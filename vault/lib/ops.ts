@@ -495,6 +495,27 @@ async function archive(): Promise<void> {
   out({ op: "archive", title: hit.title, path: relative(root, dest), why, inbound: inbound.map((n) => n.title), commit });
 }
 
+/**
+ * Remove a note for good: a claim that was wrong, not one that is over. Git keeps the old file. A note that a live
+ * note links to is refused, since its callers would dangle; unlink them or archive it instead.
+ */
+async function del(): Promise<void> {
+  requireVault();
+  const title = positional.join(" ").trim();
+  const why = flag("why");
+  if (!title || !why) { console.error('usage: vault delete "<title>" --why "<one line>"'); exit(1); }
+  const notes = await loadVault(root);
+  const hit = wikiNotes(notes).find((n) => n.title.toLowerCase() === title.toLowerCase());
+  if (!hit) refuse([{ note: title, rule: "delete", detail: "no live wiki note has that title" }]);
+  const inbound = wikiNotes(notes).filter((n) => n.path !== hit.path && links(n.body).some((t) => t.toLowerCase() === hit.title.toLowerCase()));
+  if (inbound.length) refuse(inbound.map((n) => ({ note: n.title, rule: "inbound", detail: `links [[${hit.title}]]; unlink it or archive [${hit.title}] instead` })));
+  unlinkSync(hit.path);
+  appendDaily(`delete ${hit.title} — ${why}`);
+  await writeHome();
+  const commit = commitAndPush(`delete: ${hit.title}`, [hit.path, join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+  out({ op: "delete", title: hit.title, why, commit });
+}
+
 // ---------------------------------------------------------------- compile
 async function compile(): Promise<void> {
   requireVault();
@@ -529,10 +550,11 @@ export async function run(argv: string[]): Promise<void> {
     case "adopt": await adopt(); break;
     case "rename-scope": await renameScopeOp(); break;
     case "archive": await archive(); break;
+    case "delete": await del(); break;
     case "compile": await compile(); break;
     case "misses": await misses(); break;
     default:
-      console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|compile [date]|misses [--days N]>");
+      console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]>");
       exit(2);
   }
 }

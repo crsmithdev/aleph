@@ -9,7 +9,7 @@ import { memoryTypes } from "./memory-types.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
-import { md, priorityBadge } from "./lib.js";
+import { priorityBadge } from "./lib.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
@@ -81,7 +81,9 @@ test("?project= keeps only that project's data", async () => {
   expect(m.home.map((s: any) => s.heading)).toEqual(["Gotchas"]);
   expect(m.writes.map((w: any) => w.text)).toEqual(["write [[Other trap]] — why"]);
   const s: any = await (await at("/api/memory/search?q=bun&project=other")).json();
-  expect(s.results.map((r: any) => r.title)).toEqual(["Other trap"]);
+  expect(s.results.filter((r: any) => r.source === "note").map((r: any) => r.title)).toEqual(["Other trap"]);
+  // A rule or a skill is global: it is in every project.
+  expect(s.results.every((r: any) => ["other", "global", ""].includes(r.scope))).toBe(true);
   expect((await at("/api/memory/note?title=Use%20Bun&project=other")).status).toBe(404);
   const n: any = await (await at("/api/memory/note?title=Other%20trap&project=other")).json();
   expect(n.links).toEqual([]);  // Use Bun is another project's
@@ -94,39 +96,6 @@ test("a note has its links and backlinks; a missing note is 404", async () => {
   expect(n.backlinks.map((l: any) => l.title)).toContain("Other trap");
   expect(n.backlinks.map((l: any) => l.title)).toContain("Home");
   expect((await at("/api/memory/note?title=Nope")).status).toBe(404);
-});
-
-test("the views render and the note route is wired", () => {
-  expect(noteView.path).toBe("/memory/:title");
-  expect(noteView.api({ title: "A b" })).toBe("/api/memory/note?title=A%20b");
-  const h = v.renderMemory({ exists: true, total: 1, byKind: { decision: 1 }, byScope: { aleph: 1 }, home: [{ heading: "Decisions", entries: [{ title: "Use Bun", hook: "h" }] }], lint: { refuse: [], warn: [] }, writes: [], misses: { days: 7, recalls: 2, empty: 1, empty_share: 0.5, reformulated: 0, unoffered_reads: 0 },
-    types: { semantic: { memory: null, notes: [{ title: "Use Bun", kind: "decision", scope: "aleph" }], start: {}, last: "" } } });
-  for (const t of ["Use Bun", "#/memory/Use%20Bun", "Counts by kind and scope", "50%", "Search titles, aliases and bodies"]) expect(h).toContain(t);
-  for (const t of ["<h3>When Recall Last Returned Each Note</h3>", '<h3>Notes by Kind</h3><span class="count">1</span>', "<h3>Recall Misses, 7 Days</h3>", "<h2>Factory Memory Gates</h2>", "<h2>Recent Writes</h2>", 'aria-label="Factory memory gates"', 'aria-label="Recent writes"']) expect(h).toContain(t);
-  expect(h).toContain('<ul class="legend"><li><i class="c-use"></i>Last 7 days</li><li><i class="c-stale"></i>Earlier</li><li><i class="c-never"></i>Never</li></ul>');
-  expect(h).not.toContain('class="key"');
-  const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
-  expect(nh).toContain('href="#/memory/U"');
-  expect(nh).toContain("Linked From");
-});
-
-test("the Writes, counts and hooks tables show empty() with no rows; Writes and the type lists fold after 10 and hooks page at 50", () => {
-  const base = { exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, notes: [] };
-  const hooks = (n: number) => ({ procedural: { skills: [], claudeMd: null, hooks: Array.from({ length: n }, (_, i) => ({ event: "Stop", matcher: "", command: `c${i}`, calls: i })), last: "" } });
-  const one = '<div class="empty"><p>';
-  expect(v.renderWrites({ writes: [] })).toContain(`${one}No writes recorded.`);
-  const sem = v.renderMemory({ ...base, writes: [] }, v.options(new URLSearchParams("type=semantic")));
-  for (const t of ["No notes by kind.", "No notes by scope."]) expect(sem).toContain(`${one}${t}`);
-  expect(v.renderMemory({ ...base, writes: [], types: hooks(0) }, v.options(new URLSearchParams("type=procedural")))).toContain(`${one}No hooks in`);
-  const writes = (n: number) => v.renderWrites({ writes: Array.from({ length: n }, (_, i) => ({ text: `w${i}`, date: "2026-11-01", time: "10:00" })) });
-  expect(writes(51)).toContain("<summary>41 more</summary>");
-  expect(writes(10)).not.toContain("<details");
-  const eps = (n: number) => v.renderMemory({ ...base, writes: [], types: { episodic: { episodes: Array.from({ length: n }, (_, i) => ({ title: `e${i}`, scope: "aleph", updated: "2026-11-01" })), keepDays: 0, daily: { total: 0, latest: [] }, sessions: [], last: "" } } }, v.options(new URLSearchParams("type=episodic")));
-  expect(eps(11)).toContain("<summary>1 more</summary>");
-  expect(eps(10)).not.toContain(" more</summary>");
-  const h = v.renderMemory({ ...base, writes: [], types: hooks(51) }, v.options(new URLSearchParams("type=procedural")));
-  expect(h).toContain('<th>Event</th><th>Command</th><th class="num">Calls</th>');
-  expect(h).toContain("50 of 51");
 });
 
 test("warm() fills the misses cache, so the first request runs vault misses zero more times", async () => {
@@ -197,42 +166,6 @@ test("a note's status: a refusal first, then recent, earlier, never", () => {
   expect(v.noteStatus(row({ read: "2026-10-30", problems: [{ rule: "schema", detail: "x" }] }), now)).toBe("lint");
 });
 
-test("the browser filters, ranks a search first and sorts; episodes come only on request", () => {
-  const rows = [row({ title: "A", status: "never", updated: "2026-10-02" }), row({ title: "B", status: "use", scope: "x", updated: "2026-10-03" }), row({ title: "Ep", kind: "episode", status: "never" })];
-  const t = (q: string, hits: string[] = []) => v.browseRows(rows, v.options(new URLSearchParams(q)), hits).map((n: any) => n.title);
-  expect(t("")).toEqual(["B", "A"]);
-  expect(t("status=never")).toEqual(["A"]);
-  expect(t("scope=x")).toEqual(["B"]);
-  expect(t("kind=episode")).toEqual(["Ep"]);
-  expect(t("q=body", ["A", "B"])).toEqual(["A", "B"]);
-  expect(t("q=body", ["B"])).toEqual(["B"]);
-  expect(t("sort=title&dir=desc")).toEqual(["B", "A"]);
-});
-
-test("the page is the board, then broad health, then the note browser; the type comes from the query", () => {
-  const m = { exists: true, total: 2, byKind: { gotcha: 2 }, byScope: { aleph: 2 }, home: [], writes: [],
-    lint: { refuse: [{ note: "B", rule: "schema", detail: "no confidence" }, { note: "B", rule: "dangling", detail: "x" }], warn: [{ note: "A", rule: "orphan", detail: "y" }] },
-    notes: [row({ title: "A" }), row({ title: "B", read: "2026-10-01", problems: [{ rule: "schema", detail: "no confidence" }] })] };
-  const h = v.renderMemory({ ...m, writes: [{ text: "w", date: "2026-11-01", time: "10:00" }] });
-  expect(h).toContain(`<li><span class="quiet">`);
-  expect(h).toMatch(/data-sort="updated">Written<.*?data-sort="title">Title</s);
-  expect(h).toContain('<header class="ph"><h1>Memory</h1></header>');
-  expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('aria-label="Lint"'));
-  expect(h.indexOf('aria-label="Lint"')).toBeLessThan(h.indexOf('id="mem-table"'));
-  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`data-tile="${id}"`);
-  expect(h).toContain('data-tile="semantic" aria-pressed="true"');
-  const w = v.view.render(m, {}, new URLSearchParams("type=parametric"));
-  expect(w).toContain('data-tile="parametric" aria-pressed="true"');
-  expect(w).toContain("The model weights");
-  expect(v.lintRules(m.lint).map((r: any) => [r.rule, r.refused, r.warned])).toEqual([["schema", 1, 0], ["dangling", 1, 0], ["orphan", 0, 1]]);
-});
-
-test("the inspector shows the note, its problem, sources, links and path, escaped", () => {
-  const h = v.renderInspector({ title: "N", path: "wiki/N.md", frontmatter: { kind: "gotcha", scope: "a", confidence: "measured", updated: "2026-10-01", sources: ["<src>"] }, body: "**Claim.** x", links: [{ title: "L" }], backlinks: [{ title: "B" }] }, row({ status: "lint", problems: [{ rule: "schema", detail: "bad" }] }));
-  for (const s of ["lint problem", "schema: bad", "&lt;src&gt;", "<strong>Claim.</strong>", "Linked From", "wiki/N.md"]) expect(h).toContain(s);
-  expect(v.renderInspector(null)).toContain("Select a note");
-});
-
 test("/api/memory lists the notes with their read date, and a page search logs no read", async () => {
   const log = join(base, "vault", ".recall.json");
   writeFileSync(log, JSON.stringify({ "Use Bun": "2026-10-30" }));
@@ -256,12 +189,14 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
     expect(bun.history.reduce((a: number, b: number) => a + b)).toBe(3);
     expect(m.notes.find((n: any) => n.title !== "Use Bun").history).toEqual(Array(30).fill(0));
   } finally { rmSync(log, { force: true }); }
-  const n = { title: "N", path: "wiki/N.md", frontmatter: {}, body: "x" };
+  const n = { title: "N", path: "wiki/N.md", frontmatter: {}, body: "x", links: [], backlinks: [] };
   const hist = Array(30).fill(0); hist[29] = 2; hist[26] = 1;
-  const h = v.renderInspector(n, row({ history: hist }));
-  expect(h.match(/<i /g)).toHaveLength(30);
+  const note = { type: "semantic", source: "note", key: "N", title: "N", text: "", scope: "", at: "", read: null, effect: "" };
+  const h = v.renderInspector(note, n, "use", hist);
+  expect(h.match(/<i title=/g)).toHaveLength(30);
   expect(h).toContain('data-n="2"');
-  expect(v.renderInspector(n, row({ history: Array(30).fill(0) }))).toContain("No recall in the last 30 days.");
+  expect(h).toContain('aria-label="3 recalls in 30 days"');
+  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain("No recall in the last 30 days.");
 });
 
 test("/api/memory lint gives no stale finding to an old note that the read log shows read lately", async () => {
@@ -277,7 +212,7 @@ test("/api/memory lint gives no stale finding to an old note that the read log s
   } finally { rmSync(file); rmSync(log, { force: true }); clearCache(); }
 });
 
-test("prospective issues carry their priority, medium when they have none, and the page shows the badge", async () => {
+test("prospective issues carry their priority, medium when they have none", async () => {
   writeFileSync(join(base, "repos.json"), JSON.stringify({ pri: { path: base } }));
   try {
     writeList({ key: "pri" }, "seed", (doc) => {
@@ -290,10 +225,6 @@ test("prospective issues carry their priority, medium when they have none, and t
     }, true);
     const t: any = await memoryTypes(join(base, "vault"), [], null);
     expect(t.prospective.issues.map((i: any) => i.priority)).toEqual(["critical", "medium"]);
-    const h = v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: t }, {}, new URLSearchParams("type=prospective"));
-    expect(h).toContain(priorityBadge("critical"));
-    expect(h).toContain(">critical<");
-    expect(h).toContain("<h3>Open Issues With a Wait<");
   } finally {
     writeFileSync(join(base, "repos.json"), "{}");
   }
@@ -308,20 +239,10 @@ test("working lists the per-project handoffs", async () => {
     const t: any = await memoryTypes(join(base, "vault"), [], null);
     expect(t.working.projects.map((x: any) => [x.name, x.text])).toEqual([["aleph", "Fix the memory tab"]]);
     expect(t.working.total).toBe(1);
-    const h = v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: t }, {}, new URLSearchParams("type=working"));
-    expect(h).toContain("Fix the memory tab");
-    expect(h).not.toContain("No handoff yet.");
   } finally {
     restore();
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("typeTiles writes the unrounded returned share", async () => {
-  // @ts-ignore plain JS shared with the page
-  const { typeTiles } = await import("./views/memory.js");
-  const rows = Array.from({ length: 1000 }, (_, i) => ({ kind: "decision", read: i < 3 ? "2026-11-01" : null }));
-  expect(typeTiles({ exists: true }, rows).find((t: any) => t.id === "semantic").v2).toBe("0.3%");
 });
 
 test("semantic lists each scope's core lines and the start-context bytes against the budget", async () => {
@@ -341,24 +262,64 @@ test("semantic lists each scope's core lines and the start-context bytes against
     }
     expect(t.semantic.start.aleph.core.map((c: any) => c.core).sort()).toEqual(["line for aleph", "line for global"]);
     expect(JSON.stringify(t.semantic.start)).not.toContain("line for other");
-    const h = v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: t }, {}, new URLSearchParams("type=semantic"));
-    for (const l of ["line for aleph", "line for global"]) expect(h).toContain(l);
-    for (const scope of ["aleph", "global"]) expect(h).toContain(`${t.semantic.start[scope].bytes} / 6000 bytes`);
   } finally {
     for (const t of ["Core A", "Core G", "Core O"]) rmSync(join(root, "wiki", "decisions", `${t}.md`));
   }
 });
 
-test("every seg group in the notes filters has an accessible name", () => {
-  const h = v.renderMemory({ exists: true, total: 1, byKind: { gotcha: 1 }, byScope: { aleph: 1 }, home: [], writes: [], lint: { refuse: [], warn: [] }, notes: [row({ title: "A" })] });
-  const groups = h.slice(h.indexOf('id="mem-filters"')).match(/<div class="seg"[^>]*>/g)!;
-  expect(groups.length).toBeGreaterThan(0);
-  for (const g of groups) expect(g).toMatch(/aria-label="[^"]+"/);
+
+const it = (over: object) => ({ type: "semantic", source: "note", key: "N", title: "N", text: "claim", scope: "aleph", at: "2026-10-01", read: null, effect: "Reaches a session when vault recall returns it.", ...over });
+const page = { exists: true, total: 1, byKind: {}, byScope: {}, scopes: ["aleph", "other"], home: [], lint: { refuse: [], warn: [] }, writes: [], notes: [row({ title: "N", read: "2026-11-03" }), row({ title: "Never" })],
+  types: { semantic: { start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c" }] } } } } };
+
+test("the page is the search, the freshness filter, seven type tiles, the results and the inspector, then health", () => {
+  const h = v.renderMemory(page, v.options(new URLSearchParams("q=work")), [it({}), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" })]);
+  for (const t of ['data-ui="mem-search"', 'value="work"', "Read in 7 days", 'id="mem-inspector"', "<h2>Health</h2>", "3000 / 6000 bytes, 1 core lines", '<datalist id="mem-titles"><option value="N"><option value="Never"></datalist>', '<option value="other">other</option>'])
+    expect(h).toContain(t);
+  expect(h.match(/data-tile=/g)).toHaveLength(7);
+  expect(h).toMatch(/data-tile="working" aria-pressed="false"><span class="r1"><span class="k">Working<\/span><\/span><b>1<\/b>/);
+  expect(h).toMatch(/data-tile="parametric"[^]*?<b>–<\/b>/);
+  expect(v.renderMemory(page, v.options(), null)).toContain("Loading memory");
+  expect(v.view.api({}, new URLSearchParams("project=aleph"))).toBe("/api/memory?project=aleph");
+  const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
+  expect(nh).toContain('href="#/memory/U"');
 });
 
-test("the note states are lower-case badges", () => {
-  const rows = [row({ title: "A", status: "never" }), row({ title: "B", status: "use" }), row({ title: "C", status: "stale" }), row({ title: "D", status: "lint", problems: [{ rule: "schema", detail: "x" }] })];
-  const h = v.renderInspector({ title: "N", path: "p", frontmatter: {}, body: "", links: [], backlinks: [] }, rows[3]);
-  expect(h).toContain('<span class="badge stuck">lint problem</span>');
-  for (const [s, t] of [["never", "quiet"], ["use", "done"], ["stale", "need"]]) expect(v.renderInspector({ title: "N", path: "p", frontmatter: {}, body: "", links: [], backlinks: [] }, row({ status: s }))).toContain(`<span class="badge ${t}">${{ never: "never read", use: "in use", stale: "stale" }[s as string]}</span>`);
+test("each type has its own layout, filters keep by type and freshness, and the tiles count before the type filter", () => {
+  const rs = [it({}), it({ key: "Never", title: "Never" }), it({ type: "procedural", source: "skill", key: "vault", title: "skill vault", text: "the vault", at: "2026-01-01" }),
+    it({ type: "episodic", source: "episode", key: "e.md", title: "e" }), it({ type: "prospective", source: "issue", key: "a/1", title: "a-1", priority: "high" })];
+  const status = new Map(v.noteRows(page, NOW).map((n: any) => [n.title, n.status]));
+  const keep = (q: string) => v.keepRows(rs, v.options(new URLSearchParams(q)), status, NOW).map((x: any) => x.title);
+  expect(keep("type=procedural")).toEqual(["skill vault"]);
+  expect(keep("fresh=use")).toEqual(["N"]);
+  expect(keep("fresh=never")).toEqual(["Never"]);
+  expect(keep("fresh=old")).toEqual(["skill vault"]);
+  expect(v.typeCounts(rs, v.options(new URLSearchParams("type=procedural&fresh=never")), status)).toMatchObject({ semantic: 1, procedural: 0 });
+  const h = v.renderResults(rs, v.options(), status);
+  expect(h).toContain("<th>Loaded when</th>");          // procedural: a table
+  expect(h).toContain('<ul class="mrows tl">');           // episodic: a timeline
+  expect(h).toContain(priorityBadge("high"));             // prospective: cards with the priority
+  expect(h).toContain("read never");                      // semantic: the read date
+  expect(v.renderResults([], v.options(new URLSearchParams("q=zz")), status)).toContain("No memory matches “zz”.");
+  const many = v.renderResults(Array.from({ length: 51 }, (_, i) => it({ key: `n${i}`, title: `n${i}` })), v.options(), status);
+  expect(many).toContain("50 of 51");
+  expect(many.match(/<li hidden /g)).toHaveLength(1);
+});
+
+test("the inspector says how a memory reaches the agent, shows its recall history and offers the writes its source takes", () => {
+  const n = { title: "N", path: "wiki/gotchas/N.md", frontmatter: { scope: "aleph", confidence: "measured", core: "the <core>" }, body: "**Claim.** x", text: "", links: [{ title: "L" }], backlinks: [{ title: "B" }] };
+  const h = v.renderInspector(it({ read: "2026-11-03" }), n, "use");
+  for (const t of ["How it reaches the agent", "Reaches a session when vault recall returns it.", 'value="the &lt;core&gt;"', "Recall history", "No recall in the last 30 days.", 'data-mact="unlink" data-target="L"', 'data-mact="link"', 'data-mact="archive"', 'data-mact="delete"', "in use", "wiki/gotchas/N.md"])
+    expect(h).toContain(t);
+  // No button of the page carries data-act, which index.html's own handler takes.
+  expect(h).not.toContain("data-act=");
+  const hand = v.renderInspector(it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }));
+  for (const t of ['data-mact="edit"', 'data-mact="file-delete"']) expect(hand).toContain(t);
+  expect(hand).not.toContain("Recall history");
+  expect(v.renderInspector(it({ type: "procedural", source: "skill", key: "vault", href: "#/skills/vault" }))).toContain("change it on a branch");
+  expect(v.renderInspector(it({ type: "retrieval", source: "miss" }))).toContain('data-mact="alias"');
+  expect(v.renderInspector(it({ type: "procedural", source: "proposal", key: "p1" }))).toContain('data-mact="approve"');
+  expect(v.renderInspector(it({ type: "prospective", source: "issue", key: "a/1" }))).toContain('data-mact="drop"');
+  expect(v.renderInspector(it({ title: "<x>" }))).toContain("&lt;x&gt;");
+  expect(v.renderInspector(null)).toContain("Select a memory");
 });

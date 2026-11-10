@@ -846,6 +846,36 @@ mark { color: inherit; background: var(--need-bg); border-radius: var(--r-hair);
 .ins .note { overflow-wrap: anywhere; }
 .ins .warnbox { padding: var(--sp-8) var(--sp-10); color: var(--ink); border: 1px solid var(--stuck); border-radius: var(--r-ctl); }
 .ins .badge { align-self: flex-start; }
+/* Memory: the search, the type dots, the result rows by type, the inspector's forms and the recall strip. */
+.memory .msearch input[type="search"] { width: 100%; height: 44px; font-size: var(--fs-lg); }
+.memory .mdot { display: inline-block; width: 10px; height: 10px; border-radius: var(--r-pill); margin-right: var(--sp-6); vertical-align: baseline; background: var(--muted); }
+.mdot.t-semantic { background: var(--run); } .mdot.t-procedural { background: var(--done); } .mdot.t-episodic { background: var(--focus); }
+.mdot.t-working { background: var(--chart-7); } .mdot.t-prospective { background: var(--hot); } .mdot.t-retrieval { background: var(--need); }
+.mgroup { margin-bottom: var(--sp-20); }
+.mrows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--sp-8); }
+.mrows .mrow { padding: var(--sp-10) var(--sp-12); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); cursor: pointer; min-width: 0; }
+.mrows .mrow p { margin: var(--sp-4) 0 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.mrow[aria-selected="true"] { border-color: var(--run); background: var(--raised); }
+tr.mrow { cursor: pointer; } tr.mrow[aria-selected="true"] td { background: var(--raised); }
+table.tbl td.eff { white-space: normal; min-width: 22ch; }
+.mrow .mh { display: flex; justify-content: space-between; gap: var(--sp-8); flex-wrap: wrap; }
+.mrow .mm { font-size: var(--fs-xs); color: var(--muted); }
+.mrow .eff, td.eff { color: var(--done); }
+.mrow .core { color: var(--run); }
+.mrows.tl { border-left: 2px solid var(--rule); padding-left: var(--sp-12); }
+.mrows.tl .mev { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-10); }
+.ins .mtype { margin: 0; font-size: var(--fs-xs); color: var(--muted); }
+.ins h4 { margin: var(--sp-14) 0 var(--sp-6); font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.ins .mreach { margin-top: var(--sp-10); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-ctl); background: var(--sunk); }
+.ins .mreach h4 { margin-top: 0; }
+.ins .mform { display: flex; gap: var(--sp-6); align-items: center; flex-wrap: wrap; margin-top: var(--sp-8); }
+.ins .mform.col { flex-direction: column; align-items: stretch; }
+.ins .mform input, .ins .mwhy { flex: 1; min-width: 140px; }
+.ins textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: var(--fs-xs); }
+.ins .macts { display: flex; gap: var(--sp-6); flex-wrap: wrap; align-items: center; margin-top: var(--sp-14); padding-top: var(--sp-12); border-top: 1px solid var(--rule-2); }
+.ins .act.danger { color: var(--stuck); }
+.ins .act.small { padding: 0 var(--sp-6); font-size: var(--fs-2xs); }
+.ins .mhist i { background: var(--run); }
 tr.nrow { cursor: pointer; }
 tr.nrow[aria-selected="true"] { background: var(--sunk); box-shadow: inset 3px 0 0 var(--run); }
 tr.nrow td.wide a { color: inherit; text-decoration: none; }

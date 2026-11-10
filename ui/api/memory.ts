@@ -1,8 +1,18 @@
-/** `GET /api/memory`, `/api/memory/search?q=`, `/api/memory/note?title=`: the Memory view, read-only over the vault. `?project=<key>` keeps the notes whose scope is that key. */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+/**
+ * `GET /api/memory`, `/api/memory/search?q=`, `/api/memory/note?title=`, `/api/memory/file?source=&key=`: the Memory view.
+ * `?project=<key>` keeps the notes whose scope is that key. The POST routes are its writes: a note goes through
+ * `vault write`, `archive` or `delete`, so each is validated, committed and pushed; a handoff or an episode is a file.
+ */
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
+import { sameSite } from "../http.ts";
 import { staleAsync } from "../stale.ts";
+import { items, search as searchItems } from "../memory-items.ts";
+import { handoffsDir } from "../memory-types.ts";
+import { episodesDir } from "../../jobs/lib/learning/episode.ts";
+import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { uiFetchTtl } from "../../issues/lib/store.ts";
 import { clearTypesCache, memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
@@ -128,6 +138,7 @@ async function overview(url: URL): Promise<Response> {
     total: wiki.length,
     byKind: { ...Object.fromEntries(KINDS.map((k) => [k, 0])), ...count(wiki.map((n) => String(n.fm.kind ?? "none"))) },
     byScope: count(wiki.map(scopeOf)),
+    scopes: [...new Set(wikiNotes(all).map(scopeOf).filter(Boolean))].sort(),
     home: homeSections(all, keep, project),
     lint: { refuse: lint.refuse.filter(mine), warn: lint.warn.filter(mine) },
     writes: recentWrites(root, all, keep, project),
@@ -139,19 +150,15 @@ async function overview(url: URL): Promise<Response> {
   return json(body);
 }
 
+/** Every memory that matches `q`, of every type; all of them when `q` is empty. */
 async function search(url: URL): Promise<Response> {
   const q = (url.searchParams.get("q") ?? "").trim();
   const project = url.searchParams.get("project") || null;
-  if (!q) return json({ q, results: [] });
-  // `vault recall` ranks, so the page shows the order the agent sees.
-  const args = ["bun", CLI, "recall", q, ...(project ? ["--scope", project] : []), "--unlogged"];
-  const p = Bun.spawn(args, { env: process.env, stdout: "pipe", stderr: "ignore" });
-  const text = await new Response(p.stdout).text();
-  if ((await p.exited) !== 0) return json({ q, results: [], error: "vault recall failed" });
-  try {
-    const hits = JSON.parse(text) as { title: string; path: string; rank: number; scope: string; frontmatter: Record<string, unknown> }[];
-    return json({ q, results: hits.map((h) => ({ title: h.title, path: h.path, rank: h.rank, scope: h.scope, kind: String(h.frontmatter?.kind ?? "") })) });
-  } catch { return json({ q, results: [], error: "vault recall failed" }); }
+  const root = vaultDir();
+  const all = existsSync(join(root, "Home.md")) ? await vaultNotes(root) : [];
+  const wiki = wikiNotes(all);
+  const m = await misses();
+  return json({ q, results: searchItems(await items(root, wiki, readLog(root), m?.value), q, project, root, wiki) });
 }
 
 async function note(url: URL): Promise<Response> {
@@ -167,11 +174,111 @@ async function note(url: URL): Promise<Response> {
   const to = [...new Set(links(hit.body))].map((t) => targets.get(t.toLowerCase())).filter((n): n is Note => !!n && keep(n) && n !== hit);
   const from = all.filter((n) => n !== hit && keep(n) && !n.archived && links(n.body).some((t) => targets.get(t.toLowerCase()) === hit));
   const ref = (n: Note) => ({ title: n.title, kind: String(n.fm.kind ?? ""), scope: scopeOf(n) });
-  return json({ title: hit.title, path: hit.rel, archived: hit.archived, frontmatter: hit.fm, body: hit.body, links: [...new Map(to.map((n) => [n.title, ref(n)])).values()], backlinks: from.map(ref).sort((a, b) => a.title.localeCompare(b.title)) });
+  return json({ title: hit.title, path: hit.rel, archived: hit.archived, frontmatter: hit.fm, body: hit.body, text: hit.text, links: [...new Map(to.map((n) => [n.title, ref(n)])).values()], backlinks: from.map(ref).sort((a, b) => a.title.localeCompare(b.title)) });
 }
+
+// ---------------------------------------------------------------- writes
+
+const WHY = "edited on the Memory page";
+const fail = (error: string, status = 422) => json({ error }, status);
+
+/** `vault <args>`; the refusal lines of stderr are the error. */
+async function vault(...args: string[]): Promise<Response> {
+  const p = Bun.spawn(["bun", CLI, ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
+  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+  // The notes only: the misses cache stays, since reloading it waits on Langfuse.
+  notes.clear();
+  if (code !== 0) return fail(err.trim() || `vault ${args[0]} exited ${code}`);
+  try { return json(JSON.parse(out)); } catch { return json({ output: out.trim() }); }
+}
+
+/** A note's text, rewritten by `change`, through `vault write`. */
+async function rewrite(title: string, change: (text: string) => string, why = WHY): Promise<Response> {
+  const hit = linkTargets(await loadVault(vaultDir())).get(title.toLowerCase());
+  if (!hit?.wiki || hit.archived) return fail(`no live note titled ${title}`, 404);
+  const dir = mkdtempSync(join(tmpdir(), "aleph-memory-"));
+  try {
+    writeFileSync(join(dir, `${hit.title}.md`), change(hit.text));
+    return await vault("write", join(dir, `${hit.title}.md`), "--why", why);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+/** `text` with its frontmatter changed by `change`. */
+const withFm = (text: string, change: (fm: Record<string, string | string[]>) => void): string => {
+  const { frontmatter, body } = splitFrontmatter(text);
+  const fm = parseFrontmatter(frontmatter ?? "");
+  change(fm);
+  return serializeFrontmatter(fm) + body;
+};
+/** `text` with `core:` set to `core`, or without it when `core` is blank. */
+export const withCore = (text: string, core: string) => withFm(text, (fm) => { if (core.trim()) fm.core = core.trim(); else delete fm.core; });
+/** `text` with `alias` added to its aliases. */
+export const withAlias = (text: string, alias: string) => withFm(text, (fm) => { const xs = [].concat((fm.aliases ?? []) as never); if (!xs.includes(alias as never)) fm.aliases = [...xs, alias]; });
+/** `text` with `[[target]]` under its `## Related` heading, which it gets when it has none. */
+export function withLink(text: string, target: string): string {
+  if (links(text).some((t) => t.toLowerCase() === target.toLowerCase())) return text;
+  const lines = text.split("\n"), at = lines.findIndex((l) => /^##\s+related\s*$/i.test(l));
+  if (at < 0) return `${text.replace(/\n*$/, "")}\n\n## Related\n[[${target}]]\n`;
+  lines.splice(at + 1, 0, `[[${target}]]`);
+  return lines.join("\n");
+}
+/** `text` with no link to `target`: a line that is only the link goes, an inline link becomes its plain text. */
+export function withoutLink(text: string, target: string): string {
+  const esc = target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const link = new RegExp(`\\[\\[${esc}(?:#[^\\]|]*)?(?:\\|([^\\]]*))?\\]\\]`, "gi");
+  return text.split("\n").filter((l) => !new RegExp(`^\\s*(?:[-*]\\s*)?${link.source}\\s*$`, "i").test(l)).join("\n").replace(link, (_, alias) => alias ?? target);
+}
+
+const body = async (req: Request): Promise<Record<string, string>> => {
+  const b: any = await req.json().catch(() => ({}));
+  return Object.fromEntries(Object.entries(b ?? {}).map(([k, v]) => [k, typeof v === "boolean" ? (v ? "1" : "") : String(v ?? "")]));
+};
+type Post = (b: Record<string, string>) => Promise<Response>;
+const post = (f: Post) => async (req: Request) => (sameSite(req) ? f(await body(req)) : fail("forbidden", 403));
+
+/** The file a handoff, an episode or MEMORY.md is, or null for a key outside its folder. */
+function fileOf(source: string, key: string): string | null {
+  if (source === "memory-md") return join(vaultDir(), "MEMORY.md");
+  if (source === "handoff" && /^(projects\/)?[^/\\.][^/\\]*\.md$/.test(key)) return join(handoffsDir(), key);
+  if (source === "episode" && /^[^/\\.][^/\\]*\.md$/.test(key)) return join(episodesDir(), key);
+  return null;
+}
+
+async function file(url: URL): Promise<Response> {
+  const path = fileOf(url.searchParams.get("source") ?? "", url.searchParams.get("key") ?? "");
+  return path && existsSync(path) ? json({ text: readFileSync(path, "utf8") }) : fail("no such file", 404);
+}
+
+/** MEMORY.md is written in place, then `vault write` checks it; a refusal puts the old text back. */
+const editFile: Post = async ({ source, key, text }) => {
+  const path = fileOf(source, key);
+  if (!path || !existsSync(path)) return fail("no such file", 404);
+  const old = readFileSync(path, "utf8");
+  writeFileSync(path, text);
+  if (source !== "memory-md") return json({ op: "edit", source, key });
+  const r = await vault("write", path, "--why", WHY);
+  if (!r.ok) writeFileSync(path, old);
+  return r;
+};
+
+const deleteFile: Post = async ({ source, key }) => {
+  const path = source === "memory-md" ? null : fileOf(source, key);
+  if (!path || !existsSync(path)) return fail("no such file", 404);
+  unlinkSync(path);
+  return json({ op: "delete", source, key });
+};
 
 export const routes: Routes = {
   "GET /api/memory": (_req, _p, url) => overview(url),
   "GET /api/memory/search": (_req, _p, url) => search(url),
   "GET /api/memory/note": (_req, _p, url) => note(url),
+  "GET /api/memory/file": (_req, _p, url) => file(url),
+  "POST /api/memory/note/edit": post(({ title, text }) => rewrite(title, () => text)),
+  "POST /api/memory/note/core": post(({ title, core }) => rewrite(title, (t) => withCore(t, core))),
+  "POST /api/memory/note/alias": post(({ title, alias }) => (alias.trim() ? rewrite(title, (t) => withAlias(t, alias.trim())) : Promise.resolve(fail("no alias")))),
+  "POST /api/memory/note/link": post(({ title, target, unlink }) => rewrite(title, (t) => (unlink ? withoutLink(t, target) : withLink(t, target)))),
+  "POST /api/memory/note/archive": post(({ title, why }) => vault("archive", title, "--why", why || WHY)),
+  "POST /api/memory/note/delete": post(({ title, why }) => vault("delete", title, "--why", why || WHY)),
+  "POST /api/memory/file/edit": post(editFile),
+  "POST /api/memory/file/delete": post(deleteFile),
 };

@@ -68,7 +68,7 @@ function semantic(root: string, wiki: Note[], all: Note[]) {
 
 /** The last 7 days' sessions from Langfuse, newest first; null when Langfuse is off or fails. */
 type Sessions = { id: string; project: string; firstPrompt: string; turns: number; last: string }[];
-const sessions = (): Promise<Sessions | null> => sessionsCache.get("sessions", uiCacheMs(), loadSessions);
+export const sessions = (): Promise<Sessions | null> => sessionsCache.get("sessions", uiCacheMs(), loadSessions);
 async function loadSessions(): Promise<Sessions | null> {
   if (!langfuseConfig()) return null;
   try {
@@ -100,7 +100,7 @@ function episodic(root: string, live: Awaited<ReturnType<typeof sessions>>) {
 const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vault-context": "vault-context", "vault-recall": "vault-recall" };
 
 /** Hooks in Claude Code's settings file (`claudeSettings()`): event, matcher and command, with 7-day call counts where Langfuse has them. */
-async function hooks() {
+export async function hooks() {
   const file = claudeSettings();
   let cfg: any = {};
   try { cfg = JSON.parse(readFileSync(file, "utf8")); } catch {}
@@ -139,7 +139,7 @@ function retrieval(misses: any) {
 }
 
 /** Open issues with an after. */
-function prospective() {
+export function prospectiveIssues() {
   const registry = Object.values(loadRegistry());
   let docs: (todos.Doc | null)[] = [];
   try { docs = readLists(registry); } catch {}
@@ -151,8 +151,7 @@ function prospective() {
       if (after.length) open.push({ repo: r.key, id: i.id, title: i.title, after, priority: String(i.fm.priority ?? "medium") });
     }
   });
-  open.sort((a, b) => a.repo.localeCompare(b.repo) || a.id - b.id);
-  return { issues: open };
+  return open.sort((a, b) => a.repo.localeCompare(b.repo) || a.id - b.id);
 }
 
 /** The factory's memory gates: corrections and proposals from the store. */
@@ -170,6 +169,6 @@ export async function memoryTypes(root: string, wiki: Note[], misses: unknown, a
   const [live, proc] = await Promise.all([sessions(), procedural()]);
   return {
     working: working(), semantic: semantic(root, wiki, all), episodic: episodic(root, live), procedural: proc,
-    retrieval: retrieval(misses), prospective: prospective(), gates: gates(),
+    retrieval: retrieval(misses), prospective: { issues: prospectiveIssues() }, gates: gates(),
   };
 }

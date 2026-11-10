@@ -548,6 +548,26 @@ describe("archive", () => {
     expect(gitLog()).toContain("archive: Retired Subject");
     expect(gitStatus()).toBe("");
   });
+  test("delete removes a note with no caller and commits; a note with a caller is refused", async () => {
+    (await cli("write", note("Deleted Outright", { kind: "decision" }), "--why", "x"));
+    const body = "**Claim.** a caller, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Kept By A Caller]]\n";
+    (await cli("write", note("Kept By A Caller", { kind: "decision" }), "--why", "x"));
+    (await cli("write", note("Calls The Kept One", {}, body), "--why", "x"));
+    const no = await cli("delete", "Kept By A Caller", "--why", "y");
+    expect(no.code).toBe(1);
+    expect(no.stderr).toContain("refuse inbound Calls The Kept One");
+    expect(existsSync(join(vault, "wiki/decisions/Kept By A Caller.md"))).toBe(true);
+
+    const r = await cli("delete", "Deleted Outright", "--why", "wrong from the start");
+    expect(r.code).toBe(0);
+    expect(r.json).toMatchObject({ op: "delete", title: "Deleted Outright", why: "wrong from the start" });
+    expect(existsSync(join(vault, "wiki/decisions/Deleted Outright.md"))).toBe(false);
+    expect(existsSync(join(vault, "archive/Deleted Outright.md"))).toBe(false);
+    expect(readFileSync(join(vault, "Home.md"), "utf8")).not.toContain("Deleted Outright");
+    expect((await cli("lint")).json.warn.filter((f: any) => f.note === "Deleted Outright")).toEqual([]);
+    expect(gitLog()).toContain("delete: Deleted Outright");
+    expect(gitStatus()).toBe("");
+  });
   test("a note deleted by hand is named, and points at archive", async () => {
     (await cli("write", note("Deleted By Hand"), "--why", "x"));
     rmSync(join(vault, "wiki/gotchas/Deleted By Hand.md"));

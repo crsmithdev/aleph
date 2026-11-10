@@ -85,11 +85,30 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("Memory: a row opens in the inspector", async () => {
     await page.go("#/memory");
-    await page.when('document.querySelectorAll("#mem-table tr.nrow").length > 0');
-    const all = await page.ev<number>('document.querySelectorAll("#mem-table tr.nrow").length');
-    await page.ev('document.querySelector("#mem-table tr.nrow").click()');
-    await page.when('document.querySelector("#mem-table tr.nrow[aria-selected=true]")');
+    await page.when('document.querySelectorAll("#mem-results .mrow").length > 0');
+    const all = await page.ev<number>('document.querySelectorAll("#mem-results .mrow").length');
+    await page.ev('document.querySelector("#mem-results .mrow").click()');
+    await page.when('document.querySelector("#mem-results .mrow[aria-selected=true]")');
+    await page.when('document.querySelector("#mem-inspector h3")');
     expect(all).toBeGreaterThan(0);
+    // A search that answers after the reader has left: it lands on another page, which it must not touch.
+    await page.ev(`(() => {
+      const f = window.fetch, gate = new Promise((r) => { window.__release = r; });
+      window.fetch = (u, o) => {
+        if (!String(u).startsWith("/api/memory/search")) return f(u, o);
+        window.__pending = true;
+        return gate.then(() => f(u, o)).then((res) => { const j = res.json.bind(res); res.json = () => j().then((x) => { window.__parsed = true; return x; }); return res; });
+      };
+      const i = document.querySelector("[data-ui=mem-search]");
+      i.value = "";  // the empty query: still the query after the reader leaves, so only the page check stops the redraw
+      i.dispatchEvent(new Event("input", { bubbles: true }));
+    })()`);
+    await page.when("window.__pending");
+    await page.ev('location.hash = "#/issues"');
+    await page.when('document.querySelector("#view h1")?.textContent === "Issues"');
+    await page.ev("window.__release()");
+    await page.when("window.__parsed");
+    expect(page.errors).toEqual([]);
   }, 30_000);
 
   test("Automation: a log row's clamp button opens and closes the text from the keyboard", async () => {
