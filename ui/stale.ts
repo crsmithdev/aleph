@@ -1,7 +1,8 @@
 /**
  * Caches that answer from the last value. A value older than its TTL is still
  * returned at once, and one reload runs in the background; only the first read
- * of a key waits. A failed load is not kept. A TTL of 0 turns the cache off.
+ * of a key waits. A value older than ten TTLs is dropped, so its read waits like
+ * a first read. A failed load is not kept. A TTL of 0 turns the cache off.
  * The UI server restarts on every land, so page switches would otherwise wait
  * on Langfuse and on the vault (on /mnt/c under WSL) again and again.
  */
@@ -22,6 +23,7 @@ export function staleAsync<T>() {
       if (!ttlMs) return load();
       let e = map.get(key);
       if (!e) { e = { at: 0 }; map.set(key, e); }
+      if (Date.now() - e.at >= 10 * ttlMs) e.value = undefined;
       if (!e.value) return e.loading ?? start(key, e, load);
       if (Date.now() - e.at >= ttlMs && !e.loading) start(key, e, load).catch(() => {});
       return Promise.resolve(e.value.v);
@@ -37,7 +39,8 @@ export function staleSync<T>() {
     get(key: string, ttlMs: number, load: () => T): T {
       if (!ttlMs) return load();
       const e = map.get(key);
-      if (!e?.value) {
+      if (!e?.value || Date.now() - e.at >= 10 * ttlMs) {
+        map.delete(key);
         const v = load();
         map.set(key, { at: Date.now(), value: { v } });
         return v;

@@ -55,3 +55,33 @@ test("a TTL of 0 loads every time", async () => {
   expect(staleSync<number>().get("k", 0, () => ++n)).toBe(1);
   expect(await staleAsync<number>().get("k", 0, async () => ++n)).toBe(2);
 });
+
+test("staleAsync: a value older than ten TTLs waits for a fresh load; a failed load drops it", async () => {
+  const c = staleAsync<number>();
+  let loads = 0;
+  let fail = false;
+  const load = async () => { if (fail) throw new Error("down"); return ++loads; };
+  expect(await c.get("k", 10, load)).toBe(1);
+  await pass(100);
+  expect(await c.get("k", 10, load)).toBe(2);
+  fail = true;
+  await pass(100);
+  await expect(c.get("k", 10, load)).rejects.toThrow("down");
+  fail = false;
+  expect(await c.get("k", 10, load)).toBe(3);
+});
+
+test("staleSync: a value older than ten TTLs waits for a fresh load; a failed load drops it", async () => {
+  const c = staleSync<number>();
+  let loads = 0;
+  let fail = false;
+  const load = () => { if (fail) throw new Error("down"); return ++loads; };
+  expect(c.get("k", 10, load)).toBe(1);
+  await pass(100);
+  expect(c.get("k", 10, load)).toBe(2);
+  fail = true;
+  await pass(100);
+  expect(() => c.get("k", 10, load)).toThrow("down");
+  fail = false;
+  expect(c.get("k", 10, load)).toBe(3);
+});
