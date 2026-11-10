@@ -4,7 +4,7 @@
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
 import { readEvents } from "../jobs/lib/infra/layout.ts";
-import type { Event } from "../lib/naming.ts";
+import { parseId, type Event } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
@@ -141,7 +141,7 @@ export interface State {
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
   /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
-  herald?: { history: HeraldHistoryItem[]; events: Event[] };
+  herald?: { history: HeraldHistoryItem[]; events: Event[]; /** The title of each issue the events name, by its full ID. */ titles: Record<string, string> };
 }
 
 const DONE = 10;
@@ -464,10 +464,16 @@ export function state(now = new Date()): State {
   const text = alertLines.length ? `${ALERT}${alertLines.join("; ")}` : att.items.length ? lead(ASK) : factory.paused ? lead(PAUSED) : FINE;
   recordStatusTransition({ at: now.toISOString(), tone, label: labelOf(tone, text), text, reason: alertLines[0] });
   const redOf = mainRed();
+  const events = readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS), titles: Record<string, string> = {};
+  for (const e of events) {
+    const p = parseId(e.subject);
+    const item = p && !(e.subject in titles) ? lists.item(p.repo, p.sub === undefined ? p.n : `${p.n}.${p.sub}`) : undefined;
+    if (item) titles[e.subject] = item.title;
+  }
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), events: readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS) },
+    herald: { history: currentStatusHistory(), events, titles },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {

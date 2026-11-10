@@ -3,6 +3,7 @@
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { actButton, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
+import { panelOf } from "../chart.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
 import { ALERT, ASK, FINE, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
@@ -16,7 +17,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s, w)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderActive(speedOf(w))}${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s, w)}</div>${renderHerald(s)}</div></div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -38,6 +39,23 @@ const withWindow = (href, win) => (win === "week" ? href : `${href}?window=${win
 /** The scorecard: lost time, completion, landed, queue wait, usage. `d` is /api/speed for the window `win` with its baseline, or null while it loads. */
 export function renderTiles(s, d, win = d?.window ?? "week") {
   return statusCards(s, d, { efficiency: withWindow(EFFICIENCY, win), performance: withWindow(PERFORMANCE, win) });
+}
+
+/** The active jobs over the window as one line: the jobs live in each bucket, all roles summed. */
+export const activeFrame = (d) => ({
+  measure: { name: "Active Jobs", unit: "count", agg: "max" },
+  over: { kind: "time", window: d.window },
+  by: { keys: [{ key: "jobs", name: "Active Jobs" }] },
+  rows: (d.agents?.points ?? []).map((p) => ({ at: p.at, jobs: Object.entries(p).reduce((n, [k, v]) => (k !== "at" && typeof v === "number" ? n + v : n), 0) })),
+  form: "lines",
+  legend: false,
+});
+
+/** The Active Jobs chart above Agent Time. `d` is null while it loads, `{ error }` on a failed load. */
+function renderActive(d) {
+  if (!d) return card("Active Jobs", loadingLine("the active jobs"), { id: "active" });
+  if (d.error) return card("Active Jobs", error(d.error), { id: "active" });
+  return panelOf("status/active", activeFrame(d), "active");
 }
 
 /** The outcome bar. `d` is null while it loads, `{ error }` on a failed load. */
@@ -120,14 +138,17 @@ export function heraldEvents(s, more = streamed) {
 /** The tone of an event's row: a start runs, a wait asks, a failure warns, an end is fine; any other action is quiet. */
 const TONES = { running: "run", reran: "run", waiting: "ask", escalated: "ask", failed: "warning", returned: "warning", red: "warning", passed: "fine", landed: "fine", done: "fine", filed: "fine", answered: "fine" };
 
-/** An event's row: the time, the action in its tone, then the subject, the sub and the content, and the note quiet after them. */
-export function eventRow(ev) {
+/** An event's row: the time, the action in its tone, the subject's ID, then the issue's title, the sub and the content, and the note quiet after them. */
+export function eventRow(ev, titles = {}) {
   const tone = TONES[ev.action] ?? "quiet";
-  const body = [shownId(ev.subject), ev.sub, contentText(ev)].filter(Boolean).join(" ");
+  const p = parseId(ev.subject), title = titles[ev.subject] ?? "";
+  const id = p ? idLink(shownId(ev.subject), `#/issues/${encodeURIComponent(p.repo)}/${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`, { title: title || undefined }) : esc(shownId(ev.subject));
+  const what = [ev.sub, contentText(ev)].filter(Boolean).join(" ");
   return `<div class="event-row ${tone}" data-by="${esc(ev.by)}">` +
     `<span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
-    `<span class="event-tone ${tone}"><span class="event-dot ${tone}"></span>${esc(ev.action)}</span>` +
-    `<span class="event-body">${esc(body)}${ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}</span></div>`;
+    `<span class="event-tone ${tone}">${esc(ev.action)}</span>` +
+    `<span class="event-id">${id}</span>` +
+    `<span class="event-body">${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}${what ? `<span class="event-what">${esc(what)}</span>` : ""}${ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}</span></div>`;
 }
 
 /** Extract the plain-text status line verdict and reasons from state. */
@@ -190,12 +211,12 @@ export function renderHerald(s) {
   const status = history.map((ev, i) => ({ at: ev.at ?? "", html:
     `<div class="event-row ${esc(ev.tone)}${i === 0 && errors ? " live" : ""}">` +
       `<span class="event-time">${esc(ev.at ? (clock(ev.at) || when(ev.at)) : "")}</span>` +
-      `<span class="event-tone ${esc(ev.tone)}"><span class="event-dot ${esc(ev.tone)}"></span>${esc(ev.label || ev.tone)}</span>` +
+      `<span class="event-tone ${esc(ev.tone)}">${esc(ev.label || ev.tone)}</span><span class="event-id"></span>` +
       `<span class="event-body ${esc(ev.tone)}">${esc(eventText(ev))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}</span>` +
     `</div>` }));
   // The status changes and the events in one feed, newest first; the live status row stays on top.
   const live = errors ? status.shift() : null;
-  const rows = [...status, ...heraldEvents(s).map((ev) => ({ at: ev.at, html: eventRow(ev) }))].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const rows = [...status, ...heraldEvents(s).map((ev) => ({ at: ev.at, html: eventRow(ev, s.herald?.titles) }))].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = (live ? [live, ...rows] : rows).map((r) => r.html).join("");
 
   const m = s.factory?.monitor;
@@ -243,6 +264,10 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   await loadSpeed(w, fetcher, true);
   const tiles = root.querySelector("#scorecard");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);
+  const active = root.querySelector("#active, aleph-chart.active");
+  if (active) active.outerHTML = renderActive(speedOf(w));
+  const line = root.querySelector('aleph-chart[key="status/active"]');
+  if (line && !speedOf(w)?.error) line.frame = activeFrame(speedOf(w));
   const outcome = root.querySelector("#outcome");
   if (outcome) outcome.outerHTML = renderOutcome(speedOf(w));
   const pipe = root.querySelector("#pipeline");

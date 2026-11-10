@@ -11,6 +11,7 @@
 //   rows: time [{ at, [key]: n }], category [{ name, [key]: n }]; a row may carry `name` and `href`.
 //   form: the form the panel opens in, where its group offers it. note: a line under the title.
 //   empty: the line the panel shows instead of the chart when no key has a value.
+//   legend: false hides the legend, for a frame of one key that the title already names.
 // The kind of `over` is the group, and the group gives the forms.
 import { card, chart, count, dur, empty, esc, idLink, keep, kept, legend, money, pct, readTokens, seg } from "./lib.js";
 import { xLabel } from "./views/speed.js";
@@ -61,7 +62,7 @@ export function option(f, form, t, hidden = []) {
   const data = (k) => f.rows.map((r, i) => item(r, share ? (sums[i] ? ((r[k.key] ?? 0) / sums[i]) * 100 : null) : (r[k.key] ?? none)));
   const value = { type: "value", min: 0, ...(share ? { max: 100 } : {}), minInterval: f.measure.unit === "count" && !share ? 1 : 0, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: fmt } };
   const base = (k) => ({ name: k.name, data: data(k), ...(k.color ? { color: t[k.color] } : {}) });
-  const o = { animation: false, legend: { ...legend, selected: Object.fromEntries(hidden.map((n) => [n, false])) }, tooltip: { trigger: "axis", confine: true, valueFormatter: fmt } };
+  const o = { animation: false, legend: { ...legend, ...(f.legend === false ? { show: false } : {}), selected: Object.fromEntries(hidden.map((n) => [n, false])) }, tooltip: { trigger: "axis", confine: true, valueFormatter: fmt } };
   if (f.over.kind === "time") {
     const bars = form === "columns", points = form === "points", stack = !bars && !points && form !== "lines";
     // A day axis keeps one label per day: the label of a bucket is its day, so a point whose label is the label

@@ -780,7 +780,7 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .herald-sticky { position: sticky; top: 0; background: var(--surface); z-index: var(--z-sticky); border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-10); margin-bottom: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-8); }
 .herald-sticky-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-4); padding-right: var(--sp-4); }
-.event-row { display: grid; grid-template-columns: 55px 70px 1fr; align-items: baseline; gap: var(--sp-8); padding: var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-xs); }
+.event-row { display: grid; grid-template-columns: 55px 70px 64px 1fr; align-items: baseline; gap: var(--sp-8); padding: var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-xs); }
 .event-row:last-child { border-bottom: none; }
 /* The event of an alert that still holds: tinted and ringed like an Ask card, as the Herald pins no copy of it. */
 .event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-8) var(--sp-10); margin-bottom: var(--sp-6); }
@@ -796,7 +796,10 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .event-dot.run { background: var(--run); }
 .tile .lights { display: flex; flex-direction: column; gap: var(--sp-4); margin-top: var(--sp-4); }
 .tile .light { display: flex; align-items: center; gap: var(--sp-6); white-space: nowrap; }
-.event-body { color: var(--ink); overflow-wrap: anywhere; }
+.event-body { color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.event-id { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.event-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-what { color: var(--muted); }
 .event-body.alert, .event-body.error, .event-row.alert .event-body, .event-row.error .event-body { color: var(--stuck); }
 .event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body { color: var(--need); }
 .event-body.fine, .event-row.fine .event-body { color: var(--ink); }
@@ -812,6 +815,8 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 aleph-chart { display: flex; min-width: 0; }
 aleph-chart > .card { flex: 1; }
 aleph-chart .chartbox { flex: 1; height: auto; min-height: 200px; }
+/* Status: Active Jobs is as tall as the Agent Time card below it. */
+aleph-chart.active .chartbox { min-height: 0; height: 58px; flex: none; }
 .bars { display: grid; grid-template-columns: minmax(80px, 200px) minmax(40px, 1fr) max-content; column-gap: var(--sp-12); }
 .barrow { all: unset; box-sizing: border-box; display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; padding: var(--sp-6) 0; border-top: 1px solid var(--rule-2); font-size: var(--fs-sm); }
 .barrow .bl { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }

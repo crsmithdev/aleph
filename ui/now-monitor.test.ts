@@ -128,8 +128,12 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   const order = [...h.matchAll(/class="event-row (\w+)/g)].map((m) => m[1]);
   // The fixture's status now (12:00) is newest, then the event at 11:30, then the status at 11:00.
   expect(order).toEqual(["alert", "run", "fine"]);
-  expect(view.eventRow(merged[0])).toContain('<span class="event-tone warning"><span class="event-dot warning"></span>failed</span>');
-  expect(view.eventRow(merged[0])).toContain('aleph-5 timeout aleph-5#1<span class="reason">timed out</span>');
+  const row = view.eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
+  expect(row).toContain('<span class="event-tone warning">failed</span>');
+  expect(row).not.toContain("event-dot");
+  expect(row).toContain('<span class="event-id"><a class="idl" title="Fix the flaky land test" href="#/issues/aleph/5">');
+  expect(row).toContain('<span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span>');
+  expect(view.eventRow(merged[0])).toContain('<span class="event-what">timeout aleph-5#1</span><span class="reason">timed out</span>');
 });
 
 test("an event from the stream goes into the Herald at once", () => {
@@ -139,5 +143,6 @@ test("an event from the stream goes into the Herald at once", () => {
   const herald = { set outerHTML(v: string) { html = v; } };
   view.view.event({ querySelector: (q: string) => (q === "#herald" ? herald : null) }, { at: "2026-11-09T11:59:00Z", by: "gate", subject: "aleph-6", action: "landed", on: ["aleph-6#2"] });
   expect(html).toContain(">landed</span>");
-  expect(html).toContain("aleph-6 aleph-6#2");
+  expect(html).toContain('href="#/issues/aleph/6">aleph-6</a></span>');
+  expect(html).toContain('<span class="event-what">aleph-6#2</span>');
 });
