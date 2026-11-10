@@ -27,15 +27,16 @@ const WEEK = {
   buckets: [{ at: "2026-10-27T00:00:00", lead: 1000 }, { at: "2026-10-28T00:00:00", lead: null }],
   issues: { landed: 7, firstPass: 0.91, fixRounds: 0, week: 0.02 }, lost: { hours: 6, share: 0.38 },
   classes: [
-    { key: "landed", name: "landed", hours: 8, causes: [{ name: "First run", hours: 8, runs: 8 }] }, { key: "returned", name: "returned", hours: 2, causes: [{ name: "Checks failed", hours: 2, runs: 2 }] },
-    { key: "failed", name: "failed", hours: 2, causes: [{ name: "Issue had landed", hours: 2, runs: 3 }] },
-    { key: "reran", name: "reran", hours: 4, causes: [{ name: "Issue had landed", hours: 1, runs: 1 }, { name: "No commit", hours: 3, runs: 2 }] },
-    { key: "dropped", name: "dropped", hours: 0, causes: [] },
+    { key: "landed", lost: false, hours: 8, causes: [{ name: "First run", hours: 8, runs: 8 }] }, { key: "returned", lost: false, hours: 2, causes: [{ name: "Checks failed", hours: 2, runs: 2 }] },
+    { key: "failed", lost: true, hours: 2, causes: [{ name: "Issue had landed", hours: 2, runs: 3 }] },
+    { key: "reran", lost: true, hours: 4, causes: [{ name: "Issue had landed", hours: 1, runs: 1 }, { name: "No commit", hours: 3, runs: 2 }] },
+    { key: "dropped", lost: true, hours: 0, causes: [] },
   ],
+  figures: { lost: 0.38, hours: 6, leadP50: 1570, leadP90: 16560, asks: null, landed: 7, firstPass: 0.91 },
 };
 
 const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };
-const withBase = (d: any, asks = { count: 4, manual: 1 }) => ({ ...d, asks, baseline: BASE });
+const withBase = (d: any, asks = { count: 4, manual: 1 }) => ({ ...d, asks, figures: { ...d.figures, asks: asks.count }, baseline: BASE });
 
 const USAGE = { now: { seven_day: 7, five_hour: 2, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
 
@@ -63,7 +64,8 @@ test("the Asks card shows all and manual counts, zeros with no Ask, and no p50 w
 });
 
 test("the Landed card shows the clean share, then the clean count, and trends on the clean share", () => {
-  const d = { ...WEEK, done: 49, issues: { ...WEEK.issues, landed: 49, firstPass: Math.round((38 / 49) * 1e4) / 1e4 }, baseline: BASE };
+  const firstPass = Math.round((38 / 49) * 1e4) / 1e4;
+  const d = { ...WEEK, done: 49, issues: { ...WEEK.issues, landed: 49, firstPass }, figures: { ...WEEK.figures, landed: 49, firstPass }, baseline: BASE };
   const h = view.renderTiles({ ...state, usage: undefined }, d);
   expect(h).toContain("<b>78%<em> / 49</em></b>");
   expect(h).toContain("baseline 80%, the previous 7 days (change in percentage points)");
@@ -140,7 +142,7 @@ test("the outcome bar sits between the scorecard and the panels and fills once m
   const at = ['id="scorecard"', 'id="outcome"', 'id="pipeline"'].map((x) => page.indexOf(x));
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
   expect(page).toContain("Loading the outcomes");
-  const { s } = await more({ ...WEEK, classes: [...WEEK.classes, { key: "idle", name: "Idle", hours: 0, causes: [] }] }, new URLSearchParams("window=week"));
+  const { s } = await more({ ...WEEK, classes: [...WEEK.classes, { key: "idle", lost: false, hours: 0, causes: [] }] }, new URLSearchParams("window=week"));
   const filled = view.view.render(s, {}, new URLSearchParams("window=week")), h = filled.slice(filled.indexOf('id="outcome"'), filled.indexOf('id="pipeline"'));
   expect(h).toContain('class="obar"');
   expect(h).toContain("<h2 id=\"h-outcome\">Agent Time</h2>");

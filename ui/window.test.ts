@@ -23,6 +23,7 @@ const P = (n: number) => ({ count: n, p50: 60, p90: 120, hist: [0, 1, 0, 0, 0, 0
 const speed = (window: string): any => ({
   window, flaky: 1, lost: { hours: 1, share: 0.1 }, notCounted: { runs: 0, hours: 0 },
   issues: { landed: 1, firstPass: 0.5, fixRounds: 0, week: null, usage: [] }, classes: [],
+  figures: { lost: null, hours: null, leadP50: 60, leadP90: 120, asks: null, landed: null, firstPass: 0.5 },
   phases: { lead: P(1), intake: P(1), queue: P(1), implement: P(1), land: P(1) }, buckets: [{ at: new Date(2026, 9, 28).toISOString(), lead: 1 }],
   checks: [], models: [], agents: { live: 0, workers: 0, cap: 5, mean: 1, peak: 2, roles: [], outcomes: [], points: [{ at: new Date(2026, 9, 28).toISOString() }] },
 });

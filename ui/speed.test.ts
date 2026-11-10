@@ -6,7 +6,9 @@ import { withEnv } from "./test-server.ts";
 import { agentStats, CLASSES, classify, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { bar, statusCards, weekText, xLabel } from "./views/speed.js";
+import { bar, statusCards, xLabel } from "./views/speed.js";
+// @ts-ignore plain JS shared with the page
+import { pct } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import * as record from "../jobs/lib/records/record.ts";
 import { averageFigures, figures } from "./api/speed.ts";
@@ -72,6 +74,18 @@ test("GET /api/flow takes a window (default week) and answers JSON", async () =>
   expect(b.window).toBe("week");
   expect(Object.keys(b.baseline).sort()).toEqual(["base", "basis", "prev"]);
   expect(Object.keys(b.baseline.prev)).toContain("asks");
+  const { baseline: _b, figures: f, ...d } = b;
+  expect(f).toEqual(figures(d));
+  expect(Object.keys(f).sort()).toEqual(Object.keys(b.baseline.prev).sort());
+});
+
+test("the Status cards show the answer's figures and trend them against its baseline", () => {
+  // The raw fields disagree with `figures`, so a card that read them would show 90% and 9.0h.
+  const d = { classes: [{ hours: 9 }], lost: { share: 0.9, hours: 9 }, asks: { count: 1, manual: 0 }, figures: { lost: 0.2, hours: 2, leadP50: null, leadP90: null, asks: 3, landed: null, firstPass: null }, baseline: { prev: { lost: 0.4 }, base: { lost: 0.4 }, basis: "the previous 7 days" } };
+  const h = statusCards({ now: "2026-11-01T08:00:00Z" }, d, {});
+  expect(h).toContain("<b>20%<em> / 2.0h</em></b>");
+  expect(h).toContain("baseline 40%, the previous 7 days");
+  expect(h).toContain("<b>3<em> / 0</em></b>");
 });
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
@@ -140,7 +154,7 @@ test("classify: one run of each class, with its cause", () => {
   const by = (k: string) => out.classes.find((c) => c.key === k)!;
   expect(by("landed").causes.map((c) => c.name)).toEqual(["After fix rounds"]);
   expect(out.classes.map((c) => c.key)).toEqual(["landed", "returned", "failed", "reran", "dropped"]);
-  expect(out.classes.map((c) => c.name)).toEqual(["landed", "returned", "failed", "reran", "dropped"]);
+  expect(out.classes.map((c) => c.lost)).toEqual([false, false, true, true, true]);
   expect(by("returned").causes.map((c) => c.name)).toEqual(["Checks failed"]);
   expect(by("reran").causes.map((c) => c.name).sort()).toEqual(["Restart loop", "Stalled or timed out"]);
   expect(by("failed").causes.map((c) => c.name)).toEqual(["Issue had landed"]);
@@ -151,7 +165,7 @@ test("classify: one run of each class, with its cause", () => {
     for (const e of [...c.causes, ...c.top]) expect(e).not.toHaveProperty("week");
   }
   expect(out.notCounted).toEqual({ runs: 4, issues: 2, hours: round2(4 * 10 / 60) });
-  expect(out.lost.hours).toBeCloseTo(Math.round(out.classes.slice(2).reduce((a, c) => a + c.hours, 0) * 100) / 100, 1);
+  expect(out.lost.hours).toBeCloseTo(Math.round(out.classes.filter((c) => c.lost).reduce((a, c) => a + c.hours, 0) * 100) / 100, 1);
   const d = speed("day", now);
   expect(d.classes.map((c) => c.key)).toEqual([...CLASSES]);
   expect(d.issues.week).toBeNull();
@@ -348,7 +362,7 @@ test("an unlanded run of an issue that left the store is Dropped", () => {
 });
 
 test("the shared formats", () => {
-  expect([weekText(0.02), weekText(2.5)]).toEqual(["<0.1%", "3%"]);
+  expect([pct(0.02), pct(2.5)]).toEqual(["<0.1%", "3%"]);
   expect([xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week")]).toEqual(["1:36p", "Oct 28"]);
 });
 
@@ -476,7 +490,7 @@ test("a bucket's cost per model is the recorded cost of the agent runs that star
 });
 
 test("every Status card with a second value has a qualifier, Lost time too, and none prints undefined", () => {
-  const d = { classes: [{ hours: 6 }], lost: { share: 0.3, hours: 6 }, phases: { lead: { count: 2, p50: 60, p90: 600 } }, asks: { count: 4, manual: 1 }, done: 5, issues: { firstPass: 0.8 } };
+  const d = { asks: { count: 4, manual: 1 }, figures: { lost: 0.3, hours: 6, leadP50: 60, leadP90: 600, asks: 4, landed: 5, firstPass: 0.8 } };
   const s = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } };
   for (const html of [statusCards(s, d, {}), statusCards({ now: s.now }, null, {})]) {
     expect(html).not.toContain("undefined");

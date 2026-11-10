@@ -1,7 +1,7 @@
 // The Flow page (was Efficiency): where agent time went, in hours. `d` is /api/flow for the window.
 import { redraw } from "../router.js";
-import { count, card, empty, meter, sentence, statCard, dataTable, esc, heads, onTile, pageHead, pct, repoIdLink, setQuery, tiles, pagedTable, scope } from "../lib.js";
-import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, plural, weekText, windowTrend } from "./speed.js";
+import { count, card, empty, hours, meter, sentence, statCard, dataTable, esc, heads, onTile, pageHead, pct, repoIdLink, setQuery, tiles, pagedTable, scope } from "../lib.js";
+import { bar, cardHours, cardPct, lastPeriod, mergeCauses, plural, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
 const ALL = "all", FLAKES = "flakes", USAGE = "usage";
@@ -14,8 +14,8 @@ export function selection(d, key) {
   }
   if (key === USAGE) return { title: "Usage per issue", causes: [], top: d.issues?.usage ?? [] };
   const c = key !== ALL && (d.classes ?? []).find((x) => x.key === key);
-  if (c) return { title: c.name, causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
-  const causes = mergeCauses(d), lost = lostClasses(d);
+  if (c) return { title: c.key, causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
+  const causes = mergeCauses(d), lost = (d.classes ?? []).filter((x) => x.lost);
   return {
     title: "Lost Time",
     causes,
@@ -24,14 +24,14 @@ export function selection(d, key) {
 }
 
 function scorecard(d, key) {
-  const returned = (d.classes ?? []).find((c) => c.key === "returned"), f = figuresOf(d);
-  const pct = { kind: "points", format: cardPct }, flaky = d.baseline?.base?.flaky;
+  const returned = (d.classes ?? []).find((c) => c.key === "returned"), f = d.figures;
+  const points = { kind: "points", format: cardPct }, flaky = d.baseline?.base?.flaky;
   const usage = d.issues.week;
-  return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: windowTrend(d, "lost", f.lost, { ...pct, lowerIsGood: true }), key: ALL, on: key === ALL }) +
-    statCard({ k: "First pass", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...pct, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
+  return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: windowTrend(d, "lost", f.lost, { ...points, lowerIsGood: true }), key: ALL, on: key === ALL }) +
+    statCard({ k: "First pass", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...points, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
     statCard({ k: "Reruns", v: count(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: String }), key: FLAKES, on: key === FLAKES }) +
     statCard({ k: "Fix rounds", v: count(returned?.runs ?? 0), note: `${hours(returned?.hours ?? 0)} on ${plural(returned?.issues ?? 0, "issue")}`, key: "returned", on: key === "returned" }) +
-    statCard({ k: "Usage per issue", v: usage === null ? "–" : weekText(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
+    statCard({ k: "Usage per issue", v: usage === null ? "–" : pct(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 
 const causeBars = (s) => {
@@ -44,7 +44,7 @@ const topTable = (rows) => dataTable(heads(["Issue", "Why", "Took", "Jobs"], ["T
   `<tr><td>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="wide" title="${esc(`${x.title ? `${x.title}. ` : ""}${x.reason || "No reason recorded."}`)}">${x.title ? `${esc(x.title)}. ` : ""}${esc(x.reason || "No reason recorded.")}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${x.runs}</td></tr>`).join(""));
 
 const usageTable = (rows) => pagedTable(heads(["Issue", "Usage", "Jobs"], ["Usage", "Jobs"]), rows.map((x) =>
-  `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(weekText(x.week))}</td><td class="num">${x.runs}</td></tr>`));
+  `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(pct(x.week))}</td><td class="num">${x.runs}</td></tr>`));
 
 function usagePage(d, key) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);

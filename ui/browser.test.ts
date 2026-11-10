@@ -438,7 +438,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       await page.width(w);
       await page.go("#/");
       const m = await page.ev<{ clip: boolean[]; widths: number[]; page: number }>(`import("/views/speed.js").then((v) => {
-        const classes = [["landed", 40], ["returned", 20], ["failed", 1.6], ["reran", 10], ["dropped", 8]].map(([key, hours]) => ({ key, name: key, hours, text: key }));
+        const classes = [["landed", 40], ["returned", 20], ["failed", 1.6], ["reran", 10], ["dropped", 8]].map(([key, hours], i) => ({ key, lost: i > 1, hours, text: key }));
         const host = document.createElement("div");
         host.id = "obar-probe";
         document.querySelector("#view").prepend(host);
@@ -464,7 +464,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       const host = document.createElement("div");
       host.id = "obar-probe";
       document.querySelector("#view").prepend(host);
-      host.innerHTML = v.bar({ classes: [{ key: "landed", name: "Landed", hours: 5, text: "" }, { key: "dropped", name: "Dropped", hours: 3, text: "" }] }, "");
+      host.innerHTML = v.bar({ classes: [{ key: "landed", lost: false, hours: 5, text: "" }, { key: "dropped", lost: true, hours: 3, text: "" }] }, "");
       const r = (e) => e.getBoundingClientRect();
       const at = () => { const sep = r(host.querySelector(".osep")); return { sep: [sep.top, sep.bottom], segs: [...host.querySelectorAll(".osegs")].map((e) => [r(e).top, r(e).bottom]) }; };
       const out = [at()];

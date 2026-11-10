@@ -18,7 +18,7 @@ import { reader, storeDir } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
-import { clip, issueHref, NAMES, parseId, tail } from "../../lib/naming.ts";
+import { clip, issueHref, NAMES, parseId, SPEEDS, tail } from "../../lib/naming.ts";
 import { inProject, repoIn, scopeOf } from "./scope.ts";
 import type { Window } from "../../lib/windows.ts";
 
@@ -106,9 +106,10 @@ export interface Agents {
 
 /** What `classify`'s `statusOf` returns for an issue that is no longer in the store: closed issues left it, so one with no landing was closed without landing. */
 export const GONE = "gone";
-export const CLASSES = ["landed", "returned", "failed", "reran", "dropped"] as const;
+export const CLASSES = SPEEDS;
 export type Class = (typeof CLASSES)[number];
-const CLASS_NAME: Record<Class, string> = { landed: "landed", returned: "returned", failed: "failed", reran: "reran", dropped: "dropped" };
+/** The classes whose work did not reach main: their hours are the lost time. */
+const LOST: Class[] = ["failed", "reran", "dropped"];
 const CLASS_TEXT: Record<Class, string> = {
   landed: "The run whose work landed on main.",
   returned: "A run of the landing job before the run that landed: a fix round the issue needed.",
@@ -141,7 +142,8 @@ const CAUSE_TEXT: Record<string, string> = {
 
 export interface Measure { hours: number; week: number; runs: number }
 interface ClassStat extends Measure {
-  key: Class; name: string; text: string; issues: number;
+  /** `lost`: the class's work did not reach main. */
+  key: Class; lost: boolean; text: string; issues: number;
   causes: (Omit<Measure, "week"> & { name: string; text: string })[];
   top: (Omit<Measure, "week"> & { goal: string; title?: string; href?: string; reason: string })[];
 }
@@ -249,10 +251,10 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
       const [repo, n] = splitId(issue);
       return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: issueHref(`${repo}-${n}`) };
     }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.issue, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
-    return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.issue)).size, causes, top };
+    return { key, lost: LOST.includes(key), text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.issue)).size, causes, top };
   });
-  const raw = CLASSES.map((c) => sum(rows.get(c)!).hours);
-  const total = raw.reduce((x, y) => x + y, 0), lostH = raw.slice(2).reduce((x, y) => x + y, 0);
+  const hoursOf = (cs: readonly Class[]) => cs.reduce((x, c) => x + sum(rows.get(c)!).hours, 0);
+  const total = hoursOf(CLASSES), lostH = hoursOf(LOST);
   return {
     classes,
     notCounted: { runs: skipped.length, issues: new Set(skipped.map((r) => r.issue)).size, hours: round(skipped.reduce((x, y) => x + y.hours, 0), 2) },
@@ -695,7 +697,9 @@ export const routes: Routes = {
     const w = sc.window as Window, project = sc.project ?? undefined;
     const fit = await currentFit().catch(() => null), inp = inputs(), now = new Date(), d = speed(w, now, fit, project, inp);
     // `baseline=1`: the trend baseline of the window in the same answer, so the Status page makes one request.
-    if (url.searchParams.get("baseline") !== "1") return Response.json(d);
-    return Response.json({ ...d, baseline: baseline(w, now, fit, project, inp) });
+    // `figures`: what the Status cards show for the window, the same function the baseline's spans use.
+    const out = { ...d, figures: figures(d) };
+    if (url.searchParams.get("baseline") !== "1") return Response.json(out);
+    return Response.json({ ...out, baseline: baseline(w, now, fit, project, inp) });
   },
 };

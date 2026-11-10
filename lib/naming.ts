@@ -26,7 +26,7 @@ export const NAMES: Record<string, string> = {
 };
 export const STAGES = ["new", "queued", "held", "working", "waiting", "failed", "landing", "done", "dropped", "parked"];
 export const LANES = ["landed", "waiting", "failed", "other"];
-export const SPEEDS = ["landed", "returned", "failed", "reran", "dropped"];
+export const SPEEDS = ["landed", "returned", "failed", "reran", "dropped"] as const;
 export const ROUTINES = ["monitor"];
 
 /** Old words, per set, that live code still writes or reads, and the new word each reads as. A word not listed is already new. */

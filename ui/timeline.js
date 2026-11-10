@@ -1,7 +1,7 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { clamp, codeText, contentText, legendHtml, dur, esc, money, shortModel, tag, when } from "./lib.js";
+import { clamp, codeText, contentText, legendHtml, dur, esc, money, shortModel, tag, tone, when } from "./lib.js";
 import { word } from "../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
@@ -173,12 +173,10 @@ export const costText = (n) => (n ? money(n) : "–");
 /** "08:11 to 08:39" for a span in one day, else with the dates. */
 export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 
-/** A run's event tone by its stored condition, so a returned or failed run stays in the stuck tone. */
-const RUN_TONE = { returned: "stuck", failed: "stuck", dropped: "quiet", passed: "done", landed: "done", done: "done", waiting: "need", running: "run" };
 /** The event of one run: its job state as the tag, then `name` as the content and its reason as the note, or `what` in their place. */
 export function runEvent(x, name, what = null) {
-  const state = x.r.condition, tone = RUN_TONE[state] ?? "quiet";
-  return { at: x.end, tag: state, tone, html: what ?? [esc(name), x.r.reason && codeText(x.r.reason)].filter(Boolean).join(" · ") };
+  const state = x.r.condition;
+  return { at: x.end, tag: state, tone: tone(state), html: what ?? [esc(name), x.r.reason && codeText(x.r.reason)].filter(Boolean).join(" · ") };
 }
 /** The events of a lane: each run that stopped or asks, with its reason. */
 const laneEvents = (runs, bars) => runs.flatMap((x, i) => {

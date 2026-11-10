@@ -49,16 +49,17 @@ test("issue stats: first-pass share, median fix rounds", () => {
   expect(g).not.toHaveProperty("cost");
 });
 
-const cls = (key: string, name: string, h: number, causes: any[], top: any[] = []) => ({ key, name, text: `${name} text.`, hours: h, week: 0, runs: causes.reduce((a, x) => a + x.runs, 0), issues: 2, causes, top });
+const cls = (key: string, lost: boolean, h: number, causes: any[], top: any[] = []) => ({ key, lost, text: `${key} text.`, hours: h, week: 0, runs: causes.reduce((a, x) => a + x.runs, 0), issues: 2, causes, top });
 const D: any = {
   window: "week", flaky: 4, issues: { landed: 2, firstPass: 0.5, fixRounds: 1, week: 0.02, usage: [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", week: 0.5, runs: 3 }, { goal: "fx-2", week: 0.1, runs: 1 }] }, lost: { hours: 6, share: 0.3 }, notCounted: { runs: 11, issues: 4, hours: 0.4 },
   classes: [
-    cls("landed", "landed", 10, [{ name: "First run", hours: 10, runs: 5 }]),
-    cls("returned", "returned", 4, [{ name: "Checks failed", hours: 4, runs: 3 }]),
-    cls("failed", "failed", 2, [{ name: "Issue had landed", hours: 2, runs: 6 }], [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", reason: "already met", hours: 2, runs: 6 }]),
-    cls("reran", "reran", 4, [{ name: "No commit", hours: 3, runs: 2 }, { name: "Issue had landed", hours: 1, runs: 1 }], [{ goal: "fx-2", reason: "", hours: 3, runs: 2 }]),
-    cls("dropped", "dropped", 0, []),
+    cls("landed", false, 10, [{ name: "First run", hours: 10, runs: 5 }]),
+    cls("returned", false, 4, [{ name: "Checks failed", hours: 4, runs: 3 }]),
+    cls("failed", true, 2, [{ name: "Issue had landed", hours: 2, runs: 6 }], [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", reason: "already met", hours: 2, runs: 6 }]),
+    cls("reran", true, 4, [{ name: "No commit", hours: 3, runs: 2 }, { name: "Issue had landed", hours: 1, runs: 1 }], [{ goal: "fx-2", reason: "", hours: 3, runs: 2 }]),
+    cls("dropped", true, 0, []),
   ],
+  figures: { lost: 0.3, hours: 6, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: 0.5 },
 };
 
 const BASE: any = { prev: { lost: 0.2, firstPass: 0.6, flaky: 2 }, base: { lost: 0.25, firstPass: 0.75, flaky: 4 }, basis: "the previous 7 days" };
