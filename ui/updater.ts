@@ -156,7 +156,8 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
      * next request waits for its build: the page that acted reads the result of its own action. */
     changed(source: string): void {
       stale(source);
-      if (source === "action") for (const s of slots.values()) if (!s.building) s.dirty = true;
+      // A key mid-build is marked too: stale() makes its build run once more, and the request waits for that run.
+      if (source === "action") for (const s of slots.values()) s.dirty = true;
       pending.add(source);
       settle ??= setTimeout(() => { settle = undefined; void flush(); }, SETTLE_MS);
     },

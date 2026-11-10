@@ -238,3 +238,19 @@ test("a key whose build ends first is signalled first: a fast key does not wait 
   await flushing;
   expect(heard).toEqual([["/fast"], ["/slow"]]);
 });
+
+test("a request after an action waits for a build that starts after it, even when a build was running", async () => {
+  const f = fake(), u = createUpdater(f);
+  f.world["/a"] = { body: 1, sources: ["store"] };
+  await u.get("/a");
+  f.world["/a"].body = 2;
+  const release = f.hold();
+  u.changed("store");
+  const flushing = u.flush(); // a build of /a is running
+  f.world["/a"].body = 3; // the action writes
+  u.changed("action");
+  const after = u.get("/a");
+  release();
+  expect((await after).answer.body).toBe(3);
+  await flushing;
+});
