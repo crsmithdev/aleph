@@ -22,6 +22,8 @@ function repo(items: { title: string; labels?: string[] }[] = []): store.Place {
   return r;
 }
 const item = (r: store.Place, id: number) => issues.find(store.readList(r)!, id)!;
+/** Effects that start nothing. */
+const quiet: store.Effects = { after: () => {} };
 const refusal = (f: () => unknown) => {
   try { f(); } catch (e) { expect(e).toBeInstanceOf(Refusal); return (e as Error).message; }
   throw new Error("did not refuse");
@@ -41,7 +43,7 @@ afterAll(() => {
 describe("issue verbs without argv", () => {
   test("add, note and done", async () => {
     const r = repo();
-    const a = await issueOps.add(r, "first thing", { labels: ["x"] });
+    const a = await issueOps.add(r, "first thing", { labels: ["x"] }, quiet);
     expect(a.result.added).toBe(1);
     expect(a.result.title).toBe("first thing");
     const n = issueOps.note(r, 1, "a remark");
@@ -83,7 +85,7 @@ describe("issue verbs without argv", () => {
     expect(item(r, 1).fm.closed_as).toBeUndefined();
     expect(item(r, 1).notes.at(-1)).toContain("needs more investigation");
     expect(issueOps.edit(r, 1, { status: "open" }).result.status).toBe("open");
-    const a = await issueOps.add(r, "filed parked", { status: "parked" });
+    const a = await issueOps.add(r, "filed parked", { status: "parked" }, quiet);
     expect(issues.status(item(r, a.result.added))).toBe("parked");
   });
 

@@ -133,9 +133,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     if (due(s, "firefight", now)) {
       s.last.firefight = at;
       const f = await firefight(undefined, now);
-      // A filed red is an issue for intake; a slow land's rescue Ask is the director's.
-      const reg = loadRegistry();
-      for (const x of f?.filed ?? []) if ("filed" in x && reg[x.repo]) p.intake(reg[x.repo]!, x.filed);
+      // A filed red starts its own intake (its filing's effects); a slow land's rescue Ask is the director's.
       if (f?.asked.length) directIfNew();
       if (f && (f.filed.length || f.asked.length)) out.firefighter = f;
     }

@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { join } from "node:path";
 import { LANES, lane, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { byPriority, afterOf, buildableIssue, buildableIssues, note, partsOf, planSet, priorityOf, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
+import { byPriority, afterOf, buildableIssue, buildableIssues, note, partsOf, planSet, priorityOf, readFetched, readList, readLists, reader, type Effects, type Place, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { logEvent } from "../infra/layout.ts";
@@ -42,6 +42,26 @@ import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
 
 /** The buildable issues of each factory repo. */
 export const openIssues = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => buildableIssues(sandboxRepos(), lists);
+
+/** After a write that leaves an open issue of a factory repo buildable: a dispatch, so the issue starts at once. */
+export function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
+  if (!repo.sandbox || !buildableIssue(repo, issues.idOf(item))) return;
+  dispatchDetached();
+}
+
+/** What a new issue starts, detached: a dispatch when it is buildable, and intake when `decideIntake` says so. It never fails the filing. */
+export function afterFiling(place: Place, item: issues.Issue): void {
+  const repo = loadRegistry()[place.key];
+  if (!repo) return;
+  try {
+    dispatchAfterIssue(repo, item);
+    const doc = reader().list(repo.key);
+    if (doc && decideIntake(repo, item, { doc, done: doneChecker(false), red: mainRed()(repo) }).kind !== "none") intakeDetached(repo, item.id);
+  } catch {}
+}
+
+/** The production effects of a filing (store.ts `writeFiling`). */
+export const filing: Effects = { after: afterFiling };
 
 /**
  * Whether `<repo>-<n>` is done, by `refDone`. It fetches each repo once; with `fetch` false it reads what was last fetched.
@@ -241,7 +261,7 @@ export function correctionsDue(now = Date.now()): boolean {
 export async function correctionsStep(now = Date.now()): Promise<{ signals: number; lessons: number; proposed: number } | null> {
   if (gates({ only: ["pause"] }) || !correctionsDue(now)) return null;
   try {
-    const store = await mine(now);
+    const store = await mine(now, filing);
     const r = {
       signals: store.lessons.reduce((n, l) => n + l.signals.length, 0),
       lessons: store.lessons.length,

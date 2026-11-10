@@ -8,12 +8,13 @@
  *
  * It is the Issues module: the predicates (`isBuildable`, `isSorted`,
  * `awaitsChris`), one read of a repo's list (`reader`), and the named writes
- * (`note`, `close`, `closeAndFile`, `file`). Callers do not read
+ * (`note`, `close`, `closeAndFile`, `file`). Every new issue but the flake
+ * tracker comes from `writeFiling`. Callers do not read
  * `fm.labels` or name a task's path.
  */
 import * as record from "../../jobs/lib/records/record.ts";
 import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/infra/git.ts";
-import { layout } from "../../jobs/lib/infra/layout.ts";
+import { layout, logEvent } from "../../jobs/lib/infra/layout.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
@@ -334,15 +335,16 @@ export const close = (repo: Place, id: number | string, text: string): string | 
 
 /**
  * Change item `id` with `change` as one commit, while it is still open and not
- * sorted: intake's write. False when the item is gone, closed or sorted.
+ * sorted: intake's write. False when the item is gone, closed or sorted. A
+ * change that files parts with `file` passes the `effects` they start.
  */
-export function sort(repo: Place, id: number | string, message: string, change: (item: Issue, doc: Doc) => void): boolean {
-  const w = writeList(repo, message, (doc) => {
+export function sort(repo: Place, id: number | string, message: string, change: (item: Issue, doc: Doc, file: File) => void, effects: Effects = { after: () => {} }): boolean {
+  const w = writeFiling(repo, message, "intake", effects, (doc, file) => {
     const item = issues.find(doc, id);
     if (!item || status(item) !== "open" || isSorted(doc, item, repo)) return null;
-    change(item, doc);
+    change(item, doc, file);
     return true;
-  });
+  }, false);
   return w?.value === true;
 }
 
@@ -360,8 +362,43 @@ export function reopen(doc: Doc, item: Issue, since: string | null): void {
   if (since) item.fm.since = since;
 }
 
-/** A new issue for `file` and `closeAndFile`; `spec` makes it buildable. */
-export interface Filing { title: string; kind?: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory" | "agent"; parked?: boolean }
+/** A new issue; `spec` makes it buildable, `from` (the full id it was split from) makes it a part, and `after` is what it waits for. */
+export interface Filing { title: string; kind?: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: issues.Source; parked?: boolean; from?: string; after?: string[] }
+
+/** What a new issue starts once its commit is on main. Production passes `filing` (factory.ts): intake or a dispatch. A test passes a recorder. */
+export interface Effects { after: (repo: Place, item: Issue) => void }
+
+/** Adds `f` to the list in a write: the new issue. A title or kind the store refuses throws, so nothing is written. */
+export type File = (f: Filing) => Issue;
+
+/**
+ * The one path that creates an issue: `change` runs in one write of the list and adds each new issue with `file`.
+ * After the commit, each new issue logs one `filed` event by `by`, and `effects.after` starts what it calls for.
+ * Returns what `writeList` returns.
+ */
+export function writeFiling<T>(repo: Place, message: string, by: string, effects: Effects, change: (doc: Doc, file: File) => T | null, create = true, blobs?: Record<string, Uint8Array>) {
+  let made: Issue[] = [];
+  const w = writeList(repo, message, (doc) => {
+    // A retry runs `change` again on a fresh list.
+    made = [];
+    return change(doc, (f) => {
+      const item = issues.add(doc, f.title, { kind: f.kind, labels: f.labels, request: f.request, spec: f.spec, priority: f.priority, source: f.source, from: f.from, after: f.after });
+      if (f.areas) item.fm.areas = f.areas;
+      if (f.parked) issues.setStatus(item, "parked");
+      made.push(item);
+      return item;
+    });
+  }, create, blobs);
+  for (const item of w ? made : []) {
+    logEvent({ by, subject: `${repo.key}-${issues.refOf(item)}`, action: "filed" });
+    effects.after(repo, item);
+  }
+  return w;
+}
+
+/** File one issue as one commit, starting the list when the store has none: the new issue. */
+export const fileIssue = (repo: Place, f: Filing, by: string, effects: Effects): Issue =>
+  writeFiling(repo, `todo: file ${f.title}`, by, effects, (_, file) => file(f))!.value;
 
 /**
  * Item `id` done with the note `text` (when `id` is given), and `filed` added,
@@ -369,11 +406,11 @@ export interface Filing { title: string; kind?: string; labels?: string[]; areas
  * of the item (`done`, `no issue <id>`, or the write's error) and the new numbers.
  * A filing with no `priority` takes the priority of the closed item.
  */
-export function closeAndFile(repo: Place, message: string, id: number | string | undefined, text: string, filed: Filing[]): { todo?: string; ids: number[] } {
+export function closeAndFile(repo: Place, message: string, id: number | string | undefined, text: string, filed: Filing[], by: string, effects: Effects): { todo?: string; ids: number[] } {
   let todo: string | undefined;
   let ids: number[] = [];
   try {
-    writeList(repo, message, (doc) => {
+    writeFiling(repo, message, by, effects, (doc, file) => {
       let inherited: string | undefined;
       if (id !== undefined) {
         const item = issues.find(doc, id);
@@ -384,14 +421,9 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
         }
         todo = item ? "done" : `no issue ${id}`;
       }
-      ids = filed.map((f) => {
-        const item = issues.add(doc, f.title, { kind: f.kind, labels: f.labels, request: f.request, spec: f.spec, priority: f.priority ?? inherited, source: f.source });
-        if (f.areas) item.fm.areas = f.areas;
-        if (f.parked) issues.setStatus(item, "parked");
-        return item.id;
-      });
+      ids = filed.map((f) => file({ ...f, priority: f.priority ?? inherited }).id);
       return true;
-    }, true);
+    });
   } catch (e) {
     todo = why(e);
     ids = [];
@@ -400,8 +432,8 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
 }
 
 /** File new issues as one commit, starting the list when the store has none; their numbers. A write that fails files none. */
-export const file = (repo: Place, message: string, filed: Filing[]): number[] =>
-  filed.length ? closeAndFile(repo, message, undefined, "", filed).ids : [];
+export const file = (repo: Place, message: string, filed: Filing[], by: string, effects: Effects): number[] =>
+  filed.length ? closeAndFile(repo, message, undefined, "", filed, by, effects).ids : [];
 
 /** The open flake tracker (`tracker: true`), the lowest id when there are several; undefined when there is none. */
 export function flakeTracker(doc: Doc): Issue | undefined {

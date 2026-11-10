@@ -8,6 +8,7 @@ import * as store from "./store.ts";
 import * as verbs from "./issues.ts";
 import { askChris, askOf, setAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
+import { readEvents } from "../../jobs/lib/infra/layout.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -31,6 +32,12 @@ function repo(items: { title: string; labels?: string[] }[] = []): store.Place {
   return r;
 }
 const item = (r: store.Place, id: number) => issues.find(store.readList(r)!, id)!;
+/** Effects that start nothing. */
+const quiet: store.Effects = { after: () => {} };
+/** Effects that record the full id of each issue passed to `after`. */
+const recorder = () => { const seen: string[] = []; return { seen, effects: { after: (r: store.Place, i: issues.Issue) => { seen.push(`${r.key}-${i.id}`); } } }; };
+/** The `[by, subject]` of each `filed` event logged since `before`. */
+const filedSince = (before: number) => readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject]);
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-store-"));
@@ -142,22 +149,57 @@ describe("the writes", () => {
 
   test("a Filing's kind is stored, and a Filing with no kind is a task", () => {
     const r = repo();
-    const ids = store.file(r, "file", [{ title: "Check it", kind: "check" }, { title: "Do it" }]);
+    const ids = store.file(r, "file", [{ title: "Check it", kind: "check" }, { title: "Do it" }], "rule", quiet);
     expect(ids.map((id) => item(r, id).fm.kind)).toEqual(["check", "task"]);
+  });
+
+  test("fileIssue files one issue in one commit, logs one filed event and calls after once", () => {
+    const r = repo(), rec = recorder(), before = readEvents().length, at = commits();
+    const i = store.fileIssue(r, { title: "Ship the thing", spec: "Do it.", parked: true }, "director", rec.effects);
+    expect(commits()).toBe(at + 1);
+    expect([item(r, i.id).spec, issues.status(item(r, i.id))]).toEqual(["Do it.", "parked"]);
+    expect(filedSince(before)).toEqual([["director", `${r.key}-${i.id}`]]);
+    expect(rec.seen).toEqual([`${r.key}-${i.id}`]);
+  });
+
+  test("fileIssue refuses a title that breaks the rule: no commit, no event, no after", () => {
+    const r = repo(), rec = recorder(), before = readEvents().length, at = commits();
+    expect(() => store.fileIssue(r, { title: "Fix: the title has a prefix" }, "rule", rec.effects)).toThrow("prefix");
+    expect(() => store.fileIssue(r, { title: "Ship the thing." }, "rule", rec.effects)).toThrow("period");
+    expect([commits(), filedSince(before), rec.seen]).toEqual([at, [], []]);
+  });
+
+  test("writeFiling starts nothing when its change writes nothing", () => {
+    const r = repo(), rec = recorder(), before = readEvents().length;
+    expect(store.writeFiling(r, "none", "rule", rec.effects, () => null)).toBeNull();
+    expect([filedSince(before), rec.seen]).toEqual([[], []]);
+  });
+
+  test("closeAndFile files through writeFiling: each new issue logs filed and starts its effects", () => {
+    const r = repo([{ title: "landed" }]), rec = recorder(), before = readEvents().length;
+    expect(store.closeAndFile(r, "landed", 1, "x", [{ title: "Check it", kind: "check" }], "rule", rec.effects)).toEqual({ todo: "done", ids: [2] });
+    expect(filedSince(before)).toEqual([["rule", `${r.key}-2`]]);
+    expect(rec.seen).toEqual([`${r.key}-2`]);
+  });
+
+  test("the flake tracker is made with no filed event", () => {
+    const r = repo(), before = readEvents().length;
+    expect(store.noteFlake(r, "a flake")).toEqual({ id: 1 });
+    expect(filedSince(before)).toEqual([]);
   });
 
   test("closeAndFile starts a list the store has none for, and names an item it lacks", () => {
     const r = { key: `st${++n}` };
-    expect(store.closeAndFile(r, "landed", 4, "x", [{ title: "Check", labels: ["check"] }])).toEqual({ todo: "no issue 4", ids: [1] });
+    expect(store.closeAndFile(r, "landed", 4, "x", [{ title: "Check", labels: ["check"] }], "rule", quiet)).toEqual({ todo: "no issue 4", ids: [1] });
     expect(store.readList(r)!.items.map((i) => i.title)).toEqual(["Check"]);
   });
 
   test("file adds issues with their bodies; nothing to file writes nothing", () => {
     const r = repo();
-    expect(store.file(r, "follow-ups", [{ title: "a", labels: ["followup"], request: "From job j." }, { title: "b", labels: ["followup"] }])).toEqual([1, 2]);
+    expect(store.file(r, "follow-ups", [{ title: "a", labels: ["followup"], request: "From job j." }, { title: "b", labels: ["followup"] }], "worker", quiet)).toEqual([1, 2]);
     expect(item(r, 1).request).toBe("From job j.");
     const before = commits();
-    expect(store.file(r, "none", [])).toEqual([]);
+    expect(store.file(r, "none", [], "worker", quiet)).toEqual([]);
     expect(commits()).toBe(before);
   });
 

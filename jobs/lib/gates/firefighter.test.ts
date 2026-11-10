@@ -23,7 +23,8 @@ const baselineRed = (commit: string) => write("baseline.json", JSON.stringify({ 
 const longLog = (what: string) => Array.from({ length: 500 }, (_, i) => `${what} line ${i}`).join("\n");
 const reds = () => readList({ key })!.items.filter((i) => store.areasOf(i).includes("red-main"));
 let ciCalls = 0;
-const ports = (): Ports => ({ gh: () => { ciCalls++; return { ok: true, out: longLog("ci") }; } });
+let started: string[] = [];
+const ports = (): Ports => ({ gh: () => { ciCalls++; return { ok: true, out: longLog("ci") }; }, after: (r, i) => { started.push(`${r.key}-${i.id}`); } });
 const listing = (runs: GhRun[]) => () => ({ ok: true, out: JSON.stringify(runs) });
 const agentRuns = () => (existsSync(process.env.ALEPH_JOBS_DIR!) ? readdirSync(process.env.ALEPH_JOBS_DIR!).filter((d) => d.endsWith("-firefighter")) : []);
 
@@ -31,9 +32,14 @@ test("a red baseline files exactly one critical issue for its commit across two 
   fresh([{ title: "other" }]);
   baselineRed(A);
   write(`baseline/${key}/checks.log`, longLog("checks"));
+  started = [];
+  const before = readEvents().length;
   const one = await firefight(ports());
   expect(one!.filed).toEqual([{ repo: key, commit: A, source: "baseline", filed: 2 }]);
   expect((await firefight(ports()))!.filed).toEqual([]);
+  // It files through writeFiling: one filed event, and the ports' `after` once.
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["firefighter", `${key}-2`]]);
+  expect(started).toEqual([`${key}-2`]);
   const [it] = reds();
   expect(reds().length).toBe(1);
   expect(it.title).toBe(`Fix the red main at ${A.slice(0, 7)}`);
@@ -163,7 +169,7 @@ test("a CI issue quotes the run URL, the failing tests, their failure lines and 
   const url = "https://github.com/x/y/actions/runs/41907198470";
   ciStep([repo], listing([{ conclusion: "failure", status: "completed", headSha: B, url, createdAt: "2026-11-04T20:30:11Z" }]));
   const asked: string[][] = [];
-  await firefight({ gh: (_, args) => { asked.push(args); return { ok: true, out: CI_LOG }; } });
+  await firefight({ gh: (_, args) => { asked.push(args); return { ok: true, out: CI_LOG }; }, after: () => {} });
   expect(asked).toEqual([["run", "view", "41907198470", "--log-failed"]]);
   const failure = ciFailure(CI_LOG, 24);
   expect(failure).toBe([
@@ -187,7 +193,7 @@ test("a landed CI issue closes on a green CI at or after the land, waits on one 
   const before = commit("before"), landed = commit("the fix"), after = commit("later");
   let runId = 100;
   const ci = (conclusion: string, sha: string) => ciStep([repo], listing([{ conclusion, status: "completed", headSha: sha, url: `https://github.com/x/y/actions/runs/${++runId}`, createdAt: "2026-11-04T21:00:00Z" }]));
-  const gh: Ports = { gh: () => ({ ok: true, out: CI_LOG }) };
+  const gh: Ports = { gh: () => ({ ok: true, out: CI_LOG }), after: () => {} };
   ci("failure", before);
   await firefight(gh);
   const [it] = reds();
@@ -221,7 +227,7 @@ test("a CI run that failed in setup is rerun once; failing again, it files an is
   const url = "https://github.com/x/y/actions/runs/777";
   ciStep([repo], listing([{ conclusion: "failure", status: "completed", headSha: B, url, createdAt: "2026-11-08T09:00:00Z" }]));
   const asked: string[][] = [];
-  const p: Ports = { gh: (_, args) => { asked.push(args); return { ok: true, out: args[1] === "rerun" ? "" : SETUP_LOG }; } };
+  const p: Ports = { gh: (_, args) => { asked.push(args); return { ok: true, out: args[1] === "rerun" ? "" : SETUP_LOG }; }, after: () => {} };
   await firefight(p);
   expect(asked.filter((a) => a[1] === "rerun")).toEqual([["run", "rerun", "777", "--failed"]]);
   expect(readEvents()).toContainEqual(expect.objectContaining({ by: "firefighter", subject: key, action: "reran", on: [B.slice(0, 7)] }));
@@ -244,7 +250,7 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
     ciStep([repo], listing([{ conclusion, status: "completed", headSha: sha, url, createdAt: "2026-11-04T21:00:00Z" }]));
     return url;
   };
-  const gh: Ports = { gh: () => ({ ok: true, out: CI_LOG }) };
+  const gh: Ports = { gh: () => ({ ok: true, out: CI_LOG }), after: () => {} };
   ci("failure", failed);
   await firefight(gh);
   const [it] = reds();
@@ -275,7 +281,7 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
 test("a step that fails is an event of the firefighter with the failure in its note, and no line in tick.log", async () => {
   fresh([]);
   ciStep([loadRegistry()[key]], listing([{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }]));
-  await firefight({ gh: () => { throw new Error("gh broke"); } });
+  await firefight({ gh: () => { throw new Error("gh broke"); }, after: () => {} });
   const events = readEvents().filter((e) => e.by === "firefighter" && e.action === "failed");
   expect(events.length).toBeGreaterThan(0);
   expect(events.some((e) => e.note?.includes("gh broke"))).toBe(true);

@@ -23,11 +23,10 @@ import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import * as notes from "../lib/annotations.ts";
 import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
-import { behind, directorStep, doneChecker, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
+import { behind, directorStep, dispatchAfterIssue, filing, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { runTick } from "./lib/transitions/tick.ts";
 import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
-import { health, mainRed } from "./lib/gates/factory-status.ts";
-import { decideIntake } from "./lib/gates/intake-decision.ts";
+import { health } from "./lib/gates/factory-status.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
 import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
 import { fit } from "./lib/roles/title.ts";
@@ -193,12 +192,6 @@ function jobs(ctx: Ctx): void {
   });
 }
 
-/** After `aleph issue add` or `edit` of an open issue in a factory repo: a dispatch, so the issue starts at once. It never fails the write. */
-function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
-  if (!repo.sandbox || !store.buildableIssue(repo, issues.idOf(item))) return;
-  dispatchDetached();
-}
-
 /**
  * aleph issue <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
  * registry has a list in the work store. The verbs are issues/lib/issues.ts; this
@@ -243,13 +236,10 @@ async function todoCmd(ctx: Ctx): Promise<void> {
 
   switch (sub) {
     case "add": {
-      const a = await verbs.add(repo, args.join(" "), fields);
+      const a = await verbs.add(repo, args.join(" "), fields, filing);
       warn(a.follow);
       for (const m of a.result.maybeSame ?? []) ctx.err(`${repo.key}-${m.id} may be the same task: ${m.title}`);
       ctx.out(a.result);
-      dispatchAfterIssue(repo, a.item);
-      const list = store.reader().list(repo.key);
-      if (list && decideIntake(repo, a.item, { doc: list, done: doneChecker(false), red: mainRed()(repo) }).kind !== "none") intakeDetached(repo, a.item.id);
       return;
     }
     case "list": {

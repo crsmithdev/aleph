@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssues, isBuildable, isSorted, mediaDir, mediaPath, partsOf, readList, writeList } from "../../../issues/lib/store.ts";
+import { buildableIssues, isBuildable, isSorted, mediaDir, mediaPath, partsOf, readList, writeList, type File } from "../../../issues/lib/store.ts";
 
 import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
 import { allRuns, stamp, type Repo } from "../records/ledger.ts";
@@ -79,6 +79,10 @@ function reset(items: Seed[], o: { author?: boolean } = {}): void {
   }, true);
 }
 const item = (id: number | string) => issues.find(readList(repo)!, id)!;
+/** A `File` that adds to `doc` with no write, for a test of what goes in. */
+const fileIn = (doc: issues.Doc): File => (f) => issues.add(doc, f.title, f);
+/** The full id of each issue a filing in `run` passed to `after`. */
+let started: string[] = [];
 /** Take in each open issue that is not sorted, in id order, as the intake queue starts them; the counts summed. */
 async function run(): Promise<{ counts: Counts; skipped: string[] }> {
   const counts: Counts = {};
@@ -86,7 +90,7 @@ async function run(): Promise<{ counts: Counts; skipped: string[] }> {
   const doc = readList(repo)!;
   for (const i of doc.items) {
     if (issues.status(i) !== "open" || isSorted(doc, i, repo)) continue;
-    const t = await intakeIssue(repo, i.id, () => true);
+    const t = await intakeIssue(repo, i.id, () => true, { after: (r, x) => { started.push(`${r.key}-${x.id}`); } });
     for (const [k, v] of Object.entries(t.counts)) counts[k as keyof Counts] = (counts[k as keyof Counts] ?? 0) + (v ?? 0);
     skipped.push(...t.skipped);
   }
@@ -200,6 +204,8 @@ test("a worker's follow-up whose Edit surface is only test files is closed as te
 
 test("parts are filed in the intake run as new issues from the issue; each waits on what the issue waits on and on its earlier parts", async () => {
   reset([{ title: "a", body: "VERDICT:parts" }]);
+  started = [];
+  const before = readEvents().length;
   const t = await run();
   expect(t.counts).toEqual({ build: 1 });
   const doc = readList(repo)!;
@@ -213,6 +219,9 @@ test("parts are filed in the intake run as new issues from the issue; each waits
   expect(item(1).spec).toBe("");
   expect(item(1).notes.at(-1)).toContain(`intake: split into ${repo.key}-2`);
   expect(calls()).toHaveLength(1);
+  // Each part is filed through writeFiling: one filed event by intake, and its effects.
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["intake", `${repo.key}-2`], ["intake", `${repo.key}-3`]]);
+  expect(started).toEqual([`${repo.key}-2`, `${repo.key}-3`]);
 });
 
 test("a split gives the parts task when the parent's stored kind is one the store dropped, and a current kind as it is", () => {
@@ -221,12 +230,12 @@ test("a split gives the parts task when the parent's stored kind is one the stor
   const parent = item(1);
   parent.fm.kind = "goal";
   const half = { goal: "Half.", surface: [{ path: "x.ts", new: false }], oracle: ["`bun test x.test.ts` passes"] };
-  const refs = addParts(repo, doc, parent, [{ title: "[Big] Do the first half", spec: half, after: [] }, { title: "[Big] Do the second half", spec: half, after: [1] }]);
+  const refs = addParts(repo, fileIn(doc), parent, [{ title: "[Big] Do the first half", spec: half, after: [] }, { title: "[Big] Do the second half", spec: half, after: [1] }]);
   const parts = refs.map((r) => issues.find(doc, r.slice(repo.key.length + 1))!);
   expect(parts.map((p) => p.fm.from)).toEqual([`${repo.key}-1`, `${repo.key}-1`]);
   expect(parts.map((p) => p.fm.after ?? [])).toEqual([[], [`${repo.key}-3`]]);
   expect(parts.map((p) => p.fm.kind)).toEqual(["task", "task"]);
-  const bugs = addParts(repo, doc, item(2), [{ title: "[Bug] Do the fix", spec: half, after: [] }]).map((r) => issues.find(doc, r.slice(repo.key.length + 1))!);
+  const bugs = addParts(repo, fileIn(doc), item(2), [{ title: "[Bug] Do the fix", spec: half, after: [] }]).map((r) => issues.find(doc, r.slice(repo.key.length + 1))!);
   expect(bugs.map((p) => p.fm.kind)).toEqual(["bug"]);
 });
 

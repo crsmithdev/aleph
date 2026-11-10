@@ -3,7 +3,8 @@
  * arguments: a repo, an issue number, text and options. Each returns what
  * `aleph issue` prints as JSON and throws a `Refusal` when it refuses. No argv,
  * no stdout, no exit code: jobs/cli.ts parses, prints and exits, and starts the
- * detached dispatch and intake that follow a write. A store `follow` warning
+ * detached dispatch that follows an edit; `add` gets the `effects` a new issue
+ * starts from its caller. A store `follow` warning
  * comes back in the result for the caller to print.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -65,8 +66,13 @@ function pick(repo: store.Place, doc: issues.Doc, id: number | string): issues.I
 
 // Every verb but `add` needs a list on main; `add` starts one.
 function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) => T | null, create = false, blobs?: Record<string, Uint8Array>) {
+  return refusing(() => store.writeList(repo, message, change, create, blobs));
+}
+
+/** What `f` returns; an error of the store is thrown as a refusal. */
+function refusing<T>(f: () => T): T {
   try {
-    return store.writeList(repo, message, change, create, blobs);
+    return f();
   } catch (e: any) {
     if (e instanceof Refusal) throw e;
     return refuse(e?.message ?? String(e));
@@ -121,9 +127,10 @@ function checkAfter(after: string[]): void {
 
 /**
  * Add an issue, with its areas from the triage unless `fields.labels` is given. With `fields.spec` it is buildable as filed;
- * `fields.after` is what it waits for. `item` is the stored issue, `follow` a store warning.
+ * `fields.after` is what it waits for. `item` is the stored issue, `follow` a store warning. It is filed through
+ * `store.writeFiling`, which logs `filed` and calls `effects.after`.
  */
-export async function add(repo: store.Place, title: string, fields: Fields = {}): Promise<{ result: Added; item: issues.Issue; follow: string | null }> {
+export async function add(repo: store.Place, title: string, fields: Fields, effects: store.Effects): Promise<{ result: Added; item: issues.Issue; follow: string | null }> {
   checkFields(fields);
   title = title.trim() || refuse("give the item a title");
   const problem = issues.titleProblem(title);
@@ -134,18 +141,16 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
   const files = readMedia(fields.media ?? []);
   const blobs: Record<string, Uint8Array> = {};
   const t = await triage(store.reader().list(repo.key), title, fields.request ?? spec ?? "");
-  const w = write(repo, "todo: add an item", (doc) => {
+  const w = refusing(() => store.writeFiling(repo, "todo: add an item", "rule", effects, (doc, file) => {
     const labels = fields.labels ?? t.labels;
     // Claude Code sets CLAUDECODE in its shells; a label that implies a source still wins over it.
     const implied = labels.some((l) => ["followup", "memory"].includes(l));
-    const issue = issues.add(doc, title, { kind: fields.kind, priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined });
-    if (fields.status === "parked") issues.setStatus(issue, "parked");
+    const issue = file({ title, kind: fields.kind, priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined, parked: fields.status === "parked" });
     if (fields.after?.length) setAfter(repo, doc, issue, fields.after);
     if (files.length) attachTo(repo.key, issue, files, blobs);
     return { issue };
-  }, true, blobs)!;
+  }, true, blobs))!;
   const { issue } = w.value;
-  logEvent({ by: "rule", subject: refIn(repo.key, issue), action: "filed" });
   const result: Added = { repo: repo.key, added: issue.id, title: issue.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) };
   return { result, item: issue, follow: w.follow };
 }

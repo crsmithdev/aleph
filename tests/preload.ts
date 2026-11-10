@@ -44,6 +44,9 @@ delete process.env.ALEPH_JOB_RUN;
 delete process.env.ALEPH_RECORDS_DIR;
 // Pin the test runner to UTC so timezone-independent dates and timestamps agree across environments.
 process.env.TZ = "UTC";
+// No test starts a detached dispatch or intake as a systemd unit: each new issue's filing would start one. A test
+// that wants them sets "on" itself.
+process.env.ALEPH_DISPATCH ??= "off";
 // No check, worker or land in a test waits for the host's load: the admission's own tests give a fake load.
 process.env.ALEPH_LOAD_LIMIT = "Infinity";
 

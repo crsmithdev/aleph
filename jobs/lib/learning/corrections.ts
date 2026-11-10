@@ -18,10 +18,10 @@ const fail = (subject: string, note: string) => logEvent({ by: "rule", subject, 
 import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
 import { always, logAlways, type Ask } from "../asks/ask.ts";
 import { causeOf } from "../records/outcome.ts";
-import { writeList, type Place } from "../../../issues/lib/store.ts";
+import { fileIssue, writeList, type Effects, type Place } from "../../../issues/lib/store.ts";
 import { PROPOSE_AT } from "../infra/settings.ts";
 import { cutTitle, writeLine, writeTitle } from "../roles/title.ts";
-import { add, edit, find, parseIssueRef, setStatus, titleProblem } from "../../../issues/lib/todo.ts";
+import { edit, find, parseIssueRef, setStatus, titleProblem } from "../../../issues/lib/todo.ts";
 
 export const CORRECTION_AT = 0.7;
 const WINDOW = 14 * 24 * 3600_000;
@@ -215,8 +215,8 @@ async function group(lessons: Lesson[], s: Signal): Promise<boolean> {
   return true;
 }
 
-/** Collect the last 14 days of new signals and group them into lessons; the store is rewritten. */
-export async function mine(now = Date.now()): Promise<Store> {
+/** Collect the last 14 days of new signals and group them into lessons; the store is rewritten. `effects` is what a filed proposal starts. */
+export async function mine(now: number, effects: Effects): Promise<Store> {
   const store = readStore();
   const from = new Date(now - WINDOW);
   const seen = new Set(store.lessons.flatMap((l) => l.signals.map((s) => s.id)));
@@ -230,15 +230,15 @@ export async function mine(now = Date.now()): Promise<Store> {
   signals.push(...(await dropSignals(from, seen)));
   signals.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   for (const s of signals) await group(store.lessons, s);
-  const proposed = await propose(store.lessons);
+  const proposed = await propose(store.lessons, effects);
   store.minedAt = new Date(now).toISOString();
   writeStore(store);
-  standingProposals(proposed);
+  standingProposals(proposed, effects);
   return store;
 }
 
 /** Every open lesson at PROPOSE_AT() signals becomes a proposal of the kind Jev finds, with a title, a target and its own parked issue. A Jev failure leaves it open. */
-async function propose(lessons: Lesson[]): Promise<Lesson[]> {
+async function propose(lessons: Lesson[], effects: Effects): Promise<Lesson[]> {
   const made: Lesson[] = [];
   const todo = lessons.filter((l) => (l.state === "open" && l.count >= PROPOSE_AT()) || (l.state === "proposed" && (!l.target || !l.issue)));
   if (!todo.length) return made;
@@ -266,7 +266,7 @@ async function propose(lessons: Lesson[]): Promise<Lesson[]> {
       }
       l.title ||= await writeTitle(l.sentence);
       if (!l.issue) {
-        const n = fileLesson(l, repo);
+        const n = fileLesson(l, repo, effects);
         if (n !== undefined) l.issue = `${repo.key}-${n}`;
       }
     } catch (e) {
@@ -287,7 +287,7 @@ export function place(kind: Kind, target = ""): string {
 export const standingKey = (l: Lesson): string => `proposal-${l.kind ?? "skill"}:${place(l.kind ?? "skill", l.target)}`;
 
 /** A proposal with a standing approve or decline is answered at once, as the route would. */
-function standingProposals(made: Lesson[]): void {
+function standingProposals(made: Lesson[], effects: Effects): void {
   for (const l of made) {
     const reason = standingKey(l);
     const action = always(reason)?.action;
@@ -295,8 +295,9 @@ function standingProposals(made: Lesson[]): void {
       // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
       const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
       if (!repo) { fail(l.id, `${reason}: approve failed: no sandboxed repo in the registry`); continue; }
-      const ref = approve(l.id, repo);
-      if (ref.startsWith(`${repo.key}-`)) logAlways(reason, ref, "filed", { note: `${reason}: approved ${l.id}` });
+      const ref = approve(l.id, repo, effects);
+      // The issue's filing logged `filed`; the standing approve answers its proposal.
+      if (ref.startsWith(`${repo.key}-`)) logAlways(reason, ref, "answered", { note: `${reason}: approved ${l.id}` });
       else fail(l.id, `${reason}: approve failed: ${ref}`);
     } else if (action === "decline") {
       const refusal = decline(l.id);
@@ -312,15 +313,10 @@ export const proposals = (): Lesson[] => readStore().lessons.filter((l) => l.sta
 const KIND_TITLE: Record<Kind, string> = { check: "Add a check", "claude-md": "Add a CLAUDE.md line", skill: "Change a skill" };
 
 /** Files the lesson as a parked `proposal` issue in `repo`: its number, or undefined when the store refused. It holds no spec until Chris approves it. */
-function fileLesson(l: Lesson, repo: Place): number | undefined {
+function fileLesson(l: Lesson, repo: Place, effects: Effects): number | undefined {
   const title = l.title && !titleProblem(l.title) ? l.title : cutTitle(l.sentence);
   try {
-    const w = writeList(repo, `memory: ${KIND_TITLE[l.kind ?? "skill"]}`, (doc) => {
-      const item = add(doc, title, { kind: "proposal", source: "memory" });
-      setStatus(item, "parked");
-      return item.id;
-    }, true);
-    return w?.value;
+    return fileIssue(repo, { title, kind: "proposal", source: "memory", parked: true }, "rule", effects).id;
   } catch (e) {
     fail(l.id, `filing the proposal failed: ${(e as Error).message}`);
     return undefined;
@@ -336,7 +332,7 @@ function pending(store: Store, id: string, verb: string): Lesson | string {
 }
 
 /** Reopens the proposal's own issue with the issue spec; its ref, or a refusal string. Writes no CLAUDE.md, skill or check. */
-export function approve(id: string, repo: Place): string {
+export function approve(id: string, repo: Place, effects: Effects): string {
   const store = readStore();
   const l = pending(store, id, "approved");
   if (typeof l === "string") return l;
@@ -361,7 +357,7 @@ export function approve(id: string, repo: Place): string {
     ...sections,
   ].join("\n");
   // A lesson the mine filed no issue for, because it was proposed before this or its filing failed, gets its issue now.
-  const n = l.issue ? parseIssueRef(l.issue)?.id : fileLesson(l, repo);
+  const n = l.issue ? parseIssueRef(l.issue)?.id : fileLesson(l, repo, effects);
   if (n === undefined) return "the work store refused the issue";
   try {
     const w = writeList(repo, `memory: approved ${repo.key}-${n}`, (doc) => {

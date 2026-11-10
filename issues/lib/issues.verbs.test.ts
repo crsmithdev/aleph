@@ -30,7 +30,9 @@ const proj = () => loadRegistry().proj!;
 async function code<T>(f: () => T | Promise<T>): Promise<{ code: number; value?: T }> {
   try { return { code: 0, value: await f() }; } catch (e) { if (!(e instanceof Refusal)) throw e; return { code: 1 }; }
 }
-const add = async (title: string, fields: verbs.Fields = {}) => { verbs.checkFields(fields); return verbs.add(proj(), title, fields); };
+/** The full id of each issue the verb's filing passed to `after`. */
+let started: string[] = [];
+const add = async (title: string, fields: verbs.Fields = {}) => { verbs.checkFields(fields); return verbs.add(proj(), title, fields, { after: (r, i) => { started.push(`${r.key}-${i.id}`); } }); };
 const list = (o: { status?: string; label?: string } = {}) => verbs.list(proj(), o).map(verbs.brief(proj().key));
 const show = (id: number) => { const i = verbs.show(proj(), id); return { ...verbs.brief(proj().key)(i), request: i.request, spec: i.spec, notes: i.notes }; };
 /** The lines `aleph issue lint` prints on stderr, and its exit code. */
@@ -235,4 +237,14 @@ test("add logs a filed event, and close logs a done or a dropped event, on the i
   const mine = (n: number) => readEvents().slice(before).filter((e) => e.subject === `proj-${n}`).map((e) => e.action);
   expect(mine(added)).toEqual(["filed", "done"]);
   expect(mine(b)).toEqual(["filed", "dropped"]);
+});
+
+test("add files through writeFiling: one filed event and one after per new issue; a refused title writes and starts nothing", async () => {
+  started = [];
+  const before = readEvents().length;
+  const n = (await add("Start the dispatch on a filing")).result.added;
+  expect(started).toEqual([`proj-${n}`]);
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["rule", `proj-${n}`]]);
+  expect((await code(() => add("Fix: the title has a prefix"))).code).toBe(1);
+  expect(started).toEqual([`proj-${n}`]);
 });

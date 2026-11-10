@@ -62,7 +62,7 @@ test("a spec question run, then the director's answer: the job keeps its Ask or 
   expect(ask(id)?.options).toEqual([]);
   const c = pendingCases([loadRegistry().fac]).find((x) => x.on === `fac-${id}`)!;
   if (c.at === "lesson") throw new Error("not an item case");
-  const r = await applyActions(c, [{ do: "answer", note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop });
+  const r = await applyActions(c, [{ do: "answer", note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop, after: () => {} });
   // The next dispatch: the director's answer must not leave the issue open with no Ask and no run.
   await dispatchIssues(f.start, undefined, f.rescue);
   const hasAsk = ask(id) !== null;

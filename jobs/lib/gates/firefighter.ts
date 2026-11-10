@@ -27,6 +27,7 @@ import { logEvent } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { askSlowLands } from "../land/rescue.ts";
 import { runFile } from "../records/run-files.ts";
+import { afterFiling } from "../transitions/factory.ts";
 
 /** The most of a log that goes into an issue's request: its last LOG_LINES lines, cut to LOG_CHARS. */
 export const LOG_LINES = 200;
@@ -40,9 +41,9 @@ const SOURCE_NAME: Record<Source, string> = { baseline: "the baseline checks", c
 /** One failure the firefighter files: the repo, the failing commit, what failed, and its log, read only when it is filed. */
 export interface Red { repo: string; commit: string; source: Source; line: string; log: () => string; url?: string }
 
-/** How the firefighter reads what is outside the factory directory. Tests replace it. */
-export interface Ports { gh: Gh }
-export const defaultPorts: Ports = { gh };
+/** How the firefighter reads what is outside the factory directory, and what a new issue starts. Tests replace it. */
+export interface Ports extends store.Effects { gh: Gh }
+export const defaultPorts: Ports = { gh, after: afterFiling };
 
 /** The failed jobs' log of the GitHub CI run at `url`. */
 const ciLog = (ports: Ports, repo: Repo, url: string): string => {
@@ -131,14 +132,14 @@ export type Filed = { repo: string; commit: string; source: Source } & ({ filed:
  * whose failure failed the same tests, when there is one; else a new critical issue with the log's tail. The check runs
  * again inside the write, on the store as it is then, so two ticks at once file it once.
  */
-export function fileRed(r: Red): Filed | null {
+export function fileRed(r: Red, effects: store.Effects = defaultPorts): Filed | null {
   if ((store.reader().list(r.repo)?.items ?? []).some((i) => holds(i, r.commit))) return null;
   const repo = loadRegistry()[r.repo];
   if (!repo) return null;
   const log = r.source === "ci" ? ciFailure(r.log()) : tail(r.log());
   const what = r.source === "ci" ? `The failure, from \`gh run view --log-failed\` of ${r.url}` : `The last ${LOG_LINES} lines of the log, at most ${LOG_CHARS} characters`;
   const request = `${mark(r.commit)}\nFailed: ${SOURCE_NAME[r.source]}\n${r.line}\n\n${what}:\n\n\`\`\`\n${log || "(no log)"}\n\`\`\`\n`;
-  const w = store.writeList(repo, `firefighter: ${SOURCE_NAME[r.source]} red at ${r.commit.slice(0, 7)}`, (doc): Filed | null => {
+  const w = store.writeFiling(repo, `firefighter: ${SOURCE_NAME[r.source]} red at ${r.commit.slice(0, 7)}`, "firefighter", effects, (doc, file): Filed | null => {
     if (doc.items.some((i) => holds(i, r.commit))) return null;
     const open = doc.items.filter((i) => issues.status(i) === "open" && isRedMain(i) && sameFails(i.request, log)).at(-1);
     const at = { repo: r.repo, commit: r.commit, source: r.source };
@@ -146,8 +147,8 @@ export function fileRed(r: Red): Filed | null {
       issues.note(open, `firefighter: ${mark(r.commit)}; ${SOURCE_NAME[r.source]} failed again while this fix is open: ${r.line}${log ? `; log: ${oneLine(log)}` : ""}`);
       return { ...at, noted: open.id };
     }
-    return { ...at, filed: issues.add(doc, titleOf(r), { kind: "bug", priority: "critical", labels: ["red-main"], source: "agent", request }).id };
-  }, true);
+    return { ...at, filed: file({ title: titleOf(r), kind: "bug", priority: "critical", labels: ["red-main"], source: "agent", request }).id };
+  });
   const f = w?.value ?? null;
   if (f && "filed" in f && r.source === "ci") record.update(`${r.repo}-${f.filed}`, (x) => { x.ci = { url: r.url!, commit: r.commit, failure: log }; });
   return f;
@@ -229,12 +230,11 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
   for (const r of (() => { try { return reds(ports); } catch (e: any) { logEvent({ by: "firefighter", subject: "reds", action: "failed", note: `failed: ${e?.message ?? e}` }); return []; } })()) {
     try {
       if (rerun(r, ports)) continue;
-      const f = fileRed(r);
+      const f = fileRed(r, ports);
       if (!f) continue;
       filed.push(f);
-      logEvent("filed" in f
-        ? { by: "firefighter", subject: `${f.repo}-${f.filed}`, action: "filed", note: `filed ${f.repo}-${f.filed} (critical) for ${r.line}` }
-        : { by: "firefighter", subject: `${f.repo}-${f.noted}`, action: "red", on: [r.commit.slice(0, 7)], note: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
+      // A new issue's `filed` event is the filing's own.
+      if ("noted" in f) logEvent({ by: "firefighter", subject: `${f.repo}-${f.noted}`, action: "red", on: [r.commit.slice(0, 7)], note: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
     } catch (e: any) {
       logEvent({ by: "firefighter", subject: r.repo, action: "failed", note: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}` });
     }

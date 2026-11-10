@@ -51,7 +51,7 @@ test("a red CI is a health line and one firefighter red at its latest failed hea
   let runs: GhRun[] | null = [run("failure", "c4", "2026-10-29T04:00:00Z"), run("failure", "c3", "2026-10-29T03:00:00Z"), run("success", "c2", "2026-10-29T02:00:00Z")];
   expect(ciStep([repo], listing(runs)).map((c) => c.sinceSha)).toEqual(["c3"]);
   expect(health()).toContainEqual({ text: "health: fac CI on main has failed 2 runs in a row since 2026-10-29 03:00 UTC (c3): https://ci/c4", kind: "warn", key: "red-ci" });
-  const ci = () => reds({ gh: () => ({ ok: true, out: "" }) }).filter((r) => r.source === "ci").map((r) => r.commit);
+  const ci = () => reds({ gh: () => ({ ok: true, out: "" }), after: () => {} }).filter((r) => r.source === "ci").map((r) => r.commit);
   expect(ci()).toEqual(["c4"]);
   // A third failed run is a new failing head.
   runs = [run("failure", "c5", "2026-10-29T05:00:00Z"), ...runs];

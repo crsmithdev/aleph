@@ -12,7 +12,8 @@ export const routes: Routes = {
   "POST /api/proposals/:id/approve": post((_body, { id }) => {
     // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
     const repo = Object.values(loadRegistry()).find((r) => r.sandbox) ?? fail(422, "no sandboxed repo in the registry to reopen the issue in");
-    const ref = approve(id, repo);
+    // A proposal's issue is filed parked, so its filing starts nothing; the server loads none of the factory's actions.
+    const ref = approve(id, repo, { after: () => {} });
     if (parseId(ref)?.repo !== repo.key) fail(422, ref);
     return { issue: ref };
   }),

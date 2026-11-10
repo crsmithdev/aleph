@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FULL } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { areasOf, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf } from "../../../issues/lib/store.ts";
+import { areasOf, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
 import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -25,6 +25,7 @@ import { INTAKE_TRIES } from "../infra/settings.ts";
 import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
+import { filing } from "../transitions/factory.ts";
 
 /** The model an intake run asks for. */
 const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;
@@ -326,14 +327,14 @@ ${PART_RULES}
  * takes the issue's kind when that is a current one, else `task`, its priority, and its source when that is not chris,
  * else agent. Each part's `after` is the earlier parts it names and the issue's own `after`. The parts' refs.
  */
-export function addParts(repo: Repo, doc: issues.Doc, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
+export function addParts(repo: Repo, file: File, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
   const refs: string[] = [];
   const from = `${repo.key}-${issues.refOf(issue)}`;
   const source = sourceOf(issue) === "chris" ? "agent" : sourceOf(issue);
   // A store from before a kind was dropped (such as `goal`) still splits: a kind the store does not know gives the parts `task`.
   const kind = issues.kindOf(issue);
   for (const c of parts) {
-    const part = issues.add(doc, c.title, { kind: issues.kindProblem(kind) ? "task" : kind, priority: priorityOf(issue), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
+    const part = file({ title: c.title, kind: issues.kindProblem(kind) ? "task" : kind, priority: priorityOf(issue), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
     refs.push(`${repo.key}-${issues.refOf(part)}`);
   }
   delete issue.fm.plan;
@@ -355,10 +356,10 @@ function stillRed(repo: Repo, item: issues.Issue): string | null {
 }
 
 /** Apply a route to the item through the work store; the route applied, or null when the item changed under the run. */
-function apply(repo: Repo, id: number, v: Route): Applied | null {
+function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | null {
   const ref = `${repo.key}-${id}`;
   let standing = false;
-  const ok = sort(repo, id, `intake ${ref}: ${v.route}`, (item, doc) => {
+  const ok = sort(repo, id, `intake ${ref}: ${v.route}`, (item, doc, file) => {
     if (v.route === "build") {
       // An open item with an Ask (a proposal too) waits for Chris: an after-link to it would stall this issue on his answer.
       const waits = v.after.filter((r) => {
@@ -370,7 +371,7 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
       item.fm.intake = "build";
       issues.note(item, `intake: build${after.length ? `, after ${after.join(", ")}` : ""}: ${v.reason}`);
       if (waits.length) issues.note(item, `intake: dropped after ${waits.join(", ")}: it waits for Chris`);
-      if (v.parts) addParts(repo, doc, item, v.parts, after);
+      if (v.parts) addParts(repo, file, item, v.parts, after);
       else item.spec = specText(v.spec!);
     } else if (v.route === "done") {
       issues.setStatus(item, "done", undefined, v.reason);
@@ -385,7 +386,7 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
     } else {
       issues.note(item, `intake: for Chris: ${askNote(v.ask)}`);
     }
-  });
+  }, effects);
   if (ok && v.route === "ask" && !standing) setAsk(ref, v.ask);
   if (ok && standing) logAlways("question", ref, "answered", { note: "the recommended answer" });
   return ok ? v.route : null;
@@ -461,7 +462,7 @@ function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line
 }
 
 /** One intake of one item and its route applied; counts and skipped lines are added to. */
-async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean, counts: Counts, skipped: string[]): Promise<void> {
+async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean, counts: Counts, skipped: string[], effects: Effects): Promise<void> {
   const name = `${repo.key}-${id}`;
   // One intake of an item at a time: an issue write's run and the tick may meet.
   const release = await lock(`intake-${name}`, 0);
@@ -505,7 +506,7 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
       if (v.route === "build" && testOnly(item, v)) v = { route: "close", reason: "test-only follow-up" };
       const red = stillRed(repo, item);
       if (red && (v.route === "close" || v.route === "done")) v = { route: "ask", reason: v.reason, ask: plainAsk("question", `Main is still red (${red}), and intake would close this issue: ${v.reason}`) };
-      const applied = apply(repo, id, v);
+      const applied = apply(repo, id, v, effects);
       if (applied) {
         counts[applied] = (counts[applied] ?? 0) + 1;
         run.end(v.reason, { route: applied });
@@ -526,14 +527,14 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
 const lockOf = (run: Run): string | null => (run.repo && onOf(run) !== undefined ? `intake-${run.repo}-${onOf(run)}` : null);
 const endLostIntakes = () => endLost("intake", lockOf, "a verdict");
 
-/** Take in one open issue now, if it is one the tick would take in; `done` says whether an `after` ref is done. */
-export async function intakeIssue(repo: Repo, id: number, done: (ref: string) => boolean): Promise<{ counts: Counts; skipped: string[] }> {
+/** Take in one open issue now, if it is one the tick would take in; `done` says whether an `after` ref is done, and `effects` is what a part starts. */
+export async function intakeIssue(repo: Repo, id: number, done: (ref: string) => boolean, effects: Effects = filing): Promise<{ counts: Counts; skipped: string[] }> {
   const counts: Counts = {};
   const skipped: string[] = [];
   await endLostIntakes();
   const blocked = gates({ only: ["live-cap"] });
   if (blocked) { skipped.push(`intake: ${blocked.why}`); return { counts, skipped }; }
-  await intakeItem(repo, id, done, counts, skipped);
+  await intakeItem(repo, id, done, counts, skipped, effects);
   return { counts, skipped };
 }
 

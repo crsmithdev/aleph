@@ -107,32 +107,34 @@ afterEach(() => {
 const stored = () => JSON.parse(readFileSync(join(base, "factory", "corrections.json"), "utf8"));
 
 const repo = { key: "fac" };
+/** Effects that start nothing. */
+const quiet = { after: () => {} };
 
 test("the kind falls to claude-md, then skill", async () => {
   pickFirst = true; checkP = 0.4; ruleP = 0.5;
-  await mine(NOW);
+  await mine(NOW, quiet);
   expect(proposals()[0].kind).toBe("claude-md");
   rmSync(join(base, "factory", "corrections.json"));
   ruleP = 0.49;
-  await mine(NOW);
+  await mine(NOW, quiet);
   expect(proposals()[0].kind).toBe("skill");
   expect(lastSkillCriteria).toEqual({ alpha: "Does alpha things." });
 });
 
 test("a proposed lesson without target gets title and target on the next mine", async () => {
   pickFirst = true;
-  await mine(NOW);
+  await mine(NOW, quiet);
   const s = stored();
   delete s.lessons[0].target; delete s.lessons[0].title;
   writeFileSync(join(base, "factory", "corrections.json"), JSON.stringify(s));
-  await mine(NOW + 1000);
+  await mine(NOW + 1000, quiet);
   expect(proposals()[0].target).toBe("fac checks");
   expect(proposals()[0].title!.length).toBeGreaterThan(0);
 });
 
 test("a proposed lesson files its own parked proposal issue", async () => {
   pickFirst = true;
-  await mine(NOW);
+  await mine(NOW, quiet);
   const items = readList(repo)!.items;
   expect(items.length).toBe(1);
   expect(items[0].fm.kind).toBe("proposal");
@@ -140,9 +142,21 @@ test("a proposed lesson files its own parked proposal issue", async () => {
   expect(stored().lessons[0].issue).toBe("fac-1");
 });
 
+test("approve files a lesson with no issue through fileIssue: one filed event, and its effects once", async () => {
+  pickFirst = true;
+  await mine(NOW, quiet);
+  const s = stored();
+  delete s.lessons[0].issue;
+  writeFileSync(join(base, "factory", "corrections.json"), JSON.stringify(s));
+  const seen: string[] = [], before = readEvents().length;
+  expect(approve(s.lessons[0].id, repo, { after: (r, i) => { seen.push(`${r.key}-${i.id}`); } })).toBe("fac-2");
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["rule", "fac-2"]]);
+  expect(seen).toEqual(["fac-2"]);
+});
+
 test("decline drops the proposal's issue", async () => {
   pickFirst = true;
-  await mine(NOW);
+  await mine(NOW, quiet);
   expect(decline(proposals()[0].id)).toBe("");
   expect(stored().lessons[0].state).toBe("declined");
   expect(status(readList(repo)!.items[0])).toBe("dropped");
@@ -150,10 +164,10 @@ test("decline drops the proposal's issue", async () => {
 
 test("an approved claude-md proposal reopens its issue with a spec with Goal, Edit surface and Oracle", async () => {
   pickFirst = true; checkP = 0.4; ruleP = 0.5; scope = "repo";
-  await mine(NOW);
+  await mine(NOW, quiet);
   const l = proposals()[0];
   expect(l.issue).toBe("fac-1");
-  expect(approve(l.id, repo)).toBe("fac-1");
+  expect(approve(l.id, repo, quiet)).toBe("fac-1");
   const items = readList(repo)!.items;
   expect(items.length).toBe(1);
   const [item] = items;
@@ -175,19 +189,20 @@ describe("standing proposals", () => {
   test("approve files the issue at once", async () => {
     grant("approve");
     pickFirst = true;
-    await mine(NOW);
+    await mine(NOW, quiet);
     expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
     expect(readList(repo)!.items.length).toBe(1);
     const [item] = readList(repo)!.items;
     expect(item.fm.kind).toBe("proposal");
     expect(titleProblem(item.title)).toBeNull();
-    expect(readEvents().find((e) => e.by === "rule" && e.subject === "fac-1" && e.action === "filed")?.note).toStartWith("proposal-check:fac: approved ");
+    expect(readEvents().find((e) => e.by === "rule" && e.subject === "fac-1" && e.action === "answered")?.note).toStartWith("proposal-check:fac: approved ");
+    expect(readEvents().filter((e) => e.subject === "fac-1" && e.action === "filed").length).toBe(1);
   });
 
   test("decline marks it declined", async () => {
     grant("decline");
     pickFirst = true;
-    await mine(NOW);
+    await mine(NOW, quiet);
     expect(stored().lessons[0].state).toBe("declined");
     expect(readEvents()).toContainEqual(expect.objectContaining({ action: "dropped", note: "proposal-check:fac: declined" }));
   });
@@ -220,7 +235,7 @@ test("traces on later pages reach the corrections, at most 4 requests at a time"
     gate.max = Math.max(gate.max, ++gate.open);
     try { return await real(url, init); } finally { gate.open--; }
   }) as typeof fetch;
-  try { await mine(NOW); } finally { globalThis.fetch = real; }
+  try { await mine(NOW, quiet); } finally { globalThis.fetch = real; }
   expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source))).toContain("chris");
   expect(gate.max).toBeLessThanOrEqual(4);
 });
@@ -230,14 +245,14 @@ describe("noise", () => {
 
   test("notifications, hand-backs and bridge text make no signal", async () => {
     traces = [{ id: "t0", sessionId: "s", timestamp: ago(4), input: "start", output: "did it" }, ...noise.map((input, i) => ({ id: `n${i}`, sessionId: "s", timestamp: ago(3 - i / 10), input, output: "ok" }))];
-    await mine(NOW);
+    await mine(NOW, quiet);
     expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["drop", "gate"]);
   });
 
   test("a drop whose run made no commit is not a signal, whatever Jev says", async () => {
     const dir = join(base, "jobs", "20261027-aleph-9");
     putRun(basename(join(dir)), { kind: "build", job: "aleph-9", name: "aleph-9", condition: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) } as any);
-    await mine(NOW);
+    await mine(NOW, quiet);
     expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
   });
 });

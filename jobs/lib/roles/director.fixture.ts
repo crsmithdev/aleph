@@ -95,9 +95,12 @@ export const held = (b: string, review = "Fine.\nVERDICT: pass\n") =>
 
 export let landed: string[] = [];
 export let dropped: { name: string; reason: string; fate?: string }[] = [];
+/** The full id of each issue a filing passed to the ports' `after`. */
+export let started: string[] = [];
 export const ports = (): Ports => ({
   land: async (name) => { landed.push(name); return null; },
   drop: async (name, reason, fate) => { dropped.push({ name, reason, fate }); return null; },
+  after: (repo, item) => { started.push(`${repo.key}-${item.id}`); },
 });
 
 /** Registers the hooks: the store, the repo, the fake and the tell server for the file, and clean fakes for each test. */
@@ -128,5 +131,5 @@ export function useDirectorFixture(): void {
     });
   });
   afterAll(() => { setSystemTime(); server.stop(true); rmSync(base, { recursive: true, force: true }); });
-  beforeEach(() => { rmSync(join(base, "calls"), { force: true }); landed = []; dropped = []; told = []; reply([]); });
+  beforeEach(() => { rmSync(join(base, "calls"), { force: true }); landed = []; dropped = []; started = []; told = []; reply([]); });
 }

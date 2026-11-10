@@ -13,7 +13,7 @@ import { jobId } from "../../../lib/naming.ts";
 import { setPaused } from "../gates/factory-status.ts";
 import { readStore } from "../learning/corrections.ts";
 import { getRun, jobIdOf, lastEvent, read as readJobRecord } from "../records/record.ts";
-import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, repoPath, run, sh, useDirectorFixture } from "./director.fixture.ts";
+import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, repoPath, run, sh, started, useDirectorFixture } from "./director.fixture.ts";
 
 useDirectorFixture();
 
@@ -84,6 +84,16 @@ test("actions that leave the Ask open send it to Chris with the director's case 
   expect(a.recommend).toEqual(TEXT.recommend);
   expect(a.details).toContain("It did: note: looked at it.");
   expect(a.details).toContain(`It could not: close: met on main: ${key}-1 was filed by Chris`);
+});
+
+test("a director add files the fix job through writeFiling: one filed event, on the new issue, and the ports' after once", async () => {
+  fresh([{ title: "q", ask: plain() }]);
+  reply([{ do: "add", title: "Fix the other module", body: "## Goal\nFix it.\n\n## Edit surface\n- x.ts\n\n## Oracle\n- `bun test x.test.ts` passes.\n" }], TEXT);
+  const [d] = await direct();
+  expect(d.applied).toEqual([`add: Fix the other module (${key}-2)`]);
+  expect(item(2)).toMatchObject({ title: "Fix the other module" });
+  expect(events().filter((e) => e.action === "filed" && e.subject.startsWith(`${key}-`)).map((e) => [e.by, e.subject])).toEqual([["director", `${key}-2`]]);
+  expect(started).toEqual([`${key}-2`]);
 });
 
 test("the schema requires the case text with actions, and parseReply returns it with the actions", () => {

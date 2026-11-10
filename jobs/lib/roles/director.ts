@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import * as jobRecord from "../records/record.ts";
 import { basename, dirname, join } from "node:path";
 import { dispatchDetached } from "../transitions/launch.ts";
+import { afterFiling } from "../transitions/factory.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
@@ -489,7 +490,7 @@ const fallback = (why: string): Text => ({ situation: `The director did not deci
 // Applying the actions.
 
 /** How actions reach the factory; each returns the refusal, or null. Tests replace them. */
-export interface Ports {
+export interface Ports extends store.Effects {
   land: (name: string) => Promise<string | null>;
   drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
   /** Starts a dispatch; a new spec starts its issue at once. */
@@ -499,6 +500,7 @@ export const defaultPorts: Ports = {
   land: (name) => refusal(async () => { await (await landJob(name, { lander: "director" }, { output: "ignore" })).child?.exited; }),
   drop: (name, reason, fate) => refusal(() => dropJob(name, { reason, quiet: true, fate })),
   dispatch: dispatchDetached,
+  after: afterFiling,
 };
 
 /** The result of one action: applied (whether it decides the Ask, and its log event), or refused. */
@@ -571,10 +573,11 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     const missing = missingSections(a.body);
     if (missing.length) return no(a, `the body lacks ${missing.map((h) => `## ${h}`).join(", ")}`);
     const title = issues.titleProblem(a.title) ? await writeTitle(a.title) : a.title;
-    const w = store.writeList(repo, `todo: a fix job for ${id}`, (doc) => issues.add(doc, title, { spec: a.body, source: "agent" }).id, true);
+    const w = store.writeFiling(repo, `todo: a fix job for ${id}`, "director", ports, (_, file) => file({ title, spec: a.body, source: "agent" }).id);
     if (!w) return no(a, "no issue written");
     store.note(repo, n!, `director: filed ${repo.key}-${w.value} as a fix job: ${title}`);
-    return { applied: `${describe(a)} (${repo.key}-${w.value})`, decides: false, ev: { action: "filed", on: [`${repo.key}-${w.value}`], note: title } };
+    // The filing logged `filed` on the new issue; this event is a note on the Ask's.
+    return { applied: `${describe(a)} (${repo.key}-${w.value})`, decides: false, ev: { note: `filed ${repo.key}-${w.value}: ${title}` } as Hold };
   }
   if (a.do === "close" || a.do === "drop-issue") {
     if (chrisOwns(item)) return no(a, `${id} was filed by Chris, so closing or dropping it is his`);

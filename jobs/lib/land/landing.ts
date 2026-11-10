@@ -8,6 +8,7 @@
 import { basename } from "node:path";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { closeAndFile, note } from "../../../issues/lib/store.ts";
+import { filing } from "../transitions/factory.ts";
 import { fetchOrigin, followMain, git } from "../infra/git.ts";
 import { needsOf } from "../asks/ask.ts";
 import { allRuns, isWaiting, isAgentRun, onOf, trailerOf, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
@@ -77,7 +78,7 @@ function closeItems(repo: Repo, run: Run, title = "", commit?: string): { todo?:
   if (on === undefined && !open) return {};
   const ci = on !== undefined && run.on && commit ? record.read(run.on)?.ci : undefined;
   if (ci) record.update(run.on!, (r) => { r.ci = { ...ci, landed: commit }; });
-  const w = closeAndFile(repo, `todo: job ${run.name} landed`, ci ? undefined : on, `job ${run.name} landed`, open ? [{ title, kind: "check", request: `The manual check of run ${run.name}: ${run.say}` }] : []);
+  const w = closeAndFile(repo, `todo: job ${run.name} landed`, ci ? undefined : on, `job ${run.name} landed`, open ? [{ title, kind: "check", request: `The manual check of run ${run.name}: ${run.say}` }] : [], "rule", filing);
   if (ci) return { todo: note(repo, on!, `job ${run.name} landed as ${commit!.slice(0, 7)}; the issue is done when GitHub CI on main is green at or after it`) ?? "open until GitHub CI on main is green at or after the land", checkItem: w.ids[0] };
   return { todo: w.todo, checkItem: w.ids[0] };
 }
