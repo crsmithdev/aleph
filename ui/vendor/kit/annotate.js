@@ -9,15 +9,24 @@
  * numbered pin on its element; a click on a pin edits the note. An element with a `data-annotate` attribute keeps its
  * pin when the page re-renders around it.
  *
- * `store` holds the annotations: `load()` resolves to all of them, `save(all)` replaces them. The default keeps them in
- * localStorage. An annotation is { v, id, url, selector, text, html, note, at }; `url` is the page without its query or anchor.
+ * `store` holds the annotations: `load()` resolves to all of them, `put(note)` adds or replaces one, `drop(id)` removes one,
+ * and `watch(callback)` calls `callback(all)` when another writer changes them. The default keeps them in localStorage.
+ * An annotation is { v: 2, id, url, selector, text, html, note, at, status, by, replies }; `url` is the page without its
+ * query or anchor, `status` is "open" or "resolved", and a reply is { by, text, at }.
  */
 import { dock, host } from "./dock.js";
 
-export const local = (key = "annotations") => ({
-  load: async () => { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; } },
-  save: async (all) => { try { localStorage.setItem(key, JSON.stringify(all)); } catch {} },
-});
+export const local = (key = "annotations") => {
+  const read = () => { try { return JSON.parse(localStorage.getItem(key) || "[]").map((a) => ({ status: "open", by: "user", replies: [], ...a, v: 2 })); } catch { return []; } };
+  const write = (all) => { try { localStorage.setItem(key, JSON.stringify(all)); } catch {} };
+  return {
+    load: async () => read(),
+    put: async (a) => { const all = read(); write(all.some((x) => x.id === a.id) ? all.map((x) => (x.id === a.id ? a : x)) : [...all, a]); },
+    drop: async (id) => write(read().filter((x) => x.id !== id)),
+    // Another tab's write fires `storage`; this tab's own writes do not.
+    watch: (fn) => { const on = (e) => { if (e.key === key) fn(read()); }; addEventListener("storage", on); return () => removeEventListener("storage", on); },
+  };
+};
 
 const BAR = `
 .bar { display: flex; border-radius: 20px; box-shadow: var(--shadow); }
@@ -30,9 +39,12 @@ const BAR = `
 .head { display: flex; gap: 6px; align-items: center; }
 .head b { flex: 1; }
 ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-li { display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; align-items: start; padding: 6px; border-radius: 6px; background: var(--sunk); cursor: pointer; }
+li { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 6px; align-items: start; padding: 6px; border-radius: 6px; background: var(--sunk); cursor: pointer; }
 li .no { font-weight: 600; color: var(--accent); }
 li .sel { display: block; color: var(--muted); font: 11px var(--code); overflow-wrap: anywhere; }
+li .st { color: var(--muted); font-size: 11px; }
+li .rep { display: block; margin-top: 2px; padding-left: 8px; border-left: 2px solid var(--rule); color: var(--muted); }
+li.resolved .txt { text-decoration: line-through; }
 li .gone { color: var(--muted); font-style: italic; }
 li button { padding: 0 6px; border: 0; background: none; color: var(--muted); }
 .empty { color: var(--muted); margin: 0; }
@@ -41,6 +53,7 @@ li button { padding: 0 6px; border: 0; background: none; color: var(--muted); }
 const LAYER = `
 .layer { position: fixed; inset: 0; pointer-events: none; z-index: var(--kit-z, 2147483000); }
 .glow { position: fixed; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 3px; display: none; }
+.pin.resolved { opacity: .5; }
 .pin { position: fixed; pointer-events: auto; width: 22px; height: 22px; padding: 0; border-radius: 11px; border: 2px solid var(--bg);
   background: var(--accent); color: var(--bg); font: 600 11px/18px var(--font); text-align: center; transform: translate(-50%, -50%); box-shadow: var(--shadow); }
 .edit { position: fixed; pointer-events: auto; width: 300px; display: grid; gap: 8px; }
@@ -74,10 +87,12 @@ export function annotate({ store = local() } = {}) {
   function draw() {
     const notes = here();
     countBtn.textContent = notes.length;
-    pins.innerHTML = notes.map((a, i) => `<button type="button" class="pin" data-id="${a.id}" title="${esc(a.note)}">${i + 1}</button>`).join("");
+    pins.innerHTML = notes.map((a, i) => `<button type="button" class="pin ${a.status}" data-id="${a.id}" title="${esc(a.note)}">${i + 1}</button>`).join("");
     place();
-    ui.querySelector("ol").innerHTML = notes.map((a, i) => `<li data-id="${a.id}"><span class="no">${i + 1}</span>` +
-      `<span>${esc(a.note)}<span class="sel">${esc(a.selector)}</span>${find(a) ? "" : `<span class="gone">Not on the page now</span>`}</span>` +
+    ui.querySelector("ol").innerHTML = notes.map((a, i) => `<li class="${a.status}" data-id="${a.id}"><span class="no">${i + 1}</span>` +
+      `<span><span class="txt">${esc(a.note)}</span> <span class="st">${a.status}${a.by ? ` · ${esc(a.by)}` : ""}</span>` +
+      a.replies.map((x) => `<span class="rep">${esc(x.by)}: ${esc(x.text)}</span>`).join("") + `<span class="sel">${esc(a.selector)}</span>${find(a) ? "" : `<span class="gone">Not on the page now</span>`}</span>` +
+      `<button type="button" class="res" aria-label="${a.status === "open" ? "Resolve" : "Reopen"} annotation ${i + 1}">${a.status === "open" ? "&check;" : "&#8634;"}</button>` +
       `<button type="button" class="del" aria-label="Delete annotation ${i + 1}">&times;</button></li>`).join("") || `<p class="empty">No annotations on this page.</p>`;
   }
 
@@ -93,9 +108,13 @@ export function annotate({ store = local() } = {}) {
 
   /** Saves `a` in its place, or at the end when it is new; an empty note deletes it. */
   async function put(a) {
-    const kept = all.some((x) => x.id === a.id) ? all.map((x) => (x.id === a.id ? a : x)) : [...all, a];
-    all = kept.filter((x) => x.note);
-    await store.save(all);
+    if (a.note) {
+      all = all.some((x) => x.id === a.id) ? all.map((x) => (x.id === a.id ? a : x)) : [...all, a];
+      await store.put(a);
+    } else {
+      all = all.filter((x) => x.id !== a.id);
+      await store.drop(a.id);
+    }
     draw();
   }
 
@@ -144,7 +163,7 @@ export function annotate({ store = local() } = {}) {
     if (!picking || ours(e)) return;
     block(e);
     glow.style.display = "none";
-    edit({ v: 1, id: uid(), url: page(), selector: selector(e.target), text: words(e.target), html: snippet(e.target), note: "" }, e.target);
+    edit({ v: 2, id: uid(), url: page(), selector: selector(e.target), text: words(e.target), html: snippet(e.target), note: "", status: "open", by: "user", replies: [] }, e.target);
   }, true);
   document.addEventListener("mousemove", (e) => {
     if (!picking || editing) return;
@@ -172,8 +191,9 @@ export function annotate({ store = local() } = {}) {
       setTimeout(() => delete e.target.dataset.armed, 3000);
       return;
     }
+    const gone = here();
     all = all.filter((a) => a.url !== page());
-    await store.save(all);
+    await Promise.all(gone.map((a) => store.drop(a.id)));
     draw();
   };
   ui.querySelector("ol").onclick = (e) => {
@@ -181,6 +201,7 @@ export function annotate({ store = local() } = {}) {
     const a = all.find((x) => x.id === id);
     if (!a) return;
     if (e.target.closest(".del")) return put({ ...a, note: "" });
+    if (e.target.closest(".res")) return put({ ...a, status: a.status === "open" ? "resolved" : "open" });
     find(a)?.scrollIntoView({ block: "center", behavior: "smooth" });
   };
   pins.onclick = (e) => {
@@ -198,6 +219,7 @@ export function annotate({ store = local() } = {}) {
   dock().append(bar);
   document.body.append(top);
   store.load().then((saved) => { all = saved; draw(); });
+  store.watch((saved) => { all = saved; draw(); });
 }
 
 /** The element an annotation names, or null when the page no longer has it. */

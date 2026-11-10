@@ -521,6 +521,41 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.ev('localStorage.removeItem("annotations")');
   }, 30_000);
 
+  test("the annotation widget saves through put and drop and redraws on watch", async () => {
+    await page.go("#/");
+    const bar = 'document.getElementById("kit-annotate").shadowRoot', lay = 'document.getElementById("kit-annotate-layer").shadowRoot';
+    const out = await page.ev<any>(`import("/vendor/kit/annotate.js").then(async ({ annotate }) => {
+      for (const id of ["kit-annotate", "kit-annotate-layer"]) document.getElementById(id).remove();
+      const calls = [];
+      let push;
+      annotate({ store: { load: async () => [], put: async (a) => { calls.push(["put", a]); }, drop: async (id) => { calls.push(["drop", id]); }, watch: (fn) => { push = fn; } } });
+      window.__push = (all) => push(all);
+      window.__calls = calls;
+      return true;
+    })`);
+    expect(out).toBe(true);
+    await page.ev(`${bar}.querySelector(".pick").click()`);
+    await page.ev('document.querySelector("#nav li a").click()');
+    await page.ev(`(() => { const l = ${lay}; l.querySelector("textarea").value = "v2 note"; l.querySelector(".save").click(); })()`);
+    await page.when(`${bar}.querySelector(".count").textContent === "1"`);
+    const [[kind, note]] = await page.ev<any[]>("window.__calls");
+    expect([kind, note.v, note.status, note.by, note.replies]).toEqual(["put", 2, "open", "user", []]);
+    // Resolve puts the note again with the new status.
+    await page.ev(`${bar}.querySelector(".res").click()`);
+    await page.when("window.__calls.length === 2");
+    expect(await page.ev("window.__calls[1][1].status")).toBe("resolved");
+    // A change from watch updates the count, the pins, the status and the replies.
+    await page.ev(`window.__push([{ ...window.__calls[1][1], id: "a", replies: [{ by: "agent", text: "done it", at: "" }] }, { ...window.__calls[1][1], id: "b", status: "open" }])`);
+    await page.when(`${bar}.querySelector(".count").textContent === "2"`);
+    expect(await page.ev(`${lay}.querySelectorAll(".pin").length`)).toBe(2);
+    expect(await page.ev(`${bar}.querySelector(".rep").textContent`)).toBe("agent: done it");
+    // Delete calls drop.
+    await page.ev(`${bar}.querySelector(".del").click()`);
+    await page.when("window.__calls.length === 3");
+    expect(await page.ev("window.__calls[2]")).toEqual(["drop", "a"]);
+    await page.ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))');
+  }, 30_000);
+
   test("every indented list takes its left padding from --indent-list", async () => {
     await page.width(1200);
     await page.go("#/");
