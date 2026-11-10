@@ -16,6 +16,7 @@ import { baselines, factoryDir, factoryRepos, gates, probeHold, readStalls, writ
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { logEvent } from "../infra/layout.ts";
+import { retain } from "../infra/retention.ts";
 import { archiveOld } from "../records/record.ts";
 import { allJobs, loadRegistry, lock, type Entry, type Repo } from "../records/ledger.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
@@ -124,6 +125,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     await smokeStep(undefined, undefined, now);
     const old = archiveOld(now);
     if (old.length) out.archived = old;
+    try { const gone = retain(now); if (gone) out.retained = gone; } catch (e: any) { logEvent({ by: "rule", subject: "retention", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
     if (due(s, "firefight", now)) {
       s.last.firefight = at;
       const f = await firefight(undefined, now);
