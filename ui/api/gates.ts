@@ -21,8 +21,7 @@ import type { Event } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 
-import { runCli } from "../cli.ts";
-import { sameSite, text } from "../http.ts";
+import { aleph, fail, post } from "../action.ts";
 import { loadState } from "../state-load.ts";
 import type { State } from "../state.ts";
 import type { Routes } from "../server.ts";
@@ -304,26 +303,17 @@ export const routes: Routes = {
     const [{ state }, security] = await Promise.all([loadState(), securityFacts()]);
     return Response.json(gatesBody(state, security, w === null ? undefined : WINDOWS[w], q.get("project") || undefined));
   },
-  "POST /api/gates/caps": async (req) => {
-    if (!sameSite(req)) return text("forbidden", 403);
-    const body: any = await req.json().catch(() => null);
-    if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "body must be a JSON object" }, { status: 422 });
+  "POST /api/gates/caps": post((body) => {
+    if (typeof body !== "object" || Array.isArray(body)) fail(422, "body must be a JSON object");
     const patch: Record<string, unknown> = {};
     for (const k of CAP_KEYS) if (k in body) patch[k] = body[k];
-    try { writeCaps(patch); } catch (e) { return Response.json({ error: (e as Error).message }, { status: 422 }); }
-    return Response.json({ live: LIVE_CAP(), run: RUN_CAP(), ...settingsNow() });
-  },
-  "POST /api/gates/schedules": async (req) => {
-    if (!sameSite(req)) return text("forbidden", 403);
-    const body: any = await req.json().catch(() => null);
-    const e = setTimerInterval(String(body?.name), String(body?.every));
-    if (e) return Response.json({ error: e }, { status: 422 });
-    return Response.json({ every: intervalOf(TIMERS[body.name]) });
-  },
-  "POST /api/gates/revoke/:reason": async (req, params) => {
-    if (!sameSite(req)) return text("forbidden", 403);
-    const { stdout, stderr, code } = await runCli(["always", "revoke", params.reason]);
-    if (code !== 0) return Response.json({ error: (stderr || stdout).trim() || `aleph exited ${code}` }, { status: 422 });
-    try { return Response.json(JSON.parse(stdout)); } catch { return Response.json({ output: stdout.trim() }); }
-  },
+    try { writeCaps(patch); } catch (e) { fail(422, (e as Error).message); }
+    return { live: LIVE_CAP(), run: RUN_CAP(), ...settingsNow() };
+  }),
+  "POST /api/gates/schedules": post((body) => {
+    const e = setTimerInterval(String(body.name), String(body.every));
+    if (e) fail(422, e);
+    return { every: intervalOf(TIMERS[body.name]) };
+  }),
+  "POST /api/gates/revoke/:reason": post((_body, { reason }) => aleph(["always", "revoke", "--", reason])),
 };

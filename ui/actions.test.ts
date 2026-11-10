@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../issues/lib/store.ts";
+import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
@@ -45,7 +45,7 @@ beforeAll(async () => {
   sh(items, "push", "-q", "origin", "main");
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
-  writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\nif [ "$1" = "drop" ] && [ -e ${base}/fail-drop ]; then echo "drop failed" >&2; exit 1; fi\nif [ "$3" = "no-such-reason" ]; then echo "no such reason" >&2; exit 1; fi\necho out\nexit 0\n`);
+  writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\nif [ "$1" = "drop" ] && [ -e ${base}/fail-drop ]; then echo "drop failed" >&2; exit 1; fi\nif [ "$4" = "no-such-reason" ]; then echo "no such reason" >&2; exit 1; fi\necho out\nexit 0\n`);
   chmodSync(fake, 0o755);
   restoreEnv = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake });
   for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "failed" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
@@ -66,23 +66,21 @@ test("POST /api/wait 400s without a blocker or an item", async () => {
   expect((await post("/api/wait/x", undefined, { run: rid("x") })).status).toBe(400);
 });
 
-const waiting = (n: number) => readList({ key: "r" })!.items.find((i) => i.id === n && (n === 6 ? i.sub === 1 : i.sub === undefined))!.fm.after;
-
 test("POST /api/wait reads the issue from `on`, and the integer part of a part's dotted `on`", async () => {
-  for (const [job, n] of [["won", 5], ["wgoal", 6]] as const) {
+  for (const [job, n] of [["won", "5"], ["wgoal", "6.1"]] as const) {
     const before = recorded().length;
     const res = await post(`/api/wait/${job}`, { "X-Aleph-UI": "1" }, { run: rid(job), on: "r-9.1" });
     expect(res.status).toBe(200);
-    expect(waiting(n)).toEqual(["r-9.1"]);
     const calledNow = recorded().slice(before);
-    expect(calledNow).toHaveLength(1);
-    expect(calledNow[0].startsWith(`drop ${job} Chris chose to wait for r-9.1`)).toBe(true);
+    expect(calledNow).toHaveLength(2);
+    expect(calledNow[0]).toBe(`issue edit --after r-9.1 -- r ${n}`);
+    expect(calledNow[1].startsWith(`drop -- ${job} Chris chose to wait for r-9.1`)).toBe(true);
   }
 });
 
 test("POST /api/wait is 422 when the edit is refused, and drops nothing", async () => {
   const before = recorded().length;
-  // Issue 99 is not in the store: the in-process edit refuses it.
+  // Issue 99 is not in the store: reading its wait refuses it.
   const res = await post("/api/wait/wtgone", { "X-Aleph-UI": "1" }, { run: rid("wtgone"), on: "r-9.1" });
   expect(res.status).toBe(422);
   expect(((await res.json()) as any).error).toContain("no issue 99");
@@ -99,9 +97,9 @@ test("a POST without the header, or from another origin, is 403 and runs nothing
 
 test("POST /api/drop passes the reason", async () => {
   expect((await post("/api/drop/x", { "X-Aleph-UI": "1" }, { run: rid("x"), reason: "not needed" })).status).toBe(200);
-  expect(recorded().at(-1)).toBe("drop x not needed");
+  expect(recorded().at(-1)).toBe("drop -- x not needed");
   await post("/api/drop/x", undefined, { run: rid("x") });
-  expect(recorded().at(-1)).toBe("drop x");
+  expect(recorded().at(-1)).toBe("drop -- x");
 });
 
 test("a name not in the ledger is 404 and runs nothing", async () => {
@@ -146,9 +144,9 @@ test("POST /api/answer/:name drops the question run with the answer as its reaso
   expect(recorded().length).toBe(before);
   const res = await post("/api/answer/asks", hdr, { run: rid("asks"), answer: "blue" });
   expect(res.status).toBe(200);
-  expect((await res.json()).code).toBe(0);
+  expect(await res.json()).toEqual({ output: "out" });
   const last = recorded().at(-1)!;
-  expect(last.startsWith("drop asks ")).toBe(true);
+  expect(last.startsWith("drop -- asks ")).toBe(true);
   expect(last).toContain("which colour?");
   expect(last).toContain("blue");
 });
@@ -163,18 +161,40 @@ test("an action for a run that is not the job's latest is 409 and runs nothing",
   expect(recorded().length).toBe(before);
   for (const verb of ["land", "recheck"]) {
     expect((await post(`/api/${verb}/x`, hdr, { run: rid("x") })).status).toBe(200);
-    expect(recorded().at(-1)).toBe(`${verb} x`);
+    expect(recorded().at(-1)).toBe(`${verb} -- x`);
   }
 });
 
-test("POST /api/wait puts the old `after` back when the drop fails", async () => {
+test("POST /api/wait puts the old `after` back when the drop fails, and says which step failed", async () => {
   const fail = join(base, "fail-drop");
   writeFileSync(fail, "");
   try {
-    const was = waiting(5);
     const res = await post("/api/wait/won", { "X-Aleph-UI": "1" }, { run: rid("won"), on: "r-8" });
-    expect(((await res.json()) as any).code).toBe(1);
-    expect(waiting(5)).toEqual(was);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as any).error).toBe("drop the job: drop failed; r-5 its wait was put back");
+    expect(recorded().slice(-3)).toEqual(["issue edit --after r-8 -- r 5", expect.stringMatching(/^drop -- won /), "issue edit --after none -- r 5"]);
+  } finally { rmSync(fail); }
+});
+
+test("POST /api/wait says which step failed when the edit is refused, and drops nothing", async () => {
+  const fail = join(base, "fail-edit");
+  writeFileSync(fail, "");
+  try {
+    const before = recorded().length;
+    const res = await post("/api/wait/won", { "X-Aleph-UI": "1" }, { run: rid("won"), on: "r-8" });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as any).error).toBe("set the wait: edit refused");
+    expect(recorded().slice(before)).toEqual(["issue edit --after r-8 -- r 5"]);
+  } finally { rmSync(fail); }
+});
+
+test("a failed command is never a 200: it is a 4xx with the command's reason", async () => {
+  const fail = join(base, "fail-drop");
+  writeFileSync(fail, "");
+  try {
+    const res = await post("/api/drop/x", { "X-Aleph-UI": "1" }, { run: rid("x") });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "drop failed" });
   } finally { rmSync(fail); }
 });
 
@@ -190,11 +210,24 @@ describe("POST /api/standing/:reason", () => {
   test("grants through the CLI", async () => {
     const r = await post("/api/standing/held-path", { "X-Aleph-UI": "1" }, body);
     expect(r.status).toBe(200);
-    expect(recorded().at(-1)).toBe("always grant held-path land");
+    expect(recorded().at(-1)).toBe("always grant -- held-path land");
   });
   test("a CLI refusal is a 422 with its reason", async () => {
     const r = await post("/api/standing/no-such-reason", { "X-Aleph-UI": "1" }, body);
     expect(r.status).toBe(422);
     expect((await r.json()).error).toBe("no such reason");
   });
+});
+
+test("every POST route answers a refused request with a 4xx and `{ error }`", async () => {
+  const dir = join(import.meta.dir, "api");
+  const files = (await Array.fromAsync(new Bun.Glob("*.ts").scan(dir))).filter((f) => !f.endsWith(".test.ts"));
+  const keys = (await Promise.all(files.map(async (f) => Object.keys((await import(join(dir, f))).routes ?? {})))).flat();
+  const paths = keys.filter((k) => k.startsWith("POST ")).map((k) => k.slice(5).replace(/:\w+/g, "x"));
+  expect(paths.length).toBeGreaterThan(20);
+  for (const p of paths) {
+    const res = await post(p, {});
+    expect([p, res.status]).toEqual([p, 403]);
+    expect([p, await res.json()]).toEqual([p, { error: "forbidden" }]);
+  }
 });

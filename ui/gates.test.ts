@@ -152,7 +152,7 @@ test("a director decision shows its action and sub, and its long note only behin
 
 test("POST /api/gates/revoke/:reason runs `aleph always revoke`, and refuses a request without the UI header", async () => {
   expect((await post("/api/gates/revoke/rescue")).status).toBe(200);
-  expect(readFileSync(calls, "utf8").trim().split("\n").at(-1)).toBe("always revoke rescue");
+  expect(readFileSync(calls, "utf8").trim().split("\n").at(-1)).toBe("always revoke -- rescue");
   const n = readFileSync(calls, "utf8").length;
   expect((await at("/api/gates/revoke/rescue", { method: "POST" })).status).toBe(403);
   expect(existsSync(calls) && readFileSync(calls, "utf8").length).toBe(n);

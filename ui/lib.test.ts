@@ -360,8 +360,8 @@ test("postJson posts the JSON body with the UI header and throws the error text 
     await expect(postJson("/api/x", {})).rejects.toThrow("no job named x");
     reply = () => new Response("forbidden", { status: 403 });
     await expect(postJson("/api/x", {})).rejects.toThrow("forbidden");
-    reply = () => Response.json({ code: 1, stdout: "", stderr: "bad flag" }, { status: 422 });
-    await expect(postJson("/api/x", {})).rejects.toThrow("bad flag");
+    reply = () => new Response("Bad Gateway", { status: 502 });
+    await expect(postJson("/api/x", {})).rejects.toThrow("Bad Gateway");
   } finally { globalThis.fetch = real; }
 });
 

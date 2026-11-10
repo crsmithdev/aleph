@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
-import { sameSite } from "../http.ts";
+import { aleph, fail, post } from "../action.ts";
 import { staleAsync } from "../stale.ts";
 import { items, search as searchItems } from "../memory-items.ts";
 import { handoffsDir } from "../memory-types.ts";
@@ -180,26 +180,23 @@ async function note(url: URL): Promise<Response> {
 // ---------------------------------------------------------------- writes
 
 const WHY = "edited on the Memory page";
-const fail = (error: string, status = 422) => json({ error }, status);
 
-/** `vault <args>`; the refusal lines of stderr are the error. */
-async function vault(...args: string[]): Promise<Response> {
-  const p = Bun.spawn(["bun", CLI, ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
-  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-  // The notes only: the misses cache stays, since reloading it waits on Langfuse.
-  notes.clear();
-  if (code !== 0) return fail(err.trim() || `vault ${args[0]} exited ${code}`);
-  try { return json(JSON.parse(out)); } catch { return json({ output: out.trim() }); }
+/** `vault <args>` through ui/action.ts. */
+async function vault(...args: string[]): Promise<unknown> {
+  try { return await aleph(args, { cli: "vault" }); } finally {
+    // The notes only: the misses cache stays, since reloading it waits on Langfuse.
+    notes.clear();
+  }
 }
 
 /** A note's text, rewritten by `change`, through `vault write`. */
-async function rewrite(title: string, change: (text: string) => string, why = WHY): Promise<Response> {
+async function rewrite(title: string, change: (text: string) => string, why = WHY): Promise<unknown> {
   const hit = linkTargets(await loadVault(vaultDir())).get(title.toLowerCase());
-  if (!hit?.wiki || hit.archived) return fail(`no live note titled ${title}`, 404);
+  if (!hit?.wiki || hit.archived) fail(404, `no live note titled ${title}`);
   const dir = mkdtempSync(join(tmpdir(), "aleph-memory-"));
   try {
-    writeFileSync(join(dir, `${hit.title}.md`), change(hit.text));
-    return await vault("write", join(dir, `${hit.title}.md`), "--why", why);
+    writeFileSync(join(dir, `${hit!.title}.md`), change(hit!.text));
+    return await vault("write", join(dir, `${hit!.title}.md`), "--why", why);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -229,12 +226,10 @@ export function withoutLink(text: string, target: string): string {
   return text.split("\n").filter((l) => !new RegExp(`^\\s*(?:[-*]\\s*)?${link.source}\\s*$`, "i").test(l)).join("\n").replace(link, (_, alias) => alias ?? target);
 }
 
-const body = async (req: Request): Promise<Record<string, string>> => {
-  const b: any = await req.json().catch(() => ({}));
-  return Object.fromEntries(Object.entries(b ?? {}).map(([k, v]) => [k, typeof v === "boolean" ? (v ? "1" : "") : String(v ?? "")]));
-};
-type Post = (b: Record<string, string>) => Promise<Response>;
-const post = (f: Post) => async (req: Request) => (sameSite(req) ? f(await body(req)) : fail("forbidden", 403));
+/** The body's fields as text: a boolean is "1" or "". */
+const strings = (b: object): Record<string, string> => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, typeof v === "boolean" ? (v ? "1" : "") : String(v ?? "")]));
+type Post = (b: Record<string, string>) => Promise<unknown>;
+const write = (f: Post) => post((b) => f(strings(b)));
 
 /** The file a handoff, an episode or MEMORY.md is, or null for a key outside its folder. */
 function fileOf(source: string, key: string): string | null {
@@ -246,26 +241,24 @@ function fileOf(source: string, key: string): string | null {
 
 async function file(url: URL): Promise<Response> {
   const path = fileOf(url.searchParams.get("source") ?? "", url.searchParams.get("key") ?? "");
-  return path && existsSync(path) ? json({ text: readFileSync(path, "utf8") }) : fail("no such file", 404);
+  return path && existsSync(path) ? json({ text: readFileSync(path, "utf8") }) : json({ error: "no such file" }, 404);
 }
 
 /** MEMORY.md is written in place, then `vault write` checks it; a refusal puts the old text back. */
 const editFile: Post = async ({ source, key, text }) => {
   const path = fileOf(source, key);
-  if (!path || !existsSync(path)) return fail("no such file", 404);
-  const old = readFileSync(path, "utf8");
-  writeFileSync(path, text);
-  if (source !== "memory-md") return json({ op: "edit", source, key });
-  const r = await vault("write", path, "--why", WHY);
-  if (!r.ok) writeFileSync(path, old);
-  return r;
+  if (!path || !existsSync(path)) fail(404, "no such file");
+  const old = readFileSync(path!, "utf8");
+  writeFileSync(path!, text);
+  if (source !== "memory-md") return { op: "edit", source, key };
+  try { return await vault("write", path!, "--why", WHY); } catch (e) { writeFileSync(path!, old); throw e; }
 };
 
 const deleteFile: Post = async ({ source, key }) => {
   const path = source === "memory-md" ? null : fileOf(source, key);
-  if (!path || !existsSync(path)) return fail("no such file", 404);
-  unlinkSync(path);
-  return json({ op: "delete", source, key });
+  if (!path || !existsSync(path)) fail(404, "no such file");
+  unlinkSync(path!);
+  return { op: "delete", source, key };
 };
 
 export const routes: Routes = {
@@ -273,12 +266,12 @@ export const routes: Routes = {
   "GET /api/memory/search": (_req, _p, url) => search(url),
   "GET /api/memory/note": (_req, _p, url) => note(url),
   "GET /api/memory/file": (_req, _p, url) => file(url),
-  "POST /api/memory/note/edit": post(({ title, text }) => rewrite(title, () => text)),
-  "POST /api/memory/note/core": post(({ title, core }) => rewrite(title, (t) => withCore(t, core))),
-  "POST /api/memory/note/alias": post(({ title, alias }) => (alias.trim() ? rewrite(title, (t) => withAlias(t, alias.trim())) : Promise.resolve(fail("no alias")))),
-  "POST /api/memory/note/link": post(({ title, target, unlink }) => rewrite(title, (t) => (unlink ? withoutLink(t, target) : withLink(t, target)))),
-  "POST /api/memory/note/archive": post(({ title, why }) => vault("archive", title, "--why", why || WHY)),
-  "POST /api/memory/note/delete": post(({ title, why }) => vault("delete", title, "--why", why || WHY)),
-  "POST /api/memory/file/edit": post(editFile),
-  "POST /api/memory/file/delete": post(deleteFile),
+  "POST /api/memory/note/edit": write(({ title, text }) => rewrite(title, () => text)),
+  "POST /api/memory/note/core": write(({ title, core }) => rewrite(title, (t) => withCore(t, core))),
+  "POST /api/memory/note/alias": write(async ({ title, alias }) => (alias.trim() ? rewrite(title, (t) => withAlias(t, alias.trim())) : fail(422, "no alias"))),
+  "POST /api/memory/note/link": write(({ title, target, unlink }) => rewrite(title, (t) => (unlink ? withoutLink(t, target) : withLink(t, target)))),
+  "POST /api/memory/note/archive": write(({ title, why }) => vault("archive", title, "--why", why || WHY)),
+  "POST /api/memory/note/delete": write(({ title, why }) => vault("delete", title, "--why", why || WHY)),
+  "POST /api/memory/file/edit": write(editFile),
+  "POST /api/memory/file/delete": write(deleteFile),
 };

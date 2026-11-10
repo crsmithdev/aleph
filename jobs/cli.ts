@@ -41,7 +41,11 @@ const DAY_MS = 24 * 3600_000;
 
 const out = (value: unknown) => console.log(JSON.stringify(value, null, 2));
 
-const [cmd, ...rest] = process.argv.slice(2);
+const [cmd, ...argv] = process.argv.slice(2);
+// Everything after `--` is positional, so a name or a text that the UI passes is never read as a flag.
+const dash = argv.indexOf("--");
+const rest = dash < 0 ? argv : argv.slice(0, dash);
+const tail = dash < 0 ? [] : argv.slice(dash + 1);
 function flag(name: string): string | undefined {
   const i = rest.indexOf(`--${name}`);
   return i >= 0 ? rest[i + 1] : undefined;
@@ -49,9 +53,9 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--media", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day"];
+const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day"];
 const FATES: Fate[] = ["duplicate", "met", "manual"];
-const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
+const positional = [...rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1])), ...tail];
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
 const command = process.argv.slice(2);
 
@@ -73,8 +77,7 @@ async function job(): Promise<void> {
 }
 
 async function plain(): Promise<void> {
-  const dash = rest.indexOf("--");
-  await started(await startPlain({ name: rest[0], argv: dash >= 0 ? rest.slice(dash + 1) : [], cwd: process.cwd() }, { command }));
+  await started(await startPlain({ name: rest[0], argv: tail, cwd: process.cwd() }, { command }));
 }
 
 /**

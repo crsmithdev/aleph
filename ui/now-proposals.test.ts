@@ -47,7 +47,7 @@ test("approve and decline handlers", async () => {
     expect(stored()[0].state).toBe("proposed");
     const ok = await call("POST /api/approve/:id", "approve/l-a", "l-a");
     const body = await ok.json();
-    expect(body.code).toBe(0);
+    expect(body.issue).toMatch(/^fac-\d+$/);
     expect(stored()[0].state).toBe("approved");
     const items = readList({ key: "fac" })!.items;
     // The issue and its part `.1`.
@@ -55,10 +55,10 @@ test("approve and decline handlers", async () => {
     expect(items[0].fm).toMatchObject({ source: "memory" });
     const again = await call("POST /api/approve/:id", "approve/l-a", "l-a");
     expect(again.status).toBe(422);
-    expect((await again.json()).code).toBe(1);
+    expect((await again.json()).error).toBeTruthy();
 
     const d = await call("POST /api/decline/:id", "decline/l-b", "l-b");
-    expect(await d.json()).toEqual({ code: 0, stdout: "declined", stderr: "" });
+    expect(await d.json()).toEqual({ declined: "l-b" });
     expect(stored()[1].state).toBe("declined");
   } finally {
     restore();
@@ -74,7 +74,7 @@ test("the approve refusal names the issue when no registry repo is sandboxed", a
     const req = new Request("http://x/api/approve/l-a", { method: "POST", headers: { "x-aleph-ui": "1" } });
     const res = await (proposalRoutes as any)["POST /api/approve/:id"](req, { id: "l-a" }, new URL("http://x/"));
     expect(res.status).toBe(422);
-    expect((await res.json()).stderr).toBe("no sandboxed repo in the registry to reopen the issue in");
+    expect((await res.json()).error).toBe("no sandboxed repo in the registry to reopen the issue in");
   } finally {
     restore();
     rmSync(base, { recursive: true, force: true });

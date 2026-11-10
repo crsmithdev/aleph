@@ -104,7 +104,7 @@ The tests, fixtures and testkits of a module are in its folder.
 
 ### The UI read path
 
-`GET /api/state` sends the build to a worker thread (`ui/state-load.ts`, `ui/state-worker.ts`). `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST runs an `aleph` command in its own process (`ui/cli.ts` `runCli`), so the UI and the CLI have one write path.
+`GET /api/state` sends the build to a worker thread (`ui/state-load.ts`, `ui/state-worker.ts`). `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
 
 ## Invariants
 

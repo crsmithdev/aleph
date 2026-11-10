@@ -532,7 +532,7 @@ describe("POST /api/issues", () => {
     const res = await post({ repo: "fac", title: "new one", body: "## Goal\n\ndo it", labels: ["spec", "x"] });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ added: 7 });
-    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "new one", "--spec", "-", "--labels", "x"]);
+    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "--spec", "-", "--labels", "x", "--", "fac", "new one"]);
     expect(readFileSync(stdinFile, "utf8")).toBe("## Goal\n\ndo it");
   });
 
@@ -677,7 +677,7 @@ describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
   const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "stuck triage", { request: "x" }); setAsk(refIn(doc.repo!, i), { kind: "input", reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
 
-  for (const [verb, argv] of [["retriage", ["issue", "note", "fac", "N", "Chris: run intake again"]], ["rerun", ["issue", "decide", "fac", "N", "Chris: run it again"]]] as const) {
+  for (const [verb, argv] of [["retriage", ["issue", "note", "--", "fac", "N", "Chris: run intake again"]], ["rerun", ["issue", "decide", "--", "fac", "N", "Chris: run it again"]]] as const) {
     test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on an item with an ask`, async () => {
       const n = ask();
       rmSync(argvFile, { force: true });
@@ -750,7 +750,7 @@ describe("what an issue waits on", () => {
     expect(existsSync(argvFile)).toBe(false);
     const res = await unblock(waiter);
     expect(res.status).toBe(200);
-    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "edit", "oth", waiter, "--after", live]);
+    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "edit", "--after", live, "--", "oth", waiter]);
   });
 });
 
