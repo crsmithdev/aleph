@@ -99,6 +99,7 @@
 /* The kit widgets (ui/vendor/kit) read these; one block serves both themes, as above. */
 :root {
   --kit-bg: var(--surface);
+  --kit-field: var(--bg);
   --kit-sunk: var(--sunk);
   --kit-ink: var(--ink);
   --kit-muted: var(--muted);

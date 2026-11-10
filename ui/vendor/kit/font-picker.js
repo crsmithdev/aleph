@@ -79,7 +79,7 @@ export function fontPicker({ roles = ROLES, base = "sans", key = "font-picker", 
   }
 
   const el = host("kit-fonts", CSS, `<details><summary class="fab" title="Fonts" aria-label="Fonts">Aa</summary>
-    <div class="card pop">${roles.map((r) => roleHtml(r, chosen, step)).join("")}<pre></pre><button type="button" class="reset">Reset</button></div></details>`);
+    <div class="card pop">${roles.map((r) => roleHtml(r, chosen, step, unset(r, roles, base))).join("")}<pre></pre><button type="button" class="reset">Reset</button></div></details>`);
   const shadow = el.shadowRoot;
   const out = shadow.querySelector("pre");
   shadow.addEventListener("change", (e) => {
@@ -113,12 +113,19 @@ export function fontPicker({ roles = ROLES, base = "sans", key = "font-picker", 
   sources().then((texts) => { rules = texts.flatMap((t) => scan(t, roles, base)); apply(); });
 }
 
+/** The label of a role's unset family: its default, or the base role whose family it then takes. */
+function unset(r, roles, base) {
+  const from = roles.find((x) => x.name === base);
+  if (r.default) return `Default (${r.default})`;
+  return r.name === base || !from ? "Default" : `Same as ${from.label.toLowerCase()}`;
+}
+
 /** The select rows of one role: the family with its arrows, then one select per step kind. */
-function roleHtml(r, chosen, step) {
+function roleHtml(r, chosen, step, none) {
   const groups = [...TYPES, ["Other", r.fonts.filter((f) => !TYPES.some(([, fs]) => fs.includes(f)))]]
     .map(([type, fonts]) => [type, fonts.filter((f) => r.fonts.includes(f))]).filter(([, fonts]) => fonts.length);
   const lower = r.label.toLowerCase();
-  const family = `<select data-role="${r.name}" aria-label="${r.label} font"><option value="">${r.default ? `Default (${r.default})` : "Default"}</option>` +
+  const family = `<select data-role="${r.name}" aria-label="${r.label} font"><option value="">${none}</option>` +
     groups.map(([type, fonts]) => `<optgroup label="${type}">${fonts.map((f) => `<option${chosen[r.name] === f ? " selected" : ""}>${f}</option>`).join("")}</optgroup>`).join("") + `</select>`;
   const steps = Object.entries(STEPS).filter(([prop]) => (r.steps ?? Object.keys(STEPS)).includes(prop)).map(([prop, [name, list]]) =>
     `<select data-role="${r.name}" data-prop="${prop}" aria-label="${r.label} ${prop}"><option value="">${name}</option>` +
