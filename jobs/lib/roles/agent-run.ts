@@ -10,7 +10,8 @@ import { gpuSlot } from "../gates/factory-status.ts";
 import { appendFileSync, closeSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { outcome, replyOf, type Outcome } from "../gates/gate.ts";
-import { allRuns, makeRun, readRun, runsDir, updateRun, writeRun, type Run } from "../records/ledger.ts";
+import { allRuns, makeRun, runsDir, type Run } from "../records/ledger.ts";
+import { getRun, patchRun, putRun } from "../records/record.ts";
 import { lock } from "../infra/locks.ts";
 import { roleCmd, roleSeconds } from "../infra/settings.ts";
 import { runFile } from "../records/run-files.ts";
@@ -95,7 +96,7 @@ export interface AgentRun {
 /** Make the run's folder and state. The caller ends the run, on every path. */
 export function openRun(o: Opening): AgentRun {
   const id = makeRun({ kind: o.role, name: o.name, on: o.on, job: o.job }, (folder, n) => {
-    writeRun(folder, { kind: o.role, job: o.job ?? basename(folder), name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now(), n });
+    putRun(basename(folder), { kind: o.role, job: o.job ?? basename(folder), name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now(), n });
   });
   const folder = join(runsDir(), id);
   writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
@@ -110,7 +111,7 @@ export function openRun(o: Opening): AgentRun {
     const r = await spawn(cwd === undefined ? c : { ...c, cwd }, sent);
     write(runFile(folder, "output.log"), r.output);
     prev = { input: sent, session: r.session };
-    if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; updateRun(folder, { cost: spent }); }
+    if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; patchRun(basename(folder), { cost: spent }); }
     if (r.failure) throw new Error(r.failure);
     return r;
   };
@@ -124,7 +125,7 @@ export function openRun(o: Opening): AgentRun {
 }
 
 export function endRun(folder: string, reason: string, fields: Partial<Run> = {}): void {
-  updateRun(folder, { condition: "done", reason, ...fields, phase: undefined, ended: new Date().toISOString() });
+  patchRun(basename(folder), { condition: "done", reason, ...fields, phase: undefined, ended: new Date().toISOString() });
 }
 
 /**
@@ -140,7 +141,7 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
     if (!release) continue;
     try {
       // Read again under the lock: the run may have ended since the list was read.
-      if (readRun(folder)?.condition === "running") endRun(folder, `failed: its process ended before ${before}`, { cause: "unanswered" });
+      if (getRun(basename(folder))?.condition === "running") endRun(folder, `failed: its process ended before ${before}`, { cause: "unanswered" });
     } finally {
       release();
     }

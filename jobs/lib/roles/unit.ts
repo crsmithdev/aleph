@@ -15,11 +15,11 @@ import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
-import { admit, isAgentRun, onOf, allRuns, loadRegistry, newsLine, readEnvFile, readRun, tell, trailerOf, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
+import { admit, isAgentRun, onOf, allRuns, loadRegistry, newsLine, readEnvFile, tell, trailerOf, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
-import { allJobs, isOpen, jobById, lastReal, openJob, stepOf } from "../records/job.ts";
+import { allJobs, isOpen, jobById, openJob } from "../records/job.ts";
 import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "../gates/checks.ts";
 import { gates, holdBackend } from "../gates/factory-status.ts";
 import { keepDiff } from "../records/jobdiff.ts";
@@ -81,8 +81,8 @@ export function resultText(log: string): string {
 /** A recorder that starts the run's `checks` over and adds each check that ran. */
 function recorder(folder: string): (c: CheckResult) => void {
   let all: CheckResult[] = [];
-  updateRun(folder, { checks: all });
-  return (c) => { all = [...all, c]; updateRun(folder, { checks: all }); };
+  jobRecord.patchRun(basename(folder), { checks: all });
+  return (c) => { all = [...all, c]; jobRecord.patchRun(basename(folder), { checks: all }); };
 }
 
 /**
@@ -110,7 +110,7 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
 
 /** The land's checks, in a detached worktree at the commit. */
 function landPorts({ folder, run }: Entry, repo: Repo, env: Record<string, string | undefined>): LandPorts {
-  const phase = (p: string) => updateRun(folder, { phase: p });
+  const phase = (p: string) => jobRecord.patchRun(basename(folder), { phase: p });
   const logFile = runFile(folder, "checks.log");
   return {
     pull: (room) => pullWaiting(repo, run, room),
@@ -120,7 +120,7 @@ function landPorts({ folder, run }: Entry, repo: Repo, env: Record<string, strin
       const rec = task.record!;
       task.record = (c) => rec(picked.tests.has(c.name) ? { ...c, files: picked.tests.get(c.name)!.length } : c);
       const why = await checksAt(task, commit, env);
-      return { why, checks: readRun(folder)?.checks, log: existsSync(logFile) ? readFileSync(logFile, "utf8").slice(before) : undefined };
+      return { why, checks: jobRecord.getRun(basename(folder))?.checks, log: existsSync(logFile) ? readFileSync(logFile, "utf8").slice(before) : undefined };
     },
   };
 }
@@ -172,7 +172,7 @@ export async function unit(folder: string): Promise<void> {
   });
   markStarted(folder);
   const id = basename(folder);
-  let run = readRun(folder)!;
+  let run = jobRecord.getRun(id)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   const dispatcherPath = runPath();
   const env: Record<string, string | undefined> = {
@@ -192,8 +192,8 @@ export async function unit(folder: string): Promise<void> {
   try {
     // A worker or a land starts only under the load limit: it waits, with the reason as its phase.
     if (run.kind !== "plain") {
-      await admit((line) => updateRun(folder, { phase: line }));
-      updateRun(folder, { phase: undefined });
+      await admit((line) => jobRecord.patchRun(id, { phase: line }));
+      jobRecord.patchRun(id, { phase: undefined });
     }
     if (run.kind === "plain") {
       const r = await exec(["bash", "-c", readFileSync(runFile(folder, "command.txt"), "utf8")], { cwd: process.cwd(), env, out: runFile(folder, "output.log") });
@@ -212,15 +212,15 @@ export async function unit(folder: string): Promise<void> {
     code = 1;
   }
 
-  let ended = updateRun(folder, { ...outcome, phase: undefined, ended: new Date().toISOString() });
+  // One write ends the run with its `next`. `told` is a later write: it waits for the reply of Sidetone.
+  const ended = jobRecord.endRun(id, { ...outcome, phase: undefined, ended: new Date().toISOString() }, (r, lands) => nextStep(r, !!repo?.autoland, lands));
+  const next = ended.next;
   // A run the API refused for credit did no work: the factory holds its backend until a probe succeeds.
   if (outcome.cause === "credit") await holdBackend(viaOfRun(ended, readModels()), outcome.reason ?? "the API credit ran out");
-  const next = nextStep(ended, !!repo?.autoland);
-  if (next) ended = updateRun(folder, { next });
   markEnded(folder, code);
   process.exitCode = code;
   if (isAgentRun(run.kind) && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
-  if (await tell(newsLine({ id, folder, run: ended }, repo?.note))) updateRun(folder, { told: true });
+  if (await tell(newsLine({ id, folder, run: ended }, repo?.note))) jobRecord.patchRun(id, { told: true });
   if (next) await start(folder, ended, next);
   if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);
 }
@@ -248,9 +248,9 @@ export async function startKept(go: typeof start = start): Promise<string[]> {
   const started: string[] = [];
   for (const j of allJobs()) {
     if (!isOpen(j)) continue;
-    const { folder, run } = lastReal(j);
+    const { folder, run } = jobRecord.counting(j);
     const mark = runFile(folder, PAUSED_NEXT);
-    const { step } = stepOf(j);
+    const { step } = jobRecord.stepOf(j);
     if ((step !== "worker" && step !== "land" && step !== "recheck") || !existsSync(mark)) continue;
     try { rmSync(mark); } catch { continue; }
     await go(folder, run, step);
@@ -271,7 +271,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   const there = dropped ? null : onMain(repo, { item: onOf(run), fetch: onOf(run) !== undefined })?.commit;
   if (dropped || there) {
     appendFileSync(runFile(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
-    updateRun(folder, { next: undefined });
+    jobRecord.patchRun(basename(folder), { next: undefined });
     return;
   }
   const back = nextBrief(folder, run);
@@ -287,7 +287,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     await s.child?.exited;
   } catch (e: any) {
     appendFileSync(log, `${String(e?.message ?? e)}\n`);
-    updateRun(folder, { next: undefined });
+    jobRecord.patchRun(basename(folder), { next: undefined });
   }
 }
 
@@ -308,7 +308,7 @@ function agentEnv(env: Record<string, string | undefined>, folder: string): Reco
 async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, checkEnv: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const wt = run.worktree!;
   const branch = run.branch!;
-  const phase = (p: string) => updateRun(folder, { phase: p });
+  const phase = (p: string) => jobRecord.patchRun(basename(folder), { phase: p });
   const fail = (cause: Cause, reason: string) => ({ outcome: { condition: "failed" as const, cause, reason }, code: 1 });
 
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
@@ -358,7 +358,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
   // A tier set to a model Claude does not serve runs on it; the run keeps its Claude model as its tier.
   const pick = tier !== undefined ? readModels()[tier].model : undefined;
-  if (pick !== undefined && viaOf(pick) !== "claude") { updateRun(folder, { model: pick, tier: run.model }); run = { ...run, model: pick }; }
+  if (pick !== undefined && viaOf(pick) !== "claude") { jobRecord.patchRun(basename(folder), { model: pick, tier: run.model }); run = { ...run, model: pick }; }
   const argv = modelArgv(workerCmd(), run.model, ["--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(repo.sandbox ? schemaFlags(WORKER_SCHEMA) : [])]);
@@ -448,7 +448,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
  * final message (a recheck has neither), `runner` runs the Oracle's commands, and `env` is the unit's env.
  */
 export function branchPorts(folder: string, run: Run, repo: Repo, base: string, branch: string, o: { changed: string[]; earlier?: Entry[]; result?: string; runner?: Runner; review?: typeof review; env?: Record<string, string | undefined> }): VerdictPorts {
-  const phase = (p: string) => updateRun(folder, { phase: p });
+  const phase = (p: string) => jobRecord.patchRun(basename(folder), { phase: p });
   // Verify is one station: its checks, keep-gate and Oracle all show as the phase `verify`.
   const verify = () => phase("verify");
   const tip = `refs/heads/${branch}`;
@@ -466,7 +466,7 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       }
       const sha = git(repo.path, "rev-parse", tip).out;
       const stop = await checksAt({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase: verify, record, onSpawn: (p) => { child = p; } }, sha, checksEnv(env));
-      return { stop, failed: readRun(folder)?.checks?.findLast((c) => !c.ok)?.name };
+      return { stop, failed: jobRecord.getRun(basename(folder))?.checks?.findLast((c) => !c.ok)?.name };
     },
     repeatedFailure: (check) => repeatedFailure(folder, check, o.earlier ?? []),
     docClaims: () => o.result === undefined ? null : docClaims(folder, o.result),
@@ -479,7 +479,7 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       appendFileSync(runFile(folder, "checks.log"), `## keep-gate: ${kept.noVerdict ? "no verdict" : "exit 1"}\n${kept.log}\n\n`);
       if (!kept.noVerdict) return kept.reason;
       // No verdict is a result on the run beside the checks, so the job page shows it.
-      updateRun(folder, { checks: [...readRun(folder)?.checks ?? [], { name: "keep-gate", ok: false, seconds: Math.round((performance.now() - start) / 1000), noVerdict: true }] });
+      jobRecord.patchRun(basename(folder), { checks: [...jobRecord.getRun(basename(folder))?.checks ?? [], { name: "keep-gate", ok: false, seconds: Math.round((performance.now() - start) / 1000), noVerdict: true }] });
       return { noVerdict: kept.reason };
     },
     stat: () => git(repo.path, "diff", "--stat", base, tip).out,
@@ -504,7 +504,7 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
 async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: () => void): Promise<string | NoVerdict | null> {
   const specFile = jobSpecFile(folder, run);
   if (!existsSync(specFile)) return null;
-  const ran = new Set((readRun(folder)?.checks ?? []).map((c) => c.name));
+  const ran = new Set((jobRecord.getRun(basename(folder))?.checks ?? []).map((c) => c.name));
   const done = new Set(repo.checks.filter((c) => ran.has(c.name)).map((c) => c.run.trim()));
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
   const start = performance.now();
@@ -513,8 +513,8 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   let tests: TestRecord | undefined;
   const result = (ok: boolean, none = false) => {
     if (!any && !none) return;
-    const checks = readRun(folder)?.checks ?? [];
-    updateRun(folder, { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(none ? { noVerdict: true as const } : {}), ...(tests ? { tests } : {}) }] });
+    const checks = jobRecord.getRun(basename(folder))?.checks ?? [];
+    jobRecord.patchRun(basename(folder), { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(none ? { noVerdict: true as const } : {}), ...(tests ? { tests } : {}) }] });
   };
   const noVerdict = (command: string, r: Ran): NoVerdict => {
     appendFileSync(runFile(folder, "checks.log"), `## oracle: no verdict\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`);
@@ -559,7 +559,7 @@ async function recheck(folder: string, run: Run, repo: Repo, env: Record<string,
   const branch = run.branch!;
   const ref = `refs/heads/${branch}`;
   const main = `refs/remotes/origin/${repo.main}`;
-  const phase = (p: string) => updateRun(folder, { phase: p });
+  const phase = (p: string) => jobRecord.patchRun(basename(folder), { phase: p });
   const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "failed" as const, cause, reason, ...extra }, code: 1 });
   phase("setup");
   { const f = fetchOrigin(repo.path); if (!f.ok) return stop("infra", `fetch failed: ${f.out}`); }

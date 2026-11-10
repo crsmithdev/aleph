@@ -10,12 +10,12 @@ import { areasOf, reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
-import { isOpen, lastReal, openJob, type Job } from "../records/job.ts";
+import { isOpen, openJob, type Job } from "../records/job.ts";
 import type { Bound, Gate, Hold } from "./issue-decision.ts";
 import { event, type Event } from "../../../lib/naming.ts";
 import { layout, logEvent, readEvents } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
-import { allRuns, jobIdOf, isWaiting, isBuild, loadRegistry, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, isWaiting, isBuild, loadRegistry, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { held, lock } from "../infra/locks.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { causeOf } from "../records/outcome.ts";
@@ -414,7 +414,7 @@ const BUSY_MS = 7 * 86_400_000;
 function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => { file: string; what: string } | undefined): { why: string; on: string; file: string } | null {
   const lists = reader({ fetch: false });
   for (const j of jobs) {
-    const last = lastReal(j).run;
+    const last = record.counting(j).run;
     const on = onOf(last);
     if (last.repo !== repo.key || on === undefined || !isOpen(j) || isWaiting(last.condition)) continue;
     const theirs = lists.item(repo.key, on);
@@ -460,7 +460,7 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
   return {
     name, item,
     open: open?.at(-1)!.run.condition ?? null,
-    job: open ? jobIdOf(open[0], runs) : null,
+    job: open ? record.jobIdOf(open[0], runs) : null,
     busy: busyWait(repo, item, jobs, now),
     noCommits: noCommitStreak(repo.key, name, runs),
     capHeld: capMarked(name),

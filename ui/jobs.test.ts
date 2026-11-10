@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
@@ -11,8 +11,7 @@ import { withEnv } from "./test-server.ts";
 import * as lib from "./lib.js";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
-import { writeRun } from "../jobs/lib/records/ledger.ts";
-import { removeRun } from "../jobs/lib/records/record.ts";
+import { putRun, removeRun } from "../jobs/lib/records/record.ts";
 
 let base: string, jobsDir: string;
 let restore: () => void;
@@ -31,7 +30,7 @@ const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  writeRun(join(dir), { kind: "build", told: true, started: ago(3), ...extra } as any);
+  putRun(basename(join(dir)), { kind: "build", told: true, started: ago(3), ...extra } as any);
   for (const [f, t] of Object.entries(files)) writeFileSync(join(dir, f), t);
 }
 async function get(path: string) {

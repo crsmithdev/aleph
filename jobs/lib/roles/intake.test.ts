@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { buildableIssues, isBuildable, isSorted, mediaDir, mediaPath, partsOf, readList, writeList } from "../../../issues/lib/store.ts";
 
 import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
-import { allRuns, readRun, stamp, writeRun, type Repo } from "../records/ledger.ts";
+import { allRuns, stamp, type Repo } from "../records/ledger.ts";
+import { getRun, putRun } from "../records/record.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 import { readEvents } from "../infra/layout.ts";
@@ -370,9 +371,9 @@ test("an intake run whose process ended before a verdict is ended as failed by t
   reset([]);
   const folder = join(base, "jobs", `${stamp()}-intake-${repo.key}-1-intake`);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "intake", job: folder.split("/").at(-1)!, name: `intake-${repo.key}-1`, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "intake", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
+  putRun(basename(folder), { kind: "intake", job: folder.split("/").at(-1)!, name: `intake-${repo.key}-1`, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "intake", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
   await intakeIssue(repo, 1);
-  expect(readRun(folder)).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict" });
+  expect(getRun(basename(folder))).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict" });
 });
 
 test("intake reads a clone at origin/main, and the clone is gone after", async () => {

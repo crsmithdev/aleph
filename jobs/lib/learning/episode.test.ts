@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
-import { loadRegistry, writeRun, type Run } from "../records/ledger.ts";
+import { loadRegistry, type Run } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -75,7 +76,7 @@ const land = (id: number | string): string => {
 const run = (id: string, o: Partial<Run>): void => {
   const folder = join(base, "jobs", id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: hoursAgo(1), ended: hoursAgo(0.5), ...o });
+  putRun(basename(folder), { kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: hoursAgo(1), ended: hoursAgo(0.5), ...o });
 };
 
 const NOW = new Date("2026-11-04T12:00:00Z").getTime();

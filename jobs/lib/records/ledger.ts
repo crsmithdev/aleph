@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir, loadavg } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { needsOf, type Ask } from "../asks/ask.ts";
 import { layout } from "../infra/layout.ts";
 import * as record from "./record.ts";
@@ -13,7 +13,7 @@ import { isLive } from "../infra/process.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
 import { touch } from "../infra/sources.ts";
-import { contentText, fileSafe, jobId, parseJob, setCodes, subjectOf } from "../../../lib/naming.ts";
+import { contentText, fileSafe, parseJob, setCodes, subjectOf } from "../../../lib/naming.ts";
 
 /** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. */
 export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
@@ -163,25 +163,6 @@ export function readEnvFile(file: string | undefined): Record<string, string> {
   return env;
 }
 
-/** The run in `folder`: its entry in its job record (record.ts). */
-export function readRun(folder: string): Run | null {
-  const r = record.getRun(basename(folder));
-  if (!r) return null;
-  const { id: _, ...run } = r;
-  return run;
-}
-
-export function writeRun(folder: string, run: Run): void {
-  record.putRun(basename(folder), run);
-}
-
-export function updateRun(folder: string, change: Partial<Run>): Run {
-  const r = record.patchRun(basename(folder), change);
-  if (!r) throw new Error(`no record holds the run ${basename(folder)}`);
-  const { id: _, ...run } = r;
-  return run;
-}
-
 export interface Entry { id: string; folder: string; run: Run }
 
 /** Every run, oldest first: ids start with the time, so they sort. */
@@ -201,29 +182,18 @@ export function allJobs(live = false): Entry[][] {
   return [...jobs.values()];
 }
 
-/** The runs on `subject`, oldest first, each with its number: the stored `n`, else its place in start order (a run from before job IDs). */
-function numbered(subject: string, runs: Entry[]): { e: Entry; n: number }[] {
-  return runs.filter((e) => subjectOf(e.run) === subject).map((e, i) => ({ e, n: e.run.n ?? i + 1 }));
-}
-
 /** The run whose job ID is `id` (`a1375#6`, `monitor#14`), or undefined. A short ID needs the registry's codes: `loadRegistry` sets them. */
 export function runOfJob(id: string, runs = allRuns()): Entry | undefined {
   // A run with no issue and no routine has its name as its subject: `x#1`.
   const m = /^(.+)#(\d+)$/.exec(id), p = parseJob(id) ?? (m ? { subject: m[1], n: Number(m[2]) } : null);
-  return p ? numbered(p.subject, runs).find((x) => x.n === p.n)?.e : undefined;
-}
-
-/** The job ID of a run, `a1375#6`. `runs` gives the start order for a run with no stored `n`. */
-export function jobIdOf(e: Entry, runs?: Entry[]): string {
-  const subject = subjectOf(e.run);
-  return jobId(subject, e.run.n ?? numbered(subject, runs ?? allRuns()).find((x) => x.e.id === e.id)?.n ?? 1);
+  return p ? record.numbered(p.subject, runs).find((x) => x.n === p.n)?.e : undefined;
 }
 
 /** The `Job:` trailer value of the job `job` (the folder name of its first run): that run's job ID, or `job` when no record holds that run. */
 export function trailerOf(job: string): string {
   const runs = allRuns();
   const first = runs.find((e) => e.id === job);
-  return first ? jobIdOf(first, runs) : job;
+  return first ? record.jobIdOf(first, runs) : job;
 }
 
 /**
@@ -238,7 +208,7 @@ export function makeRun(run: Pick<Run, "on" | "kind" | "name"> & { job?: string 
   const release = record.lockRecord(`start-${subject}`);
   try {
     const runs = allRuns();
-    const n = Math.max(0, ...numbered(subject, runs).map((x) => x.n)) + 1;
+    const n = Math.max(0, ...record.numbered(subject, runs).map((x) => x.n)) + 1;
     const now = stamp();
     const last = runs.filter((e) => subjectOf(e.run) === subject || (run.job !== undefined && e.run.job === run.job)).map((e) => e.id.slice(0, 15)).sort().at(-1);
     const id = `${last && last >= now ? nextStamp(last) : now}-${fileSafe(`${subject}#${n}`)}`;
@@ -277,9 +247,6 @@ export function onOf(run: Run): number | string | undefined {
   return m && m[1] === run.repo ? (m[2].includes(".") ? m[2] : Number(m[2])) : undefined;
 }
 
-/** The run's ask. Undefined when the run asks nothing. */
-export const askOf = (run: Run): Ask | undefined => run.ask;
-
 /** `YYYYMMDD-HHMMSS` in local time. */
 export function stamp(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -299,12 +266,12 @@ export function nextStamp(s: string): string {
  */
 export function newsLine(e: Entry, note?: string): string {
   const run = e.run;
-  const needs = needsOf(askOf(run));
+  const needs = needsOf(run.ask);
   const sub = isWaiting(run.condition) ? needs
     : run.condition === "failed" ? causeOf(run) : undefined;
   // A failed check's name is the content. The arrow marks it: `contentText` puts one before a lone file.
   const check = failedCheckOf(run);
-  const line = [`${jobIdOf(e)} ${run.condition}`, sub, check && contentText({ file: check })].filter(Boolean).join(" ");
+  const line = [`${record.jobIdOf(e)} ${run.condition}`, sub, check && contentText({ file: check })].filter(Boolean).join(" ");
   const said = run.condition === "landed" ? [run.reason, note].filter(Boolean).join(" ") : "";
   return said ? `${line}\n  ${said}` : line;
 }

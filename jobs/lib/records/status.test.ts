@@ -1,10 +1,10 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { facts, onMain, repoStages } from "./status.ts";
-import { writeRun } from "./ledger.ts";
 import type { Repo, Run } from "./ledger.ts";
+import { putRun } from "./record.ts";
 import type { Doc, Issue } from "../../../issues/lib/todo.ts";
 
 // The test's clock: the recent-runs window reads it.
@@ -44,7 +44,7 @@ test("a touched item the store closed is done without a fresh trailer commit, un
   for (const n of [11, 12, 13]) {
     const folder = join(base, "jobs", `20261028-0001${n}-demo-${n}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind: "build", job: `j${n}`, name: `j${n}`, repo: "demo", on: `demo-${n}`, condition: "done", told: true, shown: true, started: STARTED });
+    putRun(basename(folder), { kind: "build", job: `j${n}`, name: `j${n}`, repo: "demo", on: `demo-${n}`, condition: "done", told: true, shown: true, started: STARTED });
   }
   // 12: landed.
   sh(clone, "git", "fetch", "-q");
@@ -68,7 +68,7 @@ test("facts carry what stage() needs: status, spec, after, parts, ask kind and e
   ] };
   const folder = join(base, "jobs", "20261028-000021-demo-21-build");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", condition: "waiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: STARTED });
+  putRun(basename(folder), { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", condition: "waiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: STARTED });
   const f = facts(repo, doc);
   // The run owns the issue's one Ask, so the issue has none of its own.
   expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [] });
@@ -88,7 +88,7 @@ test("a dotted ref in after, parts and on resolves to the issue, its runs and it
   });
   const folder = join(base, "jobs", "20261030-000001-demo-5.1-build");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "dotted-build", name: "dotted-build", repo: "demo", on: "demo-5.1", condition: "running", told: true, shown: true, started: STARTED } as Run);
+  putRun(basename(folder), { kind: "build", job: "dotted-build", name: "dotted-build", repo: "demo", on: "demo-5.1", condition: "running", told: true, shown: true, started: STARTED } as Run);
 
   const open = mk("open");
   const f = facts(repo, open);

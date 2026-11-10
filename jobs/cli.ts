@@ -8,9 +8,10 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { allRuns, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/records/ledger.ts";
+import { allRuns, loadRegistry, newsLine, type Entry, type Repo } from "./lib/records/ledger.ts";
 import { isLive } from "./lib/infra/process.ts";
-import { allJobs, findJob, isOpen, issue as issueOf, issueTitle, lastReal, readFile, view, type Job } from "./lib/records/job.ts";
+import { allJobs, findJob, isOpen, issue as issueOf, issueTitle, readFile, view, type Job } from "./lib/records/job.ts";
+import { counting, patchRun } from "./lib/records/record.ts";
 import { unit } from "./lib/roles/unit.ts";
 import { onMain } from "./lib/records/status.ts";
 import { removeBranch } from "./lib/land/landing.ts";
@@ -101,7 +102,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
     }
     const found = onMain(repo, { job: last.run.job, branch: last.run.branch, fetch: false });
     if (found) {
-      updateRun(last.folder, { condition: "landed", commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
+      patchRun(last.id, { condition: "landed", commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
       removeBranch(repo, last.run);
       const todo = issueOf(runs);
       const why = todo === undefined ? null : store.close(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`);
@@ -129,7 +130,7 @@ function jobs(): void {
     for (const e of allRuns()) {
       if (e.run.condition === "running" || e.run.told) continue;
       news.push({ run: e.id, line: newsLine(e, e.run.repo ? loadRegistry()[e.run.repo]?.note : undefined) });
-      updateRun(e.folder, { told: true });
+      patchRun(e.id, { told: true });
     }
     return out(news);
   }
@@ -139,14 +140,14 @@ function jobs(): void {
   // A job that landed with its check open stays in the list until `aleph checked`.
   // A job that ended in the last 24 hours follows the open ones, the latest first.
   if (!name) {
-    const listed = (j: Entry[]) => isOpen(j) || (lastReal(j).run.condition === "landed" && lastReal(j).run.check === "open");
-    const ended = (j: Entry[]) => Date.parse(lastReal(j).run.ended ?? "");
+    const listed = (j: Entry[]) => isOpen(j) || (counting(j).run.condition === "landed" && counting(j).run.check === "open");
+    const ended = (j: Entry[]) => Date.parse(counting(j).run.ended ?? "");
     const recent = all.filter((j) => !listed(j) && Date.now() - ended(j) < DAY_MS).sort((a, b) => ended(b) - ended(a));
     return out([...all.filter(listed), ...recent].map((j) => summary(j, fates)));
   }
   const runs = findJob(name, null, all);
   if (!runs) refuse(`no job named ${name}`);
-  const last = lastReal(runs!);
+  const last = counting(runs!);
   const checks = readFile(last, "checks.log");
   out({
     ...summary(runs!, fates), question: last.run.question, result: readFile(last, "result.md"),

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   afterLand, askedQuestion, brief, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, issueBrief,
   infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedFailure, rerunStep, rescueCase, writeRerun, type Stuck,
 } from "./continuation.ts";
 import type { Entry, Repo, Run } from "../records/ledger.ts";
-import { writeRun } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "continuation-"));
 const saved = { jobs: process.env.ALEPH_JOBS_DIR, factory: process.env.ALEPH_FACTORY_DIR };
@@ -28,7 +28,7 @@ const folder = (id: string, files: Record<string, string> = {}): string => {
   const f = join(dir, "runs", id);
   mkdirSync(f, { recursive: true });
   for (const [name, text] of Object.entries(files)) {
-    if (name === "state.json") writeRun(f, JSON.parse(text));
+    if (name === "state.json") putRun(basename(f), JSON.parse(text));
     else writeFileSync(join(f, name), text);
   }
   return f;

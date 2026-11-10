@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
@@ -13,9 +13,9 @@ import { readEvents } from "../infra/layout.ts";
 import { setPaused, writeBaseline, writeStalls } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";
-import { loadRegistry, writeRun, type Repo } from "../records/ledger.ts";
+import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { archiveDir } from "../records/record.ts";
+import { archiveDir, putRun } from "../records/record.ts";
 import { markFile } from "../records/migrate.ts";
 import { due, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 
@@ -109,7 +109,7 @@ test("an intake the live cap held starts at the dispatch that a run's end makes,
   // A build run that holds the one live slot: made now, no pid yet.
   const folder = join(process.env.ALEPH_JOBS_DIR!, "20261104-120000-busy");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "busy", name: "busy", condition: "running", told: true, started: new Date(NOW).toISOString(), made: NOW });
+  putRun(basename(folder), { kind: "build", job: "busy", name: "busy", condition: "running", told: true, started: new Date(NOW).toISOString(), made: NOW });
   const s = recorder();
   const held = await intakeNow(repo(), 1, s);
   expect(held.skipped).toEqual(["intake: 1 agent runs are live"]);
@@ -158,7 +158,7 @@ test("the sweep logs a job that waits for a spec edit as missed once the spec mo
   writeList({ key }, "seed", (doc) => { issues.add(doc, "goal", { spec: "Old spec." }); return true; }, true);
   const folder = join(process.env.ALEPH_JOBS_DIR!, "w1");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "w1", name: `${key}-1`, repo: key, on: `${key}-1`, condition: "failed", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
+  putRun(basename(folder), { kind: "build", job: "w1", name: `${key}-1`, repo: key, on: `${key}-1`, condition: "failed", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
   markAsked({ id: "w1", folder, run: { job: "w1", name: `${key}-1`, repo: key, on: `${key}-1` } as any }, "which wins?", specVersion(issues.find(readList({ key })!, 1)!));
   const p = sweepPorts();
   const s = readTick();
@@ -230,7 +230,7 @@ test("one tick moves a finished record older than 7 days into the archive folder
   seed([]);
   expect(existsSync(markFile())).toBe(false);
   const started = new Date(NOW - 8 * 864e5).toISOString();
-  writeRun(join(process.env.ALEPH_JOBS_DIR!, "20261020-120000-old"), { kind: "build", job: "old", name: `${key}-1`, on: `${key}-1`, condition: "done", told: true, started } as any);
+  putRun("20261020-120000-old", { kind: "build", job: "old", name: `${key}-1`, on: `${key}-1`, condition: "done", told: true, started } as any);
   const ports: TickPorts = { dispatch: async () => {}, suite: () => {}, intake: () => {} };
   const out = await runTick(NOW, ports);
   expect(out.archived).toEqual([`${key}-1`]);

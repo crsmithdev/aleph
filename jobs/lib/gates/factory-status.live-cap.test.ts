@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { liveRuns } from "./factory-status.ts";
-import { writeRun, type Run } from "../records/ledger.ts";
+import { type Run } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 
 const NOW = Date.parse("2026-10-30T00:00:00Z");
 let base: string;
@@ -13,7 +14,7 @@ afterEach(() => { setSystemTime(); delete process.env.ALEPH_JOBS_DIR; rmSync(bas
 function run(id: string, extra: Partial<Run>, files: string[] = []): void {
   const folder = join(base, id);
   mkdirSync(folder);
-  writeRun(folder, { kind: "build", job: id, name: id, repo: "demo", condition: "running", told: true, started: "2026-10-30T00:00:00Z", made: NOW, ...extra } as Run);
+  putRun(basename(folder), { kind: "build", job: id, name: id, repo: "demo", condition: "running", told: true, started: "2026-10-30T00:00:00Z", made: NOW, ...extra } as Run);
   for (const f of files) writeFileSync(join(folder, f), "999999");
 }
 

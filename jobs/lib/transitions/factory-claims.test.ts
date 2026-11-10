@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, readdirSync, watch, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { dispatchIssues } from "./factory.ts";
 import { factoryDir } from "../gates/factory-status.ts";
-import { readRun, writeRun, allJobs, allRuns } from "../records/ledger.ts";
+import { allJobs, allRuns } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { ctx, newIssue, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";
 import { askOf } from "../asks/ask.ts";
@@ -23,7 +23,7 @@ for (const red of [false, true]) {
   test(`a second claimed run after one rescued as claimed, main ${red ? "red: it asks Chris" : "green: the item is done"}`, async () => {
     const id = newIssue();
     const first = mk(`fac-${id}`, "build", "dropped", { cause: "no-commit", reason: "no commit", alreadyMet: "main has it" });
-    markRescued({ id: first.folder.split("/").at(-1)!, folder: first.folder, run: readRun(first.folder)! }, "claimed");
+    markRescued({ id: first.folder.split("/").at(-1)!, folder: first.folder, run: record.getRun(basename(first.folder))! }, "claimed");
     claimed(`fac-${id}`, "main has it");
     const f = fakes();
     await withChecks(f, async () => (red ? { cause: "check" as const, checkName: "tests", reason: "tests failed" } : null));
@@ -171,7 +171,7 @@ test("a rescue that finds the lock taken waits, then acts once on the state it f
     if (waiting()) { w.close(); r(); }
   });
   expect(f.calls).toEqual([]);
-  writeRun(folder, { ...readRun(folder)!, condition: "failed", cause: "timeout", reason: "time box" });
+  record.putRun(basename(folder), { ...record.getRun(basename(folder))!, condition: "failed", cause: "timeout", reason: "time box" });
   release();
   await b;
   expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);

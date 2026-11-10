@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { writeRun } from "../jobs/lib/records/ledger.ts";
+import { putRun } from "../jobs/lib/records/record.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -54,7 +54,7 @@ beforeAll(async () => {
   for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "failed" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(join(folder), { kind: "build", condition: "waiting", started: new Date(NOW).toISOString(), name, job: name, repo: "r", ...extra } as any);
+    putRun(basename(join(folder)), { kind: "build", condition: "waiting", started: new Date(NOW).toISOString(), name, job: name, repo: "r", ...extra } as any);
   }
   ({ server, stop, at } = await withServer({ warm: false }));
   writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { add(doc, `issue ${i}`, i === 7 ? { spec: "Do it." } : {}); } for (const n of [6, 9]) addPart(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, spec: "x" }); return true; }, true);
@@ -159,7 +159,7 @@ test("an action on a job that a newer job of its name replaced is 409, names the
   for (const [n, at] of [[1, NOW - 60_000], [2, NOW]] as const) {
     const folder = join(base, "jobs", `20261027-10000${n}-r-again-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind: "build", condition: "waiting", started: new Date(at).toISOString(), name: "again", job: `again-${n}`, repo: "r", n } as any);
+    putRun(basename(folder), { kind: "build", condition: "waiting", started: new Date(at).toISOString(), name: "again", job: `again-${n}`, repo: "r", n } as any);
   }
   const before = recorded().length;
   const hdr = { "X-Aleph-UI": "1" };

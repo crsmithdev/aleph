@@ -9,13 +9,14 @@
  * next run reads, and `rescued` in a run folder, which counts a rescue case against
  * the issue. The Ask markers (`asked`, `asked-spec`) stay in ask.ts.
  */
+import { basename } from "node:path";
 import { skillSection } from "../roles/role-skill.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { reader, runMedia } from "../../../issues/lib/store.ts";
 import { needsOf } from "../asks/ask.ts";
 import { git } from "../infra/git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "../records/job.ts";
-import { askOf, isAgentRun, isBuild, lastTagged, onOf, readRun, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
+import { isAgentRun, isBuild, lastTagged, onOf, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import * as record from "../records/record.ts";
 import { jobSpec, runFile } from "../records/run-files.ts";
@@ -94,7 +95,7 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
   if (prev) {
     const p = prev.run;
-    parts.push(`## Previous run: ${p.kind}, ${p.condition}${needsOf(askOf(p)) ? ` (${needsOf(askOf(p))})` : ""}${p.reason ? `: ${p.reason}` : ""}`);
+    parts.push(`## Previous run: ${p.kind}, ${p.condition}${needsOf(p.ask) ? ` (${needsOf(p.ask)})` : ""}${p.reason ? `: ${p.reason}` : ""}`);
     for (const f of ["result.md", "checks.log", "land.log"] as const) {
       const text = readFile(prev, f);
       if (text !== undefined) parts.push(`### ${f}\n\n${text.trim()}`);
@@ -252,7 +253,7 @@ export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) =
 export function repeatedFailure(folder: string, check: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
   const prev = earlier.at(-1);
   if (!prev || prev.run.failed !== check) return null;
-  const now = failedTests(readRun(folder), check);
+  const now = failedTests(record.getRun(basename(folder)), check);
   const key = (f: FailedTest) => `${f.file} > ${f.name}`;
   const before = failedTests(prev.run, check).map(key).sort();
   const names = now.map(key).sort();

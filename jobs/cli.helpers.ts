@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { allRuns, readRun, writeRun, type Run } from "./lib/records/ledger.ts";
+import { basename, join } from "node:path";
+import { allRuns, type Run } from "./lib/records/ledger.ts";
+import { getRun, putRun } from "./lib/records/record.ts";
 import { unitAlive } from "./lib/infra/process.ts";
 export { unitAlive };
 import { config as storeConfig } from "../issues/lib/store.ts";
@@ -177,9 +178,9 @@ export function moveMain(): void {
   sh(other, "git", "push", "-q", "origin", "main");
 }
 /** The run's state: its entry in its job record. Throws when no record holds it yet. */
-export const state = (run: string): any => readRun(join(jobsDir, run)) ?? (() => { throw new Error(`no record holds ${run}`); })();
+export const state = (run: string): any => getRun(run) ?? (() => { throw new Error(`no record holds ${run}`); })();
 /** `state` for a run that may be starting: its folder exists a moment before its record has it, so a missing run reads as no state yet. */
-export const stateNow = (run: string): { condition: string } => readRun(join(jobsDir, run)) ?? { condition: "" };
+export const stateNow = (run: string): { condition: string } => getRun(run) ?? { condition: "" };
 export const file = (run: string, f: string) => readFileSync(join(jobsDir, run, f), "utf8");
 export const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
 export const branchExists = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `job/${name}`]).exitCode === 0;
@@ -480,7 +481,7 @@ export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | 
   const id = `20261030-${String(++seeded).padStart(6, "0")}-${repoKey}-seed-${run.kind}`;
   const folder = join(jobsDir, id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date(now).toISOString(), ...run } as Run);
+  putRun(basename(folder), { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date(now).toISOString(), ...run } as Run);
   return id;
 }
 

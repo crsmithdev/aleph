@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { wallStepSince } from "./clock.ts";
 import { emptyObjects, fix, gitChecks, homeCheck, linkCheck, lostCheck, unitChecks, doctor } from "./doctor.ts";
-import { writeRun } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 import { mkdirSync, readFileSync, rmSync as rm, symlinkSync } from "node:fs";
 
 let dir: string, repo: string;
@@ -118,7 +118,7 @@ test("a run with a pid, no exit and no process is lost", () => {
   expect(lostCheck().ok).toBe(true);
   const f = join(dir, "jobs", "20261030-000000-x");
   mkdirSync(f);
-  writeRun(f, { kind: "plain", job: "x", name: "x", condition: "running", told: false, started: "2026-10-30T00:00:00Z" });
+  putRun(basename(f), { kind: "plain", job: "x", name: "x", condition: "running", told: false, started: "2026-10-30T00:00:00Z" });
   writeFileSync(join(f, "pid"), "999999\n");
   expect(lostCheck()).toMatchObject({ ok: false });
 });

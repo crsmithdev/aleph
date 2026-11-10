@@ -7,8 +7,9 @@
  */
 import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
-import { allJobs, lastReal } from "../../jobs/lib/records/job.ts";
-import { allRuns, jobIdOf, loadRegistry, onOf, type Entry, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { allJobs } from "../../jobs/lib/records/job.ts";
+import { allRuns, loadRegistry, onOf, type Entry, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { counting as lastReal, jobIdOf } from "../../jobs/lib/records/record.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";

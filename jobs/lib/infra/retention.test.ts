@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { writeRun } from "../records/ledger.ts";
-import { archiveDir, recordsDir } from "../records/record.ts";
+import { basename, join } from "node:path";
+import { archiveDir, putRun, recordsDir } from "../records/record.ts";
 import { birthDay, retain } from "./retention.ts";
 
 const NOW = Date.parse("2026-11-09T12:00:00Z");
@@ -16,7 +15,7 @@ function run(id: string, on: string, d: number, archived: boolean) {
   const folder = join(base, "runs", id);
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "output.log"), "x");
-  writeRun(folder, { kind: "build", job: id, name: id, on, condition: "done", started: ago(d).toISOString(), ended: ago(d).toISOString() } as any);
+  putRun(basename(folder), { kind: "build", job: id, name: id, on, condition: "done", started: ago(d).toISOString(), ended: ago(d).toISOString() } as any);
   if (archived) { mkdirSync(archiveDir(), { recursive: true }); renameSync(join(recordsDir(), `${on}.json`), join(archiveDir(), `${on}.json`)); }
   return folder;
 }

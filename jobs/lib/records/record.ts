@@ -5,12 +5,15 @@
  *
  * The key is the issue the job is on (`<repo>-<n>`, the run's `on`). A run on no issue (a plain run, an old run)
  * keys by its job id. A run folder keeps the logs, `pid` and `exit`; its state is the run's entry in `runs`.
+ *
+ * It also owns a run's life: its end (`endRun`), the run that counts in a job (`counting`), the job's next step
+ * (`next`, `stepOf`) and the run's job ID (`jobIdOf`).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Ask } from "../asks/ask.ts";
-import type { Run } from "./ledger.ts";
+import type { Entry, Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
 import { logEvent } from "../infra/layout.ts";
@@ -187,7 +190,7 @@ function logChanges(was: Map<string, string>, runs: RunRecord[]): void {
   for (const x of runs) {
     if (was.get(x.id) === x.condition) continue;
     const sub = x.condition === "running" ? undefined : x.cause ?? x.fate;
-    try { logEvent({ by: "gate", subject: subjectOf(x), action: x.condition, sub, on: [jobIdOfRun(x)], ...(x.condition === "running" ? {} : { cost: x.cost }), ...(x.condition === "landed" ? { commit: x.commit } : {}) }); }
+    try { logEvent({ by: "gate", subject: subjectOf(x), action: x.condition, sub, on: [jobIdOf({ id: x.id, run: x })], ...(x.condition === "running" ? {} : { cost: x.cost }), ...(x.condition === "landed" ? { commit: x.commit } : {}) }); }
     catch (e) { console.error(`record: no event for ${x.id}: ${(e as Error).message}`); }
   }
 }
@@ -204,7 +207,7 @@ export function write(r: JobRecord): void {
 }
 
 // ---------------------------------------------------------------------------
-// Runs. The ledger's run accessors call these.
+// Runs: a run is its entry in its record, found by its id, the name of its run folder.
 
 /** Run id to record key, for the runs this process has seen. */
 const keys = new Map<string, string>();
@@ -254,19 +257,36 @@ export function putRun(id: string, run: Run): void {
   });
 }
 
-/** Change fields of run `id`; a field set to undefined goes. Returns the run, or null when no record holds it. */
-export function patchRun(id: string, change: Partial<Run>): RunRecord | null {
+/**
+ * Change fields of run `id`; a field set to undefined goes. `change` can be a function of the run and the record's
+ * runs, called under the record's lock. Returns the run. Throws when no record holds it.
+ */
+export function patchRun(id: string, change: Partial<Run> | ((run: RunRecord, runs: RunRecord[]) => Partial<Run>)): RunRecord {
   const key = keyOfId(id);
-  if (!key) return null;
   let out: RunRecord | null = null;
-  update(key, (r) => {
+  if (key) update(key, (r) => {
     const i = r.runs.findIndex((x) => x.id === id);
     if (i < 0) return;
-    const merged: RunRecord = JSON.parse(JSON.stringify({ ...view(r, r.runs[i]), ...change }));
+    const was = view(r, r.runs[i]);
+    const merged: RunRecord = JSON.parse(JSON.stringify({ ...was, ...(typeof change === "function" ? change(was, r.runs) : change) }));
     r.runs[i] = takeAsk(r, merged);
     out = view(r, r.runs[i]);
   });
+  if (!out) throw new Error(`no record holds the run ${id}`);
   return out;
+}
+
+/**
+ * End run `id` in one write: `change` (its condition, `ended` and the rest) and its `next`, which `decide` gives from
+ * the ended run and the land runs of its job, this one included. No reader sees the run ended with no `next`, so no
+ * reader takes it for a rescue. Returns the run.
+ */
+export function endRun(id: string, change: Partial<Run>, decide: (run: Run, lands: Run[]) => Run["next"]): RunRecord {
+  return patchRun(id, (run, runs) => {
+    const ended = { ...run, ...change };
+    const lands = runs.filter((x) => x.job === run.job && x.kind === "land").map((x) => (x.id === id ? ended : x));
+    return { ...change, next: decide(ended, lands) };
+  });
 }
 
 /** Take run `id` out of its record. */
@@ -315,22 +335,38 @@ export interface Step {
 /** The `sub` of a step: why the run stopped, when the run states it. */
 const subOf = (run: RunRecord): Pick<Step, "sub"> => { const cause = causeOf(run); return cause ? { sub: cause } : {}; };
 
-/** The job ID of a run, `a1375#6`. A run from before job IDs states no number, so it reads as the first. */
-const jobIdOfRun = (run: RunRecord): string => jobId(subjectOf(run), run.n ?? 1);
+/** The runs on `subject` in `runs`, oldest first, each with its number: its `n`, else its place in start order (a run from before job IDs). */
+export function numbered<T extends { id: string; run: Run }>(subject: string, runs: T[]): { e: T; n: number }[] {
+  return runs.filter((e) => subjectOf(e.run) === subject).map((e, i) => ({ e, n: e.run.n ?? i + 1 }));
+}
+
+/** The job ID of a run, `a1375#6`. A run with no `n` takes its number from `runs` (`numbered`), else reads as the first. */
+export function jobIdOf(e: { id: string; run: Run }, runs: { id: string; run: Run }[] = []): string {
+  const subject = subjectOf(e.run);
+  return jobId(subject, e.run.n ?? numbered(subject, runs).find((x) => x.e.id === e.id)?.n ?? 1);
+}
+
+/** A run counts unless it is a director run or a land that found the job lock busy: neither changes the job. */
+const counts = (run: Run): boolean => run.kind !== "director" && !(run.kind === "land" && run.condition === "failed" && causeOf(run) === "locked");
+
+/**
+ * The run that counts in a job: its last run that counts, else its last run. A director run has a job of its own
+ * (agent-run.ts `openRun`), so only a director job falls back.
+ */
+export const counting = (j: Entry[]): Entry => j.findLast((e) => counts(e.run)) ?? j.at(-1)!;
 
 /**
  * The next step of the job. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
  * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a returned or failed run
  * goes to the rescue, unless the factory asked Chris about it; a landed, done or dropped job does nothing; an issue
- * with no open run waits for its `wait`, else starts. The run that counts is the newest one that is not a facts or
- * director run and not a land that lost the lock race (job.ts `lastReal`): a director run changes the step through
- * the Ask and the `director` event it writes, never as the run that counts.
+ * with no open run waits for its `wait`, else starts. The run that counts is the newest one that `counts`: a director
+ * run changes the step through the Ask and the `director` event it writes, never as the run that counts.
  */
 export function next(r: JobRecord): Step {
   if (r.ask) return { step: "ask", action: "waiting", to: "human" };
-  const last = r.runs.findLast((x) => x.kind !== "director" && !(x.kind === "land" && x.condition === "failed" && causeOf(x) === "locked"));
-  if (last?.condition === "running") return { step: "run", action: "running", on: [jobIdOfRun(last)] };
-  if (last?.condition === "waiting") return { step: "ask", action: "waiting", on: [jobIdOfRun(last)], to: "human" };
+  const last = r.runs.findLast(counts);
+  if (last?.condition === "running") return { step: "run", action: "running", on: [jobIdOf({ id: last.id, run: last })] };
+  if (last?.condition === "waiting") return { step: "ask", action: "waiting", on: [jobIdOf({ id: last.id, run: last })], to: "human" };
   if (last?.next === "worker") return { step: "worker", action: "returned", ...subOf(last), count: `${r.rounds} / ${fixRounds()}` };
   if (last?.next === "recheck") return { step: "recheck", action: "returned", ...subOf(last) };
   if (last?.next === "land") return { step: "land", action: last.condition };
@@ -344,4 +380,10 @@ export function next(r: JobRecord): Step {
   if (last?.condition === "done") return { step: "none", action: "done" };
   if (r.wait) return { step: "wait", action: "waiting" };
   return { step: "start", action: "starting" };
+}
+
+/** The job's next step: `next` over the job's runs, with the Ask, wait and events of the record of its run that counts. */
+export function stepOf(j: Entry[]): Step {
+  const key = keyOf(counting(j).run);
+  return next({ ...(read(key) ?? empty(key)), runs: j.map((e) => ({ ...e.run, id: e.id })) });
 }

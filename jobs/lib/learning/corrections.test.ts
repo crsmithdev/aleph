@@ -1,13 +1,13 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { readList } from "../../../issues/lib/store.ts";
 import { section, status, titleProblem } from "../../../issues/lib/todo.ts";
 import { approve, decline, explainLesson, mine, proposals, readStore } from "./corrections.ts";
 import { missingSections } from "../roles/issue-spec.ts";
 import { storeRepos } from "../../../tests/git-fixture.ts";
-import { writeRun } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 import { readEvents } from "../infra/layout.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -92,7 +92,7 @@ beforeEach(() => {
   const run = (state: string, reason: string) => ({ kind: "build", job: "aleph-9", name: "aleph-9", condition: state, reason, told: true, started: ago(1), ended: ago(1) });
   const dir = join(base, "jobs", "20261027-aleph-9");
   mkdirSync(dir, { recursive: true });
-  writeRun(join(dir), run("dropped", "Drops the test it changed.") as any);
+  putRun(basename(join(dir)), run("dropped", "Drops the test it changed.") as any);
 });
 afterEach(() => {
   for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
@@ -216,7 +216,7 @@ describe("noise", () => {
 
   test("a drop whose run made no commit is not a signal, whatever Jev says", async () => {
     const dir = join(base, "jobs", "20261027-aleph-9");
-    writeRun(join(dir), { kind: "build", job: "aleph-9", name: "aleph-9", condition: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) } as any);
+    putRun(basename(join(dir)), { kind: "build", job: "aleph-9", name: "aleph-9", condition: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) } as any);
     await mine(NOW);
     expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
   });

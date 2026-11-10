@@ -8,11 +8,12 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
-import { allRuns, askOf, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, jobIdOf, makeRun, onOf, updateRun, writeRun, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, makeRun, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, type Fate } from "../records/outcome.ts";
-import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "../records/job.ts";
+import { addNote, issue as issueOf, latestJob, openJob } from "../records/job.ts";
+import { counting, jobIdOf, patchRun, putRun } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
 import { git } from "../infra/git.ts";
@@ -100,7 +101,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, cwd: string, c
       prep(folder);
       // `made` orders the land queue: never below an earlier run's, so a clock stepped back keeps the order.
       const made = Math.max(Date.now(), ...allRuns().map((e) => (e.run.made ?? 0) + 1));
-      writeRun(folder, { ...run, job: run.job ?? basename(folder), made, n } as Run);
+      putRun(basename(folder), { ...run, job: run.job ?? basename(folder), made, n } as Run);
     });
     const folder = join(runsDir(), id);
     gpu?.();
@@ -112,7 +113,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, cwd: string, c
     try {
       child = startUnit(["unit", folder], { unit: `aleph-${id.slice(16)}`, cwd, props: max, output, attach: true });
     } catch (e: any) {
-      updateRun(folder, { condition: "failed", reason: e.message, ended: new Date().toISOString() });
+      patchRun(basename(folder), { condition: "failed", reason: e.message, ended: new Date().toISOString() });
       refuse(e.message);
     }
     // Wait for `pid`, but not for a unit that cannot write it: one that has exited, or whose folder is gone.
@@ -237,7 +238,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const agent = agentOf(runs)!.run;
     const terms = landTerms(agent);
     if (!terms) {
-      const needs = isWaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
+      const needs = isWaiting(agent.condition) ? needsOf(agent.ask) : undefined;
       refuse(`${name} is ${agent.condition}${needs ? ` (${needs})` : ""}, not passed`);
     }
     const { manual, held } = terms!;
@@ -266,9 +267,9 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
 export function checked(name: string): { job: string; name: string; condition: "landed"; check: "done" } {
   checkName(name);
   const found = latestJob(name);
-  const last = found ? lastReal(found) : undefined;
+  const last = found ? counting(found) : undefined;
   if (!last || last.run.condition !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
-  updateRun(last!.folder, { check: "done" });
+  patchRun(last!.id, { check: "done" });
   const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;
   const item = last!.run.checkItem;
   const why = repo && item !== undefined ? store.close(repo, item, "checked by Chris") : null;
@@ -331,7 +332,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     for (const e of live) {
       if (await stop(e)) continue;
       // A run whose process outlives the stop fails as `infra`.
-      updateRun(e.folder, { condition: "failed", cause: "infra", reason: "cannot stop: its process still runs", phase: undefined });
+      patchRun(e.id, { condition: "failed", cause: "infra", reason: "cannot stop: its process still runs", phase: undefined });
       refuse(`cannot stop ${jobIdOf(e)}: its process still runs`);
     }
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
@@ -339,7 +340,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     for (const e of new Set([...live, last])) {
       markEnded(e.folder, 143);
       // The drop replaces the sentence, so a run that has only the sentence gets its cause now.
-      updateRun(e.folder, { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      patchRun(e.id, { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
     const todo = issueOf(runs);
     const why = repo && todo !== undefined && !a.quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;

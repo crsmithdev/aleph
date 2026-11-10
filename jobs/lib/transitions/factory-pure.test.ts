@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, watch, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
 import { spentToday, runsToday, health, writeBaseline, suiteHistory, factorySnapshot, issueFacts } from "../gates/factory-status.ts";
-import { allJobs, loadRegistry, readRun, writeRun } from "../records/ledger.ts";
+import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { type Run } from "../records/ledger.ts";
+import { getRun, putRun } from "../records/record.ts";
 import { ctx, sh, newIssue, change, mk, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
@@ -122,7 +123,7 @@ test("an issue that names a busy file an open job also names waits; a job waitin
   const out = await dispatchIssues(start);
   expect(calls).toEqual([]);
   expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both change the busy file jobs/busy.ts`);
-  writeRun(folder, { ...readRun(folder)!, condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  putRun(basename(folder), { ...getRun(basename(folder))!, condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
   await dispatchIssues(start);
   expect(calls).toEqual([`fac-${second}`]);
 });
@@ -138,7 +139,7 @@ test("an issue that uses the gpt-oss server waits for an open job that uses it; 
   const out = await dispatchIssues(start);
   expect(calls).toEqual([`fac-${third}`]);
   expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both use the gpt-oss server`);
-  writeRun(folder, { ...readRun(folder)!, condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  putRun(basename(folder), { ...getRun(basename(folder))!, condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
   await dispatchIssues(start);
   expect(calls).toContain(`fac-${second}`);
 });
@@ -165,7 +166,7 @@ test("stalled lists what could move: a ready issue, a new issue and a passed run
   setPaused(true);
   expect(await stalled()).toEqual([]);
   setPaused(false);
-  writeRun(folder, { ...readRun(folder)!, condition: "failed", next: undefined });
+  putRun(basename(folder), { ...getRun(basename(folder))!, condition: "failed", next: undefined });
   // A stuck run holds only its own issue, which its open job keeps not ready; the new issue can still move.
   expect(await stalled()).toEqual([`ingest:fac-${fresh}`]);
 });
@@ -233,7 +234,7 @@ test("health warns when the last full suite of a repo took more than the budget"
   const suite = (id: string, ended: string, seconds: number, extra: object = {}) => {
     const dir = join(ctx.base, "jobs", id);
     mkdirSync(dir, { recursive: true });
-    writeRun(dir, { kind: "build", job: id, name: id, repo: "fac", condition: "done", told: true, started: ended, ended, checks: [{ name: "tests", ok: true, seconds, ...extra }, { name: "types", ok: true, seconds: 1 }] } as Run);
+    putRun(basename(dir), { kind: "build", job: id, name: id, repo: "fac", condition: "done", told: true, started: ended, ended, checks: [{ name: "tests", ok: true, seconds, ...extra }, { name: "types", ok: true, seconds: 1 }] } as Run);
   };
   const said = () => health().filter((l) => l.text.includes("full suite"));
   suite("20261103-000001-a", "2026-11-03T00:01:00Z", 135);

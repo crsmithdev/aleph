@@ -1,12 +1,13 @@
 import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { askOf } from "../asks/ask.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues, suiteStep } from "./factory.ts";
 import type { Rescue } from "../land/rescue.ts";
-import { allJobs, writeRun, type Run } from "../records/ledger.ts";
+import { allJobs, type Run } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 import type { ChecksStop } from "../gates/checks.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 
@@ -63,7 +64,7 @@ export function mk(name: string, kind: Run["kind"], state: Run["condition"], ext
   const folder = join(ctx.base, "jobs", id);
   mkdirSync(folder, { recursive: true });
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
-  writeRun(folder, { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date(now).toISOString(), ...extra } as Run);
+  putRun(basename(folder), { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date(now).toISOString(), ...extra } as Run);
   return { folder, job: extra.job ?? id };
 }
 export const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
@@ -78,7 +79,7 @@ export function fakes() {
       calls.push(`drop ${name}`);
       const j = allJobs().find((x) => x.at(-1)!.run.name === name && x.at(-1)!.run.condition !== "dropped")!;
       const last = j.at(-1)!;
-      writeRun(last.folder, { ...last.run, condition: "dropped", reason, ...(fate ? { fate } : {}) });
+      putRun(last.id, { ...last.run, condition: "dropped", reason, ...(fate ? { fate } : {}) });
       return null;
     },
     recheck: async (name) => {

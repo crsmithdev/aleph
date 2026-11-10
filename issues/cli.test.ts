@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { env, fx, remoteItem, seed, sh, tasks, useFixture } from "./fixture.ts";
 import { clock, renderItem, titleProblem } from "./lib/todo.ts";
-import { writeRun } from "../jobs/lib/records/ledger.ts";
+import { putRun } from "../jobs/lib/records/record.ts";
 
 // Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
 setDefaultTimeout(30000);
@@ -159,7 +159,7 @@ test("list and lint with no repo cover the repos with a run or an item update in
   mkdirSync(join(jobs, "r1"));
   const saved = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobs;
-  writeRun(join(jobs, "r1"), { kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: clock().toISOString() } as any);
+  putRun("r1", { kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: clock().toISOString() } as any);
   // Assigning undefined would set the string "undefined", and a later test's records would land in ./undefined/.
   if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
   expect(alephWith(e, "issue", "list").out).toBe("proj\n  3  open    medium   An old item\nfresh\n  1  open    medium   A new item\n");

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
-import { readRun, writeRun } from "../records/ledger.ts";
 import { type Run } from "../records/ledger.ts";
+import { getRun, putRun } from "../records/record.ts";
 import { rescued } from "./continuation.ts";
 
 /** The rescue mark of the run `mk` made. */
-const rescuedOf = (r: { folder: string }) => rescued({ id: r.folder.split("/").at(-1)!, folder: r.folder, run: readRun(r.folder)! });
+const rescuedOf = (r: { folder: string }) => rescued({ id: r.folder.split("/").at(-1)!, folder: r.folder, run: getRun(basename(r.folder))! });
 import { ctx, newIssue, mk, notes, ask, fakes, dispatch, setup, sh, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
@@ -38,13 +38,13 @@ test("a build a host restart killed, with a commit ahead of main, starts a reche
   sh(repo, "git", "checkout", "-q", "main");
   const r = killedRun(`fac-${id}`, "build", {});
   // The run's branch is `work`: its commit is ahead of main.
-  writeRun(r.folder, { ...readRun(r.folder)!, branch: "work" });
+  putRun(basename(r.folder), { ...getRun(basename(r.folder))!, branch: "work" });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`recheck fac-${id}`]);
   expect(f.specs).toEqual([]);
   expect(notes(id)).toContain("its branch has the worker's commits");
-  expect(readRun(r.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
+  expect(getRun(basename(r.folder))).toMatchObject({ condition: "failed", reason: "host restart" });
   expect(ask(id)).toBeNull();
   expect(rescuedOf(r)).toBe("");
 });
@@ -56,13 +56,13 @@ test("a recheck a host restart killed, with a commit ahead of main, starts a new
   sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "the worker's work");
   sh(repo, "git", "checkout", "-q", "main");
   const r = killedRun(`fac-${id}`, "recheck", {});
-  writeRun(r.folder, { ...readRun(r.folder)!, branch: "work" });
+  putRun(basename(r.folder), { ...getRun(basename(r.folder))!, branch: "work" });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`recheck fac-${id}`]);
   expect(f.specs).toEqual([]);
   expect(notes(id)).toContain("its branch has the worker's commits");
-  expect(readRun(r.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
+  expect(getRun(basename(r.folder))).toMatchObject({ condition: "failed", reason: "host restart" });
   expect(ask(id)).toBeNull();
   expect(rescuedOf(r)).toBe("");
 });
@@ -107,7 +107,7 @@ test("a run from before this boot whose pid's process names its folder is live a
     const f = fakes();
     await dispatch(f);
     expect(f.calls).toEqual([]);
-    expect(readRun(r.folder)!.condition).toBe("running");
+    expect(getRun(basename(r.folder))!.condition).toBe("running");
   } finally { p.kill(); }
 });
 
@@ -120,7 +120,7 @@ test("a lost run is marked failed and the issue reruns once; a second lost run o
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(readRun(r.folder)).toMatchObject({ condition: "dropped", reason: expect.stringContaining("was lost") });
+  expect(getRun(basename(r.folder))).toMatchObject({ condition: "dropped", reason: expect.stringContaining("was lost") });
   expect(existsSync(join(r.folder, "exit"))).toBe(true);
   expect(rescuedOf(r)).toBe("lost");
   expect(notes(id)).toContain("was lost: its process ended with no end written: dropped, and the goal reruns once");
@@ -129,7 +129,7 @@ test("a lost run is marked failed and the issue reruns once; a second lost run o
   const again = lostRun(`fac-${id}`);
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(readRun(again.folder)).toMatchObject({ condition: "failed", reason: "lost: its process ended with no end written" });
+  expect(getRun(basename(again.folder))).toMatchObject({ condition: "failed", reason: "lost: its process ended with no end written" });
   expect(ask(id)).toMatchObject({ reason: "rescue" });
   // The Ask is set: the next dispatch leaves the run alone.
   await dispatch(f);
@@ -144,7 +144,7 @@ test("a lost land is marked failed and lands again, and the issue does not start
   await dispatch(f);
   expect(f.calls[0]).toBe(`land fac-${id}`);
   expect(f.calls).not.toContain(`drop fac-${id}`);
-  expect(readRun(l.folder)).toMatchObject({ condition: "failed", reason: "lost: its process ended with no end written" });
+  expect(getRun(basename(l.folder))).toMatchObject({ condition: "failed", reason: "lost: its process ended with no end written" });
 });
 
 test("a land killed by a host restart fails and lands again, and the issue does not start over", async () => {
@@ -155,7 +155,7 @@ test("a land killed by a host restart fails and lands again, and the issue does 
   await dispatch(f);
   expect(f.calls[0]).toBe(`land fac-${id}`);
   expect(f.calls).not.toContain(`drop fac-${id}`);
-  expect(readRun(l.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
+  expect(getRun(basename(l.folder))).toMatchObject({ condition: "failed", reason: "host restart" });
   expect(existsSync(join(l.folder, "exit"))).toBe(true);
 });
 
@@ -166,7 +166,7 @@ test("an old held run with a PENDING call.md from before the boot is left alone:
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([]);
-  expect(readRun(r.folder)).toMatchObject({ condition: "waiting", ask: { reason: "held-path" } });
+  expect(getRun(basename(r.folder))).toMatchObject({ condition: "waiting", ask: { reason: "held-path" } });
   expect(readFileSync(join(r.folder, "call.md"), "utf8")).toBe("PENDING\n");
 });
 
@@ -177,5 +177,5 @@ test("a paused factory leaves a killed run alone", async () => {
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([]);
-  expect(readRun(r.folder)!.condition).toBe("running");
+  expect(getRun(basename(r.folder))!.condition).toBe("running");
 });

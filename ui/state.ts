@@ -9,8 +9,9 @@ import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { allRuns, askOf as runAsk, isWaiting, jobIdOf, loadRegistry, onOf, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
-import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
+import { allRuns, isWaiting, loadRegistry, onOf, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
+import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
+import { counting as lastReal, jobIdOf } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
@@ -257,7 +258,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       job.checkName = failedCheckOf(run);
     }
     // A waiting run with no ask of its own asks a question, as stage() reads it.
-    const stored = isWaiting(lastReal(runs).run.condition) ? runAsk(lastReal(runs).run) : undefined;
+    const stored = isWaiting(lastReal(runs).run.condition) ? lastReal(runs).run.ask : undefined;
     const asked = isWaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
     if (asked) job.ask = asked;
     if (asked && v.review) job.reviewCall = v.review;

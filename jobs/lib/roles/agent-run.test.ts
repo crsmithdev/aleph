@@ -1,9 +1,10 @@
 import { afterAll, afterEach, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { agentCause, endLost, openRun, type Opening } from "./agent-run.ts";
-import { allRuns, jobIdOf, readRun, runsDir, stamp, writeRun } from "../records/ledger.ts";
+import { allRuns, runsDir, stamp } from "../records/ledger.ts";
+import { getRun, jobIdOf, putRun } from "../records/record.ts";
 import { lock } from "../infra/locks.ts";
 
 let base: string;
@@ -28,7 +29,7 @@ afterAll(() => { rmSync(base, { recursive: true, force: true }); process.env = s
 test("a run holds its state, its prompt, its output and its ending", async () => {
   fake(`cat > ${join(base, "stdin")}; echo "$@" > ${join(base, "args")}; echo reply; echo noise >&2`);
   const run = openRun({ ...opening, repo: "r", on: "r-1", job: "job-1" });
-  expect(readRun(run.folder)).toMatchObject({ kind: "intake", name: "demo", job: "job-1", repo: "r", on: "r-1", condition: "running", phase: "intake", model: "m-1", shown: false, told: true });
+  expect(getRun(basename(run.folder))).toMatchObject({ kind: "intake", name: "demo", job: "job-1", repo: "r", on: "r-1", condition: "running", phase: "intake", model: "m-1", shown: false, told: true });
   expect(readFileSync(join(run.folder, "command.txt"), "utf8")).toBe("facts demo\n");
   expect(await run.ask("hello")).toBe("reply\n");
   expect(readFileSync(join(run.folder, "prompt.md"), "utf8")).toBe("hello");
@@ -39,7 +40,7 @@ test("a run holds its state, its prompt, its output and its ending", async () =>
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--disable-slash-commands");
   expect(readFileSync(join(run.folder, "output.log"), "utf8")).toBe("reply\nnoise\n");
   run.end("ok", { route: "close" });
-  const r = readRun(run.folder)!;
+  const r = getRun(basename(run.folder))!;
   expect(r).toMatchObject({ condition: "done", reason: "ok", route: "close" });
   expect(r.phase).toBeUndefined();
   expect(typeof r.ended).toBe("string");
@@ -50,7 +51,7 @@ test("a role run that joins a job sorts after the job's earlier runs, even when 
   const later = stamp(new Date(NOW.getTime() + 60_000));
   const earlier = join(runsDir(), `${later}-step-build`);
   mkdirSync(earlier, { recursive: true });
-  writeRun(earlier, { kind: "build", job: "step-job", name: "step", condition: "landed", told: true, started: NOW.toISOString() });
+  putRun(basename(earlier), { kind: "build", job: "step-job", name: "step", condition: "landed", told: true, started: NOW.toISOString() });
   const run = openRun({ ...opening, name: "step", job: "step-job" });
   const ids = allRuns().map((e) => e.folder);
   expect(ids.indexOf(run.folder)).toBeGreaterThan(ids.indexOf(earlier));
@@ -60,13 +61,13 @@ test("two jobs on one subject are #1 and #2, after the runs from before job IDs,
   setSystemTime(NOW);
   const old = join(runsDir(), `${stamp(new Date(NOW.getTime() - 60_000))}-intake-r-9-intake`);
   mkdirSync(old, { recursive: true });
-  writeRun(old, { kind: "intake", job: "old-9", name: "intake-r-9", on: "r-9", condition: "done", told: true, started: NOW.toISOString() });
+  putRun(basename(old), { kind: "intake", job: "old-9", name: "intake-r-9", on: "r-9", condition: "done", told: true, started: NOW.toISOString() });
   const one = openRun({ ...opening, on: "r-9" });
   const two = openRun({ ...opening, on: "r-9" });
   const e = (f: string) => allRuns().find((x) => x.folder === f)!;
   expect([jobIdOf(e(old)), jobIdOf(e(one.folder)), jobIdOf(e(two.folder))]).toEqual(["r-9#1", "r-9#2", "r-9#3"]);
   expect(one.folder.split("/").at(-1)).toMatch(/^\d{8}-\d{6}-r-9-2$/);
-  expect(readRun(two.folder)!.n).toBe(3);
+  expect(getRun(basename(two.folder))!.n).toBe(3);
   const first = openRun({ ...opening, on: "r-10" }), second = openRun({ ...opening, on: "r-10" });
   expect([jobIdOf(e(first.folder)), jobIdOf(e(second.folder))]).toEqual(["r-10#1", "r-10#2"]);
 });
@@ -83,17 +84,17 @@ test("a run records the cost of its result event, also when the command fails, a
   fake(`echo '{"type":"system"}'; echo '${result(0.5, false, "the text")}'`);
   const good = openRun(opening);
   expect(await good.ask("x")).toBe("the text");
-  expect(readRun(good.folder)!.cost).toBe(0.5);
+  expect(getRun(basename(good.folder))!.cost).toBe(0.5);
 
   fake(`echo '${result(0.25, true, "out of turns")}'; exit 1`);
   const bad = openRun(opening);
   await expect(bad.ask("x")).rejects.toThrow("the reviewer exited 1");
-  expect(readRun(bad.folder)!.cost).toBe(0.25);
+  expect(getRun(basename(bad.folder))!.cost).toBe(0.25);
 
   fake("echo plain");
   const none = openRun(opening);
   await none.ask("x");
-  expect(readRun(none.folder)!.cost).toBeUndefined();
+  expect(getRun(basename(none.folder))!.cost).toBeUndefined();
 });
 
 test("a run past its time box is killed and says it timed out", async () => {
@@ -127,10 +128,10 @@ test("endLost ends a run when its lock is free, and leaves one whose lock is hel
   } finally {
     release();
   }
-  expect(readRun(free.folder)).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict", cause: "unanswered" });
-  expect(readRun(held.folder)?.condition).toBe("running");
-  expect(readRun(other.folder)?.condition).toBe("running");
-  expect(readRun(done.folder)?.reason).toBe("kept");
+  expect(getRun(basename(free.folder))).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict", cause: "unanswered" });
+  expect(getRun(basename(held.folder))?.condition).toBe("running");
+  expect(getRun(basename(other.folder))?.condition).toBe("running");
+  expect(getRun(basename(done.folder))?.reason).toBe("kept");
 });
 
 test("an agent gets no API key and no CLAUDECODE, so it bills the subscription", async () => {

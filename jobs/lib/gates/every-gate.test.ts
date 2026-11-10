@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { Runner } from "./checks.ts";
 import { setup, teardown } from "../transitions/factory.helpers.ts";
 import { git } from "../infra/git.ts";
@@ -10,7 +10,7 @@ import type { Repo, Run } from "../records/ledger.ts";
 import { branchPorts } from "../roles/unit.ts";
 import { workerVerdict } from "./worker-verdict.ts";
 import { fixture } from "../../../tests/git-fixture.ts";
-import { writeRun } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 
 setDefaultTimeout(120_000);
 
@@ -48,7 +48,7 @@ function landSetup(file = "a.txt", held: string[] = []): string {
   folder = join(root, "j1-run");
   mkdirSync(folder);
   writeFileSync(join(root, "j1", "spec.md"), "## Oracle\n- `bun run test` passes.\n- `bun test x.test.ts` passes.\n");
-  writeRun(join(folder), base_run as any);
+  putRun(basename(join(folder)), base_run as any);
   return git(path, "rev-parse", "main").out;
 }
 /** A runner that passes and writes, for a `bun test` command, a JUnit report of one passed test. */

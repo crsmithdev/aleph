@@ -4,8 +4,9 @@
  * job ID, `a1430#2`. Each action is the `aleph` command of that name on the job's name, run through ui/action.ts. The
  * command acts on the newest job of that name, so an action acts only while the named job is that one: a 409 otherwise.
  */
-import { allRuns, askOf, isWaiting, jobIdOf, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
-import { lastReal, latestJob } from "../../jobs/lib/records/job.ts";
+import { allRuns, isWaiting, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { latestJob } from "../../jobs/lib/records/job.ts";
+import { counting as lastReal, jobIdOf } from "../../jobs/lib/records/record.ts";
 import { may } from "../../jobs/lib/asks/ask.ts";
 import * as issues from "../../issues/lib/issues.ts";
 import { afterOf } from "../../issues/lib/store.ts";
@@ -29,10 +30,10 @@ const action = (verb: "land" | "recheck" | "drop") => post(async (body, { id }) 
 
 const answerAndRerun = post(async (body, { id }) => {
   const { run } = find(id);
-  if (!isWaiting(run.condition) || may("chris", "answer", askOf(run), { run: true })) fail(409, `${id} is ${run.condition}, not waiting for an answer`);
+  if (!isWaiting(run.condition) || may("chris", "answer", run.ask, { run: true })) fail(409, `${id} is ${run.condition}, not waiting for an answer`);
   const said = typeof body.answer === "string" ? body.answer.trim() : "";
   if (!said) fail(400, "answer is required");
-  return aleph(["drop", "--", run.name, `Chris answered the worker's question "${askOf(run)?.question ?? run.question ?? ""}": ${said}`]);
+  return aleph(["drop", "--", run.name, `Chris answered the worker's question "${run.ask?.question ?? run.question ?? ""}": ${said}`]);
 });
 
 /**

@@ -1,14 +1,13 @@
 import { afterAll, beforeAll, expect, setSystemTime, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { withEnv } from "./test-server.ts";
 import { agentStats, CLASSES, classify, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
 import { bar, statusCards, weekText, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
-import { writeRun } from "../jobs/lib/records/ledger.ts";
 import * as record from "../jobs/lib/records/record.ts";
 import { averageFigures, figures } from "./api/speed.ts";
 
@@ -20,7 +19,7 @@ let n = 0;
 function run(r: Record<string, unknown>) {
   const dir = join(base, "jobs", `r${String(++n).padStart(3, "0")}`);
   mkdirSync(dir, { recursive: true });
-  writeRun(join(dir), { job: `j${n}`, name: `j${n}`, told: true, ...r } as any);
+  record.putRun(basename(join(dir)), { job: `j${n}`, name: `j${n}`, told: true, ...r } as any);
 }
 const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, h), ended: new Date(Date.parse(at(daysAgo, h)) + s * 1000).toISOString() });
 

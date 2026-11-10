@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
 import { add, setStatus, type Doc } from "../issues/lib/todo.ts";
@@ -23,7 +23,7 @@ import { label, option } from "./chart.js";
 import { xLabel } from "./views/speed.js";
 // @ts-ignore plain JS, shared with the page
 import { when } from "./lib.js";
-import { writeRun } from "../jobs/lib/records/ledger.ts";
+import { putRun } from "../jobs/lib/records/record.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const ISO_UTC = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
@@ -53,7 +53,7 @@ const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1
 function run(id: string, extra: Record<string, unknown>) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  writeRun(join(dir), { kind: "build", told: true, started: new Date(NOW).toISOString(), ...extra } as any);
+  putRun(basename(join(dir)), { kind: "build", told: true, started: new Date(NOW).toISOString(), ...extra } as any);
 }
 
 beforeAll(async () => {

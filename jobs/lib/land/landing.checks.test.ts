@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { land } from "./landing.ts";
-import { writeRun } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 import { dir, job, landLog, moveMain, ports, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
 
 useLandingFixture();
@@ -18,7 +18,7 @@ async function landed(name: string, files: [string, string][], moved: [string, s
   repo.checks = [TESTS, TYPES];
   const e = job(name, files);
   const run = { ...e.run, checkedBase: remote("rev-parse", "main"), checkedTip: sh(repo.path, "git", "rev-parse", `job/${name}`) };
-  writeRun(e.folder, run);
+  putRun(e.id, run);
   for (const [f, t] of moved) moveMain(f, t);
   const p = ports();
   const r = await land({ ...e, run }, repo, p);
@@ -83,7 +83,7 @@ test("on an unchanged main a land runs only the critical tests", async () => {
 test.skip("a commit added to the branch after its checks gets the checks on land", async () => {
   const e = job("tipped", [["tipped.txt", "t\n"]]);
   const run = { ...e.run, checkedBase: remote("rev-parse", "main"), checkedTip: "0000000" };
-  writeRun(e.folder, run);
+  putRun(e.id, run);
   const p = ports();
   await land({ ...e, run }, repo, p);
   expect(p.calls).toEqual([["tipped"]]);

@@ -20,10 +20,10 @@ import { note, partsOf, reader, writeList } from "../../../issues/lib/store.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
 import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "../gates/factory-status.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, stepOf, type Job } from "../records/job.ts";
+import { allJobs, isOpen, issue as issueOf, type Job } from "../records/job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";
 import { logEvent } from "../infra/layout.ts";
-import { allRuns, isAgentRun, jobIdOf, loadRegistry, tell, updateRun, type Repo } from "../records/ledger.ts";
+import { allRuns, isAgentRun, loadRegistry, tell, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive, isLost, isStarting, markEnded } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
@@ -31,7 +31,7 @@ import type { Baseline } from "../transitions/factory.ts";
 import { onMain } from "../records/status.ts";
 import { rescueWaitMs } from "../infra/settings.ts";
 import { ciLine, redCi } from "../gates/ci.ts";
-import { read as readRecord } from "../records/record.ts";
+import { counting, jobIdOf, patchRun, read as readRecord, stepOf } from "../records/record.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
 
@@ -64,7 +64,7 @@ const killed = (jobs: Job[]): Job[] => {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   const booted = bootedAt();
   return jobs.filter((j) => {
-    const last = lastReal(j);
+    const last = counting(j);
     const r = last.run;
     return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land")
       && Date.parse(r.started) < booted && !isLive(last.folder) && !isStarting(last);
@@ -79,7 +79,7 @@ const lost = (jobs: Job[]): Job[] => {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   const booted = bootedAt();
   return jobs.filter((j) => {
-    const last = lastReal(j);
+    const last = counting(j);
     const r = last.run;
     return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land")
       && Date.parse(r.started) >= booted && isLost(last.folder);
@@ -93,7 +93,7 @@ const lost = (jobs: Job[]): Job[] => {
 const stuckJobs = (jobs: Job[]): Job[] => {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   return jobs.filter((j) => {
-    const last = lastReal(j);
+    const last = counting(j);
     return isOpen(j) && !!last.run.repo && keys.has(last.run.repo) && !isLive(last.folder) && stepOf(j).step === "rescue"
       && causeOf(last.run) !== "credit";
   });
@@ -111,7 +111,7 @@ const SLOW_LAND_OPTIONS = [
 const slowLands = (jobs: Job[], now: number): Job[] => {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   return jobs.filter((j) => {
-    const last = lastReal(j);
+    const last = counting(j);
     const r = last.run;
     return isOpen(j) && !!r.repo && keys.has(r.repo) && r.kind === "land" && r.condition === "running" && isLive(last.folder)
       && now - Date.parse(r.started) >= LAND_STUCK_MS && !asked(last);
@@ -132,7 +132,7 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
       // Read again under the lock: another tick may have asked.
       const runs = slowLands(allJobs(), now).find((j) => j[0].run.job === first[0].run.job);
       if (!runs) continue;
-      const last = lastReal(runs);
+      const last = counting(runs);
       const r = last.run;
       const repo = loadRegistry()[r.repo!];
       const minutes = Math.floor((now - Date.parse(r.started)) / 60_000);
@@ -175,7 +175,7 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
 
 /** The open jobs whose last run waits for a spec edit and whose issue's spec is no longer the one it asked about. */
 export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
-  const last = lastReal(runs), r = last.run;
+  const last = counting(runs), r = last.run;
   const waits = waitsForSpecEdit(last);
   if (!waits || !r.repo || !isOpen(runs) || (r.condition !== "returned" && r.condition !== "failed")) return false;
   const issue = issueOf(runs);
@@ -189,8 +189,8 @@ export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
  */
 async function releaseEdited(act: Rescue): Promise<void> {
   for (const runs of editedWaits(allJobs())) {
-    const r = lastReal(runs).run;
-    const { question } = waitsForSpecEdit(lastReal(runs))!;
+    const r = counting(runs).run;
+    const { question } = waitsForSpecEdit(counting(runs))!;
     const repo = loadRegistry()[r.repo!];
     const issue = issueOf(runs)!;
     const release = await lock(`rescue-${r.repo}-${r.name}`, rescueWaitMs());
@@ -261,7 +261,7 @@ function sendToIntake(repo: Repo, issue: number): string | null {
 
 /** Choose the rescue of one job, and do it. The once-only rule is here: a mark on the run counts the case against the issue. */
 async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
-  const last = lastReal(runs);
+  const last = counting(runs);
   const r = last.run;
   const repo = loadRegistry()[r.repo!];
   const name = r.name;
@@ -316,7 +316,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     // The real recheck takes only a returned or failed run, so the killed run ends failed first, as a killed land does.
     if (r.kind === "land" || step.action === "recheck") {
       markEnded(last.folder, 143);
-      updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
+      patchRun(last.id, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
     }
     return take(step);
   }
@@ -324,7 +324,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (isLostRun) {
     // Marked failed first, so the run is no longer lost, whatever comes next: the recheck and the Ask both want an ended run.
     markEnded(last.folder, 143);
-    updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
+    patchRun(last.id, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
     const again = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "lost");
     if (again) return chris(`${name}: a second run of this goal was lost (its process ended with no end written). Drop it, or change the goal?`, choice(`${name}: a second run was lost: how should the factory go on?`, ["An earlier run of this goal was lost too, and its rerun did not clear it"]));
     markRescued(last, "lost");

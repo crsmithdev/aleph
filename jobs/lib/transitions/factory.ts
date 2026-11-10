@@ -13,13 +13,14 @@ import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { logEvent } from "../infra/layout.ts";
 import { itemOnMain, repoStages } from "../records/status.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
-import { allRuns, askOf as runAskOf, isWaiting, loadRegistry, updateRun, type Entry, type Repo } from "../records/ledger.ts";
+import { allRuns, isWaiting, loadRegistry, type Entry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
 import { clearRerun, issueBrief } from "./continuation.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
-import { allJobs, checkedBy, isOpen, lastReal, lookMinutes, openJob } from "../records/job.ts";
+import { allJobs, checkedBy, isOpen, lookMinutes, openJob } from "../records/job.ts";
+import { counting, patchRun } from "../records/record.ts";
 import { mine, proposals, readStore } from "../learning/corrections.ts";
 import { directAll, pendingCases, subjectOfCase, type Decision, type Ports as DirectorPorts } from "../roles/director.ts";
 import { episodesDir, writeEpisodes } from "../learning/episode.ts";
@@ -462,7 +463,7 @@ export function behind(repo: Repo, short = false): string | null {
 /** The SessionStart hook's lines: a pause, the asks, the alarms and each sandbox checkout that is behind. It writes nothing. */
 export function hookLines(now = Date.now()): string[] {
   const lines = paused() ? ["factory paused"] : [];
-  const refs = allJobs().filter((j) => isOpen(j) && isWaiting(lastReal(j).run.condition) && runAskOf(lastReal(j).run)).map((j) => j[0].run.name);
+  const refs = allJobs().filter((j) => isOpen(j) && isWaiting(counting(j).run.condition) && counting(j).run.ask).map((j) => j[0].run.name);
   for (const repo of Object.values(loadRegistry())) {
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) {
       if (issues.status(item) === "open" && askOf(refIn(repo.key, item))) refs.push(`${repo.key}-${issues.idOf(item)}`);
@@ -486,7 +487,7 @@ const laneOf = (e: Entry): string => lane(e.run.condition);
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
-  const needs = isWaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
+  const needs = isWaiting(r.condition) ? needsOf(r.ask) : undefined;
   const lane = laneOf(e);
   const hit = (lane === "landed" || lane === "waiting") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on) : undefined, prio = hit && priorityOf(hit);
   const head = `${shortId(r.name)} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "returned" && r.condition !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
@@ -583,7 +584,7 @@ function runLines(now: number): string[] {
     const here = fresh.filter((e) => laneOf(e) === l);
     if (here.length) lines.push(`${l}:`, ...here.map(entry));
   }
-  for (const e of fresh) updateRun(e.folder, { shown: true });
+  for (const e of fresh) patchRun(e.id, { shown: true });
   const today = runsToday(now);
   if (lines.length) lines.push(`runs in the last 24 hours: ${today.length}, ${money(spentToday(now))} at the API price${paused() ? "; the factory is paused" : ""}`);
   return lines;

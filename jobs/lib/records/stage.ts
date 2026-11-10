@@ -7,12 +7,13 @@
  * item or run and a new-shape one alike.
  */
 import { askOf, waitOf } from "../asks/ask.ts";
-import { askOf as runAsk, isWaiting, type Run, type State } from "./ledger.ts";
+import { isWaiting, type Run, type State } from "./ledger.ts";
 import type { Job } from "./job.ts";
-import { isOpen, lastReal } from "./job.ts";
+import { isOpen } from "./job.ts";
+import { counting, jobIdOf } from "./record.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { contentText, jobId, subjectOf as runSubject } from "../../../lib/naming.ts";
+import { contentText } from "../../../lib/naming.ts";
 
 /** The stages of docs/naming.md. */
 export type StageName = "new" | "queued" | "held" | "working" | "waiting" | "failed" | "landing" | "done" | "dropped" | "parked";
@@ -74,8 +75,8 @@ export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Sub
 }
 
 export function runViewOf(job: Job): RunView {
-  const run = lastReal(job).run;
-    return { id: jobId(runSubject(run), run.n ?? 1), kind: run.kind, condition: run.condition, open: isOpen(job), ...(isWaiting(run.condition) ? { ask: waitOf(runAsk(run)) } : {}) };
+  const last = counting(job), run = last.run;
+    return { id: jobIdOf(last), kind: run.kind, condition: run.condition, open: isOpen(job), ...(isWaiting(run.condition) ? { ask: waitOf(run.ask) } : {}) };
 }
 
 /** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */

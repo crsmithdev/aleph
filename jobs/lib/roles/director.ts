@@ -19,12 +19,12 @@ import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { ASK_REASONS, askSub, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
-import { allRuns, isAgentRun, loadRegistry, readRun, updateRun, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, isAgentRun, loadRegistry, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { NO_OUTPUT } from "./structured.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile } from "../records/job.ts";
+import { allJobs, isOpen, issue as issueOf, openJob, readFile } from "../records/job.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { git } from "../infra/git.ts";
 import { securityChange } from "../gates/gate.ts";
@@ -464,7 +464,7 @@ export function stillOpen(c: Case): boolean {
     const item = store.reader().item(c.repo.key, idOf(c.item));
     return !!item && issues.status(item) === "open" && sameAsk(askOf(c.on), c.ask);
   }
-  const now = readRun(c.entry.folder);
+  const now = jobRecord.getRun(c.entry.id);
   return !!now && now.condition === "waiting" && sameAsk(now.ask, c.ask);
 }
 
@@ -478,9 +478,9 @@ export function writeCaseText(c: Case, t: Text): boolean {
     return true;
   }
   if (c.at === "lesson") return explainLesson(c.lesson.id, c.lesson.sentence, t);
-  const now = readRun(c.entry.folder);
+  const now = jobRecord.getRun(c.entry.id);
   if (!now || now.condition !== "waiting" || !sameAsk(now.ask, c.ask)) return false;
-  updateRun(c.entry.folder, { ask: { ...now.ask!, ...t } });
+  jobRecord.patchRun(c.entry.id, { ask: { ...now.ask!, ...t } });
   return true;
 }
 
@@ -541,7 +541,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     const name = jobOf(c, n);
     if (!name || !openJob(name)) return no(a, "no open job to drop");
     const runs = openJob(name)!;
-    const last = lastReal(runs);
+    const last = jobRecord.counting(runs);
     const issue = issueOf(runs);
     let reason: string, fate: Fate | undefined;
     if (a.do === "answer") {
@@ -592,7 +592,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
   }
   if (a.do === "answer" || a.do === "rerun") {
     const ask = askOf(refIn(repo.key, item));
-    const waiting = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === n && waitsForSpecEdit(lastReal(j)));
+    const waiting = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === n && waitsForSpecEdit(jobRecord.counting(j)));
     const refused = may("director", "answer", ask, waiting ? { waiting: waiting[0].run.name } : {});
     if (refused) return no(a, refused);
     const option = a.do === "answer" && a.option ? ask?.options.find((o) => o.label === a.option) : undefined;
@@ -660,7 +660,7 @@ export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Deci
       flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(","), ...dirs], schema: DIRECTOR_SCHEMA,
       cwd, name: `director-${c.on}`, command: `director ${c.on}: ${reasonName(c)}: ${questionOf(c)}`, shown: true, on: subjectOfCase(c),
     });
-    updateRun(run.folder, { question: questionOf(c) });
+    jobRecord.patchRun(basename(run.folder), { question: questionOf(c) });
     const at = { ...base, run: run.folder.split("/").at(-1)! };
     let reply: Reply | string;
     // An Ask listed for a held path is the sub `protected`, with the path.

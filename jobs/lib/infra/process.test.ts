@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { writeRun, type Entry, type Run } from "../records/ledger.ts";
+import { basename, join } from "node:path";
+import { type Entry, type Run } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 import { isRunning, markEnded, markStarted, processState, STARTING_MS, stop, unitAlive } from "./process.ts";
 
 const NOW = Date.parse("2026-11-03T00:00:00Z");
@@ -24,7 +25,7 @@ function entry(id: string, extra: Partial<Run> = {}): Entry {
   const folder = join(base, "runs", id);
   mkdirSync(folder);
   const run = { kind: "build", job: id, name: "x", repo: "demo", condition: "running", told: true, started: "2026-11-03T00:00:00Z", made: NOW, ...extra } as Run;
-  writeRun(folder, run);
+  putRun(basename(folder), run);
   return { id, folder, run };
 }
 

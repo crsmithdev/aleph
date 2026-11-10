@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { CLI } from "../../cli.helpers.ts";
 import { renderItem } from "../../../issues/lib/todo.ts";
 import { config, storeDir } from "../../../issues/lib/store.ts";
-import { runsDir, writeRun } from "../records/ledger.ts";
+import { runsDir } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 import { layout } from "./layout.ts";
 
 // A temporary HOME and no layout variables: the paths follow what is on disk.
@@ -44,7 +45,7 @@ beforeAll(() => {
   sh(join(a, "issues"), "git", "push", "-q", "origin", "main");
   const run = join(a, "runs", "20261030-100000-aleph-j1-agent");
   mkdirSync(run, { recursive: true });
-  writeRun(run, { job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", condition: "failed", told: true, started: "2026-10-30T10:00:00Z" });
+  putRun(basename(run), { job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", condition: "failed", told: true, started: "2026-10-30T10:00:00Z" });
   mkdirSync(join(a, "runs", "sandbox-run"), { recursive: true });
   mkdirSync(join(a, "factory"), { recursive: true });
   writeFileSync(join(a, "factory", "paused"), "");

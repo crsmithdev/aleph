@@ -10,7 +10,7 @@ import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import { renderIssue } from "./views/issues.js";
-import { writeRun } from "../jobs/lib/records/ledger.ts";
+import { putRun } from "../jobs/lib/records/record.ts";
 
 // /api/factory on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).
@@ -30,7 +30,7 @@ const now = new Date(NOW);
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
 const run = (id: string, extra: Record<string, unknown>) => {
   mkdirSync(join(runsDir, id), { recursive: true });
-  writeRun(join(runsDir, id), { repo: "fac", told: true, started: ago(2), ...extra } as any);
+  putRun(id, { repo: "fac", told: true, started: ago(2), ...extra } as any);
 };
 
 beforeAll(async () => {

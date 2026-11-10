@@ -5,17 +5,18 @@
  * The repo's checks and the start of more land runs reach this module through
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
+import { basename } from "node:path";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { closeAndFile, note } from "../../../issues/lib/store.ts";
 import { fetchOrigin, followMain, git } from "../infra/git.ts";
 import { needsOf } from "../asks/ask.ts";
-import { askOf, allRuns, isWaiting, isAgentRun, onOf, trailerOf, updateRun, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, isWaiting, isAgentRun, onOf, trailerOf, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive } from "../infra/process.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";
 import { LOCK_BUSY, type Cause } from "../records/outcome.ts";
-import { allJobs, hasFile, isOpen, jobById, lastReal, stepOf } from "../records/job.ts";
+import { allJobs, hasFile, isOpen, jobById } from "../records/job.ts";
 import { onMain } from "../records/status.ts";
 import { RELANDS, TODO_PATH } from "../transitions/continuation.ts";
 import { landBatch } from "../infra/settings.ts";
@@ -48,7 +49,7 @@ export const agentOf = (runs: Entry[]): Entry | undefined => runs.filter((e) => 
 export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: boolean } | null {
   if (!isAgentRun(agent.kind)) return null;
   if (agent.condition === "passed") return { manual: agent.say !== undefined, held: false, asked: false };
-  const needs = isWaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
+  const needs = isWaiting(agent.condition) ? needsOf(agent.ask) : undefined;
   if (needs === "protected" || needs === "review") return { manual: false, held: true, asked: true };
   return null;
 }
@@ -59,8 +60,8 @@ export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: 
  */
 export function waitingToLand(jobs = allJobs()): string[] {
   return jobs.filter((j) => {
-    const last = lastReal(j);
-    return isOpen(j) && isAgentRun(last.run.kind) && !isLive(last.folder) && stepOf(j).step === "land";
+    const last = record.counting(j);
+    return isOpen(j) && isAgentRun(last.run.kind) && !isLive(last.folder) && record.stepOf(j).step === "land";
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
 }
 
@@ -291,7 +292,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
   const log = (step: string, out = "") => appendFileSync(logFile, `## ${step}\n${out ? out + "\n" : ""}\n`);
   const logged = (name: string, r: { ok: boolean; out: string }) => { log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
   const step = (name: string, ...args: string[]) => logged(name, git(repo.path, ...args));
-  const phase = (p: string) => updateRun(folder, { phase: p });
+  const phase = (p: string) => record.patchRun(basename(folder), { phase: p });
   const fail =(cause: Cause, reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(cause, reason, extra); };
 
   const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
@@ -304,7 +305,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
     const given = runFile(folder, "batch.json");
     if (existsSync(given)) {
       const b = JSON.parse(readFileSync(given, "utf8"));
-      if (b.checks) updateRun(folder, { checks: b.checks });
+      if (b.checks) record.patchRun(basename(folder), { checks: b.checks });
       return { outcome: b.verdict, code: b.code };
     }
     phase("land");
@@ -411,7 +412,7 @@ function conclude(leader: Member, done: Map<Member, Landing & { after?: () => vo
     writeFileSync(runFile(m.folder, "batch.json"), JSON.stringify({ verdict: o.outcome, code: o.code, ...(checks ? { checks } : {}) }));
   }
   const own = checksOf.get(leader);
-  if (own) updateRun(leader.folder, { checks: own });
+  if (own) record.patchRun(leader.id, { checks: own });
   return done.get(leader) ?? { outcome: { condition: "failed", cause: "other", reason: "not landed" }, code: 1 };
 }
 

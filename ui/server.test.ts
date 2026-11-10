@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { writeRun } from "../jobs/lib/records/ledger.ts";
+import { putRun } from "../jobs/lib/records/record.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -21,7 +21,7 @@ beforeAll(async () => {
   for (const [repo, name] of [["aleph", "aleph-1"], ["other", "other-2"]]) {
     const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, JSON.parse(run({ name, job: name, repo })));
+    putRun(basename(folder), JSON.parse(run({ name, job: name, repo })));
   }
   // A view added the way a view issue adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");

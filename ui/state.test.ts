@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import * as store from "../issues/lib/store.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
 import { jobProjector, state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
-import { loadRegistry, writeRun } from "../jobs/lib/records/ledger.ts";
+import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { allJobs } from "../jobs/lib/records/job.ts";
-import { archiveOld, removeRun } from "../jobs/lib/records/record.ts";
+import { archiveOld, putRun, removeRun } from "../jobs/lib/records/record.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/records/status.ts";
 import { state as fixture } from "./fixtures/status-state.ts";
@@ -37,7 +37,7 @@ const HELD = { kind: "approval", reason: "held-path", question: "", options: [],
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  writeRun(join(dir), { kind: "build", repo: "fac", told: true, started: ago(3), ...extra } as any);
+  putRun(basename(join(dir)), { kind: "build", repo: "fac", told: true, started: ago(3), ...extra } as any);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(dir, f), text);
 }
 

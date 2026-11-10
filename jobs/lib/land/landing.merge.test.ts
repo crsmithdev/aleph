@@ -1,10 +1,11 @@
 // A land's merge and push: a rebase, no net change, a refused branch, a lost push race, a job already on main, and what happens after a failed land.
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterLand, bounceNote, brief as unitPrompt, isMergeBounce, MERGE_MODEL, MERGE_SECONDS } from "../transitions/continuation.ts";
 import { land, landTerms } from "./landing.ts";
-import { readRun, writeRun, type Run } from "../records/ledger.ts";
+import { type Run } from "../records/ledger.ts";
+import { getRun, putRun } from "../records/record.ts";
 import { dir, job, landLog, mainFiles, moveMain, ports, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
@@ -59,7 +60,7 @@ test("a push that keeps losing fails as moved, and the unit lands again", async 
   const e = job("loser", [["x.txt", "x\n"]]);
   const r = await land(e, repo, ports({ races: 99 }));
   expect(r.code).toBe(1);
-  writeRun(e.folder, { ...e.run, ...r.outcome } as Run);
+  putRun(e.id, { ...e.run, ...r.outcome } as Run);
   expect(afterLand({ ...e.run, ...r.outcome } as Run)).toBe("land");
   expect(mainFiles()).not.toContain("x.txt");
 });
@@ -88,14 +89,14 @@ test("a job already on main by its Job trailer lands as that commit and does not
 test("afterLand sends a conflict back to the worker at most twice", () => {
   const e = job("clash", []);
   const fail = { ...e.run, condition: "failed", cause: "conflict", reason: "merge conflict", conflicts: ["f"] } as Run;
-  writeRun(e.folder, fail);
+  putRun(e.id, fail);
   expect(afterLand(fail)).toBe("worker");
   expect(afterLand({ ...fail, condition: "landed" })).toBeUndefined();
   expect(afterLand({ ...fail, conflicts: undefined, cause: "check", reason: "x failed" })).toBeUndefined();
   for (const n of [2, 3]) {
     const f = join(dir, "jobs", `20261101-00000${n}-demo-clash-land`);
     mkdirSync(f);
-    writeRun(f, fail);
+    putRun(basename(f), fail);
     expect(afterLand(fail)).toBe(n === 2 ? "worker" : undefined);
   }
 });
@@ -119,12 +120,12 @@ test("the run after a conflicted land has a merge prompt: the paths and the last
   writeFileSync(join(e.folder, "..", e.run.job, "spec.md"), spec);
   const r = await land(e, repo, ports());
   expect(r.outcome).toMatchObject({ condition: "failed", conflicts: ["clash.txt"] });
-  writeRun(e.folder, { ...e.run, ...r.outcome } as Run);
+  putRun(e.id, { ...e.run, ...r.outcome } as Run);
   const id = "20261101-000009-demo-mrg-build";
   const folder = join(dir, "jobs", id);
   mkdirSync(folder);
-  writeRun(folder, { name: "mrg", repo: "demo", job: e.run.job, kind: "build", condition: "running", merge: true, model: MERGE_MODEL, made: 99, started: new Date(NOW).toISOString() } as Run);
-  const text = unitPrompt(id, folder, readRun(folder)!, repo);
+  putRun(basename(folder), { name: "mrg", repo: "demo", job: e.run.job, kind: "build", condition: "running", merge: true, model: MERGE_MODEL, made: 99, started: new Date(NOW).toISOString() } as Run);
+  const text = unitPrompt(id, folder, getRun(basename(folder))!, repo);
   expect(text).toContain("clash.txt");
   expect(text).toContain("other clash.txt");
   expect(text).toContain("origin/main");

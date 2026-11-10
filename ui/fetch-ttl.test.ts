@@ -2,13 +2,13 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { watch } from "node:fs";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { add } from "../issues/lib/todo.ts";
 import { fetchStore, readFetched, readList, skipFetches, writeList } from "../issues/lib/store.ts";
 import { routes } from "./api/issues.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
-import { writeRun } from "../jobs/lib/records/ledger.ts";
+import { putRun } from "../jobs/lib/records/record.ts";
 
 let base: string, log: string, stale: string, staleRemote: string;
 let restoreEnv: () => void;
@@ -45,7 +45,7 @@ beforeAll(() => {
   for (const [repo, name] of [["a", "a-1"], ["b", "b-1"]]) {
     const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(join(folder), { kind: "build", condition: "running", started: "2026-10-27T10:00:00.000Z", name, job: name, repo, on: `${repo}-1` } as any);
+    putRun(basename(join(folder)), { kind: "build", condition: "running", started: "2026-10-27T10:00:00.000Z", name, job: name, repo, on: `${repo}-1` } as any);
   }
   restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
   skipFetches();

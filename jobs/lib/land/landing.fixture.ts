@@ -3,9 +3,10 @@ import type { ChecksStop } from "../gates/checks.ts";
 import { afterEach, beforeEach, setDefaultTimeout } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { LandPorts } from "./landing.ts";
-import { writeRun, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "ALEPH_ISSUES", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
 export let dir: string, repo: Repo;
@@ -84,12 +85,12 @@ export function job(name: string, commits: [string, string][], extra: Partial<Ru
   const base = { name, repo: "demo", job: buildId, branch: `job/${name}`, told: true, started } as const;
   mkdirSync(join(dir, "jobs", buildId));
   writeFileSync(join(dir, "jobs", buildId, "spec.md"), "");
-  writeRun(join(dir, "jobs", buildId), { ...base, kind: "build", condition: "passed", ...agent } as Run);
+  putRun(buildId, { ...base, kind: "build", condition: "passed", ...agent } as Run);
   const id = `20261101-000001-demo-${name}-land`;
   const folder = join(dir, "jobs", id);
   mkdirSync(folder);
   const run = { ...base, kind: "land", condition: "running", made: made++, ...extra } as Run;
-  writeRun(folder, run);
+  putRun(basename(folder), run);
   return { id, folder, run };
 }
 

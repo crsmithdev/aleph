@@ -2,17 +2,17 @@
 // list, the action bound, the once-per-issue rerun and the record are code's, whatever the fake replies.
 import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { markAsked, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
 import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "../transitions/factory.ts";
-import { allRuns, jobIdOf, loadRegistry, readRun } from "../records/ledger.ts";
+import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { jobId } from "../../../lib/naming.ts";
 import { setPaused } from "../gates/factory-status.ts";
 import { readStore } from "../learning/corrections.ts";
-import { lastEvent, read as readJobRecord } from "../records/record.ts";
+import { getRun, jobIdOf, lastEvent, read as readJobRecord } from "../records/record.ts";
 import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, repoPath, run, sh, useDirectorFixture } from "./director.fixture.ts";
 
 useDirectorFixture();
@@ -105,7 +105,7 @@ test("the escalation list: a land on a security path gets case text and no actio
   expect(out[1].refused.every((r) => r.endsWith("the Ask is on the escalation list"))).toBe(true);
   expect(landed).toEqual([]);
   expect(awaitsChris(`${key}-2`)).toBe(false);
-  expect(readRun(folder)!.ask!.situation).toStartWith("The director did not decide this Ask");
+  expect(getRun(basename(folder))!.ask!.situation).toStartWith("The director did not decide this Ask");
   expect(prompt()).toContain("This Ask is on the escalation list");
 });
 
@@ -125,8 +125,8 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   expect(e).toMatchObject({ outcome: "decided", applied: ["land"] });
   expect(landed).toEqual([`${key}-1`]);
   // The land runs in its own unit and the run still awaits: the Ask gets no "with you" text, so Chris sees no buttons on a landing run.
-  expect(readRun(folder)!.condition).toBe("waiting");
-  expect(readRun(folder)!.ask!.situation ?? "").toBe("");
+  expect(getRun(basename(folder))!.condition).toBe("waiting");
+  expect(getRun(basename(folder))!.ask!.situation ?? "").toBe("");
 });
 
 test("a memory proposal is on the escalation list: the director's case text goes on the lesson, and no action is taken", async () => {

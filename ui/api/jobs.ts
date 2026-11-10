@@ -1,11 +1,11 @@
 /** `GET /api/jobs`, `/api/jobs/:id`, its diff and logs, and `/api/issues/:id/jobs`: the Jobs and Job views' data. `:id` is a job ID, `a1430#2`. */
-import { keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/records/record.ts";
+import { jobIdOf, keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/records/record.ts";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { OPUS_MODEL, readModels } from "../../jobs/lib/routing/models.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { allRuns, isAgentRun, isBuild, jobIdOf, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, isAgentRun, isBuild, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";

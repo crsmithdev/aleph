@@ -3,12 +3,13 @@
 import { afterAll, beforeAll, beforeEach, setSystemTime } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import type { Ask } from "../asks/ask.ts";
 import type { Ports } from "./director.ts";
-import { stamp, writeRun, type Run } from "../records/ledger.ts";
+import { stamp, type Run } from "../records/ledger.ts";
+import { putRun } from "../records/record.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { readEvents } from "../infra/layout.ts";
 
@@ -83,7 +84,7 @@ export function run(o: Partial<Run> & { name: string }, files: Record<string, st
   const id = `${stamp(at)}-${key}-${o.name}-${++runs}-agent`;
   const folder = join(process.env.ALEPH_JOBS_DIR!, id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: id, repo: key, condition: "waiting", told: true, shown: true, started: at.toISOString(), ...o } as Run);
+  putRun(basename(folder), { kind: "build", job: id, repo: key, condition: "waiting", told: true, shown: true, started: at.toISOString(), ...o } as Run);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }

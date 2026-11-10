@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { addNote, allJobs, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, readFile, tailOf } from "./job.ts";
-import { writeRun, type Run } from "./ledger.ts";
+import { type Run } from "./ledger.ts";
+import { putRun } from "./record.ts";
 import { asked, markAsked, waitsForSpecEdit } from "../asks/ask.ts";
 import { markRescued, rescued } from "../transitions/continuation.ts";
 
@@ -26,7 +27,7 @@ afterEach(() => {
 function run(id: string, job: string, extra: Partial<Run> = {}, files: Record<string, string> = {}): string {
   const folder = join(base, id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job, name: job.replace(/^\d+-\d+-/, ""), repo: "fac", condition: "passed", told: true, started: `2026-10-28T00:00:${id.slice(-2)}Z`, ...extra } as Run);
+  putRun(basename(folder), { kind: "build", job, name: job.replace(/^\d+-\d+-/, ""), repo: "fac", condition: "passed", told: true, started: `2026-10-28T00:00:${id.slice(-2)}Z`, ...extra } as Run);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }

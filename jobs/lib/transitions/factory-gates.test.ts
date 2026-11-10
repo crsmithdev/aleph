@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, mock, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
 import { gates, gpuSlot, liveEntries, liveRuns } from "../gates/factory-status.ts";
 import { setModel } from "../routing/models.ts";
 import { waitingToLand } from "../land/landing.ts";
-import { runsDir, updateRun, type Run } from "../records/ledger.ts";
+import { runsDir, type Run } from "../records/ledger.ts";
+import { patchRun } from "../records/record.ts";
 import * as locks from "../infra/locks.ts";
 import { held } from "../infra/locks.ts";
 import { startJob } from "./transitions.ts";
@@ -180,7 +181,7 @@ test("when a local run starts while gpuSlot takes the free gpu lock, gpuSlot ret
     const run = mk("local-1", "build", "running", { model: "gpt-oss-20b", made: NOW });
     expect(await probe).toBeNull();
     expect(held("gpu")).toBe(false);
-    updateRun(run.folder, { condition: "failed" });
+    patchRun(basename(run.folder), { condition: "failed" });
     const release = await gpuSlot(0);
     expect(release).not.toBeNull();
     release!();

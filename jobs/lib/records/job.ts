@@ -1,15 +1,14 @@
 /**
  * A job over the ledger: its runs, oldest first, as `allJobs` groups them.
- * Lookups by name, its issue, the run that counts, its state, the files in
+ * Lookups by name, its issue, its state, the files in
  * its run folders, and `view`, the one projection that `/api/factory`,
  * `/api/jobs` and `aleph jobs` show. See docs/data-model.md.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
-import { allJobs, askOf, isOpen, onOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
+import { allJobs, isOpen, onOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 import { isLost } from "../infra/process.ts";
-import { causeOf } from "./outcome.ts";
 import { runFile, type RunFile } from "./run-files.ts";
 import * as record from "./record.ts";
 
@@ -39,17 +38,8 @@ export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.f
 /** The repo issue the job works on: the latest run that names one. */
 export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
-/** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
-export const lastReal = (j: Job): Entry => j.findLast((e) => !(e.run.kind === "land" && e.run.condition === "failed" && causeOf(e.run) === "locked")) ?? j.at(-1)!;
-
-/** The job's next step: record.ts `next` over the job's runs, with the Ask, wait and events of its record. */
-export function stepOf(j: Job): record.Step {
-  const key = record.keyOf(lastReal(j).run);
-  return record.next({ ...(record.read(key) ?? record.empty(key)), runs: j.map((e) => ({ ...e.run, id: e.id })) });
-}
-
 /** The job's state: that of the run that counts. */
-export const stateOf = (j: Job): State => lastReal(j).run.condition;
+export const stateOf = (j: Job): State => record.counting(j).run.condition;
 
 /** A file in a run's folder, or undefined when it is not there. */
 export function readFile(e: Entry, file: RunFile): string | undefined {
@@ -119,7 +109,7 @@ export function lookMinutes(changedLines: number): number {
 }
 
 export function view(j: Job): JobView {
-  const last = lastReal(j);
+  const last = record.counting(j);
   const r = last.run;
   const latest = <K extends keyof Run>(k: K): Run[K] | undefined => r[k] ?? j.findLast((e) => e.run[k])?.run[k];
   const v: JobView = {
@@ -129,7 +119,7 @@ export function view(j: Job): JobView {
   };
   if (r.repo) v.repo = r.repo;
   for (const k of ["phase", "reason", "question", "say", "session", "ended"] as const) if (r[k]) (v as any)[k] = r[k];
-  const needs = needsOf(askOf(r));
+  const needs = needsOf(r.ask);
   if (needs) v.needs = needs;
   if (r.ask?.reason === "question" && !v.question) v.question = r.ask.question;
   const item = issue(j);
