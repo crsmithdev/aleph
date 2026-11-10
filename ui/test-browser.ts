@@ -17,7 +17,7 @@ function chromeArgv(profileDir: string): string[] {
 }
 
 /** A CDP connection over Chrome's pipe: commands on fd 3, answers and events on fd 4, each message ended by a NUL. */
-class Pipe {
+export class Pipe {
   private next = 1;
   private waiting = new Map<number, { ok: (v: any) => void; no: (e: Error) => void }>();
   private listeners: ((m: any) => void)[] = [];
@@ -63,6 +63,30 @@ class Pipe {
   }
 }
 
+/** A headless Chrome on a pipe, and the call that kills it. */
+export interface Chrome { cdp: Pipe; kill(): void }
+
+/**
+ * Start Chrome with a profile under `base`. The first call waits for Chrome to start. A Chrome that closes its pipe is
+ * killed and started once more, with a new profile.
+ */
+export async function launchChrome(base: string): Promise<Chrome> {
+  const waits: string[] = [];
+  for (let n = 1; ; n++) {
+    const profile = join(base, `profile${n}`);
+    mkdirSync(profile);
+    const argv = chromeArgv(profile);
+    const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
+      env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
+    const cdp = new Pipe(chrome.stdio[3] as NodeJS.WritableStream, chrome.stdio[4] as NodeJS.ReadableStream);
+    try { await cdp.send("Browser.getVersion"); return { cdp, kill: () => chrome.kill("SIGKILL") }; } catch (e) {
+      chrome.kill("SIGKILL");
+      waits.push(`try ${n}: ${(e as Error).message}`);
+      if (n === 2) throw new Error(`Chrome failed both tries; ${waits.join("; ")}`);
+    }
+  }
+}
+
 /**
  * The tests that start Chrome run only with ALEPH_BROWSER_TESTS=1: `bun run test:all`, CI and the factory's checks
  * set it, and a plain `bun run test` skips them. CI must have one:
@@ -102,23 +126,9 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
   const line = new TextDecoder().decode((await (server.stdout as ReadableStream<Uint8Array>).getReader().read()).value);
   const url = line.trim();
 
-  // The first call waits for Chrome to start. A Chrome that closes its pipe is killed and started once more, with a new profile.
-  const waits: string[] = [];
-  let chrome!: ReturnType<typeof spawn>;
-  let cdp!: Pipe;
-  for (let n = 1; n <= 2; n++) {
-    const profile = join(base, `profile${n}`);
-    mkdirSync(profile);
-    const argv = chromeArgv(profile);
-    chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
-      env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
-    cdp = new Pipe(chrome.stdio[3] as NodeJS.WritableStream, chrome.stdio[4] as NodeJS.ReadableStream);
-    try { await cdp.send("Browser.getVersion"); break; } catch (e) {
-      chrome.kill("SIGKILL");
-      waits.push(`try ${n}: ${(e as Error).message}`);
-      if (n === 2) { server.kill(); rmSync(base, { recursive: true, force: true }); throw new Error(`Chrome failed both tries; ${waits.join("; ")}`); }
-    }
-  }
+  let chrome: Chrome;
+  try { chrome = await launchChrome(base); } catch (e) { server.kill(); rmSync(base, { recursive: true, force: true }); throw e; }
+  const cdp = chrome.cdp;
 
   const open = async (hash = "#/"): Promise<Page> => {
     const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
@@ -164,5 +174,5 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
       reload: async () => { const [done, off] = load(); await cdp.send("Page.reload", {}, sessionId); await done; off(); await when(loaded); },
     };
   };
-  return { url, open, stop: () => { chrome.kill("SIGKILL"); server.kill(); rmSync(base, { recursive: true, force: true }); } };
+  return { url, open, stop: () => { chrome.kill(); server.kill(); rmSync(base, { recursive: true, force: true }); } };
 }

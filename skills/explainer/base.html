@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TITLE</title>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* The aleph UI's tokens (ui/app.css), light and dark. */
+:root {
+  --bg: #F4F3FA; --surface: #FFFFFF; --sunk: #ECEAF6; --ink: #292D3E; --ink-2: #4A4F6A; --muted: #62688A; --rule: #DCD9EC;
+  --accent: #3B5FC8; --accent-bg: #EBEFFA; --ok: #437018; --ok-bg: #EDF2E8; --risk: #C0304C; --risk-bg: #F9EAED;
+  --warn: #8A5A00; --warn-bg: #F3EEE6; --hot: #C2521F; --idea: #6D3FB0; --idea-bg: #F1EBFA;
+  --display: Merriweather, Georgia, serif; --sans: "Work Sans", system-ui, sans-serif; --mono: "Hack Nerd Font", Hack, ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202331; --surface: #292D3E; --sunk: #191C28; --ink: #EEF1F8; --ink-2: #BFC7D5; --muted: #8E96BA; --rule: #3A3F58;
+    --accent: #82AAFF; --accent-bg: #353E59; --ok: #A9C77D; --ok-bg: #3B4347; --risk: #F07178; --risk-bg: #3D2C39;
+    --warn: #FFCB6B; --warn-bg: #474344; --hot: #F78C6C; --idea: #C792EA; --idea-bg: #3B3450;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); }
+main { max-width: 1040px; margin: 0 auto; padding: 40px 24px 64px; display: grid; gap: 40px; }
+h1, h2 { font-family: var(--display); font-weight: 700; line-height: 1.25; margin: 0; }
+h1 { font-size: 30px; }
+h2 { font-size: 21px; }
+p { margin: 0; max-width: 68ch; color: var(--ink-2); }
+.answer { font-size: 19px; color: var(--ink); }
+.kicker { font: 500 12px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 14px; }
+code, .mono { font: 14px var(--mono); }
+code { background: var(--sunk); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { margin: 0; padding: 12px 14px; background: var(--sunk); border-radius: 8px; overflow-x: auto; font: 13px/1.5 var(--mono); }
+
+/* A figure: one claim, stated in its caption. */
+figure { margin: 0; padding: 20px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; display: grid; gap: 12px; }
+figcaption { font-weight: 500; color: var(--ink); }
+figure svg { width: 100%; height: auto; display: block; overflow: visible; }
+.notes { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 14px; }
+
+/* SVG parts. */
+svg text { font: 14px var(--sans); fill: var(--ink); }
+svg .t-mono { font: 13px var(--mono); }
+svg .t-muted { fill: var(--muted); font-size: 13px; }
+svg .t-title { font-weight: 600; }
+.node { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5; }
+.node.sunk { fill: var(--sunk); }
+.node.key { stroke: var(--accent); stroke-width: 2.5; fill: var(--accent-bg); }
+.node.ok { stroke: var(--ok); fill: var(--ok-bg); }
+.node.risk { stroke: var(--risk); fill: var(--risk-bg); }
+.node.warn { stroke: var(--warn); fill: var(--warn-bg); }
+.node.idea { stroke: var(--idea); fill: var(--idea-bg); stroke-dasharray: 6 4; }
+.node.off { stroke-dasharray: 6 4; fill: none; }
+.edge { fill: none; stroke: var(--muted); stroke-width: 1.5; marker-end: url(#arrow); }
+.edge.async { stroke-dasharray: 6 4; }
+.edge.key { stroke: var(--accent); stroke-width: 3; marker-end: url(#arrow-key); }
+.edge.risk { stroke: var(--risk); stroke-dasharray: 4 4; marker-end: url(#arrow-risk); }
+.bnd { fill: none; stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 8 5; }
+.bnd-t { font-size: 12px; fill: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.dim { stroke: var(--muted); stroke-width: 1; fill: none; }
+.dim.key { stroke: var(--accent); }
+.co circle { fill: var(--accent); }
+.co text { fill: var(--surface); font-size: 12px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+.lead { stroke: var(--accent); stroke-width: 1; fill: none; }
+
+/* Cards, chips, tables. */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px; display: grid; gap: 8px; align-content: start; }
+.chip { display: inline-block; font: 500 12px var(--sans); padding: 1px 8px; border-radius: 10px; background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
+.chip.ok { background: var(--ok-bg); color: var(--ok); }
+.chip.risk { background: var(--risk-bg); color: var(--risk); }
+.chip.warn { background: var(--warn-bg); color: var(--warn); }
+.chip.run { background: var(--accent-bg); color: var(--accent); }
+.chip.idea { background: var(--idea-bg); color: var(--idea); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.inferred { color: var(--warn); font-style: italic; }
+
+/* A stepper: a figure with [data-steps]; an element with data-s="N" shows from step N on, and data-only="N" only at step N. */
+.steps { display: flex; gap: 8px; align-items: center; }
+.steps button { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 3px 12px; cursor: pointer; }
+.steps button:disabled { opacity: .4; cursor: default; }
+.steps output { color: var(--ink-2); font-size: 14px; }
+[data-steps] [data-s], [data-steps] [data-only] { transition: opacity .25s; }
+.hide { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker>
+    <marker id="arrow-key" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker>
+    <marker id="arrow-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--risk)"/></marker>
+  </defs>
+</svg>
+<main>
+  <header>
+    <p class="kicker">KICKER</p>
+    <h1>HEADLINE</h1>
+    <p class="answer">ANSWER</p>
+  </header>
+
+  <!-- the figures -->
+
+  <section id="sources">
+    <h2>Sources</h2>
+    <table>
+      <thead><tr><th>Claim</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td>CLAIM</td><td><code>SOURCE</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+<script>
+// The stepper: Back and Next in each figure[data-steps]; the step's caption comes from the shown [data-say] element.
+for (const fig of document.querySelectorAll("figure[data-steps]")) {
+  const max = Number(fig.dataset.steps);
+  let at = 1;
+  const bar = Object.assign(document.createElement("div"), { className: "steps", innerHTML: `<button type="button">Back</button><button type="button">Next</button><output></output>` });
+  fig.append(bar);
+  const [back, next] = bar.querySelectorAll("button"), out = bar.querySelector("output");
+  const show = () => {
+    for (const el of fig.querySelectorAll("[data-s]")) el.classList.toggle("hide", Number(el.dataset.s) > at);
+    for (const el of fig.querySelectorAll("[data-only]")) el.classList.toggle("hide", Number(el.dataset.only) !== at);
+    const say = fig.querySelector(`[data-say="${at}"]`);
+    out.textContent = `${at} / ${max}${say ? `: ${say.textContent}` : ""}`;
+    back.disabled = at === 1;
+    next.disabled = at === max;
+  };
+  back.onclick = () => { at--; show(); };
+  next.onclick = () => { at++; show(); };
+  show();
+}
+</script>
+</body>
+</html>
