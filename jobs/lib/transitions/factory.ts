@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { join } from "node:path";
 import { LANES, lane, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { byPriority, afterOf, buildableIssue, buildableIssues, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
+import { byPriority, afterOf, buildableIssue, buildableIssues, isSorted, note, partsOf, planSet, priorityOf, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { logEvent } from "../infra/layout.ts";
@@ -274,7 +274,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) if (issues.status(item) === "open" && !isSorted(doc!, item, repo)) queue.push({ repo, item });
   }
-  queue.sort((a, b) => String(a.item.fm.created_time ?? "").localeCompare(String(b.item.fm.created_time ?? "")) || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
+  queue.sort((a, b) => (issues.created(a.item) ?? "").localeCompare(issues.created(b.item) ?? "") || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
   const started: string[] = [];
   for (const { repo, item } of queue.slice(0, INTAKE_CAP())) {
     const name = `${repo.key}-${item.id}`;
@@ -488,7 +488,7 @@ function entry(e: Entry): string {
   const r = e.run;
   const needs = isWaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
   const lane = laneOf(e);
-  const prio = (lane === "landed" || lane === "waiting") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
+  const hit = (lane === "landed" || lane === "waiting") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on) : undefined, prio = hit && priorityOf(hit);
   const head = `${shortId(r.name)} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "returned" && r.condition !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.condition === "landed" && r.commit) {

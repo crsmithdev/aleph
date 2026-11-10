@@ -14,12 +14,12 @@ import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from 
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
-import { afterOf, byPriority, partsOf, reader, isTracker } from "../issues/lib/store.ts";
-import { idOf, parentRef, parseIssueRef, refOf, status } from "../issues/lib/todo.ts";
+import { afterOf, byPriority, partsOf, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
+import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import { summary, type Wk } from "./usage.ts";
-import { card, priorityOf, stageOf } from "./issue.ts";
+import { card, stageOf } from "./issue.ts";
 import { verdict } from "../lib/status-words.ts";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
@@ -410,16 +410,16 @@ export function state(now = new Date()): State {
       if (st === "done" && (!top || mineParts.length === 0)) {
         const mine = ofItem.get(id) ?? [];
         const ends = mine.map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
-        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated_time ?? "")) || 0, repo, item, runs: mine, since: pickedUp(id) });
+        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(updated(item) ?? "") || 0, repo, item, runs: mine, since: pickedUp(id) });
       }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       const ask = askOf(id);
       if (st === "waiting" && ask) awaitingItems.push(card(repo.key, item, st, ask));
-      else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated_time ?? item.fm.created_time ?? "") });
+      else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: updated(item) ?? created(item) ?? "" });
       // A parent shows a card in Running only while it waits to close: every part is done.
       if (st === "working" && mineParts.length) {
         const of = stageById.get(ref)?.of ?? { n: 0, m: mineParts.length };
-        if (of.n >= of.m) runningIssues.push({ id, title: item.title, href, stage: st, priority: priorityOf(item), of, since: pickedUp(id, ...mineParts.map((g) => `${repo.key}-${refOf(g)}`)), at: String(item.fm.updated_time ?? "") });
+        if (of.n >= of.m) runningIssues.push({ id, title: item.title, href, stage: st, priority: priorityOf(item), of, since: pickedUp(id, ...mineParts.map((g) => `${repo.key}-${refOf(g)}`)), at: updated(item) ?? "" });
       }
     }
   }

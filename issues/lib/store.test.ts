@@ -70,6 +70,10 @@ describe("labels", () => {
     expect(store.labels(it({ labels: "goal" }))).toEqual(["goal"]);
     expect(store.labels(it({}))).toEqual([]);
   });
+
+  test("priorityOf reads the priority, and medium for none or an unknown one", () => {
+    expect([it({ priority: "critical" }), it({}), it({ priority: "weird" })].map(store.priorityOf)).toEqual(["critical", "medium", "medium"]);
+  });
 });
 
 describe("the read", () => {

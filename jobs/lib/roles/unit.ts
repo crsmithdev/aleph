@@ -9,7 +9,7 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSyn
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { file as fileIssues, note, noteFlake, reader } from "../../../issues/lib/store.ts";
+import { file as fileIssues, note, noteFlake, priorityOf, reader } from "../../../issues/lib/store.ts";
 import { agentCall, stallReason, stallSeconds } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
@@ -711,7 +711,7 @@ export async function fileFollowups(repo: Repo, run: Run, lines: string[]): Prom
   }
   if (!fresh.length) return;
   const on = onOf(run);
-  const priority = (on === undefined ? undefined : lists.item(repo.key, on)?.fm.priority as string | undefined) ?? "medium";
+  const hit = on === undefined ? undefined : lists.item(repo.key, on), priority = hit ? priorityOf(hit) : "medium";
   const titles = await Promise.all(fresh.map(writeTitle));
   fileIssues(repo, `followups from ${run.name}`, fresh.map((line, n) => ({ title: titles[n], kind: "task", priority, source: "worker" as const, parked: true, request: `A follow-up the worker met in run ${run.name}:\n\nFOLLOWUP: ${line}` })));
 }

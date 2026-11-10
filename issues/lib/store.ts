@@ -278,6 +278,8 @@ export function rank(item: Issue): number {
   const i = (issues.PRIORITIES as readonly string[]).indexOf(String(item.fm.priority ?? ""));
   return i < 0 ? (issues.PRIORITIES as readonly string[]).indexOf("medium") : i;
 }
+/** An item's priority; none, or an unknown one, reads medium. */
+export const priorityOf = (item: Issue): string => issues.PRIORITIES[rank(item)];
 
 /** Sort entries by priority, highest first; stable, so equal priorities keep their order. */
 export function byPriority<T extends { item: Issue }>(entries: T[]): T[] {

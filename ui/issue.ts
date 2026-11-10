@@ -6,14 +6,9 @@
 import { issueHref } from "../lib/naming.ts";
 import type { Ask } from "../jobs/lib/asks/ask.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
-import { afterOf, areasOf, rank } from "../issues/lib/store.ts";
+import { afterOf, areasOf, priorityOf, sourceOf } from "../issues/lib/store.ts";
 import * as todos from "../issues/lib/todo.ts";
 import type { NewIssue } from "./state.ts";
-
-const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
-
-/** An item's priority; none, or an unknown one, reads medium. */
-export const priorityOf = (item: todos.Issue): string => todos.PRIORITIES[rank(item)];
 
 /** The stage the UI shows: parked when parked, else the stage its jobs give, else its status. */
 export const stageOf = (item: todos.Issue, st?: Pick<Stage, "stage">): string =>
@@ -29,12 +24,12 @@ export interface Row {
 
 /** The Issues page row of `item` in `repo`, with the stage `st` its jobs give. */
 export function row(repo: string, item: todos.Issue, st?: Pick<Stage, "stage" | "why">): Row {
-  const createdTime = str(item.fm.created_time), closedTime = str(item.fm.closed_time), updatedTime = str(item.fm.updated_time);
+  const createdTime = todos.created(item) ?? null, closedTime = todos.closed(item) ?? null, updatedTime = todos.updated(item) ?? null;
   const day = (t: string | null) => (t ? todos.today(new Date(t)) : null);
   const parked = todos.status(item) === "parked";
   return {
-    id: item.id, ref: todos.refOf(item), repo, title: item.title, href: issueHref(`${repo}-${todos.refOf(item)}`), kind: str(item.fm.kind) ?? "task", status: todos.status(item), priority: str(item.fm.priority), labels: areasOf(item),
-    after: afterOf(item), created: day(createdTime), createdTime, closed: day(closedTime), closedTime, source: str(item.fm.source), updated: day(updatedTime), updatedTime, notes: item.notes.length, parent: todos.parentRef(item) ?? null,
+    id: item.id, ref: todos.refOf(item), repo, title: item.title, href: issueHref(`${repo}-${todos.refOf(item)}`), kind: todos.kindOf(item), status: todos.status(item), priority: priorityOf(item), labels: areasOf(item),
+    after: afterOf(item), created: day(createdTime), createdTime, closed: day(closedTime), closedTime, source: sourceOf(item), updated: day(updatedTime), updatedTime, notes: item.notes.length, parent: todos.parentRef(item) ?? null,
     stage: stageOf(item, st), why: parked ? "" : st?.why ?? "",
   };
 }
@@ -42,7 +37,7 @@ export function row(repo: string, item: todos.Issue, st?: Pick<Stage, "stage" | 
 /** The Status page card of an open `item` in `repo` at `stage`; with `ask`, the Ask it waits on and the question it puts. */
 export function card(repo: string, item: todos.Issue, stage: string, ask?: Ask): NewIssue {
   const id = `${repo}-${todos.refOf(item)}`;
-  const c: NewIssue = { id, title: item.title, priority: priorityOf(item), status: "open", href: issueHref(id), labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created_time ?? ""), updated: String(item.fm.updated_time ?? ""), stage };
+  const c: NewIssue = { id, title: item.title, priority: priorityOf(item), status: "open", href: issueHref(id), labels: areasOf(item), notes: item.notes.length, created: todos.created(item) ?? "", updated: todos.updated(item) ?? "", stage };
   if (!ask) return c;
   const q = ask.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
   if (q) c.question = q;

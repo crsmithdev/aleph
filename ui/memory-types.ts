@@ -7,7 +7,7 @@ import { langfuseConfig } from "../lib/env.ts";
 import { readStore } from "../jobs/lib/learning/corrections.ts";
 import { episodesDir, KEEP_DAYS } from "../jobs/lib/learning/episode.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
-import { afterOf, readLists } from "../issues/lib/store.ts";
+import { afterOf, priorityOf, readLists } from "../issues/lib/store.ts";
 import * as todos from "../issues/lib/todo.ts";
 import { coreNotes, START_BUDGET, startContext, type Note } from "../vault/lib/vault.ts";
 import { activity } from "./activity.ts";
@@ -146,7 +146,7 @@ export function prospectiveIssues() {
     for (const i of docs[n]?.items ?? []) {
       if (todos.status(i) !== "open") continue;
       const after = afterOf(i);
-      if (after.length) open.push({ repo: r.key, id: i.id, title: i.title, after, priority: String(i.fm.priority ?? "medium") });
+      if (after.length) open.push({ repo: r.key, id: i.id, title: i.title, after, priority: priorityOf(i) });
     }
   });
   return open.sort((a, b) => a.repo.localeCompare(b.repo) || a.id - b.id);

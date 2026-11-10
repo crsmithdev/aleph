@@ -69,7 +69,7 @@ export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Sub
     id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
     after: store.afterOf(item), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
     ...(a ? { ask: { kind: a.kind, reason: a.reason } } : {}),
-    spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item), ...(item.fm.since ? { since: String(item.fm.since) } : {}),
+    spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item), ...(issues.sinceOf(item) ? { since: issues.sinceOf(item) } : {}),
   };
 }
 

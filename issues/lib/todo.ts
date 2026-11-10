@@ -98,6 +98,21 @@ export function labels(item: Issue): string[] {
   return l === undefined || l === null || l === "" ? [] : [String(l)];
 }
 
+/** The item's kind; none reads task. */
+export const kindOf = (item: Issue): string => String(item.fm.kind || "task");
+/** Main's head when the issue was reopened, or undefined. */
+export const sinceOf = (item: Issue): string | undefined => (item.fm.since ? String(item.fm.since) : undefined);
+
+/** A stored time as ISO UTC: an old local time converts. Undefined for none. */
+const timeOf = (v: unknown): string | undefined => (typeof v === "string" && ISO.test(v) ? v : isoOf(v));
+// The old `created`, `updated` and `closed_at` dates stay until `aleph issue lint --fix` rewrites every store (aleph-1657).
+/** When the issue was made, as ISO UTC. */
+export const created = (item: Issue): string | undefined => timeOf(item.fm.created_time) ?? isoOf(item.fm.created);
+/** When the issue last changed, as ISO UTC. */
+export const updated = (item: Issue): string | undefined => timeOf(item.fm.updated_time) ?? isoOf(item.fm.updated);
+/** When the issue closed, as ISO UTC; undefined while it is open. */
+export const closed = (item: Issue): string | undefined => (item.fm.closed_as ? timeOf(item.fm.closed_time) ?? isoOf(item.fm.closed_at) : undefined);
+
 const MARK = { request: "<!-- request -->", spec: "<!-- spec -->", notes: "<!-- notes -->" } as const;
 const MARKS: string[] = Object.values(MARK);
 

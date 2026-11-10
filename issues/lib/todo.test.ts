@@ -143,3 +143,26 @@ test("lint reports an item without created_time or with a non-ISO time", () => {
   item.notes.push("- 2026-11-04 16:00: x");
   expect(issues.lint(doc).map((f) => f.problem)).toContain("a note stamp is not an ISO UTC time");
 });
+
+test("created, updated and closed read ISO UTC, convert old local times and fall back to the old date fields", () => {
+  const now = new Date("2026-11-04T15:30:00.000Z");
+  const item = issues.add(issues.blank("r"), "Fix the lane", { now });
+  expect([issues.created(item), issues.updated(item), issues.closed(item)]).toEqual([now.toISOString(), now.toISOString(), undefined]);
+  issues.setStatus(item, "done", now);
+  expect(issues.closed(item)).toBe(now.toISOString());
+  const old = issues.parseItem("---\nid: r-2\ntitle: Old\ncreated: 2026-11-01\nupdated_time: 2026-11-02 09:07\nclosed_as: done\nclosed_at: 2026-11-03\n---\n");
+  expect(issues.created(old)).toBe(new Date(2026, 10, 1).toISOString());
+  expect(issues.updated(old)).toBe(new Date(2026, 10, 2, 9, 7).toISOString());
+  expect(issues.closed(old)).toBe(new Date(2026, 10, 3).toISOString());
+  issues.setStatus(old, "open");
+  expect(issues.closed(old)).toBeUndefined();
+  expect(issues.created(issues.parseItem("---\nid: r-3\ntitle: None\n---\n"))).toBeUndefined();
+});
+
+test("kindOf reads task for none, and sinceOf reads since or undefined", () => {
+  const item = issues.parseItem("---\nid: r-1\ntitle: Bare\n---\n");
+  expect([issues.kindOf(item), issues.sinceOf(item)]).toEqual(["task", undefined]);
+  item.fm.kind = "bug";
+  item.fm.since = "abc1234";
+  expect([issues.kindOf(item), issues.sinceOf(item)]).toEqual(["bug", "abc1234"]);
+});

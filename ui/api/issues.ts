@@ -14,7 +14,7 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, readList, readLists } from "../../issues/lib/store.ts";
+import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, readList, readLists } from "../../issues/lib/store.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -120,7 +120,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The Issue page: the `## Request`, then the parts, each with its Job.
   const parts = partRefs.map((g) => {
     const gi = todos.find(doc!, g), st = states.get(g);
-    return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: issueHref(`${repo.key}-${g}`), priority: String(gi?.fm.priority ?? "medium"), stage: gi ? stageOf(gi, st) : "missing", why: st?.why ?? "", jobs: jobsOf(g) };
+    return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: issueHref(`${repo.key}-${g}`), priority: gi ? priorityOf(gi) : "medium", stage: gi ? stageOf(gi, st) : "missing", why: st?.why ?? "", jobs: jobsOf(g) };
   });
   // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
   const timeline = {

@@ -9,7 +9,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { areasOf, isSorted, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../../issues/lib/store.ts";
+import { areasOf, isSorted, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf } from "../../../issues/lib/store.ts";
 import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -245,7 +245,7 @@ function mainRef(repo: Repo): string | null {
 function mainSince(repo: Repo, item: issues.Issue): string {
   const ref = mainRef(repo);
   if (!ref) return "(main is not readable)";
-  const at = new Date(String(item.fm.created_time ?? ""));
+  const at = new Date(issues.created(item) ?? "");
   const r = git(repo.path, "log", "--oneline", "--no-decorate", ...(isNaN(+at) ? ["-n", "50"] : [`--since=${at.toISOString()}`]), ref);
   return (r.ok && r.out.trim()) || "(none)";
 }
@@ -280,7 +280,7 @@ export function prompt(repo: Repo, item: issues.Issue, doc = reader().list(repo.
 
 # Issue ${repo.key}-${issues.refOf(item)}: ${item.title}
 
-Source: ${sourceOf(item)}. Kind: ${String(item.fm.kind ?? "task")}.
+Source: ${sourceOf(item)}. Kind: ${issues.kindOf(item)}.
 
 ${item.request.trim() || "(no text)"}
 ${mediaSection(repo.key, item)}${item.spec.trim() ? `\n# Its spec now\n\n${item.spec.trim()}\n\nKeep what is right in it, and fix what the rules below find wrong.\n` : ""}${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${split}
@@ -288,7 +288,7 @@ ${mediaSection(repo.key, item)}${item.spec.trim() ? `\n# Its spec now\n\n${item.
 
 ${openIssues(repo, item)}
 
-# Commits on main since ${String(item.fm.created_time ?? "").trim() || "the issue was created"}
+# Commits on main since ${issues.created(item) ?? "the issue was created"}
 
 ${mainSince(repo, item)}
 
@@ -328,11 +328,11 @@ ${PART_RULES}
 export function addParts(repo: Repo, doc: issues.Doc, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
   const refs: string[] = [];
   const from = `${repo.key}-${issues.refOf(issue)}`;
-  const source = issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as issues.Source) : "agent";
+  const source = sourceOf(issue) === "chris" ? "agent" : sourceOf(issue);
   // A store from before a kind was dropped (such as `goal`) still splits: a kind the store does not know gives the parts `task`.
-  const kind = String(issue.fm.kind ?? "task");
+  const kind = issues.kindOf(issue);
   for (const c of parts) {
-    const part = issues.add(doc, c.title, { kind: issues.kindProblem(kind) ? "task" : kind, priority: String(issue.fm.priority ?? "medium"), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
+    const part = issues.add(doc, c.title, { kind: issues.kindProblem(kind) ? "task" : kind, priority: priorityOf(issue), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
     refs.push(`${repo.key}-${issues.refOf(part)}`);
   }
   delete issue.fm.plan;
@@ -344,7 +344,7 @@ export function addParts(repo: Repo, doc: issues.Doc, issue: issues.Issue, parts
 /** Whether the build route is a worker's test-only follow-up: every path of its Edit surfaces is a test file. */
 const testOnly = (item: issues.Issue, v: Extract<Route, { route: "build" }>): boolean => {
   const paths = [...(v.parts?.flatMap((p) => p.spec.surface) ?? v.spec?.surface ?? [])].map((p) => p.path);
-  return sourceOf(item) === "worker" && item.fm.kind !== "bug" && paths.length > 0 && paths.every((p) => TEST_FILE.test(p));
+  return sourceOf(item) === "worker" && issues.kindOf(item) !== "bug" && paths.length > 0 && paths.every((p) => TEST_FILE.test(p));
 };
 
 /** A red-main issue's red, while its repo's main or CI is still red; else null. Intake does not close such an issue: the fix may lie outside the repo, and that is Chris's to decide. */
@@ -440,7 +440,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
  */
 function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line: string } | null {
   const ref = `${repo.key}-${item.id}`;
-  if (item.fm.kind === "flake") {
+  if (issues.kindOf(item) === "flake") {
     const noted = noteFlake(repo, `${ref}: ${item.title}${item.request.trim() ? `: ${item.request.trim().replace(/\s+/g, " ")}` : ""}`);
     if (typeof noted === "string") return { applied: null, line: `${ref}: flake not noted: ${noted}` };
     const ok = sort(repo, item.id, `intake ${ref}: flake`, (i) => {

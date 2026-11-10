@@ -66,8 +66,8 @@ function storedSince(key: string): (n: string) => string | undefined {
   let doc: issues.Doc | null = null;
   try { doc = readFetched({ key }); } catch {}
   return (n) => {
-    const v = doc && issues.find(doc, n)?.fm.since;
-    return v ? String(v) : undefined;
+    const hit = doc && issues.find(doc, n);
+    return hit ? issues.sinceOf(hit) : undefined;
   };
 }
 
@@ -163,6 +163,6 @@ export function recentRepos(repos: Repo[], docs: (issues.Doc | null)[]): number[
   const last = new Map<string, number>();
   const seen = (k: string, t: number) => { if (t >= since && t > (last.get(k) ?? 0)) last.set(k, t); };
   for (const e of allRuns()) if (e.run.repo) seen(e.run.repo, Date.parse(e.run.started));
-  repos.forEach((r, n) => { for (const i of docs[n]?.items ?? []) if (i.fm.updated_time) seen(r.key, Date.parse(String(i.fm.updated_time))); });
+  repos.forEach((r, n) => { for (const i of docs[n]?.items ?? []) if (issues.updated(i)) seen(r.key, Date.parse(issues.updated(i)!)); });
   return repos.map((_, n) => n).filter((n) => last.has(repos[n].key)).sort((a, b) => last.get(repos[b].key)! - last.get(repos[a].key)!);
 }
