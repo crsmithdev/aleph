@@ -1,7 +1,7 @@
 # The full suite on origin/main of each factory repo, recorded as the baseline. See docs/factory.md.
 #   systemctl --user link ~/aleph/jobs/systemd/aleph-suite.service
 #   systemctl --user enable --now ~/aleph/jobs/systemd/aleph-suite.timer
-#   journalctl --user -u aleph-suite -n 20;  ~/.aleph/factory/tick.log
+#   journalctl --user -u aleph-suite -n 20
 [Unit]
 Description=aleph full suite on origin/main
 

@@ -33,7 +33,7 @@ flowchart LR
 | Rescue | `rescue.ts` `rescueJob` | Each dispatch, for returned, failed, killed and lost runs |
 | Tick | `tick.ts` | The `aleph-tick` timer, each minute |
 
-No transition waits for the tick. Each step starts the next one directly. The tick runs periodic work and the sweep, which is the safety net: work it sees two ticks in a row is a missed key in `tick.log`, and the sweep starts a dispatch for it.
+No transition waits for the tick. Each step starts the next one directly. The tick runs periodic work and the sweep, which is the safety net: work it sees two ticks in a row is a missed key, and the sweep starts a dispatch for it.
 
 ## Stages of an issue
 
@@ -287,4 +287,4 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 | Why a run stopped | `aleph status <repo>-<n>`, or the job page |
 | What a check printed | `~/.aleph/runs/<run>/checks.log` |
 | What the director decided | The Automation page |
-| What the sweep caught | `~/.aleph/factory/tick.log`, lines that start `missed:` |
+| What the sweep caught | the event log, events with the action `missed` |

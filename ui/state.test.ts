@@ -68,7 +68,6 @@ beforeAll(() => {
   run("20261027-000003-a", { job: "fac-4", name: "fac-4", condition: "running", on: "fac-4" });
   run("20261027-000004-a", { job: "fac-5", name: "fac-5", condition: "landed", on: "fac-5", commit: "abcdef1234567", ended: ago(2), started: ago(3) });
   run("20261027-000005-a", { job: "fac-6", name: "fac-6", condition: "landed", on: "fac-6", commit: "123456abcdef", ended: ago(30), started: ago(31) });
-  writeFileSync(join(factory, "tick.log"), `${ago(30)} yesterday line\n${now.toISOString()} started none\n`);
 });
 afterAll(() => {
   restore();

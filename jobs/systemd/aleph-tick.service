@@ -1,7 +1,7 @@
 # The factory's tick: one run for each open issue item, and the periodic work. See docs/factory.md.
 #   systemctl --user link ~/aleph/jobs/systemd/aleph-tick.service
 #   systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
-#   journalctl --user -u aleph-tick -n 20;  ~/.aleph/factory/tick.log
+#   journalctl --user -u aleph-tick -n 20
 [Unit]
 Description=aleph factory tick
 

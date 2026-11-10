@@ -3,7 +3,7 @@
  * reader (docs/data-model.md): the layout
  * (issues, runs, factory) under ~/.aleph. The environment wins, variable by variable.
  */
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { event, type Event } from "../../../lib/naming.ts";
@@ -21,17 +21,6 @@ export function layout(): Layout {
     ledger: expand(e.ALEPH_JOBS_DIR ?? join(home, "runs")),
     factory: expand(e.ALEPH_FACTORY_DIR ?? join(home, "factory")),
   };
-}
-
-/** One line in the factory's tick.log. A tick.log from an earlier UTC day becomes `tick.<day>.log`; those files last 14 days. */
-export function factoryLog(line: string): void {
-  const dir = layout().factory, now = new Date(), log = join(dir, "tick.log");
-  mkdirSync(dir, { recursive: true });
-  const today = now.toISOString().slice(0, 10), last = existsSync(log) ? statSync(log).mtime.toISOString().slice(0, 10) : today;
-  if (last < today) renameSync(log, join(dir, `tick.${last}.log`));
-  const oldest = new Date(now.getTime() - 14 * 864e5).toISOString().slice(0, 10);
-  for (const f of readdirSync(dir)) if (/^tick\.\d{4}-\d\d-\d\d\.log$/.test(f) && f.slice(5, 15) < oldest) rmSync(join(dir, f));
-  appendFileSync(log, `${now.toISOString()} ${line}\n`);
 }
 
 /** The event log: one file per UTC day, `<day>.jsonl`, one event as JSON per line. A day before today never changes. */

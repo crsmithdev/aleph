@@ -115,7 +115,7 @@ export function diagnose(label: string, ids: number[], ...results: { code: numbe
   const runs = existsSync(jobsDir) ? readdirSync(jobsDir).sort().filter((r) => ids.some((id) => issueRuns(id).includes(r)))
     .map((r) => `--- ${r}: pid ${tail(join(jobsDir, r, "pid"), 1)}, exit ${tail(join(jobsDir, r, "exit"), 1)}`) : [];
   return [`${label}`, ...results.map((x, i) => `--- dispatch ${"xy"[i] ?? i}: exit ${x.code}\nstdout: ${x.stdout.trim()}\nstderr: ${tail_(x.stderr)}`), ...runs,
-    `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`, `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`].join("\n");
+    `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`].join("\n");
 }
 const tail_ = (s: string) => s.trimEnd().split("\n").slice(-15).join("\n");
 

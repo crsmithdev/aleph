@@ -43,7 +43,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 
 ## The tick
 
-The tick starts only periodic work, each step on its own due rule: the corrections and the monitor once a day, the episodes every 30 minutes, the CI read and the firefighter every 5 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready goal with no run, an issue for intake, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep writes `missed: <key>` in `tick.log`, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
+The tick starts only periodic work, each step on its own due rule: the corrections and the monitor once a day, the episodes every 30 minutes, the CI read and the firefighter every 5 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready goal with no run, an issue for intake, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep logs a `missed` event with the key as its subject, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
 
 ## Flakes and health
 
