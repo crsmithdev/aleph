@@ -13,6 +13,10 @@ const issue = { id: "number", ref: "string", repo: "string", title: "string", hr
 const turn = { n: "number", traceId: "string", start: "time", seconds: "number?", cost: "number" };
 
 export const SCHEMAS: Record<string, Schema | "text"> = {
+  "/api/annotations": [{
+    v: "number", id: "string", url: "string", selector: "string", text: "string", html: "string", note: "string", status: "string", by: "string",
+    replies: [{ by: "string", text: "string", at: "time" }], at: "time",
+  }],
   "/api/factory": {
     now: "time", factory: { paused: "boolean", liveCap: "number", liveRuns: "number", runCap: "number", runStarts: "number", nextTick: "time?" },
     herald: { history: [{ at: "time", tone: "string", text: "string" }], events: [{ at: "time", subject: "string", action: "string" }], titles: { "*": "string" } },
@@ -61,7 +65,6 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     "wk?": "any", base: "string", id: "string", "label?": "string", n: "number", total: "number", traceId: "string", project: "string", start: "time",
     prompt: "string", output: "string", cost: "number", seconds: "number?", observations: "array",
   },
-  "/api/annotations": "array",
   "/api/skills/:name": { name: "string", days: "number", since: "string", asOf: "time", "failed?": "string", uses: "number", perDay: "array", projects: "array", sessions: "array", tools: "array", errors: "array" },
   "/api/specs/:project/:file": { project: "string", file: "string", date: "string", title: "string", body: "string" },
   "/api/memory": {

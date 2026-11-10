@@ -118,6 +118,7 @@ export function loader(env) {
 
   /** A `change` names the keys the server rebuilt: reload only a view that read one of them. */
   function change(keys) {
+    env.changed?.(keys);
     if (keys.some((k) => read.has(k))) return reload();
   }
 
@@ -252,6 +253,8 @@ export async function start() {
     },
     draw,
     event: (ev) => page.shown?.view?.event?.($("view"), ev),
+    // The keys of each `change`, for code outside the views: the kit's note tool reloads on /api/annotations.
+    changed: (keys) => dispatchEvent(new CustomEvent("aleph:change", { detail: keys })),
   });
 
   $("logout").addEventListener("click", async (e) => {

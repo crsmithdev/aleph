@@ -26,7 +26,7 @@ const vars: Record<string, string> = {
   ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), ALEPH_REPOS: join(dir, "repos.json"),
   ALEPH_SKILLS_STORE: join(dir, "skills-store.json"), ALEPH_USAGE_FILE: join(dir, "usage.jsonl"),
   ALEPH_CLAUDE_CREDENTIALS: join(dir, "credentials.json"), ALEPH_SPOOL: join(dir, "spool"),
-  ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_JUDGE_FILE: join(dir, "judge"),
+  ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_JUDGE_FILE: join(dir, "judge"), ALEPH_ANNOTATIONS: join(dir, "annotations.json"),
   // No test reaches the live model through the monitor's reader: `false` fails, and a test that wants a reply gives a fake.
   ALEPH_MONITOR_CMD: "false",
   // Nor through the title writer: `false` fails, so a title that breaks the rule is cut.

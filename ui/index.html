@@ -56,10 +56,10 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">import { start } from "/router.js"; start();</script>
-<!-- The font picker and the annotations: copies of ~/kit (6a17dc2). The picker stays; only Chris decides when it goes. -->
+<!-- The font picker and the annotations: copies of ~/kit (65aeec5). The picker stays; only Chris decides when it goes. -->
 <script type="module">
   import { fontPicker, SANS, SERIF, MONO } from "/vendor/kit/font-picker.js";
-  import { annotate } from "/vendor/kit/annotate.js";
+  import { annotate, remote } from "/vendor/kit/annotate.js";
   const role = (name, label, fonts, def, fallback, steps) => ({ name, label, fonts, default: def, fallback, steps });
   fontPicker({
     key: "aleph-fonts",
@@ -74,18 +74,12 @@
       role("chart", "Charts", [...SANS, ...MONO], "", "system-ui, sans-serif", ["size", "weight"]),
     ],
   });
-  const api = (path, init) => fetch(`/api/annotations${path}`, init);
-  const post = (path, body) => api(path, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
-  annotate({ store: {
-    load: async () => (await api("")).json(),
-    put: (note) => post("", note),
-    drop: (id) => post(`/${id}/drop`, {}),
-    watch: (fn) => {
-      const es = new EventSource("/api/events");
-      es.addEventListener("change", async (e) => { if (JSON.parse(e.data).keys.includes("/api/annotations")) fn(await (await api("")).json()); });
-      return () => es.close();
-    },
-  } });
+  // Notes live on the server, where `aleph annotation` lets an agent read, answer and add them. The page hears of a
+  // change from the router's stream; a tab shown again loads them too.
+  annotate({ store: remote("/api/annotations", {
+    headers: { "X-Aleph-UI": "1" },
+    watch: (fn) => addEventListener("aleph:change", (e) => { if (e.detail.includes("/api/annotations")) fn(); }),
+  }) });
 </script>
 </body>
 </html>

@@ -140,6 +140,8 @@ export const runEnvFile = (): string | undefined => process.env.ALEPH_RUN_ENV;
 export const nowOverride = (): string | undefined => process.env.ALEPH_NOW;
 export const skillsDir = () => process.env.ALEPH_SKILLS_DIR ?? join(import.meta.dir, "..", "..", "..", "skills");
 /** The skills store. */
+/** The notes pinned on UI pages, and the answers to them (lib/annotations.ts). */
+export const annotationsFile = (): string => { touch("annotations"); return process.env.ALEPH_ANNOTATIONS ?? join(homedir(), ".aleph", "annotations.json"); };
 export const skillsStore = () => process.env.ALEPH_SKILLS_STORE ?? join(homedir(), ".aleph", "skills-store.json");
 export const uiPassword = () => process.env.ALEPH_UI_PASSWORD ?? "";
 export const cliOverride = (): string | undefined => process.env.ALEPH_CLI;

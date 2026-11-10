@@ -10,6 +10,8 @@
  *   dirty, and its next request waits for a build. A key not asked for in 1 h is dropped.
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
+ * - The annotations file is watched: a note written by the page or by `aleph annotation` sends `change` for
+ *   /api/annotations at once. That route is not kept; the page reads it whole.
  * - The skills folder is watched: a skill folder added or removed, or a SKILL.md written, rebuilds the keys that read the skills.
  * - Langfuse is polled every 30 s (2 min for skills) while a key that reads it is kept; the work store is fetched
  *   every 30 s while a key that reads it is kept.
@@ -23,9 +25,8 @@ import { factoryDir } from "../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../jobs/lib/infra/layout.ts";
 import { expand } from "../jobs/lib/records/ledger.ts";
 import { recordsDir } from "../jobs/lib/records/record.ts";
-import { handoffsDir, reposFile, skillsDir, vaultDir } from "../jobs/lib/infra/settings.ts";
+import { annotationsFile, handoffsDir, reposFile, skillsDir, vaultDir } from "../jobs/lib/infra/settings.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
-import { file as annotationsFile } from "../lib/annotations.ts";
 import { fetchStore } from "../issues/lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
 
@@ -284,9 +285,11 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
   }, "events");
   follow(vaultDir(), countsInVault, "vault", true);
   follow(handoffsDir(), (f) => f.endsWith(".md"), "handoffs", true);
-  mkdirSync(dirname(annotationsFile()), { recursive: true });
-  follow(dirname(annotationsFile()), (f) => f === basename(annotationsFile()), "annotations");
   follow(episodesDir(), (f) => f.endsWith(".md"), "episodes");
+  // The file is renamed into place: the rename counts, the temporary file does not.
+  const notes = annotationsFile();
+  mkdirSync(dirname(notes), { recursive: true });
+  follow(dirname(notes), (f) => f === basename(notes), "annotations");
   const every = (ms: number, f: () => unknown) => { const t = setInterval(f, ms); t.unref?.(); stops.push(() => clearInterval(t)); };
   every(POLL_MS, () => updater.poll());
   every(FETCH_MS, () => updater.fetchStore());

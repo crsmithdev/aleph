@@ -1,66 +1,92 @@
 /**
- * Notes on aleph pages: $ALEPH_ANNOTATIONS or ~/.aleph/annotations.json.
- * A v2 note is the v1 fields of ui/vendor/kit/annotate.js plus status, by and replies.
+ * The annotations: notes pinned on elements of UI pages with ui/vendor/kit/annotate.js, and the replies to them.
+ * One JSON file holds them all (`annotationsFile()`), outside git: a note lives until someone drops it. The page writes
+ * through `aleph annotation put` and `drop`; an agent reads, replies, resolves and adds through the other verbs.
+ *
+ * A note is v 2 of the kit's shape. `url` "" puts a note on every page where its selector finds an element, which is
+ * how an agent pins a note on an item by its `data-annotate` id without knowing which page shows it.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { annotationsFile } from "../jobs/lib/infra/settings.ts";
 import { refuse } from "./refusal.ts";
 
-export type Reply = { by: string; note: string; at: string };
-export type Note = {
-  id: string; url: string; selector: string; text: string; html: string; note: string; at: string;
-  status: "open" | "resolved"; by: string; replies: Reply[];
-};
+export type By = "you" | "agent";
+export type Status = "open" | "resolved";
+export interface Reply { by: By; text: string; at: string }
+export interface Note { v: 2; id: string; url: string; selector: string; text: string; html: string; note: string; status: Status; by: By; replies: Reply[]; at: string }
 
-export const file = () => process.env.ALEPH_ANNOTATIONS ?? join(homedir(), ".aleph", "annotations.json");
+const BY: By[] = ["you", "agent"];
+const STATUS: Status[] = ["open", "resolved"];
 
-/** Every note; a v1 note reads as open, written by "user", with no replies. */
-export function load(): Note[] {
-  if (!existsSync(file())) return [];
-  return JSON.parse(readFileSync(file(), "utf8")).map((n: Partial<Note>) => ({ status: "open", by: "user", replies: [], ...n }));
+/** Every note, oldest first; a v 1 note reads as open, by you, with no replies. */
+export function read(): Note[] {
+  const file = annotationsFile();
+  if (!existsSync(file)) return [];
+  return (JSON.parse(readFileSync(file, "utf8")) as Partial<Note>[]).map((n) => ({ url: "", text: "", html: "", status: "open", by: "you", replies: [], ...n, v: 2 }) as Note);
 }
 
-function save(all: Note[]): Note[] {
-  mkdirSync(dirname(file()), { recursive: true });
-  writeFileSync(file(), JSON.stringify(all, null, 2));
-  return all;
+/** Replaces the file whole: a rename, so a reader never sees half of it. */
+function write(all: Note[]): void {
+  const file = annotationsFile();
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(`${file}.tmp`, `${JSON.stringify(all, null, 2)}\n`);
+  renameSync(`${file}.tmp`, file);
 }
 
-const find = (all: Note[], id: string) => all.find((n) => n.id === id) ?? refuse(`no note ${id}`);
+const now = () => new Date().toISOString();
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const one = (id: string): Note => read().find((n) => n.id === id) ?? refuse(`no annotation ${id}`);
+const str = (v: unknown, name: string): string => (typeof v === "string" ? v : refuse(`${name} must be a string`));
 
-/** A new open note; a v1 field left undefined is saved as "", as annotate.js would. `at` is an ISO time, as in v1. */
-export function add(by: string, n: Pick<Note, "url" | "note"> & { selector?: string; text?: string; html?: string }): Note {
-  const made: Note = { id: crypto.randomUUID().slice(0, 8), url: n.url, selector: n.selector ?? "", text: n.text ?? "", html: n.html ?? "", note: n.note, at: new Date().toISOString(), status: "open", by, replies: [] };
-  save([...load(), made]);
-  return made;
+/** Saves a note the page sends, in its place or at the end; it refuses a note without id, selector or text. */
+export function put(raw: unknown): Note {
+  const n = (raw ?? {}) as Record<string, unknown>;
+  const note: Note = {
+    v: 2, id: str(n.id, "id"), url: str(n.url ?? "", "url"), selector: str(n.selector, "selector"), text: str(n.text ?? "", "text"),
+    html: str(n.html ?? "", "html"), note: str(n.note, "note").trim(), status: STATUS.includes(n.status as Status) ? (n.status as Status) : "open",
+    by: BY.includes(n.by as By) ? (n.by as By) : "you", at: str(n.at ?? now(), "at"),
+    replies: (Array.isArray(n.replies) ? n.replies : []).map((r: any) => ({ by: BY.includes(r?.by) ? r.by : "you", text: str(r?.text, "reply text"), at: str(r?.at ?? now(), "reply at") })),
+  };
+  if (!note.id || !note.selector || !note.note) refuse("an annotation needs an id, a selector and a note");
+  const all = read();
+  write(all.some((x) => x.id === note.id) ? all.map((x) => (x.id === note.id ? note : x)) : [...all, note]);
+  return note;
 }
 
-/** Add a note, or replace the one with its id: what the page's store puts. */
-export function put(n: Note): Note {
-  const all = load();
-  save(all.some((x) => x.id === n.id) ? all.map((x) => (x.id === n.id ? n : x)) : [...all, n]);
-  return n;
+/** A new note by `by` on `selector`; `url` "" shows it on every page that has the element. */
+export const add = (selector: string, note: string, { url = "", by = "agent" as By } = {}): Note =>
+  put({ id: uid(), url, selector, note, by, status: "open", replies: [], at: now() });
+
+/** Adds a reply to a note. */
+export function reply(id: string, text: string, by: By = "agent"): Note {
+  const n = one(id);
+  return put({ ...n, replies: [...n.replies, { by, text: text.trim() || refuse("a reply needs text"), at: now() }] });
 }
 
-export function reply(id: string, by: string, note: string): Note {
-  const all = load();
-  const n = find(all, id);
-  n.replies.push({ by, note, at: new Date().toISOString() });
-  save(all);
-  return n;
+/** Marks a note resolved or open again. */
+export const mark = (id: string, status: Status): Note => put({ ...one(id), status });
+
+/** Deletes a note. */
+export function drop(id: string): { dropped: string } {
+  one(id);
+  write(read().filter((n) => n.id !== id));
+  return { dropped: id };
 }
 
-export function resolve(id: string): Note {
-  const all = load();
-  const n = find(all, id);
-  n.status = "resolved";
-  save(all);
-  return n;
-}
+/** The selector of a `data-annotate` id, the anchor aleph puts on each issue and job row. */
+export const anchor = (id: string): string => `[data-annotate="${id.replace(/["\\]/g, "\\$&")}"]`;
 
-export function drop(id: string): Note[] {
-  const all = load();
-  find(all, id);
-  return save(all.filter((n) => n.id !== id));
+/** Notes as the Markdown the page's Copy gives, grouped by page. */
+export function markdown(notes: Note[]): string {
+  if (!notes.length) return "No annotations.";
+  const pages = [...new Set(notes.map((n) => n.url))];
+  return pages.map((url) => [`Annotations on ${url || "any page with the element"}:`, "", ...notes.filter((n) => n.url === url).map((n, i) => [
+    `${i + 1}. ${n.note.replace(/\n/g, "\n   ")}${n.by === "agent" ? " (by the agent)" : ""}${n.status === "resolved" ? " (resolved)" : ""}`,
+    `   - id: ${n.id}`,
+    `   - element: \`${n.selector}\``,
+    ...(n.text ? [`   - text: "${n.text}"`] : []),
+    ...(n.html ? [`   - html: \`${n.html.replace(/`/g, "'")}\``] : []),
+    ...n.replies.map((r) => `   - reply from ${r.by}: ${r.text.replace(/\n/g, " ")}`),
+  ].join("\n"))].join("\n")).join("\n\n");
 }

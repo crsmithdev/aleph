@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|recheck|drop|jobs|issue|unit|tick|suite|report|pause|resume|status|judge>
+ * aleph <job|run|land|checked|recheck|drop|jobs|issue|annotation|unit|tick|suite|report|pause|resume|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
@@ -20,6 +20,7 @@ import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
 import * as issues from "../issues/lib/todo.ts";
 import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
+import * as notes from "../lib/annotations.ts";
 import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
 import { behind, directorStep, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { runTick } from "./lib/transitions/tick.ts";
@@ -37,7 +38,6 @@ import type { Stage } from "./lib/records/stage.ts";
 import { jobId } from "./lib/infra/settings.ts";
 import { readModels, setModel } from "./lib/routing/models.ts";
 import { parseId, shortText } from "../lib/naming.ts";
-import * as notes from "../lib/annotations.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -55,7 +55,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day", "--url", "--selector", "--text", "--html", "--by"];
+const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day", "--url", "--selector", "--by"];
 const FATES: Fate[] = ["duplicate", "met", "manual"];
 const positional = [...rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1])), ...tail];
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
@@ -406,6 +406,42 @@ function printRows(rows: issues.Issue[], key: string, indent = ""): void {
   for (const [n, i] of rows.entries()) console.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${store.priorityOf(i).padEnd(8)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
 }
 
+const ANNOTATION_USAGE = "usage: aleph annotation <list [--all] [--url <u>] [--json] | add (--on <id> | --selector <css>) [--url <u>] <text|-> | reply <id> [--by you|agent] <text|-> | resolve <id> | reopen <id> | drop <id> | put>";
+
+/** `aleph annotation ...`: the notes pinned on UI pages (lib/annotations.ts). `list` prints Markdown, the rest JSON; `put` reads one note as JSON on stdin. */
+async function annotationCmd(): Promise<void> {
+  const [verb, ...args] = positional;
+  const text = async (words: string[]) => (words[0] === "-" ? await Bun.stdin.text() : words.join(" ")).trim() || refuse(ANNOTATION_USAGE);
+  const by = (flag("by") ?? "agent") as notes.By;
+  if (!["you", "agent"].includes(by)) refuse("--by takes you or agent");
+  switch (verb) {
+    case "list": {
+      const url = flag("url");
+      const shown = notes.read().filter((n) => (rest.includes("--all") || n.status === "open") && (!url || n.url === url || n.url === ""));
+      if (rest.includes("--json")) out(shown);
+      else console.log(notes.markdown(shown));
+      return;
+    }
+    case "add": {
+      const on = flag("on"), css = flag("selector");
+      if (Boolean(on) === Boolean(css)) refuse(ANNOTATION_USAGE);
+      out(notes.add(on ? notes.anchor(on) : css!, await text(args), { url: flag("url") ?? "", by }));
+      return;
+    }
+    case "reply": out(notes.reply(args[0] ?? refuse(ANNOTATION_USAGE), await text(args.slice(1)), by)); return;
+    case "resolve": out(notes.mark(args[0] ?? refuse(ANNOTATION_USAGE), "resolved")); return;
+    case "reopen": out(notes.mark(args[0] ?? refuse(ANNOTATION_USAGE), "open")); return;
+    case "drop": out(notes.drop(args[0] ?? refuse(ANNOTATION_USAGE))); return;
+    case "put": {
+      let raw: unknown;
+      try { raw = JSON.parse(await Bun.stdin.text()); } catch { refuse("put reads one annotation as JSON on stdin"); }
+      out(notes.put(raw));
+      return;
+    }
+    default: refuse(ANNOTATION_USAGE);
+  }
+}
+
 /** `aleph doctor [--fix] [--json]`: pass or fail for each part of the machine; exit 1 if any fails. */
 async function doctorCmd(): Promise<void> {
   const checks = await doctor.doctor();
@@ -444,6 +480,7 @@ try {
     case "land": await started(await land(positional[0], { checked: rest.includes("--checked") }, { command })); break;
     case "checked": out(checked(positional[0])); break;
     case "issue": await todoCmd(); break;
+    case "annotation": await annotationCmd(); break;
     case "tick": await tickCmd(); break;
     case "director": out(await directorStep()); break;
     case "suite": out(await suiteStep()); break;
@@ -478,18 +515,6 @@ try {
       out(readModels());
       break;
     }
-    case "annotation": {
-      const [sub, id, ...words] = positional;
-      const by = flag("by") ?? "user";
-      const use = "usage: aleph annotation <list|add --url <url> [--selector <css>] [--text <text>] [--html <html>] [--by <who>] <note>|reply <id> <note>|resolve <id>|drop <id>>";
-      if (sub === "list" || sub === undefined) out(notes.load());
-      else if (sub === "add") out(notes.add(by, { url: flag("url") ?? refuse(use), note: [id, ...words].join(" ").trim() || refuse(use), selector: flag("selector"), text: flag("text"), html: flag("html") }));
-      else if (sub === "reply") out(notes.reply(id ?? refuse(use), by, words.join(" ").trim() || refuse(use)));
-      else if (sub === "resolve") out(notes.resolve(id ?? refuse(use)));
-      else if (sub === "drop") out(notes.drop(id ?? refuse(use)));
-      else refuse(use);
-      break;
-    }
     case "judge": {
       const v = positional[0];
       if (v === "jev" || v === "haiku") setJudgeChoice(v);
@@ -497,7 +522,7 @@ try {
       out({ judge: judgeChoice() });
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|suite|report|pause|resume|status|judge|annotation|models|dispatch|doctor|doc-claims|monitor> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|annotation|tick|suite|report|pause|resume|status|judge|models|dispatch|doctor|doc-claims|monitor> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;
