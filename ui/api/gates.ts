@@ -5,7 +5,7 @@
  * `POST /api/gates/revoke/:reason`: `aleph always revoke <reason>`, the Ask-me side of a rule. The grant side is
  * `POST /api/standing/:reason` (standing.ts).
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
@@ -13,11 +13,11 @@ import { allHolds, backendHold, baselines, type HoldRecord, factoryRepos, gates,
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
-import { eventOf, eventsDir, layout, readEvents, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
+import { layout, readEvents } from "../../jobs/lib/infra/layout.ts";
 import { inProject } from "./scope.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
-import { ACTIONS, refs, word, type Event } from "../../lib/naming.ts";
+import { word, type Event } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 
@@ -107,82 +107,12 @@ export async function securityFacts(): Promise<{ held: string[] }> {
   return JSON.parse(out);
 }
 
-type Fields = Omit<Event, "at" | "by" | "subject">;
-
-/** The verb of an old director action or rule line as an action: `land` is `landed`. */
-const act = (verb: string) => word("act", verb);
-
-/** The decisions of an old `director: <ref>: <reason>: decided: …` line: one event per action; a `note` or a `refused` part is the first event's note. */
-function oldDecided(reason: string, text: string): Fields[] {
-  const parts = text.split(/; (?=(?:land|drop|drop-issue|answer|rerun|close|edit-goal|add|note|refused)\b)/);
-  const evs: Fields[] = [], notes: string[] = [];
-  for (const p of parts) {
-    const [, verb, rest = ""] = /^([\w-]+)(?::? ([\s\S]*))?$/.exec(p) ?? [, p];
-    if (verb === "note" || verb === "refused" || !ACTIONS.includes(act(verb!))) { notes.push(verb === "note" ? rest : p); continue; }
-    const dup = verb === "drop" && /\bduplicate\b/.test(rest);
-    evs.push({
-      action: act(verb!), sub: verb === "land" && reason === "review" ? "override" : dup ? "duplicate" : verb === "add" ? undefined : askSub(reason),
-      ...(dup || verb === "add" ? { on: refs(rest).slice(-1) } : {}), ...(rest ? { note: rest } : {}),
-    });
-  }
-  const out = evs.length ? evs : [{ action: "answered", sub: askSub(reason) }];
-  if (notes.length) out[0] = { ...out[0], note: [out[0].note, ...notes].filter(Boolean).join("; ") };
-  return out;
-}
-
-/**
- * The log events of an old text line of tick.log, as near as its text gives them: the Always actions (`always:`, `standing:`),
- * the director's decisions (`director: <ref>: <reason>: decided|escalated: …`) and the firefighter's lines. A line of
- * another kind is no log entry. A director or firefighter line of no known form takes the word before its first `: ` as
- * its action, and the rest as its note.
- */
-function oldLine(at: string, line: string): LogEntry[] {
-  let m: RegExpExecArray | null;
-  const one = (by: string, subject: string, f: Fields): LogEntry[] => [{ at, by, subject, ...f }];
-  if ((m = /^always: revoked (\S+)$/.exec(line))) return one("human", m[1], { action: "changed", sub: askSub(m[1]), to: "human", note: "set to Ask me" });
-  // A rescue rule dropped the run and the issue reran; its second line, `<name>: always: Rerun; …`, is the same act.
-  if ((m = /^(?:always|standing): (\S+): (\S+) on (\S+)$/.exec(line))) return one("rule", m[3], m[1] === "rescue" ? { action: "reran", sub: "rescue", result: "dropped" } : { action: act(m[2]), sub: askSub(m[1]) });
-  if ((m = /^director: (\S+): (\S+): decided: ([\s\S]*)$/.exec(line))) { const [, ref, reason, text] = m; return oldDecided(reason, text).map((f) => ({ at, by: "director", subject: ref, ...f })); }
-  if ((m = /^director: (\S+): (\S+): escalated: ([\s\S]*)$/.exec(line))) {
-    const [, ref, reason, why] = m, file = /^the run changes (\S+), a security path/.exec(why)?.[1];
-    return one("director", ref, { action: "escalated", sub: /^its (run failed|reply was malformed)/.test(why) ? "error" : file ? "protected" : askSub(reason), ...(file ? { file } : {}), to: "human", note: why });
-  }
-  if ((m = /^firefighter: filed (\S+) \(critical\)/.exec(line))) return one("firefighter", m[1], { action: "filed", note: line.slice(13) });
-  if ((m = /^firefighter: noted (\S+): also red at (\w+)/.exec(line))) return one("firefighter", m[1], { action: "red", on: [m[2]], note: line.slice(13) });
-  if ((m = /^firefighter: (\S+): its land is live for/.exec(line))) return one("firefighter", m[1], { action: "waiting", sub: "rescue", to: "director", note: line.slice(13) });
-  if ((m = /^firefighter: did ([\w-]+) ([\s\S]*)$/.exec(line))) return one("firefighter", refs(m[2])[0] ?? "", { action: act(m[1]), note: m[2] });
-  if ((m = /^(director|firefighter|standing)[: ] ?([\s\S]*)$/.exec(line))) {
-    const by = m[1] === "standing" ? "rule" : m[1], subject = refs(m[2])[0] ?? "";
-    const rest = subject && m[2].startsWith(`${subject}: `) ? m[2].slice(subject.length + 2) : m[2];
-    const w = /^([\w-]+): /.exec(rest)?.[1];
-    return one(by, subject, { action: w ? act(word("state", w)) : "", note: w ? rest.slice(w.length + 2) : rest });
-  }
-  return [];
-}
-
-/**
- * The one-time conversion of the old text lines of tick.log into the event log: each entry of `oldLine` goes to the day file of
- * its line's time. The file `tick.converted` in the factory dir marks it done, so a second run adds nothing.
- */
-export function convertTick(): void {
-  const mark = join(layout().factory, "tick.converted");
-  if (existsSync(mark)) return;
-  mkdirSync(eventsDir(), { recursive: true });
-  for (const l of readFactoryLog().split("\n")) {
-    const m = /^(\S+) (.*)$/.exec(l);
-    if (m && !eventOf(m[2])) for (const e of oldLine(m[1], m[2])) appendFileSync(join(eventsDir(), `${e.at.slice(0, 10)}.jsonl`), `${JSON.stringify(e)}\n`);
-  }
-  writeFileSync(mark, "");
-}
-
-/**
- * The events of the event log from `since` (ms), after the conversion of the old text lines of tick.log. A run's state
- * changes are the gate's events, and the log does not list them.
- */
+/** The events of the event log from `since` (ms). A run's state changes are the gate's events, and the log does not list them. */
 function tickEntries(since: number): LogEntry[] {
-  convertTick();
   return readEvents(since).filter((e) => e.by !== "gate");
 }
+
+type Fields = Omit<Event, "at" | "by" | "subject">;
 
 /** The event of an old hold record, as near as its text gives it; the text is the note when no form fits. */
 function oldHold(h: HoldRecord): LogEntry {

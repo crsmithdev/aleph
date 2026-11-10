@@ -1,7 +1,7 @@
 // The firefighter as code: one critical issue per failing commit, from a red baseline or a red CI,
 // and a rescue Ask on a land live past 30 minutes. No agent run starts.
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
@@ -11,7 +11,7 @@ import { ciStep, type GhRun } from "./ci.ts";
 import { ciFailure, firefight, LOG_CHARS, settleCi, type Ports } from "./firefighter.ts";
 import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";
-import { readEvents, readFactoryLog } from "../infra/layout.ts";
+import { readEvents } from "../infra/layout.ts";
 import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.fixture.ts";
 
 useDirectorFixture();
@@ -279,5 +279,6 @@ test("a step that fails is an event of the firefighter with the failure in its n
   const events = readEvents().filter((e) => e.by === "firefighter" && e.action === "failed");
   expect(events.length).toBeGreaterThan(0);
   expect(events.some((e) => e.note?.includes("gh broke"))).toBe(true);
-  expect(readFactoryLog()).not.toContain("firefighter:");
+  const tick = join(process.env.ALEPH_FACTORY_DIR!, "tick.log");
+  expect(existsSync(tick) ? readFileSync(tick, "utf8") : "").not.toContain("firefighter:");
 });

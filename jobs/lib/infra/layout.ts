@@ -66,15 +66,3 @@ export function readEvents(since = 0): Event[] {
   return out.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
-/** The event in the rest of a tick.log line (after the time), or null for a text line. tick.log holds events only from before the event log. */
-export function eventOf(rest: string): Event | null {
-  if (!rest.startsWith("{")) return null;
-  try { return JSON.parse(rest); } catch { return null; }
-}
-
-/** The kept `tick.<day>.log` files in day order, then tick.log; "" when there is none. */
-export function readFactoryLog(): string {
-  const dir = layout().factory;
-  const days = existsSync(dir) ? readdirSync(dir).filter((f) => /^tick\.\d{4}-\d\d-\d\d\.log$/.test(f)).sort() : [];
-  return [...days, "tick.log"].map((f) => { try { return readFileSync(join(dir, f), "utf8"); } catch { return ""; } }).join("");
-}

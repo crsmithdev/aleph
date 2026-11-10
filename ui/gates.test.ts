@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
-import { LOG_MAX, convertTick, gatesBody, log, metrics, repeats, rules, securityFacts } from "./api/gates.ts";
+import { LOG_MAX, gatesBody, log, metrics, repeats, rules, securityFacts } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
@@ -14,7 +14,7 @@ import * as gates from "./views/gates.js";
 import * as record from "../jobs/lib/records/record.ts";
 import { allHolds, recordHold, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
 import { issueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { eventsDir, logEvent, readEvents } from "../jobs/lib/infra/layout.ts";
+import { eventsDir, logEvent } from "../jobs/lib/infra/layout.ts";
 import { contentText, setCodes } from "../lib/naming.ts";
 
 /** Make `rows` the only hold records: each issue's `hold` and `started` events in its job record. */
@@ -45,12 +45,6 @@ beforeAll(async () => {
   const factory = join(base, "factory");
   mkdirSync(factory);
   writeFileSync(join(factory, "always.json"), JSON.stringify({ rescue: { action: "recommended", at: ago(30) }, "run-cap": { action: "rerun", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } }));
-  writeFileSync(join(factory, "tick.log"), [
-    `${ago(3)} always: rescue: recommended on r-5`,
-    `${ago(2)} firefighter: did answer r-6: picked the plain option`,
-    `${ago(2.5)} director: r-8: run-cap: decided: rerun: the cause is fixed`,
-    `${ago(1)} landed r-7`,
-  ].join("\n") + "\n");
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\necho '{}'\nexit 0\n`);
@@ -59,6 +53,9 @@ beforeAll(async () => {
   const systemctl = join(base, "systemctl");
   writeFileSync(systemctl, `#!/bin/sh\necho "$@" >> ${join(base, "systemctl.log")}\ncase "$*" in *"show aleph-tick"*) echo "TimersMonotonic={ OnUnitActiveUSec=1min ; next_elapse=1min }";; *"show aleph-suite"*) echo "TimersMonotonic={ OnUnitActiveUSec=1h ; next_elapse=1h }";; esac\n`, { mode: 0o755 });
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake, ALEPH_SYSTEMCTL: systemctl, XDG_CONFIG_HOME: join(base, "config") });
+  logEvent({ at: ago(3), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" });
+  logEvent({ at: ago(2), by: "firefighter", subject: "r-6", action: "answered", note: "r-6: picked the plain option" });
+  logEvent({ at: ago(2.5), by: "director", subject: "r-8", action: "reran", sub: "capped", note: "the cause is fixed" });
   setHolds([
     // An old record, from before the 7 gates, still reads.
     { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live" },
@@ -294,34 +291,13 @@ test("log collapses a run of identical gate events into one with times, first an
   });
 });
 
-const oldLines = () => {
+test("a director line only in tick.log gives no log entry and no event file", async () => {
   const dir = process.env.ALEPH_FACTORY_DIR!;
+  rmSync(eventsDir(), { recursive: true, force: true });
   rmSync(join(dir, "tick.converted"), { force: true });
-  rmSync(eventsDir(), { recursive: true, force: true });
-  writeFileSync(join(dir, "tick.log"), `${ago(0.5)} always: revoked rescue\n${ago(0.4)} always: rescue: recommended on r-9\n${ago(0.4)} r-9: always: Rerun; dropped, and the goal reruns\n`);
-};
-const mine = () => readEvents(0).filter((x) => x.subject === "rescue" || x.subject === "r-9");
-
-test("the conversion turns an old revoke line into a human change of the rule and an old always line into a rule event; its second line is no entry", async () => {
-  oldLines();
-  convertTick();
-  expect(mine()).toEqual([
-    expect.objectContaining({ by: "human", subject: "rescue", action: "changed", sub: "rescue", to: "human", note: "set to Ask me" }),
-    expect.objectContaining({ by: "rule", subject: "r-9", action: "reran", sub: "rescue", result: "dropped" }),
-  ]);
-  const e: any[] = ((await body()) as any).log.entries;
-  expect(e.find((x) => x.note === "set to Ask me")).toMatchObject({ by: "human", subject: "rescue", action: "changed", sub: "rescue", to: "human" });
-  expect(e.filter((x) => x.subject === "r-9")).toEqual([expect.objectContaining({ by: "rule", action: "reran", sub: "rescue", result: "dropped" })]);
-});
-
-test("a second conversion adds no event, and the Gates log no longer reads tick.log", async () => {
-  oldLines();
-  convertTick();
-  convertTick();
-  expect(mine()).toHaveLength(2);
-  appendFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), `${ago(0.3)} always: rescue: recommended on r-10\n`);
+  appendFileSync(join(dir, "tick.log"), `${ago(0.3)} director: r-10: run-cap: decided: rerun: the cause is fixed\n`);
   expect(((await body()) as any).log.entries.find((x: any) => x.subject === "r-10")).toBeUndefined();
-  rmSync(eventsDir(), { recursive: true, force: true });
+  expect(existsSync(eventsDir())).toBe(false);
 });
 
 const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");

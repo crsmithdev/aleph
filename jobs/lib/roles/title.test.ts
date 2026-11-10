@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { titleProblem } from "../../../issues/lib/todo.ts";
 import { gpuSlot } from "../gates/factory-status.ts";
-import { readFactoryLog } from "../infra/layout.ts";
 import { setModel } from "../routing/models.ts";
 import { writeTitle } from "./title.ts";
 
@@ -73,7 +72,7 @@ test("when the GPU slot stays taken past the title call's time box, the title co
     setSystemTime(T0 + 31_000); // the 30 s box ends while the slot stays taken
     expect(await title).toBe("A title from Claude");
     expect(readFileSync(join(dir, "args-busy"), "utf8")).toContain("--model haiku");
-    expect(readFactoryLog()).toContain("title: the GPU slot stayed taken for 30 s; the call falls back to Claude");
+    expect(readFileSync(join(dir, "factory-busy", "tick.log"), "utf8")).toContain("title: the GPU slot stayed taken for 30 s; the call falls back to Claude");
   } finally {
     release();
     setSystemTime();

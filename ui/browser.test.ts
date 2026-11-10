@@ -112,7 +112,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("Automation: a log row's clamp button opens and closes the text from the keyboard", async () => {
-    const own = await startRig((env) => { mkdirSync(env.ALEPH_FACTORY_DIR, { recursive: true }); writeFileSync(join(env.ALEPH_FACTORY_DIR, "tick.log"), `${new Date(statSync(env.ALEPH_FACTORY_DIR).mtimeMs).toISOString()} director: aleph-1: why: decided: ${"word ".repeat(60)}\n`); });
+    const own = await startRig((env) => { const ev = join(env.ALEPH_FACTORY_DIR, "events"); mkdirSync(ev, { recursive: true }); const at = new Date(statSync(env.ALEPH_FACTORY_DIR).mtimeMs).toISOString(); writeFileSync(join(ev, `${at.slice(0, 10)}.jsonl`), `${JSON.stringify({ at, by: "director", subject: "aleph-1", action: "answered", note: "word ".repeat(60) })}\n`); });
     try {
       const pg = await own.open("#/automation");
       const btn = "#gates-log .clamp-btn";
@@ -130,7 +130,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("Automation: a redraw keeps focus on an open clamp button and keeps its text open, with a new row above it", async () => {
     let dir = "", at = 0;
-    const own = await startRig((env) => { dir = env.ALEPH_FACTORY_DIR; mkdirSync(dir, { recursive: true }); at = statSync(dir).mtimeMs; writeFileSync(join(dir, "tick.log"), `${new Date(at).toISOString()} director: aleph-1: why: decided: ${"word ".repeat(60)}\n`); });
+    const own = await startRig((env) => { dir = env.ALEPH_FACTORY_DIR; mkdirSync(join(dir, "events"), { recursive: true }); at = statSync(dir).mtimeMs; const iso = new Date(at).toISOString(); writeFileSync(join(dir, "events", `${iso.slice(0, 10)}.jsonl`), `${JSON.stringify({ at: iso, by: "director", subject: "aleph-1", action: "answered", note: "word ".repeat(60) })}\n`); });
     try {
       const pg = await own.open("#/automation");
       const btn = "#gates-log .clamp-btn";
