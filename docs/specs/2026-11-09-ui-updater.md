@@ -70,7 +70,7 @@ The routes are renamed to the terms in `docs/naming.md`, with one name for the d
 12. WHEN `POST /api/jobs/:id/drop` names a job that is not the subject's latest job THE system SHALL act on the named job. IF the named job's state no longer allows the action THEN THE system SHALL return 409 with `{ error }` naming the state. THE system SHALL never act on another job.
 13. IF any POST fails THEN THE answer SHALL have a 4xx or 5xx status with body `{ error: "<reason>" }`, and THE page SHALL show that reason. A command that exits non-zero SHALL never return 200.
 14. WHEN any route is asked for project `p` THE answer SHALL contain exactly the records that the project scope module puts in `p`. IF `p` is not in the registry THEN every route SHALL return an empty result.
-15. THE answers SHALL not repeat each other: asks appear only in `/api/automation`, `/api/issues` appears in no other answer, there is no `doneStamps`, and there is one `factory` block.
+15. THE answers SHALL not repeat each other: asks appear only in `/api/automation`, `/api/issues` appears in no other answer, there is no `doneStamps`, and there is one `factory` block. One exception: a prospective item in `/api/memory/search` carries the issue's ID, title and the issue it waits on, and links to the issue.
 16. WHEN any route answers THE body SHALL validate against that route's schema. A test runs every route against its schema.
 17. THE answers SHALL send every time as an ISO 8601 UTC string, and durations as seconds.
 18. THE updater module SHALL be the only code that clears or rebuilds derived data, and the only sender of `change`.
@@ -91,6 +91,7 @@ The routes are renamed to the terms in `docs/naming.md`, with one name for the d
 - **Restart:** the kept-key set is saved to `~/.aleph/ui/keys.json` when it changes. On start, the updater rebuilds those keys.
 - **Builds run in the existing state Worker,** behind one seam. Today the seam has one implementation. Moving flow to its own Worker must be a change to that seam only. Nothing builds on the main thread. Rejected: a second Worker now (rule 5), and a faster main-thread build.
 - **Day baseline:** built in one pass over its span, in place of 7 calls of the flow build.
+- **Memory keys:** `memory:overview`, `memory:misses` and `memory:items`. `memory:items` is every memory item of every type, built in the Worker. `/api/memory/search` only filters and ranks that value; it never rebuilds it. Today each search rebuilds the items on the main thread, and in a cold process the build did not finish in 120 s (measured 2026-11-09, source not isolated). The four Memory caches (`notes`, `missesCache`, the types cache and the sessions cache) go, and a Memory write does not clear anything: the vault watcher sees the write.
 - **Records parsed once per change (R1):** the Worker reads the job records once per change and builds every key from that one copy. Job detail reads only its own record.
 - **Source tracking (automatic):** each path resolver (the factory folder, records, events, the work store, the vault, the registry) and the Langfuse `get` calls `touch(<source>)`. While the Worker builds one key at a time, a plain set records what the build touched. The two builds that read through a subprocess (`security-facts` for automation, the vault misses for memory) declare their sources. `layout()` exposes its paths so that a touch marks only the path that was read. Rejected: hand-kept source lists.
 - **Sources and triggers:**
@@ -140,6 +141,9 @@ Rule: a URL names the data it returns in the terms of `docs/naming.md`, and the 
 | `GET /api/projects` | `/api/projects/keys`, `/codes` | map of project key to code |
 | `GET /api/memory`, `/api/memory/search` | unchanged | |
 | `GET /api/memory/notes/:title` | `/api/memory/note?title=` | |
+| `GET /api/memory/files/:source/:key` | `/api/memory/file?source=&key=` | a handoff, an episode or MEMORY.md as text |
+| `POST /api/memory/notes/:title/{edit,core,alias,link,archive,delete}` | `/api/memory/note/*` | runs `vault write`, `archive` or `delete` through the CLI action module |
+| `POST /api/memory/files/:source/:key/{edit,delete}` | `/api/memory/file/*` | |
 | `GET /api/specs/:project/:file` | unchanged | |
 | `GET /api/models`, `POST /api/models` | unchanged | |
 | `GET /api/events`, `GET /api/views`, `POST /api/login`, `/logout` | unchanged | |
@@ -161,6 +165,7 @@ Rule: a URL names the data it returns in the terms of `docs/naming.md`, and the 
 ### Project scope (candidate 2)
 
 - One module answers "is this record in project P" for runs, jobs, issues, events, Langfuse traces, vault notes and skills. Matching is by the registry key, exact, with worktrees mapped to their repo. An unknown project is empty everywhere.
+- Memory that applies to every project is in every known project: a note with scope `global`, a rule section, a skill and a hook. The scope module owns this rule, and Memory's own `inScope` goes. An unknown project is empty on Memory too.
 
 ### Issue projection (candidate 4)
 
@@ -169,6 +174,7 @@ Rule: a URL names the data it returns in the terms of `docs/naming.md`, and the 
 ### Router (candidate 5)
 
 - The page router, load guard, stream client and action dispatch move from the inline script in `index.html` to a module. Every load, whether from a mount, a `change`, the clock timer or after an action, goes through one path that orders answers and drops an older answer.
+- A load that a view starts itself goes through the same path: Memory's search, note and file loads. The view's own `shown()` guard then goes.
 
 ### Langfuse (candidate 6)
 
