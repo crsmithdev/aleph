@@ -14,7 +14,8 @@ beforeAll(async () => {
   if (build.exitCode !== 0) throw new Error(build.stderr.toString());
   const env: Record<string, string> = { ...process.env as Record<string, string>, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" };
   for (const l of build.stdout.toString().trim().split("\n")) env[l.slice(0, l.indexOf("="))] = l.slice(l.indexOf("=") + 1);
-  proc = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", "0"], { env: { ...env, HOME: join(base, "empty") }, stdout: "pipe", stderr: "ignore" });
+  // A systemctl that is not there, so the schedules have no interval: every is null for tick and suite, as on a host with no user systemd.
+  proc = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", "0"], { env: { ...env, HOME: join(base, "empty"), ALEPH_SYSTEMCTL: join(base, "no-systemctl") }, stdout: "pipe", stderr: "ignore" });
   const line = new TextDecoder().decode((await (proc.stdout as ReadableStream<Uint8Array>).getReader().read()).value);
   port = Number(new URL(line.trim()).port);
 });
@@ -39,6 +40,8 @@ test("every route answers in its schema, or with { error } when it fails, and se
     if (res.ok) fits.push(path);
   }
   expect(bad).toEqual([]);
+  // systemctl does not answer here, so the two timer schedules have no interval; the schema allows null for it.
+  expect((await (await at("/api/automation")).json() as any).schedules.slice(0, 2).map((s: any) => s.every)).toEqual([null, null]);
   // The fixture serves these in full; the Langfuse routes fail there, and their tests check them with a fake Langfuse.
   for (const p of ["/api/factory", "/api/automation", "/api/flow", "/api/issues", "/api/issues/:id", "/api/issues/:id/jobs", "/api/jobs", "/api/jobs/:id", "/api/projects", "/api/models", "/api/memory", "/api/memory/search"]) expect(fits).toContain(p);
 });
