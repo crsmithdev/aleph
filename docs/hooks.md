@@ -20,6 +20,7 @@ After you change a hook, run `/reload-plugins`.
 | `PostToolUse` | `Write` | `handoff-saved.ts` | 10 | Ends the turn after a handoff file is written |
 | `Stop` | | `verify-gate.ts` | 45 | Blocks a claim of completion that no run supports |
 | `Stop` | | `context-gate.ts` | 10 | Warns on context fill; asks for a handoff after a compaction |
+| `Stop` | | `skills/one-way/hook.ts` | 20 | Blocks once when a change leaves out a file that history changes with it, or copies code a `.jscpd.json` boundary protects |
 
 `obs.ts` runs async on every event except `Stop`, `StopFailure` and `SessionEnd`, where it runs inline with a 5-second timeout.
 
@@ -100,6 +101,10 @@ A deny is `{decision: "block", reason: "Verify gate: …"}`. A judge that cannot
 - After the session's first compaction, it blocks once and asks for a handoff.
 
 The design is in [the context gate decision](context-gate.md).
+
+### one-way
+
+`skills/one-way/hook.ts` checks the change since the branch left the default branch, plus the working tree. It uses no model. Co-change rules come from `skills/one-way/cochange.ts`; boundary rules come from `.jscpd.json` and run through the `jscpd` dev dependency. A pair recorded in `.one-way.json` under `accepted` does not block. It blocks once per session for one set of findings. [The one-way skill](../skills/one-way/SKILL.md) has the rules.
 
 ### handoff-saved
 

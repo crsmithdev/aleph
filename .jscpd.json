@@ -1,0 +1,8 @@
+{
+  "boundaries": [
+    { "name": "locks", "code": ["jobs/lib/infra/locks.ts"], "notIn": ["**"], "allow": ["jobs/lib/infra/locks.ts", "**/*.test.ts"], "disable": ["semantic"] },
+    { "name": "status verdict", "code": ["lib/status-words.ts"], "notIn": ["**"], "allow": ["lib/status-words.ts", "**/*.test.ts"], "disable": ["semantic"] },
+    { "name": "start decision", "code": ["jobs/lib/gates/start-decision.ts"], "notIn": ["**"], "allow": ["jobs/lib/gates/start-decision.ts", "**/*.test.ts"], "disable": ["semantic"] },
+    { "name": "page scope", "code": ["lib/windows.ts", "ui/api/scope.ts"], "notIn": ["**"], "allow": ["lib/windows.ts", "ui/api/scope.ts", "**/*.test.ts"], "disable": ["semantic"] }
+  ]
+}
