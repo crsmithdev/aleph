@@ -2,12 +2,13 @@
  * The job ledger: one folder per run in ~/.aleph/runs, the repo registry,
  * liveness and locks. See docs/data-model.md.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir, loadavg } from "node:os";
 import { basename, join } from "node:path";
 import { needsOf, type Ask } from "../asks/ask.ts";
 import { layout } from "../infra/layout.ts";
 import * as record from "./record.ts";
+import { lock } from "../infra/locks.ts";
 import { isLive } from "../infra/process.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
@@ -234,7 +235,7 @@ export function trailerOf(job: string): string {
 export function makeRun(run: Pick<Run, "on" | "kind" | "name"> & { job?: string }, fill: (folder: string, n: number) => void): string {
   const subject = subjectOf(run);
   mkdirSync(runsDir(), { recursive: true });
-  const release = record.lockSync(`start-${subject}`);
+  const release = record.lockRecord(`start-${subject}`);
   try {
     const runs = allRuns();
     const n = Math.max(0, ...numbered(subject, runs).map((x) => x.n)) + 1;
@@ -278,82 +279,6 @@ export function onOf(run: Run): number | string | undefined {
 
 /** The run's ask. Undefined when the run asks nothing. */
 export const askOf = (run: Run): Ask | undefined => run.ask;
-
-function pidAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch (e: any) { return e.code === "EPERM"; }
-}
-
-/** How long a lock with no readable owner may stand: only a version before the atomic rename can leave one. */
-const OWNERLESS_MS = 60_000;
-
-/** The one way to remove a lock: another process's rename cannot land on a half-removed directory. */
-function remove(dir: string): void {
-  const gone = `${dir}.gone.${process.pid}.${crypto.randomUUID()}`;
-  try { renameSync(dir, gone); } catch { return; }
-  rmSync(gone, { recursive: true, force: true });
-}
-
-/** True when the lock has no live owner: a dead pid, or no readable pid for longer than OWNERLESS_MS. */
-function isStale(dir: string): boolean {
-  let text = "";
-  try { text = readFileSync(join(dir, "owner"), "utf8"); } catch {}
-  if (/^\d+$/.test(text)) return !pidAlive(Number(text));
-  try { return Date.now() - statSync(dir).mtimeMs > OWNERLESS_MS; } catch { return false; }
-}
-
-/**
- * Remove a stale lock under a guard, so that two waiters who both saw the dead
- * owner cannot remove the live lock one of them then took. The holder of the
- * guard checks again, and only a guard holder removes a lock. A guard left by
- * a crash goes after a short age.
- */
-function reclaim(dir: string): void {
-  const guard = `${dir}.reclaim`;
-  try { mkdirSync(guard); } catch {
-    try { if (Date.now() - statSync(guard).mtimeMs > 10_000) rmSync(guard, { recursive: true, force: true }); } catch {}
-    return;
-  }
-  try { if (isStale(dir)) remove(dir); } finally { rmSync(guard, { recursive: true, force: true }); }
-}
-
-const lockRoot = () => join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "aleph");
-
-/** True when a live process holds the lock `name`. */
-export function held(name: string): boolean {
-  const dir = join(lockRoot(), name);
-  return existsSync(dir) && !isStale(dir);
-}
-
-/**
- * A lock is a directory on a tmpfs that a reboot clears, with the holder's pid
- * in `owner`. It comes into being whole, by a rename onto a name that must not
- * exist, so a crash cannot leave one with no owner. It is stale when that
- * process is gone. Waits up to `waitMs`, then gives up.
- */
-export async function lock(name: string, waitMs = 20_000): Promise<(() => void) | null> {
-  const root = lockRoot();
-  mkdirSync(root, { recursive: true });
-  const dir = join(root, name);
-  const deadline = Date.now() + waitMs;
-  const made = `${dir}.new.${process.pid}.${crypto.randomUUID()}`;
-  mkdirSync(made);
-  writeFileSync(join(made, "owner"), String(process.pid));
-  try {
-    for (;;) {
-      try {
-        renameSync(made, dir); // A non-empty directory at `dir` refuses it.
-        return () => remove(dir);
-      } catch (e: any) {
-        if (e.code !== "EEXIST" && e.code !== "ENOTEMPTY") throw e;
-      }
-      if (isStale(dir)) { reclaim(dir); await Bun.sleep(5); continue; }
-      if (Date.now() >= deadline) return null;
-      await Bun.sleep(50);
-    }
-  } finally {
-    rmSync(made, { recursive: true, force: true });
-  }
-}
 
 /** `YYYYMMDD-HHMMSS` in local time. */
 export function stamp(d = new Date()): string {

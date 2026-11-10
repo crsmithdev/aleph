@@ -19,7 +19,7 @@ Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdo
 
 Retention: each tick (`jobs/lib/infra/retention.ts`) deletes data over 90 days old: the run folder of an archived record's run that ended that long ago, a run folder that no record holds and that did not change for 90 days, `usage.jsonl` rows by `at`, `repos.json.bak-*` files, and `dispatch.<day>.log` files (`dispatch.log` moves aside each UTC day under the day it began, which `dispatch.day` holds). The event log and the job records stay forever; the folders of a record that is not archived stay at any age.
 
-Locks are not on disk. Each is a directory with an `owner` pid under `$XDG_RUNTIME_DIR/aleph/<name>`, so a reboot clears them (`ledger.ts` `lock`).
+Locks are not on disk. Each is a directory with an `owner` pid under `$XDG_RUNTIME_DIR/aleph/<name>`, so a reboot clears them (`jobs/lib/infra/locks.ts`).
 
 ## Entities
 

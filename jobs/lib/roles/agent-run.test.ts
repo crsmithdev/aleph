@@ -3,7 +3,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentCause, endLost, openRun, type Opening } from "./agent-run.ts";
-import { allRuns, jobIdOf, lock, readRun, runsDir, stamp, writeRun } from "../records/ledger.ts";
+import { allRuns, jobIdOf, readRun, runsDir, stamp, writeRun } from "../records/ledger.ts";
+import { lock } from "../infra/locks.ts";
 
 let base: string;
 const NOW = new Date("2026-06-01T12:00:00Z");

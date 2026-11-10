@@ -6,7 +6,7 @@
  * The key is the issue the job is on (`<repo>-<n>`, the run's `on`). A run on no issue (a plain run, an old run)
  * keys by its job id. A run folder keeps the logs, `pid` and `exit`; its state is the run's entry in `runs`.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Ask } from "../asks/ask.ts";
@@ -14,6 +14,7 @@ import type { Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
 import { logEvent } from "../infra/layout.ts";
+import { lockSync } from "../infra/locks.ts";
 import { once, touch } from "../infra/sources.ts";
 import { jobId, subjectOf } from "../../../lib/naming.ts";
 
@@ -124,7 +125,7 @@ export function archiveOld(now = Date.now()): string[] {
   const cut = new Date(now - ARCHIVE_DAYS * 864e5).toISOString();
   const moved: string[] = [];
   for (const { issue } of all(true)) {
-    const release = lockSync(issue);
+    const release = lockRecord(issue);
     try {
       const r = read(issue);
       if (!r || r.ask || r.wait || !r.runs.length) continue;
@@ -147,40 +148,16 @@ function derive(r: JobRecord): JobRecord {
   };
 }
 
-const LOCK_WAIT_MS = 20_000;
-
-function pidAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch (e: any) { return e.code === "EPERM"; }
-}
-
-/** Take the record's lock, or another lock of that name: a directory with the owner's pid, made whole by a rename. A dead owner's lock goes. */
-export function lockSync(key: string): () => void {
-  const root = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "aleph");
-  mkdirSync(root, { recursive: true });
-  const dir = join(root, `record-${key.replaceAll("/", "_")}`);
-  const made = `${dir}.new.${process.pid}.${crypto.randomUUID()}`;
-  mkdirSync(made);
-  writeFileSync(join(made, "owner"), String(process.pid));
-  const free = () => { const gone = `${dir}.gone.${process.pid}.${crypto.randomUUID()}`; try { renameSync(dir, gone); rmSync(gone, { recursive: true, force: true }); } catch {} };
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  try {
-    for (;;) {
-      try { renameSync(made, dir); return free; } catch (e: any) { if (e.code !== "EEXIST" && e.code !== "ENOTEMPTY") throw e; }
-      let owner = "";
-      try { owner = readFileSync(join(dir, "owner"), "utf8"); } catch {}
-      const stale = /^\d+$/.test(owner) ? !pidAlive(Number(owner)) : (() => { try { return Date.now() - statSync(dir).mtimeMs > 60_000; } catch { return false; } })();
-      if (stale) { free(); continue; }
-      if (Date.now() > deadline) throw new Error(`record ${key}: lock held by ${owner || "an unknown process"}`);
-      Bun.sleepSync(5);
-    }
-  } finally {
-    rmSync(made, { recursive: true, force: true });
-  }
+/** Take the record's lock, or another lock of that name (`start-<subject>`). Throws when it stays held. */
+export function lockRecord(key: string): () => void {
+  const release = lockSync(`record-${key.replaceAll("/", "_")}`);
+  if (!release) throw new Error(`record ${key}: lock held by another process`);
+  return release;
 }
 
 /** Read the record of `key`, apply `fn`, and write it whole, under the record's lock. Returns what was written. */
 export function update(key: string, fn: (r: JobRecord) => JobRecord | void): JobRecord {
-  const release = lockSync(key);
+  const release = lockRecord(key);
   try {
     const draft = read(key) ?? empty(key);
     const had = draft.ask ? `ask ${draft.askRun ?? ""}` : "";

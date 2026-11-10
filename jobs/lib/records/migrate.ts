@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { ACTIONS, subjectOf, word } from "../../../lib/naming.ts";
 import { eventsDir, layout } from "../infra/layout.ts";
 import { lastTagged, runsDir, type Review } from "./ledger.ts";
-import { archiveDir, lockSync, recordsDir, type JobRecord } from "./record.ts";
+import { archiveDir, lockRecord, recordsDir, type JobRecord } from "./record.ts";
 
 /** The file whose presence says the migration ran. */
 export const markFile = (): string => join(layout().factory, "words-migrated");
@@ -124,7 +124,7 @@ export function migrateWords(): boolean {
   const records = files.map((file) => ({ file, r: JSON.parse(readFileSync(file, "utf8")) as JobRecord }));
   const ns = numbers(records.flatMap(({ r }) => r.runs));
   for (const { file, r: { issue } } of records) {
-    const release = lockSync(issue);
+    const release = lockRecord(issue);
     try {
       const was = readFileSync(file, "utf8"), r = JSON.parse(was) as Stored;
       for (const x of r.runs) migrateRun(x, ns.get(x.id));

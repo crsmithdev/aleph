@@ -8,7 +8,8 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
-import { allRuns, askOf, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, jobIdOf, lock, makeRun, onOf, updateRun, writeRun, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, askOf, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, jobIdOf, makeRun, onOf, updateRun, writeRun, type Repo, type Run } from "../records/ledger.ts";
+import { lock } from "../infra/locks.ts";
 import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, type Fate } from "../records/outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "../records/job.ts";

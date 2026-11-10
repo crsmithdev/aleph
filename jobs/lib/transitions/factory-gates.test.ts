@@ -5,16 +5,17 @@ import { dispatchIssues, setPaused } from "./factory.ts";
 import { gates, gpuSlot, liveEntries, liveRuns } from "../gates/factory-status.ts";
 import { setModel } from "../routing/models.ts";
 import { waitingToLand } from "../land/landing.ts";
-import * as ledger from "../records/ledger.ts";
-import { held, runsDir, updateRun, type Run } from "../records/ledger.ts";
+import { runsDir, updateRun, type Run } from "../records/ledger.ts";
+import * as locks from "../infra/locks.ts";
+import { held } from "../infra/locks.ts";
 import { startJob } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import { ctx, newIssue, mk, setup, teardown } from "./factory.helpers.ts";
 
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */
 let afterHeld: ((name: string) => void) | undefined;
-const real = { ...ledger };
-mock.module("../records/ledger.ts", () => ({ ...real, held: (name: string) => { const r = real.held(name); afterHeld?.(name); return r; } }));
+const real = { ...locks };
+mock.module("../infra/locks.ts", () => ({ ...real, held: (name: string) => { const r = real.held(name); afterHeld?.(name); return r; } }));
 
 beforeEach(setup);
 afterEach(teardown);

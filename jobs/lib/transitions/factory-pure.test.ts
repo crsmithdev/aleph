@@ -6,7 +6,8 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
 import { spentToday, runsToday, health, writeBaseline, suiteHistory, factorySnapshot, issueFacts } from "../gates/factory-status.ts";
-import { allJobs, loadRegistry, lock, readRun, writeRun } from "../records/ledger.ts";
+import { allJobs, loadRegistry, readRun, writeRun } from "../records/ledger.ts";
+import { lock } from "../infra/locks.ts";
 import { type Run } from "../records/ledger.ts";
 import { ctx, sh, newIssue, change, mk, setup, teardown } from "./factory.helpers.ts";
 

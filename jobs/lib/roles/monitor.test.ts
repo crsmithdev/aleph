@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findingsOf, monitorDue, monitorStep, readerPrompt } from "./monitor.ts";
 import { monitorPanel, reportFile, reportLine, type Report } from "../learning/monitor-table.ts";
-import { allRuns, lock } from "../records/ledger.ts";
+import { allRuns } from "../records/ledger.ts";
+import { lock } from "../infra/locks.ts";
 import { setPaused } from "../gates/factory-status.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_VAULT", "ALEPH_MONITOR_CMD", "ALEPH_MONITOR", "FAKE_DIR"] as const;

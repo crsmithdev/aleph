@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { admit, loadRegistry, lock } from "./ledger.ts";
+import { admit, loadRegistry } from "./ledger.ts";
+import { lock } from "../infra/locks.ts";
 import { setCodes, shortId } from "../../../lib/naming.ts";
 
 let base: string;
@@ -20,82 +21,6 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-
-
-describe("lock", () => {
-  let saved: string | undefined;
-  const dir = (name: string) => join(base, "aleph", name);
-  const dead = () => Bun.spawnSync(["sh", "-c", "echo $$"], { stdout: "pipe" }).stdout.toString().trim();
-  const seed = (name: string, owner?: string) => {
-    mkdirSync(dir(name), { recursive: true });
-    if (owner !== undefined) writeFileSync(join(dir(name), "owner"), owner);
-  };
-  beforeEach(() => { saved = process.env.XDG_RUNTIME_DIR; process.env.XDG_RUNTIME_DIR = base; });
-  afterEach(() => { if (saved === undefined) delete process.env.XDG_RUNTIME_DIR; else process.env.XDG_RUNTIME_DIR = saved; });
-
-  test("one holder at a time; a release frees it; a held lock times out", async () => {
-    const release = (await lock("a"))!;
-    expect(readFileSync(join(dir("a"), "owner"), "utf8")).toBe(String(process.pid));
-    expect(await lock("a", 0)).toBeNull();
-    release();
-    (await lock("a", 0))!();
-  });
-
-  test("a held lock gives up at once with no wait, even on a frozen clock", async () => {
-    const release = (await lock("frozen"))!;
-    setSystemTime(new Date(0));
-    try {
-      expect(await lock("frozen", 0)).toBeNull();
-    } finally {
-      setSystemTime();
-      release();
-    }
-  });
-
-  test("a dead owner's lock is taken over; a live owner's is not", async () => {
-    seed("d", dead());
-    (await lock("d", 0))!();
-    seed("l", String(process.ppid));
-    expect(await lock("l", 0)).toBeNull();
-  });
-
-  test("an empty lock directory is free; one with an unreadable owner waits a minute, then is taken over", async () => {
-    seed("none");
-    (await lock("none", 0))!();
-    seed("empty", "");
-    expect(await lock("empty", 0)).toBeNull();
-    const old = new Date(0);
-    utimesSync(dir("empty"), old, old);
-    (await lock("empty", 0))!();
-  });
-
-  test("a guard left by a crash does not block the takeover for good", async () => {
-    seed("g", dead());
-    mkdirSync(`${dir("g")}.reclaim`);
-    const old = new Date(0);
-    utimesSync(`${dir("g")}.reclaim`, old, old);
-    (await lock("g", 2000))!();
-  });
-
-  test("processes racing for a dead owner's lock never hold it together", async () => {
-    const script = join(base, "contend.ts");
-    writeFileSync(script, `import { closeSync, openSync, rmSync } from "node:fs";
-import { lock } from ${JSON.stringify(join(import.meta.dir, "ledger.ts"))};
-for (let i = 0; i < 12; i++) {
-  const release = (await lock("race", 25000))!;
-  closeSync(openSync(process.argv[2], "wx")); // Throws if another process is inside.
-  await new Promise((r) => setImmediate(r));
-  rmSync(process.argv[2]);
-  release();
-}
-`);
-    seed("race", dead());
-    const procs = Array.from({ length: 8 }, () => Bun.spawn(["bun", script, join(base, "inside")], { env: { ...process.env, XDG_RUNTIME_DIR: base }, stdout: "ignore", stderr: "pipe" }));
-    const codes = await Promise.all(procs.map((p) => p.exited));
-    const errors = await Promise.all(procs.map((p) => new Response(p.stderr).text()));
-    expect(codes, errors.join("")).toEqual(procs.map(() => 0));
-  }, 30_000);
-});
 
 describe("admit", () => {
   const keys = ["XDG_RUNTIME_DIR", "ALEPH_LOAD_LIMIT"];

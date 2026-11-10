@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { endLost, openRun } from "./agent-run.ts";
-import { lock } from "../records/ledger.ts";
+import { lock } from "../infra/locks.ts";
 import { recordRan } from "../transitions/factory.ts";
 import { addDays, measure, monitorDir, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
 import { monitorOn } from "../infra/settings.ts";
