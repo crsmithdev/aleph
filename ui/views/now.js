@@ -2,7 +2,7 @@
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { actButton, jobHref, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, localId, issueHref, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when, scope } from "../lib.js";
-import { NAMES } from "../../lib/naming.ts";
+import { NAMES, shortId } from "../../lib/naming.ts";
 import { bar, flowOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, shell as jobCard, statLines, trailerLine } from "./cards.js";
 import { verdict } from "../../lib/status-words.ts";
@@ -223,8 +223,8 @@ const cards = (html, cls = "") => `<div class="cards${cls ? " " + cls : ""}">${h
 const titleOf = (title, href) => (href ? `<a href="${esc(href)}" class="t" title="${esc(title)}">${esc(title)}</a>` : `<span class="t" title="${esc(title)}">${esc(title)}</span>`);
 
 /** An item card of a lane: the 2-line face (the meta row, then the title on 1 line); `below` is HTML after the face. */
-function laneCard(cls, row, title, href, below = "") {
-  return `<article class="job-card small lane-card ${cls}">${row}${titleOf(title, href)}${below}</article>`;
+function laneCard(id, cls, row, title, href, below = "") {
+  return `<article class="job-card small lane-card ${cls}" data-annotate="${esc(shortId(id))}">${row}${titleOf(title, href)}${below}</article>`;
 }
 
 /** A lane: header with the count, its cards or one quiet line. */
@@ -234,7 +234,7 @@ const lane = (id, title, n, rows, none, cap = 0) =>
 /** Done: the done parts and issues /api/factory sends, newest first, each its own card. */
 function doneLane(s) {
   const rows = (s.done ?? []).map((i) =>
-    laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: badge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
+    laneCard(i.id, "done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: badge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
   return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.", s.doneCount ?? 0);
 }
 
@@ -243,7 +243,7 @@ function queuedLane(s) {
     const dead = (w.waits ?? []).filter((b) => b.dead);
     const id = repoIdLink(`${w.repo}-${w.id}`, issueHref(`${w.repo}-${w.id}`), w.repo);
     const hold = holdLine(w.ev);
-    return laneCard("queued-row", metaRow({ id, chips: (hold ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
+    return laneCard(`${w.repo}-${w.id}`, "queued-row", metaRow({ id, chips: (hold ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
   }).join("");
   return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
@@ -251,7 +251,7 @@ function queuedLane(s) {
 
 /** A parent that waits to close: all its parts are done. */
 function runningIssue(i, now) {
-  return laneCard("run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: badge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
+  return laneCard(i.id, "run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: badge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
 }
 
 const TIERS = { haiku: "low", sonnet: "medium", opus: "high" };
@@ -265,7 +265,7 @@ function runningLane(s) {
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
     const tier = TIERS[j.tier ?? shortModel(j.model)];
     const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
-    return laneCard(`run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));
+    return laneCard(j.name, `run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));
   }).join("");
   return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }

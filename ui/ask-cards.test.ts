@@ -7,6 +7,7 @@ import { join } from "node:path";
 import * as view from "./views/now.js";
 // @ts-ignore cards.js is plain JS, shared with the page
 import { askCard } from "./views/cards.js";
+import { shortId } from "../lib/naming.ts";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { asksOf, prop } from "./test-now.ts";
 import { job } from "./fixtures/status-state.ts";
@@ -37,6 +38,7 @@ test("one card per kind: the title opens with the kind label, and the tag names 
   for (const [i, label] of items.map((x, k) => [x, ["Approve", "Decide", "Unstick"][k]] as const)) {
     const row = card(askCard(i, "2026-10-27T17:00:00Z"));
     expect(row).toContain(`data-card="${i.card}"`);
+    expect(row).toContain(`data-annotate="${shortId(i.id)}"`);
     expect(row).toContain(`<span class="t"><b class="ask-kind">${label}:</b> <span class="ask-title">the doc-claim check in the verify gate</span></span>`);
     expect(row).toContain(`<span class="ask-tag">${i.tag}</span>`);
   }

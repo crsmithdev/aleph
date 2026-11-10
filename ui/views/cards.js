@@ -1,5 +1,6 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
 import { actButton, actMessages, codeText, denyReasons, diffHtml, dur, esc, jobHref, localId, openDiffs, parseId, priorityBadge, repoIdLink, tag, when } from "../lib.js";
+import { shortId } from "../../lib/naming.ts";
 
 /** A job's id, linking to its page. */
 export const itemId = (j) => repoIdLink(j.name, j.href || jobHref(j.id));
@@ -114,6 +115,6 @@ export function askCard(i, now = new Date().toISOString()) {
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
   const desc = `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}</p>`;
-  return askShell(esc(i.reason), `data-kind="${esc(i.kind)}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, localId(i.headline || i.title, i.repo), i.tag, desc,
+  return askShell(esc(i.reason), `data-annotate="${esc(shortId(i.id))}" data-kind="${esc(i.kind)}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, localId(i.headline || i.title, i.repo), i.tag, desc,
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
 }

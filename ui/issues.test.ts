@@ -942,3 +942,10 @@ describe("the labels say sub-issue and job", () => {
     expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
   });
 });
+
+test("an issue row carries its short id for a pin to anchor on", () => {
+  setCodes({ aleph: "a" });
+  try {
+    expect(v.renderRow({ repo: "aleph", n: 1430, id: "aleph-1430", href: "#/issues/aleph/1430", title: "t", stage: "new", project: "aleph", priority: "medium", labels: [] })).toContain('data-annotate="a1430"');
+  } finally { setCodes({}); }
+});

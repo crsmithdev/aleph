@@ -139,6 +139,7 @@ describe("GET /api/jobs", () => {
       expect([actor("oth-5#1"), actor("oth-6#1"), actor("oth-7#1")]).toEqual(["intake", "worker", "director"]);
       expect(v.renderJobsTable(rows, { role: "director" })).toContain("oth-7#1");
       expect(v.renderJobsTable(rows, { role: "director" })).not.toContain("oth-6#1");
+      expect(v.renderJobsTable(rows)).toContain('<tr class="rowlink" data-annotate="oth-5#1">');
     } finally { for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id)); }
   });
   test("the Role filter offers the six actors and no old role", () => {

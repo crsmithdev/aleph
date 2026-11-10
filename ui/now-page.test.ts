@@ -17,6 +17,7 @@ test("a Queued card names a dead blocker and offers to remove only that wait", (
   expect(q).not.toContain("Live");
   expect(q).toContain("this wait never ends");
   expect(q).toContain('data-act="unblock" data-repo="aleph" data-id="964"');
+  expect(q).toContain('data-annotate="a964"');
   expect(q).toContain(">Stop waiting on a963</button>");
 });
 
@@ -192,8 +193,10 @@ test("a land card has its own kind class, and the Done header shows the count of
   const run = (kind: string) => ({ name: "j", repo: "r", item: { title: "t" }, started: "2026-11-02T11:00:00Z", run: { kind, started: "2026-11-02T11:00:00Z" } });
   const html = view.renderLanes({ ...state, running: [run("land"), run("build")] });
   expect(html).toContain("run-row kind-land");
+  expect(html).toContain('data-annotate="j"');
   expect(html).toContain("run-row kind-worker");
   const done = { ...state, done: [1, 2].map((n) => ({ id: `r-${n}`, title: "d", href: "#/x", jobs: [] })), doneCount: 4 };
+  expect(view.renderLanes(done)).toContain('data-annotate="r-2"');
   expect(view.renderLanes(done)).toContain('<h2 id="h-done">Done</h2><span class="count">2 of 4</span>');
 });
 
