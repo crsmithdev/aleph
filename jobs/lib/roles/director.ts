@@ -31,7 +31,7 @@ import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";
-import { factoryLog, logEvent } from "../infra/layout.ts";
+import { logEvent } from "../infra/layout.ts";
 import { refs as idsIn, word } from "../../../lib/naming.ts";
 import type { Hold } from "../gates/issue-decision.ts";
 import { DIRECTOR_CAP, needsYouLog, vaultDir } from "../infra/settings.ts";
@@ -636,7 +636,7 @@ const lockOf = (run: Run): string | null => (run.on ? lockName(run.on) : null);
 /** Send the Ask to Chris: the case text (the director's, else the fallback) on it, and the record. `ev` sets the event's sub and file. */
 function escalate(c: Case, base: Omit<Decision, "outcome">, text: Text | string | undefined, why: string, ev: Pick<Hold, "sub" | "file"> = {}): Decision {
   const t = text && typeof text !== "string" ? text : fallback(typeof text === "string" ? `${why}; its case text had ${text}` : why);
-  if (!writeCaseText(c, t) && stillOpen(c)) factoryLog(`director: ${base.ref}: the case text was not written`);
+  if (!writeCaseText(c, t) && stillOpen(c)) logEvent({ by: "director", subject: base.ref, action: "failed", note: "the case text was not written" });
   const d: Decision = { ...base, outcome: "escalated", why };
   record(d, c, [{ action: "escalated", sub: askSub(base.reason), ...ev, to: "human", note: why }]);
   return d;
@@ -704,10 +704,10 @@ export async function directAll(repos: Repo[] = factoryRepos(), ports: Ports = d
   try {
     await endLost("director", lockOf, "its decision");
     const todo = pendingCases(repos).slice(0, Math.max(0, DIRECTOR_CAP()));
-    const out = await Promise.all(todo.map((c) => direct(c, ports).catch((e: any) => { factoryLog(`director: ${refOf(c)}: failed: ${e?.message ?? e}`); return null; })));
+    const out = await Promise.all(todo.map((c) => direct(c, ports).catch((e: any) => { logEvent({ by: "director", subject: refOf(c), action: "failed", note: String(e?.message ?? e) }); return null; })));
     return out.filter((d): d is Decision => !!d);
   } catch (e: any) {
-    factoryLog(`director: failed: ${e?.message ?? e}`);
+    logEvent({ by: "director", subject: "director", action: "failed", note: String(e?.message ?? e) });
     return [];
   }
 }

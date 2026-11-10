@@ -11,7 +11,9 @@ import { langfuseConfig, type LangfuseConfig } from "../../../lib/env.ts";
 import { decide } from "../../../lib/jev.ts";
 import { fetchObservations } from "../../../lib/otlp.ts";
 import { factoryDir } from "../gates/factory-status.ts";
-import { factoryLog } from "../infra/layout.ts";
+import { logEvent } from "../infra/layout.ts";
+
+const fail = (subject: string, note: string) => logEvent({ by: "rule", subject, action: "failed", note });
 import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
 import { always, logAlways, type Ask } from "../asks/ask.ts";
 import { causeOf } from "../records/outcome.ts";
@@ -141,7 +143,7 @@ async function chrisSignals(cfg: LangfuseConfig, from: Date, seen: Set<string>):
       const r = d.answers.general;
       if (a.type !== "noul" || !(a.noul >= CORRECTION_AT) || r.type !== "noul" || !(r.noul >= CORRECTION_AT)) continue;
     } catch (e) {
-      factoryLog(`corrections: jev failed on trace ${t.id}: ${(e as Error).message}`);
+      fail(t.id, `jev failed on the trace: ${(e as Error).message}`);
       continue;
     }
     out.push({ id: t.id, source: "chris", at: new Date(t.timestamp!).toISOString(), quote: cut(message), link: `${cfg.baseUrl}/trace/${t.id}` });
@@ -177,7 +179,7 @@ async function dropSignals(from: Date, seen: Set<string>): Promise<Signal[]> {
       const a = d.answers.fault;
       if (a.type !== "noul" || !(a.noul >= CORRECTION_AT)) continue;
     } catch (e2) {
-      factoryLog(`corrections: jev failed on drop ${e.id}: ${(e2 as Error).message}`);
+      fail(e.id, `jev failed on the drop: ${(e2 as Error).message}`);
       continue;
     }
     out.push({ id: e.id, source: "drop", at: new Date(ended).toISOString(), quote: cut(run.reason), link: run.job });
@@ -200,7 +202,7 @@ async function group(lessons: Lesson[], s: Signal): Promise<boolean> {
       const a = d.answers.lesson;
       if (a.type === "choice" && criteria[a.choice]) pick = a.choice;
     } catch (e) {
-      factoryLog(`corrections: jev failed on signal ${s.id}: ${(e as Error).message}`);
+      fail(s.id, `jev failed on the signal: ${(e as Error).message}`);
       return false;
     }
   }
@@ -208,7 +210,7 @@ async function group(lessons: Lesson[], s: Signal): Promise<boolean> {
   if (!lesson) {
     const sentence = await writeRule(s.quote);
     if (!sentence) {
-      factoryLog(`corrections: no rule written for signal ${s.id}`);
+      fail(s.id, "no rule written for the signal");
       return false;
     }
     lesson = lessons.find((l) => l.id === lessonId(sentence));
@@ -231,7 +233,7 @@ export async function mine(now = Date.now()): Promise<Store> {
   const cfg = langfuseConfig();
   if (cfg) {
     for (const f of [() => chrisSignals(cfg, from, seen), () => gateSignals(cfg, from, now, seen)]) {
-      try { signals.push(...(await f())); } catch (e) { factoryLog(`corrections: langfuse failed: ${(e as Error).message}`); }
+      try { signals.push(...(await f())); } catch (e) { fail("corrections", `langfuse failed: ${(e as Error).message}`); }
     }
   }
   signals.push(...(await dropSignals(from, seen)));
@@ -251,7 +253,7 @@ async function propose(lessons: Lesson[]): Promise<Lesson[]> {
   if (!todo.length) return made;
   // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
   const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
-  if (!repo) { factoryLog("corrections: no sandboxed repo in the registry; proposals stay open"); return made; }
+  if (!repo) { fail("corrections", "no sandboxed repo in the registry; proposals stay open"); return made; }
   for (const l of todo) {
     try {
       if (l.state === "open") {
@@ -277,7 +279,7 @@ async function propose(lessons: Lesson[]): Promise<Lesson[]> {
         if (n !== undefined) l.issue = `${repo.key}-${n}`;
       }
     } catch (e) {
-      factoryLog(`corrections: jev failed on proposal ${l.id}: ${(e as Error).message}`);
+      fail(l.id, `jev failed on the proposal: ${(e as Error).message}`);
     }
   }
   return made;
@@ -301,13 +303,13 @@ function standingProposals(made: Lesson[]): void {
     if (action === "approve") {
       // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
       const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
-      if (!repo) { factoryLog(`standing: ${reason}: approve on ${l.id} failed: no sandboxed repo in the registry`); continue; }
+      if (!repo) { fail(l.id, `${reason}: approve failed: no sandboxed repo in the registry`); continue; }
       const ref = approve(l.id, repo);
       if (ref.startsWith(`${repo.key}-`)) logAlways(reason, ref, "filed", { note: `${reason}: approved ${l.id}` });
-      else factoryLog(`standing: ${reason}: approve on ${l.id} failed: ${ref}`);
+      else fail(l.id, `${reason}: approve failed: ${ref}`);
     } else if (action === "decline") {
       const refusal = decline(l.id);
-      if (refusal) factoryLog(`standing: ${reason}: decline on ${l.id} failed: ${refusal}`);
+      if (refusal) fail(l.id, `${reason}: decline failed: ${refusal}`);
       else logAlways(reason, l.id, "dropped", { note: `${reason}: declined` });
     }
   }
@@ -329,7 +331,7 @@ function fileLesson(l: Lesson, repo: Place): number | undefined {
     }, true);
     return w?.value;
   } catch (e) {
-    factoryLog(`corrections: filing the proposal ${l.id} failed: ${(e as Error).message}`);
+    fail(l.id, `filing the proposal failed: ${(e as Error).message}`);
     return undefined;
   }
 }

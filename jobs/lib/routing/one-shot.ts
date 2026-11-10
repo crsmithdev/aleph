@@ -4,7 +4,7 @@
  */
 import { modelArgv, modelEnv, onGpu, readModels, type Tier } from "./models.ts";
 import { gpuSlot } from "../gates/factory-status.ts";
-import { factoryLog } from "../infra/layout.ts";
+import { logEvent } from "../infra/layout.ts";
 
 export type Ask = (system: string, input: string, box: number) => Promise<{ code: number; stderr: string; result: string }>;
 
@@ -23,7 +23,7 @@ export async function oneShot<T>(tier: Tier, cmd: string, label: string, wait: n
   let release: (() => void) | null = null;
   if (onGpu(pick)) {
     release = await gpuSlot(wait);
-    if (!release) factoryLog(`${label}: the GPU slot stayed taken for ${waited}; the call falls back to Claude`);
+    if (!release) logEvent({ by: "rule", subject: label, action: "gpu", note: `the GPU slot stayed taken for ${waited}; the call falls back to Claude` });
   }
   const model = onGpu(pick) && !release ? "haiku" : pick;
   Object.assign(env, modelEnv(model));

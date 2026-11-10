@@ -22,7 +22,7 @@ import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "../gates/factory-st
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, stepOf, type Job } from "../records/job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";
-import { factoryLog, logEvent } from "../infra/layout.ts";
+import { logEvent } from "../infra/layout.ts";
 import { allRuns, isAgentRun, jobIdOf, loadRegistry, lock, tell, updateRun, type Repo } from "../records/ledger.ts";
 import { isLive, isLost, isStarting, markEnded } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
@@ -159,13 +159,13 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
     const release = await lock(`rescue-${first[0].run.repo}-${name}`, rescueWaitMs());
-    if (!release) { factoryLog(`rescue of ${name} skipped: the rescue lock stayed busy`); continue; }
+    if (!release) { logEvent({ by: "firefighter", subject: name, action: "busy", sub: "rescue", note: "the rescue lock stayed busy; the rescue is skipped" }); continue; }
     try {
       // Read again under the lock: another dispatch may have acted on it.
       const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
       if (runs) await rescueJob(runs, act, land, checkMain);
     } catch (e: any) {
-      factoryLog(`rescue of ${name} failed: ${e?.message ?? e}`);
+      logEvent({ by: "firefighter", subject: name, action: "failed", sub: "rescue", note: String(e?.message ?? e) });
     } finally {
       release();
     }
@@ -196,12 +196,11 @@ async function releaseEdited(act: Rescue): Promise<void> {
     if (!release) continue;
     try {
       const why = await act.drop(r.name, "the goal's spec was edited after the run asked about it; the goal starts again on the new spec");
-      if (why) { factoryLog(`${r.name}: release after a spec edit failed (${why})`); continue; }
+      if (why) { logEvent({ by: "firefighter", subject: r.name, action: "failed", sub: "rescue", note: `release after a spec edit failed (${why})` }); continue; }
       if (askOf(`${repo.key}-${issue}`)?.question === question) clearAsk(`${repo.key}-${issue}`);
-      factoryLog(`${r.name}: the spec was edited; the run is dropped and the goal starts again`);
       await tell(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
     } catch (e: any) {
-      factoryLog(`${r.name}: release after a spec edit failed: ${e?.message ?? e}`);
+      logEvent({ by: "firefighter", subject: r.name, action: "failed", sub: "rescue", note: `release after a spec edit failed: ${e?.message ?? e}` });
     } finally {
       release();
     }
@@ -273,10 +272,10 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   const stuck: Stuck = { last, r, repo, name, issue, reason: isKilled ? "host restart" : isLostRun ? "lost: its process ended with no end written" : r.reason ?? r.condition };
   const { reason } = stuck;
 
-  const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${shortId(name)}: ${line}`); };
+  const say = (line: string) => tell(`${shortId(name)}: ${line}`);
   const record = (text: string, opts: { done?: boolean } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
-    if (why) factoryLog(`${name}: no issue note: ${why}`);
+    if (why) logEvent({ by: "firefighter", subject: name, action: "failed", sub: "rescue", note: `no issue note: ${why}` });
   };
   const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
   // A run that ended with a QUESTION about the spec: a rerun reads the same spec and asks again, so it waits for a spec edit.
@@ -293,10 +292,10 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
         await tell(`${repo.key}/${name}: always: Rerun; dropped, and the goal reruns`);
         return;
       }
-      factoryLog(`${name}: always Rerun failed (${why})`);
+      logEvent({ by: "firefighter", subject: name, action: "failed", sub: "rescue", note: `always Rerun failed (${why})` });
     }
     const why = askFromRun(last, repo, issue, ask, question, spec);
-    if (why) factoryLog(`${name}: no issue note: ${why}`);
+    if (why) logEvent({ by: "firefighter", subject: name, action: "failed", sub: "rescue", note: `no issue note: ${why}` });
     await say(`asks Chris: ${question}`);
   };
   const take = async (step: Step) => {
@@ -349,7 +348,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     // The worker says the issue is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
     // the issue with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
     const main: Baseline = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
-    if (main.state === "unchecked" || main.state === "running") { factoryLog(`${name}: the claim waits: ${main.line}`); return; }
+    if (main.state === "unchecked" || main.state === "running") { logEvent({ by: "firefighter", subject: name, action: "waiting", sub: "rescue", note: `the claim waits: ${main.line}` }); return; }
     // An issue a red CI started is met only when GitHub CI on main is green too: the checks here may pass where CI fails.
     const ci = r.on ? readRecord(r.on)?.ci : undefined;
     const ciRed = ci ? redCi().find((c) => c.repo === repo.key) : undefined;

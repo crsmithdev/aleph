@@ -3,6 +3,7 @@ import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "../transitions/factory.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
+import { readEvents } from "../infra/layout.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { askOf } from "../asks/ask.ts";
 import { newIssue, mk, ask, fakes, setup, teardown } from "../transitions/factory.helpers.ts";
@@ -29,6 +30,18 @@ test("a run with a question waits for a spec edit: the Ask says so, and an edit 
   expect(f.calls).toContain(`drop fac-${id}`);
   expect(ask(id)).toBeNull();
   expect(f.specs.length).toBe(1);
+});
+
+test("a rescue that throws gives a failed event whose note holds the failure", async () => {
+  const id = newIssue();
+  mk(`fac-${id}`, "build", "failed", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
+  const f = fakes();
+  await dispatchIssues(f.start, undefined, f.rescue);
+  writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
+  await dispatchIssues(f.start, undefined, { ...f.rescue, drop: async () => { throw new Error("drop broke"); } });
+  const e = readEvents().find((x) => x.action === "failed" && x.sub === "rescue");
+  expect(e?.by).toBe("firefighter");
+  expect(e?.note).toContain("drop broke");
 });
 
 test("a run the API refused for credit waits: the rescue starts no rerun, recheck or drop, and writes no Ask", async () => {

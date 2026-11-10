@@ -1,8 +1,9 @@
 import { afterAll, expect, setSystemTime, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { titleProblem } from "../../../issues/lib/todo.ts";
+import { readEvents } from "../infra/layout.ts";
 import { gpuSlot } from "../gates/factory-status.ts";
 import { setModel } from "../routing/models.ts";
 import { writeTitle } from "./title.ts";
@@ -57,7 +58,7 @@ test("a title slot set to local runs claude on gpt-oss-20b at the local base URL
   }
 });
 
-test("when the GPU slot stays taken past the title call's time box, the title comes from Claude and the log records the fallback", async () => {
+test("when the GPU slot stays taken past the title call's time box, the title comes from Claude and an event records the fallback", async () => {
   const saved = process.env.ALEPH_FACTORY_DIR;
   process.env.ALEPH_FACTORY_DIR = join(dir, "factory-busy");
   const f = join(dir, "record-busy");
@@ -72,7 +73,8 @@ test("when the GPU slot stays taken past the title call's time box, the title co
     setSystemTime(T0 + 31_000); // the 30 s box ends while the slot stays taken
     expect(await title).toBe("A title from Claude");
     expect(readFileSync(join(dir, "args-busy"), "utf8")).toContain("--model haiku");
-    expect(readFileSync(join(dir, "factory-busy", "tick.log"), "utf8")).toContain("title: the GPU slot stayed taken for 30 s; the call falls back to Claude");
+    expect(readEvents().find((e) => e.action === "gpu")?.note).toContain("the call falls back to Claude");
+    expect(existsSync(join(dir, "factory-busy", "tick.log"))).toBe(false);
   } finally {
     release();
     setSystemTime();

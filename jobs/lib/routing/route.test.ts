@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readEvents } from "../infra/layout.ts";
 import { route } from "./route.ts";
 import { setModel } from "./models.ts";
 
@@ -21,17 +22,19 @@ afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }
 beforeEach(() => { asked = []; delete process.env.ALEPH_JUDGE; rmSync(join(dir, "f"), { recursive: true, force: true }); process.env.ALEPH_FACTORY_DIR = join(dir, "f"); });
 const factoryDir = process.env.ALEPH_FACTORY_DIR!;
 afterAll(() => { process.env.ALEPH_FACTORY_DIR = factoryDir; });
-const logLines = () => { try { return readFileSync(join(dir, "f", "tick.log"), "utf8").trim().split("\n").filter(Boolean); } catch { return []; } };
+const noTickLog = () => !existsSync(join(dir, "f", "tick.log"));
 
-test("a Jev 500 gives no model and writes no line", async () => {
+test("a Jev 500 gives no model and logs no event", async () => {
   reply = { status: 500, body: { error: { message: "down" } } };
   expect(await route("x")).toBeNull();
-  expect(logLines()).toEqual([]);
+  expect(readEvents()).toEqual([]);
 });
 
 test("a low pick at p >= 0.6 gives worker-low, worker-medium when worker-low is disabled, and opus when both are disabled", async () => {
   reply = { status: 200, body: { answers: { tier: { type: "choice", choice: "worker-low", probabilities: { "worker-low": 0.7 } } }, cost: 0, model: "m" } };
   expect(await route("x")).toBe("worker-low");
+  expect(readEvents().find((e) => e.action === "routed")?.note).toBe("cost 0 model m tier worker-low p 0.7");
+  expect(noTickLog()).toBe(true);
   expect(setModel("worker-low", { enabled: false })).toBeNull();
   expect(await route("x")).toBe("worker-medium");
   expect(setModel("worker-medium", { enabled: false })).toBeNull();
