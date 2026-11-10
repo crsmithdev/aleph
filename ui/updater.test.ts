@@ -216,3 +216,25 @@ test("while a build runs in the Worker, the server answers other routes: /api/pr
     expect(s.headers.get("x-aleph-keys")).toBe("/api/state");
   } finally { stop(); restore(); }
 });
+
+test("a key whose build ends first is signalled first: a fast key does not wait for a slow one", async () => {
+  const f = fake();
+  let go = () => {};
+  const slow = new Promise<void>((r) => { go = r; });
+  const u = createUpdater({ ...f, build: async (key: string, gens: Record<string, number>) => { if (key === "/slow" && f.world["/slow"].body === 2) await slow; return f.build(key, gens); } });
+  f.world["/fast"] = { body: 1, sources: ["usage"] };
+  f.world["/slow"] = { body: 1, sources: ["usage"] };
+  await u.get("/fast"); await u.get("/slow");
+  const heard: string[][] = [];
+  let first = () => {};
+  const firstHeard = new Promise<void>((r) => { first = r; });
+  u.onChange((keys) => { heard.push(keys); first(); });
+  f.world["/fast"].body = 2; f.world["/slow"].body = 2;
+  u.changed("usage");
+  const flushing = u.flush();
+  await firstHeard; // /slow is still held
+  expect(heard).toEqual([["/fast"]]);
+  go();
+  await flushing;
+  expect(heard).toEqual([["/fast"], ["/slow"]]);
+});

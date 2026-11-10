@@ -12,12 +12,14 @@ export const touch = (source: string): void => { touched.add(source); };
 /** Each source's change count, from the updater; null outside a build. */
 let gens: Record<string, number> | null = null;
 const memo = new Map<string, { v: unknown; sources: string[]; at: number[] }>();
+/** The values of `later` reads, by name. */
+const slow = new Map<string, { v?: unknown; at: number[]; loading?: Promise<unknown> }>();
 const fresh = (e: { sources: string[]; at: number[] }) => e.sources.every((s, i) => (gens![s] ?? 0) === e.at[i]);
 
 /** Start a build with these change counts. `env` is the environment's fingerprint: a new one drops every kept read. */
 let lastEnv = "";
 export function openPass(counts: Record<string, number>, env: string): void {
-  if (env !== lastEnv) memo.clear();
+  if (env !== lastEnv) { memo.clear(); slow.clear(); }
   lastEnv = env;
   gens = counts;
   for (const [k, e] of memo) if (!fresh(e)) memo.delete(k);
@@ -34,4 +36,27 @@ export function once<T>(name: string, sources: string[], fn: () => T): T {
   memo.set(name, { v, sources, at: sources.map((s) => gens![s] ?? 0) });
   if (v instanceof Promise) v.catch(() => { if (memo.get(name)?.v === v) memo.delete(name); });
   return v;
+}
+
+/** Told the source `later:<name>` changed when a `later` read ends; the build Worker passes it to the updater. */
+export let onLater: (source: string) => void = () => {};
+export const setOnLater = (f: (source: string) => void): void => { onLater = f; };
+
+/**
+ * A slow read that a build must not wait for. In a build it answers the last value it has (`none` before the
+ * first), starts a read when `sources` changed since that value, and when the read ends it reports the source
+ * `later:<name>`, so the updater builds the key again with the new value. Outside a pass it waits for the read.
+ */
+export async function later<T>(name: string, sources: string[], fn: () => Promise<T>, none: T): Promise<T> {
+  sources.forEach(touch);
+  touch(`later:${name}`);
+  if (!gens) return fn();
+  const at = sources.map((s) => gens![s] ?? 0);
+  const e = slow.get(name) ?? { at: [] };
+  slow.set(name, e);
+  const current = e.at.length === at.length && e.at.every((n, i) => n === at[i]);
+  if (!current && !e.loading) {
+    e.loading = fn().then((v) => { e.v = v; e.at = at; }, () => { e.at = at; }).finally(() => { e.loading = undefined; onLater(`later:${name}`); });
+  }
+  return "v" in e ? (e.v as T) : none;
 }

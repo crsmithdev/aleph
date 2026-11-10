@@ -18,7 +18,7 @@ import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../
 import { memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
-import { once } from "../../jobs/lib/infra/sources.ts";
+import { later, once } from "../../jobs/lib/infra/sources.ts";
 import { memoryIn } from "./scope.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
@@ -71,7 +71,7 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
 /** `vault misses --days 7`'s JSON, or null when it fails (no Langfuse keys, offline). It runs in a subprocess that reads
  * Langfuse for about 45 s, so it declares the source `usage`: one run serves every build until the 10 min usage poll,
  * and the 30 s Langfuse poll does not hold the build Worker with it. */
-const misses = (): Promise<unknown | null> => once("memory:misses", ["usage"], runMisses);
+const misses = (): Promise<unknown | null> => later("memory:misses", ["usage"], runMisses, null);
 /** The vault's notes, read once until a file in the vault changes or the UI writes: a page that wrote reads its write
  * even when the watcher's event comes after its request. */
 const vaultNotes = (root: string): Promise<Note[]> => once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root));
@@ -145,7 +145,7 @@ async function overview(url: URL): Promise<Response> {
 const allNotes = async (root: string) => (existsSync(join(root, "Home.md")) ? await vaultNotes(root) : []);
 
 /** Every memory item of every type, built once until one of its sources changes. */
-const ITEM_SOURCES = ["vault", "handoffs", "episodes", "usage", "store", "registry", "factory", "action"];
+const ITEM_SOURCES = ["vault", "handoffs", "episodes", "usage", "later:memory:misses", "later:memory:calls", "later:memory:sessions", "store", "registry", "factory", "action"];
 async function memoryItems(root: string) {
   return once(`memory:items:${root}`, ITEM_SOURCES, async () => {
     const wiki = wikiNotes(await allNotes(root));

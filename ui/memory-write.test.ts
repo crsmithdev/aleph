@@ -130,9 +130,11 @@ test("a vault write outside the UI: the watcher sees it, and change names the me
   const title = "Fresh From The CLI", key = noteAt(title);
   await at("/api/memory");
   expect((await at(key)).status).toBe(404);
-  const heard = new Promise<string[]>((ok) => updater.onChange((keys) => { if (keys.includes(key)) ok(keys); }));
+  // Each key is signalled when its own build ends: wait until both have been.
+  const seen = new Set<string>();
+  const heard = new Promise<void>((ok) => updater.onChange((keys) => { keys.forEach((k) => seen.add(k)); if (seen.has(key) && seen.has("/api/memory")) ok(); }));
   write(title, body("The watcher sees a note the CLI writes"));
-  expect(await heard).toContain("/api/memory");
+  await heard;
   expect(((await (await at(key)).json()) as any).title).toBe(title);
 });
 

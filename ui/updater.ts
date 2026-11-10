@@ -25,7 +25,7 @@ import { recordsDir } from "../jobs/lib/records/record.ts";
 import { handoffsDir, reposFile, vaultDir } from "../jobs/lib/infra/settings.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
 import { fetchStore } from "../issues/lib/store.ts";
-import { build as workerBuild, type Answer, type Built } from "./build.ts";
+import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
 
 export const SETTLE_MS = 500, KEEP_MS = 10 * 60_000, DROP_MS = 60 * 60_000;
 export const POLL_MS = 30_000, SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 60_000;
@@ -115,11 +115,14 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
 
   const signal = (keys: string[]) => { if (keys.length) for (const f of listeners) f(keys); };
 
-  /** Build `keys` again, then signal the ones whose answer or mark changed. */
+  /** Build `keys` again, and signal each one whose answer or mark changed as soon as its own build ends:
+   * a fast key does not wait for a slow one. */
   async function refresh(keys: string[]): Promise<void> {
-    const before = new Map(keys.map((k) => [k, sig(slots.get(k)!)]));
-    await Promise.all(keys.map((k) => run(k, slots.get(k)!)));
-    signal(keys.filter((k) => slots.has(k) && sig(slots.get(k)!) !== before.get(k)));
+    await Promise.all(keys.map(async (k) => {
+      const before = sig(slots.get(k)!);
+      await run(k, slots.get(k)!);
+      if (slots.has(k) && sig(slots.get(k)!) !== before) signal([k]);
+    }));
   }
 
   /** `source` changed: an idle key that read it waits for a build at its next request. */
@@ -210,6 +213,7 @@ export type Updater = ReturnType<typeof createUpdater>;
 
 /** The UI server's updater: the build Worker, `<aleph>/ui/keys.json` and the work store's origin. */
 export const updater = createUpdater({ build: workerBuild, file: () => join(dirname(layout().factory), "ui", "keys.json"), fetch: () => fetchStore() });
+onLater((source) => updater.changed(source));
 
 /** The answer of the keyed route at `url`, with `x-aleph-keys` and, on an object body, the mark of a failed build. */
 export async function respond(url: URL): Promise<Response> {

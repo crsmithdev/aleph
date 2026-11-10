@@ -7,7 +7,7 @@
  */
 import { join } from "node:path";
 import { skipFetches } from "../issues/lib/store.ts";
-import { closePass, openPass, touched } from "../jobs/lib/infra/sources.ts";
+import { closePass, openPass, setOnLater, touched } from "../jobs/lib/infra/sources.ts";
 import { stateSlowMs } from "../jobs/lib/infra/settings.ts";
 import { loadRoutes, match } from "./server.ts";
 
@@ -16,9 +16,11 @@ declare const self: Worker;
 /** A route's answer: its status and its body, parsed when it is JSON. */
 export interface Answer { status: number; body: unknown; text?: boolean }
 export interface BuildRequest { id: number; env: Record<string, string | undefined>; clock: number; key: string; gens: Record<string, number> }
-export type BuildReply = { id: number; answer: Answer; sources: string[] } | { id: number; error: string; sources: string[] };
+export type BuildReply = { id: number; answer: Answer; sources: string[] } | { id: number; error: string; sources: string[] } | { changed: string };
 
 skipFetches();
+// A slow read that ended after its build answered: the updater builds the keys that read it again.
+setOnLater((source) => self.postMessage({ changed: source } satisfies BuildReply));
 const routes = loadRoutes(join(import.meta.dir, "api"));
 let queue: Promise<void> = Promise.resolve();
 

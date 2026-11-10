@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { updater } from "./updater.ts";
+import { onLater } from "./build.ts";
 import { memoryTypes } from "./memory-types.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
@@ -24,6 +25,15 @@ let base: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const at = (p: string) => fetch(`http://127.0.0.1:${server.port}${p}`);
 /** Build the kept keys that read `source` again, as the watcher would after a write. */
 const fresh = async (source = "vault") => { updater.changed(source); await updater.flush(); };
+/** Ends when the Worker has reported each of the `later` reads `names` (a slow read ends after its build answered). */
+function ended(...names: string[]): Promise<void> {
+  const left = new Set(names.map((n) => `later:${n}`));
+  return new Promise((ok) => onLater((source) => {
+    updater.changed(source);
+    left.delete(source);
+    if (!left.size) { onLater((src) => updater.changed(src)); ok(); }
+  }));
+}
 const today = new Date(NOW).toISOString().slice(0, 10);
 
 /** The registry: a project filter names a key in it, or it matches nothing. */
@@ -119,8 +129,13 @@ test("one vault misses run serves the overview and every search until the usage 
   updater.reset();
   const runs = () => readFileSync(log, "utf8").trim().split("\n").length;
   try {
+    // The first answer does not wait for the slow read; the next build after it ends has the misses.
+    const read = ended("memory:misses");
     const a: any = await (await at("/api/memory")).json();
-    expect(a.misses).toEqual({ days: 7, recalls: 3 });
+    expect(a.misses).toBeUndefined();
+    await read;
+    await updater.flush();
+    expect(((await (await at("/api/memory")).json()) as any).misses).toEqual({ days: 7, recalls: 3 });
     await at("/api/memory/search?q=bun");
     await at("/api/memory/search?q=trap");
     expect(runs()).toBe(1);
@@ -159,13 +174,18 @@ async function failing(name: string) {
 test("a failed load is kept until its source changes: no second spawn, no second Langfuse request", async () => {
   const f = await failing("bin-fail");
   try {
+    const read = ended("memory:misses", "memory:sessions", "memory:calls");
     const a = await at("/api/memory");
     expect(a.status).toBe(200);
     const body: any = await a.json();
     expect(body.misses).toBeUndefined();
     expect(body.types.episodic.sessions).toBeNull();
+    // The slow reads run after the answer: wait until each has failed.
+    await read;
+    await updater.flush();
+    expect(f.calls()).toBe(1);
+    expect(f.requests()).toBeGreaterThan(0);
     const seen = f.requests();
-    expect(seen).toBeGreaterThan(0);
     await at("/api/memory/search?q=bun");
     await fresh("vault");
     const b = await at("/api/memory");
