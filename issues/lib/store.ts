@@ -13,7 +13,7 @@
  * `fm.labels` or name a task's path.
  */
 import * as record from "../../jobs/lib/records/record.ts";
-import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
+import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
 import { layout, logEvent } from "../../lib/layout.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
@@ -48,14 +48,13 @@ function fetch(dir: string): void {
   if (fetches) fetchNow(dir);
 }
 
-/**
- * Fetch origin/main without blocking: the error text, or null. An explicit, non-forced refspec: a write may move
- * origin/main while this runs, and the clone's forced `origin` refspec would then set it back to the remote's older value.
- */
+/** An explicit, non-forced refspec: a write may move origin/main while a fetch runs, and the clone's forced `origin` refspec would then set it back to the remote's older value. */
+const REFSPEC = `refs/heads/${MAIN}:refs/remotes/origin/${MAIN}`;
+
+/** Fetch origin/main without blocking: the error text, or null. */
 export async function fetchStore(dir = storeDir()): Promise<string | null> {
-  const p = Bun.spawn(["git", "fetch", "-q", "origin", `refs/heads/${MAIN}:refs/remotes/origin/${MAIN}`], { cwd: dir, env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
-  const err = await new Response(p.stderr).text();
-  return (await p.exited) === 0 ? null : err.trim() || `git fetch exited ${p.exitCode}`;
+  const r = await fetchOriginAsync(dir, REFSPEC);
+  return r.ok ? null : r.out;
 }
 
 /**
@@ -63,7 +62,7 @@ export async function fetchStore(dir = storeDir()): Promise<string | null> {
  * reads the store, so two fetches at once race on the ref's lock: fetchOrigin retries that.
  */
 function fetchNow(dir: string): void {
-  const r = fetchOrigin(dir, MAIN);
+  const r = fetchOrigin(dir, REFSPEC);
   if (!r.ok) throw new Error(`work store fetch failed: ${r.out}`);
 }
 

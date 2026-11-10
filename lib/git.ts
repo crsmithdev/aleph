@@ -53,17 +53,38 @@ export function gitWith(o: { env?: Record<string, string>; stdin?: string | Uint
   }
 }
 
-/** The pause between two tries of a step that met a held git lock. A test replaces it to free the lock. */
-export const lockRetry = { pause: (): void => Bun.sleepSync(100 + Math.random() * 200) };
+/** The pause between two tries of a step that met a held git lock: `sleep` waits, Bun.sleepSync unless the caller passes Bun.sleep and awaits it. A test replaces it to free the lock. */
+export const lockRetry = { pause: (sleep: (ms: number) => unknown = Bun.sleepSync): unknown => sleep(100 + Math.random() * 200) };
+
+type Run = { ok: boolean; out: string };
+
+/** The tries of a fetch: it yields the number of each try and takes its result. A try after the first waits out the ref lock that another process holds (up to 5 tries). */
+function* fetchTries(): Generator<number, Run, Run> {
+  let r = yield 0;
+  for (let i = 1; i < 5 && !r.ok && r.out.includes("cannot lock ref"); i++) r = yield i;
+  return r;
+}
 
 /** `git fetch -q origin <refs>`, tried again (up to 5 times) when another process holds the ref lock. Returns the last result. */
-export function fetchOrigin(cwd: string, ...refs: string[]): { ok: boolean; out: string } {
-  let r = git(cwd, "fetch", "-q", "origin", ...refs);
-  for (let i = 1; i < 5 && !r.ok && r.out.includes("cannot lock ref"); i++) {
-    lockRetry.pause();
-    r = git(cwd, "fetch", "-q", "origin", ...refs);
+export function fetchOrigin(cwd: string, ...refs: string[]): Run {
+  const tries = fetchTries();
+  for (let t = tries.next(); ; ) {
+    if (t.done) return t.value;
+    if (t.value) lockRetry.pause();
+    t = tries.next(git(cwd, "fetch", "-q", "origin", ...refs));
   }
-  return r;
+}
+
+/** fetchOrigin that does not block: each try is an async spawn and each pause an async sleep. */
+export async function fetchOriginAsync(cwd: string, ...refs: string[]): Promise<Run> {
+  const tries = fetchTries();
+  for (let t = tries.next(); ; ) {
+    if (t.done) return t.value;
+    if (t.value) await lockRetry.pause(Bun.sleep);
+    const p = Bun.spawn(["git", "fetch", "-q", "origin", ...refs], { cwd, env: baseEnv(), stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+    const [err, code] = await Promise.all([new Response(p.stderr).text(), p.exited]);
+    t = tries.next({ ok: code === 0, out: code === 0 ? "" : err.trimEnd() || `git fetch exited ${code}` });
+  }
 }
 
 /** `tree` with each path in `files` set to its content, or removed when it is null. */

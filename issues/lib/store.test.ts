@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "./todo.ts";
@@ -9,6 +9,7 @@ import * as verbs from "./issues.ts";
 import { askChris, askOf, setAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
 import { readEvents } from "../../lib/layout.ts";
+import { lockRetry } from "../../lib/git.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -320,4 +321,52 @@ describe("a part's source", () => {
     expect(store.sourceOf(old)).toBe("agent");
     expect(store.sourceOf(a)).toBe("chris");
   });
+});
+
+describe("the fetch of origin/main", () => {
+  const origin = () => join(base, "items.git");
+  const clone = () => join(base, "items");
+  const tip = (dir: string, rev: string) => sh(dir, "git", "rev-parse", rev);
+  /** A new commit on the remote's main, made apart from the store clone. */
+  function push(msg: string): void {
+    const w = mkdtempSync(join(tmpdir(), "aleph-other-"));
+    sh(w, "git", "clone", "-q", origin(), "w");
+    sh(join(w, "w"), "git", "commit", "-q", "--allow-empty", "-m", msg);
+    sh(join(w, "w"), "git", "push", "-q", "origin", "HEAD:main");
+    rmSync(w, { recursive: true, force: true });
+  }
+  const narrow = () => sh(clone(), "git", "config", "remote.origin.fetch", "+refs/heads/none:refs/remotes/origin/none");
+  const widen = () => sh(clone(), "git", "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+  const saved = lockRetry.pause;
+  beforeAll(() => store.skipFetches(false));
+  afterEach(() => { lockRetry.pause = saved; widen(); });
+
+  test("a clone whose fetch refspec misses main still gets origin/main on a read, a write and fetchStore", async () => {
+    narrow();
+    push("one");
+    store.readList({ key: "fa" });
+    expect(tip(clone(), "origin/main")).toBe(tip(origin(), "main"));
+    push("two");
+    const two = tip(origin(), "main");
+    store.writeList({ key: "fa" }, "w", () => true, true);
+    expect(tip(clone(), "origin/main")).toBe(two);
+    push("three");
+    expect(await store.fetchStore()).toBeNull();
+    expect(tip(clone(), "origin/main")).toBe(tip(origin(), "main"));
+  });
+
+  for (const via of ["fetchStore", "readList"]) {
+    test(`${via} waits out a ref lock that goes away`, async () => {
+      narrow();
+      push(via);
+      const lock = join(clone(), ".git/refs/remotes/origin/main.lock");
+      writeFileSync(lock, "");
+      let pauses = 0;
+      lockRetry.pause = () => { pauses++; rmSync(lock); };
+      if (via === "fetchStore") expect(await store.fetchStore()).toBeNull();
+      else store.readList({ key: "fa" });
+      expect(pauses).toBe(1);
+      expect(tip(clone(), "origin/main")).toBe(tip(origin(), "main"));
+    });
+  }
 });
