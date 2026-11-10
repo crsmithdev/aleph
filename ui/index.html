@@ -124,7 +124,11 @@
     if (out !== wasOut) { wasOut = out; v.outOfDate($("view"), out); }
   }
 
+  // Each load takes a number; an answer that finds a newer number is dropped, so an old load never draws over a new one.
+  // `drawn` is the last mount: the next draw waits for it.
+  let seq = 0, drawn = Promise.resolve(), pending = false;
   async function load(route, first) {
+    const mine = ++seq;
     const { view, params, query } = route;
     let data = null;
     if (view.api) {
@@ -136,7 +140,7 @@
         $("offline").hidden = true;
         if (route === shown) { goodAt = Date.now(); failed = false; }
       } catch (e) {
-        if (route !== shown) return;
+        if (route !== shown || mine !== seq) return;
         failed = true;
         checkOut();
         if (first) $("view").innerHTML = `<div class="page">${error(`Could not load ${view.title}: ${e.message}`)}</div>`;
@@ -144,7 +148,8 @@
         return;
       }
     }
-    if (route !== shown) return;  // the reader moved on while this loaded
+    await drawn;
+    if (route !== shown || mine !== seq) return;  // the reader moved on, or a newer load started, while this loaded
     // The reader armed a button while this loaded: the caller's check came too early, and the next refresh catches up.
     if (!first && $("view").querySelector("button.act.ask")) return;
     // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
@@ -157,8 +162,8 @@
     // has no kept state, and shows its own default.
     restoreFolds($("view"));
     // `mount` runs after render, for what needs a DOM (the charts); a view without one is left alone.
-    try { mountView(view, $("view"), data, query); }
-    catch (e) { console.error(view.title, "mount failed", e); }
+    drawn = (async () => { try { await mountView(view, $("view"), data, query); } catch (e) { console.error(view.title, "mount failed", e); } })();
+    await drawn;
     // A good response clears the alert.
     wasOut = false;
     if (view.outOfDate) view.outOfDate($("view"), false);
@@ -169,11 +174,15 @@
   let reloading = false, again = false;
   async function reload() {
     if (reloading) { again = true; return; }
-    if (!shown?.view?.live || document.activeElement?.matches("input, textarea, select") || $("view").querySelector("button.act.ask")) return;
+    if (!shown?.view?.live || $("view").querySelector("button.act.ask")) return;
+    if (document.activeElement?.matches("input, textarea, select")) { pending = true; return; }  // the blur reloads
     reloading = true;
     try { await load(shown, false); } finally { reloading = false; }
     if (again) { again = false; reload(); }
   }
+
+  // Focus moves after `focusout`, so look once it has settled.
+  document.addEventListener("focusout", () => setTimeout(() => { if (pending && !document.activeElement?.matches("input, textarea, select")) { pending = false; reload(); } }));
 
   // The stream is open only for a live view in a visible tab: a browser allows few connections to one host.
   // The server pings every 25 s; a stream with no message for 60 s, or one the browser gave up on (a 502 from the

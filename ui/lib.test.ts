@@ -21,6 +21,13 @@ test("mountView calls mount only when the view has one", () => {
   expect(mountView({}, "root", 1)).toBe(false);
 });
 
+test("mountView hands an async mount to the caller, and a failed mount rejects", async () => {
+  const done = mountView({ mount: async () => {} }, "root", 1);
+  expect(done).toBeInstanceOf(Promise);
+  expect(await done).toBe(true);
+  await expect(mountView({ mount: async () => { throw new Error("no chart"); } }, "root", 1)).rejects.toThrow("no chart");
+});
+
 test("chart on() attaches a handler that survives a re-theme", () => {
   const g = globalThis as any;
   const made: any[] = [];

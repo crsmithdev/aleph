@@ -38,10 +38,11 @@ export async function loadSpeed(window, fetcher = fetch, baseline = false, proje
     if (!res.ok) throw new Error(`Could not load speed (${res.status}).`);
     // With `baseline=1` the answer carries the window's trend baseline (`d.baseline`): one request per window.
     const { others, ...d } = await res.json();
+    if (project !== loadedFor) return got.get(window); // the project changed while this loaded
     got.set(window, d);
     // The day and month answers come in the same answer (the Efficiency page reads them): one request fills all three.
     for (const [k, v] of Object.entries(others ?? {})) if (k !== window) got.set(k, v);
-  } catch (e) { if (!usable(window)) got.set(window, { error: e.message }); }
+  } catch (e) { if (project === loadedFor && !usable(window)) got.set(window, { error: e.message }); }
   return got.get(window);
 }
 

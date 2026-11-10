@@ -225,6 +225,59 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when(`${loads} > ${n}`);
   }, 30_000);
 
+  test("a slow first load does not draw over a newer one", async () => {
+    // Hold the fetch of the first /api/state load, let a second (the refresh timer) answer, then release the first.
+    await page.ev(`(() => {
+      const now = Date.now;
+      window.skew = 0;
+      Date.now = () => now() + window.skew;
+      window.setInterval = (f) => { window.tick = f; return 0; };
+      const rf = window.fetch;
+      let held = true;
+      window.fetch = (u, o) => {
+        if (!String(u).startsWith("/api/state") || !held) return rf(u, o);
+        held = false;
+        return new Promise((ok) => { window.release = () => ok(rf(u, o).then((r) => {
+          const j = r.json.bind(r);
+          const read = () => { window.firstRead = true; };
+          r.json = () => j().then((d) => { setTimeout(read); return d; });
+          return r;
+        })); });
+      };
+    })()`);
+    await page.go("#/issues");
+    await page.ev('location.hash = "#/"');
+    await page.when("window.release");
+    await page.ev("window.skew += 61_000; window.tick()");
+    await page.when('document.querySelector("#view .page, #view > *") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
+    await page.ev('document.querySelector("#view > *").dataset.mark = "1"');
+    await page.ev("window.release()");
+    await page.when("window.firstRead");
+    expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBe("1"); // The old answer did not redraw.
+    await page.reload(); // Takes the patched timer and fetch away.
+  }, 30_000);
+
+  test("a change that comes while an input has focus reloads the view after the input blurs", async () => {
+    const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/state")).length';
+    // Count the change events the page hears, to know the change came before the check.
+    await page.ev(`(() => {
+      const ES = window.EventSource;
+      window.heard = 0;
+      window.EventSource = class extends ES { constructor(...a) { super(...a); this.addEventListener("change", () => { window.heard++; }); } };
+    })()`);
+    await page.go("#/factory/agents");
+    await page.when('document.querySelector("#view aleph-chart")');
+    await page.ev(`(() => { const i = document.createElement("input"); i.id = "probe"; document.body.append(i); i.focus(); })()`);
+    const n = await page.ev<number>(loads);
+    writeFileSync(join(env.ALEPH_FACTORY_DIR, "nudge2.json"), "{}");
+    await page.when("window.heard > 0");
+    expect(await page.ev<number>(loads)).toBe(n); // No redraw while focus stays.
+    await page.ev('document.getElementById("probe").blur()');
+    await page.when(`${loads} > ${n}`);
+    await page.ev('document.getElementById("probe").remove()');
+    await page.reload(); // Takes the patched EventSource away.
+  }, 30_000);
+
   test("an action the server refuses shows the server's reason on the row", async () => {
     await page.go("#/");
     await page.when(`document.querySelector('#view button.act[data-act="land"], #view button.act[data-act="recheck"]')`);

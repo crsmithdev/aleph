@@ -145,11 +145,11 @@ export function md(src) {
   return out.join("\n");
 }
 
-/** Call the view's optional `mount(root, data)` after its markup is in `root`. Returns whether it ran. */
+/** Call the view's optional `mount(root, data)` after its markup is in `root`. Returns whether it ran, or a promise of that when the mount is async; a failed async mount rejects it. */
 export function mountView(view, root, data, query) {
   if (typeof view?.mount !== "function") return false;
-  view.mount(root, data, query);
-  return true;
+  const done = view.mount(root, data, query);
+  return typeof done?.then === "function" ? done.then(() => true) : true;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { loadSpeed } from "./views/speed.js";
+import { loadSpeed, speedOf } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { goQuery, parseHash, projectOf, storeWindow, windowOf, wireScope } from "./lib.js";
 // @ts-ignore plain JS shared with the page
@@ -130,4 +130,15 @@ test("a chosen project is in the address, in each request, and on the next page"
 
 test("the Automation page asks for the chosen window and project", () => {
   expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toBe("/api/gates?window=day&project=alpha");
+});
+
+test("an answer for a project that is no longer cached does not enter the cache", async () => {
+  let late: (v: unknown) => void = () => {};
+  const slow = () => new Promise((ok) => { late = ok; }).then(() => ({ ok: true, json: async () => ({ window: "week", who: "A", others: { day: { who: "A" } } }) }) as any);
+  const fast = async () => ({ ok: true, json: async () => ({ window: "week", who: "B", others: { day: { who: "B" }, month: { who: "B" } } }) }) as any;
+  const a = loadSpeed("week", slow as any, false, "A");
+  await loadSpeed("week", fast, false, "B");
+  late(0);
+  await a;
+  for (const w of ["week", "day", "month"]) expect((speedOf(w) as any).who, w).toBe("B");
 });
