@@ -225,6 +225,17 @@ function detailsKeys(root) {
   });
 }
 
+/** Each clamp button keyed by its clamped text plus its position among the clamps with the same text, so a new row above it does not move the key. */
+function clampKeys(root) {
+  const seen = new Map();
+  return [...root.querySelectorAll(".clamp-btn")].map((b) => {
+    const text = b.previousElementSibling?.textContent ?? "";
+    const n = seen.get(text) ?? 0;
+    seen.set(text, n + 1);
+    return [`${text}#${n}`, b];
+  });
+}
+
 /** Capture what the reader set in `root` (open details, shown diff panels, typed fields) before a refresh re-renders it. */
 export function recordState(root) {
   const details = {};
@@ -235,7 +246,9 @@ export function recordState(root) {
   }
   const panels = {};
   for (const p of root.querySelectorAll(PANELS)) if (!p.hidden) panels[panelKey(p)] = p.innerHTML;
-  return { details, panels };
+  const clamps = clampKeys(root);
+  const open = clamps.flatMap(([k, b]) => (b.getAttribute("aria-expanded") === "true" ? [k] : []));
+  return { details, panels, open, focus: clamps.find(([, b]) => b === globalThis.document?.activeElement)?.[0] };
 }
 
 /** Apply a `recordState` record to the freshly rendered `root`. What the new markup no longer has is ignored. */
@@ -259,6 +272,9 @@ export function restoreState(root, state) {
     p.hidden = false;
     if (!p.getAttribute?.("data-diff-for")) for (const b of root.querySelectorAll("button[data-diff]")) b.remove();
   }
+  const clamps = new Map(clampKeys(root));
+  for (const k of state.open ?? []) if (clamps.has(k)) openClamp(clamps.get(k), true);
+  clamps.get(state.focus)?.focus();
 }
 
 /** UI state that survives the Now view's refresh: job name to its open diff text, and to its last action message. */
@@ -633,6 +649,13 @@ export function pager(shown, total, step = 50, { cls = "", attr = "data-more", v
 /** A `dataTable` that shows `step` rows and a pager; the "Show more" button reveals the rest in place. `rows` is an array of `<tr>` strings. */
 export const pagedTable = (head, rows, step = 50) =>
   `<div class="paged">${dataTable(head, rows.map((r, i) => (i < step ? r : r.replace("<tr", "<tr hidden"))).join(""))}${pager(step, rows.length, step)}</div>`;
+/** Open or close the clamped text before the button `b`, and set the button to match. */
+function openClamp(b, open) {
+  b.previousElementSibling.classList.toggle("clamp", !open);
+  b.setAttribute("aria-expanded", String(open));
+  b.textContent = open ? "Show less" : "Show more";
+}
+
 if (typeof document !== "undefined") {
   document.addEventListener("click", (e) => {
     const b = e.target.closest?.(".paged button[data-more]");
@@ -668,9 +691,7 @@ if (typeof document !== "undefined") {
   document.addEventListener("click", (e) => {
     const b = e.target.closest?.(".clamp-btn");
     if (!b) return;
-    const open = b.previousElementSibling.classList.toggle("clamp") === false;
-    b.setAttribute("aria-expanded", String(open));
-    b.textContent = open ? "Show less" : "Show more";
+    openClamp(b, b.getAttribute("aria-expanded") !== "true");
   });
 }
 

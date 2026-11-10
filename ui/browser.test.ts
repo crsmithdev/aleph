@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
 
@@ -125,6 +125,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       expect(await state()).toEqual(["true", false]);
       await pg.key("Enter");
       expect(await state()).toEqual(["false", true]);
+    } finally { own.stop(); }
+  }, 60_000);
+
+  test("Automation: a redraw keeps focus on an open clamp button and keeps its text open, with a new row above it", async () => {
+    let dir = "", at = 0;
+    const own = await startRig((env) => { dir = env.ALEPH_FACTORY_DIR; mkdirSync(dir, { recursive: true }); at = statSync(dir).mtimeMs; writeFileSync(join(dir, "tick.log"), `${new Date(at).toISOString()} director: aleph-1: why: decided: ${"word ".repeat(60)}\n`); });
+    try {
+      const pg = await own.open("#/automation");
+      const btn = "#gates-log .clamp-btn";
+      await pg.when(`document.querySelector("${btn}")`);
+      await pg.ev(`(() => { const b = document.querySelector("${btn}"); b.focus(); b.click(); b.old = true; })()`);
+      // A newer row with its own note lands above the open one; the redraw must keep the same button, not the first one.
+      const day = join(dir, "events", `${new Date(at).toISOString().slice(0, 10)}.jsonl`), ev = JSON.parse(readFileSync(day, "utf8").trim());
+      appendFileSync(day, `${JSON.stringify(ev).replaceAll("word ", "other ").replace(ev.at, new Date(Date.parse(ev.at) + 1000).toISOString())}\n`);
+      await pg.ev('document.dispatchEvent(new Event("visibilitychange"))');
+      await pg.when(`document.querySelectorAll("${btn}").length === 2 && !document.querySelector("${btn}").old`);
+      expect(await pg.ev<unknown[]>(`(() => { const b = document.activeElement; return [b.matches("${btn}"), b.previousElementSibling.textContent.startsWith("word"), b.getAttribute("aria-expanded"), b.previousElementSibling.classList.contains("clamp"), b.textContent]; })()`)).toEqual([true, true, "true", false, "Show less"]);
     } finally { own.stop(); }
   }, 60_000);
 
