@@ -1,0 +1,39 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { withEnv, withServer } from "./test-server.ts";
+import { add, load } from "../lib/annotations.ts";
+
+let base: string, at: Awaited<ReturnType<typeof withServer>>["at"], stop: () => void, restoreEnv: () => void;
+
+beforeAll(async () => {
+  base = mkdtempSync(join(tmpdir(), "aleph-ui-annotations-"));
+  restoreEnv = withEnv({ ALEPH_ANNOTATIONS: join(base, "notes", "annotations.json"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "issues") });
+  ({ at, stop } = await withServer({ warm: false }));
+});
+
+afterAll(() => { stop(); restoreEnv(); rmSync(base, { recursive: true, force: true }); });
+
+const post = (path: string, body: unknown) => at(`/api/annotations${path}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
+
+test("a put writes the note to the file, GET lists it and a drop removes it", async () => {
+  const note = { id: "n1", url: "/", selector: "h1", text: "", html: "", note: "hi", at: "2026-11-10T00:00:00Z" };
+  expect((await post("", note)).status).toBe(200);
+  expect(load().map((n) => n.id)).toEqual(["n1"]);
+  expect(((await (await at("/api/annotations")).json()) as { note: string }[]).map((n) => n.note)).toEqual(["hi"]);
+  expect((await post("/n1/drop", {})).status).toBe(200);
+  expect(load()).toEqual([]);
+  expect(await (await at("/api/annotations")).json()).toEqual([]);
+});
+
+test("a direct write to the file sends a change naming /api/annotations", async () => {
+  const ctl = new AbortController();
+  const reader = (await at("/api/events", { signal: ctl.signal })).body!.getReader();
+  expect(new TextDecoder().decode((await reader.read()).value)).toMatch(/^event: ping/);
+  add("user", { url: "/", note: "direct" });
+  let text = "";
+  while (!/event: change\ndata: .*\n\n/.test(text)) text += new TextDecoder().decode((await reader.read()).value);
+  ctl.abort();
+  expect(JSON.parse(text.match(/event: change\ndata: (.*)\n/)![1]).keys).toContain("/api/annotations");
+});

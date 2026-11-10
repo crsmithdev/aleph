@@ -25,6 +25,7 @@ import { expand } from "../jobs/lib/records/ledger.ts";
 import { recordsDir } from "../jobs/lib/records/record.ts";
 import { handoffsDir, reposFile, skillsDir, vaultDir } from "../jobs/lib/infra/settings.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
+import { file as annotationsFile } from "../lib/annotations.ts";
 import { fetchStore } from "../issues/lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
 
@@ -164,6 +165,8 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
      * next request waits for its build: the page that acted reads the result of its own action. */
     changed(source: string): void {
       stale(source);
+      // The notes are not a kept key: the page reads them from a plain route and needs only the signal.
+      if (source === "annotations") signal(["/api/annotations"]);
       // A key mid-build is marked too: stale() makes its build run once more, and the request waits for that run.
       if (source === "action") for (const s of slots.values()) mark(s);
       pending.add(source);
@@ -281,6 +284,8 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
   }, "events");
   follow(vaultDir(), countsInVault, "vault", true);
   follow(handoffsDir(), (f) => f.endsWith(".md"), "handoffs", true);
+  mkdirSync(dirname(annotationsFile()), { recursive: true });
+  follow(dirname(annotationsFile()), (f) => f === basename(annotationsFile()), "annotations");
   follow(episodesDir(), (f) => f.endsWith(".md"), "episodes");
   const every = (ms: number, f: () => unknown) => { const t = setInterval(f, ms); t.unref?.(); stops.push(() => clearInterval(t)); };
   every(POLL_MS, () => updater.poll());

@@ -74,7 +74,18 @@
       role("chart", "Charts", [...SANS, ...MONO], "", "system-ui, sans-serif", ["size", "weight"]),
     ],
   });
-  annotate();
+  const api = (path, init) => fetch(`/api/annotations${path}`, init);
+  const post = (path, body) => api(path, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
+  annotate({ store: {
+    load: async () => (await api("")).json(),
+    put: (note) => post("", note),
+    drop: (id) => post(`/${id}/drop`, {}),
+    watch: (fn) => {
+      const es = new EventSource("/api/events");
+      es.addEventListener("change", async (e) => { if (JSON.parse(e.data).keys.includes("/api/annotations")) fn(await (await api("")).json()); });
+      return () => es.close();
+    },
+  } });
 </script>
 </body>
 </html>

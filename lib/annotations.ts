@@ -13,7 +13,7 @@ export type Note = {
   status: "open" | "resolved"; by: string; replies: Reply[];
 };
 
-const file = () => process.env.ALEPH_ANNOTATIONS ?? join(homedir(), ".aleph", "annotations.json");
+export const file = () => process.env.ALEPH_ANNOTATIONS ?? join(homedir(), ".aleph", "annotations.json");
 
 /** Every note; a v1 note reads as open, written by "user", with no replies. */
 export function load(): Note[] {
@@ -34,6 +34,13 @@ export function add(by: string, n: Pick<Note, "url" | "note"> & { selector?: str
   const made: Note = { id: crypto.randomUUID().slice(0, 8), url: n.url, selector: n.selector ?? "", text: n.text ?? "", html: n.html ?? "", note: n.note, at: new Date().toISOString(), status: "open", by, replies: [] };
   save([...load(), made]);
   return made;
+}
+
+/** Add a note, or replace the one with its id: what the page's store puts. */
+export function put(n: Note): Note {
+  const all = load();
+  save(all.some((x) => x.id === n.id) ? all.map((x) => (x.id === n.id ? n : x)) : [...all, n]);
+  return n;
 }
 
 export function reply(id: string, by: string, note: string): Note {

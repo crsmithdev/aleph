@@ -61,6 +61,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     "wk?": "any", base: "string", id: "string", "label?": "string", n: "number", total: "number", traceId: "string", project: "string", start: "time",
     prompt: "string", output: "string", cost: "number", seconds: "number?", observations: "array",
   },
+  "/api/annotations": "array",
   "/api/skills/:name": { name: "string", days: "number", since: "string", asOf: "time", "failed?": "string", uses: "number", perDay: "array", projects: "array", sessions: "array", tools: "array", errors: "array" },
   "/api/specs/:project/:file": { project: "string", file: "string", date: "string", title: "string", body: "string" },
   "/api/memory": {
