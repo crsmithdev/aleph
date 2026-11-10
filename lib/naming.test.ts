@@ -118,3 +118,22 @@ test("the name table gives one display name for each step and role", () => {
   expect([n.NAMES.build, n.NAMES["spec-check"], n.NAMES.planner]).toEqual(["Build", "Spec Check", "Planner"]);
   for (const k of Object.keys(n.NAMES)) expect(k).toMatch(/^[a-z][a-z-]*$/);
 });
+
+test("no file outside lib/naming.ts reads an issue ID with its own regex", () => {
+  // The fixed list of non-ID uses of `-\d+`, `-(\d+` or `-(?:\d+`: file and the text on the line.
+  const OK: [string, string][] = [
+    ["hooks/lib/docclaims.ts", ":\\d+(?:-\\d+)?"], ["hooks/lib/docclaims.ts", "(\\d+)(?:-\\d+)?"], ["hooks/lib/scan.ts", "@@ -\\d+"],
+    ["jobs/lib/gates/doc-claims.ts", "(?::\\d+(?:-\\d+)?)?"], ["jobs/lib/gates/doc-claims.ts", ":(\\d+)(?:-(\\d+))?"], ["ui/decision.js", ":\\d+(?:-\\d+)?"], ["ui/decision.js", "lines? \\d+(?:-\\d+)?"],
+    ["ui/lib.js", "(-\\d+)+(\\[.*\\])?$"], ["jobs/cli.helpers.ts", "-fac-${id}-\\\\d+$"],
+  ];
+  const root = join(import.meta.dir, "..");
+  const files = (d: string): string[] => readdirSync(d).flatMap((f) => {
+    const p = join(d, f);
+    return f === "node_modules" || f === "vendor" || f.startsWith(".") ? [] : statSync(p).isDirectory() ? files(p) : /\.(ts|js)$/.test(f) && !f.includes(".test.") ? [p] : [];
+  });
+  const hits = ["jobs", "issues", "ui", "hooks"].flatMap((d) => files(join(root, d))).flatMap((p) => {
+    const rel = p.slice(root.length + 1);
+    return readFileSync(p, "utf8").split("\n").filter((l) => /-\(?(?:\?:)?\\{1,2}d\+/.test(l) && !OK.some(([f, t]) => f === rel && l.includes(t))).map((l) => `${rel}: ${l.trim()}`);
+  });
+  expect(hits).toEqual([]);
+});

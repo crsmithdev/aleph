@@ -61,6 +61,11 @@ test("normalizeAsk takes after, 2 to 4 options and a recommended label that is o
   expect(normalizeAsk(raw, { kind: "approval", reason: "review" })).toMatchObject({ kind: "approval", reason: "review" });
 });
 
+test("normalizeAsk drops an after that is not an issue ID", () => {
+  const raw = { question: "Q?", options: [{ label: "A", line: "a", after: "My_Repo-3" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };
+  expect(normalizeAsk(raw)!.options[0]).toEqual({ label: "A", line: "a" });
+});
+
 test("reasonOf keeps a known reason and reads any other as a question", () => {
   expect(reasonOf("run-cap")).toBe("run-cap");
   expect(reasonOf("nope")).toBe("question");

@@ -52,6 +52,18 @@ describe("milestone 2", () => {
     expect((await aleph(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
   }, 30_000);
 
+  test("aleph status reads a short ID like the full one", async () => {
+    const id = (await issueAdd("fac", "read by its short ID")).json.added;
+    const repos = readFileSync(join(base, "repos.json"), "utf8");
+    writeFileSync(join(base, "repos.json"), JSON.stringify({ ...JSON.parse(repos), fac: { ...JSON.parse(repos).fac, code: "f" } }));
+    try {
+      const full = await aleph(["status", `fac-${id}`, "--json"]), short = await aleph(["status", `f${id}`, "--json"]);
+      expect(short.code).toBe(0);
+      expect(short.json.stage).toBe(full.json.stage);
+      expect(short.json.id).toBe(`fac-${id}`);
+    } finally { writeFileSync(join(base, "repos.json"), repos); await issueClose("fac", id, "done"); }
+  }, 30_000);
+
   test("aleph status inside a factory worker says what it says outside", async () => {
     const done = (await issueAdd("fac", "landed one")).json.added;
     pushFromOther(`landed\n\nIssue: fac-${done}`, "landed-one.txt");

@@ -4,6 +4,7 @@
  */
 import { readFetched, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
+import { parseId, tail } from "../../../lib/naming.ts";
 import { fetchOrigin, git, jobCommit } from "../infra/git.ts";
 import { allRuns, trailerOf, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
@@ -80,10 +81,10 @@ export function landedIndex(cwd: string, main: string, key: string, since: (n: s
   const hits: [string, string][] = [];
   for (const [h, issue] of rows) {
     for (const s of new Set(values(issue))) {
-      const m = s.startsWith(`${key}-`) ? /^\d+(?:\.\d+)?$/.exec(s.slice(key.length + 1)) : null;
-      if (!m) continue;
-      const at = since(m[0]), from = at === undefined ? undefined : place.get(at);
-      if (from === undefined || place.get(h)! < from) hits.push([h, m[0]]);
+      const p = parseId(s), part = p?.repo === key ? tail(p) : undefined;
+      if (part === undefined) continue;
+      const at = since(part), from = at === undefined ? undefined : place.get(at);
+      if (from === undefined || place.get(h)! < from) hits.push([h, part]);
     }
   }
   if (!hits.length) return out;
@@ -133,7 +134,7 @@ export function onMain(repo: { path: string; key: string; main: string } | undef
 
 /** The items of `ns` that the facts hold, with the stage() context for them: one `landedIndex` for all. */
 export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<string, string[]> = landedIndex(cwd, main, f.repo, (n) => f.items[n]?.since)): Stage[] {
-  const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+(\.\d+)?$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
+  const num = (ref: string) => { const p = parseId(ref); return p?.repo === f.repo ? tail(p) : undefined; };
   const ctx: Ctx = {
     landed, reverted: revertedIn(landed), sandbox: f.sandbox,
     item: (ref) => f.items[num(ref) ?? ""],

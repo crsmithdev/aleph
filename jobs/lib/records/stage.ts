@@ -13,7 +13,7 @@ import { isOpen } from "./job.ts";
 import { counting, jobIdOf } from "./record.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { contentText } from "../../../lib/naming.ts";
+import { contentText, parseId, tail } from "../../../lib/naming.ts";
 
 /** The stages of docs/naming.md. */
 export type StageName = "new" | "queued" | "held" | "working" | "waiting" | "failed" | "landing" | "done" | "dropped" | "parked";
@@ -80,7 +80,7 @@ export function runViewOf(job: Job): RunView {
 }
 
 /** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */
-const partOf = (ref: string): string | undefined => /-(\d+(?:\.\d+)?)$/.exec(ref)?.[1];
+const partOf = (ref: string): string | undefined => { const p = parseId(ref); return p ? tail(p) : undefined; };
 const SORTING: Run["kind"][] = ["intake"];
 
 /** The item is done: the store says so, or a not-reverted trailer commit on main names it. Returns the reason. */

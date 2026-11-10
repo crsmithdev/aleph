@@ -8,7 +8,7 @@
  * parent comes from its id.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
-import { parseId, shortText } from "../../lib/naming.ts";
+import { FULL, parseId, shortText } from "../../lib/naming.ts";
 import { nowOverride } from "../../jobs/lib/infra/settings.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
@@ -71,9 +71,6 @@ const isoOf = (v: unknown): string | undefined => {
 /** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
 export const clock = (): Date => (nowOverride() ? new Date(nowOverride()!) : new Date());
 
-/** A ref in `after`: `<repo>-<n>` or `<repo>-<n>.<k>`. */
-const ITEM_REF = /^[^\s,]+-\d+(\.\d+)?$/;
-
 /** `<repo>-<n>` split into its parts, or null. */
 export function parseRef(s: string): { repo: string; id: number } | null {
   const p = parseId(s);
@@ -82,8 +79,8 @@ export function parseRef(s: string): { repo: string; id: number } | null {
 
 /** `<repo>-<n>` or a part's `<repo>-<n>.<m>` split into its parts: the id is a number for the first, `"n.m"` for the second. Null for neither. */
 export function parseIssueRef(s: string): { repo: string; id: number | string } | null {
-  const m = /^(.+)-(\d+(?:\.\d+)?)$/.exec(s);
-  return m ? { repo: m[1], id: m[2].includes(".") ? m[2] : Number(m[2]) } : null;
+  const p = parseId(s);
+  return p ? { repo: p.repo, id: p.sub === undefined ? p.n : `${p.n}.${p.sub}` } : null;
 }
 
 /** `open`, or how the issue was closed. */
@@ -139,9 +136,9 @@ export function renderItem(repo: string, item: Issue): string {
 export function parseItem(text: string): Issue {
   const { frontmatter, body: rest } = splitFrontmatter(text);
   const { title, id: full, ...fields } = parseFrontmatter(frontmatter ?? "");
-  const m = /-(\d+)(?:\.(\d+))?$/.exec(String(full));
-  const id = Number(m?.[1]);
-  const sub = m?.[2] === undefined ? undefined : Number(m[2]);
+  const p = parseId(full);
+  const id = Number(p?.n);
+  const sub = p?.sub;
   const parts: Record<string, string[]> = { request: [], spec: [], notes: [] };
   let at: string[] | null = null;
   for (const line of rest.split("\n")) {
@@ -297,9 +294,9 @@ export function lint(doc: Doc): Finding[] {
     const after = item.fm.after;
     if (after !== undefined) {
       const refs = Array.isArray(after) ? after : [after];
-      if (refs.some((r) => !ITEM_REF.test(String(r)))) findings.push({ id: refOf(item), problem: `after: ${refs.join(", ")} is not <repo>-<n>[.<k>]`, fixable: false });
+      if (refs.some((r) => !FULL.test(String(r)))) findings.push({ id: refOf(item), problem: `after: ${refs.join(", ")} is not <repo>-<n>[.<k>]`, fixable: false });
     }
-    if (item.fm.from !== undefined && !/^.+-\d+$/.test(String(item.fm.from))) findings.push({ id: refOf(item), problem: `from: ${item.fm.from} is not <repo>-<n>`, fixable: false });
+    if (item.fm.from !== undefined && (!parseId(item.fm.from) || parseId(item.fm.from)!.sub !== undefined)) findings.push({ id: refOf(item), problem: `from: ${item.fm.from} is not <repo>-<n>`, fixable: false });
     const source = item.fm.source;
     if (source !== undefined && !(SOURCES as readonly string[]).includes(source as string)) findings.push({ id: refOf(item), problem: `source "${source}" is not one of ${SOURCES.join(", ")}`, fixable: false });
     for (const key of RETIRED) if (item.fm[key] !== undefined) findings.push({ id: refOf(item), problem: `${key} is retired`, fixable: false });

@@ -365,7 +365,7 @@ export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb
 /** The text with each full issue ID as its short ID. `repo` stays for the callers. */
 export const localId = (text, repo) => shortText(text);
 /** The repo of an id `<repo>-<n>[.<k>]`, or "" for any other name. */
-export const repoOf = (id) => /^(.+)-\d+(?:\.\d+)?$/.exec(String(id))?.[1] ?? "";
+export const repoOf = (id) => parseId(id)?.repo ?? "";
 /** An id as a link with its short id. */
 export const repoIdLink = (id, href) => idLink(shortId(id), href);
 
@@ -731,7 +731,7 @@ export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^
 export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` : "");
 /** The facts list of `[label, html]` pairs. */
 export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
-import { shortId, shortText } from "../lib/naming.ts";
+import { parseId, shortId, shortText } from "../lib/naming.ts";
 import { FACTORY } from "../lib/windows.ts";
 
 /** The API path of issue `<repo>-<ref>`: `/api/issues/a1430`. */

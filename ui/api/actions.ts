@@ -10,6 +10,7 @@ import { counting as lastReal, jobIdOf } from "../../jobs/lib/records/record.ts"
 import { may } from "../../jobs/lib/asks/ask.ts";
 import * as issues from "../../issues/lib/issues.ts";
 import { afterOf } from "../../issues/lib/store.ts";
+import { FULL, fullId } from "../../lib/naming.ts";
 import { aleph, fail, post } from "../action.ts";
 import type { Routes } from "../server.ts";
 
@@ -42,9 +43,9 @@ const answerAndRerun = post(async (body, { id }) => {
  */
 const wait = post(async (body, { id }) => {
   const last = find(id), name = last.run.name;
-  const on = typeof body.on === "string" ? body.on.trim() : "";
+  const on = typeof body.on === "string" ? fullId(body.on.trim()) : "";
   const repo = last.run.repo, issue = onOf(last.run);
-  if (!/^(.+)-(\d+(?:\.\d+)?)$/.test(on) || !repo || issue === undefined) fail(400, "on must name an issue and the job an item");
+  if (!FULL.test(on) || !repo || issue === undefined) fail(400, "on must name an issue and the job an item");
   const place = loadRegistry()[repo!] ?? fail(400, `no repo named ${repo}`);
   const was = afterOf(issues.show(place, issue!)).join(",") || "none";
   const edit = (after: string) => aleph(["issue", "edit", "--after", after, "--", repo!, String(issue)]);

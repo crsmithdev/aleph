@@ -3,6 +3,7 @@
  * process (no `aleph` command does this) through `post` in ui/action.ts.
  */
 import { approve, decline } from "../../jobs/lib/learning/corrections.ts";
+import { parseId } from "../../lib/naming.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { fail, post } from "../action.ts";
 import type { Routes } from "../server.ts";
@@ -12,7 +13,7 @@ export const routes: Routes = {
     // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
     const repo = Object.values(loadRegistry()).find((r) => r.sandbox) ?? fail(422, "no sandboxed repo in the registry to reopen the issue in");
     const ref = approve(id, repo);
-    if (!/^[\w.-]+-\d+$/.test(ref) || !ref.startsWith(`${repo.key}-`)) fail(422, ref);
+    if (parseId(ref)?.repo !== repo.key) fail(422, ref);
     return { issue: ref };
   }),
   "POST /api/proposals/:id/decline": post((_body, { id }) => {

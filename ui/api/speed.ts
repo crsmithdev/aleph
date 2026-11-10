@@ -18,7 +18,7 @@ import { reader, storeDir } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
-import { clip, issueHref, NAMES, parseId } from "../../lib/naming.ts";
+import { clip, issueHref, NAMES, parseId, tail } from "../../lib/naming.ts";
 import { inProject, repoIn, scopeOf } from "./scope.ts";
 import type { Window } from "../../lib/windows.ts";
 
@@ -27,7 +27,7 @@ const HOUR = 3600_000, DAY = 24 * HOUR;
 /** The repo and the ref inside it of a whole issue key: `aleph-1359.1` is `aleph` and `1359.1`; "" and "" for any other text. */
 const splitId = (s: string): [string, string] => {
   const p = parseId(s);
-  return p ? [p.repo, `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`] : ["", ""];
+  return p ? [p.repo, tail(p)] : ["", ""];
 };
 
 /** The issue number of a run, from `on` or old `todo`; a part run "860.1" reads as 860. Undefined when the run has none. */
@@ -269,7 +269,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
 
 // Bulk commits add files whose work is older: they do not say when an issue was created.
 const BULK = /^(migrate:|todo: move every )/;
-const FILED = /^([^/]+)\/backlog\/tasks\/\1-(\d+)((?:\.\d+)*)\.md$/;
+const FILED = /^([^/]+)\/backlog\/tasks\/([^/]+)\.md$/;
 export interface Filed { issue: Map<string, number | null> }
 let filedAt: Filed & { head: string } = { head: "", issue: new Map() };
 
@@ -293,9 +293,9 @@ export function filed(dir = storeDir(), head = originMain(dir)): Filed {
       at = BULK.test(line.slice(space + 1)) ? null : Number(line.slice(1, space)) * 1000;
       continue;
     }
-    const m = line.match(FILED);
-    if (!m || m[3]) continue;
-    const key = `${m[1]}-${m[2]}`;
+    const m = line.match(FILED), p = m && parseId(m[2]);
+    if (!p || p.repo !== m![1] || p.sub !== undefined) continue;
+    const key = `${p.repo}-${p.n}`;
     // A file added again keeps the first time.
     if (!next.issue.has(key)) next.issue.set(key, at);
   }

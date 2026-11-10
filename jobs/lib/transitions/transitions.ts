@@ -25,7 +25,7 @@ import { logEvent } from "../infra/layout.ts";
 import { route, TIER_MODEL, type Tier } from "../routing/route.ts";
 import type { Gate, Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
-import { fullId } from "../../../lib/naming.ts";
+import { parseId, tail } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "../infra/settings.ts";
@@ -159,10 +159,9 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   const name = checkName(a.name);
   let on = a.on;
   if (on !== undefined) {
-    const full = fullId(on);
-    const ref = full.startsWith(`${repo.key}-`) ? full.slice(repo.key.length + 1) : full;
-    if (!/^\d+(\.\d+)?$/.test(ref)) refuse("--on takes an issue number");
-    on = ref.includes(".") ? ref : Number(ref);
+    const p = parseId(on) ?? parseId(`${repo.key}-${on}`);
+    if (p?.repo !== repo.key) refuse("--on takes an issue number");
+    on = p!.sub === undefined ? p!.n : tail(p!);
     let doc: issues.Doc | null = null;
     try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
     if (!doc) refuse(`the work store has no list for ${repo.key}`);

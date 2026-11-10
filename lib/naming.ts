@@ -59,7 +59,8 @@ export function setCodes(map: Record<string, string>): void {
   keys = Object.fromEntries(Object.entries(map).map(([k, c]) => [c, k]));
 }
 
-const FULL = /^([a-z0-9][a-z0-9-]*?)-(\d+)(?:\.(\d+))?$/;
+export const FULL = /^([a-z0-9][a-z0-9-]*?)-(\d+)(?:\.(\d+))?$/;
+const FREE = /(?<![\w.-])[a-z][a-z0-9-]*-\d+(?:\.\d+)?(?![\w-])/g;
 const SHORT = /^([a-z]{1,2})(\d+)(?:\.(\d+))?$/;
 
 /** `{repo, n, sub}` for a full or short issue ID, or null. A short ID needs a known code. */
@@ -72,7 +73,8 @@ export function parseId(s: unknown): Id | null {
   return fu ? { repo: fu[1], n: Number(fu[2]), sub: fu[3] === undefined ? undefined : Number(fu[3]) } : null;
 }
 
-const tail = (p: Id) => `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`;
+/** `1430` or `1430.2`: the part of an ID after its repo. */
+export const tail = (p: Id) => `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`;
 /** `aleph-1430` for any issue ID; anything else unchanged. */
 export const fullId = (s: unknown): string => { const p = parseId(s); return p ? `${p.repo}-${tail(p)}` : String(s ?? ""); };
 /** `a1430` for any issue ID of a project with a code; anything else unchanged. */
@@ -101,9 +103,9 @@ export function parseJob(s: unknown): { subject: string; n: number } | null {
 export const fileSafe = (job: string): string => String(job).replace("#", "-");
 
 /** Every full issue ID in free text, in order. Short IDs are never read from free text. */
-export const refs = (text: unknown): string[] => [...String(text ?? "").matchAll(/(?<![\w.-])[a-z][a-z0-9-]*-\d+(?:\.\d+)?(?![\w-])/g)].map((m) => m[0]);
+export const refs = (text: unknown): string[] => [...String(text ?? "").matchAll(FREE)].map((m) => m[0]);
 /** Free text with each full issue ID of a project with a code in its short form. */
-export const shortText = (text: unknown): string => String(text ?? "").replace(/(?<![\w.-])[a-z][a-z0-9-]*-\d+(?:\.\d+)?(?![\w-])/g, shortId);
+export const shortText = (text: unknown): string => String(text ?? "").replace(FREE, shortId);
 
 // ---------- events ----------
 

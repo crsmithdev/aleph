@@ -365,10 +365,10 @@ function reportCmd(): void {
 /** `aleph status <repo>-<n>[.<k>]`: the item's stage, from the store and the ledger; with no issue, see statusRecent. */
 function statusCmd(): void {
   if (!positional[0]) return statusRecent();
-  const m = (positional[0] ?? "").match(/^(.+)-(\d+(?:\.\d+)?)$/) ?? refuse("usage: aleph status [<repo>-<n>[.<k>]] [--json]");
-  const [, key, n] = m!;
-  const itemRef: number | string = n.includes(".") ? n : Number(n);
-  const repo = loadRegistry()[key] ?? refuse(`no repo named ${key} in the registry`);
+  const reg = loadRegistry();
+  const p = issues.parseIssueRef(positional[0]) ?? refuse("usage: aleph status [<repo>-<n>[.<k>]] [--json]");
+  const key = p.repo, itemRef = p.id, n = String(p.id);
+  const repo = reg[key] ?? refuse(`no repo named ${key} in the registry`);
   let s: Stage | undefined;
   try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   if (!s) refuse(`${key} has no issue ${n}`);

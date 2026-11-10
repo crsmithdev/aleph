@@ -8,6 +8,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
+import { FULL } from "../../lib/naming.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";
 import { logEvent } from "../../jobs/lib/infra/layout.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
@@ -115,7 +116,7 @@ export function attach(repo: store.Place, id: number | string, paths: string[]) 
 
 /** A ref for `--after`: `<repo>-<n>` or `<repo>-<n>.<k>`. */
 function checkAfter(after: string[]): void {
-  for (const r of after) if (!/^[^\s,]+-\d+(\.\d+)?$/.test(r)) refuse(`--after takes ids like <repo>-<n> or <repo>-<n>.<k>: ${r}`);
+  for (const r of after) if (!FULL.test(r)) refuse(`--after takes ids like <repo>-<n> or <repo>-<n>.<k>: ${r}`);
 }
 
 /**

@@ -5,6 +5,7 @@
  */
 import { base, env } from "./cli.helpers";
 import { loadRegistry } from "./lib/records/ledger.ts";
+import { parseIssueRef } from "../issues/lib/todo.ts";
 import { Refusal } from "../lib/refusal.ts";
 import { checked as checkedJob, drop as dropJob, jobCommand, land as landJob, recheck as recheckJob, startJob, type Start } from "./lib/transitions/transitions.ts";
 import { runDispatch } from "./lib/transitions/factory.ts";
@@ -113,6 +114,6 @@ export const issueClose = (key: string, ref: number | string, how: "done" | "dro
 
 /** `aleph status <repo>-<n>[.<k>] --json`. */
 export const status = (ref: string) => call(() => {
-  const [, key, n] = ref.match(/^(.+)-(\d+(?:\.\d+)?)$/)!;
-  return repoStages(loadRegistry()[key]!, { fetch: true, items: [n.includes(".") ? n : Number(n)] })[0];
+  const reg = loadRegistry(), p = parseIssueRef(ref)!;
+  return repoStages(reg[p.repo]!, { fetch: true, items: [p.id] })[0];
 });

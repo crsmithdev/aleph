@@ -33,7 +33,7 @@ import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";
 import { logEvent } from "../infra/layout.ts";
-import { refs as idsIn, word } from "../../../lib/naming.ts";
+import { FULL, refs as idsIn, word } from "../../../lib/naming.ts";
 import type { Hold } from "../gates/issue-decision.ts";
 import { DIRECTOR_CAP, needsYouLog, vaultDir } from "../infra/settings.ts";
 import { OPUS_MODEL, readModels } from "../routing/models.ts";
@@ -92,8 +92,8 @@ export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = all
     if (openJob(r.name, r.repo, jobs)?.some((e) => e.folder !== entry.folder && (isLive(e.folder) || isStarting(e)))) continue;
     const repo = r.repo ? byKey.get(r.repo) : undefined;
     if (r.repo && !repo) continue;
-    const m = repo && r.on?.match(/^(.+)-(\d+(?:\.\d+)?)$/);
-    const item = m && m[1] === repo!.key ? lists.item(repo!.key, m[2].includes(".") ? m[2] : Number(m[2])) ?? undefined : undefined;
+    const p = repo && r.on ? issues.parseIssueRef(r.on) : null;
+    const item = p && p.repo === repo!.key ? lists.item(repo!.key, p.id) ?? undefined : undefined;
     out.push({ at: "run", on: entry.id, repo, entry, ask: r.ask!, ...(item ? { item } : {}) });
   }
   // A proposal is a case only once its issue is in the store: that issue is the case's subject.
@@ -340,7 +340,7 @@ export type Action =
   | { do: "note"; text: string };
 
 const nonEmpty = { type: "string", minLength: 1 };
-const refList = { type: "array", items: { type: "string", pattern: "^[a-z0-9-]+-\\d+(\\.\\d+)?$" } };
+const refList = { type: "array", items: { type: "string", pattern: FULL.source } };
 const shape = (name: string, fields: Record<string, object> = {}, required: string[] = []) => ({
   type: "object", additionalProperties: false, required: ["do", ...required], properties: { do: { const: name }, ...fields },
 });
@@ -381,7 +381,7 @@ export const DIRECTOR_SCHEMA = {
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 /** The issue ids (`<repo>-<n>` or `<repo>-<n>.<k>`) in a string, a comma list or an array; any other value is ignored. */
 const refs = (v: unknown): string[] | undefined => {
-  const ok = (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map(str).filter((x) => /^[a-z0-9-]+-\d+(\.\d+)?$/.test(x));
+  const ok = (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map(str).filter((x) => FULL.test(x));
   return ok.length ? ok : undefined;
 };
 

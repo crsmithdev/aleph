@@ -13,7 +13,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { layout, logEvent } from "../infra/layout.ts";
-import { SUBS, word, type Event } from "../../../lib/naming.ts";
+import { FULL, SUBS, word, type Event } from "../../../lib/naming.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { parentOf, partsOf, writeList, type Place } from "../../../issues/lib/store.ts";
@@ -124,7 +124,6 @@ export const plainAsk = (reason: AskReason, question: string, why: string[] = []
 
 const SEP = " :: ";
 const MAX_WHY = 4;
-const REF = /^[\w.-]+-\d+(\.\d+)?$/;
 const clean = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").replace(/"/g, "'").replace(/\\/g, "/").trim() : "");
 
 /**
@@ -137,7 +136,7 @@ export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: 
   if (!question || !Array.isArray(raw.options) || raw.options.length < 2 || raw.options.length > 4) return null;
   const options = raw.options.map((o: any) => {
     const after = clean(o?.after);
-    return { label: clean(o?.label).replaceAll(SEP.trim(), ":"), line: clean(o?.line), ...(REF.test(after) ? { after } : {}) };
+    return { label: clean(o?.label).replaceAll(SEP.trim(), ":"), line: clean(o?.line), ...(FULL.test(after) ? { after } : {}) };
   });
   if (options.some((o: { label: string }) => !o.label) || new Set(options.map((o: { label: string }) => o.label)).size !== options.length) return null;
   const recommended = clean(raw.recommended);

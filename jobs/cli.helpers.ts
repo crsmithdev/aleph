@@ -7,6 +7,7 @@ import { unitAlive } from "./lib/infra/process.ts";
 export { unitAlive };
 import { config as storeConfig } from "../issues/lib/store.ts";
 import { renderItem } from "../issues/lib/todo.ts";
+import { parseId } from "../lib/naming.ts";
 import { fixture } from "../tests/git-fixture.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
@@ -451,7 +452,7 @@ export function seedItem(repoKey: string, title: string, fm: Record<string, unkn
   const dir = join(items, repoKey, "backlog", "tasks");
   mkdirSync(dir, { recursive: true });
   if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
-  const id = Math.max(0, ...readdirSync(dir).map((f) => Number(/^.+-(\d+)\.md$/.exec(f)?.[1] ?? 0))) + 1;
+  const id = Math.max(0, ...readdirSync(dir).map((f) => parseId(f.replace(/\.md$/, ""))?.n ?? 0)) + 1;
   const item = { id, title, ...seedShape(String(id), fm, body, false) };
   writeFileSync(join(dir, `${repoKey}-${id}.md`), renderItem(repoKey, item as any));
   sh(items, "git", "add", "-A");

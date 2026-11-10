@@ -8,6 +8,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { FULL } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { areasOf, isSorted, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf } from "../../../issues/lib/store.ts";
 import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
@@ -42,10 +43,9 @@ export type Applied = "build" | "close" | "done" | "ask";
 export type Counts = Partial<Record<Applied, number>>;
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
-const REF = /^[a-z0-9-]+-\d+(\.\d+)?$/;
 
 const str = { type: "string", minLength: 1 };
-const refs = { type: "array", items: { type: "string", pattern: REF.source } };
+const refs = { type: "array", items: { type: "string", pattern: FULL.source } };
 const SPEC_SCHEMA = {
   type: "object", additionalProperties: false, required: ["goal", "edit_surface", "oracle"],
   properties: {
@@ -93,7 +93,7 @@ export const INTAKE_SCHEMA = {
           question: str,
           options: {
             type: "array", minItems: 2, maxItems: 4,
-            items: { type: "object", additionalProperties: false, required: ["label", "line"], properties: { label: str, line: str, after: { type: "string", pattern: REF.source } } },
+            items: { type: "object", additionalProperties: false, required: ["label", "line"], properties: { label: str, line: str, after: { type: "string", pattern: FULL.source } } },
           },
           recommended: str,
           why: { type: "array", minItems: 2, maxItems: 4, items: str },
@@ -119,7 +119,7 @@ export function parseRoute(reply: any): Route | string {
   if (!reason) return `${raw.route} without a reason`;
   switch (raw.route) {
     case "build": {
-      const after = (Array.isArray(raw.after) ? raw.after : []).map((x: unknown) => String(x).trim()).filter((x: string) => REF.test(x));
+      const after = (Array.isArray(raw.after) ? raw.after : []).map((x: unknown) => String(x).trim()).filter((x: string) => FULL.test(x));
       const parts = Array.isArray(raw.parts) && raw.parts.length
         ? raw.parts.map((p: any) => ({ title: (text(p?.title) ?? "").replace(/\s+/g, " "), spec: specOf(p?.spec) ?? { goal: "", surface: [], oracle: [] }, after: Array.isArray(p?.after) ? p.after : [] }))
         : undefined;

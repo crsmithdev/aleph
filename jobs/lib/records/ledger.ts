@@ -13,7 +13,7 @@ import { isLive } from "../infra/process.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
 import { touch } from "../infra/sources.ts";
-import { contentText, fileSafe, parseJob, setCodes, subjectOf } from "../../../lib/naming.ts";
+import { contentText, fileSafe, parseId, parseJob, setCodes, subjectOf, tail } from "../../../lib/naming.ts";
 
 /** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. */
 export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
@@ -243,8 +243,8 @@ export const isAgentRun = (kind: Run["kind"]): boolean => kind === "build" || ki
 /** The number of the run's `on` (`<repo>-<n>`, for the run's repo). A dotted `on` gives the issue's `<n>.<m>` as a string. */
 export function onOf(run: Run): number | string | undefined {
   if (run.on === undefined) return undefined;
-  const m = run.on.match(/^(.+)-(\d+(?:\.\d+)?)$/);
-  return m && m[1] === run.repo ? (m[2].includes(".") ? m[2] : Number(m[2])) : undefined;
+  const p = parseId(run.on);
+  return p && p.repo === run.repo ? (p.sub === undefined ? p.n : tail(p)) : undefined;
 }
 
 /** `YYYYMMDD-HHMMSS` in local time. */
