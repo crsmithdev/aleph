@@ -15,7 +15,7 @@ import { correctionsStep, directIfNew, editTick, doneChecker, episodeStep, runDi
 import { baselines, factoryDir, factoryRepos, gates, probeHold, readStalls, writeStalls } from "../gates/factory-status.ts";
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
-import { factoryLog } from "../infra/layout.ts";
+import { logEvent } from "../infra/layout.ts";
 import { archiveOld } from "../records/record.ts";
 import { allJobs, loadRegistry, lock, type Entry, type Repo } from "../records/ledger.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
@@ -76,7 +76,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   const over = keys.filter((k) => k in seen && !(k.startsWith("ingest:") && busy(runs, "intake", k.slice("ingest:".length))));
   const missed = over.filter((k) => !s.missed.includes(k));
   s.missed = over;
-  for (const k of missed) factoryLog(`missed: ${k}`);
+  for (const k of missed) logEvent({ by: "rule", subject: k, action: "missed" });
   if (missed.length) await p.dispatch();
   const reg = loadRegistry();
   for (const b of Object.values(baselines())) {
@@ -85,7 +85,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
     const head = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
     if (!head || head === b.commit || s.suite[b.repo] === head) continue;
     s.suite[b.repo] = head;
-    factoryLog(`${b.repo}: main moved to ${head.slice(0, 7)} while red at ${b.commit.slice(0, 7)}; the suite runs now`);
+    logEvent({ by: "rule", subject: b.repo, action: "started", sub: "check", note: `main moved to ${head.slice(0, 7)} while red at ${b.commit.slice(0, 7)}; the suite runs now` });
     p.suite();
   }
   return missed;
@@ -115,11 +115,11 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     try {
       const m = await sweep(now, s, p);
       if (m.length) out.missed = m;
-    } catch (e: any) { factoryLog(`sweep: failed: ${e?.message ?? e}`); }
+    } catch (e: any) { logEvent({ by: "rule", subject: "sweep", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
     if (due(s, "episodes", now)) { s.last.episodes = at; out.episodes = await episodeStep(); }
     if (due(s, "ci", now)) {
       s.last.ci = at;
-      try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
+      try { ciStep(factoryRepos()); } catch (e: any) { logEvent({ by: "rule", subject: "ci", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
     }
     await smokeStep(undefined, undefined, now);
     const old = archiveOld(now);

@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, file, state, setup, teardown, seedItem } from "./cli.helpers";
+import { eventsOf } from "./lib/infra/layout";
 import { dispatch, job, land } from "./inproc";
 
 beforeAll(setup);
@@ -17,7 +18,7 @@ describe("a factory run", () => {
     expect((await aleph(["pause"])).json).toEqual({ paused: true });
     const id = seedItem("fac", "while paused", { kind: "goal" }, "ACTION: commit paused.txt\n".trim());
     expect((await dispatch()).json).toMatchObject({ started: [], paused: true });
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("paused");
+    expect(readdirSync(join(base, "factory", "events")).flatMap((f) => eventsOf(readFileSync(join(base, "factory", "events", f), "utf8"))).some((e) => e.action === "paused" && e.subject === "factory")).toBe(true);
     const r = await fjob("fpaused", "commit fpaused.txt", {}, { land: true });
     expect(state(r.json.run).condition).toBe("passed");
     expect(state(r.json.run).next).toBe("land");

@@ -13,7 +13,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { isOpen, lastReal, openJob, type Job } from "../records/job.ts";
 import type { Bound, Gate, Hold } from "./issue-decision.ts";
 import { event, type Event } from "../../../lib/naming.ts";
-import { factoryLog, layout, logEvent, readEvents } from "../infra/layout.ts";
+import { layout, logEvent, readEvents } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { allRuns, held, jobIdOf, isWaiting, isBuild, loadRegistry, lock, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
@@ -117,7 +117,7 @@ export async function holdBackend(via: Via, why: string): Promise<void> {
   if (backendHold()?.via === via) return;
   mkdirSync(factoryDir(), { recursive: true });
   writeFileSync(holdFile(), JSON.stringify({ via, why, since: new Date().toISOString() }) + "\n");
-  factoryLog(`held ${BACKENDS[via]}: ${why}`);
+  logEvent({ by: "rule", subject: via, action: "paused", sub: "credit", note: `held ${BACKENDS[via]}: ${why}` });
   await tell(`the factory holds ${BACKENDS[via]}: ${why}`);
 }
 
@@ -127,7 +127,7 @@ export async function probeHold(up: (via: Via) => Promise<boolean> = probeBacken
   if (!h || !(await up(h.via))) return null;
   rmSync(holdFile(), { force: true });
   const line = `${BACKENDS[h.via]} answers again: the hold is off`;
-  factoryLog(line);
+  logEvent({ by: "rule", subject: h.via, action: "reran", note: line });
   return line;
 }
 

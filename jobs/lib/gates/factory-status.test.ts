@@ -70,6 +70,10 @@ test("the hold lifts when the probe answers, and stays when the probe fails", as
   expect(await probeHold(async () => false)).toBeNull();
   expect(backendHold()?.via).toBe("openrouter");
   expect(await probeHold(async () => true)).toBe("OpenRouter answers again: the hold is off");
+  expect(readEvents().filter((e) => e.subject === "openrouter").map((e) => [e.action, e.note])).toEqual([
+    ["paused", "held OpenRouter: API Error: 402 This request would exceed your available credits"],
+    ["reran", "OpenRouter answers again: the hold is off"],
+  ]);
   expect(backendHold()).toBeNull();
 });
 

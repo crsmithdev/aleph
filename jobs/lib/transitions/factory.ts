@@ -10,9 +10,9 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { byPriority, afterOf, buildableIssue, buildableIssues, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
-import { factoryLog } from "../infra/layout.ts";
+import { logEvent } from "../infra/layout.ts";
 import { itemOnMain, repoStages } from "../records/status.ts";
-import { countsLine, intakeIssue, type Counts } from "../roles/intake.ts";
+import { intakeIssue, type Counts } from "../roles/intake.ts";
 import { allRuns, askOf as runAskOf, isWaiting, loadRegistry, lock, updateRun, type Entry, type Repo } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
@@ -90,11 +90,11 @@ type Land = (name: string) => Promise<string | null>;
  */
 export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, intake: (repo: Repo, id: number) => void = intakeDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
-    factoryLog("paused");
+    logEvent({ by: "rule", subject: "factory", action: "paused" });
     return { started: [], skipped: [], paused: true };
   }
   const kept = await startKept();
-  if (kept.length) factoryLog(`started the steps the pause kept: ${kept.join(", ")}`);
+  for (const name of kept) logEvent({ by: "rule", subject: name, action: "started", note: "the pause kept this step" });
   if (rescue) await rescueStuck(rescue, land, async (repo) => mainState(repo));
   const landed: string[] = [];
   if (land) {
@@ -102,7 +102,6 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     const names = waitingToLand();
     const whys = await Promise.all(names.map((name) => land(name)));
     names.forEach((name, i) => { if (!whys[i]) landed.push(name); });
-    if (landed.length) factoryLog(`landed ${landed.join(", ")}`);
   }
   const started: string[] = [];
   const skipped: string[] = [];
@@ -122,6 +121,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     if (issues.status(item) !== "open" || askOf(refIn(repo.key, item)) || pendingWaits(afterOf(item), done).length) continue;
     intake(repo, item.id);
     planned.push(issueJob(repo, item.id));
+    logEvent({ by: "rule", subject: issueJob(repo, item.id), action: "started", sub: "intake", note: "planning" });
   }
   /** Records the hold and the skip line of an issue no start reached. */
   const skip = (name: string, kind: Gate, why: string, ev: Hold) => { recordHold(name, kind, why, ev); skipped.push(`${name}: ${why}`); };
@@ -137,7 +137,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     // An open issue whose work is on main is done: the store closes it, so no dispatch lists it again.
     if (done(name)) {
       const bad = note(repo, ref, `its work is on origin/${repo.main}: ${itemOnMain(repo, ref) ?? "no commit"}`, { done: true });
-      if (bad) factoryLog(`${name}: not closed: ${bad}`);
+      if (bad) logEvent({ by: "rule", subject: name, action: "failed", sub: "error", note: `not closed: ${bad}` });
       continue;
     }
     // The cheap facts first: the pause was asked above.
@@ -184,11 +184,11 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
           markStreak(name);
           const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
           const bad = askChris(repo, ref, plainAsk("no-commit", text), text);
-          if (bad) factoryLog(`${name}: no issue note: ${bad}`);
+          if (bad) logEvent({ by: "rule", subject: name, action: "failed", sub: "error", note: `no issue note: ${bad}` });
         } else {
           const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
           const bad = askChris(repo, ref, plainAsk("run-cap", text), text);
-          if (bad) factoryLog(`${name}: no issue note: ${bad}`);
+          if (bad) logEvent({ by: "rule", subject: name, action: "failed", sub: "error", note: `no issue note: ${bad}` });
           else markCap(name);
         }
         continue;
@@ -203,8 +203,6 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       release();
     }
   }
-  // A tick that does nothing writes no line: one in five lines of tick.log said `started none`.
-  if (started.length || planned.length || skipped.length) factoryLog(`started ${started.join(", ") || "none"}${planned.length ? `; planning ${planned.join(", ")}` : ""}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
   return { started, skipped, ...(landed.length ? { landed } : {}), ...(planned.length ? { planned } : {}) };
 }
 
@@ -227,7 +225,7 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
     if (!doc || !finished(doc, listed, repo, done)) continue;
     const name = `${repo.key}-${listed.id}`;
     const release = await lock(`issue-${name}`, 0);
-    if (!release) { lines.push(`${name}: another dispatch holds it`); continue; }
+    if (!release) { lines.push(`${name}: another dispatch holds it`); logEvent({ by: "rule", subject: name, action: "busy", note: "another dispatch holds it" }); continue; }
     try {
       const now = reader().list(repo.key);
       const item = now ? issues.find(now, listed.id) : undefined;
@@ -235,6 +233,7 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
       const commits = partsOf(now, item).filter((p) => issues.status(p) !== "dropped").map((p) => `${repo.key}-${issues.refOf(p)} (${itemOnMain(repo, issues.idOf(p)) ?? "no commit"})`);
       const bad = note(repo, item.id, `its sub-issues are done: ${commits.join(", ")}`, { done: true });
       lines.push(bad ? `${name}: not closed: ${bad}` : `${name}: closed as done`);
+      logEvent(bad ? { by: "rule", subject: name, action: "failed", sub: "error", note: `not closed: ${bad}` } : { by: "rule", subject: name, action: "done", note: "its sub-issues are done" });
     } finally {
       release();
     }
@@ -262,12 +261,11 @@ export async function correctionsStep(now = Date.now()): Promise<{ signals: numb
       lessons: store.lessons.length,
       proposed: store.lessons.filter((l) => l.state === "proposed").length,
     };
-    factoryLog(`corrections: ${r.signals} signals, ${r.lessons} lessons, ${r.proposed} proposed`);
     // A proposed lesson is an Ask.
     if (r.proposed) directIfNew();
     return r;
   } catch (e) {
-    factoryLog(`corrections: failed: ${(e as Error).message}`);
+    logEvent({ by: "monitor", subject: "corrections", action: "failed", sub: "error", note: (e as Error).message });
     return null;
   }
 }
@@ -330,11 +328,10 @@ export async function episodeStep(): Promise<string[]> {
   try {
     if (gates({ only: ["pause"] })) return [];
     const r = await writeEpisodes(sandboxRepos());
-    if (r.written.length) factoryLog(`episodes ${r.written.join(", ")}`);
-    for (const f of r.failed) factoryLog(`episode failed: ${f}`);
+    for (const f of r.failed) logEvent({ by: "rule", subject: "episodes", action: "failed", sub: "error", note: f });
     return r.written;
   } catch (e: any) {
-    try { factoryLog(`episodes failed: ${e?.message ?? e}`); } catch {}
+    try { logEvent({ by: "rule", subject: "episodes", action: "failed", sub: "error", note: String(e?.message ?? e) }); } catch {}
     return [];
   }
 }
@@ -621,13 +618,13 @@ export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Pro
   const mine = () => allRuns().filter((e) => e.run.kind === "intake" && e.run.on === name);
   const before = new Set(mine().map((e) => e.id));
   const t = await intakeIssue(repo, id);
-  factoryLog(`intake ${name}: ${countsLine(t.counts)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
+  for (const l of t.skipped) logEvent({ by: "intake", subject: name, action: "skipped", sub: "intake", note: l });
   if (t.counts.build) dispatchDetached();
   const failed = mine().some((e) => !before.has(e.id) && causeOf(e.run) === "unanswered");
   const doc = reader({ fetch: false }).list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
   if (failed && item && issues.status(item) === "open" && !askOf(refIn(repo.key, item)) && !isSorted(doc!, item, repo)) {
-    factoryLog(`intake ${name}: no reply; intake again now`);
+    logEvent({ by: "rule", subject: name, action: "started", sub: "intake", note: "no reply; intake again now" });
     p.intake(repo, id);
   }
   directIfNew(p.director);

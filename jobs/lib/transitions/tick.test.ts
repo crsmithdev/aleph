@@ -9,6 +9,7 @@ import { readList, writeList } from "../../../issues/lib/store.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
+import { readEvents } from "../infra/layout.ts";
 import { setPaused, writeBaseline, writeStalls } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";
@@ -72,6 +73,7 @@ function recorder(): Starts & { taken: string[]; directors: number } {
 }
 
 const tickLog = () => { try { return readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8"); } catch { return ""; } };
+const missedKeys = () => readEvents().filter((e) => e.action === "missed").map((e) => e.subject);
 
 test("an intake that sets an Ask starts the director at once, with no tick", async () => {
   seed([{ body: "VERDICT:ask" }]);
@@ -109,6 +111,7 @@ test("an intake the live cap held starts at the dispatch that a run's end makes,
   const s = recorder();
   const held = await intakeNow(repo(), 1, s);
   expect(held.skipped).toEqual(["intake: 1 agent runs are live"]);
+  expect(readEvents().filter((e) => e.action === "skipped").map((e) => [e.subject, e.note])).toEqual([[`${key}-1`, "intake: 1 agent runs are live"]]);
   expect((await runDispatch(s)).intaking).toBeUndefined();
   expect(s.taken).toEqual([]);
   // The run ends: its unit writes `exit`, then runs the dispatch.
@@ -140,7 +143,8 @@ test("the sweep logs work that two ticks in a row saw as missed, once, and start
   expect(await sweep(NOW, s, p)).toEqual([]);
   expect(p.dispatches).toBe(0);
   expect(await sweep(NOW + MIN, s, p)).toEqual([`ask:${key}-1`]);
-  expect(tickLog()).toContain(`missed: ask:${key}-1`);
+  expect(missedKeys()).toEqual([`ask:${key}-1`]);
+  expect(tickLog()).toBe("");
   expect(p.dispatches).toBe(1);
   expect(await sweep(NOW + 2 * MIN, s, p)).toEqual([]);
   expect(p.dispatches).toBe(1);
@@ -162,7 +166,7 @@ test("the sweep logs a job that waits for a spec edit as missed once the spec mo
   writeList({ key }, "edit", (doc) => { issues.find(doc, 1)!.spec = "New spec."; return true; });
   expect(await sweep(NOW + 2 * MIN, s, p)).toEqual([]);
   expect(await sweep(NOW + 3 * MIN, s, p)).toEqual([`edited:${key}-1`]);
-  expect(tickLog()).toContain(`missed: edited:${key}-1`);
+  expect(missedKeys()).toEqual([`edited:${key}-1`]);
   expect(p.dispatches).toBe(1);
 });
 

@@ -10,7 +10,7 @@ export const STATUSES = ["open", "parked", "done", "dropped"];
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"];
 export const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"];
 export const ASKS = ["protected", "question", "incomplete", "capped", "proposal"];
-export const ACTIONS = [...STATES, ...HOLDS, ...ASKS, "reran", "filed", "escalated", "changed", "answered", "routed"];
+export const ACTIONS = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed"];
 export const SUBS = [
   "no-commit", "timeout", "stalled", "infra", "locked", "credit", "check", "conflict", "moved", "review", "unanswered",
   "duplicate", "met", "manual", "protected", "question", "intake", "capped", "override", "error", "rescue",

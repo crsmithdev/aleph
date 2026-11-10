@@ -19,7 +19,7 @@ import { onMain } from "../records/status.ts";
 import { refuse } from "../../../lib/refusal.ts";
 import { factoryGates, liveEntries, onLocal } from "../gates/factory-status.ts";
 import { readModels } from "../routing/models.ts";
-import { factoryLog } from "../infra/layout.ts";
+import { logEvent } from "../infra/layout.ts";
 import { route, TIER_MODEL, type Tier } from "../routing/route.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import { fullId } from "../../../lib/naming.ts";
@@ -340,7 +340,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
 export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<string | null> {
   const routed = tier !== undefined ? tier : await route(spec);
   const model = routed ? TIER_MODEL[routed] : null;
-  factoryLog(`starting ${name} with model ${model ?? "default"}`);
+  logEvent({ by: "rule", subject: name, action: "started", note: `model ${model ?? "default"}` });
   const start = startCmd();
   if (start) {
     const p = Bun.spawn([start, repo.key, name, String(id)], { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
