@@ -291,7 +291,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) if (issues.status(item) === "open" && !isSorted(doc!, item, repo)) queue.push({ repo, item });
   }
-  queue.sort((a, b) => String(a.item.fm.created ?? "").localeCompare(String(b.item.fm.created ?? "")) || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
+  queue.sort((a, b) => String(a.item.fm.created_time ?? a.item.fm.created ?? "").localeCompare(String(b.item.fm.created_time ?? b.item.fm.created ?? "")) || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
   const started: string[] = [];
   for (const { repo, item } of queue.slice(0, INTAKE_CAP())) {
     const name = `${repo.key}-${item.id}`;

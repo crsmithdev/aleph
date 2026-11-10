@@ -62,7 +62,7 @@ test("lint blocks on bad frontmatter and --fix repairs what it can", () => {
   seed(`# To do\n\n## 7. Broken\n---\nid: 9\nstatus: open\ncreated: 2026-09-01\n---\n\nBody.\n`);
   const bad = aleph("issue", "lint", "proj");
   expect(bad.code).toBe(1);
-  expect(bad.err).toContain("updated is missing");
+  expect(bad.err).toContain("updated_time is missing");
   const fixed = aleph("issue", "lint", "proj", "--fix");
   expect(fixed.code).toBe(0);
   expect(JSON.parse(fixed.out).fixed.length).toBeGreaterThan(0);
@@ -119,9 +119,9 @@ test("dates are local, not UTC", () => {
        console.log(today(e), minute(e), today());`],
     { env: { ...(process.env as Record<string, string>), TZ: "America/Los_Angeles" }, stdout: "pipe" },
   );
-  const [day, date, time, now] = p.stdout.toString().trim().split(/[\s]+/);
+  const [day, time, now] = p.stdout.toString().trim().split(/[\s]+/);
   expect(`${day}`).toBe("2026-09-28");
-  expect(`${date} ${time}`).toBe("2026-09-28 18:06");
+  expect(time).toBe("2026-09-29T01:06:00.000Z");
   expect(now).toBe("2026-09-28");
 });
 

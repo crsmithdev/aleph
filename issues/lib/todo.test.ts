@@ -67,14 +67,14 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   expect(issues.lint(doc).filter((f) => f.fixable)).toEqual([]);
 });
 
-test("add and addPart store the filing time next to the day, and setStatus stores the closing time and a reopen removes it", () => {
+test("add and addPart store the filing time, and setStatus stores the closing time and a reopen removes it", () => {
   const doc: issues.Doc = { items: [] } as any;
   const a = issues.add(doc, "Do a thing", { now: new Date(2026, 10, 4, 14, 5) });
-  expect(a.fm).toMatchObject({ created: "2026-11-04", created_time: "2026-11-04 14:05" });
+  expect(a.fm).toMatchObject({ created_time: new Date(2026, 10, 4, 14, 5).toISOString() });
   const p = addPart(doc, a, { title: "[C] part", spec: "x", now: new Date(2026, 10, 4, 14, 5) });
-  expect(p.fm).toMatchObject({ created: "2026-11-04", created_time: "2026-11-04 14:05" });
+  expect(p.fm).toMatchObject({ created_time: new Date(2026, 10, 4, 14, 5).toISOString() });
   issues.setStatus(a, "done", new Date(2026, 10, 4, 15, 30));
-  expect(a.fm).toMatchObject({ closed_at: "2026-11-04", closed_time: "2026-11-04 15:30" });
+  expect(a.fm).toMatchObject({ closed_time: new Date(2026, 10, 4, 15, 30).toISOString() });
   issues.setStatus(a, "open");
   expect(a.fm.closed_time).toBeUndefined();
 });
@@ -100,4 +100,46 @@ test("edit takes the title it already has, even a bad one, and still refuses ano
   issues.edit(item, { title: "Check foo: bar", priority: "high" });
   expect(item.fm.priority).toBe("high");
   expect(() => issues.edit(item, { title: "Check baz: bar" })).toThrow("': ' prefix");
+});
+
+test("add, note and setStatus write ISO UTC times and no date-only fields, and lint passes them", () => {
+  const doc = issues.blank("r");
+  const now = new Date(Date.UTC(2026, 10, 4, 15, 30, 5));
+  const item = issues.add(doc, "A", { now });
+  const line = issues.note(item, "x", now);
+  issues.setStatus(item, "done", now);
+  expect([item.fm.created_time, item.fm.updated_time, item.fm.closed_time]).toEqual(Array(3).fill("2026-11-04T15:30:05.000Z"));
+  expect(line).toBe("- 2026-11-04T15:30:05.000Z: x");
+  for (const k of ["created", "updated", "closed_at"]) expect(item.fm[k]).toBeUndefined();
+  expect(issues.lint(doc)).toEqual([]);
+});
+
+test("fix converts local times and note stamps to ISO UTC and drops the date-only fields", () => {
+  const doc = issues.blank("r");
+  const item = issues.add(doc, "A");
+  Object.assign(item.fm, { created: "2026-11-04", created_time: "2026-11-04 15:30", updated: "2026-11-04", closed_at: "2026-11-04" });
+  delete item.fm.updated_time;
+  item.notes = ["- 2026-11-04 16:00: x"];
+  expect(issues.lint(doc).length).toBeGreaterThan(0);
+  issues.fix(doc);
+  const at = (h: number, m: number) => new Date(2026, 10, 4, h, m).toISOString();
+  expect(item.fm.created_time).toBe(at(15, 30));
+  expect(item.fm.updated_time).toBe(at(0, 0));
+  expect(item.fm.closed_time).toBe(at(0, 0));
+  expect(item.notes).toEqual([`- ${at(16, 0)}: x`]);
+  for (const k of ["created", "updated", "closed_at"]) expect(item.fm[k]).toBeUndefined();
+  expect(issues.lint(doc)).toEqual([]);
+});
+
+test("lint reports an item without created_time or with a non-ISO time", () => {
+  const doc = issues.blank("r");
+  const item = issues.add(doc, "A");
+  delete item.fm.created_time;
+  expect(issues.lint(doc).map((f) => f.problem)).toContain("created_time is missing");
+  item.fm.created_time = "2026-11-04 15:30";
+  expect(issues.lint(doc).find((f) => f.problem.startsWith("created_time"))?.fixable).toBe(true);
+  item.fm.created_time = "soon";
+  expect(issues.lint(doc).find((f) => f.problem.startsWith("created_time"))).toMatchObject({ problem: 'created_time "soon" is not an ISO UTC time', fixable: false });
+  item.notes.push("- 2026-11-04 16:00: x");
+  expect(issues.lint(doc).map((f) => f.problem)).toContain("a note stamp is not an ISO UTC time");
 });

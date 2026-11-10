@@ -222,7 +222,7 @@ async function todoCmd(): Promise<void> {
       if (json) { out({ ...verbs.brief(repo.key)(i), request: i.request, spec: i.spec, notes: i.notes, media: store.mediaOf(i) }); return; }
       console.log(`## ${issues.refOf(i)}. ${i.title}`);
       const ask = askOf(refIn(repo.key, i));
-      console.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
+      console.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated_time ?? i.fm.updated ?? "-"}`);
       console.log(`after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
       console.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
       if (i.request.trim()) console.log(`\n## Request\n\n${i.request}`);

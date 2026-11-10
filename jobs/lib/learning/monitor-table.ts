@@ -282,7 +282,7 @@ export function flakeSection(rows: Flake[], trackers: Sources["trackers"], now: 
     const files = new Set<string>();
     let k = 0;
     for (const line of t.notes) {
-      const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (.*)$/.exec(line);
+      const m = /^- (\d{4}-\d\d-\d\d)[ T](\d\d:\d\d(?::\d\d(?:\.\d+)?Z)?): (.*)$/.exec(line);
       if (!m) continue;
       const at = Date.parse(`${m[1]}T${m[2]}`);
       if (!(now - at < 7 * DAY)) continue;

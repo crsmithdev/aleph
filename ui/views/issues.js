@@ -578,7 +578,7 @@ const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighte
 const READ = /^(?:intake: for Chris:|triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
 /** True when a note line is a machine line: the prefix at the start of the text after the `- ` and the stamp. */
 const isMachineNote = (n) => {
-  const t = String(n).replace(/^- /, "").replace(/^\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?: /, "");
+  const t = String(n).replace(/^- /, "").replace(/^\d{4}-\d\d-\d\d[ T]\d\d:\d\d(?::\d\d(?:\.\d+)?Z?)?: /, "");
   return MACHINE.test(t) && !READ.test(t);
 };
 
@@ -590,7 +590,7 @@ function noteItem(e) {
 
 /** The filing time: the store's, else the created date unless a job that day starts the issue (midnight would draw a false wait). */
 function filedAt(d, runs) {
-  const created = localMs(d.frontmatter?.created);
+  const created = localMs(d.frontmatter?.created_time ?? d.frontmatter?.created);
   const sameDay = runs.length && new Date(created).toDateString() === new Date(runs[0].start).toDateString();
   return d.timeline?.filed ?? (created >= 0 && !sameDay ? created : runs[0]?.start ?? NaN);
 }

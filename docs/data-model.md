@@ -73,7 +73,7 @@ Each `<repo>/` folder is a [Backlog.md](https://github.com/MrLesk/Backlog.md) pr
 ---
 id: aleph-1057
 title: Ignore future usage rows
-created: 2026-11-04
+created_time: 2026-11-04T15:30:00.000Z
 priority: high
 kind: bug
 source: chris
@@ -85,7 +85,7 @@ The Status page shows the wrong weekly usage.
 ## Edit surface
 ## Oracle
 <!-- notes -->
-- 2026-11-04 10:12: Reproduced on main at c26c10f
+- 2026-11-04T10:12:00.000Z: Reproduced on main at c26c10f
 ```
 
 `issues/lib/todo.ts` (`parseItem`, `renderItem`) owns the format. Notes are append-only: two writers each add a line, and neither erases the other's.
@@ -102,12 +102,12 @@ The Status page shows the wrong weekly usage.
 | `after` | list of ids | The issues that must be done first |
 | `media` | list of names | The attached images and PDFs, in `<repo>/backlog/media/<repo>-<id>/` ([Media](issues.md#media)) |
 | `parked` | `"true"` | Stops all work on the issue |
-| `closed_as`, `closed_at`, `closed_why` | `done`, `dropped` | How it closed |
+| `closed_as`, `closed_time`, `closed_why` | `done`, `dropped` | How it closed |
 | `plan` | `"true"` | Intake will split it |
 | `intake` | `build` | Intake took it in |
 | `tracker` | `"true"` | The repo's flake tracker |
 | `since` | sha | Main's head when the issue was reopened |
-| `created`, `updated`, `*_time` | | Dates and times |
+| `created_time`, `updated_time`, `closed_time` | ISO 8601 UTC, ending in `Z` | When it was made, last changed and closed. `aleph issue lint --fix` converts the old `created`, `updated` and `closed_at` dates |
 
 The status comes from the fields: `closed_as`, else `parked`, else `open`. `aleph issue lint` flags retired fields.
 

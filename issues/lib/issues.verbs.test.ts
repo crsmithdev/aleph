@@ -130,7 +130,7 @@ test("lint refuses a labels field and a waiting_on field and names the item", as
 });
 
 test("aleph issue lint reads a dotted issue file and names it by its dotted id", () => {
-  const parent = parse("# To do\n\n## 5. Parent\n---\nid: 5\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nBody.\n").items[0];
+  const parent = parse("# To do\n\n## 5. Parent\n---\nid: 5\nstatus: open\ncreated_time: 2026-09-01T00:00:00.000Z\nupdated_time: 2026-09-01T00:00:00.000Z\n---\n\nBody.\n").items[0];
   parent.fm.kind = "task";
   const part = { ...parent, sub: 1, title: "Goal", fm: { ...parent.fm, id: "5.1" } };
   const put = (due?: string) => {
@@ -138,7 +138,7 @@ test("aleph issue lint reads a dotted issue file and names it by its dotted id",
     mkdirSync(join(fx.items, tasks), { recursive: true });
     writeFileSync(join(fx.items, "proj", "backlog", "config.yml"), config("proj"));
     writeFileSync(join(fx.items, tasks, "proj-5.md"), renderItem("proj", parent));
-    const g = due ? { ...part, fm: { ...part.fm, created: due } } : part;
+    const g = due ? { ...part, fm: { ...part.fm, created_time: due } } : part;
     writeFileSync(join(fx.items, tasks, "proj-5.1.md"), renderItem("proj", g));
     sh(fx.items, "git", "add", "-A");
     sh(fx.items, "git", "commit", "-qm", "dotted");
@@ -147,7 +147,7 @@ test("aleph issue lint reads a dotted issue file and names it by its dotted id",
   put("soon");
   const bad = lint();
   expect(bad.code).toBe(1);
-  expect(bad.err).toContain('item 5.1: created "soon"');
+  expect(bad.err).toContain('item 5.1: created_time "soon"');
   expect(bad.err).not.toContain("share id 5");
   expect(bad.err).not.toContain("id says 5.1");
   put();

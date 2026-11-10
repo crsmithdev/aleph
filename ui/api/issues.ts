@@ -47,7 +47,7 @@ export interface Row {
  * stamp on its `updated` day among its filing, its closing and its notes; null when none is on that day.
  */
 export function updatedTime(i: todos.Issue): string | null {
-  const set = str(i.fm.updated_time);
+  const set = todos.localMinute(i.fm.updated_time);
   if (set) return set;
   const day = str(i.fm.updated);
   if (!day) return null;
@@ -56,9 +56,10 @@ export function updatedTime(i: todos.Issue): string | null {
 }
 
 function row(repo: string, i: todos.Issue): Row {
+  const createdTime = todos.localMinute(i.fm.created_time), closedTime = todos.localMinute(i.fm.closed_time), updated = updatedTime(i);
   return {
     id: i.id, ref: todos.refOf(i), repo, title: i.title, kind: str(i.fm.kind) ?? "task", status: todos.status(i), priority: str(i.fm.priority), labels: areasOf(i),
-    after: afterOf(i), created: str(i.fm.created), createdTime: str(i.fm.created_time), closed: str(i.fm.closed_at), closedTime: str(i.fm.closed_time), source: str(i.fm.source), updated: str(i.fm.updated), updatedTime: updatedTime(i), notes: i.notes.length, parent: todos.parentRef(i) ?? null,
+    after: afterOf(i), created: str(i.fm.created) ?? createdTime?.slice(0, 10) ?? null, createdTime, closed: str(i.fm.closed_at) ?? closedTime?.slice(0, 10) ?? null, closedTime, source: str(i.fm.source), updated: str(i.fm.updated) ?? updated?.slice(0, 10) ?? null, updatedTime: updated, notes: i.notes.length, parent: todos.parentRef(i) ?? null,
   };
 }
 
@@ -164,7 +165,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") {
     const id = `${repo.key}-${ref}`;
-    const c: NewIssue = { id, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${ref}`, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: "waiting" };
+    const c: NewIssue = { id, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${ref}`, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created_time ?? item.fm.created ?? ""), updated: String(item.fm.updated_time ?? item.fm.updated ?? ""), stage: "waiting" };
     const q = stored.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
     if (q) c.question = q;
     if (stored.options.length) c.decision = stored;

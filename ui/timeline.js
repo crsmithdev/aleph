@@ -9,7 +9,7 @@ export const GAP = 60_000;
 
 /** The time and text of a note line `- 2026-11-01 08:06: text`; null for one with no stamp. */
 export function noteEvent(line) {
-  const m = /^- (\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?): (.*)$/s.exec(String(line));
+  const m = /^- (\d{4}-\d\d-\d\d[ T]\d\d:\d\d(?::\d\d(?:\.\d+)?Z?)?): (.*)$/s.exec(String(line));
   return m ? { at: localMs(m[1]), text: m[2] } : null;
 }
 

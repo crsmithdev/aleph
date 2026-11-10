@@ -13,7 +13,7 @@ import { nowOverride } from "../../jobs/lib/infra/settings.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export type Status = (typeof STATUSES)[number];
-const REQUIRED = ["id", "created", "updated"] as const;
+const REQUIRED = ["id", "created_time", "updated_time"] as const;
 
 export interface Issue {
   id: number;
@@ -25,7 +25,7 @@ export interface Issue {
   request: string;
   /** What a run builds: Markdown with the sections `## Goal`, `## Edit surface` and `## Oracle`. Verbatim. */
   spec: string;
-  /** Raw `- YYYY-MM-DD HH:MM: text` lines, in the order they were appended. */
+  /** Raw `- <ISO UTC time>: text` lines, in the order they were appended. */
   notes: string[];
 }
 
@@ -46,13 +46,27 @@ const pad = (n: number): string => String(n).padStart(2, "0");
 
 export const today = (now = new Date()): string =>
   `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-export const minute = (now = new Date()): string =>
-  `${today(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-/** Mark an item changed at `now`: `updated` is the day, `updated_time` the minute. */
+/** A time as ISO 8601 UTC, the form every issue time and note stamp has. */
+export const minute = (now = new Date()): string => now.toISOString();
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+/** A note line with the old local `YYYY-MM-DD HH:MM` stamp. */
+const OLD_STAMP = /^- (\d{4}-\d{2}-\d{2} \d{2}:\d{2}): /;
+/** A stored time as the local `YYYY-MM-DD HH:MM`; an old local time as it is; null for none. */
+export const localMinute = (v: unknown): string | null => {
+  if (typeof v !== "string" || !v) return null;
+  if (!ISO.test(v)) return v;
+  const d = new Date(v);
+  return `${today(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+/** Mark an item changed at `now`. */
 export function touch(item: { fm: Record<string, unknown> }, now = new Date()): void {
-  item.fm.updated = today(now);
   item.fm.updated_time = minute(now);
 }
+/** An old local `YYYY-MM-DD HH:MM` or `YYYY-MM-DD` as ISO UTC; a date is that day's local midnight. Undefined for any other text. */
+const isoOf = (v: unknown): string | undefined => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(String(v ?? ""));
+  return m ? new Date(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0)).toISOString() : undefined;
+};
 
 /** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
 export const clock = (): Date => (nowOverride() ? new Date(nowOverride()!) : new Date());
@@ -179,7 +193,6 @@ export const kindProblem = (kind: string): string | null => ((KINDS as readonly 
 
 /** `from` is the full id of the issue this one was split from; `after` the refs it waits for. */
 export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; from?: string; after?: string[]; now?: Date } = {}): Issue {
-  const day = today(o.now);
   const kind = o.kind ?? "task";
   const bad = kindProblem(kind) ?? titleProblem(title, { part: !!o.from });
   if (bad) throw new Error(bad);
@@ -189,7 +202,7 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   const item: Issue = {
     id: nextId(doc),
     title,
-    fm: { id: String(nextId(doc)), created: day, created_time: minute(o.now), updated: day, updated_time: minute(o.now), kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}), ...(o.from ? { from: o.from } : {}), ...(o.after?.length ? { after: o.after } : {}) },
+    fm: { id: String(nextId(doc)), created_time: minute(o.now), updated_time: minute(o.now), kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}), ...(o.from ? { from: o.from } : {}), ...(o.after?.length ? { after: o.after } : {}) },
     request: o.request ?? "",
     spec: o.spec ?? "",
     notes: [],
@@ -227,12 +240,10 @@ export function setStatus(item: Issue, next: Status, now = new Date(), why?: str
     delete item.fm.parked;
     delete item.fm.closed_as;
     delete item.fm.closed_why;
-    delete item.fm.closed_at;
     delete item.fm.closed_time;
   } else {
     delete item.fm.parked;
     item.fm.closed_as = next;
-    item.fm.closed_at = today(now);
     item.fm.closed_time = minute(now);
     if (why) item.fm.closed_why = why;
   }
@@ -263,10 +274,11 @@ export function lint(doc: Doc): Finding[] {
     }
     const s = item.fm.closed_as;
     if (s !== undefined && s !== "done" && s !== "dropped") findings.push({ id: refOf(item), problem: `closed_as "${s}" is not done or dropped`, fixable: false });
-    for (const key of ["created", "updated"] as const) {
+    for (const key of ["created_time", "updated_time", "closed_time"] as const) {
       const v = item.fm[key];
-      if (typeof v === "string" && v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) findings.push({ id: refOf(item), problem: `${key} "${v}" is not YYYY-MM-DD`, fixable: false });
+      if (typeof v === "string" && v && !ISO.test(v)) findings.push({ id: refOf(item), problem: `${key} "${v}" is not an ISO UTC time`, fixable: isoOf(v) !== undefined });
     }
+    if (item.notes.some((l) => OLD_STAMP.test(l))) findings.push({ id: refOf(item), problem: "a note stamp is not an ISO UTC time", fixable: true });
     const after = item.fm.after;
     if (after !== undefined) {
       const refs = Array.isArray(after) ? after : [after];
@@ -308,8 +320,15 @@ export function fix(doc: Doc, now = new Date()): string[] {
     const kept = areas.filter((a) => !MOVED_AREAS.includes(a));
     if (kept.length < areas.length) { item.fm.areas = kept; fixed.push(`${refOf(item)}: areas ${areas.filter((a) => MOVED_AREAS.includes(a)).join(", ")} removed`); }
     if (item.fm.id === undefined || String(item.fm.id) !== refOf(item)) { item.fm.id = refOf(item); fixed.push(`${refOf(item)}: id set to ${refOf(item)}`); }
-    if (!item.fm.created) { item.fm.created = (item.fm.updated as string) || today(now); fixed.push(`${refOf(item)}: created set to ${item.fm.created}`); }
-    if (!item.fm.updated) { item.fm.updated = (item.fm.created as string) || today(now); fixed.push(`${refOf(item)}: updated set to ${item.fm.updated}`); }
+    const was = JSON.stringify([item.fm, item.notes]);
+    for (const key of ["created_time", "updated_time", "closed_time"]) if (item.fm[key] !== undefined) item.fm[key] = isoOf(item.fm[key]) ?? item.fm[key]!;
+    item.fm.created_time ||= isoOf(item.fm.created) ?? isoOf(item.fm.updated) ?? minute(now);
+    item.fm.updated_time ||= isoOf(item.fm.updated) ?? item.fm.created_time;
+    const closed = isoOf(item.fm.closed_at);
+    if (closed) item.fm.closed_time ||= closed;
+    for (const key of ["created", "updated", "closed_at"]) delete item.fm[key];
+    item.notes = item.notes.map((l) => l.replace(OLD_STAMP, (_, t) => `- ${isoOf(t)}: `));
+    if (JSON.stringify([item.fm, item.notes]) !== was) fixed.push(`${refOf(item)}: times set to ISO UTC`);
     if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) { item.fm.labels = [String(item.fm.labels)]; fixed.push(`${refOf(item)}: labels wrapped in a list`); }
   }
   return fixed;

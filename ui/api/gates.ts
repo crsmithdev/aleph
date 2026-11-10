@@ -144,7 +144,7 @@ function noteEntries(): LogEntry[] {
     for (const item of doc?.items ?? []) {
       const ref = `${repo.key}-${item.sub === undefined ? item.id : `${item.id}.${item.sub}`}`;
       for (const n of item.notes) {
-        const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (Chris(?::| decided:| approved| denied| dropped).*)$/.exec(n);
+        const m = /^- (\d{4}-\d\d-\d\d)[ T](\d\d:\d\d(?::\d\d(?:\.\d+)?Z)?): (Chris(?::| decided:| approved| denied| dropped).*)$/.exec(n);
         if (!m) continue;
         const t = m[3];
         const action = /^Chris: run (it|intake) again$/.test(t) ? "reran" : /^Chris: checked/.test(t) ? "done" : /^Chris (denied|dropped)/.test(t) ? "dropped" : "answered";

@@ -94,7 +94,7 @@ export function useFixture(): void {
     cpSync(template(), fx.base, { recursive: true });
     for (const clone of [fx.items, fx.repo]) writeFileSync(join(clone, ".git", "config"), readFileSync(join(clone, ".git", "config"), "utf8").replaceAll(templateDir, fx.base));
     writeFileSync(join(fx.base, "repos.json"), JSON.stringify({ proj: { path: fx.repo, code: "p" } }));
-    seed("# To do\n\n## 3. An old item\n---\nid: 3\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\nlabels: []\n---\n\nWritten long ago.\n\nDone when it is done.\n");
+    seed("# To do\n\n## 3. An old item\n---\nid: 3\nstatus: open\ncreated_time: 2026-09-01T00:00:00.000Z\nupdated_time: 2026-09-01T00:00:00.000Z\npriority: medium\nlabels: []\n---\n\nWritten long ago.\n\nDone when it is done.\n");
   });
   afterEach(() => rmSync(fx.base, { recursive: true, force: true }));
 }

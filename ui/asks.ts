@@ -33,7 +33,7 @@ export interface Details {
 }
 export type Always = Record<string, Granted>;
 
-const STAMP = /^\s*\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?:\s*/;
+const STAMP = /^\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?Z?)?:\s*/;
 /** A note without its optional leading timestamp. */
 const unlead = (s: string): string => s.replace(/^\s*-\s*/, "").replace(STAMP, "");
 

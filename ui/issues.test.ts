@@ -875,10 +875,10 @@ describe("the Updated time", () => {
     expect(v.sortRows(rows, { key: "updated", dir: -1 })[0]).toBe(rows[1]);
   });
 
-  test("a write sets updated and updated_time", () => {
-    const i = item({ updated: "2026-01-01" });
+  test("a write sets updated_time", () => {
+    const i = item({ updated_time: "2026-01-01T00:00:00.000Z" });
     todos.note(i, "hi", new Date(2026, 10, 5, 9, 7));
-    expect([i.fm.updated, i.fm.updated_time]).toEqual(["2026-11-05", "2026-11-05 09:07"]);
+    expect(i.fm.updated_time).toBe(new Date(2026, 10, 5, 9, 7).toISOString());
   });
 });
 

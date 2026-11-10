@@ -245,7 +245,7 @@ function mainSince(repo: Repo, item: issues.Issue): string {
   const ref = mainRef(repo);
   if (!ref) return "(main is not readable)";
   // `created` is a day; start a day early, so a time zone cannot drop the commits of the day itself.
-  const day = new Date(`${String(item.fm.created ?? "").trim()}T00:00:00Z`);
+  const day = new Date(`${String(item.fm.created_time ?? item.fm.created ?? "").trim().slice(0, 10)}T00:00:00Z`);
   const r = git(repo.path, "log", "--oneline", "--no-decorate", ...(isNaN(+day) ? ["-n", "50"] : [`--since=${new Date(+day - 864e5).toISOString()}`]), ref);
   return (r.ok && r.out.trim()) || "(none)";
 }
@@ -288,7 +288,7 @@ ${mediaSection(repo.key, item)}${item.spec.trim() ? `\n# Its spec now\n\n${item.
 
 ${openIssues(repo, item)}
 
-# Commits on main since ${String(item.fm.created ?? "").trim() || "the issue was created"}
+# Commits on main since ${String(item.fm.created_time ?? item.fm.created ?? "").trim() || "the issue was created"}
 
 ${mainSince(repo, item)}
 
