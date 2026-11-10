@@ -9,7 +9,7 @@ import { issueSegments, renderIssue } from "./views/issues.js";
 const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", condition: "passed", started, ended, ...extra });
 const issue = (over: object = {}) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [] }, ...over });
 const held = () => [
-  run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"),
+  run("intake", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"),
   run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z", { condition: "waiting", cost: 0.25 }),
   run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed", cost: 0.05 }),
 ];
@@ -32,7 +32,7 @@ describe("the issue timeline", () => {
   test("without parts it is one Work row: a bar per run, the waits, and the notes as events", () => {
     const [row] = rowsOf({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: triage: asked"] });
     expect(issueSegments(issue({ timeline: { filed: 0, runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
-    expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["triage", "aux"], ["build", "build"], ["land", "land"]]);
+    expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["intake", "aux"], ["build", "build"], ["land", "land"]]);
     expect(row.bars[1].href).toBe("#/jobs/fac-1");
     expect(row.waits.map((w: any) => w.chris)).toEqual([false, true]);
     expect(row.events.map((e: any) => e.tag)).toEqual(["waiting", "waiting", "triage"]);
@@ -54,7 +54,7 @@ describe("the issue timeline", () => {
   test("with parts: before the split, a row per part from its runs' `on`, and after the parts to the close", () => {
     const parts = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [{ name: "fac-1.1" }] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
     const runs = [
-      run("plan", "2026-11-01T10:05:00Z", "2026-11-01T10:06:00Z", { name: "plan-fac-1" }),
+      run("intake", "2026-11-01T10:05:00Z", "2026-11-01T10:06:00Z", { name: "plan-fac-1" }),
       run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1", condition: "failed", reason: "it broke" }),
       run("build", "2026-11-01T10:11:00Z", "2026-11-01T10:15:00Z", { name: "fac-1.1", on: "fac-1.1" }),
       run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" }),
@@ -63,7 +63,7 @@ describe("the issue timeline", () => {
     const segs = issueSegments(issue({ goals: parts, notes, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } }));
     expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Sub-issues", 2], ["After the Sub-issues", 1]]);
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;
-    expect(before.bars.map((b: any) => b.label)).toEqual(["plan"]);
+    expect(before.bars.map((b: any) => b.label)).toEqual(["intake"]);
     expect(before.events.map((e: any) => e.tag)).toEqual(["waiting", "planner"]);
     expect(one.bars.map((b: any) => [b.label, b.tone])).toEqual([["build 1", "bad"], ["build 2", "build"]]);
     expect(one.events.find((e: any) => e.tag === "failed").html).toBe("build 1 · it broke");

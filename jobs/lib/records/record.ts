@@ -200,12 +200,11 @@ export function update(key: string, fn: (r: JobRecord) => JobRecord | void): Job
 }
 
 /**
- * One event for each run whose state a write changed, by `gate` on the run's subject: `a1421 running a1421#6`. A facts
- * run is the factory's own check and no step of a job. A bad word must not undo the write it reports, so it only logs.
+ * One event for each run whose state a write changed, by `gate` on the run's subject: `a1421 running a1421#6`. A bad word must not undo the write it reports, so it only logs.
  */
 function logChanges(was: Map<string, string>, runs: RunRecord[]): void {
   for (const x of runs) {
-    if (x.kind === "facts" || was.get(x.id) === x.condition) continue;
+    if (was.get(x.id) === x.condition) continue;
     const sub = x.condition === "running" ? undefined : x.cause ?? x.fate;
     try { logEvent({ by: "gate", subject: subjectOf(x), action: x.condition, sub, on: [jobIdOfRun(x)], ...(x.condition === "running" ? {} : { cost: x.cost }), ...(x.condition === "landed" ? { commit: x.commit } : {}) }); }
     catch (e) { console.error(`record: no event for ${x.id}: ${(e as Error).message}`); }
@@ -348,7 +347,7 @@ const jobIdOfRun = (run: RunRecord): string => jobId(subjectOf(run), run.n ?? 1)
  */
 export function next(r: JobRecord): Step {
   if (r.ask) return { step: "ask", action: "waiting", to: "human" };
-  const last = r.runs.findLast((x) => x.kind !== "facts" && x.kind !== "director" && !(x.kind === "land" && x.condition === "failed" && causeOf(x) === "locked"));
+  const last = r.runs.findLast((x) => x.kind !== "director" && !(x.kind === "land" && x.condition === "failed" && causeOf(x) === "locked"));
   if (last?.condition === "running") return { step: "run", action: "running", on: [jobIdOfRun(last)] };
   if (last?.condition === "waiting") return { step: "ask", action: "waiting", on: [jobIdOfRun(last)], to: "human" };
   if (last?.next === "worker") return { step: "worker", action: "returned", ...subOf(last), count: `${r.rounds} / ${fixRounds()}` };

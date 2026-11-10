@@ -8,12 +8,12 @@ import { allRuns, jobIdOf, lock, readRun, runsDir, stamp, writeRun } from "../re
 let base: string;
 const NOW = new Date("2026-06-01T12:00:00Z");
 const saved = { ...process.env };
-const opening: Opening = { role: "facts", who: "the reviewer", model: "m-1", seconds: 60, flags: ["--tools", "Read"], name: "demo", command: "facts demo", shown: false };
+const opening: Opening = { role: "intake", who: "the reviewer", model: "m-1", seconds: 60, flags: ["--tools", "Read"], name: "demo", command: "facts demo", shown: false };
 const fake = (body: string) => {
   const path = join(base, "fake");
   writeFileSync(path, `#!/bin/bash\n${body}\n`);
   chmodSync(path, 0o755);
-  process.env.ALEPH_FACTS_CMD = path;
+  process.env.ALEPH_INTAKE_CMD = path;
 };
 
 beforeAll(() => {
@@ -21,13 +21,13 @@ beforeAll(() => {
   process.env.ALEPH_JOBS_DIR = join(base, "jobs");
   process.env.XDG_RUNTIME_DIR = join(base, "run");
 });
-afterEach(() => { setSystemTime(); delete process.env.ALEPH_FACTS_CMD; delete process.env.ALEPH_FACTS_TIMEOUT; });
+afterEach(() => { setSystemTime(); delete process.env.ALEPH_INTAKE_CMD; delete process.env.ALEPH_INTAKE_TIMEOUT; });
 afterAll(() => { rmSync(base, { recursive: true, force: true }); process.env = saved; });
 
 test("a run holds its state, its prompt, its output and its ending", async () => {
   fake(`cat > ${join(base, "stdin")}; echo "$@" > ${join(base, "args")}; echo reply; echo noise >&2`);
   const run = openRun({ ...opening, repo: "r", on: "r-1", job: "job-1" });
-  expect(readRun(run.folder)).toMatchObject({ kind: "facts", name: "demo", job: "job-1", repo: "r", on: "r-1", condition: "running", phase: "facts", model: "m-1", shown: false, told: true });
+  expect(readRun(run.folder)).toMatchObject({ kind: "intake", name: "demo", job: "job-1", repo: "r", on: "r-1", condition: "running", phase: "intake", model: "m-1", shown: false, told: true });
   expect(readFileSync(join(run.folder, "command.txt"), "utf8")).toBe("facts demo\n");
   expect(await run.ask("hello")).toBe("reply\n");
   expect(readFileSync(join(run.folder, "prompt.md"), "utf8")).toBe("hello");
@@ -97,7 +97,7 @@ test("a run records the cost of its result event, also when the command fails, a
 
 test("a run past its time box is killed and says it timed out", async () => {
   fake("exec tail -f /dev/null");
-  process.env.ALEPH_FACTS_TIMEOUT = "2";
+  process.env.ALEPH_INTAKE_TIMEOUT = "2";
   const run = openRun(opening);
   await expect(run.ask("x")).rejects.toThrow("the reviewer timed out");
   expect(existsSync(join(run.folder, "output.log"))).toBe(true);
@@ -105,7 +105,7 @@ test("a run past its time box is killed and says it timed out", async () => {
 
 test("the time box ends the call's children too, so a child that holds the output pipe does not hold the run", async () => {
   fake(`tail -f /dev/null & echo $! > ${join(base, "child")}; exec tail -f /dev/null`);
-  process.env.ALEPH_FACTS_TIMEOUT = "2";
+  process.env.ALEPH_INTAKE_TIMEOUT = "2";
   await expect(openRun(opening).ask("x")).rejects.toThrow("the reviewer timed out");
   const child = Number(readFileSync(join(base, "child"), "utf8"));
   // The pipe closed, so the child is dead; its new parent may take a moment to reap it under load.
@@ -122,7 +122,7 @@ test("endLost ends a run when its lock is free, and leaves one whose lock is hel
   done.end("kept");
   const release = (await lock("agent-run-held", 0))!;
   try {
-    await endLost("facts", (run) => (run.name === "other" ? null : `agent-run-${run.name}`), "a verdict");
+    await endLost("intake", (run) => (run.name === "other" ? null : `agent-run-${run.name}`), "a verdict");
   } finally {
     release();
   }

@@ -47,6 +47,7 @@ const PARTS_NEW: Row[] = [
   // PARTS_NEW[1] is the held issue that the `aleph status` test below reads.
   { name: "new issue: held", stage: "held", action: "after", why: /^after fac-\d/, build: async () => newIssue({ after: [ref(newIssue())] }) },
   { name: "new issue: working while intake splits it", stage: "working", build: async () => newIssue({ plan: "true" }) },
+  { name: "new issue: an intake run sorts it, not works it", stage: "queued", action: "starting", build: async () => newRun(newIssue(), { kind: "intake", condition: "running" }) },
 ];
 
 // A commit on origin/main that names part `partRef` (`<n>.<k>`) and its parent issue `n`, as the land of an issue does; returns its sha.

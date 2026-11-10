@@ -83,8 +83,8 @@ test("a dispatch with checks, three factory repos and no open issues fetches the
 });
 
 test("the day's spend counts every kind that records a cost", () => {
-  for (const [name, kind, cost] of [["fac-1", "build", 1], ["fac-2", "triage", 2], ["fac-3", "plan", 4], ["fac-5", "firefighter", 16]] as const) mk(name, kind, "done", { cost });
-  expect(spentToday()).toBe(23);
+  for (const [name, kind, cost] of [["fac-1", "build", 1], ["fac-2", "intake", 2], ["fac-5", "director", 16]] as const) mk(name, kind, "done", { cost });
+  expect(spentToday()).toBe(19);
 });
 
 test("runStarts counts an issue's job starts in the hour, not its fix rounds, and matches the loop guard", () => {
@@ -100,13 +100,13 @@ test("runStarts counts an issue's job starts in the hour, not its fix rounds, an
   expect(factorySnapshot(NOW, jobs).runStarts).toBe(issueFacts(loadRegistry().fac, item, jobs, NOW).startsInHour);
 });
 
-test("an explain run has no repo; its cost counts in the day's spend, not in runsToday, and an old one adds nothing", () => {
+test("a director run has no repo; its cost counts in the day's spend, not in runsToday, and an old one adds nothing", () => {
   setSystemTime(NOW);
   const old = new Date(NOW - 25 * 3600_000).toISOString();
-  mk("fac-6", "explain", "done", { cost: 3, repo: undefined, on: "fac-6" });
-  mk("fac-7", "explain", "done", { cost: 5, repo: undefined, on: "20261028-000001-fac-fac-1-build", started: old });
+  mk("fac-6", "director", "done", { cost: 3, repo: undefined, on: "fac-6" });
+  mk("fac-7", "director", "done", { cost: 5, repo: undefined, on: "20261028-000001-fac-fac-1-build", started: old });
   expect(spentToday()).toBe(3);
-  expect(runsToday().filter((e) => e.run.kind === "explain")).toEqual([]);
+  expect(runsToday().filter((e) => e.run.kind === "director")).toEqual([]);
 });
 
 test("an issue that names a busy file an open job also names waits; a job waiting for Chris does not count", async () => {

@@ -16,7 +16,7 @@ import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
 /** `id` is the run folder's name, the key of its logs; `job` is the job ID that the page shows, `a1375#6`. */
-interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "triage" | "plan" | "facts" | "firefighter" | "director" | "explain" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
 export interface LogFile { name: string; size: number }
 /** The log files the Job page serves, and no others. */
@@ -93,11 +93,10 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
 }
 
 const DAY = 24 * 3600_000;
-const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", intake: "intake", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", director: "director", explain: "explain", monitor: "monitor" } as const;
+const KIND = { build: "worker", recheck: "worker", land: "land", plain: "plain", intake: "intake", director: "director", monitor: "monitor" } as const;
 /** The actor a run belongs to, by its kind. */
 const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
-  worker: "worker", review: "reviewer", intake: "intake", triage: "intake", plan: "intake", facts: "intake",
-  director: "director", explain: "director", monitor: "monitor", firefighter: "firefighter",
+  worker: "worker", review: "reviewer", intake: "intake", director: "director", monitor: "monitor",
 };
 /** The runs of a job as the page shows them; with `all`, every run, each also gets its job ID. */
 function runInfos(runs: Entry[], fit: Fit | null = null, all?: Entry[]): RunInfo[] {

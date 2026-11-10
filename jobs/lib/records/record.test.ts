@@ -27,7 +27,6 @@ test("a write that changes a run's state logs one event by gate in the file of i
   record.putRun("r31", r);
   record.putRun("r31", { ...r, phase: "worker" });
   record.patchRun("r31", { condition: "failed", cause: "timeout" });
-  record.putRun("f31", { ...r, kind: "facts" as Run["kind"] });
   expect(mine().map(({ by, subject, action, sub, on }) => ({ by, subject, action, sub, on }))).toEqual([
     { by: "gate", subject: "aleph-31", action: "running", sub: undefined, on: ["aleph-31#2"] },
     { by: "gate", subject: "aleph-31", action: "failed", sub: "timeout", on: ["aleph-31#2"] },
@@ -126,8 +125,7 @@ test("next: each run condition gives its step", () => {
     [[{ condition: "failed" }], "rescue"],
     [[{ kind: "land", condition: "landed", commit: "abc1234def" }], "none"],
     [[{ condition: "dropped", reason: "dropped by Chris" }], "none"],
-    [[{ kind: "land", condition: "landed" }, { kind: "facts", condition: "running" }], "none"],
-    [[{ condition: "failed", reason: "no commit" }, { kind: "director", condition: "done" }], "rescue"],
+        [[{ condition: "failed", reason: "no commit" }, { kind: "director", condition: "done" }], "rescue"],
     [[{ condition: "passed", next: "land" }, { kind: "director", condition: "passed" }], "land"],
   ];
   for (const [runs, step] of cases) expect([runs, record.next(rec(runs)).step]).toEqual([runs, step]);

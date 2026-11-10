@@ -94,7 +94,7 @@ export const LEFT_OUT = [
 ];
 
 /** The table's stage order; a stage with no run is left out. */
-const STAGES = ["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land", "facts", "explain", "firefighter", "director", "monitor"];
+const STAGES = ["intake", "spec-check", "build", "review", "recheck", "land", "director", "monitor"];
 
 /** Local midnight of `day` (YYYY-MM-DD), in ms. */
 export const dayStart = (day: string): number => new Date(`${day}T00:00:00`).getTime();
@@ -133,7 +133,7 @@ interface StageRun { stage: string; item: string; issue: boolean; unusable: bool
 function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun> {
   for (const e of runs) {
     const r = e.run;
-    if (r.kind === "plain" || r.kind === "agent" || r.condition === "running" || !inside(r.started, from, to)) continue;
+    if (r.kind === "plain" || r.condition === "running" || !inside(r.started, from, to)) continue;
     const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
     // A run on no item (a firefighter sweep) is its own item.
     yield { stage: r.kind, item: r.on ?? r.job, issue: !!r.on, unusable: unusable(e), secs: took >= 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost : null };

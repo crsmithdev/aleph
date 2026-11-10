@@ -63,7 +63,7 @@ async function spawn(c: Call, input: string): Promise<{ output: string; text: st
 
 /** The ledger's line for a role's run. `job` defaults to the folder's own name. The run's subject is `on`, else `monitor` for the monitor, else `name`. */
 export interface Opening extends Call {
-  role: "intake" | "facts" | "director" | "monitor";
+  role: "intake" | "director" | "monitor";
   name: string;
   /** The first line of command.txt. */
   command: string;

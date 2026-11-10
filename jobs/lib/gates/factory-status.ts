@@ -140,12 +140,12 @@ export const factoryRepos = sandboxRepos;
 /** `runs` is every run, when the caller has read them already. */
 export function runsToday(now = Date.now(), runs: Entry[] = allRuns()): Entry[] {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return runs.filter((e) => (isBuild(e.run.kind) || e.run.kind === "intake" || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
+  return runs.filter((e) => (isBuild(e.run.kind) || e.run.kind === "intake") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
 /** The dollars of the runs started in the last 24 hours: `runsToday`, and the firefighter and director runs (and the explain runs from before the director), which `runsToday` does not count. A director run has no repo (its `on` is an item ref, a run folder or a lesson id), so it is not filtered by one, as a firefighter run is not. */
 export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number {
-  const others = runs.filter((e) => (e.run.kind === "firefighter" || e.run.kind === "director" || e.run.kind === "explain") && now - Date.parse(e.run.started) < DAY);
+  const others = runs.filter((e) => (e.run.kind === "director") && now - Date.parse(e.run.started) < DAY);
   return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0);
 }
 

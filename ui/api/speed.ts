@@ -37,7 +37,7 @@ function issueOf(r: Run): number | undefined {
 }
 
 const MAX_RUN = 4 * HOUR;
-export const KINDS = ["agent", "land", "intake", "triage", "plan"] as const;
+export const KINDS = ["land", "intake"] as const;
 
 export interface Pct { count: number; p50: number; p90: number }
 /** A phase's `hist` counts times in 7 bins: under 1m, 1-5m, 5-15m, 15-30m, 30m-1h, 1-4h, over 4h (an edge falls in the upper bin). `worst` is the longest time in seconds. */
@@ -339,7 +339,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
     if (isAgentRun(r.kind)) {
       const a = Date.parse(r.started);
       if (a < (firstStart.get(key) ?? Infinity)) firstStart.set(key, a);
-    } else if (r.kind === "intake" || r.kind === "triage") {
+    } else if (r.kind === "intake") {
       const b = Date.parse(r.ended ?? "");
       if (b < (triaged.get(key) ?? Infinity)) triaged.set(key, b);
     } else if (r.kind === "land" && (r.condition === "landed" || r.condition === "done")) {
@@ -369,7 +369,7 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["triage", "triage"], ["planner", "plan"], ["director", "director"], ["monitor", "monitor"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
+const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "director"], ["monitor", "monitor"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
 type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
@@ -402,7 +402,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     const cause = causeOf(r);
     const stuck = !ok && r.condition !== "running" && (cause === "timeout" || cause === "stalled" || (r.condition === "failed" && !r.failed));
     const fail = !ok && !stuck && r.condition !== "running";
-    const build = isBuild(r.kind) || r.kind === "agent";
+    const build = isBuild(r.kind);
     const role = build ? "worker" : AGENT_ROLES.find(([, , kind]) => kind === r.kind)?.[0];
     if (role) {
       const w = row(role, r.model || "unset");
@@ -447,8 +447,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
     let runs = 0;
     for (const e of entries) {
       const r = e.run as Run;
-      // Older worker runs have the kind "agent".
-      if (r.kind !== kind && !(key === "worker" && r.kind === "agent")) continue;
+      if (r.kind !== kind) continue;
       const running = r.condition === "running" && alive(e);
       if (running) live++;
       const a = Date.parse(r.started), b = r.ended ? Date.parse(r.ended) : running ? now : NaN;
@@ -473,7 +472,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
   let up = 0, peak = 0;
   for (const [, d] of edges) { up += d; if (up > peak) peak = up; }
   for (const p of points) for (const [key] of AGENT_ROLES) if (p[key] !== undefined) p[key] = round(p[key]!, 2);
-  const inWindow = entries.map((e) => e.run as Run).filter((r) => (isBuild(r.kind) || r.kind === "agent") && Date.parse(r.started) >= since && Date.parse(r.started) < now);
+  const inWindow = entries.map((e) => e.run as Run).filter((r) => isBuild(r.kind) && Date.parse(r.started) >= since && Date.parse(r.started) < now);
   const reviews = inWindow.reduce((n, r) => n + (r.review ? 1 : 0), 0);
   // The baseline rate of a role and model: the mean of its rate over the spans that have data, as averageFigures takes it.
   const prior = before.map(([a, b]) => outcomeRows(entries, a, b));
@@ -515,7 +514,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const startOf = (i: number) => (daily ? new Date(last.getFullYear(), last.getMonth(), last.getDate() - (n - 1 - i)) : new Date(last.getTime() - (n - 1 - i) * stepMs));
   const since = startOf(0);
   const slot = (t: number): number => (daily ? Math.round((new Date(t).setHours(0, 0, 0, 0) - since.getTime()) / DAY) : Math.floor((t - since.getTime()) / stepMs));
-  const times: Record<string, number[]> = { agent: [], land: [], intake: [], triage: [], plan: [] };
+  const times: Record<string, number[]> = { land: [], intake: [] };
   const checks = new Map<string, number[]>();
   const agents: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[] = [];
   const models = new Map<string, number[]>();

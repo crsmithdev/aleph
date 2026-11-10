@@ -35,11 +35,7 @@ export interface TestRecord { ran: number; passed: number; failed: number; skipp
 export type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string; model?: string };
 
 export interface Run {
-  /**
-   * `firefighter` is read only: runs from before the firefighter became code (v6) keep it. `triage` and `plan` are read only
-   * too: runs from before intake took their work (4 Nov 2026) keep them.
-   */
-  kind: "build" | "plain" | "land" | "intake" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "director" | "explain" | "agent" | "monitor";
+  kind: "build" | "plain" | "land" | "intake" | "recheck" | "director" | "monitor";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   condition: State; phase?: string;
   reason?: string; question?: string; say?: string;
@@ -245,12 +241,11 @@ export function makeRun(run: Pick<Run, "on" | "kind" | "name"> & { job?: string 
 }
 
 /**
- * A job is open while its latest run is open. A facts run (the reviewer of a
- * landed job) does not count: a landed job stays closed while it runs. A plain
+ * A job is open while its latest run is open. A plain
  * run is open only while it is live: a failed build is news, not a job to land or drop.
  */
 export function isOpen(runs: Entry[]): boolean {
-  const last = runs.findLast((e) => e.run.kind !== "facts");
+  const last = runs.at(-1);
   if (!last) return false;
   if (last.run.kind === "plain") return isLive(last.folder);
   return OPEN.includes(last.run.condition);

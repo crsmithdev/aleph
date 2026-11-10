@@ -36,7 +36,7 @@ export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs:
     if (item === undefined || job[0].run.repo !== repo.key) continue;
     // An intake run (a triage or planner run before it) marks its item in the store and does not land:
     // neither is a factory run working on the item, so an issue they close in the store is done.
-    if (typeof item === "number" && repo.sandbox && job.some((e) => e.run.kind !== "intake" && e.run.kind !== "triage" && e.run.kind !== "plan")) touched.add(item);
+    if (typeof item === "number" && repo.sandbox && job.some((e) => e.run.kind !== "intake")) touched.add(item);
     (runs[item] ??= []).push(runViewOf(job));
     if (isOpen(job)) open[item] = stateOf(job);
   }

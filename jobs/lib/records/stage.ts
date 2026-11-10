@@ -80,7 +80,7 @@ export function runViewOf(job: Job): RunView {
 
 /** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */
 const partOf = (ref: string): string | undefined => /-(\d+(?:\.\d+)?)$/.exec(ref)?.[1];
-const SORTING: Run["kind"][] = ["intake", "triage", "plan", "facts"];
+const SORTING: Run["kind"][] = ["intake"];
 
 /** The item is done: the store says so, or a not-reverted trailer commit on main names it. Returns the reason. */
 function doneWhy(item: Subject, ctx: Ctx): Reason | null {
@@ -103,7 +103,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const done = doneWhy(item, ctx);
   if (done) return out("done", done);
   if (item.status === "parked") return out("parked", { action: "parked" });
-  const live = ctx.runs(id).filter((r) => r.open && r.kind !== "facts");
+  const live = ctx.runs(id).filter((r) => r.open);
   const work = live.filter((r) => !SORTING.includes(r.kind));
   const parts = item.parts.map((ref) => ctx.item(ref)).filter((p): p is Subject => p !== undefined && !seen.has(p.id)).map((p) => stage(p, ctx, new Set([...seen, id])));
   if (item.ask) return out("waiting", { action: "waiting", to: "human" });

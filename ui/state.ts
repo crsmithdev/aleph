@@ -320,12 +320,12 @@ export function state(now = new Date()): State {
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
     // A running intake (or planner) counts as running; it is not a live agent.
-    if ((last.kind === "intake" || last.kind === "plan") && last.condition === "running") {
+    if (last.kind === "intake" && last.condition === "running") {
       running.push(toJob(runs));
       continue;
     }
     // An intake, triage, planner or facts run sorts an issue and never lands; it shows only when it awaits you.
-    if (last.kind === "intake" || last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
+    if (last.kind === "intake") {
       if (isOpen(runs) && isWaiting(lastReal(runs).run.condition)) needs.push(toJob(runs));
       continue;
     }

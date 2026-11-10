@@ -24,9 +24,9 @@ describe("stages", () => {
     run({ kind: "build", on: "p-1", started: at(DAY, 10), ended: at(DAY, 10, 20), condition: "failed", cause: "no-commit", cost: 2, review: { call: "failed" } }),
     run({ kind: "build", on: "p-2", started: at(DAY, 11), ended: at(DAY, 11, 30), condition: "passed", cost: 3 }),
     run({ kind: "build", on: "p-3", started: at(DAY, 12), condition: "running" }),
-    run({ kind: "triage", on: "p-1", started: at(DAY, 8), ended: at(DAY, 8, 1), reason: "failed: no reply", cause: "unanswered" }),
-    run({ kind: "firefighter", started: at(DAY, 8), ended: at(DAY, 8, 2) }),
-    run({ kind: "firefighter", started: at(DAY, 9), ended: at(DAY, 9, 2) }),
+    run({ kind: "intake", on: "p-1", started: at(DAY, 8), ended: at(DAY, 8, 1), reason: "failed: no reply", cause: "unanswered" }),
+    run({ kind: "director", started: at(DAY, 8), ended: at(DAY, 8, 2) }),
+    run({ kind: "director", started: at(DAY, 9), ended: at(DAY, 9, 2) }),
     // The trailing 7 days: two builds on one item.
     run({ kind: "build", on: "p-0", started: at("2026-10-15", 9), ended: at("2026-10-15", 9, 40), condition: "passed", cost: 7 }),
     run({ kind: "build", on: "p-0", started: at("2026-10-16", 9), ended: at("2026-10-16", 10), condition: "dropped", cost: 7 }),
@@ -42,13 +42,13 @@ describe("stages", () => {
   });
 
   test("the p90 is the stage's own slowest runs, and a stage with no recorded end has none", () => {
-    expect(row("firefighter")).toMatchObject({ runs: 2, p90: 120 });
+    expect(row("director")).toMatchObject({ runs: 2, p90: 120 });
     expect(row("review")).toMatchObject({ runs: 2, p90: null });
   });
 
   test("a role run that states a cause has no usable result; a run on no item is its own item", () => {
-    expect(row("triage")).toMatchObject({ runs: 1, unusable: 1 });
-    expect(row("firefighter")).toMatchObject({ runs: 2, items: 2, unusable: 0 });
+    expect(row("intake")).toMatchObject({ runs: 1, unusable: 1 });
+    expect(row("director")).toMatchObject({ runs: 2, items: 2, unusable: 0 });
   });
 
   test("the reviewer is a stage of its own, and its error is no usable result; a spec check has only its cost", () => {

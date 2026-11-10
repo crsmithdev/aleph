@@ -78,16 +78,6 @@ const runAsks = (s: ReturnType<typeof state>) => s.asks.filter((a) => a.key.star
 
 describe("state", () => {
 
-  test("triage runs stay out of the jobs lists", () => {
-    run("20261027-000030-a", { kind: "triage", job: "fac-t1", name: "triage-fac-1", condition: "done", reason: "close", on: "fac-1", started: ago(5), ended: ago(4) });
-    run("20261027-000031-a", { kind: "triage", job: "fac-t2", name: "triage-fac-2", condition: "running", on: "fac-2", started: ago(0.1) });
-    run("20261027-000032-a", { kind: "triage", job: "fac-t3", name: "triage-fac-3", condition: "done", reason: "malformed verdict: x", on: "fac-3", started: ago(7), ended: ago(6) });
-    const s = state(now);
-    expect("triage" in s).toBe(false);
-    expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
-    for (const id of ["20261027-000030-a", "20261027-000031-a", "20261027-000032-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
-  });
-
   test("a build reads the records that are not archived, while allJobs still reads the archived ones", () => {
     const ids = ["20261027-000070-a", "20261027-000071-a"];
     run(ids[0], { job: "fac-70", name: "fac-70", condition: "failed", reason: "a check failed", on: "fac-70", started: ago(240), ended: ago(239) });
@@ -175,13 +165,11 @@ describe("a dropped issue", () => {
 });
 
 describe("an intake run", () => {
-  test("counts as running; triage does not; a done one does not", () => {
-    const ids = ["20261027-000050-a", "20261027-000051-a"];
+  test("counts as running; a done one does not", () => {
+    const ids = ["20261027-000050-a"];
     run(ids[0], { kind: "intake", job: "intake-fac-2", name: "intake-fac-2", condition: "running", on: "fac-2", started: ago(1) });
-    run(ids[1], { kind: "triage", job: "triage-fac-2", name: "triage-fac-2", condition: "running", on: "fac-2", started: ago(1) });
     let s = state(now);
     expect(s.running.map((j) => j.name)).toContain("intake-fac-2");
-    expect(s.running.map((j) => j.name)).not.toContain("triage-fac-2");
     expect(runAsks(s).map((a) => a.id)).toEqual(["fac-1"]);
     expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
     run(ids[0], { kind: "intake", job: "intake-fac-2", name: "intake-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });

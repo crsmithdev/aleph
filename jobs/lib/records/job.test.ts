@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addNote, allJobs, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, readFile, tailOf } from "./job.ts";
-import { isOpen, writeRun, type Run } from "./ledger.ts";
+import { writeRun, type Run } from "./ledger.ts";
 import { asked, markAsked, waitsForSpecEdit } from "../asks/ask.ts";
 import { markRescued, rescued } from "../transitions/continuation.ts";
 
@@ -30,14 +30,6 @@ function run(id: string, job: string, extra: Partial<Run> = {}, files: Record<st
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }
-
-describe("isOpen", () => {
-  test("a facts run does not reopen a landed job", () => {
-    run("20261028-000001-a01", "j", { name: "n", kind: "land", condition: "landed" });
-    run("20261028-000002-a02", "j", { name: "n", kind: "facts", condition: "running" });
-    expect(isOpen(allJobs()[0])).toBe(false);
-  });
-});
 
 describe("run-folder files", () => {
   test("reads, the latest run that has one, tails, marks, batch and notes", () => {

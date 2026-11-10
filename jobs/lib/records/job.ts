@@ -19,10 +19,7 @@ export { allJobs, isOpen };
 export type Job = Entry[];
 
 
-/** A facts run belongs to the landed job but is not its state: names and states look past it. */
-const notFacts = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts") ?? j.at(-1)!;
-
-const nameIs = (name: string, repo?: string | null) => (j: Job) => notFacts(j).run.name === name && (!repo || notFacts(j).run.repo === repo);
+const nameIs = (name: string, repo?: string | null) => (j: Job) => j.at(-1)!.run.name === name && (!repo || j.at(-1)!.run.repo === repo);
 
 /** The open job called `name` (in `repo`, when given). A name has one open job at most. */
 export const openJob = (name: string, repo?: string | null, jobs = allJobs()): Job | undefined => jobs.findLast((j) => isOpen(j) && nameIs(name, repo)(j));
@@ -43,7 +40,7 @@ export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.f
 export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
 /** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
-export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.condition === "failed" && causeOf(e.run) === "locked")) ?? j.at(-1)!;
+export const lastReal = (j: Job): Entry => j.findLast((e) => !(e.run.kind === "land" && e.run.condition === "failed" && causeOf(e.run) === "locked")) ?? j.at(-1)!;
 
 /** The job's next step: record.ts `next` over the job's runs, with the Ask, wait and events of its record. */
 export function stepOf(j: Job): record.Step {

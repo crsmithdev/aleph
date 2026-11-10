@@ -35,11 +35,11 @@ beforeAll(() => {
   run({ kind: "land", condition: "landed", ...secs(0, 9, 40) });
   run({ kind: "land", condition: "landed", ...secs(0, 9, 46) }); // both without an issue: one key
   run({ kind: "land", condition: "failed", ...secs(0, 9, 100) });
-  run({ kind: "triage", condition: "done", ...secs(0, 11, 20) });
+  run({ kind: "intake", condition: "done", ...secs(0, 11, 20) });
   run({ kind: "build", condition: "running", started: at(0, 14) });
   // three days ago and 20 days ago
   run({ kind: "build", condition: "passed", model: "claude-sonnet-5-5", cost: 0.5, checks: [{ name: "tests", ok: true, seconds: 40 }], ...secs(3, 9, 300) });
-  run({ kind: "plan", condition: "done", ...secs(20, 9, 90) });
+  run({ kind: "intake", condition: "done", ...secs(20, 9, 90) });
 });
 afterAll(() => {
   restore();
@@ -55,6 +55,7 @@ test("done and issues.landed count landed issues, not land runs", () => {
   old(9, 50, {}); // no issue
   old(9, 55, {}); // no issue: one key with the one above
   const d = speed("day", new Date(2026, 8, 18, 15));
+  expect(Object.keys(d.kinds)).toEqual(["land", "intake"]);
   expect(d.kinds.land.count).toBe(5);
   expect(d.done).toBe(3); // zz-5, zz-6 and the no-issue key
   expect(d.issues.landed).toBe(3);
@@ -167,7 +168,6 @@ test("a build run counts as an agent run", () => {
   const before = speed("week", now);
   run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
   const d = speed("week", now);
-  expect(d.kinds.agent.count).toBe(before.kinds.agent.count + 1);
   expect(d.slowest[0]).toMatchObject({ condition: "passed", took: 7000, tests: 20 });
   expect(d.models.find((m) => m.model === "claude-opus-5-5")!.count).toBe(before.models.find((m) => m.model === "claude-opus-5-5")!.count + 1);
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
@@ -247,11 +247,11 @@ test("phases: intake runs from the filing to the first triage end, queue from th
   const r = (n: number, kind: string, state: string, a: number, b: number, repo = "fx") => ({ kind, job: `${repo}-${n}-${a}`, name: "x", repo, on: `${repo}-${n}`, condition: state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
   const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", null], ["fx-3", 1000_000]]) };
   const p = phases([
-    r(1, "triage", "done", 1000_000, 1060_000),
+    r(1, "intake", "done", 1000_000, 1060_000),
     r(1, "build", "failed", 1660_000, 1700_000), r(1, "build", "passed", 1800_000, 1900_000),
     r(1, "land", "landed", 2000_000, 2100_000), r(1, "land", "landed", 3000_000, 4600_000),
     // fx-2 has a bulk filing: a queue from its triage, and no intake or lead. fx-3 has no triage: it queues from its filing.
-    r(2, "triage", "done", 1000_000, 1060_000), r(2, "build", "passed", 1120_000, 1200_000), r(2, "land", "landed", 1300_000, 1400_000),
+    r(2, "intake", "done", 1000_000, 1060_000), r(2, "build", "passed", 1120_000, 1200_000), r(2, "land", "landed", 1300_000, 1400_000),
     r(3, "build", "passed", 1120_000, 1200_000), r(3, "land", "landed", 1300_000, 1400_000),
   ], f, 0, 9_999_000);
   expect(p.intake.count).toBe(1);
@@ -265,8 +265,8 @@ test("per-issue times carry each issue's phases and outcome, and a bucket has a 
   const r = (n: number, kind: string, state: string, a: number, b: number) => ({ kind, job: `fx-${n}`, name: "x", repo: "fx", on: `fx-${n}`, condition: state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
   const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", 1000_000]]) };
   const t = phaseTimes([
-    r(1, "triage", "done", 1000_000, 1060_000), r(1, "build", "passed", 1660_000, 1900_000), r(1, "land", "landed", 2000_000, 2100_000),
-    r(2, "triage", "done", 1000_000, 1100_000), r(2, "build", "passed", 1400_000, 1500_000),
+    r(1, "intake", "done", 1000_000, 1060_000), r(1, "build", "passed", 1660_000, 1900_000), r(1, "land", "landed", 2000_000, 2100_000),
+    r(2, "intake", "done", 1000_000, 1100_000), r(2, "build", "passed", 1400_000, 1500_000),
   ], f, 0, 9_999_000);
   const by = Object.fromEntries(t.issues.map((i) => [i.id, i]));
   expect(by["fx-1"]).toEqual({ id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: 1000_000, intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 });
@@ -286,22 +286,22 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   const e = (kind: string, a: number, b: number | null, extra: object = {}) => ({ folder: `f${a}`, id: `f${a}`, run: { kind, condition: b === null ? "running" : "passed", started: iso(a), ...(b === null ? {} : { ended: iso(b) }), ...extra } }) as any;
   const runs = [
-    e("build", 1, 3, { model: "sonnet", review: { call: "passed" } }), e("build", 2, 4, { model: "sonnet" }), e("agent", 3, 3.5, { model: "haiku" }),
+    e("build", 1, 3, { model: "sonnet", review: { call: "passed" } }), e("build", 2, 4, { model: "sonnet" }), e("build", 3, 3.5, { model: "haiku" }),
     e("build", 7, null), e("build", 6, null), e("build", 0, 9.5), // a live run, a lost one, and a broken clock
-    e("triage", 2, 2.5, { model: "claude-opus-5-5" }), e("director", 4, 5, { model: "claude-fable-5-1" }), e("land", 1, 8), e("recheck", 1, 2),
+    e("intake", 2, 2.5, { model: "claude-opus-5-5" }), e("director", 4, 5, { model: "claude-fable-5-1" }), e("land", 1, 8), e("recheck", 1, 2),
     e("build", 5, 6, { model: "sonnet" }),
   ];
   const a = agentStats(runs, 0, 8 * H, H, 2, (x) => x.folder === "f7");
   const r = Object.fromEntries(a.roles.map((x) => [x.key, x]));
   expect([a.live, a.workers, a.cap, a.peak]).toEqual([1, 1, 2, 3]); // 2-2.5: two workers and triage
   expect(r.worker).toMatchObject({ live: 1, runs: 7, hours: 6.5, p50: 3600, models: ["sonnet", "haiku"] });
-  expect(r.triage).toMatchObject({ live: 0, runs: 1, hours: 0.5, models: ["opus"] });
+  expect(r.intake).toMatchObject({ live: 0, runs: 1, hours: 0.5, models: ["opus"] });
   expect(r.director).toMatchObject({ live: 0, runs: 1, hours: 1, models: ["fable"] });
   expect(r.reviewer).toMatchObject({ live: null, runs: 1, hours: null, p50: null });
-  expect(a.roles.map((x) => x.key)).toEqual(["worker", "intake", "triage", "planner", "director", "monitor", "reviewer"]);
+  expect(a.roles.map((x) => x.key)).toEqual(["worker", "intake", "director", "monitor", "reviewer"]);
   expect(a.mean).toBe(1); // 8 agent hours over 8
   expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 1, 0, 1]);
-  expect(a.points[2].triage).toBe(0.5);
+  expect(a.points[2].intake).toBe(0.5);
 });
 
 test("agents: outcome rows per role and model, with first pass, reviewer verdicts and a baseline rate", () => {
@@ -314,7 +314,7 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
     e("build", 11, { model: "claude-haiku", cost: 0.5, condition: "returned", failed: "review", reason: "reviewer: no" }),
     e("build", 13, { model: "claude-haiku", condition: "failed", cause: "timeout" }),
     e("build", 14, { model: "gpt-oss-20b", condition: "failed", failed: "tests", cost: 0.25 }),
-    e("triage", 15, { model: "gpt-oss-20b" }),
+    e("intake", 15, { model: "gpt-oss-20b" }),
     // The span before, 0..10: haiku one of two, gpt-oss none.
     e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", condition: "failed" }),
   ];
@@ -322,9 +322,9 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
   const by = (role: string, model: string) => a.outcomes.find((x) => x.role === role && x.model === model)!;
   expect(by("worker", "claude-haiku")).toMatchObject({ runs: 3, succeeded: 1, failed: 1, stuck: 1, rate: 0.3333, p50: 3600, cost: 1.5, firstPass: 1, reviewPass: 0.5, baseline: 0.5 });
   expect(by("worker", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 0, failed: 1, stuck: 0, rate: 0, cost: 0.25, firstPass: 0, reviewPass: null, baseline: null });
-  expect(by("triage", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 1, rate: 1 });
+  expect(by("intake", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 1, rate: 1 });
   expect(by("reviewer", "unset")).toMatchObject({ pass: 1, fail: 1, runs: 2, rate: 0.5 });
-  expect(a.outcomes.map((x) => x.role)).toEqual(["worker", "worker", "triage", "reviewer"]);
+  expect(a.outcomes.map((x) => x.role)).toEqual(["worker", "worker", "intake", "reviewer"]);
 });
 
 test("agents: the all-roles success rate, its baseline, the worker first pass and the local share", () => {
@@ -335,7 +335,7 @@ test("agents: the all-roles success rate, its baseline, the worker first pass an
     // Window 10..20: job a landed first time, job b landed after a fix round, a gpt-oss triage passed, a gpt-oss build failed.
     e("build", 10, { model: "claude-haiku", job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
     e("build", 13, { model: "claude-haiku", job: "b", condition: "returned", failed: "review" }), e("build", 14, { model: "claude-haiku", job: "b" }), e("land", 16, { job: "b", condition: "landed" }),
-    e("triage", 15, { model: "gpt-oss-20b" }), e("build", 17, { model: "gpt-oss-20b", condition: "failed", failed: "tests" }),
+    e("intake", 15, { model: "gpt-oss-20b" }), e("build", 17, { model: "gpt-oss-20b", condition: "failed", failed: "tests" }),
     // The span before, 0..10: one of two ended runs succeeded.
     e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", condition: "failed" }),
   ];
@@ -471,10 +471,8 @@ test("GET /api/speed?project= counts only that repo's runs and issues, in the an
     const get = async (q: string) => (await routes["GET /api/speed"](new Request(`http://x/api/speed${q}`), {}, new URL(`http://x/api/speed${q}`))).json();
     const a = await get("?window=week&project=alpha");
     expect(a.done).toBe(1);
-    expect(a.kinds.agent.count).toBe(1);
     const both = await get("?window=week");
     expect(both.done).toBe(3);
-    expect(both.kinds.agent.count).toBe(3);
     const b = await get("?window=week&project=alpha&baseline=1");
     expect(b.baseline.prev.landed).toBe(1);
     expect((await get("?window=week&baseline=1")).baseline.prev.landed).toBe(3);
