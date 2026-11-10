@@ -58,9 +58,12 @@ read it.
 4. **Owner.** For each finding, name the owner: the copy with the most callers, or the module whose name
    already says the concept. Name what each other copy becomes (a call to the owner, or deleted), and a
    pattern that a lint could ban outside the owner. Done when every finding has an owner and a pattern.
-5. **Report.** Write the findings, strongest first, as a table: concept, copies, disagreement, owner,
-   lint pattern. Then list the candidates you dropped, one line each, with the reason. Show the report to
-   the user and stop. File issues only when the user asks.
+5. **Report.** Write the HTML report that [REPORT.md](REPORT.md) describes, strongest finding first, with
+   the dropped candidates at the end. Give the user its absolute path and stop. File issues only when the
+   user asks. Done when each finding from step 4 has its card.
+
+[EXAMPLES.md](EXAMPLES.md) holds proven findings from earlier reviews: read it before step 3 to calibrate
+what a finding, its proof and its owner look like.
 
 ## Check
 
