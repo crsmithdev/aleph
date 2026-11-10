@@ -1,8 +1,10 @@
 # Examples
 
-Proven findings from the aleph architecture review of 2026-11-10 (main at da8a19884), each with the signal
-that finds it, the proof, the owner, and the commit that made one way. Use them to calibrate step 3 and
-step 4, and as the bar for a card.
+Proven findings, mostly from the aleph architecture review of 2026-11-10 (main at da8a19884), each with the
+signal that finds it, the proof, the fix, and the commit that landed it. Use them to calibrate the prove step
+and as the bar for a card. Sections are by lens.
+
+# One-way
 
 ## Status verdict: three copies
 
@@ -47,15 +49,49 @@ step 4, and as the bar for a card.
   write and the `next` write, a returned run read as `step: "rescue"`.
 - **Owner**: the record module owns the run end as one update. Landed as 2f385c342 and 8e8bf1326.
 
-## Redraw: a finding still open at the time
+## Redraw: six views redrew by hand
 
 - **Signal**: repeated fixes (e2ac70562, 653fe63c6 fixed lost folds one view at a time).
 - **Copies**: `ui/router.js:195` (`draw` restores folds and focus); six views that save state, set
   `innerHTML` and restore by hand, none with `restoreFolds`.
 - **Disagreement**: a view redraw drops open folds that a router redraw keeps.
-- **Owner**: the router owns every redraw; views return strings.
+- **Owner**: the router owns every redraw; views return strings. Landed as ba631c570.
 
-## Looked alike, not a finding
+# Depth
+
+## Start decision: assembled by hand in three callers
+
+- **Signal**: callers assemble one decision by hand.
+- **Locations**: `jobs/lib/gates/issue-decision.ts:21,92`, `jobs/lib/gates/factory-status.ts:185-224`,
+  `jobs/lib/transitions/factory.ts:144-201`.
+- **Proof**: deleting a shared start module would put the gate order, tier retry and cap back into each caller;
+  `stalled()` already skipped the dispatch's tier retry, and the start guard's refusal came back as text matched
+  by regex.
+- **Fix**: one module returns a typed start or gate; all three call it. Landed as 742213473
+  (`jobs/lib/gates/start-decision.ts`).
+
+# Seams
+
+## Issue fields read raw outside the issue module
+
+- **Signal**: raw reads outside the owner.
+- **Locations**: about 120 reads of raw frontmatter outside `issues/lib`, e.g. `jobs/lib/roles/intake.ts:247,290`,
+  `ui/state.ts:413,418`, `ui/issue.ts:32`.
+- **Proof**: each read encodes the field's meaning again; the owner `issues/lib/todo.ts` exists.
+- **Fix**: accessors in `issues/lib/todo.ts`; the readers call them. Landed as 71d048577.
+
+# Dead
+
+## Cloud Chamber tidy, 2026-09-27
+
+- **Signal**: knip, pointed at the real entry points.
+- **Proof**: the escape-hatch table for each candidate.
+- **Fix**: 116 exports lost `export`, 17 dead functions went with their tests, one stale doc reference was
+  fixed: −190 net lines over 53 files, landed as 8262b64 in that repo. T1 and T2 only.
+- **Lesson**: on aleph, 21 of 23 knip candidates traced to one manifest knip had not been pointed at
+  (DETECTORS.md, entry-point blindness).
+
+# Looked alike, not a finding
 
 - `isBuild` and `isAgentRun` in `ledger.ts`: different sets on purpose.
 - `dur` and `durMs` in `ui/lib.js`: different ranges and empty values by contract.

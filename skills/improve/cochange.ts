@@ -78,9 +78,9 @@ export function rules(commits: Commit[]): Map<string, Rule[]> {
   return out;
 }
 
-/** The accepted second ways of the repo, from `.one-way.json`. */
+/** The accepted second ways of the repo, from `.improve.json`. */
 export function accepted(root: string): Accepted[] {
-  const path = join(root, ".one-way.json");
+  const path = join(root, ".improve.json");
   return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")).accepted ?? []) : [];
 }
 

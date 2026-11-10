@@ -16,7 +16,7 @@ export type Violation = { rule: string; copy: Side & { function?: string }; owne
 /** The clones and boundary violations of the working tree, or nothing when the repo has no `.jscpd.json`. */
 export function scan(root: string, base?: string): { clones: Clone[]; violations: Violation[] } {
   if (!existsSync(join(root, ".jscpd.json"))) return { clones: [], violations: [] };
-  const out = mkdtempSync(join(tmpdir(), "one-way-"));
+  const out = mkdtempSync(join(tmpdir(), "improve-"));
   try {
     Bun.spawnSync([JSCPD, "--reporters", "json", "--output", out, "--silent", ...(base ? ["--baseline-from-ref", base] : []), "."], { cwd: root, stdout: "ignore", stderr: "ignore" });
     const report = JSON.parse(readFileSync(join(out, "jscpd-report.json"), "utf8"));

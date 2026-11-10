@@ -19,7 +19,7 @@ const write = (file: string, text: string) => {
 
 /** A repo on main where a.ts and b.ts change together in 12 commits, and c.ts alone in 12. */
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "one-way-"));
+  root = mkdtempSync(join(tmpdir(), "improve-"));
   process.env.ALEPH_SPOOL = join(root, ".spool");
   sh("git", "init", "-q", "-b", "main");
   for (let i = 0; i < 12; i++) {
@@ -61,8 +61,8 @@ test("a change to a.ts alone leaves b.ts as a hole; a change to both leaves none
   expect(holes(root, changed(root), all, [])).toEqual([]);
 });
 
-test("a pair recorded in .one-way.json is not a hole", () => {
-  write(".one-way.json", JSON.stringify({ accepted: [{ copies: ["a.ts:1", "b.ts"], reason: "two ways on purpose" }] }));
+test("a pair recorded in .improve.json is not a hole", () => {
+  write(".improve.json", JSON.stringify({ accepted: [{ copies: ["a.ts:1", "b.ts"], reason: "two ways on purpose" }] }));
   write("a.ts", "export const a = 99;\n");
   expect(holes(root, changed(root), rules(history(root)), accepted(root))).toEqual([]);
 });
@@ -113,6 +113,6 @@ test("a copy the base already had does not block, and an accepted pair does not 
   expect(stop({ hook_event_name: "Stop", session_id: "s5", cwd: root })).toBe("");
   write("ui/web.ts", RENAMED.replaceAll("payout", "webPay"));
   expect(stop({ hook_event_name: "Stop", session_id: "s6", cwd: root })).toContain("a copy the base did not have");
-  write(".one-way.json", JSON.stringify({ accepted: [{ copies: ["ui/web.ts", "lib/money.ts", "ui/pay.ts"], reason: "web needs its own" }] }));
+  write(".improve.json", JSON.stringify({ accepted: [{ copies: ["ui/web.ts", "lib/money.ts", "ui/pay.ts"], reason: "web needs its own" }] }));
   expect(stop({ hook_event_name: "Stop", session_id: "s7", cwd: root })).toBe("");
 });

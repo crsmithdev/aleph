@@ -1,6 +1,8 @@
-# HTML Report Format
+# HTML
 
-The architectural review is rendered as a single self-contained HTML file in the OS temp directory. Tailwind and Mermaid both come from CDNs. Mermaid handles graph-shaped diagrams reliably; hand-built divs and inline SVG handle the more editorial visuals (mass diagrams, cross-sections). Mix the two: don't lean on Mermaid for everything, it'll start to look generic.
+Adapted from the HTML report of Matt Pocock's `improve-codebase-architecture` (github.com/mattpocock/skills @4ae2317). [REPORT.md](REPORT.md) says what the report holds; this file says how it looks.
+
+The report is rendered as a single self-contained HTML file in the OS temp directory. Tailwind and Mermaid both come from CDNs. Mermaid handles graph-shaped diagrams reliably; hand-built divs and inline SVG handle the more editorial visuals (mass diagrams, cross-sections). Mix the two: don't lean on Mermaid for everything, it'll start to look generic.
 
 ## Scaffold
 
@@ -9,7 +11,7 @@ The architectural review is rendered as a single self-contained HTML file in the
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Architecture review for {{repo name}}</title>
+    <title>Improve retro for {{repo name}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
       import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
@@ -32,27 +34,6 @@ The architectural review is rendered as a single self-contained HTML file in the
   </body>
 </html>
 ```
-
-## Header
-
-Repo name, date, and a compact legend: solid box = module, dashed line = seam, red arrow = leakage, thick dark box = deep module. No introduction paragraph. Straight into the candidates.
-
-## Candidate card
-
-The diagrams carry the weight. Prose is sparse, plain, and uses the glossary terms (from the `aleph:codebase-design` skill) without ceremony.
-
-Each candidate is one `<article>`:
-
-- **Title**: short, names the deepening (e.g. "Collapse the Order intake pipeline").
-- **Badge row**: recommendation strength (`Strong` = emerald, `Worth exploring` = amber, `Speculative` = slate), plus a tag for the dependency category (`in-process`, `local-substitutable`, `ports & adapters`, `mock`).
-- **Files**: monospaced list, `font-mono text-sm`.
-- **Before / After diagram**: the centrepiece. Two columns, side by side. See patterns below.
-- **Problem**: one sentence. What hurts.
-- **Solution**: one sentence. What changes.
-- **Wins**: bullets, ≤6 words each. e.g. "Tests hit one interface", "Pricing logic stops leaking", "Delete 4 shallow wrappers".
-- **ADR callout** (if applicable): one line in an amber-tinted box.
-
-No paragraphs of explanation. If the diagram needs a paragraph to be understood, redraw the diagram.
 
 ## Diagram patterns
 
@@ -98,10 +79,6 @@ Before: a tree of function calls rendered as nested boxes. After: the same tree 
 - Keep diagrams ~320px tall so before/after sits comfortably side by side without scrolling.
 - Use `text-xs uppercase tracking-wider` for module labels inside diagrams, so they read as schematic, not as UI.
 - The only scripts are the Tailwind CDN and the Mermaid ESM import. The report is otherwise static: no app code, no interactivity beyond Mermaid's own rendering.
-
-## Top recommendation section
-
-One larger card. Candidate name, one sentence on why, anchor link to its card. That's it.
 
 ## Tone
 

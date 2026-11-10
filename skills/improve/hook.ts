@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 /**
- * The one-way Stop hook. It asks two questions of the current change, with no model:
+ * The improve Stop hook: the tool holds of the skill. It asks three questions of the current change, with no model:
  *
  *   co-change   a file that history says changes with a changed file (confidence ≥ 0.7) is left out
  *   boundaries  a changed file holds a copy of code that `.jscpd.json` keeps inside its owner
  *   new copies  a changed file holds a copy of code (renamed copies too) that the branch's base did not have
  *
  * A finding blocks the stop once per session, with the evidence, so the agent changes the companion, calls the
- * owner, or records the second way in `.one-way.json`. The same findings do not block twice, and a stop that a
+ * owner, or records the second way in `.improve.json`. The same findings do not block twice, and a stop that a
  * Stop hook already continued is never blocked.
  */
 import { createHash } from "node:crypto";
@@ -29,11 +29,11 @@ export function reason(root: string): string | null {
   const pasted = clones.filter((c) => c.isNew && (change.has(c.a.name) || change.has(c.b.name)) && !copies.some((v) => v.copy.name === c.a.name || v.copy.name === c.b.name) && !isAccepted(ok, c.a.name, c.b.name));
   if (!left.length && !copies.length && !pasted.length) return null;
   const lines = [
-    ...left.map((h) => `- ${h.a} changed; ${h.b} changed with it in ${h.co} of ${h.n} commits (confidence ${h.conf.toFixed(2)}, e.g. ${h.shas.join(" ")}). Change ${h.b} too, or record the pair in .one-way.json.`),
+    ...left.map((h) => `- ${h.a} changed; ${h.b} changed with it in ${h.co} of ${h.n} commits (confidence ${h.conf.toFixed(2)}, e.g. ${h.shas.join(" ")}). Change ${h.b} too, or record the pair in .improve.json.`),
     ...copies.map((v) => `- ${at(v.copy)} copies ${at(v.owner)}, which boundary "${v.rule}" keeps in its owner. Call the owner instead.`),
-    ...pasted.map((c) => `- ${c.b.name}:${c.b.start}-${c.b.end} repeats ${c.a.name}:${c.a.start}-${c.a.end} (${c.lines} lines), a copy the base did not have. Call or extend the first, or record the pair in .one-way.json.`),
+    ...pasted.map((c) => `- ${c.b.name}:${c.b.start}-${c.b.end} repeats ${c.a.name}:${c.a.start}-${c.a.end} (${c.lines} lines), a copy the base did not have. Call or extend the first, or record the pair in .improve.json.`),
   ];
-  return `One way: this change may add a second way or leave a copy behind.\n${lines.join("\n")}\nA second way on purpose goes in .one-way.json as {"copies": [...], "reason": "..."} under "accepted".`;
+  return `Improve: this change may add a second way or leave a copy behind.\n${lines.join("\n")}\nA second way on purpose goes in .improve.json as {"copies": [...], "reason": "..."} under "accepted".`;
 }
 
 if (import.meta.main) {
