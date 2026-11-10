@@ -62,6 +62,16 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(page.errors.slice(before)).toEqual([]);
   }, 30_000);
 
+  test("the font picker changes the --display font of the page, with no page error", async () => {
+    await page.go("#/");
+    const root = () => page.ev<string>('getComputedStyle(document.documentElement).getPropertyValue("--display")');
+    expect(await root()).toContain("Merriweather");
+    await page.ev('(() => { const s = document.querySelector(".fontpick select[data-role=display]:not([data-prop])"); s.value = "Lora"; s.dispatchEvent(new Event("change", { bubbles: true })); })()');
+    expect(await root()).toContain("Lora");
+    expect(await page.ev<string>('getComputedStyle(document.querySelector(".mark")).fontFamily')).toContain("Merriweather");
+    expect(page.errors).toEqual([]);
+  }, 30_000);
+
   test("an unknown address says so and links to Status", async () => {
     await page.go("#/nothing/here");
     expect(await title()).toContain("Nothing at /nothing/here");

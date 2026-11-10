@@ -1094,3 +1094,21 @@ ul.logs .step { margin: var(--sp-6) 0; }
 /* A number cell with a bar: the bar starts at the cell's left edge, the number stays right-aligned. */
 .vpair { display: flex; align-items: center; gap: var(--sp-6); }
 .vpair > .meter { flex: none; width: 40px; margin-right: auto; }
+
+/* The font picker (ui/index.html): a round button at the bottom right that opens the list of fonts. */
+.fontpick { margin: 0; padding: 0; border: 0; position: fixed; right: 16px; bottom: 16px; z-index: var(--z-overlay); font: var(--fs-sm) var(--sans); }
+.fontpick > summary { list-style: none; cursor: pointer; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--r-pill);
+  background: var(--surface); border: 1px solid var(--rule); color: var(--ink); font: var(--fw-strong) var(--fs-lg) var(--display); box-shadow: var(--float-sm); }
+.fontpick > summary::-webkit-details-marker { display: none; }
+details.fontpick > summary::before, details.fontpick[open] > summary::before { content: none; }
+.fontpick .fp { position: absolute; right: 0; bottom: 48px; width: min(320px, calc(100vw - 32px)); display: grid; gap: var(--sp-10); padding: var(--sp-14);
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-card); box-shadow: var(--float); }
+.fontpick .fp { box-sizing: border-box; width: 320px; max-width: calc(100vw - 32px); max-height: calc(100vh - 96px); overflow-y: auto; }
+.fontpick .fp-role { display: grid; gap: var(--sp-4); color: var(--muted); height: 84px; }
+.fontpick .fp-role > span { height: 20px; line-height: 1.54; overflow: hidden; white-space: nowrap; }
+.fontpick .fp-row { display: flex; gap: var(--sp-4); height: var(--ctl-h); }
+.fontpick select { flex: 1; min-width: 0; height: var(--ctl-h); box-sizing: border-box; text-overflow: ellipsis; font: var(--fs-sm) var(--sans); padding: var(--sp-4) var(--sp-6); color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: var(--r-tag); }
+.fontpick .fp-css { height: 6em; overflow: auto; box-sizing: border-box; margin: 0; padding: var(--sp-8); font: var(--fs-xs) var(--mono); white-space: pre-wrap; background: var(--sunk); border-radius: var(--r-tag); color: var(--ink-2); }
+.fontpick button { justify-self: start; font: var(--fs-sm) var(--sans); padding: 3px var(--sp-10); background: none; color: var(--ink); border: 1px solid var(--rule); border-radius: var(--r-tag); cursor: pointer; }
+.fontpick .fp-row button { flex: none; width: 32px; height: var(--ctl-h); box-sizing: border-box; padding: 0; text-align: center; font-size: var(--fs-lg); line-height: 1; }
+@media (max-width: 720px) { .fontpick { display: none; } }

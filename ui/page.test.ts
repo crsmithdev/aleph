@@ -38,3 +38,9 @@ test("the style sheet defines the dim, control, bar and spacing tokens and uses 
   expect(rest).not.toMatch(/opacity:\s*\.6\b|(?:min-)?height:\s*28px/);
   expect(rest).not.toMatch(/(?<![\w-])(?:(?:row-|column-)?gap|padding[\w-]*|margin[\w-]*):[^;}]*\b(?:14|18|20|24|28)px/);
 });
+
+test("the font picker styles use tokens for colour, radius and shadow", () => {
+  const rules = readFileSync(new URL("./app.css", import.meta.url), "utf8").split("\n").filter((l) => /^\s*(?:\.fontpick|details\.fontpick|background: var)/.test(l) || l.includes("fontpick"));
+  expect(rules.length).toBeGreaterThan(5);
+  expect(rules.join("\n")).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|border-radius:\s*\d/i);
+});
