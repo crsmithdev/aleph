@@ -402,13 +402,13 @@ export function state(now = new Date()): State {
       const st = stageById.get(ref)?.stage ?? status(item);
       // Done lists issues; a part shows under its issue.
       const top = parentRef(item) === undefined;
-      const card = (): NewIssue => ({ id, title: item.title, priority: priorityOf(item), status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created_time ?? item.fm.created ?? ""), updated: String(item.fm.updated_time ?? item.fm.updated ?? ""), stage: st });
+      const card = (): NewIssue => ({ id, title: item.title, priority: priorityOf(item), status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created_time ?? ""), updated: String(item.fm.updated_time ?? ""), stage: st });
       const mineParts = partsOf(doc!, item);
       // Latest done holds the done parts and the done issues without parts; a done parent shows no card.
       if (st === "done" && (!top || mineParts.length === 0)) {
         const mine = ofItem.get(id) ?? [];
         const ends = mine.map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
-        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated_time ?? item.fm.updated ?? "")) || 0, repo, item, runs: mine, since: pickedUp(id) });
+        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated_time ?? "")) || 0, repo, item, runs: mine, since: pickedUp(id) });
       }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       const ask = askOf(id);
@@ -422,11 +422,11 @@ export function state(now = new Date()): State {
         c.askKind = ask.kind;
         awaitingItems.push(c);
       }
-      else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated_time ?? item.fm.created_time ?? item.fm.updated ?? item.fm.created ?? "") });
+      else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated_time ?? item.fm.created_time ?? "") });
       // A parent shows a card in Running only while it waits to close: every part is done.
       if (st === "working" && mineParts.length) {
         const of = stageById.get(ref)?.of ?? { n: 0, m: mineParts.length };
-        if (of.n >= of.m) runningIssues.push({ id, title: item.title, href, stage: st, priority: priorityOf(item), of, since: pickedUp(id, ...mineParts.map((g) => `${repo.key}-${refOf(g)}`)), at: String(item.fm.updated_time ?? item.fm.updated ?? "") });
+        if (of.n >= of.m) runningIssues.push({ id, title: item.title, href, stage: st, priority: priorityOf(item), of, since: pickedUp(id, ...mineParts.map((g) => `${repo.key}-${refOf(g)}`)), at: String(item.fm.updated_time ?? "") });
       }
     }
   }

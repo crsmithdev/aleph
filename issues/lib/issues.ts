@@ -33,7 +33,7 @@ export interface Fields {
   media?: string[];
 }
 
-export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated_time ?? i.fm.updated ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
+export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated_time ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {

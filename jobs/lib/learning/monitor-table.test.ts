@@ -9,7 +9,7 @@ const DAY = "2026-10-20";
 /** A local time on a day, as an ISO string. */
 const at = (day: string, hh: number, mm = 0) => new Date(`${day}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`).toISOString();
 /** A store note line at a local time. */
-const note = (day: string, hh: number, text: string) => `- ${day} ${String(hh).padStart(2, "0")}:00: ${text}`;
+const note = (day: string, hh: number, text: string) => `- ${at(day, hh)}: ${text}`;
 
 let n = 0;
 function run(o: Partial<Run> & { kind: Run["kind"]; started: string }): Entry {
@@ -158,4 +158,10 @@ test("storeLog reads the reason and closed_as lines of each item file from the s
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("a tracker note with an ISO UTC stamp counts, with its file; a local stamp does not", () => {
+  const now = Date.parse("2026-11-04T12:00:00Z");
+  const notes = ["- 2026-11-04T09:00:00.000Z: job x: d.test.ts > once: flaked", "- 2026-11-04 10:00: job y: e.test.ts > twice: flaked"];
+  expect(flakeSection([], [{ ref: "p-7", notes }], now).trackers).toEqual([{ ref: "p-7", notes: 1, files: 1 }]);
 });

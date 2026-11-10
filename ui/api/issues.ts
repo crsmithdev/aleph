@@ -42,24 +42,12 @@ export interface Row {
   stage?: string; why?: string;
 }
 
-/**
- * The minute of the last change, "YYYY-MM-DD HH:MM". An item written before `updated_time` existed gets the latest
- * stamp on its `updated` day among its filing, its closing and its notes; null when none is on that day.
- */
-export function updatedTime(i: todos.Issue): string | null {
-  const set = todos.localMinute(i.fm.updated_time);
-  if (set) return set;
-  const day = str(i.fm.updated);
-  if (!day) return null;
-  const stamps = [str(i.fm.created_time), str(i.fm.closed_time), ...i.notes.map((n) => /^- (\d{4}-\d\d-\d\d \d\d:\d\d)/.exec(n)?.[1] ?? null)];
-  return stamps.filter((t): t is string => !!t && t.startsWith(day)).sort().at(-1) ?? null;
-}
-
 function row(repo: string, i: todos.Issue): Row {
-  const createdTime = todos.localMinute(i.fm.created_time), closedTime = todos.localMinute(i.fm.closed_time), updated = updatedTime(i);
+  const createdTime = str(i.fm.created_time), closedTime = str(i.fm.closed_time), updatedTime = str(i.fm.updated_time);
+  const day = (t: string | null) => (t ? todos.today(new Date(t)) : null);
   return {
     id: i.id, ref: todos.refOf(i), repo, title: i.title, kind: str(i.fm.kind) ?? "task", status: todos.status(i), priority: str(i.fm.priority), labels: areasOf(i),
-    after: afterOf(i), created: str(i.fm.created) ?? createdTime?.slice(0, 10) ?? null, createdTime, closed: str(i.fm.closed_at) ?? closedTime?.slice(0, 10) ?? null, closedTime, source: str(i.fm.source), updated: str(i.fm.updated) ?? updated?.slice(0, 10) ?? null, updatedTime: updated, notes: i.notes.length, parent: todos.parentRef(i) ?? null,
+    after: afterOf(i), created: day(createdTime), createdTime, closed: day(closedTime), closedTime, source: str(i.fm.source), updated: day(updatedTime), updatedTime, notes: i.notes.length, parent: todos.parentRef(i) ?? null,
   };
 }
 
@@ -165,7 +153,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") {
     const id = `${repo.key}-${ref}`;
-    const c: NewIssue = { id, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${ref}`, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created_time ?? item.fm.created ?? ""), updated: String(item.fm.updated_time ?? item.fm.updated ?? ""), stage: "waiting" };
+    const c: NewIssue = { id, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${ref}`, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created_time ?? ""), updated: String(item.fm.updated_time ?? ""), stage: "waiting" };
     const q = stored.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
     if (q) c.question = q;
     if (stored.options.length) c.decision = stored;

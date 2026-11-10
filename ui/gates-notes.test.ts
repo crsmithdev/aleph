@@ -29,7 +29,7 @@ beforeAll(() => {
   mkdirSync(factory);
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true } }));
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
-  writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); return true; }, true);
+  writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); note(add(doc, "b task"), "Chris decided: go on", new Date("2026-11-03T10:00:00Z")); add(doc, "c task").notes.push("- 2026-11-03 11:00: Chris decided: stop"); return true; }, true);
 });
 afterAll(() => { restoreEnv(); rmSync(base, { recursive: true, force: true }); });
 
@@ -37,4 +37,11 @@ test("log() shows an issue note `Chris dropped: <reason>` as a human drop on the
   const stub: any = { now: "2026-11-04T00:00:00.000Z", asks: [], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 }, queued: [] };
   const d: any = JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
   expect(d.log.entries.find((x: any) => x.by === "human" && x.subject === "fac-1")).toMatchObject({ action: "dropped", note: "Chris dropped: not needed" });
+});
+
+test("log() finds a Chris decision note with an ISO UTC stamp, and not one with a local stamp", async () => {
+  const stub: any = { now: "2026-11-04T00:00:00.000Z", asks: [], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 }, queued: [] };
+  const d: any = JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
+  expect(d.log.entries.find((x: any) => x.subject === "fac-2")).toMatchObject({ at: "2026-11-03T10:00:00.000Z", action: "answered", note: "Chris decided: go on" });
+  expect(d.log.entries.find((x: any) => x.subject === "fac-3")).toBeUndefined();
 });

@@ -144,11 +144,11 @@ function noteEntries(): LogEntry[] {
     for (const item of doc?.items ?? []) {
       const ref = `${repo.key}-${item.sub === undefined ? item.id : `${item.id}.${item.sub}`}`;
       for (const n of item.notes) {
-        const m = /^- (\d{4}-\d\d-\d\d)[ T](\d\d:\d\d(?::\d\d(?:\.\d+)?Z)?): (Chris(?::| decided:| approved| denied| dropped).*)$/.exec(n);
+        const m = /^- (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z): (Chris(?::| decided:| approved| denied| dropped).*)$/.exec(n);
         if (!m) continue;
-        const t = m[3];
+        const t = m[2];
         const action = /^Chris: run (it|intake) again$/.test(t) ? "reran" : /^Chris: checked/.test(t) ? "done" : /^Chris (denied|dropped)/.test(t) ? "dropped" : "answered";
-        out.push({ at: new Date(`${m[1]}T${m[2]}`).toISOString(), by: "human", subject: ref, action, ...(/intake again$/.test(t) ? { sub: "intake" } : {}), note: t });
+        out.push({ at: new Date(m[1]).toISOString(), by: "human", subject: ref, action, ...(/intake again$/.test(t) ? { sub: "intake" } : {}), note: t });
       }
     }
   }

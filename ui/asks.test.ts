@@ -109,6 +109,7 @@ describe("asks", () => {
 
   test("an old note's timestamp is not part of the detail or the Problem", () => {
     expect(clean("- 2026-10-27 12:34: which helper?")).toBe("which helper?");
+    expect(clean("- 2026-11-04T09:30:00.000Z: which helper?")).toBe("which helper?");
     expect(clean("- 2026-10-27 12:34:56: triage: for Chris: pick one")).toBe("pick one");
     const [t] = ofIssues(issue({ reason: "intake-failed", question: "- 2026-10-27 12:34: Intake failed: no verdict in 2 runs" }));
     expect(t.problem).toBe("Intake of aleph-387 failed: no verdict in 2 runs, so no one has decided what to do with this issue.");

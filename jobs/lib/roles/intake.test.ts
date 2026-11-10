@@ -423,3 +423,10 @@ test("intake reads the media attached to the issue", async () => {
   expect(calls()[0]).toContain(`--add-dir ${mediaDir()}`);
 });
 const blobs: Record<string, Uint8Array> = {};
+
+test("the prompt's 'Commits on main since' heading and window come from created_time, to the second", () => {
+  const item = (created_time: string) => ({ id: 1, title: "t", request: "", spec: "", notes: [], fm: { created_time } }) as unknown as issues.Issue;
+  expect(prompt(repo, item("2020-01-02T03:04:05.000Z"))).toContain("# Commits on main since 2020-01-02T03:04:05.000Z\n\n" + sh(repo.path, "git", "log", "--oneline", "--no-decorate", "-n", "50", "origin/main") + "\n");
+  const after = new Date((+sh(repo.path, "git", "log", "-1", "--format=%ct", "--all") + 1) * 1000).toISOString();
+  expect(prompt(repo, item(after))).toContain(`# Commits on main since ${after}\n\n(none)\n`);
+});

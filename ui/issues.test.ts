@@ -22,6 +22,7 @@ import { when } from "./lib.js";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
+const ISO_UTC = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
 const NOW = Date.parse("2026-11-04T12:00:00Z");
 beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
@@ -99,7 +100,6 @@ describe("GET /api/issues", () => {
     const [r] = await getJson("/api/issues?repo=fac");
     expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: [], after: [], notes: 0 });
     expect(r.updated).toBeTruthy();
-    expect(r.updatedTime === null || /^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(r.updatedTime)).toBe(true);
     expect((await at("/api/issues?status=bogus")).status).toBe(400);
   });
 
@@ -837,10 +837,11 @@ describe("the Issue timeline names why a wait waited", () => {
 });
 
 describe("exact times in the Hour window", () => {
-  test("a row carries the stored times", async () => {
+  test("a row carries the stored ISO UTC times", async () => {
     const [r] = await getJson("/api/issues?repo=fac");
-    expect(r.createdTime).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d$/);
-    expect((await getJson("/api/issues?repo=fac&status=done"))[0].closedTime).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d$/);
+    expect(r.createdTime).toMatch(ISO_UTC);
+    expect(r.updatedTime).toMatch(ISO_UTC);
+    expect((await getJson("/api/issues?repo=fac&status=done"))[0].closedTime).toMatch(ISO_UTC);
   });
 
   test("the Hour window counts by the minute, and a row with only days counts by its day", () => {
@@ -857,13 +858,6 @@ describe("exact times in the Hour window", () => {
 
 describe("the Updated time", () => {
   const item = (fm: Record<string, unknown>, notes: string[] = []) => ({ id: 1, title: "t", fm, request: "", spec: "", notes }) as any;
-
-  test("updatedTime is updated_time, else the latest stamp on the updated day", async () => {
-    const { updatedTime } = await import("./api/issues.ts");
-    expect(updatedTime(item({ updated: "2026-11-03", updated_time: "2026-11-03 14:05" }))).toBe("2026-11-03 14:05");
-    expect(updatedTime(item({ updated: "2026-11-03", created_time: "2026-11-01 09:00" }, ["- 2026-11-03 08:10: a", "- 2026-11-03 16:40: b", "- 2026-11-02 23:00: c"]))).toBe("2026-11-03 16:40");
-    expect(updatedTime(item({ updated: "2026-11-03", created_time: "2026-11-01 09:00" }))).toBeNull();
-  });
 
   test("updatedText gives when()'s form for a minute and the day without one; the sort uses the minute", () => {
     const now = new Date(NOW);
