@@ -6,21 +6,16 @@
  * Each function reads at each call: a test changes the environment in-process, and launch.ts hands
  * every ALEPH_* variable to the units it starts.
  */
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { alephPath, expand, home, vaultDir } from "../../../lib/paths.ts";
+import { readJsonOr, writeJson } from "./json.ts";
 import { layout } from "./layout.ts";
 
 const num = (name: string, dflt: number): number => Number(process.env[name] ?? dflt);
 
-/** `caps.json` in the factory directory: the caps and settings of CAP_KEYS. A missing or bad file is empty; other keys are left alone. */
-function capsFile(): Record<string, unknown> {
-  try {
-    const c = JSON.parse(readFileSync(join(layout().factory, "caps.json"), "utf8"));
-    return c && typeof c === "object" && !Array.isArray(c) ? c : {};
-  } catch { return {}; }
-}
+/** `caps.json` in the factory directory: the caps and settings of CAP_KEYS. A missing file is empty; other keys are left alone. */
+const capsFile = (): Record<string, unknown> => readJsonOr(join(layout().factory, "caps.json"), {});
 
 export const CAP_KEYS = ["live", "run", "intakeTries", "jobSeconds", "fixRounds", "landBatch", "loadLimit"] as const;
 export type CapKey = (typeof CAP_KEYS)[number];
@@ -40,10 +35,7 @@ export function writeCaps(patch: Partial<Record<CapKey, unknown>>): Record<strin
   }
   const next: Record<string, unknown> = { ...capsFile() };
   for (const k of CAP_KEYS) if (patch[k] !== undefined) next[k] = patch[k];
-  const file = join(layout().factory, "caps.json");
-  const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
-  renameSync(tmp, file);
+  writeJson(join(layout().factory, "caps.json"), next);
   return next;
 }
 

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentCause, callAgent } from "./agent-call.ts";
+import { agentCause, callAgent, resultOf } from "./agent-call.ts";
 import { backendHold } from "../gates/factory-status.ts";
 
 let base: string;
@@ -47,5 +47,15 @@ test("a call the API refused for credit states the credit cause and holds its mo
   expect(r.cause).toEqual({ kind: "credit", reason: line });
   expect(r.text).toBe(line);
   expect(backendHold()).toMatchObject({ via: "claude", why: line });
-  expect(agentCause({ code: 1, timedOut: false, stalled: false }, { ok: false, line, result: "" })).toEqual({ kind: "credit", reason: line });
+  expect(agentCause({ code: 1, timedOut: false, stalled: false }, { found: true, ok: false, line, result: "" })).toEqual({ kind: "credit", reason: line });
+});
+
+test("resultOf reads the last result event; only is_error false is ok", () => {
+  const ok = '{"type":"result","is_error":false,"total_cost_usd":0.5,"result":"done"}';
+  expect(resultOf(`{"type":"assistant"}\n${ok}\n`)).toMatchObject({ found: true, ok: true, cost: 0.5, result: "done", line: "" });
+  expect(resultOf(`${ok}\nafter\n{"type":"command_lifecycle"}\n`)).toMatchObject({ ok: true, result: "done" });
+  expect(resultOf('{"type":"result","is_error":true,"result":"API Error"}')).toMatchObject({ ok: false, line: "API Error" });
+  expect(resultOf('{"type":"result","result":"no flag"}').ok).toBe(false);
+  expect(resultOf('{"type":"assistant"}\nlast words\n{"type":"command_lifecycle"}\n')).toMatchObject({ found: false, ok: false, line: "last words" });
+  expect(resultOf("")).toMatchObject({ found: false, ok: false, line: "no output" });
 });

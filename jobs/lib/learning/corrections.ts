@@ -5,12 +5,13 @@
  * Jev. The store is corrections.json in the factory directory.
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { langfuse, type Langfuse } from "../../../lib/langfuse.ts";
 import { decide, nouls } from "../../../lib/jev.ts";
 import type { Observation } from "../../../lib/otlp.ts";
 import { factoryDir } from "../gates/factory-status.ts";
+import { readJsonOr, writeJson } from "../infra/json.ts";
 import { logEvent } from "../infra/layout.ts";
 
 const fail = (subject: string, note: string) => logEvent({ by: "rule", subject, action: "failed", note });
@@ -20,6 +21,7 @@ import { causeOf } from "../records/outcome.ts";
 import { fileIssue, writeList, type Effects, type Place } from "../../../issues/lib/store.ts";
 import { PROPOSE_AT } from "../infra/settings.ts";
 import { cutTitle, writeLine, writeTitle } from "../roles/title.ts";
+import { specText } from "../roles/issue-spec.ts";
 import { edit, find, parseIssueRef, setStatus, titleProblem } from "../../../issues/lib/todo.ts";
 
 export const CORRECTION_AT = 0.7;
@@ -37,21 +39,10 @@ export interface Store { minedAt: string; lessons: Lesson[] }
 
 const file = () => join(factoryDir(), "corrections.json");
 
-/** A missing or bad file is empty. */
-export function readStore(): Store {
-  try {
-    const s = JSON.parse(readFileSync(file(), "utf8"));
-    if (s && typeof s === "object" && Array.isArray(s.lessons)) return { minedAt: String(s.minedAt ?? ""), lessons: s.lessons };
-  } catch {}
-  return { minedAt: "", lessons: [] };
-}
+/** A missing file is empty. */
+export const readStore = (): Store => readJsonOr(file(), { minedAt: "", lessons: [] });
 
-function writeStore(s: Store): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  const tmp = `${file()}.tmp`;
-  writeFileSync(tmp, JSON.stringify(s, null, 2) + "\n");
-  renameSync(tmp, file());
-}
+const writeStore = (s: Store): void => writeJson(file(), s);
 
 const text = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 const cut = (s: string) => s.slice(0, QUOTE);
@@ -330,11 +321,11 @@ export function approve(id: string, repo: Place, effects: Effects): string {
   const kind = l.kind ?? "skill";
   // A claude-md issue names its line, its file in the filing repo and a command that proves the line is there.
   const path = l.target === "identity/CLAUDE.md" ? l.target : "CLAUDE.md";
-  const sections = kind !== "claude-md" ? [] : [
-    "## Goal", `Add this line to ${path}: ${l.sentence}`, "",
-    "## Edit surface", `- ${path}`, "",
-    "## Oracle", `- \`grep -F '${l.sentence.replace(/'/g, "'\\''")}' ${path}\` exits 0.`, "- `bun run test` passes.", "",
-  ];
+  const sections = kind !== "claude-md" ? [] : [specText({
+    goal: `Add this line to ${path}: ${l.sentence}`,
+    surface: [{ path, new: false }],
+    oracle: [`\`grep -F '${l.sentence.replace(/'/g, "'\\''")}' ${path}\` exits 0.`, "`bun run test` passes."],
+  }), ""];
   const body = [
     `Chris approved a proposal from the correction memory: ${KIND_TITLE[kind]}.`,
     "",

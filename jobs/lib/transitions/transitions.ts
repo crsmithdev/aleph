@@ -10,7 +10,7 @@ import { basename, join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
 import { allRuns, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, makeRun, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "../infra/process.ts";
+import { isLive, isRunning, markEnded, stop, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, type Fate } from "../records/outcome.ts";
 import { addNote, issue as issueOf, latestJob, openJob } from "../records/job.ts";
 import { counting, jobIdOf, patchRun, putRun } from "../records/record.ts";
@@ -232,7 +232,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
   try {
     const runs = openJob(name) ?? refuse(`no open job named ${name}`);
     // A unit that has not written `pid` in the dispatch's wait still counts: a second land here would land the job twice.
-    const live = runs.find((e) => isLive(e.folder) || isStarting(e));
+    const live = runs.find(isRunning);
     if (live) refuse(`${name} is running as ${jobIdOf(live)}`);
     const agent = agentOf(runs)!.run;
     const terms = landTerms(agent);

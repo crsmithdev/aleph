@@ -3,7 +3,7 @@
  * What it reads of its state is in factory-status.ts. Its state lives in
  * ~/.aleph/factory. See docs/factory.md.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { LANES, lane, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -15,7 +15,8 @@ import { itemOnMain } from "../records/status.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
 import { allRuns, isWaiting, loadRegistry, type Entry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { isLive, isStarting } from "../infra/process.ts";
+import { readJsonOr, writeJson } from "../infra/json.ts";
+import { holdsWork, isLive, isRunning } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
 import { clearRerun, issueBrief } from "./continuation.ts";
 import { doneChecker, filing } from "./filing.ts";
@@ -235,8 +236,6 @@ export async function correctionsStep(now = Date.now()): Promise<{ signals: numb
 export interface Starts { intake(repo: Repo, id: number): void; director(): void }
 const starts: Starts = { intake: intakeDetached, director: directorDetached };
 
-/** An intake or director run of `on` that has not ended: its process holds the work, so nothing starts a second. */
-const running = (runs: Entry[], kind: string, on: string) => runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running");
 
 /**
  * The intake queue: an intake for each issue that decideIntake lets in, oldest first, at most `ALEPH_INTAKE_CAP`,
@@ -255,7 +254,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
   const started: string[] = [];
   for (const { repo, item } of queue.slice(0, INTAKE_CAP())) {
     const name = `${repo.key}-${item.id}`;
-    if (running(runs, "intake", name)) continue;
+    if (holdsWork(runs, "intake", name)) continue;
     start(repo, item.id);
     started.push(name);
   }
@@ -269,7 +268,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
  */
 export function directIfNew(start: () => void = directorDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false })): boolean {
   if (gates({ only: ["pause"] })) return false;
-  if (!pendingCases(sandboxRepos(), runs, lists).some((c) => !running(runs, "director", subjectOfCase(c)))) return false;
+  if (!pendingCases(sandboxRepos(), runs, lists).some((c) => !holdsWork(runs, "director", subjectOfCase(c)))) return false;
   start();
   return true;
 }
@@ -365,12 +364,7 @@ export async function editTick(change: (s: any) => any): Promise<void> {
   const release = await lock("tick-file");
   if (!release) throw new Error("tick.json lock busy");
   try {
-    let s: any = {};
-    try { s = JSON.parse(readFileSync(file, "utf8")); } catch {}
-    mkdirSync(factoryDir(), { recursive: true });
-    const tmp = `${file}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify(change(s)));
-    renameSync(tmp, file);
+    writeJson(file, change(readJsonOr(file, {})));
   } finally {
     release();
   }
@@ -550,7 +544,7 @@ function cameDue(): string[] {
 
 /** The runs the report has not shown, oldest first; each is then marked shown, and the last line counts the day's runs. */
 function runLines(now: number): string[] {
-  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.condition !== "running" && !(isLive(e.folder) || isStarting(e)));
+  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.condition !== "running" && !isRunning(e));
   const lines: string[] = [];
   for (const l of LANES) {
     const here = fresh.filter((e) => laneOf(e) === l);

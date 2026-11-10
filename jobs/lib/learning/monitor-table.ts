@@ -10,6 +10,7 @@
 import * as record from "../records/record.ts";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readJsonOr } from "../infra/json.ts";
 import { allRuns, loadRegistry, type Entry } from "../records/ledger.ts";
 import { allHolds, flakeNames, flakes, stopsStart, type Flake, type HoldRecord } from "../gates/factory-status.ts";
 import { layout } from "../infra/layout.ts";
@@ -410,10 +411,7 @@ export const reportFile = (day: string) => join(monitorDir(), `${day}.json`);
 export function latestReport(): Report | null {
   let names: string[];
   try { names = readdirSync(monitorDir()).filter((n) => /^\d{4}-\d\d-\d\d\.json$/.test(n)).sort(); } catch { return null; }
-  for (const n of names.reverse()) {
-    try { return JSON.parse(readFileSync(join(monitorDir(), n), "utf8")) as Report; } catch {}
-  }
-  return null;
+  return names.length ? readJsonOr<Report | null>(join(monitorDir(), names.at(-1)!), null) : null;
 }
 
 /** A value of the day and the same value over the trailing 7 days; null when the data does not say. */

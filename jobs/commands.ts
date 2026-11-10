@@ -15,7 +15,7 @@ import { allJobs, findJob, isOpen, issue as issueOf, issueTitle, readFile, view,
 import { counting, patchRun } from "./lib/records/record.ts";
 import { unit } from "./lib/roles/unit.ts";
 import { onMain } from "./lib/records/status.ts";
-import { removeBranch } from "./lib/land/landing.ts";
+import { settleOnMain } from "./lib/land/landing.ts";
 import { fetchOrigin, git } from "./lib/infra/git.ts";
 import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
 import * as issues from "../issues/lib/todo.ts";
@@ -30,7 +30,7 @@ import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
 import { health } from "./lib/gates/factory-status.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
 import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
-import { fit } from "./lib/roles/title.ts";
+import { cutTitle, fit } from "./lib/roles/title.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
 import type { Fate } from "./lib/records/outcome.ts";
 import { refuse, Refusal } from "../lib/refusal.ts";
@@ -121,7 +121,7 @@ async function plain(ctx: Ctx): Promise<void> {
 
 /**
  * The ledger follows git. An open job whose work is on origin/<main> becomes
- * landed, quietly, with its issue done. An open job with no branch and
+ * landed, quietly, and settleOnMain closes its issue. An open job with no branch and
  * no worktree left is "gone": nothing is left to land. Every other open job
  * is "unlanded". Each repo is fetched once.
  */
@@ -141,10 +141,8 @@ function reconcile(ctx: Ctx, all: Entry[][]): Map<string, string> {
     const found = onMain(repo, { job: last.run.job, branch: last.run.branch, fetch: false });
     if (found) {
       patchRun(last.id, { condition: "landed", commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
-      removeBranch(repo, last.run);
-      const todo = issueOf(runs);
-      const why = todo === undefined ? null : store.close(repo, todo, `job ${last.run.name} found on main as ${found.commit.slice(0, 7)}`);
-      if (why) ctx.err(`warn: issue ${todo} not closed: ${why}`);
+      const { todo } = settleOnMain(repo, last.run, found.commit, cutTitle(last.run.say ?? last.run.name));
+      if (todo && todo !== "done") ctx.err(`warn: issue ${issueOf(runs)} not closed: ${todo}`);
       continue;
     }
     const branch = last.run.branch && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${last.run.branch}`).ok;

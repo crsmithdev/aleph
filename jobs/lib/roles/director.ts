@@ -25,7 +25,7 @@ import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, openJob, readFile } from "../records/job.ts";
-import { isLive, isStarting } from "../infra/process.ts";
+import { isRunning } from "../infra/process.ts";
 import { git } from "../infra/git.ts";
 import { NO_OUTPUT, securityChange } from "../gates/gate.ts";
 import { missingSections } from "./issue-spec.ts";
@@ -90,7 +90,7 @@ export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = all
     const r = entry.run;
     if (r.condition !== "waiting" || !empty(r.ask)) continue;
     // A run whose job has a live run (a land the director started) is not a new case: the land settles its Ask.
-    if (openJob(r.name, r.repo, jobs)?.some((e) => e.folder !== entry.folder && (isLive(e.folder) || isStarting(e)))) continue;
+    if (openJob(r.name, r.repo, jobs)?.some((e) => e.folder !== entry.folder && isRunning(e))) continue;
     const repo = r.repo ? byKey.get(r.repo) : undefined;
     if (r.repo && !repo) continue;
     const p = repo && r.on ? issues.parseIssueRef(r.on) : null;

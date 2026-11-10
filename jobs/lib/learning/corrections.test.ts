@@ -32,7 +32,7 @@ let scope = "global";
 let skillPick = "alpha";
 let lastSkillCriteria: Record<string, string> | undefined;
 /** The sentence-writing stub echoes this prefix and the quote's first word. */
-const RULE_STUB = "#!/bin/sh\nfor a; do :; done\nw=$(printf '%s' \"$a\" | tr -cd 'A-Za-z' | cut -c1-12)\nprintf '{\"result\":\"Follow rule %s.\"}' \"$w\"\n";
+const RULE_STUB = "#!/bin/sh\nfor a; do :; done\nw=$(printf '%s' \"$a\" | tr -cd 'A-Za-z' | cut -c1-12)\nprintf '{\"type\":\"result\",\"is_error\":false,\"result\":\"Follow rule %s.\"}' \"$w\"\n";
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "ALEPH_JEV_URL", "OPENROUTER_API_KEY", "HOME", "ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_PROPOSE_AT", "ALEPH_RULE_CMD", ...Object.keys(gitEnv)];
 let saved: Record<string, string | undefined>;
 

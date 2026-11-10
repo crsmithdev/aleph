@@ -241,7 +241,7 @@ describe("verify gate", () => {
   test("the script prints a block when the judge denies, and nothing when it passes", async () => {
     const verdictFile = join(spool, "verdict.txt");
     const wrapper = join(spool, "claude");
-    writeFileSync(join(spool, "judge.ts"), `const v = await Bun.file(${JSON.stringify(verdictFile)}).text(); console.log(JSON.stringify({ result: v }));`);
+    writeFileSync(join(spool, "judge.ts"), `const v = await Bun.file(${JSON.stringify(verdictFile)}).text(); console.log(JSON.stringify({ type: "result", is_error: false, result: v }));`);
     writeFileSync(wrapper, `#!/bin/sh\nexec bun ${join(spool, "judge.ts")}\n`);
     Bun.spawnSync(["chmod", "+x", wrapper]);
     const script = async (event: string, promptId: string, extra: object = {}) => {

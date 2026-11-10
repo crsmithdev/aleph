@@ -12,7 +12,6 @@
  * restart explains it) is marked failed and gets the same action, once per issue; a second lost run of the issue sets the Ask.
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */
-import { readFileSync } from "node:fs";
 import { parseId, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { isVersion } from "../roles/issue-spec.ts";
@@ -23,9 +22,9 @@ import { fetchOrigin, git } from "../infra/git.ts";
 import { allJobs, isOpen, issue as issueOf, type Job } from "../records/job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";
 import { logEvent } from "../infra/layout.ts";
-import { allRuns, isAgentRun, loadRegistry, tell, type Repo } from "../records/ledger.ts";
+import { allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { isLive, isLost, isStarting, markEnded } from "../infra/process.ts";
+import { bootedAt, markEnded, runHealth, type Health } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import type { Baseline } from "../transitions/factory.ts";
 import { onMain } from "../records/status.ts";
@@ -52,48 +51,29 @@ const RERUN_OPTIONS = [
   { label: "Another way", line: "Start the goal again, taking a different route than the run that failed" },
 ];
 
-/** When this host booted, in ms. */
-const bootedAt = (): number => Number(readFileSync("/proc/stat", "utf8").match(/^btime (\d+)$/m)![1]) * 1000;
-
-/**
- * The open jobs whose last run a host restart killed: a build, recheck or land still `running`, started before
- * this boot, with its process gone. isLive asks that the pid's process names the run's folder, so a process
- * that got the same pid after the restart does not count as the run. No mark is kept: a run stays here until it ends.
- */
-const killed = (jobs: Job[]): Job[] => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const booted = bootedAt();
+/** The open jobs of factory repos whose last real run passes `test`, given that run, its runHealth and the job. */
+function factoryJobs(jobs: Job[], test: (last: Entry, h: Health, j: Job) => boolean): Job[] {
+  const keys = new Set(sandboxRepos().map((r) => r.key)), booted = bootedAt();
   return jobs.filter((j) => {
     const last = counting(j);
-    const r = last.run;
-    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land")
-      && Date.parse(r.started) < booted && !isLive(last.folder) && !isStarting(last);
+    return isOpen(j) && !!last.run.repo && keys.has(last.run.repo) && test(last, runHealth(last, booted), j);
   });
-};
+}
+
+/** A build, recheck or land still `running`. */
+const inFlight = (r: Run): boolean => r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land");
+
+/** The open jobs whose last run, in flight, a host restart killed. No mark is kept: a run stays here until it ends. */
+const killed = (jobs: Job[]): Job[] => factoryJobs(jobs, (last, h) => inFlight(last.run) && h === "killed");
 
 /**
- * The open jobs whose last run is lost: a build, recheck or land still `running`, started since this boot, whose
- * process ended without writing `exit`. The unit writes the run's end before `exit`, so such a run will never end.
+ * The open jobs whose last run, in flight, is lost: its process ended since this boot without writing `exit`. The
+ * unit writes the run's end before `exit`, so such a run will never end.
  */
-const lost = (jobs: Job[]): Job[] => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const booted = bootedAt();
-  return jobs.filter((j) => {
-    const last = counting(j);
-    const r = last.run;
-    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land")
-      && Date.parse(r.started) >= booted && isLost(last.folder);
-  });
-};
+const lost = (jobs: Job[]): Job[] => factoryJobs(jobs, (last, h) => inFlight(last.run) && h === "lost");
 
 /** The open jobs of factory repos whose next step is the rescue, with the unit of the last real run not live. */
-const stuckJobs = (jobs: Job[]): Job[] => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  return jobs.filter((j) => {
-    const last = counting(j);
-    return isOpen(j) && !!last.run.repo && keys.has(last.run.repo) && !isLive(last.folder) && stepOf(j).step === "rescue";
-  });
-};
+const stuckJobs = (jobs: Job[]): Job[] => factoryJobs(jobs, (_, h, j) => h !== "live" && stepOf(j).step === "rescue");
 
 /** How long a dispatch waits for a run's rescue lock before it skips the run. */
 
@@ -104,15 +84,8 @@ const SLOW_LAND_OPTIONS = [
 ];
 
 /** The open jobs of factory repos whose last real run is a land live for LAND_STUCK_MS or more, with no Ask set on it. */
-const slowLands = (jobs: Job[], now: number): Job[] => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  return jobs.filter((j) => {
-    const last = counting(j);
-    const r = last.run;
-    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.kind === "land" && r.condition === "running" && isLive(last.folder)
-      && now - Date.parse(r.started) >= LAND_STUCK_MS && !asked(last);
-  });
-};
+const slowLands = (jobs: Job[], now: number): Job[] => factoryJobs(jobs, (last, h) =>
+  last.run.kind === "land" && last.run.condition === "running" && h === "live" && now - Date.parse(last.run.started) >= LAND_STUCK_MS && !asked(last));
 
 /**
  * Each land live for 30 minutes or more gets a rescue Ask (input, rescue) on its issue, once per land run: the director

@@ -6,8 +6,9 @@
  * not is logged as `missed: <key>`, so the cause gets fixed, and is started. A tick that finds nothing due reads
  * only local files: no agent run and no fetch.
  */
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readJsonOr } from "../infra/json.ts";
+import { holdsWork } from "../infra/process.ts";
 import { reader } from "../../../issues/lib/store.ts";
 import { ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
@@ -20,7 +21,7 @@ import { logEvent } from "../infra/layout.ts";
 import { retain } from "../infra/retention.ts";
 import { archiveOld } from "../records/record.ts";
 import { migrateWords } from "../records/migrate.ts";
-import { allJobs, loadRegistry, type Entry, type Repo } from "../records/ledger.ts";
+import { allJobs, loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
 import { monitorStep } from "../roles/monitor.ts";
@@ -40,12 +41,8 @@ export interface TickState { last: Partial<Record<Periodic, string>>; missed: st
 const stateFile = () => join(factoryDir(), "tick.json");
 
 export function readTick(): TickState {
-  try {
-    const s = JSON.parse(readFileSync(stateFile(), "utf8"));
-    return { last: s.last ?? {}, missed: s.missed ?? [], suite: s.suite ?? {} };
-  } catch {
-    return { last: {}, missed: [], suite: {} };
-  }
+  const s = readJsonOr<Partial<TickState>>(stateFile(), {});
+  return { last: s.last ?? {}, missed: s.missed ?? [], suite: s.suite ?? {} };
 }
 
 /** Whether `step` is due at `now`: it never ran, or it ran EVERY_MS[step] or more ago. */
@@ -58,8 +55,6 @@ export function due(s: TickState, step: Periodic, now: number): boolean {
 export interface SweepPorts { dispatch(): Promise<unknown>; suite(): void }
 const sweepPorts: SweepPorts = { dispatch: runDispatch, suite: suiteDetached };
 
-/** An intake or director run of `on` that has not ended: the work is in hand. */
-const busy = (runs: Entry[], kind: string, on: string) => runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running");
 
 /**
  * The safety net. It records what could move now and does not, each key with the time a tick first saw it: `stalled`
@@ -72,12 +67,12 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   if (gates({ only: ["pause"] })) { writeStalls({}); s.missed = []; return []; }
   const jobs = allJobs(), runs = jobs.flat(), lists = reader({ fetch: false });
   const keys = await stalled(jobs, lists, doneChecker(false));
-  for (const c of pendingCases(factoryRepos(), runs, lists)) if (!busy(runs, "director", subjectOfCase(c))) keys.push(`ask:${c.on}`);
+  for (const c of pendingCases(factoryRepos(), runs, lists)) if (!holdsWork(runs, "director", subjectOfCase(c))) keys.push(`ask:${c.on}`);
   for (const j of toRescue(jobs)) keys.push(`rescue:${j[0].run.name}`);
   for (const j of editedWaits(jobs)) keys.push(`edited:${j[0].run.name}`);
   const seen = readStalls();
   writeStalls(Object.fromEntries(keys.map((k) => [k, seen[k] ?? new Date(now).toISOString()])));
-  const over = keys.filter((k) => k in seen && !(k.startsWith("ingest:") && busy(runs, "intake", k.slice("ingest:".length))));
+  const over = keys.filter((k) => k in seen && !(k.startsWith("ingest:") && holdsWork(runs, "intake", k.slice("ingest:".length))));
   const missed = over.filter((k) => !s.missed.includes(k));
   s.missed = over;
   for (const k of missed) logEvent({ by: "rule", subject: k, action: "missed" });

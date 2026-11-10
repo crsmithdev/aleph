@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "bun:test";
-import { isVersion, missingSections, oracleCommands, specVersion, surfacePaths } from "./issue-spec.ts";
+import { isVersion, missingSections, oracleCommands, outsideSurface, specVersion, surfacePaths } from "./issue-spec.ts";
 
 const SPEC = "## Goal\nShip it.\n\n## Edit surface (the files the run may change)\n- `jobs/lib/infra/layout.ts` (new)\n- ui/views/now.js: the row.\n- README.md\n\n## Oracle\n- `bun test jobs/lib/infra/layout.test.ts` passes.\n";
 const item = (over: { title?: string; request?: string; spec?: string } = {}) => ({ title: "T", request: "R", spec: SPEC, ...over }) as any;
@@ -18,6 +18,10 @@ test("surfacePaths lists the paths of the Edit surface only, without trailing do
   expect(paths).not.toContain("jobs/lib/infra/layout.test.ts");
   expect(surfacePaths("## Edit surface\nChange a/b.ts.")).toEqual(["Change", "a/b.ts"]);
   expect(surfacePaths("## Goal\nx")).toEqual([]);
+});
+
+test("a ./ before a path of the Edit surface or a changed file does not change what is inside", () => {
+  expect(outsideSurface("## Edit surface\n- ./src/a.ts\n- ./lib/", ["src/a.ts", "./lib/b.ts", "src/c.ts"])).toEqual(["src/c.ts"]);
 });
 
 test("specVersion is short and changes with the title, the request or the spec", () => {

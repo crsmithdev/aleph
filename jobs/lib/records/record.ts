@@ -11,6 +11,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { readJsonOr } from "../infra/json.ts";
 import type { Ask } from "../asks/ask.ts";
 import type { Entry, Run } from "./ledger.ts";
 import { causeOf, policyOf } from "./outcome.ts";
@@ -98,10 +99,7 @@ export const empty = (key: string): JobRecord => ({ issue: key, ask: null, wait:
 
 /** The record of `key`, or null when there is none. */
 export function read(key: string): JobRecord | null {
-  for (const file of [fileOf(key), join(archiveDir(), nameOf(key))]) {
-    try { return JSON.parse(readFileSync(file, "utf8")); } catch { /* not in this folder */ }
-  }
-  return null;
+  return readJsonOr(fileOf(key), null) ?? readJsonOr(join(archiveDir(), nameOf(key)), null);
 }
 
 /** The folders of the records: the records folder, and with `live` false the archive too. */
@@ -116,7 +114,8 @@ function readAll(live: boolean): JobRecord[] {
     if (!existsSync(dir)) continue;
     for (const f of readdirSync(dir).sort()) {
       if (!f.endsWith(".json")) continue;
-      try { out.push(JSON.parse(readFileSync(join(dir, f), "utf8"))); } catch { /* a file mid-rename is not there yet */ }
+      const r = readJsonOr<JobRecord | null>(join(dir, f), null); // null: a file renamed away since the listing
+      if (r) out.push(r);
     }
   }
   return out;

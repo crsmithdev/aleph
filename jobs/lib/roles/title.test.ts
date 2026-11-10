@@ -18,7 +18,7 @@ afterAll(() => { for (const k of KEYS) if (savedKeys[k] === undefined) delete pr
 /** A stand-in for `claude -p` that prints `line` as its result, or fails. */
 function stub(line: string | null): void {
   const f = join(dir, `stub-${Math.random().toString(36).slice(2)}`);
-  writeFileSync(f, line === null ? "#!/bin/sh\nexit 1\n" : `#!/bin/sh\nprintf '%s' ${JSON.stringify(JSON.stringify({ result: line }))}\n`, { mode: 0o755 });
+  writeFileSync(f, line === null ? "#!/bin/sh\nexit 1\n" : `#!/bin/sh\nprintf '%s' ${JSON.stringify(JSON.stringify({ type: "result", is_error: false, result: line }))}\n`, { mode: 0o755 });
   process.env.ALEPH_RULE_CMD = f;
 }
 
@@ -42,7 +42,7 @@ test("a title slot set to local runs claude on gpt-oss-20b at the local base URL
   const saved = process.env.ALEPH_FACTORY_DIR;
   process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
   const f = join(dir, "record");
-  writeFileSync(f, `#!/bin/sh\necho "$@" > ${join(dir, "args")}\nenv > ${join(dir, "env")}\nprintf '%s' '{"result":"A title"}'\n`, { mode: 0o755 });
+  writeFileSync(f, `#!/bin/sh\necho "$@" > ${join(dir, "args")}\nenv > ${join(dir, "env")}\nprintf '%s' '{"type":"result","is_error":false,"result":"A title"}'\n`, { mode: 0o755 });
   process.env.ALEPH_RULE_CMD = f;
   try {
     expect(setModel("title", { model: "gpt-oss-20b" })).toBeNull();
@@ -62,7 +62,7 @@ test("when the GPU slot stays taken past the title call's time box, the title co
   const saved = process.env.ALEPH_FACTORY_DIR;
   process.env.ALEPH_FACTORY_DIR = join(dir, "factory-busy");
   const f = join(dir, "record-busy");
-  writeFileSync(f, `#!/bin/sh\necho "$@" > ${join(dir, "args-busy")}\nprintf '%s' '{"result":"A title from Claude"}'\n`, { mode: 0o755 });
+  writeFileSync(f, `#!/bin/sh\necho "$@" > ${join(dir, "args-busy")}\nprintf '%s' '{"type":"result","is_error":false,"result":"A title from Claude"}'\n`, { mode: 0o755 });
   process.env.ALEPH_RULE_CMD = f;
   const T0 = Date.parse("2026-11-04T00:00:00Z");
   setSystemTime(T0);

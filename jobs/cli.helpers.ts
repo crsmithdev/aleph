@@ -252,7 +252,6 @@ case $action in
   error) echo '{"type":"result","is_error":true,"result":"API Error: 500"}'; exit 0 ;;
   noresult) echo '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'; exit 0 ;;
   nostructured) echo n > n.txt; git add n.txt; git commit -qm "add n.txt"; echo '{"type":"result","is_error":false,"result":"done"}'; exit 0 ;;
-  trailing) echo x > t.txt; git add t.txt; git commit -qm "add t.txt"; echo '{"type":"result","is_error":false,"result":"done"}'; echo 'one more line'; exit 0 ;;
   already-met) echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"","structured_output":{"summary":"Looked.","defaults":[],"followups":[],"flakes":[],"already_met":{"evidence":"main has the change"},"question":null}}'; echo '{"type":"command_lifecycle","phase":"end"}'; exit 0 ;;
   defaults) echo d > d.txt; git add d.txt; git commit -qm "add d.txt"
     echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"","structured_output":{"summary":"Done.","defaults":[{"choice":"which colour?","chose":"blue"}],"followups":[{"title":"paint the fence"}],"flakes":[],"already_met":null,"question":null}}'; exit 0 ;;

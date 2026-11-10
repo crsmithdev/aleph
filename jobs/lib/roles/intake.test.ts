@@ -5,7 +5,8 @@ import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { buildableIssues, isBuildable, isSorted, mediaDir, mediaPath, partsOf, readList, writeList, type File } from "../../../issues/lib/store.ts";
 
-import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
+import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts } from "./intake.ts";
+import type { Spec } from "./issue-spec.ts";
 import { allRuns, stamp, type Repo } from "../records/ledger.ts";
 import { getRun, putRun } from "../records/record.ts";
 import { askOf, setAsk } from "../asks/ask.ts";

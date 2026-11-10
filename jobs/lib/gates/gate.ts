@@ -3,46 +3,9 @@
  * needs Chris. See docs/workflow.md.
  */
 import { git } from "../infra/git.ts";
-import type { Usage } from "../../../lib/pricing.ts";
 
 /** The reason a parser gives when the reply has no structured output. */
 export const NO_OUTPUT = "no structured output";
-
-/** `usage` is the result event's tokens, in the shape `costDetails` takes. */
-export interface Outcome { ok: boolean; line: string; result: string; cost?: number; usage?: Usage }
-
-const lifecycle = (line: string): boolean => {
-  try { return JSON.parse(line)?.type === "command_lifecycle"; } catch { return false; }
-};
-
-/**
- * The last line of the worker's stdout decides: it must be a `stream-json`
- * `result` event with `is_error` false. Anything else, whatever the exit
- * code, is a run that did not finish. The `command_lifecycle` lines the
- * command adds after the worker's output are not the worker's, so they are skipped.
- */
-export function outcome(stdout: string): Outcome {
-  const line = stdout.trimEnd().split("\n").findLast((l) => !lifecycle(l)) ?? "";
-  let ev: any;
-  try { ev = JSON.parse(line); } catch { return { ok: false, line: line.slice(0, 300) || "no output", result: "" }; }
-  const result = typeof ev?.result === "string" ? ev.result : "";
-  const cost = typeof ev?.total_cost_usd === "number" ? ev.total_cost_usd : undefined;
-  const ok = ev?.type === "result" && ev.is_error === false;
-  const u = ev?.usage;
-  const usage = typeof u?.input_tokens === "number" && typeof u?.output_tokens === "number"
-    ? { input: u.input_tokens, output: u.output_tokens, cache_read_input_tokens: u.cache_read_input_tokens ?? 0, cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0 }
-    : undefined;
-  return { ok, line: ok ? "" : (result || line).slice(0, 300), result, cost, ...(usage ? { usage } : {}) };
-}
-
-/**
- * The reply text and the cost of a read-only run. A stdout with no `result`
- * event, as a test's fake prints, is the text itself.
- */
-export function replyOf(stdout: string): { text: string; cost?: number } {
-  const o = outcome(stdout);
-  return o.result || o.cost !== undefined ? { text: o.result, cost: o.cost } : { text: stdout };
-}
 
 const text = { type: "string", minLength: 1 };
 

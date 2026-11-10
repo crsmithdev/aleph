@@ -38,6 +38,26 @@ export function processState(e: { folder: string; run: Pick<Run, "condition" | "
   return e.run.condition === "running" && Date.now() - (e.run.made ?? 0) < STARTING_MS ? "starting" : "none";
 }
 
+/** When this host booted, in ms. */
+export const bootedAt = (): number => Number(readFileSync("/proc/stat", "utf8").match(/^btime (\d+)$/m)![1]) * 1000;
+
+/** A run's health: its ProcessState, or `killed`. */
+export type Health = ProcessState | "killed";
+
+/**
+ * A run's health. `killed`: its record says `running`, it started before `booted`, and it is not live or starting, so
+ * a host restart killed it. `live` asks that the pid's process names the run's folder, so a process that got the same
+ * pid after the restart does not count as the run. Else its processState: `lost` is then a run that died since this boot.
+ */
+export function runHealth(e: Entry, booted = bootedAt()): Health {
+  const s = processState(e);
+  return e.run.condition === "running" && Date.parse(e.run.started) < booted && s !== "live" && s !== "starting" ? "killed" : s;
+}
+
+/** An intake or director run of `on` that has not ended: its process holds the work, so nothing starts a second. */
+export const holdsWork = (runs: Entry[], kind: string, on: string): boolean =>
+  runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running");
+
 /** The run's process is live or still starting: a second run of its job must not start. */
 export const isRunning = (e: Entry): boolean => ["live", "starting"].includes(processState(e));
 

@@ -8,11 +8,10 @@
 import { closeSync, openSync, readFileSync, statSync } from "node:fs";
 import { BACKENDS, modelArgv, modelEnv, onGpu, viaOf } from "../routing/models.ts";
 import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
-import { outcome, replyOf, type Outcome } from "../gates/gate.ts";
 import { policyOf } from "../records/outcome.ts";
 import { roleCmd } from "../infra/settings.ts";
 import { logEvent } from "../infra/layout.ts";
-import { costDetails } from "../../../lib/pricing.ts";
+import { costDetails, type Usage } from "../../../lib/pricing.ts";
 
 /** The roles that call `claude`. */
 export type AgentRole = "worker" | "reviewer" | "title" | "judge" | "intake" | "director" | "monitor" | "chat";
@@ -72,14 +71,36 @@ export function agentCause(r: Step, o: Outcome): AgentCause | null {
   return null;
 }
 
-/** The last `result` event of a stream-json stdout, or undefined. */
-function resultOf(stdout: string): any {
+/**
+ * What a stream-json stdout says. `found`: it has a `result` event. `usage` is that event's tokens, in the shape
+ * `costDetails` takes; `data` its `structured_output`; `line` why it is not ok, else empty.
+ */
+export interface Outcome { found: boolean; ok: boolean; line: string; result: string; cost?: number; usage?: Usage; session?: string; data?: unknown }
+
+/**
+ * The only read of a stream-json stdout's answer: its last `result` event. Lines that are not JSON and other events
+ * are skipped, so a line after the result does not change the answer. It is ok only when the event says `is_error`
+ * false; an event with no `is_error` is not ok. With no result event it is not ok, and `line` is the last line that is
+ * not a `command_lifecycle` event, which the command adds after the agent's output.
+ */
+export function resultOf(stdout: string): Outcome {
+  let last: string | undefined;
   for (const line of stdout.trimEnd().split("\n").reverse()) {
     let ev: any;
-    try { ev = JSON.parse(line); } catch { continue; }
-    if (ev?.type === "result") return ev;
+    try { ev = JSON.parse(line); } catch { last ??= line; continue; }
+    if (ev?.type !== "result") { if (ev?.type !== "command_lifecycle") last ??= line; continue; }
+    const result = typeof ev.result === "string" ? ev.result : "";
+    const ok = ev.is_error === false, u = ev.usage;
+    const usage = typeof u?.input_tokens === "number" && typeof u?.output_tokens === "number"
+      ? { input: u.input_tokens, output: u.output_tokens, cache_read_input_tokens: u.cache_read_input_tokens ?? 0, cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0 }
+      : undefined;
+    return {
+      found: true, ok, line: ok ? "" : (result || line).slice(0, 300), result,
+      cost: typeof ev.total_cost_usd === "number" ? ev.total_cost_usd : undefined, ...(usage ? { usage } : {}),
+      session: typeof ev.session_id === "string" ? ev.session_id : undefined, data: ev.structured_output ?? undefined,
+    };
   }
-  return undefined;
+  return { found: false, ok: false, line: (last ?? "").slice(0, 300) || "no output", result: "" };
 }
 
 /** Claude Code knows Claude's prices only: a call on another model is priced from its tokens. */
@@ -105,14 +126,10 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
     release?.();
   }
   const out = readFileSync(o.stdout).subarray(seen).toString();
-  const res = outcome(out);
+  const res = resultOf(out);
   const cause = agentCause(step, res);
   if (cause && policyOf(cause.kind).holdsBackend) await holdBackend(viaOf(model), cause.reason);
-  const ev = resultOf(out);
-  return {
-    text: step.code === 0 ? replyOf(out).text : res.result, data: ev?.structured_output ?? undefined,
-    session: typeof ev?.session_id === "string" ? ev.session_id : undefined, cost: costOf(model, res), step, cause,
-  };
+  return { text: step.code === 0 && !res.found ? out : res.result, data: res.data, session: res.session, cost: costOf(model, res), step, cause };
 }
 
 /** Signal the process group that `pid` leads, and `pid` itself when the group is gone. */

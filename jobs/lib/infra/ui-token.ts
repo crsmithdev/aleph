@@ -6,22 +6,14 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { readJsonOr, writeJson } from "./json.ts";
 import { layout } from "./layout.ts";
 
 export const sessionsPath = () => join(layout().factory, "ui-sessions.json");
 
-export function readSessions(): string[] {
-  try {
-    const v = JSON.parse(readFileSync(sessionsPath(), "utf8"));
-    return Array.isArray(v) ? v.filter((t): t is string => typeof t === "string") : [];
-  } catch { return []; }
-}
+export const readSessions = (): string[] => readJsonOr(sessionsPath(), []);
 
-export function writeSessions(tokens: string[]): void {
-  const p = sessionsPath();
-  mkdirSync(join(p, ".."), { recursive: true });
-  writeFileSync(p, JSON.stringify(tokens));
-}
+export const writeSessions = (tokens: string[]): void => writeJson(sessionsPath(), tokens);
 
 /** The Cookie header value of the factory's token, which this adds to the sessions file when it is missing. */
 export function factoryCookie(): string {

@@ -10,7 +10,7 @@ import { flakeNames, flakes } from "../../jobs/lib/gates/factory-status.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { all as allRecords, type JobRecord } from "../../jobs/lib/records/record.ts";
 import { allRuns, isAgentRun, isBuild, issueKeyOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
-import { activeEnd, isLive, isStarting } from "../../jobs/lib/infra/process.ts";
+import { activeEnd, isRunning } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import { specChecksOf, stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
@@ -420,7 +420,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
 }
 
 /** The agents by role over `since`..`now`. `before` are the baseline's spans, each a [since, now] before the window. A run with the condition running ends at `now` when `alive` says so, and does not count when not. `step` is the width of a point in ms. */
-export function agentStats(entries: Entry[], since: number, now: number, step: number, cap: number, alive: (e: Entry) => boolean = (e) => isLive(e.folder) || isStarting(e), before: [number, number][] = []): Agents {
+export function agentStats(entries: Entry[], since: number, now: number, step: number, cap: number, alive: (e: Entry) => boolean = isRunning, before: [number, number][] = []): Agents {
   const length = Math.ceil((now - since) / step);
   const edges: [number, number][] = [];
   const points: Agents["points"] = Array.from({ length }, (_, i) => ({ at: new Date(since + i * step).toISOString() }));

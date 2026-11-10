@@ -2,8 +2,8 @@
  * The smoke test after a delivery: each tick asks aleph-ui for its page and its Status
  * data. One failure can be a restart in progress, so the health line needs two ticks in a row.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { readJsonOr, writeJson } from "../infra/json.ts";
 import { layout } from "../infra/layout.ts";
 import { uiPort } from "../infra/settings.ts";
 import { factoryCookie } from "../infra/ui-token.ts";
@@ -31,16 +31,13 @@ export async function smokeProblem(base = `http://127.0.0.1:${port()}`): Promise
   return null;
 }
 
-const read = (file: string): Smoke => {
-  try { return JSON.parse(readFileSync(file, "utf8")); } catch { return { fails: 0 }; }
-};
+const read = (file: string): Smoke => readJsonOr(file, { fails: 0 });
 
 /** One smoke test: the count of failures in a row, kept in `file`, with the first failure's time. */
 export async function smokeStep(file = smokeFile(), base?: string, now = Date.now()): Promise<void> {
   const reason = await smokeProblem(base);
   const last = read(file);
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, JSON.stringify(reason ? { fails: last.fails + 1, reason, at: last.at ?? new Date(now).toISOString() } : { fails: 0 }));
+  writeJson(file, (reason ? { fails: last.fails + 1, reason, at: last.at ?? new Date(now).toISOString() } : { fails: 0 }));
 }
 
 /** The health line, once FAILS_TO_REPORT ticks in a row failed. */

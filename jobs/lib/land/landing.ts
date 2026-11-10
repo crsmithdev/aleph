@@ -6,13 +6,14 @@
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
 import { basename } from "node:path";
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { closeAndFile, note } from "../../../issues/lib/store.ts";
 import { filing } from "../transitions/filing.ts";
 import { fetchOrigin, followMain, git } from "../infra/git.ts";
 import { needsOf } from "../asks/ask.ts";
 import { allRuns, isWaiting, isAgentRun, onOf, trailerOf, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
+import { readJsonOr, writeJson } from "../infra/json.ts";
 import { isLive } from "../infra/process.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";
@@ -81,6 +82,17 @@ function closeItems(repo: Repo, run: Run, title = "", commit?: string): { todo?:
   const w = closeAndFile(repo, `todo: job ${run.name} landed`, ci ? undefined : on, `job ${run.name} landed`, open ? [{ title, kind: "check", request: `The manual check of run ${run.name}: ${run.say}` }] : [], "rule", filing);
   if (ci) return { todo: note(repo, on!, `job ${run.name} landed as ${commit!.slice(0, 7)}; the issue is done when GitHub CI on main is green at or after it`) ?? "open until GitHub CI on main is green at or after the land", checkItem: w.ids[0] };
   return { todo: w.todo, checkItem: w.ids[0] };
+}
+
+/**
+ * The follow-on of a job whose work is on main as `commit`: its issue closes as closeItems closes it (an issue a red CI
+ * started waits for CI; an open manual check gets its own issue, titled `title`), and its worktree and branch go. The
+ * caller writes the run's end. Returns what closeItems did.
+ */
+export function settleOnMain(repo: Repo, run: Run, commit: string, title = ""): { todo?: string; checkItem?: number } {
+  const closed = closeItems(repo, run, title, commit);
+  removeBranch(repo, run);
+  return closed;
 }
 
 const MOVED = "main moved during the land; land again";
@@ -303,9 +315,8 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
     phase("queued");
     releaseRepo = await landTurn(repo, id, run.made ?? 0);
     // A land run an earlier land took into its batch has its verdict in its folder.
-    const given = runFile(folder, "batch.json");
-    if (existsSync(given)) {
-      const b = JSON.parse(readFileSync(given, "utf8"));
+    const b = readJsonOr<any>(runFile(folder, "batch.json"), null);
+    if (b) {
       if (b.checks) record.patchRun(basename(folder), { checks: b.checks });
       return { outcome: b.verdict, code: b.code };
     }
@@ -319,6 +330,14 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
     if (members.length > 1) log(`batch of ${members.length}`, members.map((m) => m.run.name).join("\n"));
     // The title of each open manual check's issue, written before the land: closeItems runs after the push.
     const checkTitles = new Map(await Promise.all(members.filter((m) => m.run.check === "open").map(async (m) => [m, await writeTitle(m.run.say ?? m.run.name)] as const)));
+
+    /** settleOnMain for a member, with its lines in the member's log. Returns the manual check's issue. */
+    const settled = (m: Member, commit: string): number | undefined => {
+      const { todo, checkItem } = settleOnMain(repo, m.run, commit, checkTitles.get(m));
+      if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
+      if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
+      return checkItem;
+    };
 
     // Members that failed in an earlier attempt keep their verdict and are not tried again.
     const failedBefore = new Map<Member, Landing & { after?: () => void }>();
@@ -341,10 +360,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
           m.log(`already on main as ${pushed}`);
           finish(m, { outcome: { condition: "landed", commit: pushed }, code: 0, after: () => {
             // The land that pushed may have died before it closed the item.
-            const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m), pushed);
-            if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
-            if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
-            removeBranch(repo, m.run);
+            settled(m, pushed);
             followCheckout(repo, log);
           } });
           continue;
@@ -353,7 +369,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
         const there = hit?.commit;
         if (there) {
           m.log(`item landed as ${there}`);
-          finish(m, { outcome: { condition: "done", reason: `item landed as ${there}` }, code: 0, after: () => { closeItems(repo, { ...m.run, check: undefined }, "", there); removeBranch(repo, m.run); } });
+          finish(m, { outcome: { condition: "done", reason: `item landed as ${there}` }, code: 0, after: () => { settleOnMain(repo, { ...m.run, check: undefined }, there); } });
           continue;
         }
         const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${m.run.branch}`);
@@ -370,10 +386,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
         phase("land");
         if (step("push", "push", "-q", "--no-verify", "origin", `${result.tip}:refs/heads/${main}`).ok) {
           for (const { m, commit } of ok) {
-            const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m), commit);
-            if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
-            if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
-            removeBranch(repo, m.run);
+            const checkItem = settled(m, commit);
             if (m !== leader) m.log(`landed as ${commit} with ${run.name}; the checks ran in ${id}`);
             finish(m, { outcome: { condition: "landed", commit, checkItem }, code: 0 });
           }
@@ -410,7 +423,7 @@ function conclude(leader: Member, done: Map<Member, Landing & { after?: () => vo
     o.after?.();
     if (m === leader) continue;
     const checks = checksOf.get(m);
-    writeFileSync(runFile(m.folder, "batch.json"), JSON.stringify({ verdict: o.outcome, code: o.code, ...(checks ? { checks } : {}) }));
+    writeJson(runFile(m.folder, "batch.json"), { verdict: o.outcome, code: o.code, ...(checks ? { checks } : {}) });
   }
   const own = checksOf.get(leader);
   if (own) record.patchRun(leader.id, { checks: own });

@@ -7,6 +7,7 @@ import { langfuseConfig } from "../../../lib/env.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from "../../../lib/otlp.ts";
 import { onOf, type Run } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
+import { resultOf } from "../roles/agent-call.ts";
 
 export interface TraceInput {
   runId: string; run: Run; repoKey: string;
@@ -25,10 +26,10 @@ const when = (ev: any): number | undefined => {
   return Number.isNaN(t) ? undefined : t;
 };
 
-/** The tool calls, the result text and the model of one stream-json transcript. */
+/** The tool calls, the result text and the model of one stream-json transcript. It is an error when resultOf is not ok. */
 export function parseStream(stream: string): Parsed {
   const calls = new Map<string, Call>();
-  let result = "", text = "", model: string | undefined, cost: number | undefined, error = false;
+  let text = "", model: string | undefined;
   for (const line of stream.split("\n")) {
     let ev: any;
     try { ev = JSON.parse(line); } catch { continue; }
@@ -49,13 +50,9 @@ export function parseStream(stream: string): Parsed {
         c.error = b.is_error === true;
       }
     }
-    if (ev?.type === "result") {
-      if (typeof ev.result === "string") result = ev.result;
-      if (typeof ev.total_cost_usd === "number") cost = ev.total_cost_usd;
-      error = ev.is_error === true;
-    }
   }
-  return { calls: [...calls.values()], result: result || text, model, cost, error };
+  const r = resultOf(stream);
+  return { calls: [...calls.values()], result: r.result || text, model, cost: r.cost, error: !r.ok };
 }
 
 /** The root span and one child per tool call of a transcript, under `parent` when given. */

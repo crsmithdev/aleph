@@ -10,9 +10,9 @@
  *
  * `always.json` in the factory dir maps a reason to `{ action, at }`.
  */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { layout, logEvent } from "../infra/layout.ts";
+import { readJsonOr, writeJson } from "../infra/json.ts";
 import { FULL, SUBS, word, type Event } from "../../../lib/naming.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -173,27 +173,14 @@ export const askNote = (a: Ask): string =>
 
 const alwaysFile = () => join(layout().factory, "always.json");
 
-function readJson(f: string): Record<string, Granted> | null {
-  try {
-    const s = JSON.parse(readFileSync(f, "utf8"));
-    if (s && typeof s === "object" && !Array.isArray(s)) return s;
-  } catch {}
-  return null;
-}
-
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
 const allows = (r: Reason, action: string): boolean => r.actions.includes(action) || action === r.always;
 
-/** always.json. A missing or bad file is empty. An entry that grant() would refuse is ignored. */
+/** always.json. A missing file is empty; a bad one throws. An entry that grant() would refuse is ignored. */
 export const readAlways = (): Record<string, Granted> =>
-  Object.fromEntries(Object.entries(readJson(alwaysFile()) ?? {}).filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(r, g?.action); }));
+  Object.fromEntries(Object.entries(readJsonOr<Record<string, Granted>>(alwaysFile(), {})).filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(r, g?.action); }));
 
-function write(s: Record<string, Granted>): void {
-  mkdirSync(layout().factory, { recursive: true });
-  const tmp = `${alwaysFile()}.tmp`;
-  writeFileSync(tmp, JSON.stringify(s, null, 2) + "\n");
-  renameSync(tmp, alwaysFile());
-}
+const write = (s: Record<string, Granted>): void => writeJson(alwaysFile(), s);
 
 /** The Always rule for `reason`, or null. */
 export const always = (reason: string): Granted | null => readAlways()[reason] ?? null;

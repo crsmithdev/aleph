@@ -11,13 +11,13 @@ import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { file as fileIssues, note, noteFlake, priorityOf, reader } from "../../../issues/lib/store.ts";
 import { filing } from "../transitions/filing.ts";
-import { callAgent, stallReason, type Reply } from "./agent-call.ts";
+import { callAgent, resultOf, stallReason, type Reply } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, loadRegistry, newsLine, readEnvFile, tell, trailerOf, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { markEnded, markStarted } from "../infra/process.ts";
+import { isLive, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
 import { allJobs, isOpen, jobById, openJob } from "../records/job.ts";
 import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "../gates/checks.ts";
@@ -61,19 +61,17 @@ async function exec(argv: string[], o: { cwd: string; env: Record<string, string
   return { code, timedOut: o.limit !== undefined && performance.now() - start >= o.limit * 1000, killed };
 }
 
-/** The `result` of the last result event; else the last assistant text; else empty. */
+/** The text of the last result event (resultOf); else the last assistant text; else empty. */
 export function resultText(log: string): string {
-  let result: string | undefined;
   let text = "";
   for (const line of log.split("\n")) {
     let ev: any;
     try { ev = JSON.parse(line); } catch { continue; }
-    if (ev?.type === "result" && typeof ev.result === "string") result = ev.result;
     if (ev?.type === "assistant") {
       for (const block of ev.message?.content ?? []) if (block?.type === "text" && block.text) text = block.text;
     }
   }
-  return result ?? text;
+  return resultOf(log).result || text;
 }
 
 /** A recorder that starts the run's `checks` over and adds each check that ran. */
@@ -102,7 +100,8 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
     try { startUnit(["land", n], { unit, cwd: repo.path }); } catch {}
   }
   const deadline = Date.now() + 10_000;
-  const queued = (job: string) => allRuns().some((e) => e.run.kind === "land" && e.run.job === job && e.run.condition === "running");
+  // The land must be live, as queuedLands takes only a live land: one still starting would miss the batch.
+  const queued = (job: string) => allRuns().some((e) => e.run.kind === "land" && e.run.job === job && e.run.condition === "running" && isLive(e.folder));
   while (Date.now() < deadline && !jobsOf.every(queued)) await Bun.sleep(100);
 }
 

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { type Entry, type Run } from "../records/ledger.ts";
 import { putRun } from "../records/record.ts";
-import { isRunning, markEnded, markStarted, processState, STARTING_MS, stop, unitAlive } from "./process.ts";
+import { isRunning, markEnded, markStarted, processState, runHealth, STARTING_MS, stop, unitAlive } from "./process.ts";
 
 const NOW = Date.parse("2026-11-03T00:00:00Z");
 let base: string;
@@ -90,4 +90,14 @@ test("stop kills a process that ignores SIGTERM once the grace time is over, and
   await liveIn(e.folder, "trap '' TERM;");
   expect(await stop(e, 300)).toBe(true);
   expect(processState(e)).toBe("lost");
+});
+
+test("a running run with a dead pid is killed when it started before the boot, and lost when it started after", () => {
+  setSystemTime(NOW);
+  const e = entry("r-dead");
+  markStarted(e.folder, 999_999_999);
+  expect(runHealth(e, NOW + 1)).toBe("killed");
+  expect(runHealth(e, NOW - 1)).toBe("lost");
+  expect(runHealth({ ...e, run: { ...e.run, condition: "done" } }, NOW + 1)).toBe("lost");
+  expect(runHealth(entry("r-new"), NOW + 1)).toBe("starting");
 });

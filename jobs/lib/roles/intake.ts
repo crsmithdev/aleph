@@ -6,8 +6,8 @@
  * the run back once with the problems, in the same session, and a second failure asks Chris (`intake-failed`).
  * Each run is a job in the ledger, kind `intake`, with its cost in its state.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { readJsonOr, writeJson } from "../infra/json.ts";
 import { FULL } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { areasOf, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
@@ -26,12 +26,11 @@ import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
 import { filing } from "../transitions/filing.ts";
+import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec } from "./issue-spec.ts";
 
 /** The model an intake run asks for. */
 const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;
 
-/** A spec as intake gives it: each section a field. `new` marks a file of the Edit surface that the run creates. */
-export interface Spec { goal: string; surface: { path: string; new: boolean }[]; oracle: string[] }
 export interface Part { title: string; spec: Spec; after: number[] }
 
 export type Route =
@@ -143,18 +142,14 @@ export function parseRoute(reply: any): Route | string {
   }
 }
 
-/** The spec as the issue keeps it: the three sections in Markdown. */
-export const specText = (s: Spec): string =>
-  `## Goal\n${s.goal}\n\n## Edit surface\n${s.surface.map((p) => `- ${p.path}${p.new ? " (new)" : ""}`).join("\n")}\n\n## Oracle\n${s.oracle.map((o) => `- ${o}`).join("\n")}`;
-
 const COMMANDS = new Set(["bun", "bunx", "npm", "npx", "pnpm", "yarn", "node", "deno", "make", "pytest", "python", "python3", "cargo", "go", "bash", "sh", "git", "tsc", "jest", "vitest", "ruby", "rake", "mvn", "gradle"]);
 
 /** Whether an Oracle names a test file or a command a shell runs. `aleph check` is not one. */
 export function realOracle(text: string): boolean {
   if (/\baleph check\b/.test(text)) return false;
   if (/[\w./-]+\.(test|spec)\.[a-z]+\b|(^|[\s`/])(tests?|__tests__)\/[\w./-]+|\btest_[\w-]+\.py\b|_test\.(go|py)\b/m.test(text)) return true;
-  for (const m of text.matchAll(/`([^`]+)`/g)) {
-    const word = m[1].trim().split(/\s+/)[0];
+  for (const c of commandsIn(text)) {
+    const word = c.split(/\s+/)[0];
     if (COMMANDS.has(word) || word.startsWith("./") || (word && Bun.which(word))) return true;
   }
   return false;
@@ -162,9 +157,8 @@ export function realOracle(text: string): boolean {
 
 /** A test file, which sits beside the code it tests. */
 const TEST_FILE = /\.(test|spec|accept)\.[a-z]+$|(^|\/)test_[\w-]+\.py$|_test\.(go|py)$/;
-/** A placeholder left for the reader: `???`, `TBD`, a section that is only `TODO`, or `<name>` in a command or a path. */
+/** A placeholder left for the reader: `???`, `TBD`, a section that is only `TODO`, or `<name>` in a command or a path (hasPlaceholder). */
 const PLACEHOLDER = /\?\?\?|\bTBD\b/;
-const BRACKETS = /<[A-Za-z][\w-]*(?: [A-Za-z][\w-]*)*>/;
 
 /** Whether `path` is a file or folder on the repo's `origin/<main>`. */
 const onMainTree = (repo: Repo, path: string): boolean => git(repo.path, "cat-file", "-e", `origin/${repo.main}:${path.replace(/^\.\//, "").replace(/\/$/, "")}`).ok;
@@ -179,24 +173,20 @@ function specProblems(repo: Repo, s: Spec, at: string): string[] {
     if (PLACEHOLDER.test(t) || /^\s*TODO\s*$/m.test(t)) out.push(`${at}: the ${name} holds a placeholder (???, TBD or TODO): write the real text`);
   }
   for (const p of s.surface) {
-    if (BRACKETS.test(p.path) || PLACEHOLDER.test(p.path)) { out.push(`${at}: the Edit surface path ${p.path} is a placeholder`); continue; }
+    if (hasPlaceholder(p.path) || PLACEHOLDER.test(p.path)) { out.push(`${at}: the Edit surface path ${p.path} is a placeholder`); continue; }
     if (p.path.startsWith("/") || p.path.split("/").includes("..")) { out.push(`${at}: the Edit surface path ${p.path} is not a path in the repo`); continue; }
     if (!p.new && !onMainTree(repo, p.path)) out.push(`${at}: the Edit surface names ${p.path}, which is not on main; name a file that exists, or mark it new`);
   }
   const oracle = s.oracle.join("\n");
   if (s.oracle.length && !realOracle(oracle)) out.push(`${at}: the Oracle names no command or test file (and there is no \`aleph check\`)`);
-  for (const m of oracle.matchAll(/`([^`\n]+)`/g)) {
-    const cmd = m[1].trim();
-    if (BRACKETS.test(cmd)) out.push(`${at}: the Oracle command \`${cmd}\` holds a placeholder`);
-    if (!/^bun test\s/.test(cmd)) continue;
-    for (const arg of cmd.split(/\s+/).slice(2).filter((a) => !a.startsWith("-") && /\.[jt]sx?$/.test(a))) {
-      if (!arg.startsWith("./") && !/\.(test|spec)\.[jt]sx?$/.test(arg)) out.push(`${at}: \`${cmd}\` names ${arg}, which bun reads as a name filter: write ./${arg}`);
-    }
+  for (const cmd of commandsIn(oracle)) {
+    if (hasPlaceholder(cmd)) out.push(`${at}: the Oracle command \`${cmd}\` holds a placeholder`);
+    for (const arg of nameFilters(cmd)) out.push(`${at}: \`${cmd}\` names ${arg}, which bun reads as a name filter: write ./${arg}`);
   }
   // A test file the Oracle names must be on main, or in the Edit surface for the run to make.
-  const surface = s.surface.map((p) => p.path.replace(/^\.\//, ""));
+  const surface = s.surface.map((p) => p.path);
   for (const m of new Set([...oracle.matchAll(/(?:^|[\s`(])\.?\/?([\w.@-]+(?:\/[\w.@-]+)*\.(?:test|spec)\.[jt]sx?)\b/g)].map((m) => m[1]))) {
-    if (!onMainTree(repo, m) && !surface.some((p) => m === p || m.startsWith(p.endsWith("/") ? p : `${p}/`))) out.push(`${at}: the Oracle names ${m}, which is not on main and not in the Edit surface`);
+    if (!onMainTree(repo, m) && !inSurface(m, surface)) out.push(`${at}: the Oracle names ${m}, which is not on main and not in the Edit surface`);
   }
   return out;
 }
@@ -410,8 +400,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   // After a standing retry, only the runs since it count. The mark names the runs that counted before it:
   // a time would not do, because the wall clock can step back (WSL2 steps it back every half minute).
   const mark = join(factoryDir(), "standing-retry", `${repo.key}-${id}`);
-  let before: string[] = [];
-  try { before = JSON.parse(readFileSync(mark, "utf8")); } catch {}
+  const before: string[] = readJsonOr(mark, []);
   const runs = allRuns().filter((e) => e.run.kind === "intake" && e.run.repo === repo.key && onOf(e.run) === id
     && !before.includes(e.id)
     && causeOf(e.run) === "unanswered");
@@ -420,8 +409,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   const grant = always("intake-failed")?.action;
   const ref = `${repo.key}-${id}`;
   if (grant === "retry") {
-    mkdirSync(join(factoryDir(), "standing-retry"), { recursive: true });
-    writeFileSync(mark, JSON.stringify([...before, ...runs.map((e) => e.id)]));
+    writeJson(mark, [...before, ...runs.map((e) => e.id)]);
     logAlways("intake-failed", ref, "reran");
     return `${ref}: no verdict in ${n} intake runs; standing: intake again next tick`;
   }

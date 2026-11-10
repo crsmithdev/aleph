@@ -4,7 +4,7 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { areasOf, reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -17,7 +17,8 @@ import { layout, logEvent, readEvents } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { allRuns, isWaiting, isBuild, loadRegistry, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { held, lock } from "../infra/locks.ts";
-import { isLive, isStarting } from "../infra/process.ts";
+import { readJsonOr, writeJson } from "../infra/json.ts";
+import { isLive, isRunning } from "../infra/process.ts";
 import { causeOf, policyOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "../infra/settings.ts";
@@ -91,10 +92,8 @@ const holdFile = () => join(factoryDir(), "backend-hold.json");
 
 /** The backend the factory holds now, or null. */
 export function backendHold(): BackendHold | null {
-  try {
-    const h = JSON.parse(readFileSync(holdFile(), "utf8"));
-    return h && typeof h.via === "string" ? h : null;
-  } catch { return null; }
+  const h = readJsonOr<BackendHold | null>(holdFile(), null);
+  return h && typeof h.via === "string" ? h : null;
 }
 
 /** The line the hold gives a run on its backend. */
@@ -116,8 +115,7 @@ export function heldGoal(name: string): Bound | null {
  */
 export async function holdBackend(via: Via, why: string): Promise<void> {
   if (backendHold()?.via === via) return;
-  mkdirSync(factoryDir(), { recursive: true });
-  writeFileSync(holdFile(), JSON.stringify({ via, why, since: new Date().toISOString() }) + "\n");
+  writeJson(holdFile(), { via, why, since: new Date().toISOString() });
   logEvent({ by: "rule", subject: via, action: "paused", sub: "credit", note: `held ${BACKENDS[via]}: ${why}` });
   await tell(`the factory holds ${BACKENDS[via]}: ${why}`);
 }
@@ -151,7 +149,7 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
 }
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
-export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
+export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && isRunning(e));
 
 /** Whether a build run is on the local backend: unit.ts sets its model to its tier's, and before that its tier's model is the local one. */
 export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Tier, Setting>): boolean => viaOfRun(run, models) === "local";
@@ -229,10 +227,7 @@ export async function recordFlake(row: Flake): Promise<boolean> {
   const release = await lock("flaky");
   if (!release) return false;
   try {
-    mkdirSync(factoryDir(), { recursive: true });
-    const tmp = `${flakyFile()}.tmp`;
-    writeFileSync(tmp, JSON.stringify([...flakes(), row], null, 2) + "\n");
-    renameSync(tmp, flakyFile());
+    writeJson(flakyFile(), [...flakes(), row]);
     return true;
   } finally {
     release();
@@ -241,18 +236,14 @@ export async function recordFlake(row: Flake): Promise<boolean> {
 
 export interface Flake { repo: string; check: string; run: string; at: string; tests?: string[] }
 const flakyFile = () => join(factoryDir(), "flaky.json");
-export const flakes = (): Flake[] => {
-  try { return JSON.parse(readFileSync(flakyFile(), "utf8")); } catch { return []; }
-};
+export const flakes = (): Flake[] => readJsonOr(flakyFile(), []);
 
 /** `config`: the setup and checks the record ran, as JSON; a record from before it has none. */
 export interface Baseline { repo: string; commit: string; config?: string; ok: boolean; failed?: string }
 
 const baselineFile = () => join(factoryDir(), "baseline.json");
 
-export const baselines = (): Record<string, Baseline> => {
-  try { return JSON.parse(readFileSync(baselineFile(), "utf8")); } catch { return {}; }
-};
+export const baselines = (): Record<string, Baseline> => readJsonOr(baselineFile(), {});
 
 /**
  * The one write of baseline.json. Under one lock for the whole file, it reads the entries, lets `decide` turn the
@@ -266,10 +257,7 @@ export async function writeBaseline(key: string, decide: (old: Baseline | undefi
     const all = baselines();
     const next = decide(all[key]);
     if (!next) return false;
-    mkdirSync(factoryDir(), { recursive: true });
-    const tmp = `${baselineFile()}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ ...all, [key]: next }, null, 2) + "\n");
-    renameSync(tmp, baselineFile());
+    writeJson(baselineFile(), { ...all, [key]: next });
     return true;
   } finally {
     release();
@@ -329,13 +317,10 @@ const stallFile = () => join(factoryDir(), "stalls.json");
 
 /** The tick's record of stalled work: each key with the time a tick first saw it. */
 export function writeStalls(stalls: Record<string, string>): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  writeFileSync(stallFile(), JSON.stringify(stalls));
+  writeJson(stallFile(), stalls);
 }
 
-export const readStalls = (): Record<string, string> => {
-  try { return JSON.parse(readFileSync(stallFile(), "utf8")); } catch { return {}; }
-};
+export const readStalls = (): Record<string, string> => readJsonOr(stallFile(), {});
 
 /** A health line: its text, its kind, and for an alert the key the status sentence ranks it by (lib/status-words.ts). */
 export interface Health { text: string; kind: "alert" | "warn"; key?: string }

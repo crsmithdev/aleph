@@ -3,9 +3,10 @@
  * does not serve differs only in the env the call adds, which `modelEnv` gives from MODELS. The tier map lives in
  * models.json in the factory folder as tier -> {enabled, model}; a missing file or tier means enabled on its Claude model.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { readJsonOr, writeJson } from "../infra/json.ts";
 import { layout } from "../infra/layout.ts";
 import { openRouterKey } from "../../../lib/env.ts";
 import { NO_SKILLS } from "../roles/role-skill.ts";
@@ -151,15 +152,11 @@ export const WORKER_TIER: Record<string, Tier | undefined> = { haiku: "worker-lo
 const OLD: Record<string, Tier> = { "worker.haiku": "worker-low", "worker.sonnet": "worker-medium", merge: "merge", title: "title", judge: "judge" };
 
 const file = (): string => join(layout().factory, "models.json");
-const write = (m: Record<Tier, Setting>): void => {
-  mkdirSync(layout().factory, { recursive: true });
-  writeFileSync(file(), JSON.stringify(m, null, 2) + "\n");
-};
+const write = (m: Record<Tier, Setting>): void => writeJson(file(), m);
 
 /** Every tier with its setting. A file in the old slot shape (slot -> claude|local) is converted and written back. */
 export function readModels(): Record<Tier, Setting> {
-  let m: any;
-  try { m = JSON.parse(readFileSync(file(), "utf8")); } catch { m = {}; }
+  let m: any = readJsonOr(file(), {});
   const old = Object.values(m).some((v) => typeof v === "string");
   if (old) m = Object.fromEntries(Object.entries(OLD).map(([slot, t]) => [t, { model: m[slot] === "local" ? "gpt-oss-20b" : undefined }]));
   const all = Object.fromEntries((Object.keys(OFFERS) as Tier[]).map((t) => [t, {

@@ -79,6 +79,38 @@
       ]
     },
     {
+      "name": "stream-json",
+      "code": [
+        "jobs/lib/roles/agent-call.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "jobs/lib/roles/agent-call.ts",
+        "**/*.test.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
+    },
+    {
+      "name": "spec",
+      "code": [
+        "jobs/lib/roles/issue-spec.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "jobs/lib/roles/issue-spec.ts",
+        "**/*.test.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
+    },
+    {
       "name": "turn span",
       "code": [
         "hooks/lib/trace.ts"

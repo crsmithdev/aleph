@@ -4,11 +4,12 @@
  * never fixes: the reader has no tools, and nothing here files, answers or changes an item. It runs while the
  * factory is paused, since it only reads.
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { endLost, openRun } from "./agent-run.ts";
 import { lock } from "../infra/locks.ts";
+import { writeJson } from "../infra/json.ts";
 import { recordRan } from "../transitions/factory.ts";
-import { addDays, measure, monitorDir, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
+import { addDays, measure, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
 import { monitorOn } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readModels } from "../routing/models.ts";
@@ -64,8 +65,7 @@ async function read(day: string, table: Table): Promise<Report> {
     r.error = String(e?.message ?? e);
     run.end(`failed: ${r.error}`, { cause: "unanswered" });
   }
-  mkdirSync(monitorDir(), { recursive: true });
-  writeFileSync(reportFile(day), JSON.stringify(r, null, 2) + "\n");
+  writeJson(reportFile(day), r);
   return r;
 }
 
