@@ -99,7 +99,7 @@ const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
   worker: "worker", review: "reviewer", intake: "intake", director: "director", monitor: "monitor",
 };
 /** The runs of a job as the page shows them; with `all`, every run, each also gets its job ID. */
-function runInfos(runs: Entry[], fit: Fit | null = null, all?: Entry[]): RunInfo[] {
+function runInfos(runs: Entry[], fit: Fit | null, all: Entry[]): RunInfo[] {
   const out: RunInfo[] = [];
   runs.forEach((e) => {
     const r = e.run;

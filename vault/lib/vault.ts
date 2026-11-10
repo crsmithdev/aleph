@@ -192,7 +192,7 @@ export function validateNote(note: Note, others: Note[], index: Map<string, Note
   for (const target of links(note.body)) if (!index.has(target.toLowerCase()) && !mine.includes(target.toLowerCase())) add("dangling", `[[${target}]] resolves to nothing`);
 
   const body = note.body.replace(/^\s*#[^\n]*\n/, "").trimStart();
-  const claim = body.split(/\n\s*\n/)[0] ?? "";
+  const claim = body.split(/\n\s*\n/)[0];
   if (!claim.startsWith("**Claim.**")) add("template", "body must open with a paragraph beginning **Claim.**");
   if (!/as of \d{4}-\d{2}-\d{2}/.test(claim)) add("template", "the claim must carry an `as of YYYY-MM-DD` marker");
   for (const h of ["Details", "Evidence", "Related"]) if (!new RegExp(`^## ${h}\\s*$`, "m").test(note.body)) add("template", `missing section ## ${h}`);

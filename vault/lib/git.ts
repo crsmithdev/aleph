@@ -68,7 +68,7 @@ export function commitPaths(dir: string, subject: string, paths: string[]): stri
 export function pushOrigin(dir: string): { pushed: boolean; detail?: string } {
   if (!git(dir, "remote", "get-url", "origin").ok) return { pushed: false, detail: "no origin" };
   const r = git(dir, "push", "--quiet", "origin", "HEAD");
-  return r.ok ? { pushed: true } : { pushed: false, detail: r.out.split("\n").at(-1) ?? "push failed" };
+  return r.ok ? { pushed: true } : { pushed: false, detail: r.out.split("\n").at(-1) || "push failed" };
 }
 
 /** Every path git tracks under `dir`, relative and posix-style. */

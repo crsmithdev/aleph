@@ -132,7 +132,7 @@ function pairAgents(obs: any[]): Map<string, string> {
 }
 
 /** A turn's tool calls in start order; a subagent's calls nest under the `Agent` call that launched it, and those of an unpaired subagent are left to the turn page. */
-function toolCalls(obs: any[], t0 = 0) {
+function toolCalls(obs: any[], t0: number) {
   const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
   const spanOf = new Map([...pairAgents(obs)].map(([a, t]) => [t, a]));
   const call = (o: any, parent: string | null = null): any => ({
@@ -147,7 +147,7 @@ function toolCalls(obs: any[], t0 = 0) {
 }
 
 /** A turn's model calls (GENERATION observations) in start order, apart from the tool calls; one in a paired subagent has the `Agent` call's id as parent, one in an unpaired subagent is left out. */
-function generations(obs: any[], t0 = 0) {
+function generations(obs: any[], t0: number) {
   const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
   const spanTool = pairAgents(obs);
   const num = (v: unknown) => (typeof v === "number" ? v : null);

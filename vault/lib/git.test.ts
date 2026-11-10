@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addedDate, commitPaths, tracked } from "./git.ts";
+import { addedDate, commitPaths, pushOrigin, tracked } from "./git.ts";
 
 const env = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let dir: string;
@@ -29,4 +29,15 @@ test("commitPaths still commits the note when another named path is gone and was
   const sha = commitPaths(dir, "write: Draft", [join(dir, "Draft.md"), join(dir, "Gone.md")]);
   expect(sha).toBeTruthy();
   expect(tracked(dir, join(dir, "Draft.md"))).toBe(true);
+});
+
+test("a push that fails with no output reports push failed", () => {
+  g("2026-01-01T12:00:00", "remote", "add", "origin", dir);
+  const bin = mkdtempSync(join(tmpdir(), "git-shim-"));
+  writeFileSync(join(bin, "git"), '#!/bin/sh\n[ "$1" = push ] && exit 1\nexec /usr/bin/git "$@"\n');
+  chmodSync(join(bin, "git"), 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}:${path}`;
+  try { expect(pushOrigin(dir)).toEqual({ pushed: false, detail: "push failed" }); }
+  finally { process.env.PATH = path; rmSync(bin, { recursive: true, force: true }); }
 });

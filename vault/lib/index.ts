@@ -17,7 +17,7 @@ const K = 60;
 const FTS_LIMIT = 200;
 
 /** The first paragraph of a note's body on one line. */
-export const claimLine = (n: Note): string => (n.body.trim().split(/\n\s*\n/)[0] ?? "").replace(/\s+/g, " ").trim();
+export const claimLine = (n: Note): string => n.body.trim().split(/\n\s*\n/)[0].replace(/\s+/g, " ").trim();
 
 const aliasesOf = (n: Note): string[] => {
   const a = n.fm.aliases;
