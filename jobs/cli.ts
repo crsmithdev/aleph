@@ -37,6 +37,7 @@ import type { Stage } from "./lib/records/stage.ts";
 import { jobId } from "./lib/infra/settings.ts";
 import { readModels, setModel } from "./lib/routing/models.ts";
 import { parseId, shortText } from "../lib/naming.ts";
+import * as notes from "../lib/annotations.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -54,7 +55,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day"];
+const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day", "--url", "--selector", "--text", "--html", "--by"];
 const FATES: Fate[] = ["duplicate", "met", "manual"];
 const positional = [...rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1])), ...tail];
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
@@ -477,6 +478,18 @@ try {
       out(readModels());
       break;
     }
+    case "annotation": {
+      const [sub, id, ...words] = positional;
+      const by = flag("by") ?? "user";
+      const use = "usage: aleph annotation <list|add --url <url> [--selector <css>] [--text <text>] [--html <html>] [--by <who>] <note>|reply <id> <note>|resolve <id>|drop <id>>";
+      if (sub === "list" || sub === undefined) out(notes.load());
+      else if (sub === "add") out(notes.add(by, { url: flag("url") ?? refuse(use), note: [id, ...words].join(" ").trim() || refuse(use), selector: flag("selector"), text: flag("text"), html: flag("html") }));
+      else if (sub === "reply") out(notes.reply(id ?? refuse(use), by, words.join(" ").trim() || refuse(use)));
+      else if (sub === "resolve") out(notes.resolve(id ?? refuse(use)));
+      else if (sub === "drop") out(notes.drop(id ?? refuse(use)));
+      else refuse(use);
+      break;
+    }
     case "judge": {
       const v = positional[0];
       if (v === "jev" || v === "haiku") setJudgeChoice(v);
@@ -484,7 +497,7 @@ try {
       out({ judge: judgeChoice() });
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|suite|report|pause|resume|status|judge|models|dispatch|doctor|doc-claims|monitor> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|suite|report|pause|resume|status|judge|annotation|models|dispatch|doctor|doc-claims|monitor> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;
