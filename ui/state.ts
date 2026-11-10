@@ -9,7 +9,7 @@ import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { allRuns, isWaiting, loadRegistry, onOf, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
+import { allRuns, isWaiting, issueKeyOf, loadRegistry, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting as lastReal, jobIdOf } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
@@ -339,7 +339,8 @@ export function state(now = new Date()): State {
       else if (real.condition === "returned" || real.condition === "failed") stuck.push(toJob(runs));
       else {
         liveJobs.add(real.job);
-        if (onOf(real) !== undefined) liveItems.add(`${real.repo}/${onOf(real)}`);
+        const k = issueKeyOf(real);
+        if (k) liveItems.add(k);
         running.push(toJob(runs));
       }
     }
@@ -351,7 +352,7 @@ export function state(now = new Date()): State {
 
   for (const j of [...needs, ...stuck]) {
     const todo = j.item?.id;
-    j.agent = liveJobs.has(j.name) || (todo !== undefined && liveItems.has(`${j.repo}/${todo}`));
+    j.agent = liveJobs.has(j.name) || (todo !== undefined && liveItems.has(`${j.repo}-${todo}`));
   }
 
   const openById = new Map<string, { title: string; href: string }>(), waitsOf = new Map<string, string>();
@@ -372,10 +373,8 @@ export function state(now = new Date()): State {
   // The jobs of each issue, by `repo-id`: the open ones give its status, all of them its Done package.
   const ofItem = new Map<string, Runs[]>();
   for (const runs of jobs) {
-    const real = lastReal(runs).run;
-    const n = onOf(real);
-    if (n === undefined) continue;
-    const k = `${real.repo}-${n}`;
+    const k = issueKeyOf(lastReal(runs).run);
+    if (k === undefined) continue;
     ofItem.set(k, [...(ofItem.get(k) ?? []), runs]);
   }
   // When the work on an item was first picked up: its earliest run, and for a parent its parts' too.

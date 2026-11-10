@@ -323,12 +323,12 @@ describe("views", () => {
     expect([...html.matchAll(/<tr class="rowlink( part-row)?"[^>]*data-n="([^"]+)"/g)].filter((m) => m[1]).map((m) => m[2])).toEqual(["4", "3", "1.1"]);
   });
 
-  test("the numbers: open, filed and closed in 7 days, the week before, age and runs; a part's run is not counted twice", () => {
+  test("the numbers: open, filed and closed in 7 days, the week before, age and runs; a part's run counts once, by its own total", () => {
     const now = new Date("2026-11-01T12:00");
     const rows = v.issueRows({ issues: [
-      { id: 1, repo: "f", title: "a", status: "open", stage: "new", labels: [], createdTime: iso("2026-11-01"), runs: 2, cost: 1 },
-      { id: 1, ref: "1.1", parent: "1", repo: "f", title: "a part", status: "open", stage: "working", labels: [], createdTime: iso("2026-10-20"), runs: 2, cost: 1 },
-      { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-21"), closedTime: iso("2026-10-30T12:00"), runs: 3, cost: 0.5 },
+      { id: 1, repo: "f", title: "a", status: "open", stage: "new", labels: [], createdTime: iso("2026-11-01"), runs: 2, cost: 1, own: { runs: 0, cost: 0 } },
+      { id: 1, ref: "1.1", parent: "1", repo: "f", title: "a part", status: "open", stage: "working", labels: [], createdTime: iso("2026-10-20"), runs: 2, cost: 1, own: { runs: 2, cost: 1 } },
+      { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-21"), closedTime: iso("2026-10-30T12:00"), runs: 3, cost: 0.5, own: { runs: 3, cost: 0.5 } },
       { id: 3, repo: "f", title: "c", status: "dropped", labels: [], createdTime: iso("2026-10-26"), closedTime: iso("2026-10-25"), runs: 0, cost: 0 },
     ] });
     expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, working: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 6, oldest: 12, runs: 5, cost: 1.5 });

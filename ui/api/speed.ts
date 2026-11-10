@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { flakeNames, flakes } from "../../jobs/lib/gates/factory-status.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { all as allRecords, type JobRecord } from "../../jobs/lib/records/record.ts";
-import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, isAgentRun, isBuild, issueKeyOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, isLive, isStarting } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import { specChecksOf, stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
@@ -29,12 +29,6 @@ const splitId = (s: string): [string, string] => {
   const p = parseId(s);
   return p ? [p.repo, tail(p)] : ["", ""];
 };
-
-/** The issue number of a run, from `on` or old `todo`; a part run "860.1" reads as 860. Undefined when the run has none. */
-function issueOf(r: Run): number | undefined {
-  const o = onOf(r);
-  return o === undefined ? undefined : Math.trunc(Number(o));
-}
 
 const MAX_RUN = 4 * HOUR;
 export const KINDS = ["land", "intake"] as const;
@@ -177,16 +171,15 @@ const passedState = (st: string) => st === "passed" || st === "landed" || st ===
 
 /** Class every agent run of the window by what its work came to; see the parent issue's Classes list. */
 export function classify(runs: Run[], statusOf: (ref: string) => string | undefined, since: number, now: number, fit: Fit | null): { classes: ClassStat[]; notCounted: { runs: number; issues: number; hours: number }; lost: { hours: number; share: number }; total: number } {
-  const keyOf = (r: Run) => `${r.repo}-${onOf(r)}`;
   const t0 = (r: Run) => Date.parse(r.started);
   const agentsOf = new Map<string, Run[]>(), landsOf = new Map<string, Run[]>(), firstStart = new Map<string, number>();
   for (const r of runs) {
     const t = t0(r);
     if (Number.isFinite(t)) firstStart.set(r.job, Math.min(firstStart.get(r.job) ?? Infinity, t));
-    if (issueOf(r) === undefined) continue;
+    const g = issueKeyOf(r);
+    if (g === undefined) continue;
     const m = isAgentRun(r.kind) ? agentsOf : r.kind === "land" && r.condition === "landed" ? landsOf : null;
     if (!m) continue;
-    const g = keyOf(r);
     if (!m.has(g)) m.set(g, []);
     m.get(g)!.push(r);
   }
@@ -205,10 +198,11 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
   const rows = new Map<Class, Row[]>(CLASSES.map((c) => [c, []]));
   const skipped: Row[] = [];
   for (const r of runs) {
-    if (!isAgentRun(r.kind) || issueOf(r) === undefined) continue;
+    const g = issueKeyOf(r);
+    if (!isAgentRun(r.kind) || g === undefined) continue;
     const a = t0(r), b = Date.parse(r.ended ?? "");
     if (!(a >= since) || a > now || !(b >= a) || b - a > MAX_RUN) continue;
-    const g = keyOf(r), reason = r.reason ?? "";
+    const reason = r.reason ?? "";
     const row: Row = { run: r, issue: g, hours: (b - a) / 1000 / 3600, week: share(fit, r.cost, r.model)?.pct ?? 0, cause: "" };
     const lands = landing.get(g) ?? new Set<Run>();
     const mine = (agentsOf.get(g) ?? []);
@@ -322,7 +316,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
     // A job can run again after it lands; what finished the work is the last finish before the land.
     const ends = agents.filter((r) => passedState(r.condition) || r.condition === "waiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
     if (!ends.length) continue;
-    const owner = rs.find((r) => issueOf(r) !== undefined), key = owner && `${owner.repo}-${issueOf(owner)}`;
+    const key = rs.map((r) => issueKeyOf(r, { parent: true })).find((k) => k !== undefined);
     const finished = Math.max(...ends), started = Math.min(...agents.map((r) => Date.parse(r.started)));
     if (inWindow(finished)) { implement.push({ at: finished, secs: (finished - started) / 1000 }); note(key, "implement", (finished - started) / 1000); }
     if (inWindow(landed)) { land.push({ at: landed, secs: (landed - finished) / 1000 }); note(key, "land", (landed - finished) / 1000); }
@@ -330,9 +324,8 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   // Queue and Lead are per issue. A run older than its filing (a file added again) has no such span.
   const firstStart = new Map<string, number>(), lastLand = new Map<string, number>(), triaged = new Map<string, number>();
   for (const r of runs) {
-    const n = issueOf(r);
-    if (n === undefined) continue;
-    const key = `${r.repo}-${n}`;
+    const key = issueKeyOf(r, { parent: true });
+    if (key === undefined) continue;
     if (isAgentRun(r.kind)) {
       const a = Date.parse(r.started);
       if (a < (firstStart.get(key) ?? Infinity)) firstStart.set(key, a);
@@ -553,7 +546,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   // Landed issues: a land run of an issue with no number all share the one key "none". An issue's fix rounds are the most any of its landing runs' jobs needed.
   const landedBy = new Map<string, Run[]>();
   for (const r of landed) {
-    const k = issueOf(r) === undefined ? "none" : `${r.repo}-${issueOf(r)}`;
+    const k = issueKeyOf(r, { parent: true }) ?? "none";
     landedBy.set(k, [...(landedBy.get(k) ?? []), r]);
   }
   const issuesLanded = landedBy.size;
@@ -567,11 +560,12 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   };
   if (fit) {
     const weekOf = new Map<string, number>();
-    for (const r of all) if (isAgentRun(r.kind) && issueOf(r) !== undefined) weekOf.set(`${r.repo}-${issueOf(r)}`, (weekOf.get(`${r.repo}-${issueOf(r)}`) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
-    const keys = [...new Set(landed.filter((r) => issueOf(r) !== undefined).map((r) => `${r.repo}-${issueOf(r)}`))];
+    const keyOf = (r: Run) => issueKeyOf(r, { parent: true });
+    for (const r of all) if (isAgentRun(r.kind) && keyOf(r)) weekOf.set(keyOf(r)!, (weekOf.get(keyOf(r)!) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
+    const keys = [...new Set(landed.map(keyOf).filter((k) => k !== undefined))];
     const per = keys.map((g) => weekOf.get(g) ?? 0);
     const nRuns = new Map<string, number>();
-    for (const r of all) if (isAgentRun(r.kind) && issueOf(r) !== undefined) nRuns.set(`${r.repo}-${issueOf(r)}`, (nRuns.get(`${r.repo}-${issueOf(r)}`) ?? 0) + 1);
+    for (const r of all) if (isAgentRun(r.kind) && keyOf(r)) nRuns.set(keyOf(r)!, (nRuns.get(keyOf(r)!) ?? 0) + 1);
     issues.usage = keys.map((g) => {
       const [repo, n] = splitId(g);
       return { goal: g, href: issueHref(`${repo}-${n}`), week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };

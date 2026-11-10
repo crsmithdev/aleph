@@ -1,6 +1,6 @@
 /**
  * `GET /api/issues`, `GET /api/issues/:id` and `POST /api/issues`: the Issues and Issue views' data. `GET /api/issues` is
- * `{ issues, projects, tests }`: every issue row with the count and recorded cost of the jobs on it and its parts, the
+ * `{ issues, projects, tests }`: every issue row with the count and recorded cost of the jobs on it and its parts, its own alone in `own`, the
  * registry's keys and each project's suite history records. `:id` is an issue ID, short (`a1430`) or full. Every route
  * takes `?project=<key>` and shows only that project. A read is the work store's origin/main; a write runs
  * `aleph issue <verb>` through ui/action.ts, so the CLI stays the one writer.
@@ -8,7 +8,7 @@
 import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
-import { allRuns, loadRegistry, onOf, type Entry, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, issueKeyOf, loadRegistry, runsByIssue, type Entry, type Repo } from "../../jobs/lib/records/ledger.ts";
 import { counting as lastReal, jobIdOf } from "../../jobs/lib/records/record.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
@@ -48,19 +48,6 @@ function stagesBy(repo: Repo, doc: todos.Doc, items?: string[]): Map<string, Sta
   try { return new Map(repoStages(repo, { fetch: false, doc, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch { return new Map(); }
 }
 
-/** Each issue's own jobs and cost, by `<repo>-<ref>`. */
-function totals(): Map<string, { runs: number; cost: number }> {
-  const out = new Map<string, { runs: number; cost: number }>();
-  for (const { run } of allRuns()) {
-    const on = onOf(run);
-    if (on === undefined) continue;
-    const t = out.get(`${run.repo}-${on}`) ?? { runs: 0, cost: 0 };
-    t.runs++; t.cost += run.cost ?? 0;
-    out.set(`${run.repo}-${on}`, t);
-  }
-  return out;
-}
-
 function list(url: URL): Response {
   const project = projectOf(url);
   const repos = Object.values(loadRegistry()).filter((r) => repoIn(r.key, project));
@@ -72,15 +59,13 @@ function list(url: URL): Response {
     const states = stagesBy(repo, doc);
     return doc.items.map((i) => row(repo.key, i, states.get(todos.refOf(i))));
   });
-  const own = totals();
-  const sums = new Map(rows.map((r) => [`${r.repo}-${r.ref}`, { ...(own.get(`${r.repo}-${r.ref}`) ?? { runs: 0, cost: 0 }) }]));
-  // A child's jobs also count for its parent.
-  for (const r of rows) {
-    const mine = own.get(`${r.repo}-${r.ref}`), up = r.parent === null ? undefined : sums.get(`${r.repo}-${r.parent}`);
-    if (mine && up) { up.runs += mine.runs; up.cost += mine.cost; }
-  }
+  const by = runsByIssue(allRuns()), key = (r: Row) => `${r.repo}-${r.ref}`;
+  const own = (r: Row) => { const es = by.get(key(r)) ?? []; return { runs: es.length, cost: es.reduce((n, e) => n + (e.run.cost ?? 0), 0) }; };
+  // A child's jobs also count for its parent: `runs` and `cost` hold both, `own` the row's alone.
+  const kids = Map.groupBy(rows.filter((r) => r.parent !== null), (r) => `${r.repo}-${r.parent}`);
+  const totals = (r: Row) => [own(r), ...(kids.get(key(r)) ?? []).map(own)].reduce((a, t) => ({ runs: a.runs + t.runs, cost: a.cost + t.cost }));
   const projects = repos.map((r) => r.key);
-  return Response.json({ issues: rows.map((r) => ({ ...r, ...sums.get(`${r.repo}-${r.ref}`)! })), projects, tests: Object.fromEntries(projects.map((k) => [k, suiteHistory(k)])) });
+  return Response.json({ issues: rows.map((r) => ({ ...r, ...totals(r), own: own(r) })), projects, tests: Object.fromEntries(projects.map((k) => [k, suiteHistory(k)])) });
 }
 
 /** A job as the Issue page lists it: the job ID of its run that counts, its name, state, times, cost and how many runs it holds. */
@@ -89,10 +74,6 @@ function jobRow(runs: ReturnType<typeof allJobs>[number], every: Entry[]) {
   const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
   return { id: jobIdOf(last, every), name: r.name, condition: r.condition, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
 }
-
-/** Whether an `onOf` value names issue `n`: the number itself, or a part `<n>.<k>` of it. */
-const isOfIssue = (on: number | string | undefined, n: number): boolean =>
-  typeof on === "number" ? on === n : typeof on === "string" && Number(on.split(".")[0]) === n;
 
 function detail(params: Record<string, string>, url: URL): Response {
   const project = projectOf(url);
@@ -113,10 +94,11 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const all = allJobs().filter((runs) => runs[0].run.repo === repo.key);
   const every = allRuns();
-  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => String(onOf(e.run)) === r)).map((runs) => jobRow(runs, every));
-  // A run on this issue or on one of its children.
-  const onThis = (on: number | string | undefined) => (!ref.includes(".") ? isOfIssue(on, n) || partRefs.includes(String(on)) : String(on) === ref);
-  const jobs = all.filter((runs) => runs.some((e) => onThis(onOf(e.run)))).map((runs) => jobRow(runs, every));
+  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === `${repo.key}-${r}`)).map((runs) => jobRow(runs, every));
+  // The runs on this issue, its old parts and its children.
+  const by = runsByIssue(every, { rollUp: true }), keys = [ref, ...partRefs].map((r) => `${repo.key}-${r}`);
+  const ours = new Set(keys.flatMap((k) => by.get(k) ?? []).map((e) => e.id));
+  const jobs = all.filter((runs) => runs.some((e) => ours.has(e.id))).map((runs) => jobRow(runs, every));
 
   // The Issue page: the `## Request`, then the parts, each with its Job.
   const parts = partRefs.map((g) => {
@@ -126,7 +108,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
   const timeline = {
     filed: ((t) => (t == null ? null : new Date(t).toISOString()))(filed().issue.get(`${repo.key}-${ref}`)),
-    runs: all.flat().filter((e) => onThis(onOf(e.run))).map((e) => ({ r: e.run, href: jobHref(jobIdOf(e, every)) })).map(({ r, href }) => ({ kind: r.kind, name: r.name, href, on: r.on, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
+    runs: all.flat().filter((e) => ours.has(e.id)).map((e) => ({ r: e.run, href: jobHref(jobIdOf(e, every)) })).map(({ r, href }) => ({ kind: r.kind, name: r.name, href, on: r.on, issue: issueKeyOf(r) ?? null, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
   };
   // The hold records of every job name the answer shows.
   const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...parts.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);

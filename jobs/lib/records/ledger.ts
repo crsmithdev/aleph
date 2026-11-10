@@ -247,6 +247,25 @@ export function onOf(run: Run): number | string | undefined {
   return p && p.repo === run.repo ? (p.sub === undefined ? p.n : tail(p)) : undefined;
 }
 
+/** The full ID of the run's issue (`aleph-1430`, `aleph-1359.1`); with `parent`, an old part's parent (`aleph-1359`). Undefined when `on` names no issue of the run's repo. */
+export function issueKeyOf(run: Run, { parent = false } = {}): string | undefined {
+  const p = run.on === undefined ? null : parseId(run.on);
+  return p && p.repo === run.repo ? `${p.repo}-${parent ? p.n : tail(p)}` : undefined;
+}
+
+/** The runs of each issue by its full ID, in the order given. With `rollUp`, an old part's runs also count for its parent. */
+export function runsByIssue(entries: Entry[], { rollUp = false } = {}): Map<string, Entry[]> {
+  const out = new Map<string, Entry[]>();
+  const add = (k: string, e: Entry) => { const l = out.get(k); if (l) l.push(e); else out.set(k, [e]); };
+  for (const e of entries) {
+    const own = issueKeyOf(e.run), up = issueKeyOf(e.run, { parent: true })!;
+    if (own === undefined) continue;
+    add(own, e);
+    if (rollUp && up !== own) add(up, e);
+  }
+  return out;
+}
+
 /** `YYYYMMDD-HHMMSS` in local time. */
 export function stamp(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, "0");

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { admit, loadRegistry } from "./ledger.ts";
+import { admit, issueKeyOf, loadRegistry, runsByIssue, type Entry, type Run } from "./ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { setCodes, shortId } from "../../../lib/naming.ts";
 
@@ -65,5 +65,32 @@ describe("loadRegistry codes", () => {
   test("a code on two repos, or not 1–2 letters, is refused", () => {
     expect(() => load({ aleph: { path: "/a", code: "a" }, other: { path: "/o", code: "a" } })).toThrow(/more than one/);
     expect(() => load({ aleph: { path: "/a", code: "a1" } })).toThrow(/letters/);
+  });
+});
+
+describe("the issue of a run", () => {
+  const entry = (id: string, repo: string, on?: string): Entry => ({ id, folder: "", run: { repo, on } as Run });
+  // prettier-ignore
+  const cases: [string, string, string | undefined, string | undefined, string | undefined][] = [
+    // id   repo     on                 own                parent
+    ["a",  "aleph", "aleph-7",          "aleph-7",         "aleph-7"],
+    ["b",  "aleph", "aleph-7.1",        "aleph-7.1",       "aleph-7"],
+    ["c",  "aleph", "aleph-7.2",        "aleph-7.2",       "aleph-7"],
+    ["d",  "aleph", "aleph-12",         "aleph-12",        "aleph-12"],
+    ["e",  "aleph", "other-7",          undefined,         undefined],
+    ["f",  "other", "other-7",          "other-7",         "other-7"],
+    ["g",  "aleph", undefined,          undefined,         undefined],
+  ];
+  const entries = cases.map(([id, repo, on]) => entry(id, repo, on));
+
+  test.each(cases)("%s: %s on %s", (_id, repo, on, own, parent) => {
+    expect(issueKeyOf({ repo, on } as Run)).toBe(own);
+    expect(issueKeyOf({ repo, on } as Run, { parent: true })).toBe(parent);
+  });
+
+  test("runsByIssue groups by the full ID; rollUp adds an old part's runs to its parent", () => {
+    const ids = (m: Map<string, Entry[]>) => Object.fromEntries([...m].map(([k, es]) => [k, es.map((e) => e.id)]));
+    expect(ids(runsByIssue(entries))).toEqual({ "aleph-7": ["a"], "aleph-7.1": ["b"], "aleph-7.2": ["c"], "aleph-12": ["d"], "other-7": ["f"] });
+    expect(ids(runsByIssue(entries, { rollUp: true }))).toEqual({ "aleph-7": ["a", "b", "c"], "aleph-7.1": ["b"], "aleph-7.2": ["c"], "aleph-12": ["d"], "other-7": ["f"] });
   });
 });

@@ -5,13 +5,13 @@ import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { OPUS_MODEL, readModels } from "../../jobs/lib/routing/models.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { allRuns, isAgentRun, isBuild, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, isAgentRun, isBuild, issueKeyOf, loadRegistry, onOf, runOfJob, runsByIssue, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
-import { contentText, issueHref, parseId, subjectOf } from "../../lib/naming.ts";
+import { contentText, issueHref, parseId, subjectOf, tail } from "../../lib/naming.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
@@ -148,11 +148,11 @@ export interface Row {
 function rowsOf(runs: Entry[], all: Entry[]): Row[] {
   const lists = jobProjector().lists;
   return runs.map((e) => {
-    const r = e.run, on = onOf(r), issue = on !== undefined && r.repo ? `${r.repo}-${on}` : null;
+    const r = e.run, issue = issueKeyOf(r) ?? null;
     const ended = r.ended ?? null, kind = KIND[r.kind as keyof typeof KIND] ?? "worker";
     return {
       id: jobIdOf(e, all), subject: subjectOf(r), name: r.name, repo: r.repo ?? "", kind: r.kind, actor: RUN_ACTOR[kind] ?? null, state: r.condition,
-      title: (issue && lists.item(r.repo!, on!)?.title) || r.name, issue, started: r.started, ended,
+      title: (issue && lists.item(r.repo!, onOf(r)!)?.title) || r.name, issue, started: r.started, ended,
       seconds: ended ? Math.round((Date.parse(ended) - Date.parse(r.started)) / 1000) : null, cost: r.cost ?? null, model: r.model ?? null,
     };
   });
@@ -226,11 +226,8 @@ export const routes: Routes = {
     loadRegistry();
     const p = parseId(params.id);
     if (!p || !repoIn(p.repo, projectOf(url))) return Response.json({ error: "no such issue" }, { status: 404 });
-    const all = allRuns(), ref = p.sub === undefined ? String(p.n) : `${p.n}.${p.sub}`;
-    const mine = all.filter(({ run: r }) => {
-      const on = String(onOf(r) ?? "");
-      return r.repo === p.repo && (on === ref || (p.sub === undefined && on.startsWith(`${ref}.`)));
-    }).reverse();
+    const all = allRuns();
+    const mine = [...(runsByIssue(all, { rollUp: true }).get(`${p.repo}-${tail(p)}`) ?? [])].reverse();
     return Response.json({ jobs: rowsOf(mine, all) });
   },
 

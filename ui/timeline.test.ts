@@ -6,7 +6,7 @@ import { dur, setCodes } from "./lib.js";
 // @ts-ignore
 import { issueSegments, renderIssue } from "./views/issues.js";
 
-const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", href: "#/jobs/fac-1%231", condition: "passed", started, ended, ...extra });
+const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", issue: "fac-1", href: "#/jobs/fac-1%231", condition: "passed", started, ended, ...extra });
 const issue = (over: object = {}) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { filed: "2026-11-01T10:00:00Z", runs: [] }, ...over });
 const held = () => [
   run("intake", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"),
@@ -55,9 +55,9 @@ describe("the issue timeline", () => {
     const parts = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [{ id: "fac-1.1#2", name: "fac-1.1" }] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
     const runs = [
       run("intake", "2026-11-01T10:05:00Z", "2026-11-01T10:06:00Z", { name: "plan-fac-1" }),
-      run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1", condition: "failed", reason: "it broke" }),
-      run("build", "2026-11-01T10:11:00Z", "2026-11-01T10:15:00Z", { name: "fac-1.1", on: "fac-1.1" }),
-      run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" }),
+      run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1", issue: "fac-1.1", condition: "failed", reason: "it broke" }),
+      run("build", "2026-11-01T10:11:00Z", "2026-11-01T10:15:00Z", { name: "fac-1.1", on: "fac-1.1", issue: "fac-1.1" }),
+      run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2", issue: "fac-1.2" }),
     ];
     const notes = ["- 2026-11-01T10:06:00.000Z: planner: split into fac-1.1, fac-1.2", "- 2026-11-01T10:25:00.000Z: its sub-issues are done"];
     const segs = issueSegments(issue({ goals: parts, notes, timeline: { filed: "2026-11-01T10:00:00Z", runs } }));
@@ -78,7 +78,7 @@ describe("the issue timeline", () => {
 
 test("the issue timeline heads the segment for its children Sub-issues", () => {
   const parts = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
-  const runs = [run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1" }), run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" })];
+  const runs = [run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1", issue: "fac-1.1" }), run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2", issue: "fac-1.2" })];
   const h = renderTimeline(issueSegments(issue({ goals: parts, timeline: { filed: "2026-11-01T10:00:00Z", runs } })));
   expect(h).toContain("<h3>Sub-issues</h3>");
   expect(h).toContain("<h3>After the Sub-issues</h3>");

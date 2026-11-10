@@ -61,7 +61,7 @@ const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? localMs(String(
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, createdTime: r.createdTime ?? null, closedTime: r.closedTime ?? null, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: !!r.parent, parent: r.parent ? `${r.repo}-${r.parent}` : null }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, own: r.own ?? { runs: 0, cost: 0 }, createdTime: r.createdTime ?? null, closedTime: r.closedTime ?? null, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: !!r.parent, parent: r.parent ? `${r.repo}-${r.parent}` : null }));
 }
 
 // ---- Fuzzy search ----
@@ -250,7 +250,7 @@ export function stats(rows, now = new Date(), days = 7) {
     filed: rows.filter((r) => at(r.createdTime, 0, week, end)).length, filedBefore: rows.filter((r) => at(r.createdTime, 1, before, week)).length,
     closed: closed.length, done: closed.filter((r) => r.status === "done").length, dropped: closed.filter((r) => r.status === "dropped").length, closedBefore: closedIn(1, before, week).length,
     medianAge: median(ages), oldest: ages.length ? Math.max(...ages) : null,
-    runs: rows.filter((r) => !r.part).reduce((n, r) => n + r.runs, 0), cost: rows.filter((r) => !r.part).reduce((n, r) => n + r.cost, 0),
+    runs: rows.reduce((n, r) => n + r.own.runs, 0), cost: rows.reduce((n, r) => n + r.own.cost, 0),
   };
 }
 
@@ -614,7 +614,7 @@ export function issueSegments(d, now = Date.now()) {
   if (!parts.length) {
     return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no job yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.condition === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes, holds: holdsOf(id) })] }];
   }
-  const ofPart = (g) => all.filter((x) => x.r.on === g.id), partRuns = parts.flatMap(ofPart);
+  const ofPart = (g) => all.filter((x) => x.r.issue === g.id), partRuns = parts.flatMap(ofPart);
   const first = partRuns.length ? Math.min(...partRuns.map((x) => x.start)) : Infinity;
   const own = all.filter((x) => !partRuns.includes(x)), before = own.filter((x) => x.start < first), after = own.filter((x) => x.start >= first);
   const split = Number.isFinite(ends(before)) ? ends(before) : filed, lastPart = ends(partRuns);
