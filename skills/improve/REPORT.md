@@ -16,13 +16,14 @@ One `<article>` per finding, strongest first:
 
 - **Title**: the change, as an imperative ("Parse issue refs in one place").
 - **Badge row**: the lens, then its strength: one-way `Disagrees` (red) or `Duplicates` (amber); dead its tier;
-  depth, seams and slop their 1-5 rating or "proven". Then the signal that found it.
+  depth, seams, slop and layout their 1-5 rating or "proven". Then the signal that found it.
 - **Locations**: `font-mono text-sm` list, one `file:line` each, the owner first and marked.
 - **Before / after diagram**: before shows the copies, the shallow cluster or the crossing reads, with red
   dashed edges for disagreements and leaks; after shows the owner or deep module as one dark box, with the
-  former copies as grey callers. Dead and slop findings may skip the diagram and show the lines removed.
+  former copies as grey callers. Dead and slop findings may skip the diagram and show the lines removed. A layout
+  finding shows the before and after file tree.
 - **Proof**: one sentence from the lens's proof bar: the input with two results, the deletion test result, the
-  crossing reads, the removal gate clause, or the escape hatches ruled out.
+  crossing reads, the removal gate clause, the escape hatches ruled out, or the look-first test.
 - **Fix**: one sentence from the lens's Fix section. Mark a finding that needs `deepen`.
 - **Hold**: the boundary rule as JSON in `<pre>`, or the lint pattern or tool rule in `<code>`, or "model:
   check" where no tool holds it.

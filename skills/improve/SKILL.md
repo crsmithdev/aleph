@@ -2,10 +2,11 @@
 name: improve
 description: >
   Improve a codebase: find where it does one thing more than one way, where a
-  module is shallow or leaks, where code is bigger than its job or dead, and
-  sweep or polish the repo. Use when asked to review, clean up, simplify,
-  deslop or tidy code, find duplication, drift, dead code or architecture
-  problems, get a repo ready to show, before you add a function, module,
+  module is shallow or leaks, where code is bigger than its job or dead, where
+  files and directories are not where a reader looks, and sweep or polish the
+  repo. Use when asked to review, clean up, simplify, deslop or tidy code,
+  find duplication, drift, dead code or architecture problems, reorganize or
+  restructure files and directories, get a repo ready to show, before you add a function, module,
   parser, constant, route or doc section (check), or when the improve Stop
   hook blocks.
 ---
@@ -16,7 +17,7 @@ interface, depth, seam, adapter, leverage, locality) exactly.
 
 # Improve
 
-One skill for the quality of a codebase. Five **lenses** each ask one question of the code; the modes below
+One skill for the quality of a codebase. Six **lenses** each ask one question of the code; the modes below
 decide where and how they run. Read `PRINCIPLES.md`, `GLOSSARY.md`, `docs/naming.md` and `docs/adr/` first when
 they exist: they name owners and settled decisions. Read `.improve.json` at the repo root when it exists: its
 `accepted` list holds what the repo keeps on purpose, each `{"concept", "copies": ["file[:line]", ...],
@@ -31,10 +32,13 @@ they exist: they name owners and settled decisions. Read `.improve.json` at the 
 | **seams** | Does code reach past a module's interface? | [SEAMS.md](SEAMS.md) |
 | **slop** | Is this code bigger than its job? | [SLOP.md](SLOP.md) |
 | **dead** | Does this code run at all? | [DEAD.md](DEAD.md) |
+| **layout** | Are files and directories where a reader looks for them? | [LAYOUT.md](LAYOUT.md) |
 
 Where they meet: a pass-through module is **depth**, not slop; code that never runs is **dead**, code that runs
 but is too big is **slop**; once one-way merges copies, the owner's interface is a **depth** question; a seams
-leak is often a missing depth module. Report a candidate under one lens only.
+leak is often a missing depth module; the dead part of a partly dead file is **dead**, and where its live rest
+goes is **layout**; a file in the wrong place by the repo's own majority is the **sweep**, and whether that
+convention is right is **layout**. Report a candidate under one lens only.
 
 ## Modes
 
@@ -57,7 +61,8 @@ leak is often a missing depth module. Report a candidate under one lens only.
    fixed most, pairs that change together, jscpd's copies of code) and take its directories, the files changed
    most in the last 30 days, and `docs/`. Done when you have a list of directories and the seed output.
 3. **Hunt.** Spawn one Explore subagent per lens per two or three directories, in one message. Give each its
-   lens file's Signals section verbatim, the scope, and the seed lines for its directories. Each returns
+   lens file's Signals section verbatim, the scope, and the seed lines for its directories. The layout lens gets
+one subagent over the whole repo, with the full seed. Each returns
    candidates as: lens, concept or module, every location with `file:line`, the signal that found it. Done when
    each subagent has returned.
 4. **Prove.** Open every location of every candidate and apply its lens's proof bar. Read
@@ -73,7 +78,8 @@ leak is often a missing depth module. Report a candidate under one lens only.
 
 ## Act
 
-For each finding the user picks, in the order lowest risk first: dead, slop, one-way, seams, depth.
+For each finding the user picks, in the order lowest risk first: dead, slop, one-way, seams, depth, then layout, so that files move once
+their contents are final.
 
 1. Make the lens's fix. Delete or change whole: the code, its tests, fixtures, exports, docs entry and
    dependency line. Edit only lines the branch owns or the user named; report the rest.
@@ -112,6 +118,9 @@ tool.
 | slop | An empty or swallowing `catch`, an `any` | unchecked | a shrink-only ratchet, not yet wired |
 | dead | An export or file nothing uses | unchecked | knip, not yet wired |
 | depth | A one-line pass-through | model | `check` |
+| layout | A new file outside the directory of its callers and kind | model | `check` |
+| layout | An import between directories that the tree does not allow | unchecked | dependency-cruiser rules, not yet wired |
+| layout | A file that grows past the repo's size limit | unchecked | a shrink-only ratchet, not yet wired |
 
 ## The hook
 
