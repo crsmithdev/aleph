@@ -1,5 +1,5 @@
 /** `GET /api/jobs`, `/api/jobs/:id`, its diff and logs, and `/api/issues/:id/jobs`: the Jobs and Job views' data. `:id` is a job ID, `a1430#2`. */
-import { jobIdOf, keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/records/record.ts";
+import { counting, jobIdOf, keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/records/record.ts";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
@@ -170,7 +170,7 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
   const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit, allRuns()), holds: readHolds([job.name]) };
   const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
   if (blockers.length) detail.blockers = blockers;
-  const rec = readRecord(keyOf(runs.at(-1)!.run));
+  const rec = readRecord(keyOf(counting(runs).run));
   if (rec) {
     const step = nextStep(rec);
     Object.assign(detail, { next: { ...step, text: [step.action, step.sub, contentText(step)].filter(Boolean).join(" ") }, rounds: rec.rounds, events: rec.events });

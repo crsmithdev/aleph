@@ -223,7 +223,7 @@ export function makeRun(run: Pick<Run, "on" | "kind" | "name"> & { job?: string 
  * run is open only while it is live: a failed build is news, not a job to land or drop.
  */
 export function isOpen(runs: Entry[]): boolean {
-  const last = runs.at(-1);
+  const last = record.counting(runs);
   if (!last) return false;
   if (last.run.kind === "plain") return isLive(last.folder);
   return OPEN.includes(last.run.condition);

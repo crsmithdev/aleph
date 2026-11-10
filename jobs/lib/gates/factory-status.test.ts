@@ -116,3 +116,12 @@ test("after a clock step back, nextRun returns the build run with the higher ID 
   expect(run?.condition).toBe("passed");
   expect(run?.started).toBe(ago(50 * MIN));
 });
+
+test("a land that failed on a lock does not hide the job's passed build", () => {
+  const id = newIssue();
+  const { job } = mk(`fac-${id}`, "build", "passed", { started: ago(20 * MIN), ended: ago(15 * MIN) });
+  mk(`fac-${id}`, "land", "failed", { job, started: ago(10 * MIN), ended: ago(5 * MIN), cause: "locked", reason: "busy lock" });
+  const f = allFacts(id);
+  expect(f.open).toBe("passed");
+  expect(f.job).not.toBeNull();
+});

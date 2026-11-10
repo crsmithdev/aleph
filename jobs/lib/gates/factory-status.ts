@@ -447,7 +447,7 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
   const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat(), open = openJob(name, null, jobs);
   return {
     name, item,
-    open: open?.at(-1)!.run.condition ?? null,
+    open: open ? record.counting(open).run.condition : null,
     job: open ? record.jobIdOf(open[0], runs) : null,
     busy: busyWait(repo, item, jobs, now),
     noCommits: noCommitStreak(repo.key, name, runs),

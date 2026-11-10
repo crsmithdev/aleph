@@ -298,7 +298,7 @@ export function state(now = new Date()): State {
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   for (const runs of jobs) {
-    const last = runs.at(-1)!.run;
+    const last = lastReal(runs).run;
     // A running intake (or planner) counts as running; it is not a live agent.
     if (last.kind === "intake" && last.condition === "running") {
       running.push(toJob(runs));

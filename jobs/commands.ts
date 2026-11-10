@@ -131,7 +131,7 @@ function reconcile(ctx: Ctx, all: Entry[][]): Map<string, string> {
   const fates = new Map<string, string>();
   // Only Chris's git pull moves a checkout: the ledger fetches and reads refs.
   for (const runs of all.filter(isOpen)) {
-    const last = runs.at(-1)!;
+    const last = counting(runs);
     const repo = last.run.repo ? registry[last.run.repo] : undefined;
     if (!repo || last.run.kind === "plain" || isLive(last.folder)) continue;
     if (!fetched.has(repo.key)) {
