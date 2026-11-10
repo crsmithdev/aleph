@@ -43,9 +43,9 @@ test("approve and decline handlers", async () => {
     const post = (p: string, h: Record<string, string> = { "x-aleph-ui": "1" }) => new Request(`http://x/api/${p}`, { method: "POST", headers: h });
     const call = (key: string, p: string, id: string, h?: Record<string, string>) => (proposalRoutes as any)[key](post(p, h), { id }, new URL("http://x/"));
 
-    expect((await call("POST /api/approve/:id", "approve/l-a", "l-a", {})).status).toBe(403);
+    expect((await call("POST /api/proposals/:id/approve", "approve/l-a", "l-a", {})).status).toBe(403);
     expect(stored()[0].state).toBe("proposed");
-    const ok = await call("POST /api/approve/:id", "approve/l-a", "l-a");
+    const ok = await call("POST /api/proposals/:id/approve", "approve/l-a", "l-a");
     const body = await ok.json();
     expect(body.issue).toMatch(/^fac-\d+$/);
     expect(stored()[0].state).toBe("approved");
@@ -53,11 +53,11 @@ test("approve and decline handlers", async () => {
     // The issue and its part `.1`.
     expect(items.map((i) => i.fm.id)).toEqual(["1"]);
     expect(items[0].fm).toMatchObject({ source: "memory" });
-    const again = await call("POST /api/approve/:id", "approve/l-a", "l-a");
+    const again = await call("POST /api/proposals/:id/approve", "approve/l-a", "l-a");
     expect(again.status).toBe(422);
     expect((await again.json()).error).toBeTruthy();
 
-    const d = await call("POST /api/decline/:id", "decline/l-b", "l-b");
+    const d = await call("POST /api/proposals/:id/decline", "decline/l-b", "l-b");
     expect(await d.json()).toEqual({ declined: "l-b" });
     expect(stored()[1].state).toBe("declined");
   } finally {
@@ -71,8 +71,8 @@ test("the approve refusal names the issue when no registry repo is sandboxed", a
   const restore = withEnv({ ALEPH_REPOS: join(base, "repos.json") });
   try {
     writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: false } }));
-    const req = new Request("http://x/api/approve/l-a", { method: "POST", headers: { "x-aleph-ui": "1" } });
-    const res = await (proposalRoutes as any)["POST /api/approve/:id"](req, { id: "l-a" }, new URL("http://x/"));
+    const req = new Request("http://x/api/proposals/l-a/approve", { method: "POST", headers: { "x-aleph-ui": "1" } });
+    const res = await (proposalRoutes as any)["POST /api/proposals/:id/approve"](req, { id: "l-a" }, new URL("http://x/"));
     expect(res.status).toBe(422);
     expect((await res.json()).error).toBe("no sandboxed repo in the registry to reopen the issue in");
   } finally {

@@ -323,10 +323,10 @@ describe("projectKeysOnce", () => {
   });
   test("two calls give the same keys from one request", async () => {
     const urls: string[] = [];
-    globalThis.fetch = (async (u: string) => { urls.push(u); return Response.json(["aleph", "other"]); }) as any;
+    globalThis.fetch = (async (u: string) => { urls.push(u); return Response.json({ aleph: "a", other: null }); }) as any;
     expect(await projectKeysOnce()).toEqual(["aleph", "other"]);
     expect(await projectKeysOnce()).toEqual(["aleph", "other"]);
-    expect(urls).toEqual(["/api/projects/keys"]);
+    expect(urls).toEqual(["/api/projects"]);
   });
 });
 

@@ -40,9 +40,16 @@ async function get(path: string) {
     const [, p] = k.split(" ");
     return new RegExp("^" + p.replace(/:\w+/g, "([^/]+)") + "$").test(url.pathname);
   })!;
-  const m = url.pathname.match(new RegExp("^" + key.split(" ")[1].replace(/:\w+/g, "([^/]+)") + "$"))!;
-  const params: Record<string, string> = m[1] ? { name: m[1] } : {};
+  const pattern = key.split(" ")[1], names = [...pattern.matchAll(/:(\w+)/g)].map((x) => x[1]);
+  const m = url.pathname.match(new RegExp("^" + pattern.replace(/:\w+/g, "([^/]+)") + "$"))!;
+  const params = Object.fromEntries(names.map((n, i) => [n, decodeURIComponent(m[i + 1])]));
   return routes[key](new Request(url), params, url);
+}
+/** The path of job `id`, with `#` encoded. */
+const jp = (id: string, rest = "") => `/api/jobs/${encodeURIComponent(id)}${rest}`;
+/** The job IDs of `GET /api/jobs?<q>`, newest first. */
+async function idsOf(q = ""): Promise<string[]> {
+  return (await (await get(`/api/jobs${q ? `?${q}` : ""}`)).json()).jobs.map((j: any) => j.id);
 }
 
 beforeAll(() => {
@@ -88,15 +95,16 @@ describe("a land that found the job lock busy", () => {
     run(ids[0], { job: "fac-7", name: "fac-7", repo: "fac", condition: "passed", started: ago(3) });
     run(ids[1], { kind: "land", job: "fac-7", name: "fac-7", repo: "fac", condition: "failed", cause: "locked", reason: "job lock busy", started: ago(2) });
     try {
-      const d = await (await get("/api/jobs/fac-7")).json();
+      const d = await (await get(jp("fac-7#2"))).json();
       expect(d.condition).toBe("passed");
       expect(d.reason).toBeUndefined();
       // The job record gives the next step from the run that counts: the passed run, which waits for a land by hand.
       expect(d.next).toEqual({ step: "wait", action: "passed", to: "human", text: "passed → human" });
       expect(d.next.text).not.toMatch(/[:;]/);
       expect(d.runs.find((r: any) => r.id === ids[1])).toMatchObject({ condition: "failed", reason: "job lock busy" });
-      expect((await (await get("/api/jobs?condition=failed")).json()).map((j: any) => j.name)).not.toContain("fac-7");
-      expect((await (await get("/api/jobs?condition=passed")).json()).map((j: any) => j.name)).toContain("fac-7");
+      // A row is one job: the land that found the lock busy is a failed job of its own.
+      expect(await idsOf("state=passed")).toContain("fac-7#1");
+      expect(await idsOf("state=failed")).toContain("fac-7#2");
     } finally {
       for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
     }
@@ -104,36 +112,34 @@ describe("a land that found the job lock busy", () => {
 });
 
 describe("GET /api/jobs", () => {
-  test("filters by repo, state and days", async () => {
-    expect((await (await get("/api/jobs?repo=fac")).json()).map((j: any) => j.name)).toEqual(["fac-9"]);
-    expect((await (await get("/api/jobs?condition=failed")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
-    expect((await (await get("/api/jobs?days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1", "fac-9", "fac-2"]);
-    expect(await (await get("/api/jobs?days=x")).status).toBe(400);
+  test("one row per job, newest first, filtered by project, state and window", async () => {
+    expect(await idsOf("project=fac")).toEqual(["fac-9#3", "fac-9#2", "fac-9#1"]);
+    expect(await idsOf("state=failed")).toEqual(["oth-1#1", "fac-9#1"]);
+    expect(await idsOf("window=month")).toEqual(["oth-1#1", "fac-9#3", "fac-9#2", "fac-9#1", "fac-2#1"]);
+    expect((await get("/api/jobs?window=x")).status).toBe(400);
+    const [row] = (await (await get("/api/jobs?project=fac")).json()).jobs;
+    expect(row).toMatchObject({ id: "fac-9#3", subject: "fac-9", name: "fac-9", repo: "fac", kind: "land", actor: null, state: "landed", started: ago(2.5), ended: ago(2), seconds: 1800, cost: null });
   });
-  test("?role keeps the jobs with a run of that role, next to ?condition", async () => {
-    run("20261027-000006-a", { kind: "intake", job: "oth-3", name: "oth-3", repo: "oth", condition: "failed", started: ago(1) });
-    run("20261027-000007-a", { job: "fac-3", name: "fac-3", repo: "fac", condition: "failed", started: ago(1) });
-    run("20261027-000008-a", { job: "fac-4", name: "fac-4", repo: "fac", condition: "returned", failed: "review", started: ago(1) });
-    try {
-      const names = async (q: string) => (await (await get(`/api/jobs?${q}`)).json()).map((j: any) => j.name).sort();
-      expect(await names("role=worker&condition=failed")).toEqual(["fac-3", "oth-1"]);
-      expect(await names("role=intake")).toEqual(["oth-3"]);
-    } finally { for (const id of ["20261027-000006-a", "20261027-000007-a", "20261027-000008-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id)); }
+  test("pages by ?limit= and ?before=, and says where the next page starts", async () => {
+    const one = await (await get("/api/jobs?window=month&limit=2")).json();
+    expect(one.jobs.map((j: any) => j.id)).toEqual(["oth-1#1", "fac-9#3"]);
+    expect(one.next).toBe(ago(2.5));
+    const two = await (await get(`/api/jobs?window=month&limit=2&before=${encodeURIComponent(one.next)}`)).json();
+    expect(two.jobs.map((j: any) => j.id)).toEqual(["fac-9#2", "fac-9#1"]);
+    expect((await (await get(`/api/jobs?window=month&before=${encodeURIComponent(ago(5))}`)).json())).toEqual({ jobs: [expect.objectContaining({ id: "fac-2#1" })], next: null });
+    for (const q of ["limit=0", "limit=x", "before=soon"]) expect((await get(`/api/jobs?${q}`)).status).toBe(400);
   });
-  test("?role reads a run's kind as its actor, and an old role as the new one", async () => {
-    const ids = ["20261027-000010-a", "20261027-000011-a", "20261027-000012-a", "20261027-000013-a"];
+  test("each row names its actor from its kind, for the page's Role filter", async () => {
+    const ids = ["20261027-000010-a", "20261027-000011-a", "20261027-000012-a"];
     run(ids[0], { kind: "intake", job: "oth-5", name: "oth-5", repo: "oth", condition: "failed", started: ago(1) });
     run(ids[1], { kind: "build", job: "oth-6", name: "oth-6", repo: "oth", condition: "failed", started: ago(1) });
-    run(ids[2], { kind: "director", job: "oth-7", name: "oth-7", repo: "oth", condition: "failed", started: ago(1) }, { "review.md": "ok\n" });
-    run(ids[3], { job: "oth-8", name: "oth-8", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) }, { "review.md": "ok\n" });
+    run(ids[2], { kind: "director", job: "oth-7", name: "oth-7", repo: "oth", condition: "failed", started: ago(1) });
     try {
-      const names = async (q: string) => (await (await get(`/api/jobs?${q}`)).json()).map((j: any) => j.name).sort();
-      expect(await names("role=intake")).toContain("oth-5");
-      expect(await names("role=triage")).toEqual(await names("role=intake"));
-      expect(await names("role=planner")).toEqual(await names("role=intake"));
-      expect(await names("role=worker")).toContain("oth-6");
-      expect(await names("role=director")).toEqual(["oth-7"]);
-      expect(await names("role=reviewer")).toContain("oth-8");
+      const rows = (await (await get("/api/jobs?project=oth")).json()).jobs;
+      const actor = (id: string) => rows.find((j: any) => j.id === id).actor;
+      expect([actor("oth-5#1"), actor("oth-6#1"), actor("oth-7#1")]).toEqual(["intake", "worker", "director"]);
+      expect(v.renderJobsTable(rows, { role: "director" })).toContain("oth-7#1");
+      expect(v.renderJobsTable(rows, { role: "director" })).not.toContain("oth-6#1");
     } finally { for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id)); }
   });
   test("the Role filter offers the six actors and no old role", () => {
@@ -144,24 +150,24 @@ describe("GET /api/jobs", () => {
     expect(h).not.toContain('value="planner"');
   });
   test("?project narrows to one project", async () => {
-    expect((await (await get("/api/jobs?project=oth&days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
-    expect(await (await get("/api/jobs?project=nope")).json()).toEqual([]);
+    expect(await idsOf("project=oth&window=month")).toEqual(["oth-1#1"]);
+    expect(await (await get("/api/jobs?project=nope")).json()).toEqual({ jobs: [], next: null });
   });
 });
 
 describe("item titles", () => {
   test("a rename between two requests shows in the second", async () => {
     run("20261027-000006-a", { job: "fac-7", name: "fac-7", repo: "fac", condition: "running", on: "fac-1" });
-    const title = async () => (await (await get("/api/jobs")).json()).find((j: any) => j.name === "fac-7").item.title;
+    const title = async () => (await (await get("/api/jobs")).json()).jobs.find((j: any) => j.id === "fac-1#1").title;
     expect(await title()).toBe("old title");
     writeList({ key: "fac" }, "rename", (doc) => { doc.items.find((i) => i.id === 1)!.title = "new title"; return true; });
     expect(readList({ key: "fac" })!.items[0].title).toBe("new title");
     expect(await title()).toBe("new title");
-    expect((await (await get("/api/jobs/fac-7")).json()).item.title).toBe("new title");
+    expect((await (await get(jp("fac-1#1"))).json()).item.title).toBe("new title");
   });
 });
 
-describe("GET /api/jobs/:name", () => {
+describe("GET /api/jobs/:id", () => {
   test("a job whose issue waits names its blockers, and the page shows them; a closed issue waits on nothing", async () => {
     let refs: number[] = [];
     writeList({ key: "oth" }, "blockers", (doc) => {
@@ -175,8 +181,8 @@ describe("GET /api/jobs/:name", () => {
     const ids = ["20261027-000050-a", "20261027-000051-a"];
     run(ids[0], { job: `oth-${open}`, name: `oth-${open}`, repo: "oth", condition: "failed", on: `oth-${open}`, started: ago(1) });
     run(ids[1], { job: `oth-${shut}`, name: `oth-${shut}`, repo: "oth", condition: "landed", on: `oth-${shut}`, started: ago(1) });
-    const j = await (await get(`/api/jobs/oth-${open}`)).json();
-    const closed = await (await get(`/api/jobs/oth-${shut}`)).json();
+    const j = await (await get(jp(`oth-${open}#1`))).json();
+    const closed = await (await get(jp(`oth-${shut}#1`))).json();
     for (const id of ids) rmSync(join(jobsDir, id), { recursive: true, force: true });
     expect(j.blockers).toEqual([expect.objectContaining({ id: `oth-${gone}`, title: "gone work", dead: "dropped" })]);
     expect(closed.blockers).toBeUndefined();
@@ -185,25 +191,27 @@ describe("GET /api/jobs/:name", () => {
     expect(html).toContain(`data-act="unblock" data-repo="oth" data-id="${open}"`);
   });
   test("404 for an unknown name, or another project's job", async () => {
-    expect((await get("/api/jobs/nope")).status).toBe(404);
-    expect((await get("/api/jobs/fac-9?project=oth")).status).toBe(404);
-    expect((await get("/api/jobs/fac-9?project=fac")).status).toBe(200);
+    expect((await get(jp("nope#1"))).status).toBe(404);
+    expect((await get(jp("fac-9#3", "?project=oth"))).status).toBe(404);
+    expect((await get(jp("fac-9#3", "?project=fac"))).status).toBe(200);
   });
   test("the verdict comes from review.json beside review.md, not from review.md's text", async () => {
-    const j = await (await get("/api/jobs/fac-9")).json();
+    const j = await (await get(jp("fac-9#3"))).json();
+    expect(j.id).toBe("fac-9#3");
     expect(j.review).toContain("VERDICT: hold quoted");
     expect(j.verdict).toBe("pass");
   });
 });
 
 describe("a name reused by a dropped job and its rerun", () => {
-  test("the job and its diff are the newest job's", async () => {
+  test("each job ID names its own job, and its diff", async () => {
     run("20261001-000001-a", { job: "dup-old", name: "fac-dup", repo: "fac", branch: "factory/gone", condition: "dropped", started: ago(24 * 40), ended: ago(24 * 40 - 1) });
     run("20261001-000002-a", { job: "dup-new", name: "fac-dup", repo: "fac", branch: "factory/fac-9", condition: "landed", started: ago(24 * 39), ended: ago(24 * 39 - 1), commit: "def5678" });
-    const j = await (await get("/api/jobs/fac-dup?days=60")).json();
+    const j = await (await get(jp("fac-dup#2"))).json();
     expect(j.condition).toBe("landed");
     expect(j.runs.map((r: any) => r.condition)).toEqual(["landed"]);
-    const d = await get("/api/jobs/fac-dup/diff?days=60");
+    expect((await (await get(jp("fac-dup#1"))).json()).condition).toBe("dropped");
+    const d = await get(jp("fac-dup#2", "/diff"));
     expect(d.status).toBe(200);
     expect(await d.text()).toContain("+two");
   });
@@ -216,13 +224,13 @@ describe("run logs", () => {
     JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "a\nb" }] } }),
   ].join("\n");
   async function logs(file: string, q = "") {
-    const url = new URL(`http://x/api/jobs/oth-90/runs/${id}/logs/${encodeURIComponent(file)}${q}`);
-    return routes["GET /api/jobs/:name/runs/:run/logs/:file"](new Request(url), { name: "oth-90", run: id, file }, url);
+    const url = new URL(`http://x/api/jobs/oth-90%231/logs/${encodeURIComponent(file)}${q}`);
+    return routes["GET /api/jobs/:id/logs/:file"](new Request(url), { id: "oth-90#1", file }, url);
   }
   test("lists the known logs with sizes, serves them whole or as a transcript, and refuses other names", async () => {
     run(id, { job: "oth-90", name: "oth-90", kind: "build", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) },
       { "output.log": stream, "land.log": "landed\n", "notes.txt": "x" });
-    const j = await (await get("/api/jobs/oth-90")).json();
+    const j = await (await get(jp("oth-90#1"))).json();
     expect(j.runs[0].logs).toEqual([{ name: "output.log", size: stream.length }, { name: "land.log", size: 7 }].sort((a, b) => ["output.log", "land.log"].indexOf(a.name) - ["output.log", "land.log"].indexOf(b.name)));
     expect(await (await logs("land.log")).text()).toBe("landed\n");
     const steps = await (await logs("output.log", "?as=transcript")).json();
@@ -232,12 +240,12 @@ describe("run logs", () => {
     for (const bad of ["state.json", "state.json/../../x", "notes.txt", "stderr.log"]) expect((await logs(bad)).status).toBe(404);
     expect((await logs("land.log", "?as=transcript")).status).toBe(404);
     const other = new URL("http://x/");
-    expect((await routes["GET /api/jobs/:name/runs/:run/logs/:file"](new Request(other), { name: "oth-90", run: "../x", file: "land.log" }, other)).status).toBe(404);
+    expect((await routes["GET /api/jobs/:id/logs/:file"](new Request(other), { id: "nope#1", file: "land.log" }, other)).status).toBe(404);
     rmSync(join(jobsDir, id), { recursive: true, force: true });
   });
 });
 
-describe("GET /api/jobs/:name/diff", () => {
+describe("GET /api/jobs/:id/diff", () => {
   test("a landed job shows its look and the reviewer in checkedBy", async () => {
     const fac = join(base, "fac");
     sh(fac, "git", "switch", "-qc", "tmp-seal");
@@ -247,30 +255,30 @@ describe("GET /api/jobs/:name/diff", () => {
     sh(fac, "git", "switch", "-q", "main");
     sh(fac, "git", "branch", "-D", "tmp-seal");
     run("20261027-000060-a", { job: "fac-S", name: "fac-S", repo: "fac", branch: "factory/fac-S", condition: "landed", commit }, { "review.md": "land" });
-    const d = (await (await get("/api/jobs/fac-S")).json()) as any;
+    const d = (await (await get(jp("fac-S#1"))).json()) as any;
     expect(d.look).toBe(3);
     expect(d.checkedBy).toEqual(["reviewer"]);
   });
   test("a dropped job's kept diff.patch is served when the branch is gone; none recorded says so", async () => {
     run("20261027-000051-a", { job: "fac-K", name: "fac-K", repo: "fac", branch: "factory/fac-K", condition: "dropped" }, { "diff.patch": "+kept line\n", "diff.stat": " k.txt | 1 +\n" });
-    expect(await (await get("/api/jobs/fac-K/diff")).text()).toContain("+kept line");
-    expect(((await (await get("/api/jobs/fac-K")).json()) as any).stat).toContain("k.txt");
+    expect(await (await get(jp("fac-K#1", "/diff"))).text()).toContain("+kept line");
+    expect(((await (await get(jp("fac-K#1"))).json()) as any).stat).toContain("k.txt");
     run("20261027-000052-a", { job: "fac-N", name: "fac-N", repo: "fac", branch: "factory/fac-N", condition: "dropped" });
-    const res = await get("/api/jobs/fac-N/diff");
+    const res = await get(jp("fac-N#1", "/diff"));
     expect(res.status).toBe(404);
     expect(await res.text()).toContain("No diff was recorded");
   });
   test("404 when the branch is gone, or the job unknown", async () => {
-    expect((await get("/api/jobs/fac-2/diff?days=30")).status).toBe(404);
-    expect((await get("/api/jobs/oth-1/diff")).status).toBe(404);
-    expect((await get("/api/jobs/zzz/diff")).status).toBe(404);
-    expect((await get("/api/jobs/fac-9/diff?project=oth")).status).toBe(404);
+    expect((await get(jp("fac-2#1", "/diff"))).status).toBe(404);
+    expect((await get(jp("oth-1#1", "/diff"))).status).toBe(404);
+    expect((await get(jp("zzz#1", "/diff"))).status).toBe(404);
+    expect((await get(jp("fac-9#3", "/diff?project=oth"))).status).toBe(404);
   });
 });
 
 describe("render", () => {
   const job: any = {
-    name: "fac-9", repo: "fac", item: { id: 9, title: "Fix <it>" }, condition: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
+    id: "fac-9#3", name: "fac-9", repo: "fac", item: { id: 9, title: "Fix <it>" }, condition: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
     runs: [
       { id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 0.5, model: "m1" },
       { id: "2", kind: "worker", condition: "passed", started: ago(3.5), ended: ago(3), cost: 0.25 },
@@ -283,11 +291,11 @@ describe("render", () => {
     const h = v.renderJob(job);
     // The review runs inside its build, so it is no bar of its own.
     expect(h.match(/class="dp-bar /g)).toHaveLength(3);
-    for (const t of ["build 1 · $0.50", "build 2 · $0.25", ">land<", "fixed it", "Looks right.", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-job="fac-9"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
+    for (const t of ["build 1 · $0.50", "build 2 · $0.25", ">land<", "fixed it", "Looks right.", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-job="fac-9#3"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
     for (const t of [">failed<", ">passed<", ">landed<", ">Default<", ">Follow-up<", "a? -&gt; b", "tidy"]) expect(h).toContain(t);
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
-    expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9"><p class="quiet" role="status">Loading the diff…</p></div>');
+    expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9#3"><p class="quiet" role="status">Loading the diff…</p></div>');
   });
   test("the head is pageHead with the title and the nav links as aside", () => {
     const aside = '<a class="act" href="#/issues/fac/9">Issue</a><a class="act" href="http://lf/sessions/s">Trace</a>';
@@ -378,11 +386,11 @@ describe("render", () => {
     expect(h).toContain('href="#/factory/jobs"');
   });
   test("a failed run's event names it, gives its reason as the note with code set as code, and offers its logs", () => {
-    const h = v.renderJob({ ...job, runs: [{ id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });
+    const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });
     const ev = h.match(/<div class="dp-ev">.*?<\/div><\/div><\/div>/)?.[0] ?? "";
     expect(ev).toContain('<span class="badge stuck">failed</span>');
     expect(ev).toContain("build · opus · checks failed in <code>a.ts</code>");
-    expect(ev).toContain('data-log="1" data-job="fac-9" data-file="output.log" data-as="transcript"');
+    expect(ev).toContain('data-log="1" data-job="fac-9#1" data-file="output.log" data-as="transcript"');
     expect(ev).toContain('data-file="checks.log" title="checks.log, 2.0KiB">checks</button>');
     expect(h).toContain("$1.03");
   });

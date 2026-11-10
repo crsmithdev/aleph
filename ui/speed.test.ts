@@ -63,8 +63,8 @@ test("done and issues.landed count landed issues, not land runs", () => {
   expect(d.issues.landed).toBe(3);
 });
 
-test("GET /api/speed takes a window (default week) and answers JSON", async () => {
-  const get = async (q: string) => routes["GET /api/speed"](new Request(`http://x/api/speed${q}`), {}, new URL(`http://x/api/speed${q}`));
+test("GET /api/flow takes a window (default week) and answers JSON", async () => {
+  const get = async (q: string) => routes["GET /api/flow"](new Request(`http://x/api/flow${q}`), {}, new URL(`http://x/api/flow${q}`));
   expect((await (await get("?window=month")).json()).window).toBe("month");
   expect((await (await get("")).json()).window).toBe("week");
   expect((await get("?window=year")).status).toBe(400);
@@ -270,8 +270,8 @@ test("per-issue times carry each issue's phases and outcome, and a bucket has a 
     r(2, "intake", "done", 1000_000, 1100_000), r(2, "build", "passed", 1400_000, 1500_000),
   ], f, 0, 9_999_000);
   const by = Object.fromEntries(t.issues.map((i) => [i.id, i]));
-  expect(by["fx-1"]).toEqual({ id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: 1000_000, intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 });
-  expect(by["fx-2"]).toEqual({ id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: 1000_000, intake: 100, queue: 300, implement: 100, land: null, lead: null });
+  expect(by["fx-1"]).toEqual({ id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: new Date(1000_000).toISOString(), intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 });
+  expect(by["fx-2"]).toEqual({ id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: new Date(1000_000).toISOString(), intake: 100, queue: 300, implement: 100, land: null, lead: null });
   // Two jobs finish in one hour: builds of 600 and 1200 s.
   const now2 = new Date(2026, 2, 10, 15), h = (m: number) => new Date(2026, 2, 10, 9, m).toISOString();
   run({ kind: "build", job: "pa", repo: "px", on: "px-1", condition: "passed", started: h(0), ended: h(10) });
@@ -412,7 +412,7 @@ test("the day baseline in one read equals the baseline of seven spans each read 
   expect(seen).toBeGreaterThan(0); // the spans hold runs, so the two ways compare real figures
 });
 
-test("GET /api/speed?baseline=1 reads the job records once for the window, the other windows and every span", async () => {
+test("GET /api/flow?baseline=1 reads the job records once for the window, the other windows and every span", async () => {
   setSystemTime(new Date(2026, 9, 28, 15));
   const real = record.all;
   let calls = 0;
@@ -420,7 +420,7 @@ test("GET /api/speed?baseline=1 reads the job records once for the window, the o
   try {
     run({ kind: "land", condition: "landed", ...secs(0, 13, 60) });
     calls = 0;
-    const r = await routes["GET /api/speed"](new Request("http://x/api/speed?window=day&baseline=1"), {}, new URL("http://x/api/speed?window=day&baseline=1"));
+    const r = await routes["GET /api/flow"](new Request("http://x/api/flow?window=day&baseline=1"), {}, new URL("http://x/api/flow?window=day&baseline=1"));
     expect(r.status).toBe(200);
     expect(calls).toBe(1);
   } finally { spy.mockRestore(); setSystemTime(); }
@@ -447,7 +447,7 @@ test("asks: the window counts the Asks set, and those that came to Chris, in the
   expect(averageFigures([figures(s)]).asks).toBe(2);
 });
 
-test("GET /api/speed?project= counts only that repo's runs and issues, in the answer and the baseline", async () => {
+test("GET /api/flow?project= counts only that repo's runs and issues, in the answer and the baseline", async () => {
   // 60 days back (this week) and 67 days back (the week before), so no other test's window sees these runs.
   const land = (daysAgo: number, repo: string, i: number) => run({ kind: "land", condition: "landed", repo, on: `${repo}-${i}`, ...secs(daysAgo, 9, 60) });
   land(60, "alpha", 1); land(60, "beta", 1); land(60, "beta", 2);
@@ -457,7 +457,7 @@ test("GET /api/speed?project= counts only that repo's runs and issues, in the an
   land(67, "alpha", 3); land(67, "beta", 3); land(67, "beta", 4);
   setSystemTime(new Date(2026, 9, 28 - 60, 15));
   try {
-    const get = async (q: string) => (await routes["GET /api/speed"](new Request(`http://x/api/speed${q}`), {}, new URL(`http://x/api/speed${q}`))).json();
+    const get = async (q: string) => (await routes["GET /api/flow"](new Request(`http://x/api/flow${q}`), {}, new URL(`http://x/api/flow${q}`))).json();
     const a = await get("?window=week&project=alpha");
     expect(a.done).toBe(1);
     const both = await get("?window=week");

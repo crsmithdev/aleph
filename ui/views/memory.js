@@ -315,9 +315,9 @@ const WRITES = {
   delete: (it, f) => [noteUrl(it.key, "delete"), { why: f.why }],
   "file-delete": (it) => [fileUrl(it, "delete"), {}],
   alias: (it, f) => [noteUrl(f.target, "alias"), { alias: it.title }],
-  drop: (it) => [`/api/issues/${it.key}/drop`, {}],
-  approve: (it) => [`/api/approve/${encodeURIComponent(it.key)}`, {}],
-  decline: (it) => [`/api/decline/${encodeURIComponent(it.key)}`, {}],
+  drop: (it) => [`/api/issues/${encodeURIComponent(it.title)}/drop`, {}],
+  approve: (it) => [`/api/proposals/${encodeURIComponent(it.key)}/approve`, {}],
+  decline: (it) => [`/api/proposals/${encodeURIComponent(it.key)}/decline`, {}],
 };
 /** A write that removes something asks for a second click. */
 const ARMED = new Set(["delete", "file-delete", "drop"]);

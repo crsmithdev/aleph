@@ -1,8 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
-// /api/state object and returns an HTML string. No DOM, so tests can call them.
+// /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { get } from "../router.js";
-import { actButton, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, issueHref, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, jobHref, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, windowOf, wireScope, withProject, localId, openDiffs, issueHref, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -14,10 +14,12 @@ export const view = {
   group: "factory",
   order: -3,
   icon: "gauge-high",
-  api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
+  // The asks come from /api/automation, the one answer that carries them.
+  api: (_params, q = new URLSearchParams()) => [withProject(`/api/factory?window=${windowOf(q)}`, q), withProject(`/api/automation?window=${windowOf(q)}`, q)],
+  combine: ([s, a]) => ({ ...s, asks: a.asks }),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s, w)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -32,11 +34,11 @@ export const view = {
 
 let lastState = null, outOfDateNow = false;
 
-const EFFICIENCY = "#/factory/efficiency", PERFORMANCE = "#/factory/jobs";
+const EFFICIENCY = "#/flow", PERFORMANCE = "#/factory/jobs";
 /** A link to another page that keeps the window; week is the default and stays out of the address. */
 const withWindow = (href, win) => (win === "week" ? href : `${href}?window=${win}`);
 
-/** The scorecard: lost time, completion, landed, queue wait, usage. `d` is /api/speed for the window `win` with its baseline, or null while it loads. */
+/** The scorecard: lost time, completion, landed, queue wait, usage. `d` is /api/flow for the window `win` with its baseline, or null while it loads. */
 export function renderTiles(s, d, win = d?.window ?? "week") {
   return statusCards(s, d, { efficiency: withWindow(EFFICIENCY, win), performance: withWindow(PERFORMANCE, win) });
 }
@@ -51,7 +53,7 @@ function renderOutcome(d) {
 
 /** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. */
 const PIPE = Object.fromEntries(["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
-/** The Pipeline card for the window: each stage with its runs per issue and p90 runtime. `d` is /api/speed for the window, null while it loads, or `{ error }`. */
+/** The Pipeline card for the window: each stage with its runs per issue and p90 runtime. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
 export function renderPipeline(d) {
   const box = (body, aside = "") => card("Pipeline", body, { id: "pipeline", aside });
   if (!d) return box(loadingLine("the pipeline"));
@@ -341,13 +343,11 @@ function laneCard(cls, row, title, href, below = "") {
 const lane = (id, title, n, rows, none, cap = 0) =>
   `<section id="lane-${id}" class="lane" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
 
-/** Done: the done parts and issues /api/state sends, newest first, each its own card. */
-function doneLane(s, win) {
+/** Done: the done parts and issues /api/factory sends, newest first, each its own card. */
+function doneLane(s) {
   const rows = (s.done ?? []).map((i) =>
     laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: badge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
-  const from = Date.parse(s.now) - WINDOW_DAYS[win] * 86_400_000;
-  const total = (s.doneStamps ?? []).filter((d) => d.at >= from).length;
-  return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.", total);
+  return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.", s.doneCount ?? 0);
 }
 
 function queuedLane(s) {
@@ -377,14 +377,14 @@ function runningLane(s) {
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
     const tier = TIERS[j.tier ?? shortModel(j.model)];
     const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
-    return laneCard(`run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j));
+    return laneCard(`run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));
   }).join("");
   return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }
 
 /** The three lanes: Running, Queued, Done. */
-export function renderLanes(s, win = "week") {
-  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s, win)}</div>`;
+export function renderLanes(s) {
+  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s)}</div>`;
 }
 
 
@@ -419,7 +419,6 @@ const jobDetails = (s, j) => details(s, j,
   (j.blocker ? `<p class="quiet q">Blocker <a href="${esc(j.blocker.href)}">${esc(j.blocker.id)}</a>: ${esc(j.blocker.title)}</p>` : "") +
   (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : ""));
 
-const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
 /** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. An empty `problem` leaves the situation line out. */
 const alertCard = (kind, key, meta, title, problem, body = "") =>
   askShell(kind, `data-kind="${kind}" data-card="unstick"`, key, meta, kind === "error" ? "Error" : "Stuck", title, "", problem ? `<p class="situation">${esc(problem)}</p>` : "", body);
@@ -449,11 +448,11 @@ const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
   const hold = b ? holdLine({ action: "after", on: [b.id] }) : stuckSentence(j);
-  const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, run: j.run?.id, on: b.id, label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, run: j.run?.id, label: "Re-check" });
-  const meta = metaRow({ id: repoIdLink(j.name, jobHref(j), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
+  const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, job: j.id, on: b.id, label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, job: j.id, label: "Re-check" });
+  const meta = metaRow({ id: repoIdLink(j.name, jobHref(j.id), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
   const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;
   return alertCard("stuck", j.name, meta, j.item?.title || j.name, hold,
-    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(actButton("Drop", { act: "drop", name: j.name, run: j.run?.id, label: "Drop" }), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(actButton("Drop", { act: "drop", name: j.name, job: j.id, label: "Drop" }), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
     agentLine(j) + jobDetails(s, j));
 };
 

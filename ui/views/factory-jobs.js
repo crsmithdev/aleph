@@ -1,4 +1,4 @@
-// The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
+// The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
 import { get } from "../router.js";
 import { card, pagedTable, dur, empty, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
@@ -42,7 +42,7 @@ export const stripFrame = (d, key, name) => ({
   measure: { name: `${name}: Time per Issue`, unit: "seconds", agg: "max" },
   over: { kind: "time", window: d.window },
   by: { keys: [{ key: "landed", name: "landed", color: "done" }, { key: "unlanded", name: "unlanded", color: "need" }] },
-  rows: (d.times ?? []).filter((i) => ["landed", "unlanded"].includes(i.outcome) && i[key] > 0 && i.filed != null).sort((a, b) => a.filed - b.filed).map((i) => ({ at: i.filed, name: i.id, href: i.href, [i.outcome]: i[key] })),
+  rows: (d.times ?? []).filter((i) => ["landed", "unlanded"].includes(i.outcome) && i[key] > 0 && i.filed != null).sort((a, b) => a.filed.localeCompare(b.filed)).map((i) => ({ at: Date.parse(i.filed), name: i.id, href: i.href, [i.outcome]: i[key] })),
   form: "points",
   note: "One point per issue, by outcome: its filing time across, its time up.",
   empty: NONE,
@@ -81,10 +81,10 @@ export const chartKey = (k) => `factory/jobs/${k}`;
 
 const table = (labels, num, rows) => !rows.length ? empty("No row to show.") : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`));
 
-/** The page body for a stage. `day` is /api/speed for the last 24h, or null. `jobs` is /api/jobs for the window, or null while it loads; `f` is the route query. */
+/** The page body for a stage. `day` is /api/flow for the last 24h, or null. `jobs` is /api/jobs for the window, or null while it loads; `f` is the route query. */
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   const [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
-  const scope = renderScope(jobs ?? [], { ...f, window: f.window ?? (f.days ? undefined : d.window) });
+  const scope = renderScope(jobs ?? [], { ...f, window: f.window ?? d.window });
   return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: scope })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
     `<div class="trio">${panelOf(chartKey("trend"), trendFrame(d, key, name, text))}${panelOf(chartKey("strip"), stripFrame(d, key, name))}${panelOf(chartKey("slowest"), slowestFrame(d, key))}</div>` +
@@ -108,7 +108,7 @@ export const view = {
   group: "factory",
   order: 0,
   icon: "stopwatch",
-  api: (_params, q = new URLSearchParams()) => withProject(`/api/speed?window=${windowOf(q)}`, q),
+  api: (_params, q = new URLSearchParams()) => withProject(`/api/flow?window=${windowOf(q)}`, q),
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderFactoryJobs(d, usable("day"), q?.get("stage") ?? "lead", jobsNow(q ?? new URLSearchParams()), Object.fromEntries(q ?? [])),
@@ -136,13 +136,13 @@ export const view = {
     const url = listUrl(null, hashQuery());
     const got = get(url).then(async (r) => (r.ok ? r.json() : new Error(failMessage(url, r.status, await r.text())))).catch((e) => e);
     if (trendOn(d)) await loadSpeed("day");
-    const jobs = await got, failed = jobs instanceof Error;
+    const answer = await got, failed = answer instanceof Error, jobs = failed ? answer : answer.jobs;
     if (!root.querySelector("#perf")) return;
     if (!failed) listed = { url, jobs };
     if (!failed || trendOn(d)) {
       root.innerHTML = draw(hashQuery().get("stage") ?? "lead");
       wire();
     }
-    if (failed) root.querySelector("#jobs-table").innerHTML = error(jobs.message);
+    if (failed) root.querySelector("#jobs-table").innerHTML = error(answer.message);
   },
 };

@@ -1,17 +1,18 @@
-/** `GET /api/jobs`, `/api/jobs/:name`, `/api/jobs/:name/diff`: the Jobs and Job views' data. */
+/** `GET /api/jobs`, `/api/jobs/:id`, its diff and logs, and `/api/issues/:id/jobs`: the Jobs and Job views' data. `:id` is a job ID, `a1430#2`. */
 import { keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/records/record.ts";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { OPUS_MODEL, readModels } from "../../jobs/lib/routing/models.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { allRuns, isAgentRun, isBuild, jobIdOf, loadRegistry, type Entry } from "../../jobs/lib/records/ledger.ts";
-import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, readFile, view } from "../../jobs/lib/records/job.ts";
+import { allRuns, isAgentRun, isBuild, jobIdOf, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
-import { contentText, issueHref, word } from "../../lib/naming.ts";
+import { contentText, issueHref, parseId, subjectOf } from "../../lib/naming.ts";
+import { repoIn } from "./scope.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
@@ -87,7 +88,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   if (!up) return out;
   const parts = partsOf(doc, up).map(todos.refOf);
   const n = parts.indexOf(todos.refOf(item)), next = parts[n + 1];
-  out.parent = { id: `${repo}-${todos.refOf(up)}`, href: issueHref(`${repo}-${todos.refOf(up)}`), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: `#/jobs/${encodeURIComponent(`${repo}-${next}`)}` } } : {}) };
+  out.parent = { id: `${repo}-${todos.refOf(up)}`, href: issueHref(`${repo}-${todos.refOf(up)}`), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: issueHref(`${repo}-${next}`) } } : {}) };
   return out;
 }
 
@@ -135,83 +136,125 @@ async function traceUrl(runs: Entry[]): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
-const find = (name: string, project: string | null): Entry[] | undefined => latestJob(name, project);
+/** The windows of `?window=`, in ms. */
+const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DAY, month: 30 * DAY };
+/** `?limit=`: the rows of one page by default, and the most a page holds. */
+const LIMIT = 100, MAX = 2000;
+
+/** One row of `GET /api/jobs`: one job, the run whose ID it is. Times are ISO; `seconds` is null while it runs. */
+export interface Row {
+  id: string; subject: string; name: string; repo: string; kind: string; actor: string | null; state: string;
+  title: string; issue: string | null; started: string; ended: string | null; seconds: number | null; cost: number | null; model: string | null;
+}
+
+/** Each run as a row, with its job ID and its issue's title. */
+function rowsOf(runs: Entry[], all: Entry[]): Row[] {
+  const lists = jobProjector().lists;
+  return runs.map((e) => {
+    const r = e.run, on = onOf(r), issue = on !== undefined && r.repo ? `${r.repo}-${on}` : null;
+    const ended = r.ended ?? null, kind = KIND[r.kind as keyof typeof KIND] ?? "worker";
+    return {
+      id: jobIdOf(e, all), subject: subjectOf(r), name: r.name, repo: r.repo ?? "", kind: r.kind, actor: RUN_ACTOR[kind] ?? null, state: r.condition,
+      title: (issue && lists.item(r.repo!, on!)?.title) || r.name, issue, started: r.started, ended,
+      seconds: ended ? Math.round((Date.parse(ended) - Date.parse(r.started)) / 1000) : null, cost: r.cost ?? null, model: r.model ?? null,
+    };
+  });
+}
+
+/** The run of job `id` and the runs grouped with it (`allJobs`), in `project` when given; null for none. */
+function located(id: string, project: string | null): { e: Entry; runs: Entry[] } | null {
+  loadRegistry();
+  const e = runOfJob(id);
+  if (!e || !repoIn(e.run.repo, project)) return null;
+  return { e, runs: allJobs().find((g) => g.some((x) => x.id === e.id))! };
+}
+
+/** The Job page's data: the job's runs, its record and its files, with `id`, the job asked for. */
+async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
+  const v = view(runs);
+  const fit = await currentFit().catch(() => null);
+  const projector = jobProjector();
+  const job = projector.toJob(runs, v);
+  const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit, allRuns()), holds: readHolds([job.name]) };
+  const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
+  if (blockers.length) detail.blockers = blockers;
+  const rec = readRecord(keyOf(runs.at(-1)!.run));
+  if (rec) {
+    const step = nextStep(rec);
+    Object.assign(detail, { next: { ...step, text: [step.action, step.sub, contentText(step)].filter(Boolean).join(" ") }, rounds: rec.rounds, events: rec.events });
+  }
+  annotate([detail], fit);
+  const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
+  const review = latestFile(runs, "review.md");
+  if (result !== undefined) detail.result = result;
+  if (review) detail.review = review.text;
+  const rv = review && readFile(review.entry, "review.json");
+  if (rv) detail.verdict = JSON.parse(rv).verdict;
+  const by = checkedBy(runs);
+  if (by.length) detail.checkedBy = by;
+  const landedIn = v.condition === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;
+  const shortstat = landedIn ? git(landedIn.path, "show", "--shortstat", "--format=", v.commit!).out : "";
+  if (shortstat) detail.look = lookMinutes(changedLinesOf(shortstat));
+  // The job's diff stat (branch, landed commit, or the kept file), else the stat the run kept.
+  const jd = jobDiff(runs);
+  if (jd?.stat) detail.stat = jd.stat;
+  else if (v.stat) detail.stat = v.stat;
+  const trace = await traceUrl(runs);
+  if (trace) detail.trace = trace;
+  if (detail.item) Object.assign(detail, fromStore(detail.repo, detail.item.id));
+  return detail;
+}
+
+const none = () => Response.json({ error: "no such job" }, { status: 404 });
 
 export const routes: Routes = {
-  "GET /api/jobs": async (_req, _p, url) => {
+  // One row per job, newest first: `?project=`, `?window=` (default week), `?state=`, and the page `?limit=`, `?before=` (an ISO start).
+  "GET /api/jobs": (_req, _p, url) => {
     const q = url.searchParams;
-    const project = q.get("project"), repo = q.get("repo"), state = q.get("condition"), role = q.get("role");
-    const dq = q.get("days");
-    const days = dq === null || dq === "" ? 7 : Number(dq);
-    if (!(days >= 0)) return Response.json({ error: "days must be a number" }, { status: 400 });
-    const since = Date.now() - days * DAY;
-    const actor = role && word("actor", role);
-    const hit: { at: number; job: Job }[] = [];
-    const { toJob } = jobProjector();
-    for (const runs of allJobs()) {
-      const last = lastReal(runs).run;
-      if ((project && last.repo !== project) || (repo && last.repo !== repo) || (state && last.condition !== state)) continue;
-      if (actor && !runInfos(runs).some((r) => RUN_ACTOR[r.kind] === actor)) continue;
-      const times = runs.flatMap((e) => [e.run.started, e.run.ended]).map((t) => Date.parse(t ?? "")).filter((t) => !Number.isNaN(t));
-      const at = Math.max(...times);
-      if (!(at >= since)) continue;
-      hit.push({ at, job: toJob(runs) });
-    }
-    const jobs = hit.sort((a, b) => b.at - a.at).map((h) => h.job);
-    annotate(jobs, await currentFit().catch(() => null));
-    return Response.json(jobs);
+    const project = q.get("project"), state = q.get("state"), w = q.get("window") || "week", before = q.get("before");
+    const limit = q.has("limit") ? Number(q.get("limit")) : LIMIT;
+    if (!(w in WINDOWS)) return Response.json({ error: `window must be one of ${Object.keys(WINDOWS).join(", ")}` }, { status: 400 });
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX) return Response.json({ error: `limit must be a whole number from 1 to ${MAX}` }, { status: 400 });
+    if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
+    loadRegistry();
+    const since = Date.now() - WINDOWS[w], all = allRuns();
+    const hit = all.filter(({ run: r }) => repoIn(r.repo, project) && (!state || r.condition === state) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)))
+      .sort((a, b) => Date.parse(b.run.started) - Date.parse(a.run.started));
+    const page = hit.slice(0, limit);
+    return Response.json({ jobs: rowsOf(page, all), next: hit.length > limit ? page.at(-1)!.run.started : null });
   },
 
-  "GET /api/jobs/:name": async (_req, params, url) => {
-    const runs = find(params.name, url.searchParams.get("project"));
-    if (!runs) return Response.json({ error: "no such job" }, { status: 404 });
-    const v = view(runs);
-    const fit = await currentFit().catch(() => null);
-    const projector = jobProjector();
-    const detail: JobDetail = { ...projector.toJob(runs, v), runs: runInfos(runs, fit, allRuns()), holds: readHolds([projector.toJob(runs, v).name]) };
-    const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
-    if (blockers.length) detail.blockers = blockers;
-    const rec = readRecord(keyOf(runs.at(-1)!.run));
-    if (rec) {
-      const step = nextStep(rec);
-      Object.assign(detail, { next: { ...step, text: [step.action, step.sub, contentText(step)].filter(Boolean).join(" ") }, rounds: rec.rounds, events: rec.events });
-    }
-    annotate([detail], fit);
-    const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
-    const review = latestFile(runs, "review.md");
-    if (result !== undefined) detail.result = result;
-    if (review) detail.review = review.text;
-    const rv = review && readFile(review.entry, "review.json");
-    if (rv) detail.verdict = JSON.parse(rv).verdict;
-    const by = checkedBy(runs);
-    if (by.length) detail.checkedBy = by;
-    const landedIn = v.condition === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;
-    const shortstat = landedIn ? git(landedIn.path, "show", "--shortstat", "--format=", v.commit!).out : "";
-    if (shortstat) detail.look = lookMinutes(changedLinesOf(shortstat));
-    // The job's diff stat (branch, landed commit, or the kept file), else the stat the run kept.
-    const jd = jobDiff(runs);
-    if (jd?.stat) detail.stat = jd.stat;
-    else if (v.stat) detail.stat = v.stat;
-    const trace = await traceUrl(runs);
-    if (trace) detail.trace = trace;
-    if (detail.item) Object.assign(detail, fromStore(detail.repo, detail.item.id));
-    return Response.json(detail);
+  // The jobs of one issue and its sub-issues, newest first.
+  "GET /api/issues/:id/jobs": (_req, params, url) => {
+    loadRegistry();
+    const p = parseId(params.id);
+    if (!p || !repoIn(p.repo, url.searchParams.get("project"))) return Response.json({ error: "no such issue" }, { status: 404 });
+    const all = allRuns(), ref = p.sub === undefined ? String(p.n) : `${p.n}.${p.sub}`;
+    const mine = all.filter(({ run: r }) => {
+      const on = String(onOf(r) ?? "");
+      return r.repo === p.repo && (on === ref || (p.sub === undefined && on.startsWith(`${ref}.`)));
+    }).reverse();
+    return Response.json({ jobs: rowsOf(mine, all) });
   },
 
-  "GET /api/jobs/:name/diff": (_req, params, url) => {
-    const runs = find(params.name, url.searchParams.get("project"));
-    if (!runs) return Response.json({ error: "no such job" }, { status: 404 });
-    const d = jobDiff(runs);
+  "GET /api/jobs/:id": async (_req, params, url) => {
+    const at = located(params.id, url.searchParams.get("project"));
+    return at ? Response.json(await detailOf(params.id, at.runs)) : none();
+  },
+
+  "GET /api/jobs/:id/diff": (_req, params, url) => {
+    const at = located(params.id, url.searchParams.get("project"));
+    if (!at) return none();
+    const d = jobDiff(at.runs);
     if (!d) return Response.json({ error: NO_DIFF }, { status: 404 });
     return new Response(d.diff, { headers: { "content-type": "text/plain; charset=utf-8" } });
   },
 
-  // A log file of one run of the job: whole as text, or with `?as=transcript` as the steps of a stream-json log. Only known names.
-  "GET /api/jobs/:name/runs/:run/logs/:file": (_req, params, url) => {
-    const runs = find(params.name, url.searchParams.get("project"));
-    const entry = runs?.find((e) => e.id === params.run);
-    if (!entry || !(LOGS as readonly string[]).includes(params.file)) return Response.json({ error: "no such log" }, { status: 404 });
-    const path = join(entry.folder, params.file);
+  // A log file of the job's run: whole as text, or with `?as=transcript` as the steps of a stream-json log. Only known names.
+  "GET /api/jobs/:id/logs/:file": (_req, params, url) => {
+    const at = located(params.id, url.searchParams.get("project"));
+    if (!at || !(LOGS as readonly string[]).includes(params.file)) return Response.json({ error: "no such log" }, { status: 404 });
+    const path = join(at.e.folder, params.file);
     if (!existsSync(path)) return Response.json({ error: "no such log" }, { status: 404 });
     if (url.searchParams.get("as") === "transcript") {
       if (params.file !== "output.log" && params.file !== "review.log") return Response.json({ error: "not a transcript" }, { status: 404 });

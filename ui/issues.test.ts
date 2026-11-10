@@ -45,6 +45,8 @@ function sh(cwd: string, ...args: string[]): string {
 }
 const at = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${server.port}${p}`, init);
 const getJson = async (p: string) => (await at(p)).json() as Promise<any>;
+/** The issue rows of `GET /api/issues`, of one project or of all. */
+const rowsOf = async (project?: string): Promise<any[]> => (await getJson(project ? `/api/issues?project=${project}` : "/api/issues")).issues;
 const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1" }, q = "") =>
   at(`/api/issues${q}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
@@ -100,27 +102,26 @@ afterAll(() => {
 });
 
 describe("GET /api/issues", () => {
-  test("filters by status and label", async () => {
-    expect((await getJson("/api/issues?repo=fac")).map((r: any) => r.id)).toEqual([1, 2, 3, 4]);
-    expect((await getJson("/api/issues?repo=fac&status=done")).map((r: any) => r.id)).toEqual([2]);
-    const [r] = await getJson("/api/issues?repo=fac");
+  test("lists the rows of a project", async () => {
+    expect((await rowsOf("fac")).map((r: any) => r.id)).toEqual([1, 2, 3, 4]);
+    expect((await rowsOf("fac")).filter((r: any) => r.status === "done").map((r: any) => r.id)).toEqual([2]);
+    const [r] = await rowsOf("fac");
     expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: [], after: [], notes: 0 });
     expect(r.updated).toBeTruthy();
-    expect((await at("/api/issues?status=bogus")).status).toBe(400);
   });
 
   test("a row and the issue page carry the kind, and the views show it as a chip", async () => {
     const n = 2;
-    const row = (await getJson("/api/issues?repo=fac")).find((r: any) => r.id === n);
+    const row = (await rowsOf("fac")).find((r: any) => r.id === n);
     expect(row.kind).toBe("bug");
-    const d = await getJson(`/api/issues/fac/${n}`);
+    const d = await getJson(`/api/issues/fac-${n}`);
     expect(d.kind).toBe("bug");
     expect(v.renderIssue(d)).toContain('<span class="chip kind">kind: bug</span>');
     expect(v.renderRow(v.issueRows({ issues: [row] })[0])).toContain('<span class="chip kind">bug</span>');
   });
 
   test("the issue page's head is pageHead: the view-only title, the title input and the Edit button", async () => {
-    const d = await getJson("/api/issues/fac/2");
+    const d = await getJson("/api/issues/fac-2");
     const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
     mock.module("./lib.js", () => ({ ...real, pageHead: tagged }));
     try {
@@ -133,13 +134,13 @@ describe("GET /api/issues", () => {
   });
 
   test("a row carries its stage", async () => {
-    const rows = await getJson("/api/issues?repo=fac");
+    const rows = await rowsOf("fac");
     expect(rows[0].stage).toBe("done");
     expect(rows[2].stage).toBe("held");
   });
 });
 
-describe("POST /api/issues/:repo/:id/drop", () => {
+describe("POST /api/issues/:id/drop", () => {
   test("drops the issue through the real CLI and returns its status; an unknown id is 404", async () => {
     const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
     writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
@@ -147,47 +148,47 @@ describe("POST /api/issues/:repo/:id/drop", () => {
     process.env.ALEPH_CLI = wrap;
     try {
       const h = { "x-aleph-ui": "1", "content-type": "application/json" };
-      expect((await at("/api/issues/fac/99/drop", { method: "POST", headers: h })).status).toBe(404);
-      expect((await at("/api/issues/nope/1/drop", { method: "POST", headers: h })).status).toBe(404);
-      expect((await at("/api/issues/fac/3/drop", { method: "POST" })).status).toBe(403);
-      const r = await at("/api/issues/fac/3/drop", { method: "POST", headers: h, body: JSON.stringify({}) });
+      expect((await at("/api/issues/fac-99/drop", { method: "POST", headers: h })).status).toBe(404);
+      expect((await at("/api/issues/nope-1/drop", { method: "POST", headers: h })).status).toBe(404);
+      expect((await at("/api/issues/fac-3/drop", { method: "POST" })).status).toBe(403);
+      const r = await at("/api/issues/fac-3/drop", { method: "POST", headers: h, body: JSON.stringify({}) });
       expect(r.status).toBe(200);
       expect(await r.json()).toMatchObject({ repo: "fac", id: 3, status: "dropped" });
-      expect((await getJson("/api/issues/fac/3")).status).toBe("dropped");
+      expect((await getJson("/api/issues/fac-3")).status).toBe("dropped");
     } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
   });
 });
 
-describe("GET /api/issues/:repo/:n", () => {
+describe("GET /api/issues/:id", () => {
   test("lists runs by on, parts included, and by todo for old runs", async () => {
     run("20261027-000010-a", { job: "on-4", name: "on-4", repo: "fac", condition: "running", on: "fac-4" });
     run("20261027-000011-a", { job: "goal-4-1", name: "goal-4-1", repo: "fac", condition: "running", on: "fac-4.1" });
     run("20261027-000012-a", { job: "on-2", name: "on-2", repo: "fac", condition: "running", on: "fac-2" });
     run("20261027-000013-a", { job: "todo-4", name: "todo-4", repo: "fac", condition: "running", on: "fac-4" });
     run("20261027-000014-a", { job: "other-4", name: "other-4", repo: "oth", condition: "running", on: "oth-4" });
-    const d = await getJson("/api/issues/fac/4");
+    const d = await getJson("/api/issues/fac-4");
     expect(d.jobs.map((j: any) => j.name).sort()).toEqual(["goal-4-1", "on-4", "todo-4"]);
-    const g = await getJson("/api/issues/fac/2");
+    const g = await getJson("/api/issues/fac-2");
     expect(g.jobs.map((j: any) => j.name)).toEqual(["on-2"]);
   });
 
   test("unknown issue and other project are 404", async () => {
-    expect((await at("/api/issues/fac/99")).status).toBe(404);
-    expect((await at("/api/issues/fac/1?project=oth")).status).toBe(404);
-    expect((await at("/api/issues/fac/1?project=fac")).status).toBe(200);
+    expect((await at("/api/issues/fac-99")).status).toBe(404);
+    expect((await at("/api/issues/fac-1?project=oth")).status).toBe(404);
+    expect((await at("/api/issues/fac-1?project=fac")).status).toBe(200);
   });
 });
 
 describe("views", () => {
 
-  test("/api/contents gives the issues with their run counts and the registry's keys", async () => {
-    const d = await getJson("/api/contents");
+  test("/api/issues gives the issues with their run counts and the registry's keys", async () => {
+    const d = await getJson("/api/issues");
     expect(d.issues.length).toBeGreaterThan(3);
     expect([...d.projects].sort()).toEqual(["fac", "oth"]);
     expect(d).not.toHaveProperty("specs");
     expect([...new Set(d.issues.map((i: any) => i.repo))].sort()).toEqual(["fac", "oth"]);
     expect(d.issues.every((i: any) => typeof i.runs === "number" && typeof i.cost === "number")).toBe(true);
-    expect((await getJson("/api/contents?project=fac")).projects).toEqual(["fac"]);
+    expect((await getJson("/api/issues?project=fac")).projects).toEqual(["fac"]);
   });
 
   test("the tests card charts the suite history of the selected project in the window", async () => {
@@ -195,10 +196,10 @@ describe("views", () => {
     const now = new Date("2026-11-04T12:00:00Z"), recs = [rec("fac", "2026-11-04T10:00:00Z", 120, 2), rec("fac", "2026-10-01T10:00:00Z", 90, 1), rec("oth", "2026-11-04T11:00:00Z", 40, 0)];
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "suite-history.jsonl"), recs.map((r) => JSON.stringify(r)).join("\n") + "\n");
-    const d = await getJson("/api/contents");
+    const d = await getJson("/api/issues");
     expect(Object.keys(d.tests).sort()).toEqual(["fac", "oth"]);
     expect(d.tests.fac.map((r: any) => r.ran)).toEqual([120, 90]);
-    expect(Object.keys((await getJson("/api/contents?project=oth")).tests)).toEqual(["oth"]);
+    expect(Object.keys((await getJson("/api/issues?project=oth")).tests)).toEqual(["oth"]);
     const page = v.view.render(d, {}, new URLSearchParams());
     expect(page).toContain('<aleph-chart key="issues/tests"');
     const all = v.testsFrame(d.tests, "", "week", now);
@@ -229,7 +230,7 @@ describe("views", () => {
   const section = (h: string, id: string) => h.split(`<div id="${id}">`)[1]?.split("</table>")[0] ?? "";
 
   test("the page is tiles, charts, search, filters and one table, with no Projects or Specs tables", async () => {
-    const d = await getJson("/api/contents");
+    const d = await getJson("/api/issues");
     const h = v.view.render(d, {}, new URLSearchParams("status=any"));
     expect(h).not.toContain("<h2>Projects");
     expect(h).not.toContain("<h2>Specs");
@@ -248,7 +249,7 @@ describe("views", () => {
   });
 
   test("issue rows: Updated first, then Id, Title, Stage, Project and Labels, and no X", async () => {
-    const d = await getJson("/api/contents");
+    const d = await getJson("/api/issues");
     const h = section(v.view.render(d, {}, new URLSearchParams("status=any")), "issues-table");
     expect(h).toContain('href="#/issues/fac/1"');
     expect(h).not.toContain('href="#/projects/');
@@ -262,7 +263,7 @@ describe("views", () => {
   });
 
   test("the project filter is a select with what the other filters leave", async () => {
-    const d = await getJson("/api/contents");
+    const d = await getJson("/api/issues");
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
     expect(h).toMatch(/<option value="oth" selected>oth \(\d+\)<\/option>/);
     expect(h).toMatch(/<option value="fac">fac \(\d+\)<\/option>/);
@@ -389,7 +390,7 @@ describe("views", () => {
     expect(m.ats).toHaveLength(30);
     expect(v.closeTimes(rows, "week", now).p50[1]).toBe(24);
     expect(v.closeTimes(rows, "month", now).p50[1]).toBe(3);
-    const d = await getJson("/api/contents");
+    const d = await getJson("/api/issues");
     const page = v.view.render(d, {}, new URLSearchParams("window=week"));
     expect(page).toContain("<h2>Open Backlog, Filed and Closed</h2>");
     expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><span class="count">last week<\/span>/);
@@ -458,7 +459,7 @@ describe("views", () => {
     expect(html).not.toContain("7 days");
     const open = html.match(/<button[^>]*class="tile sc"[\s\S]*?<\/button>/)![0];
     expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(3);
-    const page = v.view.render(await getJson("/api/contents"), {}, new URLSearchParams("window=day"));
+    const page = v.view.render(await getJson("/api/issues"), {}, new URLSearchParams("window=day"));
     const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
     expect(head).toContain('<span class="count">last day</span>');
     expect(page).not.toContain("Filed and closed per");
@@ -497,7 +498,7 @@ describe("views", () => {
   });
 
   test("the Status filter defaults to Open, newest first; Any shows every status", async () => {
-    const d = await getJson("/api/contents");
+    const d = await getJson("/api/issues");
     expect(v.hashOptions(new URLSearchParams()).status).toBe("open");
     expect(v.hashOptions(new URLSearchParams("status=any")).status).toBe("");
     expect(v.hashOptions(new URLSearchParams("status=done")).status).toBe("done");
@@ -512,7 +513,7 @@ describe("views", () => {
   });
 
   test("the header sorts: a query key and direction order the rows", async () => {
-    const d = await getJson("/api/contents");
+    const d = await getJson("/api/issues");
     const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">([^<]+)</g)].map((m) => m[1].replace(/^\D+/, ""));
     expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
@@ -566,7 +567,7 @@ describe("POST /api/issues", () => {
   });
 });
 
-describe("POST /api/issues/:repo/:id/decide and deny", () => {
+describe("POST /api/issues/:id/decide and deny", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
   const item = (n: number) => readList({ key: "fac" })!.items.find((i) => i.id === n)!;
   async function withRealCli(fn: () => Promise<void>) {
@@ -587,15 +588,15 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
   test("approving an option writes the note, clears the Ask and its fields, and makes no issue", async () => {
     const n = ask(true);
     await withRealCli(async () => {
-      expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", body: "{}" })).status).toBe(403);
-      expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "Z" }) })).status).toBe(400);
-      const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
+      expect((await at(`/api/issues/fac-${n}/decide`, { method: "POST", body: "{}" })).status).toBe(403);
+      expect((await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "Z" }) })).status).toBe(400);
+      const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);
       const i = item(n);
       expect(i.notes.at(-1)).toContain("Chris decided: A: do a");
       expect(i.fm.labels).toBeUndefined();
       expect(i.fm.question).toBeUndefined();
-      expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) })).status).toBe(409);
+      expect((await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) })).status).toBe(409);
     });
   });
 
@@ -603,7 +604,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     const n = ask(true, "fac-1.1");
     expect(askOf(`fac-${n}`)!.options[0].after).toBe("fac-1.1");
     await withRealCli(async () => {
-      const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
+      const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);
       expect(item(n).fm.labels).toBeUndefined();
       expect(item(n).fm.after).toEqual(["fac-1.1"]);
@@ -614,7 +615,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
   test("an old prose note is approved by its recommendation sentence", async () => {
     const n = ask(false);
     await withRealCli(async () => {
-      const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ recommendation: true }) });
+      const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ recommendation: true }) });
       expect(r.status).toBe(200);
       expect(item(n).notes.at(-1)).toContain("Chris decided: My recommendation is B, it is smaller.");
       expect(item(n).fm.labels).toBeUndefined();
@@ -634,7 +635,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
   test("approving a migrated proposal clears the Ask and leaves the issue to triage", async () => {
     const n = migrated("proposal", "approval");
     await withRealCli(async () => {
-      const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ approve: true }) });
+      const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ approve: true }) });
       expect(r.status).toBe(200);
       const i = item(n);
       expect(i.notes.at(-1)).toContain("Chris approved it");
@@ -653,23 +654,23 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     const find = (ref: string) => readList({ key: "fac" })!.items.find((i) => `${i.id}.${i.sub}` === ref)!;
     await withRealCli(async () => {
       const a = capped();
-      expect((await at(`/api/issues/fac/${a}/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
+      expect((await at(`/api/issues/fac-${a}/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
       expect(askOf(`fac-${a}`)).toBeNull();
       expect(find(a).notes.at(-1)).toContain("run it again");
       const b = capped();
-      expect((await at(`/api/issues/fac/${b}/checked`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
+      expect((await at(`/api/issues/fac-${b}/checked`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
       expect(todos.status(find(b))).toBe("done");
       const c = dotted();
-      expect((await at(`/api/issues/fac/${c}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "no" }) })).status).toBe(200);
+      expect((await at(`/api/issues/fac-${c}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "no" }) })).status).toBe(200);
       expect(todos.status(find(c))).toBe("dropped");
-      expect((await at(`/api/issues/fac/x.y/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(404);
+      expect((await at(`/api/issues/fac-x.y/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(404);
     });
   });
 
   test("marking a migrated host check as checked closes it as done", async () => {
     const n = migrated("host-check", "input");
     await withRealCli(async () => {
-      const r = await at(`/api/issues/fac/${n}/checked`, { method: "POST", headers: h, body: "{}" });
+      const r = await at(`/api/issues/fac-${n}/checked`, { method: "POST", headers: h, body: "{}" });
       expect(r.status).toBe(200);
       expect(todos.status(item(n))).toBe("done");
       expect(item(n).notes.at(-1)).toContain("checked on the host");
@@ -677,7 +678,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
   });
 });
 
-describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
+describe("POST /api/issues/:id/retriage and rerun", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
   const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "stuck triage", { request: "x" }); setAsk(refIn(doc.repo!, i), { kind: "input", reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
 
@@ -685,12 +686,12 @@ describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
     test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on an item with an ask`, async () => {
       const n = ask();
       rmSync(argvFile, { force: true });
-      expect((await at(`/api/issues/fac/${n}/${verb}`, { method: "POST" })).status).toBe(403);
-      expect((await at(`/api/issues/fac/${n}/${verb}`, { method: "POST", headers: { ...h, origin: "http://evil.example" } })).status).toBe(403);
-      expect((await at(`/api/issues/fac/9999/${verb}`, { method: "POST", headers: h })).status).toBe(404);
-      expect((await at(`/api/issues/nope/${n}/${verb}`, { method: "POST", headers: h })).status).toBe(404);
+      expect((await at(`/api/issues/fac-${n}/${verb}`, { method: "POST" })).status).toBe(403);
+      expect((await at(`/api/issues/fac-${n}/${verb}`, { method: "POST", headers: { ...h, origin: "http://evil.example" } })).status).toBe(403);
+      expect((await at(`/api/issues/fac-9999/${verb}`, { method: "POST", headers: h })).status).toBe(404);
+      expect((await at(`/api/issues/nope-${n}/${verb}`, { method: "POST", headers: h })).status).toBe(404);
       expect(await Bun.file(argvFile).exists()).toBe(false);
-      const r = await at(`/api/issues/fac/${n}/${verb}`, { method: "POST", headers: h });
+      const r = await at(`/api/issues/fac-${n}/${verb}`, { method: "POST", headers: h });
       expect(r.status).toBe(200);
       expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(argv.map((a) => (a === "N" ? String(n) : a)));
     });
@@ -698,7 +699,7 @@ describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
 
   test("an issue that is not waiting for you is a 409", async () => {
     const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "plain", { request: "x" }).id, true)!.value;
-    expect((await at(`/api/issues/fac/${n}/retriage`, { method: "POST", headers: h })).status).toBe(409);
+    expect((await at(`/api/issues/fac-${n}/retriage`, { method: "POST", headers: h })).status).toBe(409);
   });
 });
 
@@ -706,9 +707,9 @@ describe("a parked issue", () => {
   test("lists as status parked; the filter offers it and narrows to it; the badge differs; it is neither open nor closed", async () => {
     let n = 0;
     writeList({ key: "oth" }, "park", (doc) => { const p = add(doc, "shelved thing"); setStatus(p, "parked"); n = p.id; return true; }, true);
-    const rows = await getJson("/api/issues?status=parked");
+    const rows = (await rowsOf()).filter((r: any) => r.status === "parked");
     expect(rows.map((r: any) => [r.repo, r.id, r.status])).toEqual([["oth", n, "parked"]]);
-    expect((await getJson(`/api/issues/oth/${n}`)).status).toBe("parked");
+    expect((await getJson(`/api/issues/oth-${n}`)).status).toBe("parked");
     const all = v.issueRows({ issues: [
       ...rows,
       { id: 8, repo: "f", title: "o", status: "open", stage: "new", labels: [], createdTime: iso("2026-11-01") },
@@ -737,12 +738,12 @@ describe("what an issue waits on", () => {
       return true;
     }, true);
   });
-  const unblock = (id: string, headers: Record<string, string> = { "x-aleph-ui": "1" }) => at(`/api/issues/oth/${id}/unblock`, { method: "POST", headers });
+  const unblock = (id: string, headers: Record<string, string> = { "x-aleph-ui": "1" }) => at(`/api/issues/oth-${id}/unblock`, { method: "POST", headers });
 
   test("the detail names each wait, with what makes it dead", async () => {
-    const d = await (await at(`/api/issues/oth/${waiter}`)).json();
+    const d = await (await at(`/api/issues/oth-${waiter}`)).json();
     expect(d.blockers.map((b: any) => [b.id, b.title, b.dead])).toEqual([[dead, "gone work", "dropped"], [tracker, "note log", "tracker"], [live, "live work", null]]);
-    expect((await (await at(`/api/issues/oth/${Number(waiter) + 1}`)).json()).blockers.map((b: any) => b.dead)).toEqual([null]);
+    expect((await (await at(`/api/issues/oth-${Number(waiter) + 1}`)).json()).blockers.map((b: any) => b.dead)).toEqual([null]);
   });
 
   test("the unblock route removes the dead waits, keeps the live one, and refuses the rest", async () => {
@@ -767,7 +768,7 @@ describe("the Issue page shows the ask row", () => {
   }, true)!.value;
 
   test("renderIssue puts the Committed time first in the Commits table", async () => {
-    const d = await getJson(`/api/issues/fac/1`);
+    const d = await getJson(`/api/issues/fac-1`);
     const date = "2026-11-02T09:00:00Z";
     const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date }] });
     expect(h).toContain("<th>Committed</th><th>Commit</th><th>Subject</th>");
@@ -775,7 +776,7 @@ describe("the Issue page shows the ask row", () => {
   });
 
   test("renderIssue shows empty() for no commits and pages the Commits table at 50", async () => {
-    const d = await getJson(`/api/issues/fac/1`);
+    const d = await getJson(`/api/issues/fac-1`);
     expect(v.renderIssue({ ...d, commits: [] })).toContain("No commit on main names this issue");
     const commits = Array.from({ length: 51 }, (_, i) => ({ hash: `abcdef${i}0000`, subject: `s${i}`, date: "2026-11-02T09:00:00Z" }));
     expect(v.renderIssue({ ...d, commits })).toContain("50 of 51");
@@ -783,7 +784,7 @@ describe("the Issue page shows the ask row", () => {
 
   test("renderIssue shows one row with the situation, effects and buttons, and no ask fields in the front matter", async () => {
     const n = seed(true);
-    const d = await getJson(`/api/issues/fac/${n}`);
+    const d = await getJson(`/api/issues/fac-${n}`);
     d.frontmatter = { ...d.frontmatter, situation: "S", effects: "E", recommend: "R", extra: "kept" };
     const h = v.renderIssue(d);
     expect(h.match(/<article[^>]*issue-row/g)?.length).toBe(1);
@@ -807,7 +808,7 @@ describe("priority badges", () => {
       (p as any).fm.priority = "critical";
       return i.id;
     }, true)!.value;
-    const d = await getJson(`/api/issues/fac/${n}`);
+    const d = await getJson(`/api/issues/fac-${n}`);
     expect(d.goals.map((g: any) => g.priority)).toEqual(["medium", "critical"]);
     d.priority = "critical";
     const h = v.renderIssue(d);
@@ -825,7 +826,7 @@ describe("priority badges", () => {
 describe("the Issue timeline names why a wait waited", () => {
   const run = (kind: string, started: string, ended: string) => ({ kind, name: "fac-1", on: "fac-1", condition: "passed", started, ended });
   const d = (holds?: object[]) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], holds,
-    timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"), run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z")] } });
+    timeline: { filed: "2026-11-01T10:00:00Z", runs: [run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"), run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z")] } });
   const evs = (x: any) => v.issueSegments(x).flatMap((s: any) => s.rows).flatMap((r: any) => r.events);
   const html = (x: any) => evs(x).map((e: any) => e.html).join("\n");
   test("a wait with hold records of the issue's job in its span names the hold's action, its content and its minutes", () => {
@@ -844,10 +845,10 @@ describe("the Issue timeline names why a wait waited", () => {
 
 describe("exact times in the Hour window", () => {
   test("a row carries the stored ISO UTC times", async () => {
-    const [r] = await getJson("/api/issues?repo=fac");
+    const [r] = await rowsOf("fac");
     expect(r.createdTime).toMatch(ISO_UTC);
     expect(r.updatedTime).toMatch(ISO_UTC);
-    expect((await getJson("/api/issues?repo=fac&status=done"))[0].closedTime).toMatch(ISO_UTC);
+    expect((await rowsOf("fac")).find((r: any) => r.status === "done").closedTime).toMatch(ISO_UTC);
   });
 
   test("the Hour window counts by the minute, and the Day window by the day", () => {
@@ -919,7 +920,7 @@ describe("the labels say sub-issue and job", () => {
   const OLD = /runs|goal|part/i;
 
   test("the Issues page heads its job count Jobs, and no label keeps the old words", async () => {
-    const rows = await getJson("/api/issues?repo=fac");
+    const rows = await rowsOf("fac");
     const h = v.renderIssues({ issues: rows, projects: ["fac"] }, { tile: "runs" });
     expect(h).toContain('<button type="button" data-sort="runs">Jobs');
     expect(h).toContain("<h2>Issues by Jobs</h2>");
@@ -933,7 +934,7 @@ describe("the labels say sub-issue and job", () => {
       return i.id;
     }, true)!.value;
     run("20261104-120001-a", { job: `fac-${n}`, name: `fac-${n}`, repo: "fac", condition: "landed", on: `fac-${n}` });
-    const h = v.renderIssue(await getJson(`/api/issues/fac/${n}`));
+    const h = v.renderIssue(await getJson(`/api/issues/fac-${n}`));
     expect(h).toContain("<h3>Sub-issues</h3>");
     expect(h).toContain('<span class="dp-k">Sub-issues done</span>');
     expect(h).toContain('<span class="dp-sub">1 job</span>');

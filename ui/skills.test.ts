@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, listSkills } from "./api/skills.ts";
@@ -160,7 +160,7 @@ test("pages are fetched concurrently, and a restart builds the saved keys at onc
   clearCache();
   // The keys the last process kept: the restart builds them before any request.
   mkdirSync(join(tmp, "ui"), { recursive: true });
-  writeFileSync(join(tmp, "ui", "keys.json"), JSON.stringify({ "/api/skills/aleph:pickup": NOW, "/api/agents?days=7": NOW }));
+  writeFileSync(join(tmp, "ui", "keys.json"), JSON.stringify({ "/api/skills/aleph:pickup": NOW, "/api/sessions?window=7": NOW }));
   const { at, stop } = await withServer();
   try {
     const r = await at("/api/skills/aleph:pickup"); // shares the build the restart started
@@ -171,9 +171,9 @@ test("pages are fetched concurrently, and a restart builds the saved keys at onc
     expect((await at("/api/skills/aleph:pickup")).status).toBe(200);
     expect(calls).toBe(12);
     // The Agents page: its build started at the restart too, so a request waits for it and reads nothing more.
-    expect((await at("/api/agents?days=7")).status).toBe(200);
+    expect((await at("/api/sessions?window=7")).status).toBe(200);
     const allSeen = all;
-    const a = await at("/api/agents?days=7");
+    const a = await at("/api/sessions?window=7");
     expect(a.status).toBe(200);
     const b = await a.json() as any;
     for (const k of ["activity", "skills", "sessions", "toolSessions"]) expect(b[k]).toBeDefined();
@@ -184,6 +184,19 @@ test("pages are fetched concurrently, and a restart builds the saved keys at onc
     stop(); paged.stop(true);
     restoreEnv();
   }
+});
+
+test("a skill folder added while the server runs shows without a restart", async () => {
+  expect((await get("/api/skills/fresh")).status).toBe(404);
+  const rebuilt = new Promise<void>((done) => updater.onChange((keys) => { if (keys.includes("/api/skills/fresh")) done(); }));
+  const staged = join(tmp, "fresh");
+  mkdirSync(staged);
+  writeFileSync(join(staged, "SKILL.md"), "# fresh\n");
+  renameSync(staged, join(tmp, "skills", "fresh"));
+  try {
+    await rebuilt;
+    expect((await get("/api/skills/fresh")).status).toBe(200);
+  } finally { rmSync(join(tmp, "skills", "fresh"), { recursive: true, force: true }); }
 });
 
 test("a project tag with no cwd counts only when it is a registry key", async () => {
@@ -215,4 +228,11 @@ test("the skill detail shows empty() for each table with no rows and pages Sessi
   const h = v.renderSkill({ ...base, sessions });
   expect(h).toContain("50 of 51");
   expect(v.renderSkill({ ...base, sessions }, { sessions: 100 })).toContain("51 of 51");
+});
+
+test("a skill's answer fits its schema", async () => {
+  const { SCHEMAS, check, epochs } = await import("./schemas.ts");
+  const { status, body } = await get("/api/skills/aleph:pickup");
+  expect(status).toBe(200);
+  expect([...check(SCHEMAS["/api/skills/:name"] as any, body), ...epochs(body)]).toEqual([]);
 });

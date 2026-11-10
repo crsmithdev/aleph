@@ -61,7 +61,7 @@ function tail(file: string): void {
 
 eventFiles.push(tail);
 
-/** The stream sends only what is added after it starts: the page has the earlier events from /api/state. */
+/** The stream sends only what is added after it starts: the page has the earlier events from /api/factory. */
 function start(): void {
   const dir = eventsDir();
   for (const f of existsSync(dir) ? readdirSync(dir) : []) sent.set(f, statSync(join(dir, f)).size);

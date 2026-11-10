@@ -82,7 +82,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Kind | yes, never shown | build, recheck, land, intake, director, monitor |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |
-| Speed class | derived | landed, returned, failed, reran, dropped |
+| Flow class | derived | landed, returned, failed, reran, dropped |
 
 `done` is a job that ended with no land: an intake, director or monitor job. `returned` is a job that a reviewer or a check sent back. `failed` is a job that broke.
 

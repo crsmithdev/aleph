@@ -113,7 +113,7 @@ export function barsOf(runs, { cost = false } = {}) {
   return runs.map(({ r, start, end }) => {
     seen[r.kind] = (seen[r.kind] ?? 0) + 1;
     const label = barLabel(r, count[r.kind] > 1 ? seen[r.kind] : 0, { cost, model: false });
-    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${dur((end - start) / 1000)}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
+    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${dur((end - start) / 1000)}`, ...(r.href ? { href: r.href } : {}) };
   });
 }
 

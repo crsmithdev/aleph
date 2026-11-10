@@ -1,7 +1,7 @@
 /**
  * The updater: the one owner of the UI server's derived data, and the one sender of `change`.
  *
- * A key is a GET route's path and its sorted query (`/api/speed?baseline=1&window=week`); its value is that route's
+ * A key is a GET route's path and its sorted query (`/api/flow?baseline=1&window=week`); its value is that route's
  * answer, built in the build Worker (ui/build.ts). A build records the sources it read (jobs/lib/infra/sources.ts).
  * When a source changes, the updater builds again each kept key that read it, keeps the new answers (the old ones
  * are served until then), and only then sends `change` with the keys whose answer or mark changed.
@@ -10,6 +10,7 @@
  *   dirty, and its next request waits for a build. A key not asked for in 1 h is dropped.
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
+ * - The skills folder is watched: a skill folder added or removed rebuilds the keys that read the skills.
  * - Langfuse is polled every 30 s (2 min for skills) while a key that reads it is kept; the work store is fetched
  *   every 30 s while a key that reads it is kept.
  * - The keys are saved to `<aleph>/ui/keys.json`; a restart builds them again at once, and requests share the builds.
@@ -22,7 +23,7 @@ import { factoryDir } from "../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../jobs/lib/infra/layout.ts";
 import { expand } from "../jobs/lib/records/ledger.ts";
 import { recordsDir } from "../jobs/lib/records/record.ts";
-import { handoffsDir, reposFile, vaultDir } from "../jobs/lib/infra/settings.ts";
+import { handoffsDir, reposFile, skillsDir, vaultDir } from "../jobs/lib/infra/settings.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
 import { fetchStore } from "../issues/lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
@@ -32,8 +33,8 @@ export const POLL_MS = 30_000, SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 6
 
 /** The GET routes whose answers the updater keeps. */
 export const KEYED = new Set([
-  "/api/state", "/api/speed", "/api/gates", "/api/contents", "/api/issues", "/api/issues/:repo/:n", "/api/jobs", "/api/jobs/:name",
-  "/api/agents", "/api/skills/:name", "/api/sessions/:id", "/api/sessions/:id/chat", "/api/sessions/:id/turns/:n",
+  "/api/factory", "/api/flow", "/api/automation", "/api/issues", "/api/issues/:id", "/api/issues/:id/jobs", "/api/jobs", "/api/jobs/:id",
+  "/api/sessions", "/api/skills/:name", "/api/sessions/:id", "/api/sessions/:id/chat", "/api/sessions/:id/turns/:n",
   "/api/memory", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key",
 ]);
 
@@ -260,6 +261,8 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
   // Each issue write moves this ref; the builds read the issues from it.
   follow(join(layout().store, ".git", "refs", "remotes", "origin"), (f) => f === "main", "store");
   follow(dirname(repos), (f) => f === basename(repos), "registry");
+  // A skill folder added or removed; an edit inside a folder is not seen.
+  follow(skillsDir(), () => true, "skills");
   follow(eventsDir(), (f) => {
     if (!f.endsWith(".jsonl")) return false;
     for (const tail of eventFiles) tail(f);

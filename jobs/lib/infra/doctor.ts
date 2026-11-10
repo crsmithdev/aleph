@@ -147,7 +147,7 @@ export async function homeCheck(): Promise<Check> {
     return bad("aleph.home", `${url}: ${e?.message ?? e}`);
   }
   // A JSON route is gzipped by the server, so its body proves that home-proxy passes gzip through intact.
-  const api = new URL("/api/state", url).href;
+  const api = new URL("/api/factory", url).href;
   try {
     const r = await fetch(api, { signal: AbortSignal.timeout(5000), headers: { "accept-encoding": "gzip", cookie: factoryCookie() }, decompress: false });
     if (!r.ok) return bad("aleph.home", `${api} answered ${r.status}`);

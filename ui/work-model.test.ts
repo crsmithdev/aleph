@@ -12,7 +12,7 @@ import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { renderIssue } from "./views/issues.js";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
-// /api/state on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
+// /api/factory on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).
 let base: string, runsDir: string, factory: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const getJson = async (p: string) => (await fetch(`http://127.0.0.1:${server.port}${p}`)).json() as Promise<any>;
@@ -79,7 +79,7 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-describe("/api/state on a work-model store", () => {
+describe("/api/factory on a work-model store", () => {
 
   test("parts are flat: the parent waits for its parts, and .3 runs after .2", () => {
     const s: any = state(now);
@@ -94,21 +94,21 @@ describe("/api/state on a work-model store", () => {
 describe("the Issue page", () => {
 
   test("a part's page names its issue and has no parts of its own", async () => {
-    const d = await getJson("/api/issues/fac/1.2");
+    const d = await getJson("/api/issues/fac-1.2");
     expect(d).toMatchObject({ ref: "1.2", goals: [], issue: { id: "fac-1", href: "#/issues/fac/1" } });
     expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-1.2"]);
-    expect((await fetch(`http://127.0.0.1:${server.port}/api/issues/fac/9.9`)).status).toBe(404);
+    expect((await fetch(`http://127.0.0.1:${server.port}/api/issues/fac-9.9`)).status).toBe(404);
   });
 
   test("the page edits an issue and appends a note through the CLI", async () => {
-    const post = (path: string, body: unknown, ui = true) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac/1/${path}`, { method: "POST", headers: { "content-type": "application/json", ...(ui ? { "x-aleph-ui": "1" } : {}) }, body: JSON.stringify(body) });
+    const post = (path: string, body: unknown, ui = true) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/${path}`, { method: "POST", headers: { "content-type": "application/json", ...(ui ? { "x-aleph-ui": "1" } : {}) }, body: JSON.stringify(body) });
     expect((await post("note", { text: "x" }, false)).status).toBe(403);
     expect((await post("note", { text: " " })).status).toBe(400);
-    const before = await getJson("/api/issues/fac/1");
+    const before = await getJson("/api/issues/fac-1");
     const edited = await post("edit", { title: "[Group] A new title", priority: "high", source: "worker", areas: "ui, bug", description: "New words." });
     expect(edited.status, await edited.clone().text()).toBe(200);
     expect((await post("note", { text: "a page note" })).status).toBe(200);
-    const d = await getJson("/api/issues/fac/1");
+    const d = await getJson("/api/issues/fac-1");
     expect(d).toMatchObject({ title: "[Group] A new title", priority: "high", labels: ["ui", "bug"], frontmatter: { source: "worker" }, request: "New words." });
     expect(d.notes.join("\n")).toContain("a page note");
     expect((await post("edit", { title: "t", priority: "high", source: "nobody", areas: "", description: "x" })).status).toBe(422);
@@ -116,7 +116,7 @@ describe("the Issue page", () => {
   }, 60_000);
 
   test("the Issue page has a breadcrumb, the stage first among the pills, a timeline, and links a spec it has", async () => {
-    const base = await getJson("/api/issues/fac/1");
+    const base = await getJson("/api/issues/fac-1");
     const html = renderIssue({ ...base, specs: ["2026-01-01-a.md"], request: "See docs/specs/2026-01-01-a.md and docs/specs/gone.md." });
     expect(html).toContain('<nav class="crumb"');
     expect(html).toContain('<span>1</span></nav>');
@@ -134,13 +134,13 @@ describe("the Issue page", () => {
   });
 
   test("the page shows the parts in the timeline, each linked to its job and its page, then the Request", async () => {
-    const html = renderIssue(await getJson("/api/issues/fac/1"));
+    const html = renderIssue(await getJson("/api/issues/fac-1"));
     const at = (t: string) => html.indexOf(t);
     expect(at('id="h-request">Description<')).toBeGreaterThan(at("<h3>Sub-issues</h3>"));
     expect(at("Do three things.")).toBeGreaterThan(at('id="h-request"'));
     const parts = html.slice(at("<h3>Sub-issues</h3>"), at('id="h-request"'));
     for (const id of ["fac-1.1", "fac-1.2", "fac-1.3"]) expect(parts).toContain(`href="#/issues/fac/${id.slice(4)}"`);
-    expect(parts).toContain('href="#/jobs/fac-1.2"');
+    expect(parts).toContain('href="#/jobs/fac-1.2%231"');
     // A part with no job yet links its id to its own page.
     expect(parts).toMatch(/<a class="idl" href="#\/issues\/fac\/1.3">/);
     for (const old of [["needs", "chris"].join("-"), ["needs", "you"].join("-"), ["waiting", "on"].join("_"), "Item"]) expect(html).not.toContain(old);

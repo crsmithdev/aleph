@@ -11,7 +11,7 @@ import { factoryCookie } from "../infra/ui-token.ts";
 /** The file that holds the count of failures in a row. */
 export const smokeFile = () => join(layout().factory, "smoke.json");
 
-const PATHS = ["/", "/api/state"];
+const PATHS = ["/", "/api/factory"];
 const TIMEOUT_MS = 15_000;
 const FAILS_TO_REPORT = 2;
 const port = uiPort;

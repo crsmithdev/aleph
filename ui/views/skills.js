@@ -41,7 +41,7 @@ export function renderSkill(d, limits = {}) {
   const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`);
   return `<div class="page sp skills">${crumb("#/sessions", [["sessions", "#/sessions"], ["skills"], [d.name]])}` +
     pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
-    (d.uses ? panelOf(chartKey(d.name), usesFrame(d)) : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
+    (d.uses ? panelOf(chartKey(d.name), usesFrame(d)) : empty("This skill was not used in the window.", "Widen it with <code>?window=90</code> on the API.")) +
     card("Projects", table("projects", heads(["Project", "Uses"], ["Uses"]), projects, lim("projects"), "No project used this skill.")) +
     card("Sessions", table("sessions", heads(["Started", "Session", "First Prompt Line", "Project", "Started by"]), sessions, lim("sessions"), "No session used this skill.")) +
     card("Tools Called After It, in the Same Turn", table("tools", heads(["Tool", "Calls"], ["Calls"]), tools, lim("tools"), "No tool ran after this skill in the same turn."), { label: "Tools called after it, in the same turn" }) +

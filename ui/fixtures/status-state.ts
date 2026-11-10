@@ -1,4 +1,4 @@
-// The hand-written Status state of ui/now.test.ts, in the shape the server sends: runs carry `ask` and `reviewCall`, and `asks` comes from the real attend(). ui/fixtures.test.ts holds its keys to what /api/state really sends.
+// The hand-written Status state of ui/now.test.ts, in the shape the server sends: runs carry `ask` and `reviewCall`, and `asks` comes from the real attend(). ui/fixtures.test.ts holds its keys to what /api/factory really sends.
 import { attend } from "../asks.ts";
 export const job = (o: object) => ({ repo: "aleph", item: null, condition: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
 /** An awaiting run the repo holds for review: the server's `ask` for it. */

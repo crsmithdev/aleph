@@ -39,9 +39,9 @@ test.skip("password gate: login, session across servers, logout", async () => {
   expect(css.status).toBe(200);
   expect(await css.text()).toContain("--bg:");
   expect((await at("/app.css", { method: "POST" })).status).toBe(401);
-  expect((await at("/api/state")).status).toBe(401);
+  expect((await at("/api/factory")).status).toBe(401);
   expect((await at("/lib.js")).status).toBe(401);
-  expect((await at("/api/pause", { method: "POST" })).status).toBe(401);
+  expect((await at("/api/factory/pause", { method: "POST" })).status).toBe(401);
   expect(tokens()).toEqual([]);
 
   const bad = await login(at, "nope");
@@ -60,13 +60,13 @@ test.skip("password gate: login, session across servers, logout", async () => {
 
   const headers = { cookie };
   expect(await (await at("/", { headers })).text()).toContain("/api/views");
-  expect((await at("/api/state", { headers })).status).toBe(200);
+  expect((await at("/api/factory", { headers })).status).toBe(200);
 
   const again = await start();
-  expect((await again("/api/state", { headers })).status).toBe(200);
+  expect((await again("/api/factory", { headers })).status).toBe(200);
 
   expect((await at("/api/logout", { method: "POST", headers })).status).toBe(204);
-  expect((await at("/api/state", { headers })).status).toBe(401);
+  expect((await at("/api/factory", { headers })).status).toBe(401);
   expect(tokens()).toEqual([]);
 });
 

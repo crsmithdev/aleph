@@ -79,7 +79,7 @@ describe("units", () => {
 });
 
 test("aleph.home answers or does not", async () => {
-  const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => new Response(new URL(r.url).pathname === "/api/state" ? "{}" : "x", { status: new URL(r.url).pathname === "/down" ? 502 : 200 }) });
+  const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => new Response(new URL(r.url).pathname === "/api/factory" ? "{}" : "x", { status: new URL(r.url).pathname === "/down" ? 502 : 200 }) });
   process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/`;
   expect(await homeCheck()).toMatchObject({ ok: true, detail: `http://127.0.0.1:${s.port}/ answered 200` });
   process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/down`;
@@ -92,7 +92,7 @@ test("aleph.home sends the factory token, which comes back after the sessions fi
   const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => {
     const t = /aleph_session=([^;]+)/.exec(r.headers.get("cookie") ?? "")?.[1];
     const ok = t && JSON.parse(readFileSync(sessions, "utf8")).includes(t);
-    return new Response(new URL(r.url).pathname === "/api/state" ? "{}" : "x", { status: ok ? 200 : 401 });
+    return new Response(new URL(r.url).pathname === "/api/factory" ? "{}" : "x", { status: ok ? 200 : 401 });
   } });
   process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/`;
   expect((await homeCheck()).ok).toBe(true);
@@ -104,13 +104,13 @@ test("aleph.home sends the factory token, which comes back after the sessions fi
 test("aleph.home fails when the JSON route's gzip body does not decode", async () => {
   const json = JSON.stringify({ items: [] });
   let body: BodyInit = Bun.gzipSync(json) as Uint8Array<ArrayBuffer>;
-  const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => new URL(r.url).pathname === "/api/state" ? new Response(body, { headers: { "content-type": "application/json", "content-encoding": "gzip" } }) : new Response("x") });
+  const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => new URL(r.url).pathname === "/api/factory" ? new Response(body, { headers: { "content-type": "application/json", "content-encoding": "gzip" } }) : new Response("x") });
   process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/`;
   expect((await homeCheck()).ok).toBe(true);
   body = json;
   const c = await homeCheck();
   expect(c.ok).toBe(false);
-  expect(c.detail).toContain(`http://127.0.0.1:${s.port}/api/state`);
+  expect(c.detail).toContain(`http://127.0.0.1:${s.port}/api/factory`);
   s.stop(true);
 });
 

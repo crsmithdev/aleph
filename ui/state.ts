@@ -1,5 +1,5 @@
 /**
- * The `/api/state` object (docs/ui.md), built read-only from
+ * The `/api/factory` object (docs/ui.md), built read-only from
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
@@ -9,7 +9,7 @@ import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { askOf as runAsk, isWaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
+import { allRuns, askOf as runAsk, isWaiting, jobIdOf, loadRegistry, onOf, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
@@ -30,6 +30,8 @@ const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.de
 export interface Part { n: number; m: number; parent: string; href: string }
 
 export interface Job {
+  /** The job ID of the run that counts, `a1430#2`: the Job page's address and the one an action acts on. */
+  id: string;
   name: string; repo: string; item: { id: number | string; title: string; priority?: string } | null;
   condition: string; phase?: string; reason?: string; question?: string;
   started: string;
@@ -224,6 +226,9 @@ function landedTrailers(repo: Repo | undefined, commit: string | undefined): { k
 export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jobs?: Runs[]) {
   const lists = reader();
   const bases = new Map<string, string | null>();
+  let every: Entry[] | undefined;
+  // A run from before job IDs has no `n`: its ID needs every run's start order, read once.
+  const jobOf = (e: Entry) => (e.run.n !== undefined ? jobIdOf(e) : jobIdOf(e, every ??= allRuns()));
 
   // The trailer the land writes.
   const needsYouIssue = (key: string | undefined, todo: number | string | undefined): { key: string; value: string }[] =>
@@ -234,7 +239,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     const todo = v.item;
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
-      name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
+      id: jobOf(runs.find((e) => e.id === v.run.id) ?? lastReal(runs)), name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
       condition: v.condition, started: v.started, run: { id: v.run.id, kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };

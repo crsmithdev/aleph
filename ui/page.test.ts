@@ -25,7 +25,7 @@ test("the sidebar: every group has a page, paths are unique, and each page has a
   for (const v of shown) expect([v.title, v.icon]).toEqual([v.title, expect.stringMatching(/^[a-z-]+$/)]);
   // The job list is the Factory Jobs page: no page keeps the /jobs route.
   expect(all.some((v) => v.path === "/jobs")).toBe(false);
-  expect(all.some((v) => v.path === "/jobs/:name")).toBe(true);
+  expect(all.some((v) => v.path === "/jobs/:id")).toBe(true);
 });
 
 test("the style sheet defines the dim, control, bar and spacing tokens and uses no literal for them", () => {

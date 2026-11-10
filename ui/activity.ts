@@ -1,6 +1,6 @@
 /**
  * The tools and hooks Claude Code used over the last days, and the
- * verify-gate's denials, for `/api/agents` and `/api/memory`. It reads Langfuse
+ * verify-gate's denials, for `/api/sessions` and `/api/memory`. It reads Langfuse
  * observations (as `fetchObservations` does). `?project=<key>` keeps one
  * project: a Langfuse trace by the scope rule in `ui/api/scope.ts`.
  */
@@ -34,20 +34,14 @@ export interface Activity {
   tools: Count[];
   hooks: Count[];
   denials: { total: number; recent: { at: string; reason: string }[] };
-  /** The traces each tool ran in, for `/api/agents`. */
+  /** The traces each tool ran in, for `/api/sessions`. */
   toolTraces?: Record<string, string[]>;
   /** True when the window held more pages than the fetch reads, so the counts cover only part of it. */
   partial?: boolean;
-  /** When the Langfuse half was fetched. */
-  cachedAt?: string;
 }
 
 const isError = (o: Observation) => (o as any).level === "ERROR";
 
-/** A Langfuse read with the time it was made, read once per pass of the UI's builds (sources.ts). */
-function cached<T>(key: string, load: () => Promise<T>): Promise<{ value: T; cachedAt: string }> {
-  return once(key, ["langfuse"], () => load().then((value) => ({ value, cachedAt: new Date().toISOString() })));
-}
 
 /** The ids of the traces of `project`, by the scope rule. */
 async function projectTraces(cfg: LangfuseConfig, project: string, from: Date, to: Date): Promise<{ ids: Set<string>; partial: boolean }> {
@@ -67,7 +61,7 @@ export async function activity(days: number, project: string | null, now = new D
   const from = startOf(keys[0]), to = new Date(now.getTime() + 60_000);
   let obs: Observation[];
   try {
-    const got = await cached(`${cfg.baseUrl}|${keys[0]}|${days}|${project ?? ""}`, async () => {
+    const got = await once(`${cfg.baseUrl}|${keys[0]}|${days}|${project ?? ""}`, ["langfuse"], async () => {
       const [all, mine] = await Promise.all([
         allPages(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }, 15_000) as Promise<{ rows: Observation[]; partial: boolean }>,
         project ? projectTraces(cfg, project, new Date(from.getTime() - DAY), to) : null,
@@ -76,9 +70,8 @@ export async function activity(days: number, project: string | null, now = new D
       // A project read from part of the traces keeps part of the window's rows: the answer is partial too.
       return { rows, partial: all.partial || !!mine?.partial };
     });
-    obs = [...got.value.rows];
-    out.partial = got.value.partial;
-    out.cachedAt = got.cachedAt;
+    obs = [...got.rows];
+    out.partial = got.partial;
   } catch (e) {
     out.langfuse = "error";
     out.error = e instanceof Error ? e.message : String(e);

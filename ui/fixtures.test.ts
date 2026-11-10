@@ -21,8 +21,8 @@ beforeAll(async () => {
 });
 afterAll(() => { proc.kill(); rmSync(base, { recursive: true, force: true }); });
 
-test("the hand-written Status state has only keys that /api/state really sends", async () => {
-  const real = await get("/api/state");
+test("the hand-written Status state has only keys that /api/factory and the asks of /api/automation really send", async () => {
+  const real = { ...(await get("/api/factory")), asks: (await get("/api/automation")).asks };
   const extra = (mine: object, theirs: object) => Object.keys(mine).filter((k) => !(k in theirs));
   expect(extra(handWritten, real)).toEqual([]);
   expect(extra(handWritten.factory, real.factory)).toEqual([]);

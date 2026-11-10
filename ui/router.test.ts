@@ -35,7 +35,7 @@ function page() {
   };
   const answer = (i: number, body: unknown, keys = "") =>
     asked[i].done(new Response(JSON.stringify(body), { headers: keys ? { "x-aleph-keys": keys } : {} }));
-  const route = { view: { title: "Status", api: "/api/state", live: true }, params: {}, query: new URLSearchParams() };
+  const route = { view: { title: "Status", api: "/api/factory", live: true }, params: {}, query: new URLSearchParams() };
   return { router: loader(env), asked, drawn, answer, route, focus: (on: boolean) => { focused = on; } };
 }
 
@@ -76,7 +76,7 @@ test("a view's own GET adds its keys, and a new route forgets them", async () =>
   const shown = p.router.show(p.route);
   p.answer(0, {}, "factory");
   await shown;
-  const got = p.router.get("/api/speed");
+  const got = p.router.get("/api/flow");
   p.answer(1, {}, "flow:day");
   await got;
   expect(p.router.keys).toEqual(["factory", "flow:day"]);
@@ -144,4 +144,19 @@ test("keysOf splits the header, and markOf takes only an error with its time", (
 
 test("markLine says how old the data is and why", () => {
   expect(markLine("Status", { error: "worker died", since: "2026-11-09T10:00:00Z" }, Date.parse("2026-11-09T10:05:30Z"))).toBe("Status is 5m 30s old: worker died");
+});
+
+test("a view with two URLs reads both, joins them with its combine, and reloads on a key of either", async () => {
+  const p = page();
+  const route = { ...p.route, view: { ...p.route.view, api: () => ["/api/factory", "/api/automation"], combine: ([s, a]: any[]) => ({ ...s, asks: a.asks }) } };
+  const shown = p.router.show(route);
+  await Promise.resolve();
+  expect(p.asked.map((a) => a.url)).toEqual(["/api/factory", "/api/automation"]);
+  p.answer(1, { asks: [1] }, "automation:week");
+  p.answer(0, { n: 1 }, "factory");
+  await shown;
+  expect(p.drawn).toEqual([{ n: 1, asks: [1] }]);
+  FakeStream.last.send("change", { keys: ["automation:week"] });
+  await Promise.resolve();
+  expect(p.asked.length).toBe(4);
 });

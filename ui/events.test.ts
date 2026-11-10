@@ -20,7 +20,7 @@ beforeAll(async () => {
   restoreEnv = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: runs, ALEPH_ISSUES: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
   ({ server, stop } = await withServer({ warm: false }));
   // A change names only the keys a page asked for: Status's key is kept from here on.
-  expect((await get("/api/state")).headers.get("x-aleph-keys")).toBe("/api/state");
+  expect((await get("/api/factory")).headers.get("x-aleph-keys")).toBe("/api/factory");
 });
 
 const get = (path: string) => fetch(`http://127.0.0.1:${server.port}${path}`);
@@ -56,9 +56,9 @@ const run = (on: string): Run => ({ kind: "build", job: on, name: on, on, condit
 
 test("a run's write to its job record sends a change naming the kept key, and the refetch has the write", async () => {
   putRun("old", run("r-1"));
-  expect(await changeAfter(() => putRun("old", { ...run("r-1"), phase: "worker" }))).toMatch(/event: change\ndata: \{"keys":\["\/api\/state"\]\}/);
+  expect(await changeAfter(() => putRun("old", { ...run("r-1"), phase: "worker" }))).toMatch(/event: change\ndata: \{"keys":\["\/api\/factory"\]\}/);
   expect(await changeAfter(() => putRun("new", run("r-2")))).not.toBeNull();
-  expect(JSON.stringify(await (await get("/api/state")).json())).toContain("r-2");
+  expect(JSON.stringify(await (await get("/api/factory")).json())).toContain("r-2");
 });
 
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {

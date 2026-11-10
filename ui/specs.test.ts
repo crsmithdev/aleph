@@ -52,7 +52,7 @@ describe("specs", () => {
   });
 
   test("Issues shows no specs; the spec routes stay", async () => {
-    const d = await getJson("/api/contents");
+    const d = await getJson("/api/issues");
     expect(d).not.toHaveProperty("specs");
     expect(v.view.render(d, {}, new URLSearchParams())).not.toContain("<h2>Specs");
   });

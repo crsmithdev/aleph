@@ -109,7 +109,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
-    // Bun closes a request after 10 s by default; /api/memory and /api/agents take longer.
+    // Bun closes a request after 10 s by default; /api/memory and /api/sessions take longer.
     idleTimeout: 120,
     async fetch(req) {
       const refused = gate(req);
@@ -136,7 +136,8 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
         return res;
       }
       if (allowed) return new Response("method not allowed", { status: 405 });
-      if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
+      // An API path with no route, such as an old one, is not found whatever the method.
+      if (req.method !== "GET") return path.startsWith("/api/") ? new Response("not found", { status: 404 }) : new Response("method not allowed", { status: 405 });
       if (path === "/api/views") return Response.json(views(join(dir, "views")));
       if (path === "/" || path === "/index.html") {
         const page = join(dir, "index.html");

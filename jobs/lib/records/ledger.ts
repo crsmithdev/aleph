@@ -12,7 +12,7 @@ import { isLive } from "../infra/process.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
 import { touch } from "../infra/sources.ts";
-import { contentText, fileSafe, jobId, setCodes, subjectOf } from "../../../lib/naming.ts";
+import { contentText, fileSafe, jobId, parseJob, setCodes, subjectOf } from "../../../lib/naming.ts";
 
 /** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. */
 export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
@@ -203,6 +203,13 @@ export function allJobs(live = false): Entry[][] {
 /** The runs on `subject`, oldest first, each with its number: the stored `n`, else its place in start order (a run from before job IDs). */
 function numbered(subject: string, runs: Entry[]): { e: Entry; n: number }[] {
   return runs.filter((e) => subjectOf(e.run) === subject).map((e, i) => ({ e, n: e.run.n ?? i + 1 }));
+}
+
+/** The run whose job ID is `id` (`a1375#6`, `monitor#14`), or undefined. A short ID needs the registry's codes: `loadRegistry` sets them. */
+export function runOfJob(id: string, runs = allRuns()): Entry | undefined {
+  // A run with no issue and no routine has its name as its subject: `x#1`.
+  const m = /^(.+)#(\d+)$/.exec(id), p = parseJob(id) ?? (m ? { subject: m[1], n: Number(m[2]) } : null);
+  return p ? numbered(p.subject, runs).find((x) => x.n === p.n)?.e : undefined;
 }
 
 /** The job ID of a run, `a1375#6`. `runs` gives the start order for a run with no stored `n`. */

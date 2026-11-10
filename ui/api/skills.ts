@@ -12,7 +12,7 @@ import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { traceProject } from "./scope.ts";
 import type { Routes } from "../server.ts";
-import { once } from "../../jobs/lib/infra/sources.ts";
+import { once, touch } from "../../jobs/lib/infra/sources.ts";
 import { allPages } from "../langfuse-pages.ts";
 import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
@@ -33,7 +33,9 @@ const text = (v: unknown): string => { const x = asValue(v); return typeof x ===
 const firstLine = (s: string) => s.replace(/<command-message>[\s\S]*?<\/command-message>/g, "").replace(/<[^>]+>/g, " ").split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 200) ?? "";
 
 export const skillsDir = skillsDirSetting;
+/** The skill folders: a read of the source `skills`, so a new folder rebuilds the keys that read them. */
 const folders = (): string[] => {
+  touch("skills");
   const dir = skillsDir();
   return existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(join(dir, d.name, "SKILL.md"))).map((d) => d.name).sort() : [];
 };
@@ -256,17 +258,17 @@ function detail(a: Analysis, name: string) {
 }
 
 async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<Response> {
-  const d = Number(url.searchParams.get("days"));
+  const d = Number(url.searchParams.get("window"));
   const days = d > 0 ? Math.min(Math.floor(d), 365) : 30;
   const project = url.searchParams.get("project") || null;
   let a: Analysis;
-  try { a = await once(`skills:${process.env.LANGFUSE_BASE_URL}:${days}:${project}`, ["langfuse", "registry"], () => analyse(days, project)); }
+  try { a = await once(`skills:${process.env.LANGFUSE_BASE_URL}:${days}:${project}`, ["langfuse", "registry", "skills"], () => analyse(days, project)); }
   catch (e) { return Response.json({ error: `Langfuse failed: ${(e as Error).message}` }, { status: 502 }); }
   const value = make(a);
   return value ? Response.json(value) : new Response("no such skill", { status: 404 });
 }
 
-/** `GET /api/skills`'s handler: the skills of a window, called in-process by `/api/agents`. */
+/** The skills of a window, for `GET /api/sessions`. */
 export const listSkills = (req: Request): Promise<Response> => cached(new URL(req.url), summary);
 
 export const routes: Routes = {

@@ -10,7 +10,7 @@
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
 import { setCodes } from "../lib/naming.ts";
-import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, withProject } from "./lib.js";
+import { issueApi, postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, withProject } from "./lib.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
@@ -23,6 +23,16 @@ export const markOf = (data) => (typeof data?.error === "string" && typeof data?
 /** The URL of a route's data: `view.api` with its ":params" filled in. */
 export const urlOf = ({ view, params, query }) =>
   typeof view.api === "function" ? view.api(params, query) : view.api.replace(/:(\w+)/g, (_, n) => encodeURIComponent(params[n] ?? ""));
+
+/** A route's data: the answer of its URL, or of each URL `view.api` lists, joined by `view.combine`. */
+export async function dataOf(route, get) {
+  const answers = await Promise.all([urlOf(route)].flat().map(async (url) => {
+    const res = await get(url);
+    if (!res.ok) throw new Error(failMessage(url, res.status, await res.text().catch(() => "")));
+    return res.json();
+  }));
+  return route.view.combine ? route.view.combine(answers) : answers[0];
+}
 
 /**
  * The one path for every load of the shown view: the first one, a `change`, the `refresh` timer and the reload after an action.
@@ -52,11 +62,8 @@ export function loader(env) {
     const mine = ++seq;
     let data = null;
     if (route.view.api) {
-      const url = urlOf(route);
       try {
-        const res = await get(url);
-        if (!res.ok) throw new Error(failMessage(url, res.status, await res.text().catch(() => "")));
-        data = route.data = await res.json();
+        data = route.data = await dataOf(route, get);
         if (route === shown) env.ok(route);
       } catch (e) {
         if (route !== shown || mine !== seq) return;
@@ -323,7 +330,7 @@ export async function start() {
 
   document.addEventListener("click", dispatch);
 
-  setCodes(await fetch("/api/projects/codes", { cache: "no-store" }).then((r) => r.json()).catch(() => ({})));
+  setCodes(Object.fromEntries(Object.entries(await fetch("/api/projects", { cache: "no-store" }).then((r) => r.json()).catch(() => ({}))).filter(([, c]) => c)));
   const names = await fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch(() => []);
   const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => (typeof m.redirect === "function" && redirects.push(m.redirect), m.views ?? (m.view ? [m.view] : [])), (e) => { console.error(n, e); return []; })));
   views = mods.flat().filter((v) => v && typeof v.path === "string" && typeof v.render === "function")
@@ -375,7 +382,7 @@ async function dispatch(e) {
     const { reason, action, first } = b.dataset;
     b.disabled = true;
     try {
-      await postJson(`/api/standing/${encodeURIComponent(reason)}`, { action });
+      await postJson(`/api/automation/rules/${encodeURIComponent(reason)}/grant`, { action });
     } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
     const next = [...b.closest("article").querySelectorAll("button.act:not(.always)")].find((x) => x.dataset.act === first);
     b.disabled = false;
@@ -387,7 +394,7 @@ async function dispatch(e) {
     const { repo, id } = b.dataset;
     b.disabled = true;
     try {
-      await postJson(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "close" ? "drop" : act}`, act === "close" ? { reason: "Chris closed it" } : {});
+      await postJson(`${issueApi(repo, id)}/${act === "close" ? "drop" : act}`, act === "close" ? { reason: "Chris closed it" } : {});
     } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
     b.closest("article.issue-row")?.remove();
     page.reload();
@@ -400,7 +407,7 @@ async function dispatch(e) {
     const bs = [...b.closest(".actions").querySelectorAll("button.act")];
     bs.forEach((x) => { x.disabled = true; });
     try {
-      await postJson(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "deny" ? "drop" : "decide"}`,
+      await postJson(`${issueApi(repo, id)}/${act === "deny" ? "drop" : "decide"}`,
         act === "deny" ? { reason: reason ? `Chris denied: ${reason}` : "Chris denied it" } : approve ? { approve: true } : recommendation ? { recommendation: true } : { label: option });
       denyReasons.delete(`${repo}-${id}`);
     } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
@@ -411,7 +418,8 @@ async function dispatch(e) {
   b.disabled = true;
   if (name) actMessages.delete(name);
   try {
-    await postJson(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, { run: b.dataset.run, ...(act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {}) });
+    const url = !name ? `/api/factory/${act}` : act === "approve" || act === "decline" ? `/api/proposals/${encodeURIComponent(name)}/${act}` : `/api/jobs/${encodeURIComponent(b.dataset.job)}/${act}`;
+    await postJson(url, { ...(act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {}) });
   } catch (err) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${err.message}`); return; }
   b.closest("article.issue-row")?.remove();
   page.reload();

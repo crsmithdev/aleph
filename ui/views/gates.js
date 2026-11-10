@@ -1,7 +1,7 @@
-// The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
+// The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { get } from "../router.js";
-import { clamp, contentText, issueHref, parseId, parseJob, setCodes, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { dataOf, get } from "../router.js";
+import { clamp, contentText, issueHref, parseId, parseJob, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -11,7 +11,9 @@ export const view = {
   group: "factory",
   order: -2,
   icon: "shield-halved",
-  api: (_params, q = new URLSearchParams()) => withProject(`/api/gates?window=${windowOf(q)}`, q),
+  // The caps' use and the live counts come from the factory block of /api/factory.
+  api: (_params, q = new URLSearchParams()) => [withProject(`/api/automation?window=${windowOf(q)}`, q), withProject("/api/factory", q)],
+  combine: ([d, s]) => ({ ...d, factory: { ...s.factory, capEnv: d.capEnv, settings: d.settings } }),
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),
@@ -184,7 +186,6 @@ function contentHtml(e) {
 
 /** The log, newest first, filtered by `by` (an actor) from the address; `limit` rows show. A row's note opens with its button. */
 export function renderLog(d, by, limit = PAGE) {
-  if (d.codes) setCodes(d.codes);
   const pick = Object.hasOwn(BY, by ?? "") ? by : "";
   const filter = filterBar([{ name: "by", label: "By", value: pick, options: [{ value: "", label: "all" }, ...Object.keys(BY).map((k) => ({ value: k, label: k }))] }]);
   const entries = d.log.entries.filter((e) => !pick || e.by === pick);
@@ -197,12 +198,12 @@ export function renderLog(d, by, limit = PAGE) {
     (rows ? dataTable(heads(["Logged", "By", "Subject", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
 }
 
-/** Load /api/gates again and draw the page with it. */
+/** Load /api/automation again and draw the page with it. */
 async function redraw(root) {
-  const res = await get(view.api(null, hashQuery()));
-  if (!res.ok) return;
+  const d = await dataOf({ view, params: null, query: hashQuery() }, get).catch(() => null);
+  if (!d) return;
   const saved = recordState(root);
-  root.innerHTML = renderGates(await res.json(), hashQuery());
+  root.innerHTML = renderGates(d, hashQuery());
   restoreState(root, saved);
   wireScope(root);
 }
@@ -219,7 +220,7 @@ export function mount(root) {
       const btn = sched.querySelector("button");
       btn.disabled = true;
       try {
-        await postJson("/api/gates/schedules", { name: sched.dataset.schedule, every: sched.elements.every.value.trim() });
+        await postJson("/api/automation/schedules", { name: sched.dataset.schedule, every: sched.elements.every.value.trim() });
       } catch (err) { btn.disabled = false; say(btn, `Could not save the interval: ${err.message}`); return; }
       return redraw(root);
     }
@@ -229,7 +230,7 @@ export function mount(root) {
     const key = form.dataset.cap, btn = form.querySelector("button");
     btn.disabled = true;
     try {
-      await postJson("/api/gates/caps", { [key]: Number(form.elements[key].value) });
+      await postJson("/api/automation/caps", { [key]: Number(form.elements[key].value) });
     } catch (err) { btn.disabled = false; say(btn, `Could not save the cap: ${err.message}`); return; }
     await redraw(root);
   };
@@ -248,7 +249,7 @@ export function mount(root) {
       buttons.forEach((b) => { b.disabled = true; });
       const { rule, mode } = r.dataset;
       try {
-        await (mode ? postJson(`/api/standing/${encodeURIComponent(rule)}`, { action: mode }) : postJson(`/api/gates/revoke/${encodeURIComponent(rule)}`));
+        await (mode ? postJson(`/api/automation/rules/${encodeURIComponent(rule)}/grant`, { action: mode }) : postJson(`/api/automation/rules/${encodeURIComponent(rule)}/revoke`));
       } catch (err) { buttons.forEach((b) => { b.disabled = false; }); say(seg, `Could not change the rule: ${err.message}`); return; }
       await redraw(root);
       return;

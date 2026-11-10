@@ -68,7 +68,7 @@ test("the tiles and the head come from the data", () => {
   const h = renderEfficiency(WITH, "all");
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "First pass", "Reruns", "Fix rounds", "Usage per issue"]);
   expect(h).toContain('<b>30%<em> / 6.0h</em></b>');
-  expect(h).toContain('<header class="ph"><h1>Efficiency</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
+  expect(h).toContain('<header class="ph"><h1>Flow</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
   expect(h).not.toContain("vs 30-day average");
   expect(h).not.toContain("in the last 24h");
   expect(h).toContain("&lt;0.1%");

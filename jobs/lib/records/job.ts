@@ -1,7 +1,7 @@
 /**
  * A job over the ledger: its runs, oldest first, as `allJobs` groups them.
  * Lookups by name, its issue, the run that counts, its state, the files in
- * its run folders, and `view`, the one projection that `/api/state`,
+ * its run folders, and `view`, the one projection that `/api/factory`,
  * `/api/jobs` and `aleph jobs` show. See docs/data-model.md.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";

@@ -21,7 +21,7 @@ function turnTable(d, limit = TURN_PAGE) {
   const rows = d.turns.slice(0, limit).map((t) =>
     `<tr><td class="time">${esc(when(t.start))}</td><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
     `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
-    `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${costHtml(t.cost, t.wk)}</td></tr>`).join("");
+    `<td class="num">${esc(sdur(t.seconds))}</td><td class="num">${costHtml(t.cost, t.wk)}</td></tr>`).join("");
   return dataTable(heads(["Started", "Turn", "Prompt", "Output", "Model", "Tools", "Took", "Cost"], ["Turn", "Tools", "Took", "Cost"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
 }
 
@@ -38,12 +38,15 @@ function sysChip({ tag, body }) {
   return `<details class="sysc"><summary>${chip(tag)}<span class="peek">${esc(peek)}</span></summary><pre>${esc(body)}</pre></details>`;
 }
 
+/** Ms from the seconds of an answer, and that as a duration. */
+const msOf = (s) => (s == null ? null : s * 1000), sdur = (s) => dur(msOf(s));
+
 /** A tool call on one line: name, key argument, error mark, duration; it opens to input and output. */
 function toolLine(c) {
   const io = (label, text) => (text ? `<h4>${label}</h4><pre>${esc(text)}</pre>` : "");
   return `<details class="tool${c.error ? " err" : ""}"><summary><span class="tn">${esc(c.name)}</span>` +
     `${c.args ? `<code class="ta">${esc(c.args)}</code>` : ""}${c.error ? `<span class="terr">Error</span>` : ""}` +
-    `<span class="td">${esc(dur(c.durationMs))}</span></summary>` +
+    `<span class="td">${esc(sdur(c.seconds))}</span></summary>` +
     `<div class="tio">${io("Input", c.input)}${c.error ? io("Error", c.error) : ""}${io("Output", c.output)}</div>` +
     `${c.children?.length ? `<div class="tools sub">${c.children.map(toolLine).join("")}</div>` : ""}</details>`;
 }
@@ -80,7 +83,7 @@ function work(t) {
 export function chatTurn(id, t) {
   const { system, text } = systemParts(t.prompt);
   const meta = [`<a href="${esc(href(`/sessions/${encodeURIComponent(id)}/turns/${t.n}`))}">Turn ${t.n}</a>`,
-    esc(shortModel(t.model)), esc(dur(t.durationMs)), costHtml(t.cost, t.wk), `<span class="time">${esc(when(t.start))}</span>`].filter(Boolean).join('<span class="dot">·</span>');
+    esc(shortModel(t.model)), esc(sdur(t.seconds)), costHtml(t.cost, t.wk), `<span class="time">${esc(when(t.start))}</span>`].filter(Boolean).join('<span class="dot">·</span>');
   const out = String(t.output ?? "").trim();
   return `<section class="turn" id="turn-${t.n}"><p class="tline">${meta}</p>` +
     (system.length ? `<div class="sys">${system.map(sysChip).join("")}</div>` : "") +
@@ -106,17 +109,17 @@ export function wfRows(turns) {
   const rows = [];
   const add = (c, depth, turn) => {
     const gen = c.kind === "generation";
-    rows.push({ id: c.id, depth, kind: c.kind, name: gen ? c.model || c.name : c.name, args: c.args, start: c.start, startMs: c.startMs, endMs: c.endMs, error: c.error, input: c.input, output: c.output, durationMs: c.durationMs, turn,
+    rows.push({ id: c.id, depth, kind: c.kind, name: gen ? c.model || c.name : c.name, args: c.args, start: c.start, startMs: c.from * 1000, endMs: c.to * 1000, error: c.error, input: c.input, output: c.output, durationMs: msOf(c.seconds), turn,
       ...(gen ? { model: c.model, cost: c.cost, inputTokens: c.inputTokens, outputTokens: c.outputTokens } : {}) });
     for (const k of kids(c.id, c.children)) add(k, depth + 1, turn);
   };
   let gens = [];
   // A parent's tool rows and generations in time order.
-  const kids = (parent, tools = []) => [...tools, ...gens.filter((g) => g.parent === parent)].sort((a, b) => a.startMs - b.startMs);
+  const kids = (parent, tools = []) => [...tools, ...gens.filter((g) => g.parent === parent)].sort((a, b) => a.from - b.from);
   for (const t of turns) {
-        const lastEnd = (cs) => cs.reduce((m, c) => Math.max(m, c.endMs, lastEnd(c.children ?? [])), 0);
-    rows.push({ id: `turn-${t.n}`, depth: 0, kind: "turn", name: `Turn ${t.n}`, args: line(systemParts(t.prompt).text), start: t.start, startMs: t.startMs, endMs: Math.max(t.endMs, lastEnd([...(t.tools ?? []), ...(t.generations ?? [])])),
-      error: null, input: t.prompt, output: t.output, durationMs: t.durationMs, model: t.model, cost: t.cost, wk: t.wk, turn: t.n });
+        const lastEnd = (cs) => cs.reduce((m, c) => Math.max(m, c.to * 1000, lastEnd(c.children ?? [])), 0);
+    rows.push({ id: `turn-${t.n}`, depth: 0, kind: "turn", name: `Turn ${t.n}`, args: line(systemParts(t.prompt).text), start: t.start, startMs: t.from * 1000, endMs: Math.max(t.to * 1000, lastEnd([...(t.tools ?? []), ...(t.generations ?? [])])),
+      error: null, input: t.prompt, output: t.output, durationMs: msOf(t.seconds), model: t.model, cost: t.cost, wk: t.wk, turn: t.n });
     gens = t.generations ?? [];
     for (const c of kids(null, t.tools ?? [])) add(c, 1, t.n);
   }
@@ -243,7 +246,7 @@ function obsRows(o, depth) {
   const ioFold = (label, text) => (text ? `<details><summary>${label}</summary><pre>${esc(text)}</pre></details>` : "");
   return `<tr><td>${tag(o.kind, o.error ? "stuck" : "quiet")}</td>` +
     `<td style="padding-left:${depth * INDENT_STEP}px"><strong>${esc(o.name)}</strong>${ioFold("Input", o.input)}${ioFold("Output", o.output)}</td>` +
-    `<td class="wide">${detail}</td><td class="num">${esc(dur(o.durationMs))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
+    `<td class="wide">${detail}</td><td class="num">${esc(sdur(o.seconds))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
 }
 
 export function renderTurn(d) {
@@ -252,7 +255,7 @@ export function renderTurn(d) {
   const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
   return `<div class="page">${crumb(`#/sessions/${sid}`, [["sessions", "#/sessions"], [d.id.slice(0, 8), `#/sessions/${sid}`], [`turn ${d.n}`]])}` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
-    facts([["Started", esc(when(d.start))], ["Cost", costHtml(d.cost, d.wk)], ["Duration", esc(dur(d.durationMs))]]) +
+    facts([["Started", esc(when(d.start))], ["Cost", costHtml(d.cost, d.wk)], ["Duration", esc(sdur(d.seconds))]]) +
     `${sectionHead("Prompt")}<pre>${esc(d.prompt)}</pre>${sectionHead("Output")}<pre>${esc(d.output)}</pre>${sectionHead("Observations")}` +
     `<div id="obs-table">${obsTable(d)}</div></div>`;
 }

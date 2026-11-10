@@ -33,13 +33,30 @@ With the gate on, `/` shows a login form. The right password sets the `aleph_ses
 
 ## Routes
 
-`GET /` is `ui/index.html`, with its styles in `ui/app.css`. Pages use hash routes, such as `#/jobs/aleph-52`. The pages send no project in the hash; each `/api` route takes `?project=<key>` as its own filter.
+`GET /` is `ui/index.html`, with its styles in `ui/app.css`. Pages use hash routes, such as `#/jobs/a1430%231`. The pages send no project in the hash; each `/api` route takes `?project=<key>` as its own filter.
+
+A URL names the data it returns in the terms of `docs/naming.md`. An action is a POST under the thing it acts on. An `/api` path with no route answers 404, whatever the method.
 
 | Route | Returns |
 |---|---|
-| `GET /api/state` | The Status page's state, from the ledger, the factory directory and the work store. It writes nothing |
-| `GET /api/projects/keys` | The repos in the registry |
+| `GET /api/factory` | The Status page: the factory, the live jobs, the queue, the Done lane and its count for `?window=` |
+| `POST /api/factory/pause`, `/resume` | Pauses or resumes the factory |
+| `GET /api/flow` | The Flow page and the Jobs page charts, for `?window=` |
+| `GET /api/automation` | The Automation page: the asks, the rules, the caps' settings, held paths and the decision log |
+| `POST /api/automation/caps`, `/schedules`, `/rules/:reason/grant`, `/rules/:reason/revoke` | Changes a cap, a schedule or a standing rule |
+| `POST /api/proposals/:id/approve`, `/decline` | Decides a proposal |
+| `GET /api/issues` | The Issues page rows, with stage, job count and cost |
+| `GET /api/issues/:id`, `/api/issues/:id/jobs` | One issue by its short ID (`a1430`), and its jobs |
+| `POST /api/issues/:id/{edit,note,media,decide,unblock,drop,retriage,rerun,checked}` | Acts on one issue |
+| `GET /api/jobs` | One row per job, newest first; `?window=`, `?state=`, `?limit=` and `?before=` (the `next` of the last page) |
+| `GET /api/jobs/:id`, `/diff`, `/logs/:file` | One job by its ID (`a1430#2`, sent as `a1430%232`) |
+| `POST /api/jobs/:id/{land,recheck,drop,wait,answer}` | Acts on that job only |
+| `GET /api/sessions` | The Sessions page; `?window=` in days, and `?limit=` and `?before=` for the session list. `partial` says Langfuse held more pages than a read takes |
+| `GET /api/sessions/:id`, `/chat`, `/turns/:n`, `GET /api/skills/:name` | One session, its chat, one turn, one skill |
+| `GET /api/projects` | A map of each project key to its code |
 | `GET /api/views` | The files under `ui/views/` |
+
+Times are ISO 8601 UTC strings and durations are in seconds. `ui/schemas.ts` holds the schema of each GET route, and `ui/schemas.test.ts` checks every route against it.
 
 ## Add a page
 
@@ -55,7 +72,7 @@ Add two files and change no shared file.
      group: "factory",         // work, factory or claude
      order: 50,                // sorts the page in its group
      icon: "cube",             // a Font Awesome name
-     api: "/api/widgets/:name",
+     api: "/api/widgets/:name",   // or a function of (params, query); a list of URLs needs combine(answers)
      refresh: 30,              // seconds between reloads
      render: (data, params) => data ? `<h1>${esc(data.name)}</h1>` : empty("No widget."),
    };
@@ -70,4 +87,4 @@ Add two files and change no shared file.
    };
    ```
 
-The server loads every `ui/api/*.ts` at start. `bun --watch` does not see a new file, so restart `aleph-ui` after you add one. To share a helper, add it to `ui/lib.js` without changing what is there.
+Add the route's schema to `ui/schemas.ts`. The server loads every `ui/api/*.ts` at start. `bun --watch` does not see a new file, so restart `aleph-ui` after you add one. To share a helper, add it to `ui/lib.js` without changing what is there.

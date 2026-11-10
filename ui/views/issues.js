@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
-// table and a form that files an issue. `data` is /api/contents: { issues, projects }.
+// table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, issueHref, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
+import { actButton, issueApi, issueHref, jobHref, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { askRow } from "./now.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
@@ -12,7 +12,7 @@ export const view = {
   icon: "list-check",
   group: "factory",
   order: -1,
-  api: "/api/contents",
+  api: "/api/issues",
   render: (d, _params, query) => renderIssues(d, hashOptions(query)),
   mount: (root, d) => mount(root, d),
 };
@@ -528,7 +528,7 @@ const mediaInput = `<input type="file" name="media" multiple accept="image/png,i
 
 /** The issue's media: each image as a thumbnail that opens the file, each PDF as a link; then the attach form. */
 function renderMedia(d, ref) {
-  const url = (name) => `/api/issues/${encodeURIComponent(d.repo)}/${encodeURIComponent(ref)}/media/${encodeURIComponent(name)}`;
+  const url = (name) => `${issueApi(d.repo, ref)}/media/${encodeURIComponent(name)}`;
   const items = (d.media ?? []).map((name) => /\.pdf$/i.test(name)
     ? `<li><a class="media-doc" href="${url(name)}" target="_blank" rel="noopener">${esc(name)}</a></li>`
     : `<li><a href="${url(name)}" target="_blank" rel="noopener"><img src="${url(name)}" alt="${esc(name)}" loading="lazy"></a></li>`).join("");
@@ -583,7 +583,7 @@ function noteItem(e) {
 function filedAt(d, runs) {
   const created = Date.parse(d.frontmatter?.created_time);
   const sameDay = runs.length && new Date(created).toDateString() === new Date(runs[0].start).toDateString();
-  return d.timeline?.filed ?? (created >= 0 && !sameDay ? created : runs[0]?.start ?? NaN);
+  return d.timeline?.filed ? Date.parse(d.timeline.filed) : (created >= 0 && !sameDay ? created : runs[0]?.start ?? NaN);
 }
 
 const ends = (runs) => (runs.length ? Math.max(...runs.map((x) => x.end)) : NaN);
@@ -603,7 +603,7 @@ export function issueSegments(d, now = Date.now()) {
   const marks = [...(Number.isFinite(filed) ? [{ at: filed, tone: "made", tip: "filed" }] : []), ...(Number.isFinite(closed) ? [{ at: closed, tone: "done", tip: d.status }] : [])];
   // The issue's own job, when one has its name, is where its id links.
   const job = (d.jobs ?? []).find((j) => j.name === id);
-  const headOf = (text) => `${job ? idLink(localId(id, d.repo), `#/jobs/${encodeURIComponent(job.name)}`) : `<span class="idp">${esc(localId(id, d.repo))}</span>`}<span class="quiet t">${esc(text)}</span>`;
+  const headOf = (text) => `${job ? idLink(localId(id, d.repo), jobHref(job.id)) : `<span class="idp">${esc(localId(id, d.repo))}</span>`}<span class="quiet t">${esc(text)}</span>`;
   const state = d.derived?.stage ?? d.status;
   // The hold records of a job name: why its waits waited.
   const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);
@@ -620,7 +620,7 @@ export function issueSegments(d, now = Date.now()) {
     { title: "Sub-issues", aside: `${done} of ${parts.length} done`, rows: parts.map((g) => {
       const runs = ofPart(g);
       const job = g.jobs?.at(-1), p = g.priority && g.priority !== "medium" ? ` ${priorityBadge(g.priority)}` : "";
-      return laneRow({ head: `<span>${idLink(localId(g.id, d.repo), job ? `#/jobs/${encodeURIComponent(job.name)}` : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage), holds: holdsOf(job?.name) });
+      return laneRow({ head: `<span>${idLink(localId(g.id, d.repo), job ? jobHref(job.id) : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage), holds: holdsOf(job?.name) });
     }) },
   ];
   const later = notes.filter((n) => n.at >= first);
@@ -683,7 +683,7 @@ export function renderIssue(d) {
   const commits = d.commits.length
     ? pagedTable(heads(["Committed", "Commit", "Subject", ...(parts ? ["Sub-issue"] : [])]), d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
-      return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), `#/jobs/${encodeURIComponent(c.part)}`) : ""}</td>` : ""}</tr>`;
+      return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), issueHref(c.part)) : ""}</td>` : ""}</tr>`;
     }))
     : empty("No commit on main names this issue in its trailers.");
   const segments = issueSegments(d);
@@ -725,7 +725,7 @@ if (typeof document !== "undefined") {
       ? { title: el.title.value, priority: el.priority.value, source: el.source.value, areas: el.areas.value, description: el.request?.value ?? "", spec: el.spec?.value ?? "" }
       : { text: el.text.value };
     try {
-      await postJson(`/api/issues/${encodeURIComponent(form.dataset.repo)}/${encodeURIComponent(form.dataset.ref)}/${edit ? "edit" : "note"}`, body);
+      await postJson(`${issueApi(form.dataset.repo, form.dataset.ref)}/${edit ? "edit" : "note"}`, body);
       location.reload();
     } catch (err) { say(form.querySelector("button"), `Could not save it: ${err.message}`); }
   });
@@ -765,7 +765,7 @@ if (typeof document !== "undefined") {
     try {
       const media = await mediaOf(form);
       if (!media.length) return say(form.querySelector("button"), "Pick, paste or drop a file first.");
-      await postJson(`/api/issues/${encodeURIComponent(form.dataset.repo)}/${encodeURIComponent(form.dataset.ref)}/media`, { media });
+      await postJson(`${issueApi(form.dataset.repo, form.dataset.ref)}/media`, { media });
       location.reload();
     } catch (err) { say(form.querySelector("button"), `Could not attach it: ${err.message}`); }
   });
@@ -775,7 +775,7 @@ export const issueView = {
   path: "/issues/:repo/:n",
   title: "Issue",
   group: "factory",
-  api: "/api/issues/:repo/:n",
+  api: (params) => issueApi(params.repo, params.n),
   render: renderIssue,
 };
 export const views = [view, issueView];

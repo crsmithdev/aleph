@@ -13,8 +13,8 @@ const D: any = {
   phases: { lead: P(3, 1570, 16560), intake: P(3, 59, 1467), queue: P(3, 304, 6120, [1, 1, 1, 0, 0, 0, 0], 800), implement: P(3, 475, 1698), land: P(3, 74, 650) },
   buckets: [{ at: new Date(2026, 9, 27).toISOString(), lead: 1000, queue: 200, p90: { lead: 3000, queue: 900 } }, { at: new Date(2026, 9, 28).toISOString(), lead: null, queue: 100, p90: { lead: null, queue: 400 } }],
   times: [
-    { id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: F1, intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 },
-    { id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: F2, intake: 100, queue: 300, implement: 100, land: null, lead: null },
+    { id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: new Date(F1).toISOString(), intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 },
+    { id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: new Date(F2).toISOString(), intake: 100, queue: 300, implement: 100, land: null, lead: null },
     { id: "fx-3", href: "#/issues/fx/3", outcome: "landed", filed: null, intake: 10, queue: 20, implement: 4000, land: 30, lead: 5000 },
   ],
   checks: [{ name: "tests", count: 5, p50: 51, p90: 171 }],
@@ -118,13 +118,13 @@ test("the title is the sidebar name; models with no name say not recorded", () =
   expect(renderFactoryJobs(D, null, "lead")).toContain("not recorded");
 });
 
-const J: any = { name: "fac-9", repo: "fac", item: { id: 9, title: "Fix it" }, condition: "landed", started: "2026-11-01T08:00:00Z", cost: 0.75 };
+const J: any = { id: "fac-9#2", subject: "fac-9", name: "fac-9", repo: "fac", kind: "build", actor: "worker", state: "landed", title: "Fix it", issue: "fac-9", started: "2026-11-01T08:00:00Z", ended: null, seconds: null, cost: 0.75, model: null };
 
 test("the page lists the jobs with the search, the State filter and the Project filter, and links no list", () => {
-  const h = renderFactoryJobs(D, null, "lead", [J], { repo: "fac", condition: "landed" });
-  expect(h).toContain('href="#/jobs/fac-9"');
+  const h = renderFactoryJobs(D, null, "lead", [J], { state: "landed" });
+  expect(h).toContain('href="#/jobs/fac-9%232"');
   expect(h).toContain('data-ui="jobs-search"');
-  expect(h).toContain('data-name="condition"');
+  expect(h).toContain('data-name="state"');
   expect(h).toContain('data-value="landed" aria-pressed="true"');
   expect(h).toContain('<select name="project"');
   expect(h).not.toContain('href="#/jobs?');
@@ -133,7 +133,7 @@ test("the page lists the jobs with the search, the State filter and the Project 
   expect(h.slice(h.indexOf('id="jobs-table"')).match(/<th[ >]/g)).toHaveLength(8);
   expect(h).not.toContain("<style>");
   expect(h).not.toContain("data-more");
-  const many = renderFactoryJobs(D, null, "lead", Array.from({ length: 51 }, (_, i) => ({ ...J, name: `fac-${i}` })), {});
+  const many = renderFactoryJobs(D, null, "lead", Array.from({ length: 51 }, (_, i) => ({ ...J, id: `fac-${i}#1` })), {});
   expect(many.match(/<tr class="rowlink"/g)).toHaveLength(50);
   expect(many).toContain('data-more="1"');
   expect(many).toContain("50 of 51");

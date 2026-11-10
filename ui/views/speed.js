@@ -1,4 +1,4 @@
-// What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
+// What the Status pages share: formats, the /api/flow cache, the merged causes, tiles and the usage pace.
 import { get } from "../router.js";
 import { count, cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, projectNow, statCard, when } from "../lib.js";
 
@@ -35,7 +35,7 @@ export const usable = (window) => { const d = speedOf(window); return d && !d.er
 export async function loadSpeed(window, fetcher = get, baseline = false, project = projectNow()) {
   if (project !== loadedFor) { got.clear(); loadedFor = project; }
   try {
-    const res = await fetcher(`/api/speed?window=${window}${baseline ? "&baseline=1" : ""}${project ? `&project=${encodeURIComponent(project)}` : ""}`, { cache: "no-store" });
+    const res = await fetcher(`/api/flow?window=${window}${baseline ? "&baseline=1" : ""}${project ? `&project=${encodeURIComponent(project)}` : ""}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`Could not load speed (${res.status}).`);
     // With `baseline=1` the answer carries the window's trend baseline (`d.baseline`): one request per window.
     const { others, ...d } = await res.json();
@@ -82,14 +82,14 @@ function usageAge(s) {
 export const cardPct = (v) => (v == null ? "–" : pct(v * 100));
 export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
 
-/** The trend of one figure of `d` against the baseline of its own /api/speed answer; empty with no baseline. */
+/** The trend of one figure of `d` against the baseline of its own /api/flow answer; empty with no baseline. */
 export function windowTrend(d, figure, value, o) {
   const base = d?.baseline?.base;
   if (!base) return "";
   return cardTrend(value, base[figure], d.baseline.prev?.[figure], { basis: d.baseline.basis ?? "", ...o });
 }
 
-/** The five cards of the Status scorecard. `d` is /api/speed for the window with `baseline`, or null while it loads. */
+/** The five cards of the Status scorecard. `d` is /api/flow for the window with `baseline`, or null while it loads. */
 export function statusCards(s, d, { efficiency, performance }) {
   const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
   const f = d && !d.error ? figuresOf(d) : null;
@@ -123,7 +123,7 @@ export function usageCard(s, link = { href: "#/factory/agents" }) {
 }
 
 const LANDED = ["landed", "returned"];
-/** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/speed for the window. */
+/** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/flow for the window. */
 export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
   if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`);

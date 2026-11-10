@@ -20,7 +20,6 @@ import { full } from "./test-now.ts";
 
 const WINDOWS = ["hour", "day", "week", "month"] as const;
 const WORDS = { hour: "last hour", day: "last 24 hours", week: "last 7 days", month: "last 30 days" };
-const DAYS = { hour: "0.041667", day: "1", week: null, month: "30" }; // week is the API default
 
 const P = (n: number) => ({ count: n, p50: 60, p90: 120, hist: [0, 1, 0, 0, 0, 0, 0], worst: 300 });
 const speed = (window: string): any => ({
@@ -33,19 +32,18 @@ const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday
 
 const PAGES: Record<string, { path: string; view: any; render: (w: string) => string }> = {
   jobs: { path: "#/factory/jobs", view: fjobs.view, render: (w) => fjobs.renderFactoryJobs(speed(w), null) },
-  efficiency: { path: "#/factory/efficiency", view: eff.view, render: (w) => eff.renderEfficiency(speed(w)) },
+  efficiency: { path: "#/flow", view: eff.view, render: (w) => eff.renderEfficiency(speed(w)) },
   agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
   status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
 };
-// Status and Agents load /api/state, then the speed of the window the mount asks for: the request is the speed one.
+// Status and Agents load /api/factory, then the speed of the window the mount asks for: the request is the speed one.
 const request = (p: { view: any }, q: URLSearchParams): string => {
-  if (typeof p.view.api === "function" && p.view !== now.view && p.view !== agents.view) return p.view.api(null, q);
+  if (typeof p.view.api === "function" && p.view !== now.view && p.view !== agents.view) return [p.view.api(null, q)].flat().join(" ");
   let url = "";
   void loadSpeed(windowOf(q), async (u: string) => { url = u; return { ok: true, json: async () => ({}) } as any; });
   return url;
 };
 const query = () => new URLSearchParams(location.hash.split("?")[1] ?? "");
-const pressed = (h: string) => [...(h.match(/data-name="window">(.*?)<\/div>/)?.[1] ?? "").matchAll(/data-value="(\w+)" aria-pressed="(\w+)"/g)];
 
 const g: any = globalThis;
 let store: Map<string, string> | null;
@@ -68,7 +66,7 @@ test("picking an option on each page asks for that window and the page says its 
     click({ target: { closest: () => btn } });
     expect(query().get("window"), name).toBe(w);
     const url = request(p, query());
-    expect(url).toBe(`/api/speed?window=${w}${name === "efficiency" ? "&baseline=1" : ""}`);
+    expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" ? "&baseline=1" : ""}`);
     const shown = p.render(w);
     expect(shown, `${name} ${w}`).toContain(name === "status" ? `data-value="${w}" aria-pressed="true"` : WORDS[w]);
     expect(html).toBeTruthy();
@@ -77,19 +75,14 @@ test("picking an option on each page asks for that window and the page says its 
 
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
   storeWindow("month");
-  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency ? "/api/speed?window=month&baseline=1" : "/api/speed?window=month");
-  expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/speed?window=hour");
+  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
+  expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/flow?window=hour");
   expect(windowOf(new URLSearchParams("window=nope"))).toBe("month");
 });
 
-test("a picked window asks for the jobs of the same window, and an old ?days= address stays open", () => {
-  for (const w of WINDOWS) expect(listUrl(null, new URLSearchParams(`window=${w}`))).toBe(DAYS[w] ? `/api/jobs?days=${DAYS[w]}` : "/api/jobs");
-  expect(listUrl(null, new URLSearchParams("days=90"))).toBe("/api/jobs?days=90");
-  expect(listUrl(null, new URLSearchParams("days=30"))).toBe("/api/jobs?days=30");
-  expect(listUrl(null, new URLSearchParams("role=worker&condition=failed"))).toBe("/api/jobs?condition=failed&role=worker");
-  const page = (days: string) => fjobs.renderFactoryJobs(speed("week"), null, "lead", [], { days });
-  expect(pressed(page("30")).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["month"]);
-  expect(pressed(page("90")).filter((m) => m[2] === "true")).toEqual([]);
+test("a picked window asks for the jobs of the same window, and the state goes along", () => {
+  for (const w of WINDOWS) expect(listUrl(null, new URLSearchParams(`window=${w}`))).toBe(w === "week" ? "/api/jobs?limit=2000" : `/api/jobs?window=${w}&limit=2000`);
+  expect(listUrl(null, new URLSearchParams("window=week&role=worker&state=failed"))).toBe("/api/jobs?state=failed&limit=2000");
 });
 
 test("the route of #?window=day is Status, on the day window", () => {
@@ -125,11 +118,11 @@ test("a chosen project is in the address, in each request, and on the next page"
     expect(request(p, new URLSearchParams()), name).not.toContain("project=");
   }
   expect(projectOf(new URLSearchParams("project=beta"))).toBe("beta");
-  expect(PAGES.status.view.api(null, new URLSearchParams("project=alpha"))).toBe("/api/state?project=alpha");
+  expect(PAGES.status.view.api(null, new URLSearchParams("project=alpha"))).toEqual(["/api/factory?window=week&project=alpha", "/api/automation?window=week&project=alpha"]);
 });
 
 test("the Automation page asks for the chosen window and project", () => {
-  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toBe("/api/gates?window=day&project=alpha");
+  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toEqual(["/api/automation?window=day&project=alpha", "/api/factory?project=alpha"]);
 });
 
 test("an answer for a project that is no longer cached does not enter the cache", async () => {

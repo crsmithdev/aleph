@@ -1,9 +1,9 @@
 /**
- * `GET /api/gates`: what the Gates page shows. The gates now, the Asks that wait for Chris, one rule per
+ * `GET /api/automation`: what the Gates page shows. The gates now, the Asks that wait for Chris, one rule per
  * Ask reason, the held paths, and the log of who decided what. Each part comes from the module that
  * owns it; this file only gathers them.
- * `POST /api/gates/revoke/:reason`: `aleph always revoke <reason>`, the Ask-me side of a rule. The grant side is
- * `POST /api/standing/:reason` (standing.ts).
+ * `POST /api/automation/rules/:reason/revoke`: `aleph always revoke <reason>`, the Ask-me side of a rule.
+ * `POST /api/automation/rules/:reason/grant` (`{ "action": "<action>" }`): `aleph always grant`, the Always side.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -15,7 +15,6 @@ import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { layout, readEvents } from "../../jobs/lib/infra/layout.ts";
 import { eventIn, inProject } from "./scope.ts";
-import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import type { Event } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
@@ -23,13 +22,13 @@ import { reader } from "../../issues/lib/store.ts";
 
 import { aleph, fail, post } from "../action.ts";
 import { state, type State } from "../state.ts";
+import { forProject, WINDOWS } from "./now.ts";
 import type { Routes } from "../server.ts";
 
 /** The log keeps the entries of the last LOG_DAYS days, newest first, at most LOG_MAX of each actor. */
 const LOG_DAYS = 7; export const LOG_MAX = 200;
 const DAY = 86_400_000;
 /** The windows that `?window=` takes. */
-const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DAY, month: 30 * DAY };
 /** Whether `item` (`<repo>-<id>`) belongs to `project`; no project keeps every item. */
 
 /** One log row: an event. A run of equal gate events is one row: `times` is how many, `first` the first one's time. */
@@ -269,14 +268,15 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
   };
 }
 
-/** The page's data from the Status page's state (its factory snapshot, its asks and its Queued lane) and the security facts. */
-export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[] }, ms = LOG_DAYS * DAY, project?: string) {
+/** The page's data from the Status page's state (its asks) and the security facts. */
+export function gatesBody(state: Pick<State, "now" | "asks">, security: { held: string[] }, ms = LOG_DAYS * DAY, project?: string) {
   const jobs = allJobs(), entries = log(Date.now(), LOG_MAX, ms, project), all = log(Date.now(), Infinity, ms, project);
   const records = record.all().filter((r) => inProject(r.issue, project)), holds = allHolds().filter((h) => inProject(h.name, project));
-  const f = state.factory, hold = backendHold();
+  const hold = backendHold();
   return {
     now: state.now,
-    factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: Object.fromEntries(CAP_KEYS.map((k) => [k, capEnvSet(CAP_ENV[k])])), settings: settingsNow() },
+    capEnv: Object.fromEntries(CAP_KEYS.map((k) => [k, capEnvSet(CAP_ENV[k])])),
+    settings: settingsNow(),
     metrics: metrics(all, holds, Date.now(), records, ms),
     schedules: schedules(),
     monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
@@ -290,27 +290,31 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     ...security,
     repoHeld: repoHeld(),
     log: { days: ms / DAY, max: LOG_MAX, entries },
-    codes: Object.fromEntries(Object.values(loadRegistry()).filter((r) => r.code).map((r) => [r.key, r.code])),
   };
 }
 
 export const routes: Routes = {
-  "GET /api/gates": async (req) => {
+  "GET /api/automation": async (req) => {
     const q = new URL(req.url).searchParams, w = q.get("window");
     if (w !== null && !(w in WINDOWS)) return Response.json({ error: `window must be one of ${Object.keys(WINDOWS).join(", ")}` }, { status: 400 });
-    return Response.json(gatesBody(state(), await securityFacts(), w === null ? undefined : WINDOWS[w], q.get("project") || undefined));
+    const project = q.get("project") || undefined;
+    return Response.json(gatesBody(forProject(state(), project ?? null), await securityFacts(), w === null ? undefined : WINDOWS[w], project));
   },
-  "POST /api/gates/caps": post((body) => {
+  "POST /api/automation/caps": post((body) => {
     if (typeof body !== "object" || Array.isArray(body)) fail(422, "body must be a JSON object");
     const patch: Record<string, unknown> = {};
     for (const k of CAP_KEYS) if (k in body) patch[k] = body[k];
     try { writeCaps(patch); } catch (e) { fail(422, (e as Error).message); }
     return { live: LIVE_CAP(), run: RUN_CAP(), ...settingsNow() };
   }),
-  "POST /api/gates/schedules": post((body) => {
+  "POST /api/automation/schedules": post((body) => {
     const e = setTimerInterval(String(body.name), String(body.every));
     if (e) fail(422, e);
     return { every: intervalOf(TIMERS[body.name]) };
   }),
-  "POST /api/gates/revoke/:reason": post((_body, { reason }) => aleph(["always", "revoke", "--", reason])),
+  "POST /api/automation/rules/:reason/grant": post((body, { reason }) => {
+    if (typeof body.action !== "string" || !body.action) fail(400, "send an action");
+    return aleph(["always", "grant", "--", reason, body.action]);
+  }),
+  "POST /api/automation/rules/:reason/revoke": post((_body, { reason }) => aleph(["always", "revoke", "--", reason])),
 };

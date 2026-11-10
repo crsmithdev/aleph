@@ -1,4 +1,4 @@
-// The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
+// The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get } from "../router.js";
 import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, say, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
@@ -110,7 +110,7 @@ export function costFrame(d) {
 const FRAMES = { live: liveFrame, outcomes: outcomesFrame, cost: costFrame };
 const key = (k) => `factory/agents/${k}`;
 
-/** The page body. `d` is /api/speed for the window, or null while it loads. */
+/** The page body. `d` is /api/flow for the window, or null while it loads. */
 export function renderFactoryAgents(s, d, _key = "live", window = "week", m = null) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
@@ -132,7 +132,7 @@ export const view = {
   group: "factory",
   order: 2,
   icon: "robot",
-  api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
+  api: (_params, q = new URLSearchParams()) => withProject("/api/factory", q),
   live: true,
   refresh: 60,
   render: (s, _params, q) => renderFactoryAgents(s, usable(windowOf(q)), "live", windowOf(q)),

@@ -1,6 +1,6 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { clip } from "../../lib/naming.ts";
-import { LangfuseError, config, observations, traces } from "../langfuse.ts";
+import { LangfuseError, config, observations, traceList, traces } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { traceIn, traceProject } from "./scope.ts";
 import type { Routes } from "../server.ts";
@@ -68,6 +68,11 @@ function modelOf(obs: any[]): string | null {
   return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
 
+/** Seconds from ms. */
+const sec = (n: number) => n / 1000;
+/** An observation's or a trace's duration in seconds, or null. */
+const secondsOf = (o: any): number | null => { const d = durationMs(o); return d === null ? null : sec(d); };
+
 const durationMs = (o: any): number | null => {
   if (o.endTime && o.startTime) return Math.max(0, ms(o.endTime) - ms(o.startTime));
   return typeof o.latency === "number" ? Math.round(o.latency * 1000) : null; // Langfuse reports latency in seconds
@@ -127,8 +132,8 @@ function toolCalls(obs: any[], t0 = 0) {
   const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
   const spanOf = new Map([...pairAgents(obs)].map(([a, t]) => [t, a]));
   const call = (o: any, parent: string | null = null): any => ({
-    id: o.id, parent, name: o.name, start: o.startTime, startMs: Math.max(0, ms(o.startTime) - t0), endMs: Math.max(0, ms(o.startTime) - t0) + (durationMs(o) ?? 0), args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
-    error: o.level === "ERROR" ? o.statusMessage || "error" : null, durationMs: durationMs(o),
+    id: o.id, parent, name: o.name, start: o.startTime, from: sec(Math.max(0, ms(o.startTime) - t0)), to: sec(Math.max(0, ms(o.startTime) - t0) + (durationMs(o) ?? 0)), args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
+    error: o.level === "ERROR" ? o.statusMessage || "error" : null, seconds: secondsOf(o),
     kind: spanOf.has(o.id) ? "subagent" : "tool",
     children: spanOf.has(o.id) ? list((p) => p === spanOf.get(o.id), o.id) : [],
   });
@@ -148,7 +153,7 @@ function generations(obs: any[], t0 = 0) {
       const startMs = Math.max(0, ms(o.startTime) - t0), durMs = durationMs(o);
       return {
         id: o.id, parent: agents.has(o.parentObservationId) ? spanTool.get(o.parentObservationId)! : null, kind: "generation", name: o.name, model: o.model ?? null,
-        start: o.startTime, startMs, endMs: startMs + (durMs ?? 0), durationMs: durMs,
+        start: o.startTime, from: sec(startMs), to: sec(startMs + (durMs ?? 0)), seconds: durMs === null ? null : sec(durMs),
         cost: num(o.calculatedTotalCost) ?? num(o.totalCost), inputTokens: num(o.usage?.input ?? o.usageDetails?.input), outputTokens: num(o.usage?.output ?? o.usageDetails?.output),
         error: o.level === "ERROR" ? o.statusMessage || "error" : null, input: cut(o.input, 400), output: cut(o.output, 400),
       };
@@ -163,21 +168,27 @@ function textBlocks(obs: any[], output: string) {
     .filter((t) => t.text.trim() !== output.trim());
 }
 
-/** The traces with a session over the last `days` days, at most 90 (the widest window the page offers). */
-export async function windowTraces(days: number, project: string | null): Promise<any[]> {
+/** The traces with a session over the last `days` days, at most 90 (the widest window the page offers), and whether Langfuse held more pages than the read. */
+export async function windowTraces(days: number, project: string | null): Promise<{ rows: any[]; partial: boolean }> {
   const hour = 3600_000; // whole hours, so the cache key holds
   const from = new Date(Math.floor((Date.now() - Math.min(days > 0 ? days : 7, 90) * 86400_000) / hour) * hour).toISOString();
-  return (await traces(config(), { fromTimestamp: from })).filter((t) => t.sessionId && traceIn(t, project));
+  const { rows, partial } = await traceList(config(), { fromTimestamp: from });
+  return { rows: rows.filter((t) => t.sessionId && traceIn(t, project)), partial };
 }
 
-/** `GET /api/sessions`'s handler: the sessions of a window, called in-process by `/api/agents`. */
+const LIMIT = 100, MAX = 2000;
+
+/** The sessions of a window, for `GET /api/sessions`: newest last turn first, `?limit=` of them before the `?before=` time, and `next`, the `before` of the next page. */
 export async function listSessions(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const days = Number(url.searchParams.get("days") ?? 7);
+  const days = Number(url.searchParams.get("window") ?? 7);
   const project = url.searchParams.get("project") || null;
+  const limit = Number(url.searchParams.get("limit") ?? LIMIT), before = url.searchParams.get("before");
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX) return Response.json({ error: `limit must be 1 to ${MAX}` }, { status: 400 });
+  if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
   try {
     const cfg = config();
-    const all = await windowTraces(days, project);
+    const { rows: all, partial } = await windowTraces(days, project);
     const groups = new Map<string, any[]>();
     for (const t of all) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
     const ledger = jobs();
@@ -199,8 +210,9 @@ export async function listSessions(req: Request): Promise<Response> {
         cost: langfuse || job?.cost || 0,
         taskTypes: taskTypes(ts),
       };
-    }).sort((a, b) => ms(b.last) - ms(a.last));
-    return Response.json({ base: cfg.baseUrl, projects: Object.keys(loadRegistry()).sort(), sessions });
+    }).sort((a, b) => ms(b.last) - ms(a.last)).filter((x) => before === null || ms(x.last) < Date.parse(before));
+    const page = sessions.slice(0, limit), next = sessions.length > limit ? page.at(-1)!.last : null;
+    return Response.json({ base: cfg.baseUrl, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, partial });
   } catch (e) { return fail(e); }
 }
 
@@ -219,7 +231,7 @@ export const routes: Routes = {
         prompt: clip(text(t.input), 300),
         output: cut(t.output, 400),
         tools: all[i].filter((o) => isType(o, "tool")).length,
-        durationMs: durationMs(t),
+        seconds: secondsOf(t),
         cost: t.totalCost ?? 0,
         model: modelOf(all[i]),
       }));
@@ -239,15 +251,15 @@ export const routes: Routes = {
       const t0 = ms(ts[0].timestamp); // the waterfall's axis starts at the session's first turn
       const turns = page.map((t, i) => ({
         n: from + i,
-        startMs: Math.max(0, ms(t.timestamp) - t0),
-        endMs: Math.max(0, ms(t.timestamp) - t0) + (durationMs(t) ?? 0),
+        from: sec(Math.max(0, ms(t.timestamp) - t0)),
+        to: sec(Math.max(0, ms(t.timestamp) - t0) + (durationMs(t) ?? 0)),
         ...wkOf(fit, t.totalCost, modelOf(all[i])),
         traceId: t.id,
         start: t.timestamp,
         prompt: text(t.input),
         output: text(t.output),
         model: modelOf(all[i]),
-        durationMs: durationMs(t),
+        seconds: secondsOf(t),
         cost: t.totalCost ?? 0,
         tools: toolCalls(all[i], t0),
         generations: generations(all[i], t0),
@@ -272,7 +284,7 @@ export const routes: Routes = {
         const kind = isType(o, "tool") ? "tool" : isType(o, "guardrail") || o.name === "verify-gate" || o.name === "vault-recall" ? "hook" : isType(o, "agent") ? "subagent" : isType(o, "generation") ? "generation" : "event";
         const out: Record<string, unknown> = {
           id: o.id, kind, name: o.name, input: cut(o.input, 400), output: cut(o.output, 400),
-          durationMs: durationMs(o), error: o.level === "ERROR" ? o.statusMessage || "error" : null, children: [] as unknown[],
+          seconds: secondsOf(o), error: o.level === "ERROR" ? o.statusMessage || "error" : null, children: [] as unknown[],
         };
         if (o.name === "vault-recall") out.recall = { candidates: m.candidates ?? null, asked: m.asked ?? null, kept: m.kept ?? null };
         if (o.name === "verify-gate") out.verify = { kind: m.kind ?? null, verdict: m.verdict ?? null };
@@ -292,7 +304,7 @@ export const routes: Routes = {
       return Response.json({
         ...wkOf(await currentFit().catch(() => null), t.totalCost, modelOf(obs)),
         base: cfg.baseUrl, id: params.id, ...labelOf(params.id), n, total: ts.length, traceId: t.id, project: projectOf(t), start: t.timestamp,
-        prompt: cut(t.input, 400), output: cut(t.output, 400), cost: t.totalCost ?? 0, durationMs: durationMs(t), observations: top,
+        prompt: cut(t.input, 400), output: cut(t.output, 400), cost: t.totalCost ?? 0, seconds: secondsOf(t), observations: top,
       });
     } catch (e) { return fail(e); }
   },

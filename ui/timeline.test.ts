@@ -6,8 +6,8 @@ import { dur, setCodes } from "./lib.js";
 // @ts-ignore
 import { issueSegments, renderIssue } from "./views/issues.js";
 
-const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", condition: "passed", started, ended, ...extra });
-const issue = (over: object = {}) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [] }, ...over });
+const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", href: "#/jobs/fac-1%231", condition: "passed", started, ended, ...extra });
+const issue = (over: object = {}) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { filed: "2026-11-01T10:00:00Z", runs: [] }, ...over });
 const held = () => [
   run("intake", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"),
   run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z", { condition: "waiting", cost: 0.25 }),
@@ -30,10 +30,10 @@ describe("the waits", () => {
 
 describe("the issue timeline", () => {
   test("without parts it is one Work row: a bar per run, the waits, and the notes as events", () => {
-    const [row] = rowsOf({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: triage: asked"] });
-    expect(issueSegments(issue({ timeline: { filed: 0, runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
+    const [row] = rowsOf({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: triage: asked"] });
+    expect(issueSegments(issue({ timeline: { filed: new Date(0).toISOString(), runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
     expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["intake", "aux"], ["build", "build"], ["land", "land"]]);
-    expect(row.bars[1].href).toBe("#/jobs/fac-1");
+    expect(row.bars[1].href).toBe("#/jobs/fac-1%231");
     expect(row.waits.map((w: any) => w.chris)).toEqual([false, true]);
     expect(row.events.map((e: any) => e.tag)).toEqual(["waiting", "waiting", "triage"]);
     expect(row.cost).toBe("$0.30");
@@ -41,8 +41,8 @@ describe("the issue timeline", () => {
 
   test("an open issue waits up to now; a live run runs up to now", () => {
     const now = Date.parse("2026-11-01T12:00:00Z");
-    expect(rowsOf({ status: "open", timeline: { filed: now - 3_600_000, runs: [] } }, now)[0].waits).toEqual([{ start: now - 3_600_000, end: now, chris: false }]);
-    const live = rowsOf({ status: "open", timeline: { filed: now - 3_600_000, runs: [run("build", "2026-11-01T11:30:00Z", null, { condition: "running" })] } }, now)[0];
+    expect(rowsOf({ status: "open", timeline: { filed: new Date(now - 3_600_000).toISOString(), runs: [] } }, now)[0].waits).toEqual([{ start: now - 3_600_000, end: now, chris: false }]);
+    const live = rowsOf({ status: "open", timeline: { filed: new Date(now - 3_600_000).toISOString(), runs: [run("build", "2026-11-01T11:30:00Z", null, { condition: "running" })] } }, now)[0];
     expect(live.bars[0].end).toBe(now);
   });
 
@@ -52,7 +52,7 @@ describe("the issue timeline", () => {
   });
 
   test("with parts: before the split, a row per part from its runs' `on`, and after the parts to the close", () => {
-    const parts = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [{ name: "fac-1.1" }] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
+    const parts = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [{ id: "fac-1.1#2", name: "fac-1.1" }] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
     const runs = [
       run("intake", "2026-11-01T10:05:00Z", "2026-11-01T10:06:00Z", { name: "plan-fac-1" }),
       run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1", condition: "failed", reason: "it broke" }),
@@ -60,14 +60,14 @@ describe("the issue timeline", () => {
       run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" }),
     ];
     const notes = ["- 2026-11-01T10:06:00.000Z: planner: split into fac-1.1, fac-1.2", "- 2026-11-01T10:25:00.000Z: its sub-issues are done"];
-    const segs = issueSegments(issue({ goals: parts, notes, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } }));
+    const segs = issueSegments(issue({ goals: parts, notes, timeline: { filed: "2026-11-01T10:00:00Z", runs } }));
     expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Sub-issues", 2], ["After the Sub-issues", 1]]);
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;
     expect(before.bars.map((b: any) => b.label)).toEqual(["intake"]);
     expect(before.events.map((e: any) => e.tag)).toEqual(["waiting", "planner"]);
     expect(one.bars.map((b: any) => [b.label, b.tone])).toEqual([["build 1", "bad"], ["build 2", "build"]]);
     expect(one.events.find((e: any) => e.tag === "failed").html).toBe("build 1 · it broke");
-    expect(one.head).toContain('href="#/jobs/fac-1.1"');
+    expect(one.head).toContain('href="#/jobs/fac-1.1%232"');
     expect(two.head).toContain('href="#/issues/fac/1.2"');
     // fac-1.2 waited from the split to its run: 10 min.
     expect(two.waits.map((w: any) => dur((w.end - w.start) / 1000))).toEqual(["10m 00s"]);
@@ -79,7 +79,7 @@ describe("the issue timeline", () => {
 test("the issue timeline heads the segment for its children Sub-issues", () => {
   const parts = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
   const runs = [run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1" }), run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" })];
-  const h = renderTimeline(issueSegments(issue({ goals: parts, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } })));
+  const h = renderTimeline(issueSegments(issue({ goals: parts, timeline: { filed: "2026-11-01T10:00:00Z", runs } })));
   expect(h).toContain("<h3>Sub-issues</h3>");
   expect(h).toContain("<h3>After the Sub-issues</h3>");
 });
@@ -153,10 +153,10 @@ describe("the compact scale", () => {
 
 describe("the timeline panel", () => {
   test("it shows the axis, the segments, the bars as links to their jobs and the events, escaped", () => {
-    const h = renderTimeline(issueSegments(issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: <b>x</b>"] })));
+    const h = renderTimeline(issueSegments(issue({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: <b>x</b>"] })));
     expect(h).toContain('<h2 id="h-timeline">Timeline</h2>');
     expect(h).toContain("<h3>Work</h3>");
-    expect(h).toContain('<a class="dp-bar t-build" href="#/jobs/fac-1"');
+    expect(h).toContain('<a class="dp-bar t-build" href="#/jobs/fac-1%231"');
     expect(h).toContain("Long spans are compressed");
     expect(h).not.toContain("dp-key");
     expect(h).toContain('<ul class="legend"><li><i class="t-wait"></i>waiting</li><li><i class="t-chris"></i>');
@@ -167,7 +167,7 @@ describe("the timeline panel", () => {
   });
 
   test("the Issue page puts the KPIs, then the Timeline, then the Description, then Notes and Commits", () => {
-    const page = renderIssue({ ...issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() } }), title: "t", labels: [], priority: "low", specs: [], request: "r", derived: null });
+    const page = renderIssue({ ...issue({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() } }), title: "t", labels: [], priority: "low", specs: [], request: "r", derived: null });
     const at = (t: string) => page.indexOf(t);
     expect(at("dp-kpis")).toBeGreaterThan(-1);
     expect(at("dp-kpis")).toBeLessThan(at('id="h-timeline"'));

@@ -75,14 +75,14 @@ test("the Status page puts Agent Time, Pipeline and the lanes in the main column
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
 });
 
-test("mountStatus fetches the week and fills the scorecard, the outcome bar and the Pipeline, and no other panel from /api/speed", async () => {
+test("mountStatus fetches the week and fills the scorecard, the outcome bar and the Pipeline, and no other panel from /api/flow", async () => {
   // @ts-ignore plain JS shared with the page
   const { resetSpeed } = await import("./views/speed.js");
   resetSpeed();
   const tiles = { innerHTML: "" }, outcome = { outerHTML: "" }, pipe = { outerHTML: "" }, other = { innerHTML: "" };
   const urls: string[] = [];
   await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#outcome" ? outcome : s === "#pipeline" ? pipe : s === ".ph" ? null : other) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, baseline: BASE }) }; });
-  expect(urls).toEqual(["/api/speed?window=week&baseline=1"]);
+  expect(urls).toEqual(["/api/flow?window=week&baseline=1"]);
   expect(tiles.innerHTML).toContain("<b>38%<em> / 6.0h</em></b>");
   expect(pipe.outerHTML).toContain('id="pipeline"');
   expect(other.innerHTML).toBe("");
@@ -120,7 +120,7 @@ test("an ask keeps its action buttons on the page", () => {
 });
 
 test("the sidebar links and the routes exist", async () => {
-  for (const [f, path, old] of [["factory-jobs", "/factory/jobs", "#/status/performance"], ["efficiency", "/factory/efficiency", "#/status/efficiency"], ["factory-agents", "/factory/agents", "#/status/capacity"]]) {
+  for (const [f, path, old] of [["factory-jobs", "/factory/jobs", "#/status/performance"], ["efficiency", "/flow", "#/status/efficiency"], ["factory-agents", "/factory/agents", "#/status/capacity"]]) {
     const m = await import(`./views/${f}.js`);
     expect(m.view.path).toBe(path);
     expect(m.redirect(old)).toBe(`#${path}`);
@@ -138,7 +138,7 @@ test("mountStatus loads the window of the address", async () => {
   resetSpeed();
   const urls: string[] = [];
   await view.mountStatus({ querySelector: () => null }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => WEEK }; }, new URLSearchParams("window=hour"));
-  expect(urls).toEqual(["/api/speed?window=hour&baseline=1"]);
+  expect(urls).toEqual(["/api/flow?window=hour&baseline=1"]);
   resetSpeed();
   delete g.localStorage; delete g.location; delete g.history;
 });
@@ -203,17 +203,13 @@ test("a held Queued card ends its meta row with its hold event: the action word 
   expect(html).not.toContain(">blocked</span>");
 });
 
-test("a land card has its own kind class, and the Done header counts the selected window", () => {
+test("a land card has its own kind class, and the Done header shows the count of its window", () => {
   const run = (kind: string) => ({ name: "j", repo: "r", item: { title: "t" }, started: "2026-11-02T11:00:00Z", run: { kind, started: "2026-11-02T11:00:00Z" } });
   const html = view.renderLanes({ ...state, running: [run("land"), run("build")] });
   expect(html).toContain("run-row kind-land");
   expect(html).toContain("run-row kind-worker");
-  const day = Date.parse(state.now);
-  const done = { ...state, done: [1, 2].map((n) => ({ id: `r-${n}`, title: "d", href: "#/x", jobs: [] })),
-    doneStamps: [0, 1, 2, 3 * 86_400_000, 20 * 86_400_000].map((a, i) => ({ id: `r-${i}`, at: day - a })) };
+  const done = { ...state, done: [1, 2].map((n) => ({ id: `r-${n}`, title: "d", href: "#/x", jobs: [] })), doneCount: 4 };
   expect(view.renderLanes(done)).toContain('<h2 id="h-done">Done</h2><span class="count">2 of 4</span>');
-  expect(view.renderLanes(done, "day")).toContain('<span class="count">2 of 3</span>');
-  expect(view.renderLanes(done, "month")).toContain('<span class="count">2 of 5</span>');
 });
 
 test("the Status page scorecard is a tiles section with the id scorecard", () => {

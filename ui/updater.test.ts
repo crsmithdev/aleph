@@ -26,8 +26,8 @@ beforeAll(() => { dir = mkdtempSync(join(tmpdir(), "aleph-ui-updater-")); });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 test("a key is its path and its non-empty query, sorted", () => {
-  expect(keyOf(new URL("http://x/api/speed?window=week&baseline=1&project="))).toBe("/api/speed?baseline=1&window=week");
-  expect(keyOf(new URL("http://x/api/state"))).toBe("/api/state");
+  expect(keyOf(new URL("http://x/api/flow?window=week&baseline=1&project="))).toBe("/api/flow?baseline=1&window=week");
+  expect(keyOf(new URL("http://x/api/factory"))).toBe("/api/factory");
 });
 
 test("a change builds the kept keys that read the source, and only then signals the keys whose answer changed", async () => {
@@ -202,18 +202,18 @@ test("a change during a build builds the key once more, and the signal waits for
   expect((await u.get("/a")).answer.body).toBe(2);
 });
 
-test("while a build runs in the Worker, the server answers other routes: /api/projects/keys comes back before a slow /api/state", async () => {
+test("while a build runs in the Worker, the server answers other routes: /api/projects comes back before a slow /api/factory", async () => {
   const { withEnv, withServer } = await import("./test-server.ts");
   const restore = withEnv({ ALEPH_STATE_SLOW_MS: "1500", ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_JOBS_DIR: join(dir, "runs") });
   const { at, stop } = await withServer({ warm: false });
   try {
     const order: string[] = [];
-    const state = at("/api/state").then((r) => { order.push("state"); return r; });
-    const keys = at("/api/projects/keys").then((r) => { order.push("projects"); return r; });
+    const state = at("/api/factory").then((r) => { order.push("state"); return r; });
+    const keys = at("/api/projects").then((r) => { order.push("projects"); return r; });
     const [s, k] = await Promise.all([state, keys]);
     expect([s.status, k.status]).toEqual([200, 200]);
     expect(order).toEqual(["projects", "state"]);
-    expect(s.headers.get("x-aleph-keys")).toBe("/api/state");
+    expect(s.headers.get("x-aleph-keys")).toBe("/api/factory");
   } finally { stop(); restore(); }
 });
 

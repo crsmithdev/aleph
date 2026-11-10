@@ -1,6 +1,6 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
-// `data` is /api/agents. The session and skill detail routes stay in their own views.
+// `data` is /api/sessions. The session and skill detail routes stay in their own views.
 import { actButton, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, scopeBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope } from "../lib.js";
 
 export const view = {
@@ -10,9 +10,10 @@ export const view = {
   group: "claude",
   order: 0,
   api: (_params, q = new URLSearchParams()) => {
-    const out = new URLSearchParams({ days: q.get("days") || "7" });
+    // The table sorts and filters the whole window, so it asks for the most rows a page holds.
+    const out = new URLSearchParams({ window: q.get("days") || "7", limit: "2000" });
     if (q.get("project")) out.set("project", q.get("project"));
-    return `/api/agents?${out}`;
+    return `/api/sessions?${out}`;
   },
   render: (d, _params, query) => renderSessions(d, options(query)),
   mount: (root, d) => mount(root, d),
@@ -141,7 +142,7 @@ const renderLive = (d, o) => {
 };
 
 /** The fetch reads a bounded number of pages, so a longer window gets the counts of part of it only. */
-const partialNotice = (d) => (d?.activity?.partial ? `<p class="hint" role="status">Langfuse holds more pages than the fetch reads, so these counts cover only part of the window.</p>` : "");
+const partialNotice = (d) => (d?.partial ? `<p class="hint" role="status">Langfuse holds more pages than the fetch reads, so these counts cover only part of the window.</p>` : "");
 
 let live = null;
 const here = () => options(hashQuery());

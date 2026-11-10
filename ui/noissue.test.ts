@@ -14,7 +14,7 @@ const attrs = (html: string) => [...html.matchAll(/\b(?:title|placeholder|aria-l
 // The Issue page, the Issues page and the Status lanes use the work model's names, so they say issue (see state.test.ts and issues.test.ts); the pages below keep the old rule.
 describe("the UI never says goal", () => {
   const pages: [string, string][] = [
-    ["now issues", renderLanes({ running: [], runningIssues: [], queued: [{ repo: "aleph", id: 3, title: "x", kind: "ready" }], done: [], doneStamps: [], factory: { health: [] } })],
+    ["now issues", renderLanes({ running: [], runningIssues: [], queued: [{ repo: "aleph", id: 3, title: "x", kind: "ready" }], done: [], factory: { health: [] } })],
   ];
   for (const [name, html] of pages) test(name, () => { noIssue(html); noIssue(attrs(html)); });
 

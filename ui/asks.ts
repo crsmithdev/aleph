@@ -1,10 +1,10 @@
 /**
- * What the Awaiting-you rows say and offer (the `asks` of /api/state). The server decides from the Ask's reason and the item's data;
+ * What the Awaiting-you rows say and offer (the `asks` of /api/factory). The server decides from the Ask's reason and the item's data;
  * the page only renders. One entry per run, issue that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
 import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Granted } from "../jobs/lib/asks/ask.ts";
-import { parseId, refs, word } from "../lib/naming.ts";
+import { jobHref, parseId, refs, word } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
 import type { Job, NewIssue } from "./state.ts";
@@ -120,7 +120,7 @@ const rerun = (reason: string, args: Record<string, string>): Action => {
 };
 
 function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
-  const run: Record<string, string> = c.run ? { name: c.run.name, run: c.run.run?.id } : {};
+  const run: Record<string, string> = c.run ? { name: c.run.name, job: c.run.id } : {};
   const p = c.issue ? parseId(c.id) : null;
   const issue = { repo: p?.repo ?? "", id: p ? `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}` : "" };
   const a = (act: string, label: string, hint: string, args: Record<string, string>): Action => ({ act, label, hint, primary: false, args, recommended: false });
@@ -252,7 +252,7 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, lessons: Lesson[]
   const add = (it: AskItem) => out.push(it);
   const rank: Record<string, number> = { "held-path": 0, review: 1 };
   const runs = s.runs.filter((j) => j.ask && ASK_REASONS[j.ask.reason]).sort((a, b) => (rank[a.ask!.reason] ?? 2) - (rank[b.ask!.reason] ?? 2));
-  for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, `#/jobs/${encodeURIComponent(j.name)}`, j.item?.title ?? "", j.repo, j.ask!.kind, j.item?.priority));
+  for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, jobHref(j.id), j.item?.title ?? "", j.repo, j.ask!.kind, j.item?.priority));
   for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, parseId(i.id)?.repo ?? "", i.askKind, i.priority));
   for (const l of lessons) {
     const reason = `proposal-${l.kind ?? "skill"}`;

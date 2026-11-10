@@ -1,15 +1,16 @@
 /**
- * `GET /api/issues`, `GET /api/issues/:repo/:n` and `POST /api/issues`: the
- * Issues and Issue views' data. `?all=1` lists every repo, not only the recent ones. Every route takes `?project=<key>` and shows
- * only that project. A read is the work store's origin/main; a write runs
+ * `GET /api/issues`, `GET /api/issues/:id` and `POST /api/issues`: the Issues and Issue views' data. `GET /api/issues` is
+ * `{ issues, projects, tests }`: every issue row with the count and recorded cost of the jobs on it and its parts, the
+ * registry's keys and each project's suite history records. `:id` is an issue ID, short (`a1430`) or full. Every route
+ * takes `?project=<key>` and shows only that project. A read is the work store's origin/main; a write runs
  * `aleph issue <verb>` through ui/action.ts, so the CLI stays the one writer.
  */
 import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
 import { allJobs, lastReal } from "../../jobs/lib/records/job.ts";
-import { loadRegistry, onOf, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, jobIdOf, loadRegistry, onOf, type Entry, type Repo } from "../../jobs/lib/records/ledger.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
-import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/records/status.ts";
+import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
@@ -21,17 +22,24 @@ import * as todos from "../../issues/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector } from "../state.ts";
-import { card, row, stageOf } from "../issue.ts";
-import { issueHref } from "../../lib/naming.ts";
+import { card, row, stageOf, type Row } from "../issue.ts";
+import { issueHref, jobHref, parseId } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { filed } from "./speed.ts";
-import { readHolds } from "../../jobs/lib/gates/factory-status.ts";
+import { readHolds, suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
 import { repoIn } from "./scope.ts";
 
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
 
-/** An issue id from a route: `7` or `7.1`; null for anything else. */
+/** An issue ref: `7` or `7.1`; null for anything else. */
 const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Number(raw) : /^\d+\.\d+$/.test(raw) ? raw : null);
+
+/** The registry repo and the ref (`7`, `7.1`) of an issue ID from a route; null when no registry repo has it. */
+function issueOf(id: string): { repo: Repo; ref: string } | null {
+  const registry = loadRegistry(), p = parseId(id);
+  const repo = p ? registry[p.repo] : undefined;
+  return repo ? { repo, ref: p!.sub === undefined ? String(p!.n) : `${p!.n}.${p!.sub}` } : null;
+}
 
 
 /** Each item's stage by ref, from the list already read and one pass over main's trailers; empty when the trailers cannot be read. */
@@ -39,36 +47,46 @@ function stagesBy(repo: Repo, doc: todos.Doc, items?: string[]): Map<string, Sta
   try { return new Map(repoStages(repo, { fetch: false, doc, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch { return new Map(); }
 }
 
-function list(url: URL): Response {
-  const registry = loadRegistry();
-  const project = url.searchParams.get("project");
-  const wantRepo = url.searchParams.get("repo");
-  const status = url.searchParams.get("status");
-  const label = url.searchParams.get("label");
-  if (status && !todos.STATUSES.includes(status as todos.Status)) return Response.json({ error: `status must be one of ${todos.STATUSES.join(", ")}` }, { status: 400 });
-  if (wantRepo && !registry[wantRepo]) return Response.json({ error: `no repo named ${wantRepo}` }, { status: 404 });
-  let repos = Object.values(registry).filter((r) => repoIn(r.key, project));
-  if (wantRepo) repos = repos.filter((r) => r.key === wantRepo);
-  let docs: (todos.Doc | null)[];
-  try { docs = readLists(repos); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
-  const order = wantRepo || url.searchParams.get("all") ? repos.map((_, n) => n) : recentRepos(repos, docs);
-  const out = [];
-  for (const n of order) {
-    const doc = docs[n];
-    if (!doc) continue;
-    const states = stagesBy(repos[n], doc);
-    const rows = doc.items.map((i) => row(repos[n].key, i, states.get(todos.refOf(i))));
-    const items = rows.filter((r) => (!status || r.status === status) && (!label || r.labels.includes(label)));
-    if (items.length) out.push(...items);
+/** Each issue's own jobs and cost, by `<repo>-<ref>`. */
+function totals(): Map<string, { runs: number; cost: number }> {
+  const out = new Map<string, { runs: number; cost: number }>();
+  for (const { run } of allRuns()) {
+    const on = onOf(run);
+    if (on === undefined) continue;
+    const t = out.get(`${run.repo}-${on}`) ?? { runs: 0, cost: 0 };
+    t.runs++; t.cost += run.cost ?? 0;
+    out.set(`${run.repo}-${on}`, t);
   }
-  return Response.json(out);
+  return out;
 }
 
-/** A job as the Issue page lists it: its name, state, times, cost and how many runs it holds. */
-function jobRow(runs: ReturnType<typeof allJobs>[number]) {
-  const r = lastReal(runs).run;
+function list(url: URL): Response {
+  const project = url.searchParams.get("project");
+  const repos = Object.values(loadRegistry()).filter((r) => repoIn(r.key, project));
+  let docs: (todos.Doc | null)[];
+  try { docs = readLists(repos); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+  const rows: Row[] = repos.flatMap((repo, n) => {
+    const doc = docs[n];
+    if (!doc) return [];
+    const states = stagesBy(repo, doc);
+    return doc.items.map((i) => row(repo.key, i, states.get(todos.refOf(i))));
+  });
+  const own = totals();
+  const sums = new Map(rows.map((r) => [`${r.repo}-${r.ref}`, { ...(own.get(`${r.repo}-${r.ref}`) ?? { runs: 0, cost: 0 }) }]));
+  // A child's jobs also count for its parent.
+  for (const r of rows) {
+    const mine = own.get(`${r.repo}-${r.ref}`), up = r.parent === null ? undefined : sums.get(`${r.repo}-${r.parent}`);
+    if (mine && up) { up.runs += mine.runs; up.cost += mine.cost; }
+  }
+  const projects = repos.map((r) => r.key);
+  return Response.json({ issues: rows.map((r) => ({ ...r, ...sums.get(`${r.repo}-${r.ref}`)! })), projects, tests: Object.fromEntries(projects.map((k) => [k, suiteHistory(k)])) });
+}
+
+/** A job as the Issue page lists it: the job ID of its run that counts, its name, state, times, cost and how many runs it holds. */
+function jobRow(runs: ReturnType<typeof allJobs>[number], every: Entry[]) {
+  const last = lastReal(runs), r = last.run;
   const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
-  return { name: r.name, condition: r.condition, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
+  return { id: jobIdOf(last, every), name: r.name, condition: r.condition, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
 }
 
 /** Whether an `onOf` value names issue `n`: the number itself, or a part `<n>.<k>` of it. */
@@ -77,9 +95,9 @@ const isOfIssue = (on: number | string | undefined, n: number): boolean =>
 
 function detail(params: Record<string, string>, url: URL): Response {
   const project = url.searchParams.get("project");
-  const repo = loadRegistry()[params.repo];
-  const ref = params.n;
-  if (!repo || !/^\d+(\.\d+)?$/.test(ref) || !repoIn(repo.key, project)) return Response.json({ error: "no such issue" }, { status: 404 });
+  const at = issueOf(params.id);
+  if (!at || !repoIn(at.repo.key, project)) return Response.json({ error: "no such issue" }, { status: 404 });
+  const { repo, ref } = at;
   let doc: todos.Doc | null;
   try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
   const item = doc && todos.find(doc, ref);
@@ -93,10 +111,11 @@ function detail(params: Record<string, string>, url: URL): Response {
   const state = mine ? { item: `${repo.key}-${ref}`, stage: mine.stage, why: mine.why } : null;
 
   const all = allJobs().filter((runs) => runs[0].run.repo === repo.key);
-  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => String(onOf(e.run)) === r)).map(jobRow);
+  const every = allRuns();
+  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => String(onOf(e.run)) === r)).map((runs) => jobRow(runs, every));
   // A run on this issue or on one of its children.
   const onThis = (on: number | string | undefined) => (!ref.includes(".") ? isOfIssue(on, n) || partRefs.includes(String(on)) : String(on) === ref);
-  const jobs = all.filter((runs) => runs.some((e) => onThis(onOf(e.run)))).map(jobRow);
+  const jobs = all.filter((runs) => runs.some((e) => onThis(onOf(e.run)))).map((runs) => jobRow(runs, every));
 
   // The Issue page: the `## Request`, then the parts, each with its Job.
   const parts = partRefs.map((g) => {
@@ -105,8 +124,8 @@ function detail(params: Record<string, string>, url: URL): Response {
   });
   // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
   const timeline = {
-    filed: filed().issue.get(`${repo.key}-${ref}`) ?? null,
-    runs: all.flat().filter((e) => onThis(onOf(e.run))).map(({ run: r }) => ({ kind: r.kind, name: r.name, on: r.on, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
+    filed: ((t) => (t == null ? null : new Date(t).toISOString()))(filed().issue.get(`${repo.key}-${ref}`)),
+    runs: all.flat().filter((e) => onThis(onOf(e.run))).map((e) => ({ r: e.run, href: jobHref(jobIdOf(e, every)) })).map(({ r, href }) => ({ kind: r.kind, name: r.name, href, on: r.on, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
   };
   // The hold records of every job name the answer shows.
   const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...parts.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);
@@ -155,8 +174,8 @@ async function withUploads<T>(given: unknown, f: (paths: string[]) => Promise<T>
 /** The registry repo, the issue's id and the issue a route names; a 404 when there is none. */
 function target(params: Record<string, string>) {
   const none = () => fail(404, "no such issue");
-  const repo = loadRegistry()[params.repo] ?? none();
-  const n = refOf(params.id) ?? none();
+  const { repo, ref } = issueOf(params.id) ?? none();
+  const n = refOf(ref) ?? none();
   const item = todos.find(readList(repo) ?? none(), n) ?? none();
   return { repo, n, item };
 }
@@ -170,9 +189,9 @@ const attachMedia = post(async (b, params) => {
 
 /** One media file of an issue, read from the store's main. */
 function media(params: Record<string, string>): Response {
-  const repo = loadRegistry()[params.repo];
-  const doc = repo && /^\d+(\.\d+)?$/.test(params.n) ? readList(repo) : null;
-  const item = doc ? todos.find(doc, params.n) : undefined;
+  const at = issueOf(params.id), repo = at?.repo;
+  const doc = repo ? readList(repo) : null;
+  const item = doc ? todos.find(doc, at!.ref) : undefined;
   const i = item ? mediaOf(item).indexOf(params.name) : -1;
   if (!repo || !item || i < 0) return Response.json({ error: "no such file" }, { status: 404 });
   const ext = params.name.split(".").pop()!.toLowerCase();
@@ -259,17 +278,17 @@ const answer = (verb: "note" | "decide" | "done", text: string) => post((_b, par
 });
 
 export const routes: Routes = {
-  "POST /api/issues/:repo/:id/retriage": answer("note", "Chris: run intake again"),
-  "POST /api/issues/:repo/:id/rerun": answer("decide", "Chris: run it again"),
-  "POST /api/issues/:repo/:id/checked": answer("done", "Chris: checked on the host"),
-  "POST /api/issues/:repo/:id/unblock": unblock,
-  "POST /api/issues/:repo/:id/edit": edit,
-  "POST /api/issues/:repo/:id/note": addNote,
-  "POST /api/issues/:repo/:id/media": attachMedia,
-  "GET /api/issues/:repo/:n/media/:name": (_req, params) => media(params),
-  "POST /api/issues/:repo/:id/drop": drop,
-  "POST /api/issues/:repo/:id/decide": decide,
+  "POST /api/issues/:id/retriage": answer("note", "Chris: run intake again"),
+  "POST /api/issues/:id/rerun": answer("decide", "Chris: run it again"),
+  "POST /api/issues/:id/checked": answer("done", "Chris: checked on the host"),
+  "POST /api/issues/:id/unblock": unblock,
+  "POST /api/issues/:id/edit": edit,
+  "POST /api/issues/:id/note": addNote,
+  "POST /api/issues/:id/media": attachMedia,
+  "GET /api/issues/:id/media/:name": (_req, params) => media(params),
+  "POST /api/issues/:id/drop": drop,
+  "POST /api/issues/:id/decide": decide,
   "GET /api/issues": (_req, _p, url) => list(url),
-  "GET /api/issues/:repo/:n": (_req, params, url) => detail(params, url),
+  "GET /api/issues/:id": (_req, params, url) => detail(params, url),
   "POST /api/issues": create,
 };

@@ -1,5 +1,5 @@
 /**
- * `GET /api/speed?window=hour|day|week|month` (default week)[&project=<repo>]: how fast the factory's runs are, read from the run folders'
+ * `GET /api/flow?window=hour|day|week|month` (default week)[&project=<repo>]: how fast the factory's runs are, read from the run folders'
  * state.json (no Langfuse). Runs with a `started` and an `ended` count; one longer than 4 hours
  * is a broken clock and is skipped. Hour is the last 60 minutes in 1-minute buckets, day the last 24 hours in hourly ones, week and
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
@@ -44,8 +44,8 @@ interface PhaseStat extends Pct { hist: number[]; worst: number }
 export type Phase = "intake" | "queue" | "implement" | "land" | "lead";
 const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
 /** One issue's seconds per phase (null when the phase did not end in the window). `outcome` is "landed" once a land run landed it, else "unlanded". */
-/** `filed` is the issue's filing time in ms, or null when the store has none. */
-type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded"; filed: number | null } & Record<Phase, number | null>;
+/** `filed` is the issue's filing time, ISO, or null when the store has none. */
+type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded"; filed: string | null } & Record<Phase, number | null>;
 /** An issue of a stage list, with its title and link while it is in the store. */
 
 export interface Speed {
@@ -310,7 +310,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   const note = (key: string | undefined, k: Phase, secs: number) => {
     if (!key) return;
     const [repo, n] = splitId(key);
-    if (!per.has(key)) per.set(key, { id: key, href: issueHref(`${repo}-${n}`), outcome: "unlanded", filed: issue.get(key) ?? null, intake: null, queue: null, implement: null, land: null, lead: null });
+    if (!per.has(key)) per.set(key, { id: key, href: issueHref(`${repo}-${n}`), outcome: "unlanded", filed: issue.get(key) ? new Date(issue.get(key)!).toISOString() : null, intake: null, queue: null, implement: null, land: null, lead: null });
     per.get(key)![k] = secs;
   };
   const inWindow = (t: number) => t >= since && t <= now;
@@ -695,7 +695,7 @@ export function baseline(window: Window, now = new Date(), fit: Fit | null = nul
 }
 
 export const routes: Routes = {
-  "GET /api/speed": async (_req, _params, url) => {
+  "GET /api/flow": async (_req, _params, url) => {
     const w = url.searchParams.get("window") ?? "week";
     if (!(WINDOWS as readonly string[]).includes(w)) return Response.json({ error: "window must be hour, day, week or month" }, { status: 400 });
     // `project`: only the runs and issues of that repo count.

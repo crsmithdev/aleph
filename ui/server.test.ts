@@ -43,16 +43,26 @@ test("binds 127.0.0.1", () => {
   expect(server.hostname).toBe("127.0.0.1");
 });
 
-test("/api/state?project= keeps only that project's jobs", async () => {
-  const all: any = await (await at("/api/state")).json();
+test("/api/factory?project= keeps only that project's jobs", async () => {
+  const all: any = await (await at("/api/factory")).json();
   expect(all.running.map((j: any) => j.name).sort()).toEqual(["aleph-1", "other-2"]);
-  const other: any = await (await at("/api/state?project=other")).json();
+  const other: any = await (await at("/api/factory?project=other")).json();
   expect(other.running.map((j: any) => j.name)).toEqual(["other-2"]);
   for (const k of ["stuck", "running", "queued"]) expect(other[k].every((j: any) => j.repo === "other")).toBe(true);
 });
 
-test("/api/projects/keys lists the registry's repos", async () => {
-  expect(await (await at("/api/projects/keys")).json()).toEqual(["aleph", "other"]);
+test("/api/factory carries the Done count of its window and no asks; /api/automation carries the asks and no factory block", async () => {
+  const f: any = await (await at("/api/factory?window=month")).json();
+  expect(typeof f.doneCount).toBe("number");
+  for (const k of ["asks", "doneStamps"]) expect(k in f).toBe(false);
+  expect((await at("/api/factory?window=year")).status).toBe(400);
+  const a: any = await (await at("/api/automation")).json();
+  expect(Array.isArray(a.asks)).toBe(true);
+  for (const k of ["factory", "codes"]) expect(k in a).toBe(false);
+});
+
+test("/api/projects maps each registry repo to its code", async () => {
+  expect(await (await at("/api/projects")).json()).toEqual({ aleph: null, other: null });
 });
 
 test("a new view file and api file are served with no edit to server.ts", async () => {
@@ -92,8 +102,9 @@ test("other paths are 404 and writes are refused", async () => {
   expect((await at("/nope")).status).toBe(404);
   expect((await at("/views/../server.ts")).status).toBe(404);
   expect((await at("/views/nope.js")).status).toBe(404);
-  expect((await at("/api/state", { method: "POST" })).status).toBe(405);
+  expect((await at("/api/factory", { method: "POST" })).status).toBe(405);
   expect((await at("/", { method: "POST" })).status).toBe(405);
+  for (const [path, method] of [["/api/state", "GET"], ["/api/land/x", "POST"], ["/api/approve/x", "POST"], ["/api/gates/caps", "POST"], ["/api/contents", "GET"]]) expect((await at(path, { method })).status, path).toBe(404);
 });
 
 test("every API answer carries the server's version; the page and its modules are revalidated on each load", async () => {
@@ -126,7 +137,7 @@ test("x-aleph-login is on every API answer behind the gate, and absent without a
   try {
     const ok = await g("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "hunter2" }) });
     const cookie = ok.headers.get("set-cookie")!.split(";")[0];
-    expect((await g("/api/state", { headers: { cookie } })).headers.get("x-aleph-login")).toBe("1");
+    expect((await g("/api/factory", { headers: { cookie } })).headers.get("x-aleph-login")).toBe("1");
   } finally {
     stopGated();
     restorePassword();
@@ -134,7 +145,7 @@ test("x-aleph-login is on every API answer behind the gate, and absent without a
 });
 
 test("without a password, a Host that is not this machine gets a 403 that names ALEPH_UI_PASSWORD", async () => {
-  for (const path of ["/", "/api/state"]) {
+  for (const path of ["/", "/api/factory"]) {
     const r = await at(path, { headers: { host: "aleph.home" } });
     expect(r.status).toBe(403);
     expect(await r.text()).toContain("ALEPH_UI_PASSWORD");

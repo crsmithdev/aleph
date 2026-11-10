@@ -88,7 +88,7 @@ describe("activity", () => {
       const a = await activity(7, null, now);
       const b = await activity(7, null, now);
       expect(obsHits).toBe(1);
-      expect(b.cachedAt).toBe(a.cachedAt);
+      expect(b).toEqual(a);
       openPass({ langfuse: 2 }, "activity.test");
       await activity(7, null, now);
       expect(obsHits).toBe(2);

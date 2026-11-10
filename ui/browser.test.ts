@@ -211,7 +211,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("a timed refresh re-renders, except over an armed button", async () => {
     // The shell reads the global setInterval when the route starts: keep the route's refresh as window.tick, and run it here.
     // The refresh loads only after a quiet minute: window.later() moves the page's clock past it.
-    // A fetch of /api/state waits for window.gate, and counts in window.fetched after the load that reads it ends.
+    // A fetch of /api/factory waits for window.gate, and counts in window.fetched after the load that reads it ends.
     await page.ev(`(() => {
       const now = Date.now;
       window.skew = 0;
@@ -219,7 +219,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       window.later = () => { window.skew += 61_000; window.tick(); };
       window.setInterval = (f) => { window.tick = f; return 0; };
       const rf = window.fetch;
-      window.fetch = (u, o) => !String(u).startsWith("/api/state") ? rf(u, o) : (window.gate ?? Promise.resolve()).then(() => rf(u, o)).then((r) => {
+      window.fetch = (u, o) => !String(u).startsWith("/api/factory") ? rf(u, o) : (window.gate ?? Promise.resolve()).then(() => rf(u, o)).then((r) => {
         const j = r.json.bind(r);
         const count = () => { window.fetched = (window.fetched ?? 0) + 1; };
         r.json = () => j().then((d) => { setTimeout(count); return d; });
@@ -257,8 +257,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a change in the factory folder reloads a live page that used to poll", async () => {
-    // The page fetches /api/state again only on a change: its quiet timer waits a minute.
-    const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/state")).length';
+    // The page fetches /api/factory again only on a change: its quiet timer waits a minute.
+    const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/factory")).length';
     await page.go("#/factory/agents");
     await page.when('document.querySelector("#view aleph-chart")');
     const n = await page.ev<number>(loads);
@@ -267,7 +267,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a slow first load does not draw over a newer one", async () => {
-    // Hold the fetch of the first /api/state load, let a second (the refresh timer) answer, then release the first.
+    // Hold the fetch of the first /api/factory load, let a second (the refresh timer) answer, then release the first.
     await page.ev(`(() => {
       const now = Date.now;
       window.skew = 0;
@@ -276,7 +276,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       const rf = window.fetch;
       let held = true;
       window.fetch = (u, o) => {
-        if (!String(u).startsWith("/api/state") || !held) return rf(u, o);
+        if (!String(u).startsWith("/api/factory") || !held) return rf(u, o);
         held = false;
         return new Promise((ok) => { window.release = () => ok(rf(u, o).then((r) => {
           const j = r.json.bind(r);
@@ -299,7 +299,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a change that comes while an input has focus reloads the view after the input blurs", async () => {
-    const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/state")).length';
+    const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/factory")).length';
     // Count the change events the page hears, to know the change came before the check.
     await page.ev(`(() => {
       const ES = window.EventSource;
@@ -355,7 +355,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when("!window.card.isConnected");
     expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBe("1");
     const posts = await page.ev<[string, string][]>("window.posts");
-    expect(posts.map(([u, body]) => [u, JSON.parse(body)])).toEqual([["/api/issues/tools/4/drop", { reason: "Chris denied: not now" }]]);
+    expect(posts.map(([u, body]) => [u, JSON.parse(body)])).toEqual([["/api/issues/tools-4/drop", { reason: "Chris denied: not now" }]]);
     await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 

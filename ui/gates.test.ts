@@ -71,16 +71,15 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-// The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
+// The body of GET /api/automation from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
 const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", kind }) as any;
 const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runCap: 3, runStarts: 0, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("credit-wait"), queued("ready")] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
 
-test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
+test("the body of /api/automation has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "backend", "baseline", "codes", "factory", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
-  expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts", "settings"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "backend", "baseline", "capEnv", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules", "settings"]);
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
@@ -150,11 +149,11 @@ test("a director decision shows its action and sub, and its long note only behin
   } finally { rmSync(eventsDir(), { recursive: true, force: true }); }
 });
 
-test("POST /api/gates/revoke/:reason runs `aleph always revoke`, and refuses a request without the UI header", async () => {
-  expect((await post("/api/gates/revoke/rescue")).status).toBe(200);
+test("POST /api/automation/rules/:reason/revoke runs `aleph always revoke`, and refuses a request without the UI header", async () => {
+  expect((await post("/api/automation/rules/rescue/revoke")).status).toBe(200);
   expect(readFileSync(calls, "utf8").trim().split("\n").at(-1)).toBe("always revoke -- rescue");
   const n = readFileSync(calls, "utf8").length;
-  expect((await at("/api/gates/revoke/rescue", { method: "POST" })).status).toBe(403);
+  expect((await at("/api/automation/rules/rescue/revoke", { method: "POST" })).status).toBe(403);
   expect(existsSync(calls) && readFileSync(calls, "utf8").length).toBe(n);
 });
 
@@ -302,9 +301,9 @@ test("a director line only in tick.log gives no log entry and no event file", as
 });
 
 const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
-const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/gates/caps", { method: "POST", headers, body: JSON.stringify(b) });
+const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/automation/caps", { method: "POST", headers, body: JSON.stringify(b) });
 
-test("POST /api/gates/caps refuses a missing header with 403 and bad values with 422, and leaves the file", async () => {
+test("POST /api/automation/caps refuses a missing header with 403 and bad values with 422, and leaves the file", async () => {
   const seed = JSON.stringify({ live: 9 });
   writeFileSync(capsPath(), seed);
   expect((await postCaps({ live: 5 }, {})).status).toBe(403);
@@ -546,11 +545,11 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   expect(none).not.toContain("<button");
 });
 
-test("GET /api/gates takes window and project: the log and the metrics keep that window and that repo; no parameter keeps 7 days of every repo; a bad window is 400", async () => {
+test("GET /api/automation takes window and project: the log and the metrics keep that window and that repo; no parameter keeps 7 days of every repo; a bad window is 400", async () => {
   const m = (min: number) => min * 60 * 24;
   for (const [min, id] of [[30, "alpha-1"], [m(3), "beta-1"], [m(10), "beta-2"], [m(40), "alpha-3"]] as const) logEvent({ at: ago(min), by: "rule", subject: id, action: "reran", sub: "rescue" });
   logEvent({ at: ago(60 * 5), by: "rule", subject: "alpha-2", action: "reran", sub: "rescue" });
-  const get = async (q: string) => { const r = await at(`/api/gates${q}`); return { status: r.status, d: r.status === 200 ? await r.json() as any : null }; };
+  const get = async (q: string) => { const r = await at(`/api/automation${q}`); return { status: r.status, d: r.status === 200 ? await r.json() as any : null }; };
   const items = (d: any) => d.log.entries.map((e: any) => e.subject).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
   try {
     const week = await get("");
@@ -578,7 +577,7 @@ test("a cap save keeps the Monitor fold open through the Automation redraw", asy
   const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
   mkdirSync(dir, { recursive: true });
   writeFileSync(file, JSON.stringify({ day: "2026-11-03", table: {}, text: "READER-TEXT", findings: ["FIRST-ONE"] }));
-  const d: any = await body();
+  const d: any = { ...(await body()), factory: stub.factory };
   const was = { fetch: globalThis.fetch, location: (globalThis as any).location };
   // The view reads the address and the API. The fake root takes the HTML and keeps the details folds.
   (globalThis as any).location = { hash: "" };
@@ -633,8 +632,8 @@ test("Schedules, Repeat Answers, Rules and Log show empty() with no rows; Repeat
   expect(gates.renderRepeats({ repeats: Array.from({ length: 51 }, (_, i) => ({ reason: `r${i}`, answer: "a", count: 3 })) })).toContain("50 of 51");
 });
 
-test("POST /api/gates/schedules writes a drop-in that keeps the boot and startup triggers, reloads systemd and restarts the timer; a bad interval or name is 422", async () => {
-  const send = (b: unknown) => at("/api/gates/schedules", { method: "POST", headers: { "X-Aleph-UI": "1" }, body: JSON.stringify(b) });
+test("POST /api/automation/schedules writes a drop-in that keeps the boot and startup triggers, reloads systemd and restarts the timer; a bad interval or name is 422", async () => {
+  const send = (b: unknown) => at("/api/automation/schedules", { method: "POST", headers: { "X-Aleph-UI": "1" }, body: JSON.stringify(b) });
   const res = await send({ name: "tick", every: "5min" });
   expect(res.status).toBe(200);
   const conf = readFileSync(join(base, "config/systemd/user/aleph-tick.timer.d/interval.conf"), "utf8");

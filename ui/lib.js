@@ -509,7 +509,7 @@ export function keepWindow(w) {
 let projectKeys = [];
 let keysLoad = null;
 /** The registry's repo keys, fetched once; a failed fetch gives [] and is tried again by the next call. */
-export const projectKeysOnce = () => keysLoad ??= fetch("/api/projects/keys").then((r) => (r.ok ? r.json() : [])).catch(() => []).then((keys) => {
+export const projectKeysOnce = () => keysLoad ??= fetch("/api/projects").then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then(Object.keys).then((keys) => {
   if (keys.length) projectKeys = keys;
   else keysLoad = null;
   return keys;
@@ -732,5 +732,8 @@ export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` 
 export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
 import { shortId, shortText } from "../lib/naming.ts";
 
+/** The API path of issue `<repo>-<ref>`: `/api/issues/a1430`. */
+export const issueApi = (repo, ref) => `/api/issues/${encodeURIComponent(shortId(`${repo}-${ref}`))}`;
+
 // The names and IDs of docs/naming.md, for the views.
-export { contentText, issueHref, parseId, parseJob, setCodes, shownId } from "../lib/naming.ts";
+export { contentText, issueHref, jobHref, parseId, parseJob, setCodes, shownId } from "../lib/naming.ts";

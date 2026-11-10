@@ -105,6 +105,18 @@ test("the sessions list holds the traces of every page, and a page that fails on
   expect(d.sessions.map((s: any) => [s.id, s.turns]).sort()).toEqual([["s1", 2], ["s2", 1]]);
 });
 
+test("the sessions list pages newest first by ?limit= and ?before=, and says whether Langfuse held more pages", async () => {
+  const page = async (q: string) => (await listSessions(new Request(`http://localhost/api/sessions?${q}`))).json() as Promise<any>;
+  const all = await page("");
+  expect(all.next).toBeNull();
+  expect(all.partial).toBe(false);
+  const first = await page("limit=1");
+  expect(first.sessions.map((s: any) => s.id)).toEqual([all.sessions[0].id]);
+  expect(first.next).toBe(all.sessions[0].last);
+  expect((await page(`limit=1&before=${encodeURIComponent(first.next)}`)).sessions.map((s: any) => s.id)).toEqual([all.sessions[1].id]);
+  for (const q of ["limit=0", "before=soon"]) expect((await listSessions(new Request(`http://localhost/api/sessions?${q}`))).status).toBe(400);
+});
+
 test("a failed Langfuse makes the sessions list answer 502 with a message that names Langfuse, after two tries", async () => {
   status = 500;
   const res = await listSessions(new Request("http://localhost/api/sessions"));
@@ -154,7 +166,7 @@ test("a turn is a tree of tools, hook spans and errors", async () => {
   const names = d.observations.map((o: any) => o.name);
   expect(names).toEqual(["vault-recall", "Bash", "Read", "m"]);
   const by = (n: string) => d.observations.find((o: any) => o.name === n);
-  expect(by("Bash")).toMatchObject({ kind: "tool", durationMs: 1500 });
+  expect(by("Bash")).toMatchObject({ kind: "tool", seconds: 1.5 });
   expect(by("Bash").output.length).toBeLessThanOrEqual(401);
   expect(by("Read").error).toBe("nope");
   expect(by("vault-recall").recall).toEqual({ candidates: 5, asked: 3, kept: 1 });
@@ -227,7 +239,7 @@ const chat = async (id: string, q = "") => (await call("GET /api/sessions/:id/ch
 test("the chat route gives whole prompts and replies and each turn's tool calls in order", async () => {
   const d = await chat("s1");
   expect(d).toMatchObject({ id: "s1", project: "aleph", total: 2, from: 1 });
-  expect(d.turns[0]).toMatchObject({ n: 1, prompt: "prompt t1\nsecond line", model: "claude-opus", cost: 0.5, durationMs: 12000 });
+  expect(d.turns[0]).toMatchObject({ n: 1, prompt: "prompt t1\nsecond line", model: "claude-opus", cost: 0.5, seconds: 12 });
   expect(d.turns[0].output).toBe("x".repeat(600));
   expect(d.turns[0].tools.map((c: any) => [c.name, c.args, c.error])).toEqual([["Bash", "ls", null], ["Read", "", "nope"]]);
   expect(d.turns[0].tools[0].output).toBe("y".repeat(900));
@@ -284,13 +296,13 @@ test("generations: listed apart from tools with model, offsets, parent and cost;
     const t = d.turns[1];
     expect(t.tools.some((c: any) => c.kind === "generation" || c.id === "g1" || c.children.some((k: any) => k.id === "g2"))).toBe(false);
     expect(t.generations.map((g: any) => g.id)).toEqual(["g1", "g2"]);
-    expect(t.generations[0]).toMatchObject({ parent: null, kind: "generation", model: "claude-opus", startMs: 10 * 60000 + 9000, durationMs: 4000, cost: 0.25, inputTokens: 100, outputTokens: 20, error: null });
+    expect(t.generations[0]).toMatchObject({ parent: null, kind: "generation", model: "claude-opus", from: 10 * 60 + 9, seconds: 4, cost: 0.25, inputTokens: 100, outputTokens: 20, error: null });
     expect(t.generations[0].input.length).toBeLessThanOrEqual(401);
     expect(t.generations[1]).toMatchObject({ parent: "ag", model: "claude-haiku", cost: 0.05, error: "overloaded" });
     expect(d.turns[0].generations.map((g: any) => g.id)).toEqual(["o4"]);
     const rows = v.wfRows([t]);
     const g1 = rows.findIndex((r: any) => r.id === "g1"), g2 = rows.findIndex((r: any) => r.id === "g2"), ag = rows.findIndex((r: any) => r.id === "ag");
-    expect(rows[g1]).toMatchObject({ kind: "generation", name: "claude-opus", depth: 1, startMs: t.generations[0].startMs });
+    expect(rows[g1]).toMatchObject({ kind: "generation", name: "claude-opus", depth: 1, startMs: t.generations[0].from * 1000 });
     expect(rows[g2]).toMatchObject({ kind: "generation", depth: rows[ag].depth + 1 });
     expect(g2).toBeGreaterThan(ag);
     expect(rows.findIndex((r: any) => r.id === "p2")).toBeGreaterThan(g1);
@@ -348,7 +360,18 @@ test("a missing token count or recall figure shows – and not ?", async () => {
 });
 
 test("?days= is capped at 90 days", async () => {
-  await listSessions(new Request("http://localhost/api/sessions?days=100000"));
+  await listSessions(new Request("http://localhost/api/sessions?window=100000"));
   const from = Date.parse(new URL("http://x" + hits.find((h) => h.startsWith("/api/public/traces"))!).searchParams.get("fromTimestamp")!);
   expect(from).toBeGreaterThanOrEqual(Math.floor((NOW - 90 * 86400_000) / 3600_000) * 3600_000);
+});
+
+test("the session answers fit their schemas", async () => {
+  const { SCHEMAS, check, epochs } = await import("./schemas.ts");
+  const fit = async (key: string, path: string, params: Record<string, string>) => {
+    const body = await (await call(`GET ${key}`, path, params)).json();
+    return [...check(SCHEMAS[key] as any, body), ...epochs(body)];
+  };
+  expect(await fit("/api/sessions/:id", "/api/sessions/s1", { id: "s1" })).toEqual([]);
+  expect(await fit("/api/sessions/:id/chat", "/api/sessions/s1/chat", { id: "s1" })).toEqual([]);
+  expect(await fit("/api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1", { id: "s1", n: "1" })).toEqual([]);
 });
