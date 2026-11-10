@@ -1,5 +1,8 @@
 #!/bin/sh
 # Run the CI checks before a push that updates main.
+# A push from a linked worktree gives this hook GIT_DIR. Unset git's repo
+# vars, or each test fixture's git acts on this repo and not on its own.
+unset $(git rev-parse --local-env-vars)
 while read -r _ _ ref _; do
   if [ "$ref" = "refs/heads/main" ]; then
     bun run typecheck && bun run test:all || exit 1

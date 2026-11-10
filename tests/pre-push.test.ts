@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -34,4 +34,13 @@ test("a push to main runs test:all, and a pass moves main", () => {
   expect(git(w, "push", "origin", "HEAD:main").exitCode).toBe(0);
   expect(existsSync(join(w, "ran"))).toBe(true);
   expect(main()).toBe(git(w, "rev-parse", "HEAD").stdout.toString().trim());
+});
+
+test("a push from a linked worktree runs test:all with none of git's repo env", () => {
+  const w = setup("env > env.txt");
+  const wt = join(dir, "wt");
+  git(w, "worktree", "add", "-q", wt);
+  expect(git(wt, "push", "origin", "HEAD:main").exitCode).toBe(0);
+  const vars = readFileSync(join(wt, "env.txt"), "utf8").split("\n").map((l) => l.split("=")[0]);
+  expect(vars.filter((v) => ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"].includes(v))).toEqual([]);
 });
