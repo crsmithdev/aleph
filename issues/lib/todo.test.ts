@@ -47,6 +47,7 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   item("Fix red main", { areas: ["red-main", "check"] });
   item("Old goal", { kind: "goal", areas: ["deps"] });
   const bug = item("Fix the bug", { areas: ["bug"] });
+  item("Teach the gate", { kind: "proposal", areas: ["proposal"] });
   const part = addPart(doc, bug, { title: "[Bug] Find the cause", spec: "x" });
   part.title = "[Bug] Find the cause: first";
   delete part.fm.kind;
@@ -62,7 +63,7 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   issues.fix(doc);
   expect(doc.items.map((i): unknown[] => [issues.refOf(i), i.fm.kind, i.fm.areas])).toEqual([
     ["1", "task", ["ui"]], ["2", "task", []], ["3", "task", []], ["4", "task", []],
-    ["5", "flake", ["tests"]], ["6", "bug", ["red-main"]], ["7", "task", []], ["8", "bug", []], ["8.1", "bug", undefined],
+    ["5", "flake", ["tests"]], ["6", "bug", ["red-main"]], ["7", "task", []], ["8", "bug", []], ["9", "task", []], ["8.1", "bug", undefined],
   ]);
   expect(issues.lint(doc).filter((f) => f.fixable)).toEqual([]);
 });

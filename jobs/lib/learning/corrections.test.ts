@@ -132,12 +132,12 @@ test("a proposed lesson without target gets title and target on the next mine", 
   expect(proposals()[0].title!.length).toBeGreaterThan(0);
 });
 
-test("a proposed lesson files its own parked proposal issue", async () => {
+test("a proposed lesson files its own parked task issue", async () => {
   pickFirst = true;
   await mine(NOW, quiet);
   const items = readList(repo)!.items;
   expect(items.length).toBe(1);
-  expect(items[0].fm.kind).toBe("proposal");
+  expect(items[0].fm.kind).toBe("task");
   expect(status(items[0])).toBe("parked");
   expect(stored().lessons[0].issue).toBe("fac-1");
 });
@@ -193,7 +193,7 @@ describe("standing proposals", () => {
     expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
     expect(readList(repo)!.items.length).toBe(1);
     const [item] = readList(repo)!.items;
-    expect(item.fm.kind).toBe("proposal");
+    expect(item.fm.kind).toBe("task");
     expect(titleProblem(item.title)).toBeNull();
     expect(readEvents().find((e) => e.by === "rule" && e.subject === "fac-1" && e.action === "answered")?.note).toStartWith("proposal-check:fac: approved ");
     expect(readEvents().filter((e) => e.subject === "fac-1" && e.action === "filed").length).toBe(1);

@@ -181,7 +181,7 @@ const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged
 /** The four priorities, in rank order. */
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 
-export const KINDS = ["task", "bug", "check", "flake", "proposal", "acceptance"] as const;
+export const KINDS = ["task", "bug", "check", "flake", "acceptance"] as const;
 export type Kind = (typeof KINDS)[number];
 
 /** Matches `: ` anywhere in a title. */
@@ -317,7 +317,7 @@ export function lint(doc: Doc): Finding[] {
 }
 
 /** The areas that say what an issue is, in the order that picks its kind. */
-const KIND_AREAS: [string, Kind][] = [["bug", "bug"], ["red-main", "bug"], ["flakes", "flake"], ["check", "check"], ["deps", "proposal"], ["proposal", "proposal"]];
+const KIND_AREAS: [string, Kind][] = [["bug", "bug"], ["red-main", "bug"], ["flakes", "flake"], ["check", "check"], ["deps", "task"], ["proposal", "task"]];
 /** The kind areas that leave `areas`. `red-main` stays: the firefighter reads it. */
 const MOVED_AREAS = ["bug", "flakes", "check", "deps", "proposal"];
 

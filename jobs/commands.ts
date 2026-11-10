@@ -1,5 +1,5 @@
 /**
- * aleph <job|run|land|checked|recheck|drop|jobs|issue|annotation|unit|tick|suite|report|pause|resume|status|judge>
+ * aleph <job|run|land|checked|recheck|drop|jobs|issue|idea|annotation|unit|tick|suite|report|pause|resume|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
@@ -22,6 +22,7 @@ import * as issues from "../issues/lib/todo.ts";
 import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import * as notes from "../lib/annotations.ts";
+import * as ideas from "../ideas/ideas.ts";
 import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
 import { behind, directorStep, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { dispatchAfterIssue, filing } from "./lib/transitions/filing.ts";
@@ -46,7 +47,7 @@ const DAY_MS = 24 * 3600_000;
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day", "--url", "--selector", "--by"];
+const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day", "--url", "--selector", "--by", "--target", "--sketch", "--writeup"];
 const FATES: Fate[] = ["duplicate", "met", "manual"];
 
 /** Where a call of `aleph` writes and reads. `stdout` gets each write as it happens; `run` also returns them all as `out`. */
@@ -219,7 +220,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     // `--media <file>` may repeat.
     media: ctx.rest.flatMap((a, i) => (a === "--media" && ctx.rest[i + 1] !== undefined ? [ctx.rest[i + 1]] : [])),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo> ... [--kind task|bug|check|flake|acceptance]");
   const registry = loadRegistry();
   const ref = parseId(repoKey);
   if (ref && sub !== "add") {
@@ -321,7 +322,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
       for (const f of l.findings) ctx.err(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|retitle> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|retitle> <repo> ... [--kind task|bug|check|flake|acceptance]");
   }
 }
 
@@ -432,6 +433,53 @@ function printRows(ctx: Ctx, rows: issues.Issue[], key: string, indent = ""): vo
   for (const [n, i] of rows.entries()) ctx.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${store.priorityOf(i).padEnd(8)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
 }
 
+const IDEA_USAGE = "usage: aleph idea <add|list|show|edit|note|save|lens|built|drop> ...";
+
+/** `aleph idea ...`: the ideas store (ideas/ideas.ts). `-` as a text flag reads stdin. */
+async function ideaCmd(ctx: Ctx): Promise<void> {
+  const [verb, ...args] = ctx.positional;
+  const text = async (name: string) => { const v = ctx.flag(name); return v === "-" ? await ctx.stdin() : v ?? ""; };
+  const warn = (w: string | null) => { if (w) ctx.err(w); };
+  switch (verb) {
+    case "add": {
+      const target = ctx.flag("target");
+      if (target && !loadRegistry()[target]) refuse(`no repo named ${target}`);
+      const a = ideas.add(args.join(" "), await text("sketch"), target);
+      warn(a.warn);
+      ctx.log(a.slug);
+      return;
+    }
+    case "list":
+      for (const r of ideas.list(ctx.flag("status"))) ctx.log([r.idea.slug, r.idea.fm.target ?? "new project", r.lenses.join(",") || "-", r.last].join("  "));
+      return;
+    case "show": {
+      const slug = args[0] ?? refuse(IDEA_USAGE);
+      ideas.read(slug);
+      const results = ideas.lenses(slug).map((l) => `- ${l.lens} ${l.at} ${l.file}`);
+      ctx.write(`${readFileSync(ideas.file(slug), "utf8")}\n## Lens results\n\n${results.join("\n") || "none"}\n`);
+      return;
+    }
+    case "edit": return warn(ideas.edit(args[0] ?? refuse(IDEA_USAGE), await text("writeup")));
+    case "note": return warn(ideas.note(args[0] ?? refuse(IDEA_USAGE), args.slice(1).join(" ")));
+    case "built": return warn(ideas.built(args[0] ?? refuse(IDEA_USAGE), args.slice(1)));
+    case "drop": return warn(ideas.drop(args[0] ?? refuse(IDEA_USAGE)));
+    case "lens": {
+      const l = await ideas.lens(args[0] ?? refuse(IDEA_USAGE), args[1] ?? refuse(IDEA_USAGE));
+      warn(l.warn);
+      ctx.log(l.file);
+      return;
+    }
+    case "save": {
+      const [slug, lens, from] = args;
+      const s = ideas.save(slug ?? refuse(IDEA_USAGE), lens ?? refuse(IDEA_USAGE), resolve(from ?? refuse(IDEA_USAGE)));
+      warn(s.warn);
+      ctx.log(s.file);
+      return;
+    }
+    default: refuse(IDEA_USAGE);
+  }
+}
+
 const ANNOTATION_USAGE = "usage: aleph annotation <list [--all] [--url <u>] [--json] | add (--on <id> | --selector <css>) [--url <u>] <text|-> | reply <id> [--by you|agent] <text|-> | resolve <id> | reopen <id> | drop <id> | put>";
 
 /** `aleph annotation ...`: the notes pinned on UI pages (lib/annotations.ts). `list` prints Markdown, the rest JSON; `put` reads one note as JSON on stdin. */
@@ -508,6 +556,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "checked": ctx.out(checked(ctx.positional[0])); break;
     case "issue": await todoCmd(ctx); break;
     case "annotation": await annotationCmd(ctx); break;
+    case "idea": await ideaCmd(ctx); break;
     case "tick": await tickCmd(ctx); break;
     case "director": ctx.out(await directorStep()); break;
     case "suite": ctx.out(await suiteStep()); break;
@@ -549,6 +598,6 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       ctx.out({ judge: judgeChoice() });
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|annotation|tick|suite|report|pause|resume|status|judge|models|dispatch|doctor|doc-claims|monitor> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|idea|annotation|tick|suite|report|pause|resume|status|judge|models|dispatch|doctor|doc-claims|monitor> ...");
   }
 }

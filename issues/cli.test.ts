@@ -50,7 +50,13 @@ test("a worker's push block does not stop a to-do write", () => {
 test("--kind reaches add, edit and list, and an unknown kind is refused", () => {
   const bad = aleph("issue", "add", "proj", "Fix the lane", "--kind", "epic");
   expect(bad.code).toBe(1);
-  for (const k of ["task", "bug", "check", "flake", "proposal"]) expect(bad.err).toContain(k);
+  for (const k of ["task", "bug", "check", "flake"]) expect(bad.err).toContain(k);
+  expect(bad.err).not.toContain("proposal");
+  expect(aleph("issue", "add", "proj", "Fix the lane", "--kind", "proposal").code).toBe(1);
+  for (const usage of [aleph("issue"), aleph("issue", "nope", "proj")]) {
+    expect(usage.code).toBe(1);
+    expect(usage.err).toContain("--kind task|bug|check|flake|acceptance");
+  }
   expect(aleph("issue", "add", "proj", "Fix the lane height", "--kind", "bug").code).toBe(0);
   expect(remoteItem(4)).toContain("kind: bug\n");
   expect(aleph("issue", "edit", "proj", "3", "--kind", "check").code).toBe(0);

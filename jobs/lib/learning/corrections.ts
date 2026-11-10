@@ -294,11 +294,11 @@ export const proposals = (): Lesson[] => readStore().lessons.filter((l) => l.sta
 
 const KIND_TITLE: Record<Kind, string> = { check: "Add a check", "claude-md": "Add a CLAUDE.md line", skill: "Change a skill" };
 
-/** Files the lesson as a parked `proposal` issue in `repo`: its number, or undefined when the store refused. It holds no spec until Chris approves it. */
+/** Files the lesson as a parked `task` issue in `repo`: its number, or undefined when the store refused. It holds no spec until Chris approves it. */
 function fileLesson(l: Lesson, repo: Place, effects: Effects): number | undefined {
   const title = l.title && !titleProblem(l.title) ? l.title : cutTitle(l.sentence);
   try {
-    return fileIssue(repo, { title, kind: "proposal", source: "memory", parked: true }, "rule", effects).id;
+    return fileIssue(repo, { title, kind: "task", source: "memory", parked: true }, "rule", effects).id;
   } catch (e) {
     fail(l.id, `filing the proposal failed: ${(e as Error).message}`);
     return undefined;

@@ -39,7 +39,7 @@ export interface TestRecord { ran: number; passed: number; failed: number; skipp
 export type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string; model?: string };
 
 export interface Run {
-  kind: "build" | "plain" | "land" | "intake" | "recheck" | "director" | "monitor" | "chat";
+  kind: "build" | "plain" | "land" | "intake" | "recheck" | "director" | "monitor" | "chat" | "lens";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   condition: State; phase?: string;
   reason?: string; question?: string; say?: string;

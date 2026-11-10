@@ -11,7 +11,7 @@ export type RunFile =
   | "pid" | "exit"
   | "spec.md" | "command.txt" | "prompt.md" | "review-prompt.md" | "call-prompt.md"
   | "output.log" | "stderr.log" | "setup.log" | "next.log" | "dispatch.log" | "trace.log" | "checks.log" | "land.log"
-  | "result.md" | "review.md" | "review.json" | "call.md" | "review.log" | "review.err"
+  | "result.md" | "result.html" | "review.md" | "review.json" | "call.md" | "review.log" | "review.err"
   | "paused-next" | "batch.json"
   | "gh";
 
