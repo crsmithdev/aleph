@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer } from "./test-server.ts";
-import { add } from "../lib/annotations.ts";
+import { add, mark } from "../lib/annotations.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
 
 let base: string, at: Awaited<ReturnType<typeof withServer>>["at"], stop: () => void, restoreEnv: () => void;
@@ -49,6 +49,18 @@ test("a turn streams the agent's events, ends, and is a chat run with its cost",
   expect(t.text).toMatch(/event: end\ndata: \{\}\n\n$/);
   const runs = allRuns().filter((e) => e.run.kind === "chat");
   expect(runs.map((e) => [e.run.condition, e.run.cost])).toEqual([["done", 0.25]]);
+});
+
+test("the notes a message points at come first, once, from any page and in any state", async () => {
+  const one = mark(add("p1", "this one", { url: "http://x/#/jobs" }).id, "resolved"), two = add("p2", "here and open", { url: "http://x/#/now" });
+  const said = (await turn({ text: "look", page: "http://x/#/now", annotations: [one.id, two.id] })).data[1].message.content[0].text as string;
+  expect(said).toStartWith("look\n\nChris points at these annotations:\n- ");
+  const [pointed, rest] = said.split("Open annotations on this page");
+  expect(pointed).toContain("(resolved) on `p1`");
+  expect(pointed).toContain("here and open");
+  // The pointed note of this page is not listed twice; the page's other open note still comes.
+  expect(rest).not.toContain("here and open");
+  expect(rest).toContain("fix this title");
 });
 
 test("a session resumes the conversation", async () => {

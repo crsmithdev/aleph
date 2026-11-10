@@ -19,6 +19,10 @@
  *   by       "you" or "agent"
  *   replies  [{ by, text, at }]
  * A v 1 annotation has no status, by or replies: it reads as open, by you, with none.
+ *
+ * Other tools reach the notes through `document.getElementById("kit-annotate").annotate`: `notes()` gives the notes of
+ * this page in pin order, and `pick()` turns pick mode on for one element and resolves with the saved note, or with
+ * null when the pick or the note is cancelled.
  */
 import { dock, host } from "./dock.js";
 
@@ -94,7 +98,9 @@ const LAYER = `
 /** Mounts the dock button, the list and the pin layer. */
 export function annotate({ store = local() } = {}) {
   if (document.getElementById("kit-annotate")) return;
-  let all = [], picking = false, editing = null;
+  let all = [], picking = false, editing = null, wanted = null;
+  /** Gives `a` to the pick() that waits for a note, if one does. */
+  const give = (a) => { const f = wanted; wanted = null; f?.(a); };
   // A hash that starts with "#/" or "#!/" is a route of a single-page app, so it names a page; any other hash is an anchor.
   const page = () => location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : "");
   const here = () => all.filter((a) => a.url === page() || (!a.url && find(a)));
@@ -168,11 +174,14 @@ export function annotate({ store = local() } = {}) {
     text.focus();
     // Save keeps the note's text and adds the reply, if any; an empty note deletes a saved note and drops a new one.
     const done = (status = a.status ?? "open") => {
+      const f = wanted;
+      wanted = null;
       shut();
       const note = text.value.trim(), reply = answer?.value.trim();
-      if (!note) return saved ? drop(a.id) : undefined;
+      if (!note) { f?.(null); return saved ? drop(a.id) : undefined; }
       const at = new Date().toISOString();
-      return put({ ...a, v: 2, note, status, by: a.by ?? "you", replies: [...replies, ...(reply ? [{ by: "you", text: reply, at }] : [])], at });
+      const b = { ...a, v: 2, note, status, by: a.by ?? "you", replies: [...replies, ...(reply ? [{ by: "you", text: reply, at }] : [])], at };
+      return put(b).then(() => f?.(b));
     };
     box.querySelector(".save").onclick = () => done();
     box.querySelector(".cancel").onclick = shut;
@@ -186,9 +195,12 @@ export function annotate({ store = local() } = {}) {
     };
   }
 
+  /** Closes the note editor; a pick() that waits for its note gets null. */
   function shut() {
+    const open = editing;
     editing = null;
     layer.querySelector(".edit")?.remove();
+    if (open) give(null);
   }
 
   function mode(on) {
@@ -197,6 +209,7 @@ export function annotate({ store = local() } = {}) {
     pickBtn.setAttribute("aria-pressed", String(on));
     document.documentElement.style.cursor = on ? "crosshair" : "";
     if (!on) glow.style.display = "none";
+    if (!on && !editing) give(null);
   }
 
   // In pick mode the page gets no pointer events: the capture listeners take them first.
@@ -207,6 +220,8 @@ export function annotate({ store = local() } = {}) {
     block(e);
     glow.style.display = "none";
     edit({ v: 2, id: uid(), url: page(), selector: selector(e.target), text: words(e.target), html: snippet(e.target), note: "", status: "open", by: "you", replies: [] }, e.target);
+    // A pick() wants one element: pick mode ends once its note is open.
+    if (wanted) mode(false);
   }, true);
   document.addEventListener("mousemove", (e) => {
     if (!picking || editing) return;
@@ -255,6 +270,10 @@ export function annotate({ store = local() } = {}) {
   addEventListener("hashchange", draw);
   new MutationObserver(redraw).observe(document.body, { childList: true, subtree: true, characterData: true });
 
+  bar.annotate = {
+    notes: () => here(),
+    pick: () => { give(null); mode(true); return new Promise((done) => { wanted = done; }); },
+  };
   dock().append(bar);
   document.body.append(top);
   store.watch?.(sync);

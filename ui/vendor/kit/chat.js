@@ -10,6 +10,10 @@
  * `session_id` of the stream goes with the next message, so the server can `--resume` the conversation.
  *
  * The transcript and the session live in localStorage under `key`, so a reload keeps them; New starts over.
+ *
+ * When the page has the annotate tool (annotate.js), the @ button points the next message at annotations: one of the
+ * page's notes, or a new one picked there and then. Their ids go with the message as `annotations`. Without the tool,
+ * the button does not show.
  */
 import { dock, host } from "./dock.js";
 
@@ -29,6 +33,14 @@ const CSS = `
 .empty { color: var(--muted); }
 form { display: flex; gap: 6px; align-items: end; }
 textarea { flex: 1; resize: none; min-height: 36px; max-height: 160px; padding: 6px 8px; }
+.you .ref { display: block; color: var(--muted); font-size: 12px; }
+.menu { display: grid; gap: 2px; max-height: 180px; overflow-y: auto; padding: 4px; border: 1px solid var(--rule); border-radius: 6px; }
+.menu[hidden], .point[hidden] { display: none; }
+.menu button { border: 0; text-align: left; overflow-wrap: anywhere; }
+.points { display: flex; flex-wrap: wrap; gap: 4px; }
+.points:empty { display: none; }
+.chip { display: inline-flex; gap: 2px; align-items: center; max-width: 100%; padding: 2px 4px 2px 8px; border-radius: 10px; background: var(--sunk); font-size: 12px; }
+.chip button { border: 0; padding: 0 4px; background: none; color: var(--muted); }
 .fab[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 `;
 
@@ -49,17 +61,26 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
 
   const el = host("kit-chat", CSS, `<button type="button" class="fab" title="${esc(title)}" aria-expanded="false">&#10022;</button>` +
     `<div class="card pop" hidden><div class="head"><b>${esc(title)}</b><button type="button" class="new">New</button></div>` +
-    `<div class="log" aria-live="polite"></div><form><textarea rows="1" placeholder="Ask, or tell it to do something"></textarea><button type="submit">Send</button></form></div>`);
+    `<div class="log" aria-live="polite"></div><div class="menu" hidden></div><div class="points"></div>` +
+    `<form><textarea rows="1" placeholder="Ask, or tell it to do something"></textarea><button type="button" class="point" title="Point at an annotation" hidden>@</button><button type="submit">Send</button></form></div>`);
   const ui = el.shadowRoot;
-  const [fab, pop, log, form, box] = [".fab", ".pop", ".log", "form", "textarea"].map((s) => ui.querySelector(s));
+  const [fab, pop, log, menu, chips, form, box, point] = [".fab", ".pop", ".log", ".menu", ".points", "form", "textarea", ".point"].map((s) => ui.querySelector(s));
+  /** The annotate tool's API when the page has the tool, else undefined. */
+  const notes = () => document.getElementById("kit-annotate")?.annotate;
+  /** The annotations the next message points at, as { id, label }. */
+  let points = [];
 
   function draw() {
-    log.innerHTML = state.items.map((m) => `<p class="${m.by}">${esc(m.text)}</p>`).join("") +
+    log.innerHTML = state.items.map((m) => `<p class="${m.by}">${esc(m.text)}${(m.points ?? []).map((l) => `<span class="ref">@ ${esc(l)}</span>`).join("")}</p>`).join("") +
       (busy ? `<p class="busy">Working…</p>` : "") || `<p class="empty">No messages yet.</p>`;
     log.scrollTop = log.scrollHeight;
-    form.querySelector("button").disabled = busy;
+    form.querySelector("button[type=submit]").disabled = busy;
+    point.hidden = !notes();
+    chips.innerHTML = points.map((p, i) => `<span class="chip">@ ${esc(p.label)}<button type="button" data-i="${i}" aria-label="Remove">&times;</button></span>`).join("");
   }
-  const add = (by, text) => { state.items.push({ by, text }); save(); draw(); };
+  const add = (by, text, refs) => { state.items.push({ by, text, ...(refs?.length ? { points: refs } : {}) }); save(); draw(); };
+  /** Points the next message at annotation `a`, the `no`th note of the page. */
+  const attach = (a, no) => { points = [...points.filter((p) => p.id !== a.id), { id: a.id, label: `#${no} ${a.note.split("\n")[0].slice(0, 40)}` }]; draw(); };
 
   /** One stream-json event of the agent. */
   function take(ev) {
@@ -75,11 +96,13 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   }
 
   async function send(text) {
-    add("you", text);
+    const ids = points.map((p) => p.id);
+    add("you", text, points.map((p) => p.label));
+    points = [];
     busy = true;
     draw();
     try {
-      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ text, session: state.session, ...context() }) });
+      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ text, session: state.session, ...(ids.length ? { annotations: ids } : {}), ...context() }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `${r.status}`);
       const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
       let buf = "";
@@ -107,10 +130,38 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
     draw();
   }
 
-  fab.addEventListener("click", () => {
-    pop.hidden = !pop.hidden;
-    fab.setAttribute("aria-expanded", String(!pop.hidden));
-    if (!pop.hidden) { draw(); box.focus(); }
+  const show = (open) => {
+    pop.hidden = !open;
+    fab.setAttribute("aria-expanded", String(open));
+    if (open) { draw(); box.focus(); }
+  };
+  fab.addEventListener("click", () => show(pop.hidden));
+  point.addEventListener("click", () => {
+    if (!menu.hidden) { menu.hidden = true; return; }
+    menu.innerHTML = (notes()?.notes() ?? []).map((a, i) => `<button type="button" data-id="${esc(a.id)}">#${i + 1} ${esc(a.note.split("\n")[0].slice(0, 60))}</button>`).join("") +
+      `<button type="button" class="pick">New: pick an element</button>`;
+    menu.hidden = false;
+  });
+  // The panel hides while you pick, so it covers no element, and opens again with the new note attached.
+  menu.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"), api = notes();
+    if (!b || !api) return;
+    menu.hidden = true;
+    if (b.classList.contains("pick")) {
+      show(false);
+      const a = await api.pick();
+      show(true);
+      if (a) attach(a, api.notes().findIndex((x) => x.id === a.id) + 1);
+      return;
+    }
+    const all = api.notes(), i = all.findIndex((x) => x.id === b.dataset.id);
+    if (i >= 0) attach(all[i], i + 1);
+  });
+  chips.addEventListener("click", (e) => {
+    const i = e.target.closest("button")?.dataset.i;
+    if (i === undefined) return;
+    points.splice(Number(i), 1);
+    draw();
   });
   ui.querySelector(".new").addEventListener("click", () => { if (busy) return; state = { items: [] }; save(); draw(); });
   form.addEventListener("submit", (e) => {

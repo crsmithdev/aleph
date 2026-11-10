@@ -81,7 +81,8 @@
     headers: { "X-Aleph-UI": "1" },
     watch: (fn) => addEventListener("aleph:change", (e) => { if (e.detail.includes("/api/annotations")) fn(); }),
   }) });
-  // The chat agent (ui/api/chat.ts) gets the open notes of the page in view, named as annotate.js names a page.
+  // The chat agent (ui/api/chat.ts) gets the open notes of the page in view, named as annotate.js names a page, and
+  // the notes its @ button points at.
   chat({ headers: { "X-Aleph-UI": "1" }, context: () => ({ page: location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : "") }) });
 </script>
 </body>

@@ -532,6 +532,62 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     for (const n of await server()) expect(cli(["drop", n.id]).exitCode).toBe(0);
   }, 30_000);
 
+  test("the chat points a message at a note of the page, or at a new one picked from the chat", async () => {
+    await page.width(1200);
+    await page.go("#/");
+    const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
+    const chat = 'document.getElementById("kit-chat").shadowRoot', note = 'document.getElementById("kit-annotate")';
+    // A stand-in for the server's turn: it keeps each body the chat posts and ends the turn at once.
+    await page.ev(`(() => { window.sent = []; window.realFetch = fetch; window.fetch = (u, o) => u === "/api/chat"
+      ? (sent.push(JSON.parse(o.body)), Promise.resolve(new Response("event: end\\ndata: {}\\n\\n", { headers: { "content-type": "text/event-stream" } })))
+      : realFetch(u, o); })()`);
+    const say = async (text: string) => {
+      const n = await page.ev<number>("sent.length");
+      await page.ev(`(() => { const ui = ${chat}; ui.querySelector("textarea").value = ${JSON.stringify(text)}; ui.querySelector("form").requestSubmit(); })()`);
+      await page.when(`sent.length === ${n + 1}`);
+      return page.ev<{ text: string; annotations?: string[] }>("sent.at(-1)");
+    };
+    const added = cli(["add", "--selector", "#nav", "--", "the nav"]);
+    expect(added.exitCode).toBe(0);
+    await page.when(`${note}.shadowRoot.querySelector(".count").textContent === "1"`);
+    const old = (await page.ev<{ id: string }[]>('fetch("/api/annotations").then((r) => r.json())'))[0].id;
+    await page.ev(`${chat}.querySelector(".fab").click()`);
+    expect(await page.ev(`${chat}.querySelector(".point").hidden`)).toBe(false);
+    // The menu lists the page's note and a new pick; the chosen note shows as a chip and goes with the next message only.
+    await page.ev(`${chat}.querySelector(".point").click()`);
+    expect(await page.ev<string[]>(`[...${chat}.querySelectorAll(".menu button")].map((b) => b.textContent)`)).toEqual(["#1 the nav", "New: pick an element"]);
+    await page.ev(`${chat}.querySelector(".menu button").click()`);
+    expect(await page.ev(`${chat}.querySelector(".points").textContent`)).toContain("#1 the nav");
+    expect((await say("rename it")).annotations).toEqual([old]);
+    expect(await page.ev(`${chat}.querySelector(".points").textContent`)).toBe("");
+    expect((await say("and now?")).annotations).toBeUndefined();
+    // New: the panel hides, a click picks an element, and the saved note comes back as the chip.
+    await page.ev(`${chat}.querySelector(".point").click()`);
+    await page.ev(`${chat}.querySelector(".menu .pick").click()`);
+    expect(await page.ev(`${chat}.querySelector(".pop").hidden`)).toBe(true);
+    expect(await page.ev(`${note}.shadowRoot.querySelector(".pick").getAttribute("aria-pressed")`)).toBe("true");
+    await page.ev('document.querySelector("#nav li a").click()');
+    expect(await page.ev(`${note}.shadowRoot.querySelector(".pick").getAttribute("aria-pressed")`)).toBe("false");
+    await page.ev('(() => { const l = document.getElementById("kit-annotate-layer").shadowRoot; l.querySelector("textarea.note").value = "this link"; l.querySelector(".save").click(); })()');
+    await page.when(`!${chat}.querySelector(".pop").hidden && ${chat}.querySelector(".points").textContent.includes("#2 this link")`);
+    const fresh = await say("what is this");
+    expect(fresh.annotations).toHaveLength(1);
+    expect(fresh.annotations![0]).not.toBe(old);
+    // A cancelled pick attaches nothing.
+    await page.ev(`${chat}.querySelector(".point").click()`);
+    await page.ev(`${chat}.querySelector(".menu .pick").click()`);
+    await page.ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))');
+    await page.when(`!${chat}.querySelector(".pop").hidden`);
+    expect(await page.ev(`${chat}.querySelector(".points").textContent`)).toBe("");
+    // Without the annotate tool the button does not show, and the chat still sends.
+    await page.ev(`${note}.id = "kit-annotate-off"`);
+    await page.ev(`${chat}.querySelector(".fab").click(); ${chat}.querySelector(".fab").click()`);
+    expect(await page.ev(`${chat}.querySelector(".point").hidden`)).toBe(true);
+    expect((await say("plain")).text).toBe("plain");
+    await page.ev(`document.getElementById("kit-annotate-off").id = "kit-annotate"; window.fetch = realFetch; ${chat}.querySelector(".new").click(); ${chat}.querySelector(".fab").click()`);
+    for (const n of await page.ev<{ id: string }[]>('fetch("/api/annotations").then((r) => r.json())')) expect(cli(["drop", n.id]).exitCode).toBe(0);
+  }, 30_000);
+
   test("every indented list takes its left padding from --indent-list", async () => {
     await page.width(1200);
     await page.go("#/");
