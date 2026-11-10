@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
-import { asksOf } from "./test-now.ts";
+// @ts-ignore cards.js is plain JS, shared with the page
+import { askCard } from "./views/cards.js";
+import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
+import { asksOf, prop } from "./test-now.ts";
 import { job } from "./fixtures/status-state.ts";
 
 const CASE = (actions: string[], rec: string) => ({
@@ -32,7 +35,7 @@ test("one card per kind: the title opens with the kind label, and the tag names 
     ["held-path", "approve", "protected"], ["question", "decide", "question"], ["no-commit", "unstick", "failed"],
   ]);
   for (const [i, label] of items.map((x, k) => [x, ["Approve", "Decide", "Unstick"][k]] as const)) {
-    const row = card(view.askRow(i, "2026-10-27T17:00:00Z"));
+    const row = card(askCard(i, "2026-10-27T17:00:00Z"));
     expect(row).toContain(`data-card="${i.card}"`);
     expect(row).toContain(`<span class="t"><b class="ask-kind">${label}:</b> <span class="ask-title">the doc-claim check in the verify gate</span></span>`);
     expect(row).toContain(`<span class="ask-tag">${i.tag}</span>`);
@@ -40,7 +43,7 @@ test("one card per kind: the title opens with the kind label, and the tag names 
 });
 
 test("the compact face is the title and the buttons; the open face adds the description and what each button does", () => {
-  const row = view.askRow(four()[0], "2026-10-27T17:00:00Z");
+  const row = askCard(four()[0], "2026-10-27T17:00:00Z");
   const fold = row.match(/<details class="ask-fold"[^>]*>[^]*?<\/details>/)![0];
   // The description sits in the title's fold, closed by default; the buttons sit outside it, so the compact face shows them.
   expect(fold).not.toMatch(/^<details[^>]* open/);
@@ -56,14 +59,14 @@ test("the compact face is the title and the buttons; the open face adds the desc
 });
 
 test("the recommended button is marked and filled; the others are not", () => {
-  const row = view.askRow(four()[0], "2026-10-27T17:00:00Z");
+  const row = askCard(four()[0], "2026-10-27T17:00:00Z");
   expect(row).toContain('<div class="choice rec"><button class="act primary" type="button" data-act="land"');
   expect(row.match(/<span class="rec-note">Recommended<\/span>/g)).toHaveLength(1);
   expect(row).toContain('<div class="choice"><button class="act" type="button" data-act="drop"');
 });
 
 test("Technical details are closed by default and hold the director's details and why it recommends", () => {
-  const row = view.askRow(four()[0], "2026-10-27T17:00:00Z");
+  const row = askCard(four()[0], "2026-10-27T17:00:00Z");
   const tech = row.match(/<details class="more"[^>]*>[^]*?<\/details>/)![0];
   expect(tech).not.toMatch(/^<details[^>]* open/);
   expect(tech).toContain("<summary>Technical details</summary>");
@@ -79,21 +82,38 @@ test("each held path names its change: a package file is a package change", () =
 test("an old Ask with none of the new fields still renders: the item's title, the fixed text, no mark", () => {
   const [i] = asksOf([], [issueAsk(50, "run-cap", { title: "Loops a lot", ask: { kind: "input", reason: "run-cap", question: "q", options: [], why: [], situation: "It started three times." } })]);
   expect(i.headline).toBe("Loops a lot");
-  const row = view.askRow(i, "2026-10-27T17:00:00Z");
+  const row = askCard(i, "2026-10-27T17:00:00Z");
   expect(row).toContain('<b class="ask-kind">Unstick:</b> <span class="ask-title">Loops a lot</span>');
   expect(row).toContain('<span class="ask-tag">capped</span>');
   expect(row).toContain("Clears the Ask and lets the factory start the issue again.");
   expect(row).not.toContain("the goal");
   expect(row).not.toContain("rec-note");
-  // An item from before the cards, with no card, headline or tag: the kind comes from its input or approval.
-  const bare = view.askRow({ key: "run:x-1", reason: "held-path", kind: "approval", id: "x-1", href: "", title: "Old run", problem: "p", situation: "s", escalated: true, actions: [], details: {} }, "2026-10-27T17:00:00Z");
-  expect(bare).toContain('<b class="ask-kind">Approve:</b> <span class="ask-title">Old run</span>');
-  expect(bare).not.toContain("ask-tag");
+});
+
+test("one Ask per reason: the card, its label and its tag come from the server item", () => {
+  const want: Record<string, [string, string, string]> = {
+    "held-path": ["approve", "Approve", "protected"], review: ["approve", "Approve", "returned"], question: ["decide", "Decide", "question"],
+    "no-commit": ["unstick", "Unstick", "failed"], "part-dropped": ["decide", "Decide", "incomplete"], "intake-failed": ["unstick", "Unstick", "failed"],
+    rescue: ["unstick", "Unstick", "waiting"], "run-cap": ["unstick", "Unstick", "capped"],
+    "proposal-check": ["approve", "Approve", "proposal"], "proposal-claude-md": ["approve", "Approve", "proposal"], "proposal-skill": ["approve", "Approve", "proposal"],
+  };
+  expect(Object.keys(want).sort()).toEqual(Object.keys(ASK_REASONS).sort());
+  const plain = Object.keys(want).filter((r) => !r.startsWith("proposal-"));
+  const items = asksOf([], plain.map((r, n) => issueAsk(60 + n, r, { title: `Stop ${r}`, ask: { kind: "input", reason: r, question: "q", options: [], why: [], ...CASE([], "") } })),
+    ["check", "claude-md", "skill"].map((k, n) => ({ ...prop, id: `l-${n}`, kind: k, situation: "S." })));
+  expect(items.map((i) => i.reason).sort()).toEqual(Object.keys(want).sort());
+  for (const i of items) {
+    const [kind, label, tag] = want[i.reason];
+    const row = card(askCard(i, "2026-10-27T17:00:00Z"));
+    expect(row).toContain(`data-card="${kind}" data-reason="${i.reason}"`);
+    expect(row).toContain(`<b class="ask-kind">${label}:</b>`);
+    expect(row).toContain(`<span class="ask-tag">${tag}</span>`);
+  }
 });
 
 test("an Ask still with the director shows its title and fixed text, and no button", () => {
   const [i] = asksOf([], [issueAsk(51, "no-commit", { title: "Empty runs", ask: { kind: "input", reason: "no-commit", question: "q", options: [], why: [] } })]);
-  const row = view.askRow(i, "2026-10-27T17:00:00Z");
+  const row = askCard(i, "2026-10-27T17:00:00Z");
   expect(row).toContain('<b class="ask-kind">Unstick:</b> <span class="ask-title">Empty runs</span>');
   expect(row).toContain("With the director");
   expect(row).not.toContain("<button");
@@ -101,7 +121,7 @@ test("an Ask still with the director shows its title and fixed text, and no butt
 
 test("the id, priority, date and runtime sit inside the coloured box of an Ask card and of a stuck card", () => {
   const stuck = view.renderNeeds({ asks: [], stuck: [job({ name: "aleph-30", condition: "failed", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
-  for (const row of [view.askRow({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z"), stuck]) {
+  for (const row of [askCard({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z"), stuck]) {
     const [before, box] = row.split('<div class="ask-box">');
     expect(before).not.toContain('class="ih"');
     const head = box.slice(0, box.indexOf("<details"));

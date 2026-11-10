@@ -24,8 +24,8 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/automation": {
     now: "time", capEnv: { "*": "boolean" }, settings: { "*": "number?" }, metrics: { days: "number", rate: "object?", catches: "object", held: "object" },
     schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", gated: "object?", baseline: "array",
-    asks: [{ key: "string", kind: "string", id: "string", title: "string", at: "string" }], rules: [{ reason: "string", mode: "string" }],
-    repeats: "array", held: ["string"], repoHeld: "array", log: { days: "number", max: "number", entries: "array" },
+    asks: [{ key: "string", kind: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }], rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
+    repeats: [{ reason: "string", name: "string", answer: "string" }], held: ["string"], repoHeld: "array", log: { days: "number", max: "number", entries: "array" },
   },
   "/api/flow": {
     window: "string", done: "number", kinds: "object", phases: "object", asks: { count: "number", manual: "number" }, checks: "array",

@@ -2,7 +2,8 @@
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { dataOf, get } from "../router.js";
 import { clamp, contentText, issueHref, parseId, parseJob, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, recordState, restoreState, seg, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
-import { askRow, findingHtml } from "./now.js";
+import { findingHtml } from "./now.js";
+import { askCard } from "./cards.js";
 
 export const view = {
   path: "/automation",
@@ -24,21 +25,6 @@ export const view = {
 export const redirect = (hash) => {
   const [path, qs] = String(hash ?? "").split("?");
   return path === "#/gates" ? `#/automation${qs ? `?${qs}` : ""}` : null;
-};
-
-/** The name and the one line of each Ask reason. A reason not listed shows its key. */
-export const REASONS = {
-  "held-path": ["Lands on held paths", "A job that changes a held path, after its checks and review pass."],
-  review: ["Reviewer holds", "The reviewer held the job and no fix rounds are left."],
-  question: ["Questions", "A job or an intake stopped on a choice that the spec leaves open."],
-  "no-commit": ["Jobs with no commit", "The last 3 jobs of an issue ended with nothing committed."],
-  "part-dropped": ["Dropped sub-issues", "A sub-issue of an issue was dropped and no other sub-issue is open."],
-  "intake-failed": ["Failed intake", "Intake of an issue failed twice."],
-  rescue: ["Rescue of a stuck job", "A stuck job with more than one way out."],
-  "run-cap": ["Job cap", "An issue started 3 times in one hour."],
-  "proposal-check": ["Proposed checks", "The correction memory proposes a check for a repo."],
-  "proposal-claude-md": ["Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."],
-  "proposal-skill": ["Proposed skill changes", "The correction memory proposes a change to a skill."],
 };
 
 /** The label of an automatic mode: what it does. */
@@ -126,14 +112,14 @@ export function renderSchedules(d) {
 
 /** The Asks routed to Chris, as the Status page's cards. */
 function renderWaiting(d) {
-  const rows = d.asks.map((i) => askRow(i, d.now)).join("");
+  const rows = d.asks.map((i) => askCard(i, d.now)).join("");
   return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for You", { count: d.asks.length })}` +
     (rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.")) + `</section>`;
 }
 
 /** Each kind of Ask that Chris answered the same way 3 or more times, with a button that makes the answer the rule when it is the reason's automatic mode. */
 export function renderRepeats(d) {
-  const rows = d.repeats.map((r) => `<tr><td>${esc(REASONS[r.reason]?.[0] ?? r.reason)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
+  const rows = d.repeats.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
     (r.mode ? actButton("Make it a rule", { rule: r.reason, mode: r.mode, label: "Make it a rule" }) : "") + `</td></tr>`);
   return `<section id="gates-repeats" aria-label="Rule candidates">${sectionHead("Rule Candidates", { count: d.repeats.length })}` +
     (rows.length ? pagedTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
@@ -142,7 +128,6 @@ export function renderRepeats(d) {
 /** One row per Ask reason: who decides it. Ask me, or the reason's one automatic mode. */
 export function renderRules(d) {
   const rows = d.rules.map((r) => {
-    const [name, desc] = REASONS[r.reason] ?? [r.reason, ""];
     const g = r.granted;
     let control = "", hint = "";
     if (r.places) {
@@ -150,13 +135,13 @@ export function renderRules(d) {
       control = `<p class="quiet note">Set per target from the proposal.</p>`;
     } else {
       const btn = (mode, label, on) => ({ label, on, attrs: ` data-rule="${esc(r.reason)}" data-mode="${esc(mode)}"` });
-      control = seg(`Who decides ${name}`, [btn("", "Ask me", !g), ...(r.mode ? [btn(r.mode, modeLabel(r.mode), g?.action === r.mode)] : [])]);
+      control = seg(`Who decides ${r.name}`, [btn("", "Ask me", !g), ...(r.mode ? [btn(r.mode, modeLabel(r.mode), g?.action === r.mode)] : [])]);
       if (!r.mode) hint = "The director decides first and sends the rest to you.";
       if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
     }
     const num = (n) => `<td class="num">${n}</td>`;
     const dec = r.decided, out = r.outcome;
-    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(name)}</b> <code>${esc(r.reason)}</code>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
+    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? `<p class="quiet">${esc(r.line)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
   }).join("");
   return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${!rows ? empty("No rule.") : dataTable(heads(["Rule", "Who Decides", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"]), rows, { id: "rules-table" })}</section>`;
 }

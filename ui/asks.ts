@@ -12,8 +12,8 @@ import type { Job, NewIssue } from "./state.ts";
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string>; /** The Ask's recommend names this action. */ recommended: boolean }
 export interface AskItem {
   key: string; reason: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
-  /** The card's kind (it sets the color and opens the title), the title after the kind, and the tag that names the stop. The page reads an item without them by its `kind` and `title`. */
-  card?: Card; headline?: string; tag?: string;
+  /** The card's kind (it sets the color), its label that opens the title, the title after the label, and the tag that names the stop. */
+  card: Card; label: string; headline: string; tag: string;
   /** The stored situation when the Ask holds one, else the fixed problem text. */ situation: string;
   /** True once the director escalated the Ask: `situation` and the hints are its case text. Until then the row offers no action. */ escalated: boolean;
   actions: Action[]; /** What the limits moved out of the card's text, and the director's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
@@ -52,19 +52,24 @@ type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
 
 /** The three kinds of card. Approve: finished work that waits for an OK. Decide: a choice only Chris can make. Unstick: work that stopped and needs a direction. */
 export type Card = "approve" | "decide" | "unstick";
-/** Each reason's kind of card. */
-const CARDS: Record<string, { card: Card }> = {
-  "held-path": { card: "approve" },
-  review: { card: "approve" },
-  "proposal-check": { card: "approve" },
-  "proposal-claude-md": { card: "approve" },
-  "proposal-skill": { card: "approve" },
-  question: { card: "decide" },
-  "part-dropped": { card: "decide" },
-  "no-commit": { card: "unstick" },
-  "run-cap": { card: "unstick" },
-  "intake-failed": { card: "unstick" },
-  rescue: { card: "unstick" },
+/** Each reason's kind of card, its name and its one line: the Automation page names a reason by them. */
+const CARDS: Record<string, { card: Card; name: string; line: string }> = {
+  "held-path": { card: "approve", name: "Lands on held paths", line: "A job that changes a held path, after its checks and review pass." },
+  review: { card: "approve", name: "Reviewer holds", line: "The reviewer held the job and no fix rounds are left." },
+  "proposal-check": { card: "approve", name: "Proposed checks", line: "The correction memory proposes a check for a repo." },
+  "proposal-claude-md": { card: "approve", name: "Proposed CLAUDE.md lines", line: "The correction memory proposes a line in a CLAUDE.md." },
+  "proposal-skill": { card: "approve", name: "Proposed skill changes", line: "The correction memory proposes a change to a skill." },
+  question: { card: "decide", name: "Questions", line: "A job or an intake stopped on a choice that the spec leaves open." },
+  "part-dropped": { card: "decide", name: "Dropped sub-issues", line: "A sub-issue of an issue was dropped and no other sub-issue is open." },
+  "no-commit": { card: "unstick", name: "Jobs with no commit", line: "The last 3 jobs of an issue ended with nothing committed." },
+  "run-cap": { card: "unstick", name: "Job cap", line: "An issue started 3 times in one hour." },
+  "intake-failed": { card: "unstick", name: "Failed intake", line: "Intake of an issue failed twice." },
+  rescue: { card: "unstick", name: "Rescue of a stuck job", line: "A stuck job with more than one way out." },
+};
+/** The name and the one line of a reason. A reason not in the table is named by its key, with no line. */
+export const reasonText = (reason: string): { name: string; line: string } => {
+  const c = CARDS[reason];
+  return c ? { name: c.name, line: c.line } : { name: reason, line: "" };
 };
 /** The text a row shows: the Ask of its run or issue, else the stored text of its lesson. */
 const askIn = (c: Ctx): Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend"> | undefined => {
@@ -237,7 +242,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   const card = CARDS[reason];
   const headline = (escalated && askIn(c)?.headline?.trim()) || title;
   return {
-    key, reason, kind: kindOf(reason, kind), card: card.card, headline, tag: escalated ? word("ask", reason) : word("actor", "Director"), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
+    key, reason, kind: kindOf(reason, kind), card: card.card, label: card.card[0].toUpperCase() + card.card.slice(1), headline, tag: escalated ? word("ask", reason) : word("actor", "Director"), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
     ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };

@@ -21,6 +21,7 @@ import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRound
 import { reader } from "../../issues/lib/store.ts";
 
 import { aleph, fail, post } from "../action.ts";
+import { reasonText } from "../asks.ts";
 import { state, type State } from "../state.ts";
 import { forProject } from "./now.ts";
 import type { Routes } from "../server.ts";
@@ -61,7 +62,7 @@ export function rules(entries: LogEntry[] = [], records = record.all(), now = Da
       outcome[a.rec.runs.some((x) => x.kind === "build" && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
     }
     return {
-      reason, kind: r.kind, mode: r.always, fired: mine.length, decided, outcome,
+      reason, ...reasonText(reason), kind: r.kind, mode: r.always, fired: mine.length, decided, outcome,
       granted: g ? { action: g.action, at: g.at } : null,
       ...(perPlace ? { places: Object.keys(granted).filter((k) => k.startsWith(`${reason}:`)) } : {}),
     };
@@ -91,7 +92,7 @@ export function repeats(entries: LogEntry[], records = record.all(), now = Date.
     c.count++;
     counts.set(k, c);
   }
-  return [...counts.values()].filter((c) => c.count >= 3).map((c) => ({ ...c, mode: ASK_REASONS[c.reason]?.always === c.answer ? c.answer : "" }));
+  return [...counts.values()].filter((c) => c.count >= 3).map((c) => ({ ...c, name: reasonText(c.reason).name, mode: ASK_REASONS[c.reason]?.always === c.answer ? c.answer : "" }));
 }
 
 /** The held paths, from ui/security-facts.ts in a process of its own: the server imports no security path. */

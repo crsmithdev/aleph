@@ -4,7 +4,7 @@
 import { actButton, issueApi, issueHref, jobHref, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember } from "../lib.js";
 import { FACTORY, WINDOWS } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
-import { askRow } from "./now.js";
+import { askCard } from "./cards.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
 export const view = {
@@ -690,7 +690,7 @@ export function renderIssue(d) {
     }))
     : empty("No commit on main names this issue in its trailers.");
   const segments = issueSegments(d);
-  return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askRow(d.ask) : "") +
+  return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askCard(d.ask) : "") +
     issueKpis(d, segments) + renderTimeline(segments) +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
     `<div class="dp-detail">${detailPanel("Media", esc((d.media ?? []).length), renderMedia(d, ref))}${detailPanel("Notes", esc(d.notes.length), notes)}${detailPanel("Commits", esc(d.commits.length), commits)}</div></div>`;

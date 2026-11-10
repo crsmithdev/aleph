@@ -338,12 +338,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     await page.when('document.querySelector("#view article.issue-row")');
     // A real Ask card with a Deny, from the view's own renderer. After the POST every other fetch hangs, and the mark on #view shows that no render replaced it.
-    await page.ev(`import("/views/now.js").then(({ askRow }) => {
+    await page.ev(`import("/views/cards.js").then(({ askCard }) => {
       const f = window.fetch;
       window.posts = [];
       window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push([u, o.body]), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
       document.querySelector("#view > *").dataset.mark = "1";
-      document.querySelector("#view > *").insertAdjacentHTML("afterbegin", askRow({ id: "tools-4", reason: "question", kind: "question", headline: "Support a second input file",
+      document.querySelector("#view > *").insertAdjacentHTML("afterbegin", askCard({ id: "tools-4", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a second input file",
         situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", args: { repo: "tools", id: "4" } }] }));
       const b = document.querySelector('#view article.issue-row button.act[data-act="deny"]');
       window.card = b.closest("article");

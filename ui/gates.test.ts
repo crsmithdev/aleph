@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
 import { LOG_MAX, gatesBody, log, metrics, repeats, rules, securityFacts } from "./api/gates.ts";
-import type { AskItem } from "./asks.ts";
+import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { pct, when } from "./lib.js";
@@ -157,7 +157,7 @@ test("POST /api/automation/rules/:reason/revoke runs `aleph always revoke`, and 
   expect(existsSync(calls) && readFileSync(calls, "utf8").length).toBe(n);
 });
 
-const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
+const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", card: "decide", label: "Decide", headline: `t ${id}`, tag: "", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
   actions: [{ act: "checked", label: "Mark it checked", hint: "Records it.", primary: true, args: { repo: "r", id: id.split("-")[1] }, recommended: false }], details: {}, repo: "r" });
 
 const data = () => ({
@@ -169,7 +169,7 @@ const data = () => ({
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
   repeats: [],
-  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
+  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
   log: { days: 7, max: 200, entries: [{ at: ago(1), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" }, { at: ago(2), by: "human", subject: "rescue", action: "changed", sub: "rescue", note: "set to recommended" }] },
@@ -528,10 +528,10 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   const records = [1, 2, 3].map((n) => rec(n, "intake-failed")).concat([4, 5].map((n) => rec(n, "question")));
   const entries: any[] = [1, 2, 3, 4, 5].map((n) => ({ at: at(n * 10), by: "human", subject: `x-${n}`, action: n < 4 ? "reran" : "answered", note: n < 4 ? "Chris: run intake again" : `Chris decided: My recommendation is plan ${n}.` }));
   const r = repeats(entries, records, NOW + 3600_000);
-  expect(r).toEqual([{ reason: "intake-failed", answer: "retry", count: 3, mode: "retry" }]);
+  expect(r).toEqual([{ reason: "intake-failed", answer: "retry", count: 3, name: "Failed intake", mode: "retry" }]);
   const rescue = [6, 7, 8].map((n) => rec(n, "rescue"));
   const approved = [6, 7, 8].map((n) => ({ at: at(n * 10), by: "human", subject: `x-${n}`, action: "answered", note: `Chris decided: My recommendation is fix ${n}.` }));
-  expect(repeats(approved as any, rescue, NOW + 3600_000)).toEqual([{ reason: "rescue", answer: "recommended", count: 3, mode: "recommended" }]);
+  expect(repeats(approved as any, rescue, NOW + 3600_000)).toEqual([{ reason: "rescue", answer: "recommended", count: 3, name: "Rescue of a stuck job", mode: "recommended" }]);
   const d = { ...data(), repeats: r };
   const h = gates.renderRepeats(d);
   expect(h).toContain("<h2>Rule Candidates");

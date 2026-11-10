@@ -1,5 +1,5 @@
-// The parts of a Status page card. Pure string functions, no DOM.
-import { actButton, actMessages, dur, esc, jobHref, repoIdLink, when } from "../lib.js";
+// The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
+import { actButton, actMessages, codeText, denyReasons, diffHtml, dur, esc, jobHref, localId, openDiffs, parseId, priorityBadge, repoIdLink, tag, when } from "../lib.js";
 
 /** A job's id, linking to its page. */
 export const itemId = (j) => repoIdLink(j.name, j.href || jobHref(j.id));
@@ -25,3 +25,95 @@ export const trailerLine = (j, now) =>
   j.trailers?.length ? `<p class="trailers-line">${j.trailers.map((t) => trailer(t, j, now)).join(" · ")}</p>` : "";
 /** One card shell. */
 export const shell = (size, cls, inner, tag = "article") => `<${tag} class="job-card ${size} ${cls}">${inner}</${tag}>`;
+
+const STAT_FILES = 12;
+
+/** The first STAT_FILES file lines of a diff stat, then "+N more files" and the summary line. */
+export function statLines(stat) {
+  const all = stat.replace(/\n+$/, "").split("\n");
+  const files = all.filter((l) => l.includes(" | "));
+  if (files.length <= STAT_FILES) return esc(stat);
+  const shown = new Set(files.slice(0, STAT_FILES));
+  const kept = all.filter((l) => !l.includes(" | ") || shown.has(l));
+  const summary = kept.filter((l) => !l.includes(" | "));
+  return esc(kept.filter((l) => l.includes(" | ")).join("\n")) + `\n<b>+${files.length - STAT_FILES} more files</b>` + (summary.length ? "\n" + esc(summary.join("\n")) : "");
+}
+
+/** The "3/4" link of a part to its parent; "" for a card that is no part. */
+const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Sub-issue ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
+
+/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, the hold. `chips` is HTML. */
+export function metaRow({ id, chips, part, at, since, now, end, hold }) {
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${hold ? `<span class="blocked">${esc(hold)}</span>` : ""}</div>`;
+}
+
+/** The time from `since` to `to` as `dur` writes it; "–" when the work was never picked up. */
+function span(since, to) {
+  const ms = Date.parse(to) - Date.parse(since);
+  if (!since || !(ms >= 0)) return "–";
+  return dur(ms / 1000);
+}
+
+/** The Ask card structure: the article with `cls` and `attrs`, then the box with `meta`, the fold of `label`, `title` and `tag` over `desc`, and `rest`. */
+export const askShell = (cls, attrs, key, meta, label, title, tag, desc, rest) =>
+  `<article class="job-card small issue-row ${cls}" ${attrs}>` +
+  `<div class="ask-box">${meta}<details class="ask-fold" data-keep="ask:${esc(key)}"><summary class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${esc(label)}:</b> <span class="ask-title">${esc(title)}</span></span>${tag ? `<span class="ask-tag">${esc(tag)}</span>` : ""}</summary>${desc}</details>${rest}</div></article>`;
+
+/** The options, recommended mark and context of a decision with fields. */
+function decisionBody(d) {
+  return `<p class="dq">${codeText(d.question)}</p>` +
+    `<ul class="opts">${d.options.map((o) => `<li${o.label === d.recommended ? ' class="rec"' : ""}><b>${codeText(o.label)}</b>${o.label === d.recommended ? ` ${tag("Recommended", "run")}` : ""} <span class="line">${codeText(o.line)}</span></li>`).join("")}</ul>` +
+    (d.why?.length ? `<ul class="why">${d.why.map((w) => `<li>${codeText(w)}</li>`).join("")}</ul>` : "");
+}
+
+const isUrl = (u) => /^https?:\/\//.test(u);
+
+/** One button of an ask row: the action's args as data attributes. */
+function actionButton(a) {
+  return actButton(a.label, { act: a.act, ...a.args, label: a.label }, { primary: a.primary });
+}
+
+/** The Technical details of an ask card: what the limits moved out, the raw note, the options, the signals, the stat and the review note. Closed until opened. */
+function askDetails(i) {
+  const d = i.details ?? {};
+  const isRun = i.key?.startsWith("run:");
+  const sig = (d.signals ?? []).map((g) => `<li>${esc(g.at)} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
+  const body = (i.more ?? []).map((t) => `<p class="quiet q">${esc(localId(t, i.repo))}</p>`).join("") +
+    (d.note ? `<p class="quiet q">${esc(d.note)}</p>` : "") +
+    (d.ask ? decisionBody(d.ask) : "") +
+    (sig ? `<ul>${sig}</ul>` : "") +
+    (d.review ? `<p class="quiet q">Reviewer: ${esc(d.review.call)}${d.review.reason ? `: ${esc(d.review.reason)}` : ""}</p>` : "") +
+    (d.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(d.stat)}</pre></div></div>` : "") +
+    (isRun ? `<div class="actions">${act("diff", i.id, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(i.id)}"${openDiffs.has(i.id) ? `>${diffHtml(openDiffs.get(i.id))}` : " hidden>"}</div>` : "");
+  return body ? `<details class="more" data-keep="more:${esc(i.key ?? i.id)}"><summary>Technical details</summary><div class="body">${body}</div></details>` : "";
+}
+
+
+/** One choice of an Ask card: the button, then what it does and the recommended mark, shown when the card is open. */
+const askChoice = (a, input) =>
+  `<div class="choice${a.recommended ? " rec" : ""}">${actionButton(a)}<div class="choice-text"><span class="effect">${codeText(a.hint)}</span>${a.recommended ? '<span class="rec-note">Recommended</span>' : ""}${input}</div></div>`;
+
+/**
+ * An Ask card from a server `asks` entry. Compact: the meta row, the title (the kind, then the headline, and the tag
+ * that names the stop) and the buttons. A click on the title opens it: the description, what each button does with
+ * the recommended one marked, and Technical details, closed until opened. Choices in order: positive, positive [auto-yes], negative.
+ */
+export function askCard(i, now = new Date().toISOString()) {
+  const acts = i.actions ?? [];
+  const inputFor = (a) => {
+    if (a.act === "deny") {
+      const p = parseId(i.id);
+      const n = p ? `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}` : "";
+      return `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(p?.repo ?? "")}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`;
+    }
+    return a.act === "answer" ? `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" hidden aria-label="Answer for ${esc(i.id)}">` : "";
+  };
+  const choices = acts.map((a) => askChoice(a, inputFor(a)));
+  if (i.always) choices.splice(acts.length ? 1 : 0, 0, `<div class="choice">${actButton(i.always.label, { act: "always", reason: i.always.reason ?? i.reason, action: i.always.action, first: acts[0]?.act ?? "", label: i.always.label }, { cls: "always" })}<div class="choice-text"><span class="effect">${codeText(i.always.hint)}</span></div></div>`);
+  const key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
+  const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
+  const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
+  const desc = `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}</p>`;
+  return askShell(esc(i.reason), `data-kind="${esc(i.kind)}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, localId(i.headline || i.title, i.repo), i.tag, desc,
+    (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
+}
