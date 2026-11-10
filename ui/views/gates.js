@@ -1,5 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
-// string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
+// string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
+import { get } from "../router.js";
 import { clamp, contentText, issueHref, parseId, parseJob, setCodes, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
@@ -198,7 +199,7 @@ export function renderLog(d, by, limit = PAGE) {
 
 /** Load /api/gates again and draw the page with it. */
 async function redraw(root) {
-  const res = await fetch(view.api(null, hashQuery()), { cache: "no-store" });
+  const res = await get(view.api(null, hashQuery()));
   if (!res.ok) return;
   const saved = recordState(root);
   root.innerHTML = renderGates(await res.json(), hashQuery());

@@ -321,7 +321,7 @@ test("the inspector says how a memory reaches the agent, shows its recall histor
   const h = v.renderInspector(it({ read: "2026-11-03" }), n, "use");
   for (const t of ["How it reaches the agent", "Reaches a session when vault recall returns it.", 'value="the &lt;core&gt;"', "Recall history", "No recall in the last 30 days.", 'data-mact="unlink" data-target="L"', 'data-mact="link"', 'data-mact="archive"', 'data-mact="delete"', "in use", "wiki/gotchas/N.md"])
     expect(h).toContain(t);
-  // No button of the page carries data-act, which index.html's own handler takes.
+  // No button of the page carries data-act, which router.js's own handler takes.
   expect(h).not.toContain("data-act=");
   const hand = v.renderInspector(it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }));
   for (const t of ['data-mact="edit"', 'data-mact="file-delete"']) expect(hand).toContain(t);

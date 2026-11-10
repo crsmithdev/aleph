@@ -549,7 +549,8 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 pre.stat b { color: var(--need); }
 .ev.one { grid-template-columns: minmax(0, 1fr); }
 .q { margin: var(--sp-10) 0 0; font-size: var(--fs-sm); max-width: 76ch; }
-#offline, #stale { margin: 0; padding: var(--sp-6) var(--sp-24); background: var(--stuck-bg); color: var(--stuck); font-size: var(--fs-sm); text-align: center; }
+#offline, #stale, #aged { margin: 0; padding: var(--sp-6) var(--sp-24); background: var(--stuck-bg); color: var(--stuck); font-size: var(--fs-sm); text-align: center; }
+p.aged { margin: 0 0 var(--sp-6); color: var(--stuck); font-size: var(--fs-sm); }
 /* ---------- shell: sidebar and views ---------- */
 .shell { display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 100vh; }
 .side {

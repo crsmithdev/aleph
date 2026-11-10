@@ -48,6 +48,9 @@ export function dur(s) {
   return h < 24 ? `${h}h ${pad(m % 60)}m` : `${Math.floor(h / 24)}d ${pad(h % 24)}h`;
 }
 
+/** The line for data that failed to rebuild: "`name` is `age` old: `error`", from its mark `{ error, since }`. */
+export const markLine = (name, { error, since }, now = Date.now()) => `${name} is ${dur((now - Date.parse(since)) / 1000)} old: ${error}`;
+
 /** Milliseconds, for a span that can be under a second: "850ms", "1.5s", then as `dur`; "" for none. */
 export const durMs = (ms) => (ms == null ? "" : ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : dur(ms / 1000));
 

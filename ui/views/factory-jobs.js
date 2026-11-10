@@ -1,4 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
+import { get } from "../router.js";
 import { card, pagedTable, dur, empty, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
@@ -133,7 +134,7 @@ export const view = {
     wire();
     wireJobs(root, () => jobsNow(hashQuery()));
     const url = listUrl(null, hashQuery());
-    const got = fetch(url, { cache: "no-store" }).then(async (r) => (r.ok ? r.json() : new Error(failMessage(url, r.status, await r.text())))).catch((e) => e);
+    const got = get(url).then(async (r) => (r.ok ? r.json() : new Error(failMessage(url, r.status, await r.text())))).catch((e) => e);
     if (trendOn(d)) await loadSpeed("day");
     const jobs = await got, failed = jobs instanceof Error;
     if (!root.querySelector("#perf")) return;

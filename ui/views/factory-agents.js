@@ -1,4 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
+import { get } from "../router.js";
 import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, say, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
@@ -151,7 +152,7 @@ export const view = {
     keepWindow(windowNow());
     keepProject(projectNow());
     draw(usable(windowNow()));
-    modelsNow = await fetch("/api/models").then((r) => r.json()).catch(() => null);
+    modelsNow = await get("/api/models").then((r) => r.json()).catch(() => null);
     if (root.querySelector("#capacity")) draw(usable(windowNow()));
     const d = await loadSpeed(windowNow());
     if (root.querySelector("#capacity")) draw(d);

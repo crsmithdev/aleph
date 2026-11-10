@@ -93,3 +93,13 @@ test("the time group offers points, for one dot per row, and a kept points form 
   const s = option(time, "points", T).series[0];
   expect([s.type, s.symbol, s.symbolSize, s.lineStyle.width]).toEqual(["line", "circle", 9, 0]);
 });
+
+test("a panel whose frame carries a mark says how old its data is and why, with or without rows", () => {
+  const since = "2026-01-01T00:00:00Z";
+  for (const f of [time, { ...time, rows: [] }]) {
+    const h = panel({ ...f, error: "build failed", since }, "area");
+    expect(h).toContain('<p class="aged" role="alert">');
+    expect(h).toMatch(/Agents Live by Role is \d+d \d+h old: build failed/);
+  }
+  expect(panel(time, "area")).not.toContain('class="aged"');
+});

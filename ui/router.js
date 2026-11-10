@@ -1,0 +1,411 @@
+// The page shell: the router, the load path, the stream client and the action dispatch.
+//
+// Each module listed by /api/views exports
+// view = { path, title, group, order, icon?, render(data, params), mount?(root, data), event?(root, ev), api?, refresh?, live? }, and
+// may export redirect(hash) -> new hash | null for an address it took over:
+// `api` is the URL its data comes from (":params" filled in from the route),
+// `refresh` the seconds between reloads, `live` that /api/events also redraws it,
+// `icon` its sidebar glyph, a Font Awesome name. The page builds the sidebar from
+// them, in GROUPS order under the HEADERS, and routes by hash (#/jobs/aleph-52).
+//
+// `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
+import { setCodes } from "../lib/naming.ts";
+import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, withProject } from "./lib.js";
+
+const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
+
+/** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
+export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);
+
+/** The mark of a key that failed to rebuild, `{ error, since }`, or null. */
+export const markOf = (data) => (typeof data?.error === "string" && typeof data?.since === "string" ? { error: data.error, since: data.since } : null);
+
+/** The URL of a route's data: `view.api` with its ":params" filled in. */
+export const urlOf = ({ view, params, query }) =>
+  typeof view.api === "function" ? view.api(params, query) : view.api.replace(/:(\w+)/g, (_, n) => encodeURIComponent(params[n] ?? ""));
+
+/**
+ * The one path for every load of the shown view: the first one, a `change`, the `refresh` timer and the reload after an action.
+ * `env` is the page: fetch(url), EventSource, hidden(), focused() (an input has focus), armed() (a button waits for its
+ * second click), ok(route), fail(route, error, first), draw(route, data, first) -> the mount's promise, event(ev).
+ */
+export function loader(env) {
+  let shown = null, seq = 0, drawn = Promise.resolve(), pending = false, reloading = false, again = false, events = null, heardAt = 0;
+  const read = new Set(); // the keys the shown view's loads returned
+
+  /** A GET for the shown view: its keys join the ones a `change` reloads it for. */
+  async function get(url) {
+    const route = shown, res = await env.fetch(url);
+    if (route === shown) for (const k of keysOf(res)) read.add(k);
+    return res;
+  }
+
+  // Each load takes a number; an answer that finds a newer number is dropped, so an old load never draws over a new one.
+  // `drawn` is the last mount: the next draw waits for it.
+  async function load(route, first) {
+    const mine = ++seq;
+    let data = null;
+    if (route.view.api) {
+      const url = urlOf(route);
+      try {
+        const res = await get(url);
+        if (!res.ok) throw new Error(failMessage(url, res.status, await res.text().catch(() => "")));
+        data = route.data = await res.json();
+        if (route === shown) env.ok(route);
+      } catch (e) {
+        if (route !== shown || mine !== seq) return;
+        env.fail(route, e, first);
+        return;
+      }
+    }
+    await drawn;
+    if (route !== shown || mine !== seq) return; // the reader moved on, or a newer load started, while this loaded
+    // The reader armed a button while this loaded: the caller's check came too early, and the next reload catches up.
+    if (!first && env.armed()) return;
+    drawn = env.draw(route, data, first);
+    await drawn;
+  }
+
+  // One reload at a time; a call that comes during it makes one more. A reload waits while the reader types (the blur
+  // runs it) and does not draw over a button armed for its second click, which stands for five seconds at most.
+  async function reload() {
+    if (!shown?.view) return;
+    if (reloading) { again = true; return; }
+    if (env.armed()) return;
+    if (env.focused()) { pending = true; return; }
+    reloading = true;
+    try { await load(shown, false); } finally { reloading = false; }
+    if (again) { again = false; reload(); }
+  }
+
+  /** Focus left an input: run the reload it held back. */
+  function blur() {
+    if (pending && !env.focused()) { pending = false; return reload(); }
+  }
+
+  /** A `change` names the keys the server rebuilt: reload only a view that read one of them. */
+  function change(keys) {
+    if (keys.some((k) => read.has(k))) return reload();
+  }
+
+  // The stream is open only for a live view in a visible tab: a browser allows few connections to one host.
+  // The server pings every 25 s; a stream with no message for 60 s, or one the browser gave up on (a 502 from the
+  // proxy while the server restarts ends it for good), is opened again, and the view loads in full.
+  function follow() {
+    events?.close();
+    events = null;
+    if (!shown?.view?.live || env.hidden()) return;
+    let lost = false;
+    const es = events = new env.EventSource(withProject("/api/events", shown.query));
+    heardAt = Date.now();
+    const heard = () => { heardAt = Date.now(); };
+    es.addEventListener("ping", heard);
+    es.addEventListener("change", (m) => { heard(); change(JSON.parse(m.data).keys); });
+    // An event of the event log, as it is written: a view with `event` shows it before the reload that `change` brings.
+    es.addEventListener("ev", (m) => { heard(); try { env.event(JSON.parse(m.data)); } catch (e) { console.error("event failed", e); } });
+    es.onerror = () => {
+      lost = true;
+      if (es.readyState === env.EventSource.CLOSED && es === events) setTimeout(() => { if (es === events) { follow(); reload(); } }, 2000);
+    };
+    es.onopen = () => { heard(); if (lost) reload(); };
+  }
+
+  /** Open the stream again when it went quiet for 60 s. */
+  function check() {
+    if (events && Date.now() - heardAt > 60_000) { follow(); reload(); }
+  }
+
+  /** Show `route` (`{ view: null }` for an address no view has) and load it; the promise settles when the load ends. */
+  function show(route) {
+    shown = route;
+    read.clear();
+    follow();
+    return route.view ? load(route, true) : Promise.resolve();
+  }
+
+  return { get, reload, blur, change, follow, check, show, get shown() { return shown; }, get keys() { return [...read]; } };
+}
+
+function compile(path) {
+  const names = [];
+  const src = path.split("/").map((seg) => seg.startsWith(":") ? (names.push(seg.slice(1)), "([^/]+)") : seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("/");
+  return { re: new RegExp(`^${src}/?$`), names };
+}
+// A hand-typed `%zz` is no encoding: it stands for itself, and the view says it found nothing.
+const decodeParam = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
+
+/** The route of `path` among `views`, or null. */
+export function match(views, path, query) {
+  for (const v of views) {
+    const m = path.match(v._route.re);
+    if (m) return { view: v, query, params: Object.fromEntries(v._route.names.map((n, i) => [n, decodeParam(m[i + 1])])) };
+  }
+  return null;
+}
+
+let page = null;
+
+/** A view's own GET: through the page's loader, so a `change` of its keys reloads the view; a view a test mounts with no page fetches plainly. */
+export const get = (url) => (page ? page.get(url) : fetch(url, { cache: "no-store" }));
+
+/** Wire the shell to the page and route to the hash. */
+export async function start() {
+  const $ = (id) => document.getElementById(id);
+  const typing = () => !!document.activeElement?.matches("input, textarea, select");
+  const armed = () => !!$("view").querySelector("button.act.ask");
+  let views = [], redirects = [], timer = 0;
+
+  // The page imports each view once; when the server restarts or a land changes a page file (the version header changes), reload to load it, unless the reader is typing.
+  let version = null;
+  async function api(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (res.status === 401) { location.reload(); return res; }
+    if (res.headers.get("x-aleph-login") === "1") $("logout").hidden = false;
+    $("stale").hidden = res.headers.get("x-aleph-stale") !== "1";
+    const v = res.headers.get("x-aleph-version");
+    if (v && version && v !== version && !typing()) location.reload();
+    if (v && !version) version = v;
+    return res;
+  }
+
+  // Out-of-date check for a view with `outOfDate`: the browser's clock, from the last good response (or the route's start).
+  let goodAt = Date.now(), failed = false, wasOut = false;
+  function checkOut() {
+    const v = page.shown?.view;
+    if (!v?.outOfDate) return;
+    const out = failed || Date.now() - goodAt > 3 * 60 * 1000;
+    if (out !== wasOut) { wasOut = out; v.outOfDate($("view"), out); }
+  }
+
+  /** Render the view, put back what the reader set, and mount it; the promise settles when the mount ends. */
+  async function draw({ view, params, query }, data, first) {
+    // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
+    const saved = first ? null : recordState($("view"));
+    try { $("view").innerHTML = view.render(data, params, query); }
+    catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; return; }
+    if (saved) restoreState($("view"), saved);
+    const mark = markOf(data);
+    $("aged").hidden = !mark;
+    $("aged").textContent = mark ? markLine(view.title, mark) : "";
+    // Keyed <details> keep their open state by data-keep, and that state goes through keep(),
+    // one key per fold: it survives a redraw and a reload. A fold the reader never touched
+    // has no kept state, and shows its own default.
+    restoreFolds($("view"));
+    // `mount` runs after render, for what needs a DOM (the charts); a view without one is left alone.
+    try { await mountView(view, $("view"), data, query); } catch (e) { console.error(view.title, "mount failed", e); }
+    // A good response clears the alert.
+    wasOut = false;
+    if (view.outOfDate) view.outOfDate($("view"), false);
+  }
+
+  page = loader({
+    fetch: api,
+    // Read at each open, as the old shell did, so a patched EventSource takes effect.
+    get EventSource() { return window.EventSource; },
+    hidden: () => document.hidden,
+    focused: typing,
+    armed,
+    ok: () => { $("offline").hidden = true; goodAt = Date.now(); failed = false; },
+    fail: ({ view }, e, first) => {
+      failed = true;
+      checkOut();
+      if (first) $("view").innerHTML = `<div class="page">${error(`Could not load ${view.title}: ${e.message}`)}</div>`;
+      else $("offline").hidden = false;
+    },
+    draw,
+    event: (ev) => page.shown?.view?.event?.($("view"), ev),
+  });
+
+  $("logout").addEventListener("click", async (e) => {
+    e.preventDefault();
+    await postJson("/api/logout").catch(() => {});
+    location.reload();
+  });
+
+  function nav(path) {
+    // The entry whose path is the longest segment prefix of the route is active: #/jobs/x marks Jobs.
+    let active = null;
+    for (const v of views) {
+      if (v.path.includes(":")) continue;
+      const hit = v.path === "/" ? path === "/" : path === v.path || path.startsWith(v.path + "/");
+      if (hit && (!active || v.path.length > active.path.length)) active = v;
+    }
+    const items = views.filter((v) => GROUPS.includes(v.group) && !v.path.includes(":") && v.nav !== false).sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
+    $("nav").innerHTML = `<ul>${items.map((v, i) =>
+      `${v.group !== items[i - 1]?.group && HEADERS[v.group] ? `<li class="head">${HEADERS[v.group]}</li>` : ""}<li><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span></a></li>`).join("")}</ul>`;
+  }
+
+  // Focus moves after `focusout`, so look once it has settled.
+  document.addEventListener("focusout", () => setTimeout(page.blur));
+  setInterval(page.check, 5000);
+  document.addEventListener("visibilitychange", () => { page.follow(); if (!document.hidden && page.shown?.view?.live) page.reload(); });
+
+  function route() {
+    // A view may take over an old address (a view exports `redirect(hash)`).
+    for (const r of redirects) {
+      const to = r(location.hash);
+      if (to) { history.replaceState(null, "", to); break; }
+    }
+    const { path, query } = parseHash(location.hash);
+    nav(path);
+    clearInterval(timer);
+    // #view outlives its views, so a view's handlers on it must not reach the next one.
+    $("view").onclick = $("view").onchange = $("view").onkeydown = $("view").oninput = null;
+    $("aged").hidden = true;
+    const m = match(views, path, query);
+    if (!m) {
+      page.show({ view: null });
+      document.title = "Not found · aleph";
+      $("view").innerHTML = `<div class="page nf"><h1>Nothing at ${esc(path)}</h1>${empty("No view has this address.", `Go to <a href="#/">Status</a> or pick a view from the list.`)}</div>`;
+      $("offline").hidden = true;
+      return;
+    }
+    document.title = `${m.view.title} · aleph`;
+    $("view").innerHTML = loading(m.view.title);
+    goodAt = Date.now(); failed = false; wasOut = false;
+    page.show(m);
+    // `refresh` is a quiet timer: it reloads the view when no load came for that many seconds, for what changes with the
+    // clock and not with a file (liveness, ages, the next tick). A hidden tab does not load.
+    if (m.view.refresh) timer = setInterval(() => { if (!document.hidden && Date.now() - goodAt >= m.view.refresh * 1000) page.reload(); }, 5000);
+  }
+
+  setInterval(checkOut, 1000);
+
+  // In-page anchors (#needs) scroll to their element instead of routing.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="#"]');
+    if (!a || a.getAttribute("href").startsWith("#/")) return;
+    const el = document.getElementById(a.getAttribute("href").slice(1));
+    e.preventDefault();
+    if (el) el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  });
+
+  // Copy a command to the clipboard; fall back to selecting it. One handler,
+  // because the buttons are rebuilt on every refresh.
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest(".cmd[data-cmd]");
+    if (!b) return;
+    const cp = b.querySelector(".cp"), text = b.dataset.cmd;
+    const done = (ok) => {
+      if (!ok) {
+        const rg = document.createRange(); rg.selectNodeContents(b.firstElementChild);
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+      }
+      cp.textContent = ok ? "Copied" : "Press Ctrl+C";
+      b.classList.add("copied");
+      $("copied").textContent = (ok ? "Copied: " : "Selected: ") + text;
+      clearTimeout(b._t);
+      b._t = setTimeout(() => { cp.textContent = "Copy"; b.classList.remove("copied"); }, 1600);
+    };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
+    else done(false);
+  });
+
+  document.addEventListener("input", (e) => {
+    const f = e.target.closest && e.target.closest("input.reason[data-id]");
+    if (f) f.value ? denyReasons.set(`${f.dataset.repo}-${f.dataset.id}`, f.value) : denyReasons.delete(`${f.dataset.repo}-${f.dataset.id}`);
+  });
+
+  // Enter in a reason or answer box does what the box's Confirm button does.
+  document.addEventListener("keydown", (e) => {
+    const f = e.key === "Enter" && e.target.closest && e.target.closest("input.reason");
+    if (!f) return;
+    e.preventDefault();
+    f.closest(".choice")?.querySelector("button.act[data-act]")?.click();
+  });
+
+  document.addEventListener("click", dispatch);
+
+  setCodes(await fetch("/api/projects/codes", { cache: "no-store" }).then((r) => r.json()).catch(() => ({})));
+  const names = await fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch(() => []);
+  const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => (typeof m.redirect === "function" && redirects.push(m.redirect), m.views ?? (m.view ? [m.view] : [])), (e) => { console.error(n, e); return []; })));
+  views = mods.flat().filter((v) => v && typeof v.path === "string" && typeof v.render === "function")
+    .map((v) => ({ ...v, _route: compile(v.path) }));
+  addEventListener("hashchange", route);
+  wireFolds($("view"));
+  route();
+}
+
+// Diff, Land, Drop and Checked: each is an `aleph` command the server runs.
+// Land and Drop ask for a second click, then the view reloads.
+async function dispatch(e) {
+  const b = e.target.closest && e.target.closest("button.act[data-act]");
+  if (!b) return;
+  const { act, label } = b.dataset;
+  const name = b.dataset.name ?? (act === "approve" || act === "decline" ? b.dataset.id : undefined);
+  const note = (m) => { say(b.parentElement.lastElementChild, m); if (name) actMessages.set(name, m); };
+  if (act === "diff") {
+    const panel = b.closest("article").querySelector(".diff-panel");
+    if (!panel.hidden) { panel.hidden = true; openDiffs.delete(name); return; }
+    panel.hidden = false;
+    openDiffs.set(name, "");
+    const t = await loadDiff(panel, `/api/diff/${encodeURIComponent(name)}`);
+    if (t === null) openDiffs.delete(name); else openDiffs.set(name, t);
+    return;
+  }
+  if ((act === "deny" || act === "answer") && !b.classList.contains("ask")) {
+    const inp = b.closest(".choice")?.querySelector("input.reason");
+    if (inp?.hidden) {
+      inp.hidden = false;
+      b.classList.add("ask");
+      b.textContent = "Confirm";
+      inp.focus();
+      return;
+    }
+  }
+  const answerText = act === "answer" ? b.closest(".actions").querySelector("input[name=answer]")?.value.trim() ?? "" : "";
+  if (act === "answer" && !answerText) { note("Type an answer first"); return; }
+  if (((act === "land" && !b.closest(".choice")) || act === "drop" || act === "pause" || ((act === "deny" || act === "answer") && !b.closest(".choice")?.querySelector("input.reason"))) && !b.classList.contains("ask")) {
+    b.classList.add("ask");
+    b.textContent = name ? `${label} ${name}? Click again` : `${label}? Click again`;
+    clearTimeout(b._t);
+    b._t = setTimeout(() => { b.classList.remove("ask"); b.textContent = label; }, 5000);
+    return;
+  }
+  clearTimeout(b._t);
+  if (act === "always") {
+    // Grant the standing permission, then click the row's first action (its second-click confirm applies).
+    const { reason, action, first } = b.dataset;
+    b.disabled = true;
+    try {
+      await postJson(`/api/standing/${encodeURIComponent(reason)}`, { action });
+    } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
+    const next = [...b.closest("article").querySelectorAll("button.act:not(.always)")].find((x) => x.dataset.act === first);
+    b.disabled = false;
+    if (next) { next.click(); return; }
+    page.reload();
+    return;
+  }
+  if (act === "retriage" || act === "unblock" || act === "rerun" || act === "checked" || act === "close" || (act === "drop" && b.dataset.repo)) {
+    const { repo, id } = b.dataset;
+    b.disabled = true;
+    try {
+      await postJson(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "close" ? "drop" : act}`, act === "close" ? { reason: "Chris closed it" } : {});
+    } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
+    b.closest("article.issue-row")?.remove();
+    page.reload();
+    return;
+  }
+  if (act === "decide" || act === "deny") {
+    // A Decide row: approve one option, or deny with the reason typed beside the button.
+    const { repo, id, option, recommendation, approve } = b.dataset;
+    const reason = b.closest(".actions").querySelector("input.reason")?.value.trim() ?? "";
+    const bs = [...b.closest(".actions").querySelectorAll("button.act")];
+    bs.forEach((x) => { x.disabled = true; });
+    try {
+      await postJson(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "deny" ? "drop" : "decide"}`,
+        act === "deny" ? { reason: reason ? `Chris denied: ${reason}` : "Chris denied it" } : approve ? { approve: true } : recommendation ? { recommendation: true } : { label: option });
+      denyReasons.delete(`${repo}-${id}`);
+    } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
+    b.closest("article.issue-row")?.remove();
+    page.reload();
+    return;
+  }
+  b.disabled = true;
+  if (name) actMessages.delete(name);
+  try {
+    await postJson(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, { run: b.dataset.run, ...(act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {}) });
+  } catch (err) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${err.message}`); return; }
+  b.closest("article.issue-row")?.remove();
+  page.reload();
+}

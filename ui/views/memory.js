@@ -133,7 +133,7 @@ function recallHistory(hist = []) {
 }
 
 const why = `<input class="mwhy" name="why" placeholder="Why (optional)" aria-label="Why">`;
-// `data-mact`, not `data-act`: index.html runs its own command for every `button.act[data-act]`.
+// `data-mact`, not `data-act`: router.js runs its own command for every `button.act[data-act]`.
 const act = (label, a, o = {}) => actButton(label, { mact: a }, o);
 
 /** The writes a memory takes, by where it lives. A rule, a skill or a hook is a file in the repo, so it changes on a branch, not here. */

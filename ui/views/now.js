@@ -1,6 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
-// The page's click handler (index.html) runs the buttons `act` makes.
+// The page's click handler (router.js) runs the buttons `act` makes.
+import { get } from "../router.js";
 import { actButton, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, issueHref, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
@@ -254,7 +255,7 @@ function wireHeraldJump(root) {
 }
 
 /** Fetch the window with its baseline in one request, then fill the scorecard. */
-export async function mountStatus(root, s, fetcher = fetch, q) {
+export async function mountStatus(root, s, fetcher = get, q) {
   const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
   keepWindow(w);
   keepProject(projectNow());

@@ -1,4 +1,5 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
+import { get } from "../router.js";
 import { count, cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, projectNow, statCard, when } from "../lib.js";
 
 export const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -31,7 +32,7 @@ export const resetSpeed = () => got.clear();
 /** A usable answer for a window, or null. */
 export const usable = (window) => { const d = speedOf(window); return d && !d.error ? d : null; };
 /** Fetch a window of a project (the address's, by default) into the cache. A failed reload keeps the last good answer. */
-export async function loadSpeed(window, fetcher = fetch, baseline = false, project = projectNow()) {
+export async function loadSpeed(window, fetcher = get, baseline = false, project = projectNow()) {
   if (project !== loadedFor) { got.clear(); loadedFor = project; }
   try {
     const res = await fetcher(`/api/speed?window=${window}${baseline ? "&baseline=1" : ""}${project ? `&project=${encodeURIComponent(project)}` : ""}`, { cache: "no-store" });
