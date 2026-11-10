@@ -8,7 +8,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { allRuns, expand } from "../jobs/lib/records/ledger.ts";
-import { config, traces } from "./langfuse.ts";
+import { list, need } from "./langfuse.ts";
 import { once, touch } from "../jobs/lib/infra/sources.ts";
 import { credentialsFileSetting, usageFileSet, usageFileSetting, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
 
@@ -208,7 +208,7 @@ export async function spends(from: number): Promise<Spend[]> {
   }
   try {
     const floor = Math.floor(from / HOUR) * HOUR;
-    for (const t of await traces(config(), { fromTimestamp: new Date(floor).toISOString() }, "usage")) {
+    for (const t of (await list(need(), "traces", { from: new Date(floor) }, "usage")).rows) {
       if (!t.sessionId || jobIds.has(t.sessionId) || !(t.totalCost > 0)) continue;
       const at = Date.parse(t.timestamp);
       if (at >= from) out.push({ at, model: typeof t.metadata?.model === "string" ? t.metadata.model : "unknown", cost: t.totalCost });

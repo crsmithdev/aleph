@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { closePass, openPass } from "../jobs/lib/infra/sources.ts";
+import { memory, use } from "./langfuse.ts";
 // @ts-ignore plain JS, shared with the page
 import { idLink, pageHead, when } from "./lib.js";
 import { listSessions, routes } from "./api/sessions.ts";
@@ -40,13 +41,7 @@ const OBS: Record<string, any[]> = {
     { id: "p5", parentObservationId: "p0", type: "EVENT", name: "text", output: "x".repeat(600), startTime: iso(19.5) },
   ], t3: [],
 };
-let lf: ReturnType<typeof Bun.serve>;
-let hits: string[] = [];
-let status = 200;
-// When set, the fake answers traces one page per entry.
-let paged: any[][] | null = null;
-// The fake answers 500 to this many requests, then answers as usual.
-let flaky = 0;
+const lf = memory({ traces: TRACES, get observations() { return Object.entries(OBS).flatMap(([traceId, os]) => os.map((o) => ({ ...o, traceId }))); } });
 let fixtures: string;
 let savedRepos: string | undefined;
 let savedJobs: string | undefined;
@@ -64,33 +59,16 @@ beforeAll(() => {
   process.env.ALEPH_REPOS = join(fixtures, "repos.json");
   process.env.ALEPH_JOBS_DIR = join(fixtures, "jobs");
   process.env.ALEPH_USAGE_FILE = join(fixtures, "usage.jsonl");
-  lf = Bun.serve({
-    port: 0,
-    fetch(req) {
-      const u = new URL(req.url);
-      hits.push(u.pathname + u.search);
-      if (status !== 200) return new Response("boom", { status });
-      if (flaky > 0) { flaky--; return new Response("boom", { status: 500 }); }
-      if (u.pathname === "/api/public/traces") {
-        const s = u.searchParams.get("sessionId");
-        if (paged) return Response.json({ data: paged[Number(u.searchParams.get("page")) - 1] ?? [], meta: { totalPages: paged.length } });
-        return Response.json({ data: TRACES.filter((t) => !s || t.sessionId === s), meta: { totalPages: 1 } });
-      }
-      return Response.json({ data: OBS[u.searchParams.get("traceId")!] ?? [], meta: { totalPages: 1 } });
-    },
-  });
-  process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${lf.port}`;
-  process.env.LANGFUSE_PUBLIC_KEY = "pk";
-  process.env.LANGFUSE_SECRET_KEY = "sk";
+  use(lf);
 });
 afterAll(() => {
-  lf.stop(true);
+  use(null);
   if (savedRepos === undefined) delete process.env.ALEPH_REPOS; else process.env.ALEPH_REPOS = savedRepos;
   if (savedJobs === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = savedJobs;
   if (savedUsage === undefined) delete process.env.ALEPH_USAGE_FILE; else process.env.ALEPH_USAGE_FILE = savedUsage;
   rmSync(fixtures, { recursive: true, force: true });
 });
-beforeEach(() => { hits = []; status = 200; paged = null; flaky = 0; });
+beforeEach(() => { lf.asked.length = 0; lf.down = null; });
 
 const TABLE = new URLSearchParams("view=table");
 const call = (key: string, path: string, params: Record<string, string> = {}) => {
@@ -98,9 +76,7 @@ const call = (key: string, path: string, params: Record<string, string> = {}) =>
   return routes[key](new Request(url), params, url) as Promise<Response>;
 };
 
-test("the sessions list holds the traces of every page, and a page that fails once is tried again", async () => {
-  paged = [[TRACES[0]], [TRACES[1]], [TRACES[2]]];
-  flaky = 1;
+test("the sessions list groups the window's traces by session", async () => {
   const d: any = await (await listSessions(new Request("http://localhost/api/sessions"))).json();
   expect(d.sessions.map((s: any) => [s.id, s.turns]).sort()).toEqual([["s1", 2], ["s2", 1]]);
 });
@@ -117,23 +93,21 @@ test("the sessions list pages newest first by ?limit= and ?before=, and says whe
   for (const q of ["limit=0", "before=soon"]) expect((await listSessions(new Request(`http://localhost/api/sessions?${q}`))).status).toBe(400);
 });
 
-test("a failed Langfuse makes the sessions list answer 502 with a message that names Langfuse, after two tries", async () => {
-  status = 500;
+test("a failed Langfuse makes the sessions list answer 502 with a message that names Langfuse", async () => {
+  lf.down = new Error("500 on /api/public/traces");
   const res = await listSessions(new Request("http://localhost/api/sessions"));
   expect(res.status).toBe(502);
   expect(((await res.json()) as any).error).toContain("Langfuse");
-  expect(hits.filter((h) => h.startsWith("/api/public/traces?")).length).toBe(2);
 });
 
 test("a second sessions list in one build pass reads Langfuse once", async () => {
-  flaky = 1;
   openPass({ langfuse: 1, usage: 1 }, "sessions.test");
   try {
     expect((await listSessions(new Request("http://localhost/api/sessions"))).status).toBe(200);
-    const n = hits.length;
+    const n = lf.asked.length;
     expect(n).toBeGreaterThan(0);
     await listSessions(new Request("http://localhost/api/sessions"));
-    expect(hits.length).toBe(n);
+    expect(lf.asked.length).toBe(n);
   } finally { closePass(); }
 });
 
@@ -362,7 +336,7 @@ test("a missing token count or recall figure shows – and not ?", async () => {
 test("?window= is week, month or quarter, and quarter reads 90 days", async () => {
   for (const w of ["100000", "7", "day"]) expect((await listSessions(new Request(`http://localhost/api/sessions?window=${w}`))).status, w).toBe(400);
   await listSessions(new Request("http://localhost/api/sessions?window=quarter"));
-  const from = Date.parse(new URL("http://x" + hits.find((h) => h.startsWith("/api/public/traces"))!).searchParams.get("fromTimestamp")!);
+  const from = lf.asked.find((a) => a.list === "traces")!.q.from!.getTime();
   expect(from).toBeGreaterThanOrEqual(Math.floor((NOW - 90 * 86400_000) / 3600_000) * 3600_000);
 });
 

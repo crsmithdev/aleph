@@ -11,6 +11,7 @@ import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
+import { langfuse } from "../langfuse.ts";
 import { contentText, issueHref, parseId, subjectOf, tail } from "../../lib/naming.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
@@ -124,15 +125,9 @@ function runInfos(runs: Entry[], fit: Fit | null = null, all?: Entry[]): RunInfo
 /** The Langfuse session page of the job's run, when Langfuse is configured and knows the session. */
 async function traceUrl(runs: Entry[]): Promise<string | undefined> {
   const session = runs.findLast((e) => e.run.session)?.run.session;
-  const pub = process.env.LANGFUSE_PUBLIC_KEY, sec = process.env.LANGFUSE_SECRET_KEY;
-  if (!session || !pub || !sec) return undefined;
-  const base = (process.env.LANGFUSE_BASE_URL ?? "http://127.0.0.1:3010").replace(/\/+$/, "");
-  try {
-    const res = await fetch(`${base}/api/public/sessions/${encodeURIComponent(session)}`, {
-      headers: { authorization: `Basic ${btoa(`${pub}:${sec}`)}` }, signal: AbortSignal.timeout(1500),
-    });
-    return res.ok ? `${base}/sessions/${encodeURIComponent(session)}` : undefined;
-  } catch { return undefined; }
+  const lf = langfuse();
+  if (!session || !lf) return undefined;
+  return (await lf.session(session)) ? `${lf.base}/sessions/${encodeURIComponent(session)}` : undefined;
 }
 
 /** `?limit=`: the rows of one page by default, and the most a page holds. */

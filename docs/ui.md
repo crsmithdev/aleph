@@ -89,4 +89,4 @@ Add two files and change no shared file.
 
 A view that needs a second answer after its data returns the data with it from `more(data, query)`: the first load draws before `more` ends and again after it. After a choice changes the address (`setQuery`) or an action changes the server's data, the view calls `redraw()` or `redraw(true)` from `ui/router.js`, which draws through the router's one draw and keeps the open folds, the focus and the typed text. A view never sets its own root's `innerHTML`.
 
-Add the route's schema to `ui/schemas.ts`. The server loads every `ui/api/*.ts` at start. `bun --watch` does not see a new file, so restart `aleph-ui` after you add one. To share a helper, add it to `ui/lib.js` without changing what is there.
+Add the route's schema to `ui/schemas.ts`. The server loads every `ui/api/*.ts` at start. `bun --watch` does not see a new file, so restart `aleph-ui` after you add one. To share a helper, add it to `ui/lib.js` without changing what is there. A route reads Langfuse only through the port in `ui/langfuse.ts` (`langfuse()`, `need()`, `list()`, `recent()`); a test gives it rows with `use(memory(...))`.

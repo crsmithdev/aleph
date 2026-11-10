@@ -4,13 +4,12 @@
  * observations (as `fetchObservations` does). `?project=<key>` keeps one
  * project: a Langfuse trace by the scope rule in `ui/api/scope.ts`.
  */
-import { langfuseConfig, type LangfuseConfig } from "../lib/env.ts";
 import type { Observation } from "../lib/otlp.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { today } from "../issues/lib/todo.ts";
-import { once, passEnv } from "../jobs/lib/infra/sources.ts";
+import { once } from "../jobs/lib/infra/sources.ts";
 import { traceIn } from "./api/scope.ts";
-import { allPages } from "./langfuse-pages.ts";
+import { langfuse, recent, type Langfuse } from "./langfuse.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
@@ -49,40 +48,9 @@ const slim = (o: any): Observation => ({
   ...(o.name === "verify-gate" ? { output: o.output } : {}),
 }) as any;
 
-/**
- * The rows the build Worker keeps between passes. A pass reads only the last `LAG` and the part of its window
- * not read yet; it reads all of it again each `FULL`, which takes in late writes older than `LAG`. A full
- * 7-day read is 1,218 pages and a 30-day read is 2,000 (2026-11-10), too much for each 30 s poll.
- * `cut` is the oldest row of a read that stopped at the page limit: a window that starts before it is partial.
- */
-const LAG = 10 * 60_000, FULL = 3600_000;
-let kept: { env: string; rows: Map<string, Observation>; from: number; to: number; since: number; cut: number } | null = null;
-let reads: Promise<unknown> = Promise.resolve();
-
-async function readObservations(cfg: LangfuseConfig, from: number, to: number): Promise<{ rows: Observation[]; partial: boolean }> {
-  const read = async (a: number) => {
-    const got = await allPages(cfg, "/api/public/observations", { fromStartTime: new Date(a).toISOString(), toStartTime: new Date(to).toISOString() }, 15_000);
-    return { rows: got.rows.map(slim), partial: got.partial };
-  };
-  const env = passEnv();
-  if (env === null) return read(from);
-  // One read at a time: two windows of one pass would otherwise both reset the kept rows.
-  const run = reads.then(async () => {
-    if (!kept || kept.env !== env || to - kept.since > FULL || from < kept.from) kept = { env, rows: new Map(), from, to: from + LAG, since: to, cut: -Infinity };
-    const k = kept, got = await read(Math.max(k.from, k.to - LAG));
-    for (const o of got.rows) k.rows.set(o.id!, o);
-    if (got.partial) k.cut = Math.max(k.cut, got.rows.reduce((m, o) => Math.min(m, Date.parse(o.startTime ?? "") || Infinity), Infinity));
-    k.to = to;
-    return { rows: [...k.rows.values()].filter((o) => Date.parse(o.startTime ?? "") >= from), partial: from < k.cut };
-  });
-  reads = run.catch(() => {});
-  return run;
-}
-
-
 /** The ids of the traces of `project`, by the scope rule. */
-async function projectTraces(cfg: LangfuseConfig, project: string, from: Date, to: Date): Promise<{ ids: Set<string>; partial: boolean }> {
-  const { rows, partial } = await allPages(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() }, 15_000);
+async function projectTraces(lf: Langfuse, project: string, from: Date, to: Date): Promise<{ ids: Set<string>; partial: boolean }> {
+  const { rows, partial } = await lf.traces({ from, to });
   return { ids: new Set(rows.filter((t) => traceIn(t, project)).map((t) => t.id)), partial };
 }
 
@@ -93,15 +61,15 @@ export async function activity(days: number, project: string | null, now = new D
     projects: Object.keys(loadRegistry()).sort(),
     tools: [], hooks: [], denials: { total: 0, recent: [] },
   };
-  const cfg = langfuseConfig();
-  if (!cfg) return out;
+  const lf = langfuse();
+  if (!lf) return out;
   const from = startOf(keys[0]), to = new Date(now.getTime() + 60_000);
   let obs: Observation[];
   try {
-    const got = await once(`${cfg.baseUrl}|${keys[0]}|${days}|${project ?? ""}`, ["langfuse"], async () => {
+    const got = await once(`${lf.base}|${keys[0]}|${days}|${project ?? ""}`, ["langfuse"], async () => {
       const [all, mine] = await Promise.all([
-        readObservations(cfg, from.getTime(), to.getTime()),
-        project ? projectTraces(cfg, project, new Date(from.getTime() - DAY), to) : null,
+        recent(lf, from.getTime(), to.getTime(), slim),
+        project ? projectTraces(lf, project, new Date(from.getTime() - DAY), to) : null,
       ]);
       const rows = mine ? all.rows.filter((o) => o.traceId && mine.ids.has(o.traceId)) : all.rows;
       // A project read from part of the traces keeps part of the window's rows: the answer is partial too.

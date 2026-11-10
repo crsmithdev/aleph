@@ -1,32 +1,7 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { activity } from "./activity.ts";
 import { closePass, openPass } from "../jobs/lib/infra/sources.ts";
-import { withEnv } from "./test-server.ts";
-
-let obsHits = 0;
-/** Resolves at the next observations request that reaches the fake Langfuse. */
-let nextHit = () => {};
-/** Resolves when four observations requests are open at one time. */
-let atFour: () => void = () => {};
-/** While a test holds this promise unresolved, the fake Langfuse does not answer observations. */
-let hold: Promise<void> = Promise.resolve();
-/** Set by the test that counts how the pages pile up: page 1 answers at once, the rest wait on `hold`. */
-let pileUp = false;
-/** The rows of each observations page; its length is the page count the fake reports. */
-let obsPages: any[][] = [];
-/** The pages that answer 500 on their first request and their rows on the second. */
-let failOnce = new Set<number>();
-/** The pages that answer 500 at once on every request. */
-let failAlways = new Set<number>();
-/** The observations requests open at one time, and the most that were open together. */
-let open = 0, peak = 0;
-/** The fromStartTime of the last observations request. */
-let lastFrom = "";
-let base: string, fake: ReturnType<typeof Bun.serve>;
-let restore: () => void;
+import { memory, use } from "./langfuse.ts";
 
 const now = new Date(2026, 10, 4, 23, 0, 0);
 const at = (daysAgo: number, hour = 10) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour).toISOString();
@@ -40,158 +15,66 @@ const observations = [
   span(0, "verify-gate", "tb", { verdict: "pass" }),
   span(1, "vault-recall", "ta", {}, "ERROR"),
 ];
-const traces = [{ id: "ta", name: "fac", metadata: { cwd: "/x/fac" } }, { id: "tb", name: "other", metadata: { cwd: "/x/other" } }];
-/** `n` pages of one tool call, one hook call and one denial each. */
-const manyPages = (n: number) => Array.from({ length: n }, (_, i) => {
-  const trace = `p${i + 1}`;
-  return [tool(0, "Bash", trace), span(0, "vault-recall", trace), span(0, "verify-gate", trace, { verdict: "deny" }, "DEFAULT", "deny: nope")];
-});
+const rows = { traces: [] as any[], observations };
+const lf = memory(rows);
+const reads = () => lf.asked.filter((a) => a.list === "observations");
 
-beforeAll(() => {
-  obsPages = [observations];
-  base = mkdtempSync(join(tmpdir(), "aleph-ui-act-"));
-  fake = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      const url = new URL(req.url);
-      if (!req.headers.get("authorization")?.startsWith("Basic ")) return new Response("no", { status: 401 });
-      if (url.pathname === "/api/public/observations") {
-        const n = Number(url.searchParams.get("page") ?? "1");
-        lastFrom = url.searchParams.get("fromStartTime") ?? "";
-        obsHits++; open++; peak = Math.max(peak, open); nextHit();
-        if (open === 4) atFour();
-        try {
-          if (failAlways.has(n)) return new Response("boom", { status: 500 });
-          if (!pileUp || n > 1) await hold;
-          if (failOnce.delete(n)) return new Response("boom", { status: 500 });
-          return Response.json({ data: obsPages[n - 1] ?? [], meta: { totalPages: obsPages.length } });
-        } finally { open--; }
-      }
-      if (url.pathname === "/api/public/traces") return Response.json({ data: traces, meta: { totalPages: 1 } });
-      return new Response("not found", { status: 404 });
-    },
-  });
-  restore = withEnv({
-    LANGFUSE_BASE_URL: `http://127.0.0.1:${fake.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk",
-  });
-});
-
-afterAll(() => {
-  fake.stop(true);
-  restore();
-  rmSync(base, { recursive: true, force: true });
-});
+beforeAll(() => use(lf));
+afterAll(() => use(null));
+beforeEach(() => { lf.asked.length = 0; lf.down = null; rows.observations = observations; });
 
 describe("activity", () => {
+  test("counts the tools, hooks and denials of the window", async () => {
+    const a = await activity(7, null, now);
+    expect(a.langfuse).toBe("ok");
+    expect(a.tools.map((t) => [t.name, t.calls, t.errors])).toEqual([["Bash", 2, 1], ["Edit", 1, 0], ["Read", 1, 0]]);
+    expect(a.hooks.map((h) => [h.name, h.calls, h.errors])).toEqual([["verify-gate", 2, 0], ["vault-recall", 1, 1]]);
+    expect(a.denials).toEqual({ total: 1, recent: [{ at: at(0), reason: "nothing was run" }] });
+  });
 
   test("in a build pass a second read does not reach Langfuse; after a Langfuse change it does", async () => {
-    obsHits = 0;
     try {
       openPass({ langfuse: 1 }, "activity.test");
       const a = await activity(7, null, now);
       const b = await activity(7, null, now);
-      expect(obsHits).toBe(1);
+      expect(reads().length).toBe(1);
       expect(b).toEqual(a);
       openPass({ langfuse: 2 }, "activity.test");
       await activity(7, null, now);
-      expect(obsHits).toBe(2);
+      expect(reads().length).toBe(2);
     } finally { closePass(); }
   });
 
   test("in a build pass a later read asks only for the last 10 min and keeps the rows read before; after an hour it reads the window again", async () => {
     const min = 60_000, start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
+    const from = () => reads().at(-1)!.q.from!.getTime();
     try {
       openPass({ langfuse: 1 }, "activity.test.later");
       const a = await activity(7, null, now);
-      expect(Date.parse(lastFrom)).toBe(start);
-      obsPages = [[tool(0, "Bash", "tc")]];
+      expect(from()).toBe(start);
+      rows.observations = [{ ...tool(0, "Bash", "tc"), startTime: new Date(now.getTime() + 2 * min).toISOString() }];
       openPass({ langfuse: 2 }, "activity.test.later");
       const b = await activity(7, null, new Date(now.getTime() + 5 * min));
-      expect(Date.parse(lastFrom)).toBe(now.getTime() + min - 10 * min);
+      expect(from()).toBe(now.getTime() + min - 10 * min);
       expect(b.tools.find((t) => t.name === "Bash")!.calls).toBe(a.tools.find((t) => t.name === "Bash")!.calls + 1);
       openPass({ langfuse: 3 }, "activity.test.later");
       // Two hours on is the next day, so the window starts a day later.
       await activity(7, null, new Date(now.getTime() + 2 * 60 * min));
-      expect(Date.parse(lastFrom)).toBe(start + 24 * 60 * min);
-    } finally { closePass(); obsPages = [observations]; }
+      expect(from()).toBe(start + 24 * 60 * min);
+    } finally { closePass(); }
   });
 
-  test("a week longer than the 499 pages the fetch read before comes back whole, four requests at a time, with a page that failed once", async () => {
-    obsPages = manyPages(520);
-    failOnce = new Set([7]);
-    obsHits = 0; open = 0; peak = 0; pileUp = true;
-    let release = () => {}, four = () => {};
-    const fourOpen = new Promise<void>((r) => { four = r; });
-    hold = new Promise<void>((r) => { release = r; });
-    atFour = four;
-    try {
-      const running = activity(7, null, now);
-      // Every page waits on `hold`, so a fetch that opens more than four shows it here.
-      await fourOpen;
-      for (let i = 0; i < 100; i++) await new Promise((r) => setTimeout(r, 0));
-      expect(peak).toBeLessThanOrEqual(4);
-      release();
-      const a = await running;
-      expect(a.langfuse).toBe("ok");
-      expect(a.partial).toBe(false);
-      expect(a.tools.map((t) => [t.name, t.calls])).toEqual([["Bash", 520]]);
-      expect(a.hooks.map((h) => [h.name, h.calls])).toEqual([["vault-recall", 520], ["verify-gate", 520]]);
-      expect(a.denials.total).toBe(520);
-      expect(peak).toBeLessThanOrEqual(4);
-      expect(obsHits).toBe(521);
-    } finally {
-      release();
-      hold = Promise.resolve();
-      atFour = () => {};
-      pileUp = false;
-      obsPages = [observations];
-      failOnce = new Set();
-    }
-  });
-
-  test("a week past the pages the fetch reads comes back with the counts of part of it, and says so", async () => {
-    obsPages = manyPages(2001);
-    obsHits = 0;
+  test("a window past the pages a read takes comes back with the counts of part of it, and says so", async () => {
+    use({ ...lf, observations: async (q) => ({ ...(await lf.observations(q)), partial: true }) });
     try {
       const a = await activity(7, null, now);
-      expect(a.langfuse).toBe("ok");
-      expect(a.partial).toBe(true);
-      expect(a.tools.map((t) => [t.name, t.calls])).toEqual([["Bash", 2000]]);
-    } finally {
-      obsPages = [observations];
-    }
+      expect([a.langfuse, a.partial]).toEqual(["ok", true]);
+    } finally { use(lf); }
   });
 
-  test("a list past the cap answers a failed page only after every request has ended, and once read says partial", async () => {
-    obsPages = manyPages(2001);
-    failAlways = new Set([3]);
-    pileUp = true;
-    let release = () => {};
-    hold = new Promise<void>((r) => { release = r; });
-    try {
-      let ended = false;
-      const running = activity(7, null, now).then((a) => { ended = true; return a; });
-      for (let i = 0; i < 100; i++) await new Promise((r) => setTimeout(r, 0));
-      // Page 3 failed twice, but pages 2, 4 and 5 are still open on `hold`.
-      expect(open).toBe(3);
-      expect(ended).toBe(false);
-      release();
-      const failed = await running;
-      expect(failed.langfuse).toBe("error");
-      expect(open).toBe(0);
-      failAlways = new Set();
-      pileUp = false;
-      const a = await activity(7, null, now);
-      expect(a.langfuse).toBe("ok");
-      expect(a.partial).toBe(true);
-    } finally {
-      release();
-      hold = Promise.resolve();
-      pileUp = false;
-      failAlways = new Set();
-      obsPages = [observations];
-    }
+  test("a failed read says error, with the reason", async () => {
+    lf.down = new Error("500 on /api/public/observations");
+    const a = await activity(7, null, now);
+    expect([a.langfuse, a.error]).toEqual(["error", "500 on /api/public/observations"]);
   });
 });
-
-

@@ -3,7 +3,6 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { clip } from "../lib/naming.ts";
 import { claudeSettings } from "../hooks/lib/context.ts";
-import { langfuseConfig } from "../lib/env.ts";
 import { readStore } from "../jobs/lib/learning/corrections.ts";
 import { episodesDir, KEEP_DAYS } from "../jobs/lib/learning/episode.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
@@ -12,7 +11,7 @@ import * as todos from "../issues/lib/todo.ts";
 import { coreNotes, START_BUDGET, startContext, type Note } from "../vault/lib/vault.ts";
 import { activity } from "./activity.ts";
 import { skillsDir } from "./api/skills.ts";
-import { config, traces } from "./langfuse.ts";
+import { langfuse, list } from "./langfuse.ts";
 import { traceProject } from "./api/scope.ts";
 import { later } from "../jobs/lib/infra/sources.ts";
 import { handoffsDir as handoffsSetting } from "../jobs/lib/infra/settings.ts";
@@ -67,11 +66,12 @@ function semantic(root: string, wiki: Note[], all: Note[]) {
 type Sessions = { id: string; project: string; firstPrompt: string; turns: number; last: string }[];
 export const sessions = (): Promise<Sessions | null> => later("memory:sessions", ["usage"], loadSessions, null);
 async function loadSessions(): Promise<Sessions | null> {
-  if (!langfuseConfig()) return null;
+  const lf = langfuse();
+  if (!lf) return null;
   try {
-    const from = new Date(Math.floor((Date.now() - 7 * 86400_000) / 3600_000) * 3600_000).toISOString();
+    const from = new Date(Math.floor((Date.now() - 7 * 86400_000) / 3600_000) * 3600_000);
     const groups = new Map<string, any[]>();
-    for (const t of await traces(config(), { fromTimestamp: from })) if (t.sessionId) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
+    for (const t of (await list(lf, "traces", { from })).rows) if (t.sessionId) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
     const ms = (t: any) => Date.parse(t.timestamp ?? "") || 0;
     return [...groups].map(([id, ts]) => {
       ts.sort((a, b) => ms(a) - ms(b));

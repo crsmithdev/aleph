@@ -1,6 +1,6 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { clip } from "../../lib/naming.ts";
-import { LangfuseError, config, observations, traceList, traces } from "../langfuse.ts";
+import { LangfuseError, list, need, type Langfuse } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { projectOf as projectOfUrl, scopeOf, traceIn, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
@@ -58,10 +58,12 @@ function fail(e: unknown): Response {
 }
 
 async function sessionTraces(id: string, project: string | null) {
-  const cfg = config();
-  const ts = (await traces(cfg, { sessionId: id })).filter((t) => t.sessionId === id || t.sessionId === undefined).sort(byTime);
-  return { cfg, ts: ts.filter((t) => traceIn(t, project)) };
+  const lf = need();
+  const ts = (await list(lf, "traces", { session: id })).rows.filter((t) => t.sessionId === id || t.sessionId === undefined).sort(byTime);
+  return { lf, ts: ts.filter((t) => traceIn(t, project)) };
 }
+
+const observationsOf = async (lf: Langfuse, trace: string) => (await list(lf, "observations", { trace })).rows;
 
 function modelOf(obs: any[]): string | null {
   const counts = new Map<string, number>();
@@ -172,8 +174,8 @@ function textBlocks(obs: any[], output: string) {
 /** The traces with a session over the last `days` days, at most 90 (the widest window the page offers), and whether Langfuse held more pages than the read. */
 export async function windowTraces(days: number, project: string | null): Promise<{ rows: any[]; partial: boolean }> {
   const hour = 3600_000; // whole hours, so the cache key holds
-  const from = new Date(Math.floor((Date.now() - Math.min(days > 0 ? days : 7, 90) * 86400_000) / hour) * hour).toISOString();
-  const { rows, partial } = await traceList(config(), { fromTimestamp: from });
+  const from = new Date(Math.floor((Date.now() - Math.min(days > 0 ? days : 7, 90) * 86400_000) / hour) * hour);
+  const { rows, partial } = await list(need(), "traces", { from });
   return { rows: rows.filter((t) => t.sessionId && traceIn(t, project)), partial };
 }
 
@@ -189,7 +191,7 @@ export async function listSessions(req: Request): Promise<Response> {
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX) return Response.json({ error: `limit must be 1 to ${MAX}` }, { status: 400 });
   if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
   try {
-    const cfg = config();
+    const lf = need();
     const { rows: all, partial } = await windowTraces(days, project);
     const groups = new Map<string, any[]>();
     for (const t of all) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
@@ -214,16 +216,16 @@ export async function listSessions(req: Request): Promise<Response> {
       };
     }).sort((a, b) => ms(b.last) - ms(a.last)).filter((x) => before === null || ms(x.last) < Date.parse(before));
     const page = sessions.slice(0, limit), next = sessions.length > limit ? page.at(-1)!.last : null;
-    return Response.json({ base: cfg.baseUrl, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, partial });
+    return Response.json({ base: lf.base, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, partial });
   } catch (e) { return fail(e); }
 }
 
 export const routes: Routes = {
   "GET /api/sessions/:id": async (_req, params, url) => {
     try {
-      const { cfg, ts } = await sessionTraces(params.id, projectOfUrl(url));
+      const { lf, ts } = await sessionTraces(params.id, projectOfUrl(url));
       if (!ts.length) return Response.json({ error: `No session ${params.id}` }, { status: 404 });
-      const all = await Promise.all(ts.map((t) => observations(cfg, t.id)));
+      const all = await Promise.all(ts.map((t) => observationsOf(lf, t.id)));
       const fit = await currentFit().catch(() => null);
       const turns = ts.map((t, i) => ({
         n: i + 1,
@@ -237,18 +239,18 @@ export const routes: Routes = {
         cost: t.totalCost ?? 0,
         model: modelOf(all[i]),
       }));
-      return Response.json({ base: cfg.baseUrl, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), turns });
+      return Response.json({ base: lf.base, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), turns });
     } catch (e) { return fail(e); }
   },
 
   "GET /api/sessions/:id/chat": async (_req, params, url) => {
     try {
-      const { cfg, ts } = await sessionTraces(params.id, projectOfUrl(url));
+      const { lf, ts } = await sessionTraces(params.id, projectOfUrl(url));
       if (!ts.length) return Response.json({ error: `No session ${params.id}` }, { status: 404 });
       const from = Math.max(1, Math.floor(Number(url.searchParams.get("from")) || 1));
       const limit = Math.min(50, Math.max(1, Math.floor(Number(url.searchParams.get("limit")) || 20)));
       const page = ts.slice(from - 1, from - 1 + limit);
-      const all = await Promise.all(page.map((t) => observations(cfg, t.id)));
+      const all = await Promise.all(page.map((t) => observationsOf(lf, t.id)));
       const fit = await currentFit().catch(() => null);
       const t0 = ms(ts[0].timestamp); // the waterfall's axis starts at the session's first turn
       const turns = page.map((t, i) => ({
@@ -270,17 +272,17 @@ export const routes: Routes = {
       // A factory worker's session is one turn Langfuse prices at 0; the ledger has its cost, as on the list.
       const job = jobs().get(params.id);
       if (ts.length === 1 && turns.length === 1 && !turns[0].cost && job?.cost) Object.assign(turns[0], { cost: job.cost }, wkOf(fit, job.cost, job.model));
-      return Response.json({ base: cfg.baseUrl, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), total: ts.length, from, turns });
+      return Response.json({ base: lf.base, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), total: ts.length, from, turns });
     } catch (e) { return fail(e); }
   },
 
   "GET /api/sessions/:id/turns/:n": async (_req, params, url) => {
     try {
-      const { cfg, ts } = await sessionTraces(params.id, projectOfUrl(url));
+      const { lf, ts } = await sessionTraces(params.id, projectOfUrl(url));
       const n = Number(params.n);
       const t = Number.isInteger(n) ? ts[n - 1] : undefined;
       if (!t) return Response.json({ error: `No turn ${params.n} in session ${params.id}` }, { status: 404 });
-      const obs = (await observations(cfg, t.id)).sort((a, b) => ms(a.startTime) - ms(b.startTime));
+      const obs = (await observationsOf(lf, t.id)).sort((a, b) => ms(a.startTime) - ms(b.startTime));
       const node = (o: any) => {
         const m = o.metadata ?? {};
         const kind = isType(o, "tool") ? "tool" : isType(o, "guardrail") || o.name === "verify-gate" || o.name === "vault-recall" ? "hook" : isType(o, "agent") ? "subagent" : isType(o, "generation") ? "generation" : "event";
@@ -305,7 +307,7 @@ export const routes: Routes = {
       const top = roots.length === 1 && roots[0].name === "turn" ? roots[0].children : roots;
       return Response.json({
         ...wkOf(await currentFit().catch(() => null), t.totalCost, modelOf(obs)),
-        base: cfg.baseUrl, id: params.id, ...labelOf(params.id), n, total: ts.length, traceId: t.id, project: projectOf(t), start: t.timestamp,
+        base: lf.base, id: params.id, ...labelOf(params.id), n, total: ts.length, traceId: t.id, project: projectOf(t), start: t.timestamp,
         prompt: cut(t.input, 400), output: cut(t.output, 400), cost: t.totalCost ?? 0, seconds: secondsOf(t), observations: top,
       });
     } catch (e) { return fail(e); }

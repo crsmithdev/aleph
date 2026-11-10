@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bu
 import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clearCache, listSkills } from "./api/skills.ts";
+import { clearCache, listSkills, routes } from "./api/skills.ts";
+import { memory, use } from "./langfuse.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { updater } from "./updater.ts";
 // @ts-ignore plain JS, shared with the page
@@ -13,7 +14,7 @@ const NOW = Date.parse(`${today}T12:00:00.000Z`);
 setSystemTime(NOW);
 const daysAgo = (n: number, time = "10:00:00") => new Date(Date.parse(today) - n * 86400_000).toISOString().slice(0, 10) + `T${time}.000Z`;
 
-let tmp: string, lf: ReturnType<typeof Bun.serve>, stopApp: () => void, restoreEnv: () => void, appAt: (path: string) => Promise<Response>, down = false, hits = 0, asked: URL[] = [];
+let tmp: string, lf: ReturnType<typeof Bun.serve>, stopApp: () => void, restoreEnv: () => void, appAt: (path: string) => Promise<Response>, asked: URL[] = [];
 const ob = (o: any): any => ({ type: o.name === "turn" ? "AGENT" : "TOOL", level: "DEFAULT", ...o });
 const observations = [
   // t1: aleph project, Skill tool call, then Read + Bash + a failing Edit in the same turn; Read before the skill does not count
@@ -38,7 +39,7 @@ const observations = [
   ob({ id: "13", traceId: "t7", name: "turn", input: "/aleph:tagged", startTime: daysAgo(1) }),
   ob({ id: "14", traceId: "t8", name: "turn", input: "/aleph:untagged", startTime: daysAgo(1) }),
 ];
-const traces = [
+const traces: any[] = [
   { id: "t1", sessionId: "s1", metadata: { cwd: "/work/aleph" } },
   { id: "t2", sessionId: "s2", metadata: { cwd: "/work/other" } },
   { id: "t3", sessionId: "s1", metadata: { cwd: "/work/aleph" } },
@@ -49,6 +50,10 @@ const traces = [
   { id: "t8", sessionId: "s6", metadata: {}, tags: ["project:agent-ae1db4a1e2c301339"] },
 ];
 
+// A trace's time is its turn's, as in Langfuse.
+for (const t of traces) t.timestamp = observations.find((o) => o.traceId === t.id)!.startTime;
+const mem = memory({ traces, observations });
+
 beforeAll(async () => {
   tmp = mkdtempSync(join(tmpdir(), "aleph-ui-skills-"));
   mkdirSync(join(tmp, "skills", "pickup"), { recursive: true });
@@ -56,11 +61,11 @@ beforeAll(async () => {
   mkdirSync(join(tmp, "skills", "dormant"), { recursive: true });
   for (const s of ["pickup", "retro", "dormant"]) writeFileSync(join(tmp, "skills", s, "SKILL.md"), `# ${s}\n`);
   writeFileSync(join(tmp, "repos.json"), JSON.stringify({ aleph: { path: "/work/aleph" }, other: { path: "/work/other" } }));
+  use(mem);
+  // The server's builds run in its Worker, which reads Langfuse over HTTP: this fake answers them in one page.
   lf = Bun.serve({
     port: 0,
     fetch(req) {
-      hits++;
-      if (down) return new Response("down", { status: 503 });
       const u = new URL(req.url);
       asked.push(u);
       const from = Date.parse(u.searchParams.get("fromStartTime") ?? u.searchParams.get("fromTimestamp") ?? "0");
@@ -75,89 +80,50 @@ beforeAll(async () => {
 });
 afterAll(() => {
   setSystemTime();
-  stopApp(); lf.stop(true);
+  stopApp(); lf.stop(true); use(null);
   restoreEnv();
 });
-beforeEach(() => { clearCache(); updater.reset(); rmSync(join(tmp, "store.json"), { force: true }); down = false; asked = []; });
+beforeEach(() => { clearCache(); updater.reset(); rmSync(join(tmp, "store.json"), { force: true }); mem.asked.length = 0; mem.down = null; asked = []; });
 
-const get = async (p: string) => { const r = await (/^\/api\/skills(\?|$)/.test(p) ? listSkills(new Request(`http://localhost${p}`)) : appAt(p)); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
+/** A skills route's answer, built in this thread from the rows of `mem`. */
+const get = async (p: string) => {
+  const url = new URL(p, "http://localhost"), name = url.pathname.match(/^\/api\/skills\/(.+)$/)?.[1];
+  const r = await (name ? routes["GET /api/skills/:name"](new Request(url), { name: decodeURIComponent(name) }, url) : listSkills(new Request(url)));
+  return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
 
 test("?project= that is no registry key matches nothing", async () => {
   expect((await get("/api/skills")).body.skills.length).toBeGreaterThan(0);
   expect((await get("/api/skills?project=zeta")).body.skills).toEqual([]);
 });
 
-test("a 502 goes out only after every request of the failed fetch has ended", async () => {
-  let inflight = 0, requests = 0, fail!: () => void;
+test("a 502 goes out only after every read of the failed fetch has ended", async () => {
+  let open = 0, fail!: () => void;
   const failed = new Promise<void>((r) => { fail = r; });
-  const slow = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      requests++;
-      if (new URL(req.url).searchParams.get("type") === "AGENT") { fail(); return new Response("down", { status: 503 }); }
-      inflight++;
-      await failed; // still open after the failed AGENT request has been answered
-      await new Promise((r) => setTimeout(r, 0));
-      inflight--;
-      return new Response("down", { status: 503 });
-    },
-  });
-  const before = process.env.LANGFUSE_BASE_URL;
-  process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${slow.port}`;
+  // The other reads are held open past the failed one: one still open when the 502 went out would show here.
+  const held = async (): Promise<any> => { open++; await failed; await new Promise((r) => setTimeout(r, 0)); open--; throw new Error("down"); };
+  use({ ...mem, traces: held, observations: (q) => (q.type === "AGENT" ? (fail(), Promise.reject(new Error("down"))) : held()) });
   try {
     expect((await get("/api/skills")).status).toBe(502);
-    // Each other request is held open past the failed one: one still open when the 502 went out would show here.
-    expect(inflight).toBe(0);
-  } finally {
-    slow.stop(true);
-    process.env.LANGFUSE_BASE_URL = before;
-  }
+    expect(open).toBe(0);
+  } finally { use(mem); }
 });
 
 test("after a restart, a reload fetches only the rows of the last two hours and keeps the older ones", async () => {
   await get("/api/skills");
   clearCache(); // as a restart: the rows are on disk only
-  asked = [];
+  mem.asked.length = 0;
   const { status, body } = await get("/api/skills");
   expect(status).toBe(200);
-  const from = Date.parse(asked.find((u) => u.pathname === "/api/public/observations")!.searchParams.get("fromStartTime")!);
+  const from = mem.asked.find((a) => a.list === "observations")!.q.from!.getTime();
   expect(NOW - from).toBeLessThan(2 * 3600_000 + 60_000);
   expect(NOW - from).toBeGreaterThan(2 * 3600_000 - 60_000);
   expect(body.skills.find((s: any) => s.name === "aleph:pickup")).toMatchObject({ uses: 2, errors: 1 }); // t2 is two days old
 });
 
-
-
-
-
-test("pages are fetched concurrently, and a restart builds the saved keys at once: a request shares that build, and the next one hits Langfuse zero times", async () => {
-  // Overlap is counted per list: the two lists run side by side even when each one pages serially.
-  const active: Record<string, number> = {}, peak: Record<string, number> = {}, arrived: Record<string, number> = {}, waiting: Record<string, (() => void)[]> = {};
-  let calls = 0, all = 0;
-  const paged = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      const u = new URL(req.url);
-      if (u.pathname.startsWith("/api/public/")) all++;
-      // Other warm-ups (memory's `vault misses` subprocess) reach this mock too: only the skills lists count.
-      // The Agents warm-up reads the 7-day window through the same lists: only the 30-day reads count.
-      const from = Date.parse(u.searchParams.get("fromStartTime") ?? u.searchParams.get("fromTimestamp") ?? "");
-      const mine = (u.pathname === "/api/public/traces" || ["AGENT", "TOOL"].includes(u.searchParams.get("type") ?? "")) && from < NOW - 10 * 86400_000;
-      const page = Number(u.searchParams.get("page") ?? 1);
-      if (mine) { calls++; active[u.pathname] = (active[u.pathname] ?? 0) + 1; peak[u.pathname] = Math.max(peak[u.pathname] ?? 0, active[u.pathname]); }
-      // Pages after the first wait for a second page of the same list: a serial fetch never gets one.
-      if (mine && page > 1) {
-        arrived[u.pathname] = (arrived[u.pathname] ?? 0) + 1;
-        if (arrived[u.pathname] >= 2) (waiting[u.pathname] ?? []).forEach((go) => go());
-        else await new Promise<void>((go) => (waiting[u.pathname] ??= []).push(go));
-      }
-      if (mine) active[u.pathname]--;
-      const data = u.pathname === "/api/public/observations" && page === 1 ? observations.filter((o) => Date.parse(o.startTime) >= NOW - 30 * 86400_000) : [];
-      return Response.json({ data: u.pathname === "/api/public/traces" && page === 1 ? traces : data, meta: { totalPages: 4 } });
-    },
-  });
-  const restoreEnv = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${paged.port}`, ALEPH_FACTORY_DIR: join(tmp, "factory") });
-  clearCache();
+test("a restart builds the saved keys at once: a request shares that build, and the next one hits Langfuse zero times", async () => {
+  // Other warm-ups (memory's `vault misses` subprocess, the Agents page's 7-day window) reach the fake too: only the skills lists' 30-day reads count.
+  const mine = () => asked.filter((u) => (u.pathname === "/api/public/traces" || ["AGENT", "TOOL"].includes(u.searchParams.get("type") ?? "")) && Date.parse(u.searchParams.get("fromStartTime") ?? u.searchParams.get("fromTimestamp") ?? "") < NOW - 10 * 86400_000).length;
+  const restoreEnv = withEnv({ ALEPH_FACTORY_DIR: join(tmp, "factory") });
   // The keys the last process kept: the restart builds them before any request.
   mkdirSync(join(tmp, "ui"), { recursive: true });
   writeFileSync(join(tmp, "ui", "keys.json"), JSON.stringify({ "/api/skills/aleph:pickup": NOW, "/api/sessions?window=week": NOW }));
@@ -165,29 +131,27 @@ test("pages are fetched concurrently, and a restart builds the saved keys at onc
   try {
     const r = await at("/api/skills/aleph:pickup"); // shares the build the restart started
     expect(r.status).toBe(200);
-    expect(calls).toBe(12); // 3 lists x 4 pages
-    expect(peak["/api/public/traces"]).toBeGreaterThan(1);
-    expect(peak["/api/public/observations"]).toBeGreaterThan(1);
+    expect(mine()).toBe(3); // 3 lists x 1 page
     expect((await at("/api/skills/aleph:pickup")).status).toBe(200);
-    expect(calls).toBe(12);
+    expect(mine()).toBe(3);
     // The Agents page: its build started at the restart too, so a request waits for it and reads nothing more.
     expect((await at("/api/sessions?window=week")).status).toBe(200);
-    const allSeen = all;
+    const seen = asked.length;
     const a = await at("/api/sessions?window=week");
     expect(a.status).toBe(200);
     const b = await a.json() as any;
     for (const k of ["activity", "skills", "sessions", "toolSessions"]) expect(b[k]).toBeDefined();
     expect(b.skills.error).toBeUndefined();
     expect(b.sessions.error).toBeUndefined();
-    expect(all).toBe(allSeen);
+    expect(asked.length).toBe(seen);
   } finally {
-    stop(); paged.stop(true);
+    stop();
     restoreEnv();
   }
 });
 
 test("a skill folder added while the server runs shows without a restart", async () => {
-  expect((await get("/api/skills/fresh")).status).toBe(404);
+  expect((await appAt("/api/skills/fresh")).status).toBe(404);
   const rebuilt = new Promise<void>((done) => updater.onChange((keys) => { if (keys.includes("/api/skills/fresh")) done(); }));
   const staged = join(tmp, "fresh");
   mkdirSync(staged);
@@ -195,7 +159,7 @@ test("a skill folder added while the server runs shows without a restart", async
   renameSync(staged, join(tmp, "skills", "fresh"));
   try {
     await rebuilt;
-    expect((await get("/api/skills/fresh")).status).toBe(200);
+    expect((await appAt("/api/skills/fresh")).status).toBe(200);
   } finally { rmSync(join(tmp, "skills", "fresh"), { recursive: true, force: true }); }
 });
 

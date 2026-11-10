@@ -7,18 +7,16 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { langfuseConfig, type LangfuseConfig } from "../../lib/env.ts";
 import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { scopeOf, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
 import { once, touch } from "../../jobs/lib/infra/sources.ts";
-import { allPages } from "../langfuse-pages.ts";
+import { langfuse, type Langfuse, type ObservationQuery, type TraceQuery } from "../langfuse.ts";
 import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 86400_000;
-const PAGE_TIMEOUT = 30_000;
 const OVERLAP = 2 * 3600_000;
 const REBUILD = DAY;
 
@@ -57,9 +55,9 @@ async function settled<T extends readonly unknown[]>(ps: { [K in keyof T]: Promi
 }
 
 /** Every row of a paged Langfuse list. Logs the page count and the time per page, so the journal shows what a load costs. */
-async function allRows<T>(cfg: LangfuseConfig, path: string, q: Record<string, string>, label: string): Promise<T[]> {
+async function allRows(lf: Langfuse, kind: "traces" | "observations", q: TraceQuery & ObservationQuery, label: string): Promise<any[]> {
   const t0 = Date.now();
-  const { rows, pages } = await allPages<T>(cfg, path, q, PAGE_TIMEOUT);
+  const { rows, pages } = await lf[kind](q);
   const ms = Date.now() - t0;
   console.log(`skills: ${label}: ${rows.length} rows, ${pages} pages in ${(ms / 1000).toFixed(1)} s (${Math.round(ms / pages)} ms per page, 4 at a time)`);
   return rows;
@@ -86,12 +84,11 @@ const compactTrace = (t: any): TraceInfo => ({ id: t.id, sessionId: t.sessionId,
  * Skills reads turns (type AGENT) and tool calls (type TOOL) only: model calls (GENERATION) are
  * most of the rows and are not fetched. Traces come without their input and output.
  */
-async function fetchRows(cfg: LangfuseConfig, from: Date, to: Date): Promise<{ obs: Observation[]; traces: TraceInfo[] }> {
-  const span = { fromStartTime: from.toISOString(), toStartTime: to.toISOString() };
+async function fetchRows(lf: Langfuse, from: Date, to: Date): Promise<{ obs: Observation[]; traces: TraceInfo[] }> {
   const [agents, tools, traces] = await settled([
-    allRows<any>(cfg, "/api/public/observations", { ...span, type: "AGENT" }, "turns"),
-    allRows<any>(cfg, "/api/public/observations", { ...span, type: "TOOL" }, "tool calls"),
-    allRows<any>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), fields: "core" }, "traces"),
+    allRows(lf, "observations", { from, to, type: "AGENT" }, "turns"),
+    allRows(lf, "observations", { from, to, type: "TOOL" }, "tool calls"),
+    allRows(lf, "traces", { from, to, core: true }, "traces"),
   ]);
   return { obs: [...agents, ...tools].map(compact), traces: traces.map(compactTrace) };
 }
@@ -124,24 +121,24 @@ function saveStore(s: Store): void {
 }
 
 /** Brings the store up to now and back to `since`; one sync runs at a time. A failed sync leaves the store as it was. */
-function sync(cfg: LangfuseConfig, since: number): Promise<Store> {
+function sync(lf: Langfuse, since: number): Promise<Store> {
   const run = queue.then(async () => {
     const now = Date.now();
-    let s = store?.base === cfg.baseUrl ? store : loadStore(cfg.baseUrl);
+    let s = store?.base === lf.base ? store : loadStore(lf.base);
     const to = new Date(now + 60_000);
     const add = (into: Store, rows: { obs: Observation[]; traces: TraceInfo[] }) => {
       for (const o of rows.obs) if (o.id) into.obs.set(o.id, o);
       for (const t of rows.traces) into.traces.set(t.id, t);
     };
     const full = async (): Promise<Store> => {
-      const fresh: Store = { base: cfg.baseUrl, from: since, through: now, built: now, obs: new Map(), traces: new Map() };
-      add(fresh, await fetchRows(cfg, new Date(since), to));
+      const fresh: Store = { base: lf.base, from: since, through: now, built: now, obs: new Map(), traces: new Map() };
+      add(fresh, await fetchRows(lf, new Date(since), to));
       return fresh;
     };
     const newRows = async (old: Store): Promise<Store> => {
       const next: Store = { ...old, obs: new Map(old.obs), traces: new Map(old.traces) };
-      if (since < old.from) { add(next, await fetchRows(cfg, new Date(since), new Date(old.from + OVERLAP))); next.from = since; }
-      add(next, await fetchRows(cfg, new Date(old.through - OVERLAP), to));
+      if (since < old.from) { add(next, await fetchRows(lf, new Date(since), new Date(old.from + OVERLAP))); next.from = since; }
+      add(next, await fetchRows(lf, new Date(old.through - OVERLAP), to));
       next.through = now;
       return next;
     };
@@ -162,15 +159,15 @@ function sync(cfg: LangfuseConfig, since: number): Promise<Store> {
 interface Analysis { uses: Use[]; tools: Map<string, Map<string, number>>; errors: Map<string, { trace: string; message: string }>; since: Date; days: number; asOf: string; failed?: string }
 
 async function analyse(days: number, project: string | null): Promise<Analysis> {
-  const cfg = langfuseConfig();
-  if (!cfg) throw new Error("no Langfuse keys");
+  const lf = langfuse();
+  if (!lf) throw new Error("no Langfuse keys");
   const to = new Date();
   const since = new Date(Math.floor(to.getTime() / DAY) * DAY - (days - 1) * DAY);
   let s: Store, failed: string | undefined;
-  try { s = await once(`skills-rows:${since.getTime()}`, ["langfuse"], () => sync(cfg, since.getTime())); }
+  try { s = await once(`skills-rows:${since.getTime()}`, ["langfuse"], () => sync(lf, since.getTime())); }
   catch (e) {
     // The last good rows, with their age, beat an empty page.
-    const last = store?.base === cfg.baseUrl ? store : loadStore(cfg.baseUrl);
+    const last = store?.base === lf.base ? store : loadStore(lf.base);
     if (!last) throw e;
     s = store = last; failed = (e as Error).message;
   }
