@@ -51,11 +51,13 @@ export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${own(r)}`;
 const DAY = 86_400_000;
 const ms = (s) => Date.parse(s) || 0;
 /** A store date `YYYY-MM-DD` as local midnight in ms, as the CLI writes it; 0 for none. */
+/** An ISO UTC time from the store as ms; 0 for none. */
+const isoMs = (s) => Date.parse(s ?? "") || 0;
 const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? localMs(String(s).slice(0, 10)) : 0);
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, created: r.created ?? null, createdTime: r.createdTime ?? null, closed: r.closed ?? null, closedTime: r.closedTime ?? null, at: r.updated, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: !!r.parent, parent: r.parent ? `${r.repo}-${r.parent}` : null }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, createdTime: r.createdTime ?? null, closedTime: r.closedTime ?? null, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: !!r.parent, parent: r.parent ? `${r.repo}-${r.parent}` : null }));
 }
 
 // ---- Fuzzy search ----
@@ -139,7 +141,7 @@ export function filterRows(rows, o = {}, skip = []) {
   const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
   const q = (o.q ?? "").trim(), now = new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - Math.max(1, Math.ceil(WINDOW_DAYS[o.window] ?? 7)) * DAY;
   const at = inSpan(now.getTime(), WINDOW_DAYS[o.window] ?? 7);
-  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? at(r.created, r.createdTime, 0, from, end) : o.tile === "closed" ? CLOSED.includes(r.status) && at(r.closed, r.closedTime, 0, from, end) : true);
+  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? at(r.createdTime, 0, from, end) : o.tile === "closed" ? CLOSED.includes(r.status) && at(r.closedTime, 0, from, end) : true);
   return rows.flatMap((r) => {
     if (!inTile(r)) return [];
     if (!want("status", r.status) || !want("project", r.project) || !want("stage", r.stage) || !want("priority", r.priority)) return [];
@@ -157,7 +159,7 @@ export const COLUMNS = [["updated", "Updated"], ["id", "Id"], ["title", "Title"]
 const RANK = { critical: 4, high: 3, medium: 2, low: 1 };
 const SORT = {
   project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => updatedMs(r),
-  priority: (r) => RANK[r.priority] ?? 0, notes: (r) => r.notes, runs: (r) => r.runs, cost: (r) => r.cost, age: (r) => -dayMs(r.created),
+  priority: (r) => RANK[r.priority] ?? 0, notes: (r) => r.notes, runs: (r) => r.runs, cost: (r) => r.cost, age: (r) => -isoMs(r.createdTime),
 };
 /** The keys that start with the largest first. */
 const DOWN_FIRST = new Set(["updated", "priority", "notes", "runs", "cost", "age"]);
@@ -186,18 +188,16 @@ export function dateText(s, now = new Date()) {
   return day(new Date(t), now);
 }
 
-/** "YYYY-MM-DD HH:MM" from the store as ms, local time; NaN for none. */
-const minuteMs = (s) => Date.parse(String(s ?? "").replace(" ", "T"));
-/** When a row last changed, in ms: its minute, else its day. */
-const updatedMs = (r) => minuteMs(r.atTime) || dayMs(r.at);
-/** The Updated cell: the minute as `when()` gives it; with no minute in the store, only `when()`'s date ("10/27"). */
-export const updatedText = (r) => (Number.isNaN(minuteMs(r.atTime)) ? (dayMs(r.at) ? when(new Date(dayMs(r.at))).split(" ")[0] : "") : when(new Date(minuteMs(r.atTime))));
+/** When a row last changed, in ms. */
+const updatedMs = (r) => isoMs(r.atTime);
+/** The Updated cell: the local minute as `when()` gives it; "" for none. */
+export const updatedText = (r) => (updatedMs(r) ? when(new Date(updatedMs(r))) : "");
 
-/** The days since a store date, as "12d"; a closed issue counts to its closing. "" for none. */
+/** The days since a store time, as "12d"; a closed issue counts to its closing. "" for none. */
 export function ageText(r, now = Date.now()) {
-  const from = dayMs(r.created);
+  const from = isoMs(r.createdTime);
   if (!from) return "";
-  return `${Math.max(0, Math.floor(((r.status === "open" ? now : dayMs(r.closed) || now) - from) / DAY))}d`;
+  return `${Math.max(0, Math.floor(((r.status === "open" ? now : isoMs(r.closedTime) || now) - from) / DAY))}d`;
 }
 
 /** One issue row; a sub-issue is indented under its parent. */
@@ -224,11 +224,10 @@ const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
-const inDays = (s, from, to) => { const t = dayMs(s); return t >= from && t < to; };
-/** For the hour window a row with a stored minute counts by that minute: `k` hours-windows back from `now`. Else by its day. */
-const inSpan = (now, days) => (day, time, k, from, to) => {
-  const t = days < 1 && time ? Date.parse(String(time).replace(" ", "T")) : NaN, span = Math.round(days * DAY);
-  return t === t ? t > now - (k + 1) * span && t <= now - k * span : inDays(day, from, to);
+/** For the hour window a time counts `k` hours-windows back from `now`; for longer windows, inside `from` to `to`. */
+const inSpan = (now, days) => (time, k, from, to) => {
+  const t = isoMs(time), span = Math.round(days * DAY);
+  return days < 1 ? t > now - (k + 1) * span && t <= now - k * span : t >= from && t < to;
 };
 
 /** The numbers over `rows`: what the status and stage filters leave out still counts here, so the tiles do not empty when the table narrows. */
@@ -237,14 +236,14 @@ export function stats(rows, now = new Date(), days = 7) {
   // The store keeps whole dates, so the window is whole days back from tonight, at least today.
   const span = Math.max(1, Math.ceil(days)) * DAY, week = end - span, before = week - span, at = inSpan(now.getTime(), days);
   const open = rows.filter((r) => r.status === "open");
-  const ages = open.map((r) => dayMs(r.created)).filter(Boolean).map((t) => (today - t) / DAY);
-  const closedIn = (k, from, to) => rows.filter((r) => CLOSED.includes(r.status) && at(r.closed, r.closedTime, k, from, to));
+  const ages = open.map((r) => isoMs(r.createdTime)).filter(Boolean).map((t) => (today - t) / DAY);
+  const closedIn = (k, from, to) => rows.filter((r) => CLOSED.includes(r.status) && at(r.closedTime, k, from, to));
   const closed = closedIn(0, week, end);
   const stages = {};
   for (const r of open) stages[r.stage] = (stages[r.stage] ?? 0) + 1;
   return {
     total: rows.length, open: open.length, stages,
-    filed: rows.filter((r) => at(r.created, r.createdTime, 0, week, end)).length, filedBefore: rows.filter((r) => at(r.created, r.createdTime, 1, before, week)).length,
+    filed: rows.filter((r) => at(r.createdTime, 0, week, end)).length, filedBefore: rows.filter((r) => at(r.createdTime, 1, before, week)).length,
     closed: closed.length, done: closed.filter((r) => r.status === "done").length, dropped: closed.filter((r) => r.status === "dropped").length, closedBefore: closedIn(1, before, week).length,
     medianAge: median(ages), oldest: ages.length ? Math.max(...ages) : null,
     runs: rows.filter((r) => !r.part).reduce((n, r) => n + r.runs, 0), cost: rows.filter((r) => !r.part).reduce((n, r) => n + r.cost, 0),
@@ -265,35 +264,32 @@ export function renderTiles(s, key = "open", win = "week") {
     statCard({ k: "Jobs", v: count(s.runs), v2: money(s.cost), q: ["jobs", "recorded cost"], ...on("runs") }));
 }
 
-/** The window's buckets (60 minutes, 24 hours, 7 or 30 days): the time of each and how many rows were filed and closed in it. A stored time counts to its minute; a row with only a day counts at the start of that day. */
+/** The window's buckets (60 minutes, 24 hours, 7 or 30 days): the time of each and how many rows were filed and closed in it. A stored time counts to its minute. */
 export function flow(rows, window = "month", now = new Date()) {
   const unit = { hour: 60000, day: 3600000 }[window], n = { hour: 60, day: 24, week: 7 }[window] ?? 30;
   const edge = (i) => unit ? Math.floor(now.getTime() / unit) * unit - i * unit : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i).getTime();
-  const at = (d, t) => { const m = unit && t ? Date.parse(String(t).replace(" ", "T")) : NaN; return m === m ? m : dayMs(d); };
   const out = { ats: [], filed: [], closed: [] };
   for (let i = n - 1; i >= 0; i--) {
     const from = edge(i), to = unit ? from + unit : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1).getTime();
     out.ats.push(from);
-    out.filed.push(rows.filter((r) => { const t = at(r.created, r.createdTime); return t >= from && t < to; }).length);
-    out.closed.push(rows.filter((r) => { const t = at(r.closed, r.closedTime); return CLOSED.includes(r.status) && t >= from && t < to; }).length);
+    out.filed.push(rows.filter((r) => { const t = isoMs(r.createdTime); return t >= from && t < to; }).length);
+    out.closed.push(rows.filter((r) => { const t = isoMs(r.closedTime); return CLOSED.includes(r.status) && t >= from && t < to; }).length);
   }
   return out;
 }
 
 const PRIORITY_ORDER = ["low", "medium", "high", "critical"];
-/** The window's buckets: how many rows were open in each, per priority. Hour is 60 minutes and day is 24 hours, sampled at each bucket's end; week and month are days. A row is open from its created time to its closed time, or by day when it has no time. */
+/** The window's buckets: how many rows were open in each, per priority. Hour is 60 minutes and day is 24 hours, sampled at each bucket's end; week and month are days. A row is open from its created time to its closed time. */
 export function backlog(rows, win = "month", now = new Date()) {
   const ats = [], counts = Object.fromEntries(PRIORITY_ORDER.map((p) => [p, []]));
   const fine = { hour: [60, 60_000], day: [24, 3_600_000] }[win];
-  const stamp = (time, d, late) => { const t = Date.parse(String(time ?? "").replace(" ", "T")); return t === t ? t : dayMs(d) ? dayMs(d) + (late ? DAY : 0) : 0; };
   const [n, step] = fine ?? [WINDOW_DAYS[win], DAY];
   for (let i = n - 1; i >= 0; i--) {
     const d = fine ? new Date(now.getTime() - i * step) : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), t = d.getTime();
     ats.push(t);
     for (const p of PRIORITY_ORDER) counts[p].push(rows.filter((r) => {
       if (r.priority !== p) return false;
-      if (!fine) return dayMs(r.created) && dayMs(r.created) <= t && (!dayMs(r.closed) || t <= dayMs(r.closed));
-      const from = stamp(r.createdTime, r.created, false), to = stamp(r.closedTime, r.closed, true);
+      const from = isoMs(r.createdTime), to = isoMs(r.closedTime);
       return from && from <= t && (!to || t < to);
     }).length);
   }
@@ -307,17 +303,12 @@ const quantile = (xs, p) => {
   const s = [...xs].sort((a, b) => a - b), at = (s.length - 1) * p, lo = Math.floor(at);
   return s[lo] + (s[Math.ceil(at)] - s[lo]) * (at - lo);
 };
-/** For each kind, the p50 and p90 from created to closed over the rows closed inside the window; null for a kind with none. A row counts from its times, or from its dates where it has none. `unit` is "hours" when a row has a time and every value is under 2 days; else "days". */
+/** For each kind, the p50 and p90 from created to closed over the rows closed inside the window; null for a kind with none. `unit` is "hours" when a row counts and every value is under 2 days; else "days". */
 export function closeTimes(rows, win = "month", now = new Date()) {
   const out = { kinds: KINDS, unit: "days", p50: [], p90: [] };
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - Math.max(1, Math.ceil(WINDOW_DAYS[win])) * DAY, at = inSpan(now.getTime(), WINDOW_DAYS[win]);
-  const stamp = (time, d) => { const t = Date.parse(String(time ?? "").replace(" ", "T")); return t === t ? t : dayMs(d); };
-  let timed = false;
-  const spans = KINDS.map((k) => rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && dayMs(r.created) && dayMs(r.closed) && at(r.closed, r.closedTime, 0, from, end)).map((r) => {
-    timed ||= !!(r.createdTime || r.closedTime);
-    return stamp(r.closedTime, r.closed) - stamp(r.createdTime, r.created);
-  }));
-  const hours = timed && spans.flat().every((ms) => ms < 2 * DAY);
+  const spans = KINDS.map((k) => rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && isoMs(r.createdTime) && isoMs(r.closedTime) && at(r.closedTime, 0, from, end)).map((r) => isoMs(r.closedTime) - isoMs(r.createdTime)));
+  const hours = spans.flat().length > 0 && spans.flat().every((ms) => ms < 2 * DAY);
   if (hours) out.unit = "hours";
   for (const xs of spans) {
     const per = xs.map((ms) => ms / (hours ? 3600000 : DAY));
@@ -590,7 +581,7 @@ function noteItem(e) {
 
 /** The filing time: the store's, else the created date unless a job that day starts the issue (midnight would draw a false wait). */
 function filedAt(d, runs) {
-  const created = localMs(d.frontmatter?.created_time ?? d.frontmatter?.created);
+  const created = Date.parse(d.frontmatter?.created_time);
   const sameDay = runs.length && new Date(created).toDateString() === new Date(runs[0].start).toDateString();
   return d.timeline?.filed ?? (created >= 0 && !sameDay ? created : runs[0]?.start ?? NaN);
 }

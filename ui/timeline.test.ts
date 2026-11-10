@@ -30,7 +30,7 @@ describe("the waits", () => {
 
 describe("the issue timeline", () => {
   test("without parts it is one Work row: a bar per run, the waits, and the notes as events", () => {
-    const [row] = rowsOf({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01 10:41: triage: asked"] });
+    const [row] = rowsOf({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: triage: asked"] });
     expect(issueSegments(issue({ timeline: { filed: 0, runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
     expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["triage", "aux"], ["build", "build"], ["land", "land"]]);
     expect(row.bars[1].href).toBe("#/jobs/fac-1");
@@ -59,7 +59,7 @@ describe("the issue timeline", () => {
       run("build", "2026-11-01T10:11:00Z", "2026-11-01T10:15:00Z", { name: "fac-1.1", on: "fac-1.1" }),
       run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" }),
     ];
-    const notes = ["- 2026-11-01 10:06: planner: split into fac-1.1, fac-1.2", "- 2026-11-01 10:25: its sub-issues are done"];
+    const notes = ["- 2026-11-01T10:06:00.000Z: planner: split into fac-1.1, fac-1.2", "- 2026-11-01T10:25:00.000Z: its sub-issues are done"];
     const segs = issueSegments(issue({ goals: parts, notes, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } }));
     expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Sub-issues", 2], ["After the Sub-issues", 1]]);
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;
@@ -153,7 +153,7 @@ describe("the compact scale", () => {
 
 describe("the timeline panel", () => {
   test("it shows the axis, the segments, the bars as links to their jobs and the events, escaped", () => {
-    const h = renderTimeline(issueSegments(issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01 10:41: <b>x</b>"] })));
+    const h = renderTimeline(issueSegments(issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: <b>x</b>"] })));
     expect(h).toContain('<h2 id="h-timeline">Timeline</h2>');
     expect(h).toContain("<h3>Work</h3>");
     expect(h).toContain('<a class="dp-bar t-build" href="#/jobs/fac-1"');
@@ -178,7 +178,7 @@ describe("the timeline panel", () => {
   });
 
   test("the formats", () => {
-    expect(noteEvent("- 2026-11-01 08:06: done it")).toEqual({ at: Date.parse("2026-11-01T08:06"), text: "done it" });
+    expect(noteEvent("- 2026-11-04T15:30:00.000Z: text")).toEqual({ at: Date.parse("2026-11-04T15:30:00.000Z"), text: "text" });
     expect(noteEvent("no stamp")).toBeNull();
   });
 });
@@ -219,7 +219,7 @@ describe("waitEvent", () => {
 });
 
 describe("the issue page's tidy-up", () => {
-  const html = renderIssue(issue({ derived: { stage: "done" }, timeline: { filed: 0, runs: [run("build", "2026-11-01T10:30:00Z", "2026-11-01T14:40:00Z", { model: "claude-sonnet-5-5" }), run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed" })] }, notes: ["- 2026-11-01 10:00: a note"] }));
+  const html = renderIssue(issue({ derived: { stage: "done" }, timeline: { filed: 0, runs: [run("build", "2026-11-01T10:30:00Z", "2026-11-01T14:40:00Z", { model: "claude-sonnet-5-5" }), run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed" })] }, notes: ["- 2026-11-01T10:00:00.000Z: a note"] }));
   test("the Stage is lower case, no bar or tip names a model, and there is no Detail h2", () => {
     expect(html).toContain('<span class="dp-v">done</span>');
     expect(html).not.toMatch(/sonnet|opus/i);

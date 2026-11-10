@@ -1,16 +1,16 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { clamp, codeText, contentText, legendHtml, dur, esc, localMs, money, shortModel, tag, when } from "./lib.js";
+import { clamp, codeText, contentText, legendHtml, dur, esc, money, shortModel, tag, when } from "./lib.js";
 import { jobState, word } from "../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
 
-/** The time and text of a note line `- 2026-11-01 08:06: text`; null for one with no stamp. */
+/** The time and text of a note line `- 2026-11-01T08:06:00.000Z: text`; null for one with no stamp. */
 export function noteEvent(line) {
-  const m = /^- (\d{4}-\d\d-\d\d[ T]\d\d:\d\d(?::\d\d(?:\.\d+)?Z?)?): (.*)$/s.exec(String(line));
-  return m ? { at: localMs(m[1]), text: m[2] } : null;
+  const m = /^- (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z): (.*)$/s.exec(String(line));
+  return m ? { at: Date.parse(m[1]), text: m[2] } : null;
 }
 
 /**
