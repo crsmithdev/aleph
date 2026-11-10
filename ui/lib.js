@@ -674,11 +674,13 @@ if (typeof document !== "undefined") {
   });
 }
 
-/** POSTs `body` as JSON with the header the server wants. Resolves to the JSON reply; throws its `error` text when the reply is not ok. */
+/** POSTs `body` as JSON with the header the server wants. Resolves to the JSON reply; throws its `error`, `stderr` or plain text when the reply is not ok. */
 export async function postJson(url, body) {
   const res = await fetch(url, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText || `answered ${res.status}`);
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text) ?? {}; } catch { data = { text }; }
+  if (!res.ok) throw new Error(data.error || data.stderr || data.text || res.statusText || `answered ${res.status}`);
   return data;
 }
 

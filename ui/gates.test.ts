@@ -602,7 +602,7 @@ test("a cap save keeps the Monitor fold open through the Automation redraw", asy
   const was = { fetch: globalThis.fetch, location: (globalThis as any).location };
   // The view reads the address and the API. The fake root takes the HTML and keeps the details folds.
   (globalThis as any).location = { hash: "" };
-  globalThis.fetch = (async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => (init?.method === "POST" ? {} : d) })) as any;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => d, text: async () => (init?.method === "POST" ? "{}" : JSON.stringify(d)) })) as any;
   const root: any = {
     details: [] as any[],
     set innerHTML(html: string) {

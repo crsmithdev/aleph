@@ -349,6 +349,12 @@ test("postJson posts the JSON body with the UI header and throws the error text 
     expect(seen[0].init.body).toBe('{"a":1}');
     reply = () => Response.json({ error: "it cannot wait" }, { status: 422 });
     await expect(postJson("/api/x", {})).rejects.toThrow("it cannot wait");
+    reply = () => new Response("no job named x", { status: 404 });
+    await expect(postJson("/api/x", {})).rejects.toThrow("no job named x");
+    reply = () => new Response("forbidden", { status: 403 });
+    await expect(postJson("/api/x", {})).rejects.toThrow("forbidden");
+    reply = () => Response.json({ code: 1, stdout: "", stderr: "bad flag" }, { status: 422 });
+    await expect(postJson("/api/x", {})).rejects.toThrow("bad flag");
   } finally { globalThis.fetch = real; }
 });
 

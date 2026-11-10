@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, say, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { lastPeriod, loadSpeed, usable, usageCard } from "./speed.js";
@@ -145,7 +145,7 @@ export const view = {
     root.onchange = async (e) => {
       const b = e.target.closest?.("#roles [data-tier]");
       if (!b || e.type !== "change") return;
-      const m = await postJson("/api/models", { tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch(() => null);
+      const m = await postJson("/api/models", { tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => say(b, err.message));
       if (m) { modelsNow = m; if (root.querySelector("#capacity")) draw(usable(windowNow())); }
     };
     keepWindow(windowNow());

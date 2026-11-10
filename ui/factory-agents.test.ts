@@ -261,3 +261,26 @@ test("the Agents view does not redraw over another page after the /api/models fe
     (globalThis as any).location = was.location;
   }
 });
+
+test("a failed model change shows the reason beside the control", async () => {
+  const was = { fetch: globalThis.fetch, location: (globalThis as any).location, document: (globalThis as any).document };
+  (globalThis as any).location = { hash: "" };
+  (globalThis as any).document = { createElement: () => ({ setAttribute() {} }) };
+  globalThis.fetch = ((_url: string, init?: any) =>
+    Promise.resolve(init?.method === "POST" ? Response.json({ error: "the backend of x is down" }, { status: 422 }) : { ok: false, status: 500, json: async () => ({}) })) as any;
+  const root: any = { innerHTML: "", querySelector: () => null };
+  const select: any = { after() {}, dataset: { tier: "worker" }, type: "select-one", value: "x", parentElement: { querySelector: () => null } };
+  select.closest = () => select;
+  try {
+    await view.mount(root, S);
+    const msg: any = {};
+    (globalThis as any).document.createElement = () => Object.assign(msg, { setAttribute() {} });
+    await root.onchange({ target: select, type: "change" });
+    expect(msg.className).toBe("act-msg");
+    expect(msg.textContent).toContain("the backend of x is down");
+  } finally {
+    globalThis.fetch = was.fetch;
+    (globalThis as any).location = was.location;
+    (globalThis as any).document = was.document;
+  }
+});
