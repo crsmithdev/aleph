@@ -4,7 +4,7 @@ import { allPages } from "./langfuse-pages.ts";
 import { staleAsync } from "./stale.ts";
 
 const CACHE_MS = 30_000;
-const cache = staleAsync<any[]>();
+const cache = staleAsync<any[]>(500, 600_000); // Keys move with the hour and the turn: bound them.
 
 export function clearCache(): void { cache.clear(); }
 

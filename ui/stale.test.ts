@@ -56,6 +56,23 @@ test("a TTL of 0 loads every time", async () => {
   expect(await staleAsync<number>().get("k", 0, async () => ++n)).toBe(2);
 });
 
+test("staleAsync: an idle key and the oldest key past the bound leave the cache; a recent key stays", async () => {
+  const c = staleAsync<number>(2, 100);
+  const loads: Record<string, number> = {};
+  const get = (k: string) => c.get(k, 1e9, async () => (loads[k] = (loads[k] ?? 0) + 1));
+  await get("a"); await pass(10);
+  await get("b"); await pass(10);
+  await get("a"); await pass(10); // "a" is now the most recent read.
+  await get("c"); // Past the bound of 2: "b" leaves.
+  await get("a");
+  expect(loads).toEqual({ a: 1, b: 1, c: 1 });
+  await get("b");
+  expect(loads.b).toBe(2);
+  await pass(150); // Every key is idle now; "b" is still under the bound, so only the idle time evicts it.
+  await get("b");
+  expect(loads.b).toBe(3);
+});
+
 test("staleAsync: a value older than ten TTLs waits for a fresh load; a failed load drops it", async () => {
   const c = staleAsync<number>();
   let loads = 0;

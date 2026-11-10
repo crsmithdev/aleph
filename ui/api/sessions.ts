@@ -164,10 +164,10 @@ function textBlocks(obs: any[], output: string) {
     .filter((t) => t.text.trim() !== output.trim());
 }
 
-/** The traces with a session over the last `days` days. */
+/** The traces with a session over the last `days` days, at most 90 (the widest window the page offers). */
 export async function windowTraces(days: number, project: string | null): Promise<any[]> {
   const hour = 3600_000; // whole hours, so the cache key holds
-  const from = new Date(Math.floor((Date.now() - (days > 0 ? days : 7) * 86400_000) / hour) * hour).toISOString();
+  const from = new Date(Math.floor((Date.now() - Math.min(days > 0 ? days : 7, 90) * 86400_000) / hour) * hour).toISOString();
   return (await traces(config(), { fromTimestamp: from })).filter((t) => t.sessionId && matches(t, project));
 }
 
