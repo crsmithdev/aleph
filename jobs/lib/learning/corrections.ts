@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../../lib/env.ts";
 import { decide } from "../../../lib/jev.ts";
 import { fetchObservations } from "../../../lib/otlp.ts";
+import { allPages } from "../../../ui/langfuse-pages.ts";
 import { factoryDir } from "../gates/factory-status.ts";
 import { logEvent } from "../infra/layout.ts";
 
@@ -103,17 +104,7 @@ const lessonId = (sentence: string) => "l-" + createHash("sha256").update(senten
 interface Trace { id: string; name?: string; sessionId?: string; timestamp?: string; input?: unknown; output?: unknown }
 
 async function fetchTraces(cfg: LangfuseConfig, from: Date): Promise<Trace[]> {
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const page = async (n: number) => {
-    const q = new URLSearchParams({ fromTimestamp: from.toISOString(), limit: "100", page: String(n) });
-    const res = await fetch(`${cfg.baseUrl}/api/public/traces?${q}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new Error(`${res.status} on traces`);
-    return (await res.json()) as any;
-  };
-  const first = await page(1);
-  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, 499) : 1;
-  const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => page(i + 2)));
-  return [first, ...rest].flatMap((b) => b.data ?? []);
+  return (await allPages<Trace>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString() }, 15_000)).rows;
 }
 
 async function chrisSignals(cfg: LangfuseConfig, from: Date, seen: Set<string>): Promise<Signal[]> {

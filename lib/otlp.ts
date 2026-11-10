@@ -4,6 +4,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import type { LangfuseConfig } from "./env.ts";
+import { allPages } from "../ui/langfuse-pages.ts";
 
 const MAX_FIELD = 4096;
 
@@ -129,25 +130,5 @@ export interface Observation {
 
 /** Every observation that started in [from, to], paged through the observations API. */
 export async function fetchObservations(cfg: LangfuseConfig, from: Date, to: Date, timeoutMs = 15000): Promise<Observation[]> {
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const page = async (n: number) => {
-    const q = new URLSearchParams({ fromStartTime: from.toISOString(), toStartTime: to.toISOString(), limit: "100", page: String(n) });
-    const res = await fetch(`${cfg.baseUrl}/api/public/observations?${q}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(timeoutMs) });
-    if (!res.ok) throw new Error(`${res.status} on observations`);
-    return (await res.json()) as any;
-  };
-  const first = await page(1);
-  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, 499) : 1;
-  const out: any[][] = [first.data ?? []];
-  let next = 2;
-  let failed = false;
-  // A pool of 4, as ui/api/skills.ts does: all pages at once overload Langfuse. Each request has its own timeout.
-  const worker = async () => {
-    try { for (let n = next++; n <= pages && !failed; n = next++) out[n - 1] = (await page(n).catch(() => page(n))).data ?? []; }
-    catch (e) { failed = true; throw e; }
-  };
-  const results = await Promise.allSettled(Array.from({ length: Math.min(4, pages - 1) }, worker));
-  const bad = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
-  if (bad) throw bad.reason;
-  return out.flat();
+  return (await allPages<Observation>(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }, timeoutMs)).rows;
 }

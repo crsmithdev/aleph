@@ -19,6 +19,7 @@ let base: string;
 let lf: ReturnType<typeof Bun.serve>;
 let jev: ReturnType<typeof Bun.serve>;
 let traces: any[];
+let perPage = 1000;
 let observations: any[];
 let noul = 0.9;
 let choice = "new";
@@ -40,7 +41,10 @@ beforeAll(() => {
     port: 0,
     fetch(req) {
       const u = new URL(req.url);
-      if (u.pathname === "/api/public/traces") { return Response.json({ data: traces, meta: { totalPages: 1 } }); }
+      if (u.pathname === "/api/public/traces") {
+        const n = Number(u.searchParams.get("page"));
+        return Response.json({ data: traces.slice((n - 1) * perPage, n * perPage), meta: { totalPages: Math.ceil(traces.length / perPage) } });
+      }
       if (u.pathname === "/api/public/observations") return Response.json({ data: observations, meta: { totalPages: 1 } });
       return new Response("no", { status: 404 });
     },
@@ -84,6 +88,7 @@ beforeEach(() => {
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "fac-repo"), sandbox: true } }));
   checkP = 0.9; ruleP = 0.1; delete process.env.ALEPH_PROPOSE_AT;
   noul = 0.9; choice = "new"; pickFirst = false;
+  perPage = 1000;
   traces = [
     { id: "t1", sessionId: "s", timestamp: ago(3), input: "start", output: "I did the thing." },
     { id: "t2", sessionId: "s", timestamp: ago(2), input: "No, that is wrong. Do not mock the db.", output: "ok" },
@@ -203,6 +208,21 @@ describe("explainLesson", () => {
     expect(proposals()[0]).toMatchObject(text);
   });
 
+});
+
+test("traces on later pages reach the corrections, at most 4 requests at a time", async () => {
+  const filler = Array.from({ length: 7 }, (_, i) => ({ id: `f${i}`, sessionId: "s", timestamp: ago(2.5), input: "<system-reminder>x</system-reminder>", output: "ok" }));
+  traces = [traces[0], ...filler, traces[1]];
+  perPage = 1;
+  const real = globalThis.fetch, gate = { open: 0, max: 0 };
+  globalThis.fetch = (async (url: any, init?: any) => {
+    if (!String(url).includes("/api/public/traces")) return real(url, init);
+    gate.max = Math.max(gate.max, ++gate.open);
+    try { return await real(url, init); } finally { gate.open--; }
+  }) as typeof fetch;
+  try { await mine(NOW); } finally { globalThis.fetch = real; }
+  expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source))).toContain("chris");
+  expect(gate.max).toBeLessThanOrEqual(4);
 });
 
 describe("noise", () => {

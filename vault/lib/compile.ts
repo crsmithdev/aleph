@@ -5,6 +5,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { LangfuseConfig } from "../../lib/env.ts";
+import { allPages } from "../../ui/langfuse-pages.ts";
 
 const TRACE_CAP = 12 * 1024;
 
@@ -58,16 +59,13 @@ export async function traceDigest(cfg: LangfuseConfig, date: string): Promise<{ 
   const parts: string[] = [];
   let size = 0;
   try {
-    for (let page = 1; page < 20; page++) {
-      const list = await get(cfg, `/api/public/traces?fromTimestamp=${from}&toTimestamp=${to}&limit=50&page=${page}`);
-      for (const t of list.data ?? []) {
-        const full = await get(cfg, `/api/public/traces/${t.id}`);
-        const block = digestTrace(full);
-        if (size + block.length > TRACE_CAP) { parts.push(`… ${list.meta?.totalItems ?? "more"} traces on the day; digest capped at ${TRACE_CAP} bytes`); return { text: parts.join("\n\n") }; }
-        parts.push(block);
-        size += block.length;
-      }
-      if (!list.meta || page >= (list.meta.totalPages ?? 1)) break;
+    const { rows } = await allPages(cfg, "/api/public/traces", { fromTimestamp: from, toTimestamp: to }, 15_000);
+    for (const t of rows) {
+      const full = await get(cfg, `/api/public/traces/${t.id}`);
+      const block = digestTrace(full);
+      if (size + block.length > TRACE_CAP) { parts.push(`… ${rows.length} traces on the day; digest capped at ${TRACE_CAP} bytes`); return { text: parts.join("\n\n") }; }
+      parts.push(block);
+      size += block.length;
     }
   } catch (e) {
     return { text: parts.join("\n\n"), error: String(e instanceof Error ? e.message : e) };

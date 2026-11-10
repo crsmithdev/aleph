@@ -642,7 +642,16 @@ describe("fetchObservations", () => {
   test("a 500 on page 3 throws", async () => {
     const { server, cfg } = fake(3);
     try {
-      await expect(fetchObservations(cfg, new Date(0), new Date(1))).rejects.toThrow("500 on observations");
+      await expect(fetchObservations(cfg, new Date(0), new Date(1))).rejects.toThrow("500 on /api/public/observations");
+    } finally { server.stop(true); }
+  });
+
+  test("a page that fails once is retried and its rows are kept", async () => {
+    const { server, cfg } = fake(undefined, { failOnce: 1 });
+    try {
+      const rows = await fetchObservations(cfg, new Date(0), new Date(1));
+      expect(rows.map((r) => r.id)).toContain("o1a");
+      expect(rows.length).toBe(8);
     } finally { server.stop(true); }
   });
 });
