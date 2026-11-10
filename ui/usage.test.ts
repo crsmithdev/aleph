@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
-import { clearFit, currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
+import { currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
@@ -183,7 +183,6 @@ test("a snapshot dated after the clock does not skew currentFit() or fit()", asy
     const sp = spendsAt.map((h) => ({ at: t0 + h * H, model: "opus", cost: 6 }));
 
     write(good);
-    clearFit();
     const base = await currentFit();
     expect(base).not.toBeNull();
     const baseDirect = fit(good, sp);
@@ -191,7 +190,6 @@ test("a snapshot dated after the clock does not skew currentFit() or fit()", asy
 
     const future = { at: new Date(NOW + 30 * H).toISOString(), five_hour: 0, seven_day: 1, seven_day_resets_at: new Date(NOW + 12 * 24 * H).toISOString() };
     write([...good, future]);
-    clearFit();
     expect(await currentFit()).toEqual(base);
     expect(readSnapshots().some((s) => s.at === future.at)).toBe(false);
   } finally {

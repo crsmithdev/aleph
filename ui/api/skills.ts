@@ -1,7 +1,7 @@
 /**
  * `GET /api/skills` and `GET /api/skills/:name`: skill use from Langfuse. A use
  * is a `Skill` tool call or a turn whose prompt starts with a slash command.
- * Both take `?days=` (default 30) and `?project=<key>`; an analysis is reloaded at most every 2 min, and an older one is served while it reloads.
+ * Both take `?days=` (default 30) and `?project=<key>`. The UI's updater keeps each answer and polls Langfuse for it every 2 min.
  * A reload fetches only the rows that are new since the last one (see `sync`). When it fails, the
  * last good rows are analysed and the answer says so: `asOf` is when they were fetched, `failed` why the reload failed.
  */
@@ -12,12 +12,11 @@ import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { traceProject } from "./scope.ts";
 import type { Routes } from "../server.ts";
-import { staleAsync } from "../stale.ts";
+import { once } from "../../jobs/lib/infra/sources.ts";
 import { allPages } from "../langfuse-pages.ts";
 import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 86400_000;
-const TTL = 120_000;
 const PAGE_TIMEOUT = 30_000;
 const OVERLAP = 2 * 3600_000;
 const REBUILD = DAY;
@@ -25,8 +24,8 @@ const REBUILD = DAY;
 interface Use { skill: string; via: "tool" | "slash"; trace: string; session: string; project: string; time: string; prompt: string; start: string }
 interface TraceInfo { id: string; sessionId?: string; metadata?: Record<string, any> | null; tags?: string[] }
 
-const cache = staleAsync<Analysis>();
-export const clearCache = () => { cache.clear(); store = null; };
+/** Forget the rows in memory, as a restart does: the next sync reads them from disk. */
+export const clearCache = () => { store = null; };
 
 const asValue = (v: unknown): any => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
 const day = (iso: string) => iso.slice(0, 10);
@@ -100,7 +99,7 @@ async function fetchRows(cfg: LangfuseConfig, from: Date, to: Date): Promise<{ o
  * is sent when the call ends, with the start time of the call. Once a day the store is fetched
  * whole, to pick up rows that came later than that.
  */
-interface Store { base: string; from: number; through: number; built: number; synced: number; obs: Map<string, Observation>; traces: Map<string, TraceInfo> }
+interface Store { base: string; from: number; through: number; built: number; obs: Map<string, Observation>; traces: Map<string, TraceInfo> }
 const storeFile = skillsStore;
 let store: Store | null = null;
 let queue: Promise<unknown> = Promise.resolve();
@@ -109,7 +108,7 @@ function loadStore(base: string): Store | null {
   try {
     const d = JSON.parse(readFileSync(storeFile(), "utf8"));
     if (d.v !== 1 || d.base !== base) return null;
-    return { ...d, synced: 0, obs: new Map(d.obs.map((o: Observation) => [o.id, o])), traces: new Map(d.traces.map((t: TraceInfo) => [t.id, t])) };
+    return { ...d, obs: new Map(d.obs.map((o: Observation) => [o.id, o])), traces: new Map(d.traces.map((t: TraceInfo) => [t.id, t])) };
   } catch { return null; }
 }
 function saveStore(s: Store): void {
@@ -126,14 +125,13 @@ function sync(cfg: LangfuseConfig, since: number): Promise<Store> {
   const run = queue.then(async () => {
     const now = Date.now();
     let s = store?.base === cfg.baseUrl ? store : loadStore(cfg.baseUrl);
-    if (s && now - s.synced < TTL && since >= s.from) return s;
     const to = new Date(now + 60_000);
     const add = (into: Store, rows: { obs: Observation[]; traces: TraceInfo[] }) => {
       for (const o of rows.obs) if (o.id) into.obs.set(o.id, o);
       for (const t of rows.traces) into.traces.set(t.id, t);
     };
     const full = async (): Promise<Store> => {
-      const fresh: Store = { base: cfg.baseUrl, from: since, through: now, built: now, synced: now, obs: new Map(), traces: new Map() };
+      const fresh: Store = { base: cfg.baseUrl, from: since, through: now, built: now, obs: new Map(), traces: new Map() };
       add(fresh, await fetchRows(cfg, new Date(since), to));
       return fresh;
     };
@@ -141,7 +139,7 @@ function sync(cfg: LangfuseConfig, since: number): Promise<Store> {
       const next: Store = { ...old, obs: new Map(old.obs), traces: new Map(old.traces) };
       if (since < old.from) { add(next, await fetchRows(cfg, new Date(since), new Date(old.from + OVERLAP))); next.from = since; }
       add(next, await fetchRows(cfg, new Date(old.through - OVERLAP), to));
-      next.through = now; next.synced = now;
+      next.through = now;
       return next;
     };
     if (!s) s = await full();
@@ -166,7 +164,7 @@ async function analyse(days: number, project: string | null): Promise<Analysis> 
   const to = new Date();
   const since = new Date(Math.floor(to.getTime() / DAY) * DAY - (days - 1) * DAY);
   let s: Store, failed: string | undefined;
-  try { s = await sync(cfg, since.getTime()); }
+  try { s = await once(`skills-rows:${since.getTime()}`, ["langfuse"], () => sync(cfg, since.getTime())); }
   catch (e) {
     // The last good rows, with their age, beat an empty page.
     const last = store?.base === cfg.baseUrl ? store : loadStore(cfg.baseUrl);
@@ -257,19 +255,12 @@ function detail(a: Analysis, name: string) {
   };
 }
 
-/** Fills the cache for the default view (30 days, all projects); throws when Langfuse fails. */
-export async function warm(): Promise<void> {
-  const res = await cached(new URL("http://localhost/api/skills"), summary);
-  if (!res.ok) throw new Error(`skills warm-up: ${res.status} ${await res.text()}`);
-}
-
 async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<Response> {
   const d = Number(url.searchParams.get("days"));
   const days = d > 0 ? Math.min(Math.floor(d), 365) : 30;
   const project = url.searchParams.get("project") || null;
-  const key = `${process.env.LANGFUSE_BASE_URL}\0${days}\0${project}`;
   let a: Analysis;
-  try { a = await cache.get(key, TTL, () => analyse(days, project)); }
+  try { a = await once(`skills:${process.env.LANGFUSE_BASE_URL}:${days}:${project}`, ["langfuse", "registry"], () => analyse(days, project)); }
   catch (e) { return Response.json({ error: `Langfuse failed: ${(e as Error).message}` }, { status: 502 }); }
   const value = make(a);
   return value ? Response.json(value) : new Response("no such skill", { status: 404 });

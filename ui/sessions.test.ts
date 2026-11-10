@@ -2,8 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { clearCache } from "./langfuse.ts";
-import { clearFit } from "./usage.ts";
+import { closePass, openPass } from "../jobs/lib/infra/sources.ts";
 // @ts-ignore plain JS, shared with the page
 import { idLink, pageHead, when } from "./lib.js";
 import { listSessions, routes } from "./api/sessions.ts";
@@ -91,7 +90,7 @@ afterAll(() => {
   if (savedUsage === undefined) delete process.env.ALEPH_USAGE_FILE; else process.env.ALEPH_USAGE_FILE = savedUsage;
   rmSync(fixtures, { recursive: true, force: true });
 });
-beforeEach(() => { clearCache(); clearFit(); hits = []; status = 200; paged = null; flaky = 0; });
+beforeEach(() => { hits = []; status = 200; paged = null; flaky = 0; });
 
 const TABLE = new URLSearchParams("view=table");
 const call = (key: string, path: string, params: Record<string, string> = {}) => {
@@ -114,13 +113,16 @@ test("a failed Langfuse makes the sessions list answer 502 with a message that n
   expect(hits.filter((h) => h.startsWith("/api/public/traces?")).length).toBe(2);
 });
 
-test("a second sessions list inside 30 s reads the cache and not Langfuse", async () => {
+test("a second sessions list in one build pass reads Langfuse once", async () => {
   flaky = 1;
-  expect((await listSessions(new Request("http://localhost/api/sessions"))).status).toBe(200);
-  const n = hits.length;
-  expect(n).toBeGreaterThan(0);
-  await listSessions(new Request("http://localhost/api/sessions"));
-  expect(hits.length).toBe(n);
+  openPass({ langfuse: 1, usage: 1 }, "sessions.test");
+  try {
+    expect((await listSessions(new Request("http://localhost/api/sessions"))).status).toBe(200);
+    const n = hits.length;
+    expect(n).toBeGreaterThan(0);
+    await listSessions(new Request("http://localhost/api/sessions"));
+    expect(hits.length).toBe(n);
+  } finally { closePass(); }
 });
 
 test("the project filter narrows every route", async () => {

@@ -7,24 +7,27 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statS
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { event, type Event } from "../../../lib/naming.ts";
+import { touch } from "./sources.ts";
 
 export interface Layout { store: string; ledger: string; factory: string }
 
 const expand = (p: string): string => (p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p);
 
-/** Read at each call, so a changed environment is seen at once. */
+const home = () => join(process.env.HOME || homedir(), ".aleph");
+const factory = () => expand(process.env.ALEPH_FACTORY_DIR ?? join(home(), "factory"));
+
+/** Read at each call, so a changed environment is seen at once. Each path touches its source when read (sources.ts). */
 export function layout(): Layout {
-  const home = join(process.env.HOME || homedir(), ".aleph");
   const e = process.env;
   return {
-    store: expand(e.ALEPH_ISSUES ?? join(home, "issues")),
-    ledger: expand(e.ALEPH_JOBS_DIR ?? join(home, "runs")),
-    factory: expand(e.ALEPH_FACTORY_DIR ?? join(home, "factory")),
+    get store() { touch("store"); return expand(e.ALEPH_ISSUES ?? join(home(), "issues")); },
+    get ledger() { touch("runs"); return expand(e.ALEPH_JOBS_DIR ?? join(home(), "runs")); },
+    get factory() { touch("factory"); return factory(); },
   };
 }
 
 /** The event log: one file per UTC day, `<day>.jsonl`, one event as JSON per line. A day before today never changes. */
-export const eventsDir = (): string => join(layout().factory, "events");
+export const eventsDir = (): string => { touch("events"); return join(factory(), "events"); };
 
 /** One event in the event log, in the file of its day. `event()` checks its words first, so a bad word throws. */
 export function logEvent(e: Parameters<typeof event>[0]): Event {

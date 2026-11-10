@@ -9,7 +9,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { allRuns, expand } from "../jobs/lib/records/ledger.ts";
 import { config, traces } from "./langfuse.ts";
-import { staleAsync } from "./stale.ts";
+import { once, touch } from "../jobs/lib/infra/sources.ts";
 import { credentialsFileSetting, usageFileSet, usageFileSetting, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
 
 export interface Snapshot { at: string; five_hour: number | null; seven_day: number; seven_day_resets_at: string | null }
@@ -92,16 +92,18 @@ export async function pollOnce(): Promise<Snapshot | null> {
   return snap;
 }
 
-/** Polls now and every `ms`. Returns a stop function. */
-export function startPoller(ms = POLL_MS): () => void {
-  void pollOnce();
-  const timer = setInterval(() => void pollOnce(), ms);
+/** Polls now and every `ms`, and calls `polled` after each snapshot it keeps. Returns a stop function. */
+export function startPoller(ms = POLL_MS, polled = () => {}): () => void {
+  const poll = () => void pollOnce().then((s) => { if (s) polled(); });
+  poll();
+  const timer = setInterval(poll, ms);
   timer.unref?.();
   return () => clearInterval(timer);
 }
 
 /** The snapshots dated at or before `clock`; a row dated after it cannot be a poll that has happened. */
 export function readSnapshots(clock = Date.now()): Snapshot[] {
+  touch("usage");
   const file = usageFile();
   if (!existsSync(file)) return [];
   const out: Snapshot[] = [];
@@ -206,7 +208,7 @@ export async function spends(from: number): Promise<Spend[]> {
   }
   try {
     const floor = Math.floor(from / HOUR) * HOUR;
-    for (const t of await traces(config(), { fromTimestamp: new Date(floor).toISOString() })) {
+    for (const t of await traces(config(), { fromTimestamp: new Date(floor).toISOString() }, "usage")) {
       if (!t.sessionId || jobIds.has(t.sessionId) || !(t.totalCost > 0)) continue;
       const at = Date.parse(t.timestamp);
       if (at >= from) out.push({ at, model: typeof t.metadata?.model === "string" ? t.metadata.model : "unknown", cost: t.totalCost });
@@ -215,16 +217,14 @@ export async function spends(from: number): Promise<Spend[]> {
   return out;
 }
 
-const fitCache = staleAsync<Fit | null>();
-/** The current fit, reloaded in the background at most every minute. */
+/** The current fit, read once per pass of the UI's builds (sources.ts). */
 export function currentFit(): Promise<Fit | null> {
-  return fitCache.get("fit", 60_000, async () => {
+  return once("fit", ["usage", "records"], async () => {
     const w = sinceReset(readSnapshots());
     if (w.length < 2) return null;
     return fit(w, await spends(Date.parse(w[0].at)));
   });
 }
-export const clearFit = () => fitCache.clear();
 
 interface UsageSummary {
   /** The last snapshot of the reset window, or null with none or when its week has ended. */

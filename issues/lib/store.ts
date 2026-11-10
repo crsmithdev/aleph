@@ -39,47 +39,38 @@ const itemPath = (key: string, item: issues.Issue | string): string => `${tasksD
 /** The file that marks a repo as having a list in the store. */
 export const config = (key: string): string => `project_name: "${key}"\ntask_prefix: "${key}"\n`;
 
-const fetchedAt = new Map<string, number>();
-
-/** Seconds the UI reuses a fetch of the work store ($ALEPH_UI_FETCH_TTL, default 30). */
+/** Seconds the UI keeps the vault's notes ($ALEPH_UI_FETCH_TTL, default 30). */
 export function uiFetchTtl(): number {
   const n = fetchTtlSetting();
   return Number.isFinite(n) && n >= 0 ? n : 30;
 }
 
-let reuse = 0;
+let fetches = true;
 
-/** Reuse a fetch of the store for `seconds` in this process. Only the UI server turns it on; the CLI always fetches. */
-export function cacheFetches(seconds: number): void { reuse = seconds; }
-/** The seconds set by cacheFetches: the UI passes it on to the worker that builds its state. */
-export const fetchReuse = (): number => reuse;
+/** Reads in this process never fetch: the UI's updater fetches the store itself (fetchStore). The CLI always fetches; a write always does. */
+export function skipFetches(skip = true): void { fetches = !skip; }
 
-/**
- * Fetch origin/main, unless this process fetched the store less than `reuse` seconds ago.
- * With `reuse` on, only the first fetch waits: a later one runs in the background and
- * this read uses the refs of the last fetch, so no UI request waits on the network.
- */
 function fetch(dir: string): void {
-  const last = fetchedAt.get(dir);
-  if (reuse > 0 && last !== undefined && Date.now() - last < reuse * 1000) return;
-  if (reuse > 0 && last !== undefined) {
-    fetchedAt.set(dir, Date.now());
-    // An explicit, non-forced refspec: a write may move origin/main while this runs, and the
-    // clone's forced `origin` refspec would then set it back to the remote's older value. Git refuses that here.
-    Bun.spawn(["git", "fetch", "-q", "origin", `refs/heads/${MAIN}:refs/remotes/origin/${MAIN}`], { cwd: dir, env: process.env, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
-    return;
-  }
-  fetchNow(dir);
+  if (fetches) fetchNow(dir);
 }
 
 /**
- * Fetch origin/main and wait for it, whatever the cache setting. Every aleph process
+ * Fetch origin/main without blocking: the error text, or null. An explicit, non-forced refspec: a write may move
+ * origin/main while this runs, and the clone's forced `origin` refspec would then set it back to the remote's older value.
+ */
+export async function fetchStore(dir = storeDir()): Promise<string | null> {
+  const p = Bun.spawn(["git", "fetch", "-q", "origin", `refs/heads/${MAIN}:refs/remotes/origin/${MAIN}`], { cwd: dir, env: process.env, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+  const err = await new Response(p.stderr).text();
+  return (await p.exited) === 0 ? null : err.trim() || `git fetch exited ${p.exitCode}`;
+}
+
+/**
+ * Fetch origin/main and wait for it. Every aleph process
  * reads the store, so two fetches at once race on the ref's lock: fetchOrigin retries that.
  */
 function fetchNow(dir: string): void {
   const r = fetchOrigin(dir, MAIN);
   if (!r.ok) throw new Error(`work store fetch failed: ${r.out}`);
-  fetchedAt.set(dir, Date.now());
 }
 
 /** The contents of each `rev:path`, in one `git cat-file --batch`. */
@@ -175,7 +166,6 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
     const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
     if (push.ok) {
-      fetchedAt.set(dir, Date.now());
       return { value, commit: commit.out, follow: followMain(dir, MAIN) };
     }
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);

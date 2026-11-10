@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { activity, clearCache } from "./activity.ts";
+import { activity } from "./activity.ts";
+import { closePass, openPass } from "../jobs/lib/infra/sources.ts";
 import { withEnv } from "./test-server.ts";
 
 let obsHits = 0;
@@ -80,48 +81,21 @@ afterAll(() => {
 
 describe("activity", () => {
 
-  test("a second request within ALEPH_UI_CACHE_TTL does not reach Langfuse; after it, the old answer comes back at once and one reload runs", async () => {
-    // The clock is the test's: only setSystemTime moves it past the TTL, so load cannot.
-    const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "300" });
-    let release = () => {};
-    clearCache();
+  test("in a build pass a second read does not reach Langfuse; after a Langfuse change it does", async () => {
+    obsHits = 0;
     try {
-      const t0 = now.getTime();
-      setSystemTime(t0);
-      obsHits = 0;
+      openPass({ langfuse: 1 }, "activity.test");
       const a = await activity(7, null, now);
       const b = await activity(7, null, now);
       expect(obsHits).toBe(1);
       expect(b.cachedAt).toBe(a.cachedAt);
-      expect(b.tools).toEqual(a.tools);
-      setSystemTime(new Date(t0 + 301_000));
-      // The fake Langfuse holds the reload, so both stale requests below come while it is in flight.
-      hold = new Promise((r) => { release = r; });
-      const reloading = new Promise<void>((r) => { nextHit = r; });
-      const c = await activity(7, null, now);
-      expect(c.cachedAt).toBe(a.cachedAt);
+      openPass({ langfuse: 2 }, "activity.test");
       await activity(7, null, now);
-      await reloading;
-      release();
-      // The reload ends a few tasks after the fake answers; each turn yields one task and reads again.
-      let d = c;
-      while ((d = await activity(7, null, now)).cachedAt === a.cachedAt) await new Promise((r) => setTimeout(r, 0));
       expect(obsHits).toBe(2);
-      expect(d.cachedAt).toBe(new Date(t0 + 301_000).toISOString());
-      await activity(7, "fac", now);
-      expect(obsHits).toBe(3);
-    } finally {
-      setSystemTime();
-      release();
-      hold = Promise.resolve();
-      restoreTtl();
-      clearCache();
-    }
+    } finally { closePass(); }
   });
 
   test("a week longer than the 499 pages the fetch read before comes back whole, four requests at a time, with a page that failed once", async () => {
-    const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "0" });
-    clearCache();
     obsPages = manyPages(520);
     failOnce = new Set([7]);
     obsHits = 0; open = 0; peak = 0; pileUp = true;
@@ -151,14 +125,10 @@ describe("activity", () => {
       pileUp = false;
       obsPages = [observations];
       failOnce = new Set();
-      restoreTtl();
-      clearCache();
     }
   });
 
   test("a week past the pages the fetch reads comes back with the counts of part of it, and says so", async () => {
-    const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "0" });
-    clearCache();
     obsPages = manyPages(2001);
     obsHits = 0;
     try {
@@ -168,14 +138,10 @@ describe("activity", () => {
       expect(a.tools.map((t) => [t.name, t.calls])).toEqual([["Bash", 2000]]);
     } finally {
       obsPages = [observations];
-      restoreTtl();
-      clearCache();
     }
   });
 
   test("a list past the cap answers a failed page only after every request has ended, and once read says partial", async () => {
-    const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "0" });
-    clearCache();
     obsPages = manyPages(2001);
     failAlways = new Set([3]);
     pileUp = true;
@@ -203,8 +169,6 @@ describe("activity", () => {
       pileUp = false;
       failAlways = new Set();
       obsPages = [observations];
-      restoreTtl();
-      clearCache();
     }
   });
 });

@@ -22,8 +22,7 @@ import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRound
 import { reader } from "../../issues/lib/store.ts";
 
 import { aleph, fail, post } from "../action.ts";
-import { loadState } from "../state-load.ts";
-import type { State } from "../state.ts";
+import { state, type State } from "../state.ts";
 import type { Routes } from "../server.ts";
 
 /** The log keeps the entries of the last LOG_DAYS days, newest first, at most LOG_MAX of each actor. */
@@ -299,8 +298,7 @@ export const routes: Routes = {
   "GET /api/gates": async (req) => {
     const q = new URL(req.url).searchParams, w = q.get("window");
     if (w !== null && !(w in WINDOWS)) return Response.json({ error: `window must be one of ${Object.keys(WINDOWS).join(", ")}` }, { status: 400 });
-    const [{ state }, security] = await Promise.all([loadState(), securityFacts()]);
-    return Response.json(gatesBody(state, security, w === null ? undefined : WINDOWS[w], q.get("project") || undefined));
+    return Response.json(gatesBody(state(), await securityFacts(), w === null ? undefined : WINDOWS[w], q.get("project") || undefined));
   },
   "POST /api/gates/caps": post((body) => {
     if (typeof body !== "object" || Array.isArray(body)) fail(422, "body must be a JSON object");

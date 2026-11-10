@@ -8,10 +8,9 @@ import { langfuseConfig, type LangfuseConfig } from "../lib/env.ts";
 import type { Observation } from "../lib/otlp.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { today } from "../issues/lib/todo.ts";
-import { staleAsync } from "./stale.ts";
+import { once } from "../jobs/lib/infra/sources.ts";
 import { traceIn } from "./api/scope.ts";
 import { allPages } from "./langfuse-pages.ts";
-import { uiCacheMs } from "../jobs/lib/infra/settings.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
@@ -39,17 +38,15 @@ export interface Activity {
   toolTraces?: Record<string, string[]>;
   /** True when the window held more pages than the fetch reads, so the counts cover only part of it. */
   partial?: boolean;
-  /** When the Langfuse half was fetched; it is reused for ALEPH_UI_CACHE_TTL seconds. */
+  /** When the Langfuse half was fetched. */
   cachedAt?: string;
 }
 
 const isError = (o: Observation) => (o as any).level === "ERROR";
 
-/** Langfuse reads kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns the cache off), keyed by their arguments; an older one is served while it reloads. */
-const cache = staleAsync<{ value: unknown; cachedAt: string }>();
-export const clearCache = () => cache.clear();
+/** A Langfuse read with the time it was made, read once per pass of the UI's builds (sources.ts). */
 function cached<T>(key: string, load: () => Promise<T>): Promise<{ value: T; cachedAt: string }> {
-  return cache.get(key, uiCacheMs(), () => load().then((v) => ({ value: v as unknown, cachedAt: new Date().toISOString() }))) as Promise<{ value: T; cachedAt: string }>;
+  return once(key, ["langfuse"], () => load().then((value) => ({ value, cachedAt: new Date().toISOString() })));
 }
 
 /** The ids of the traces of `project`, by the scope rule. */

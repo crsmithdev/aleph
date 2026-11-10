@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv } from "./test-server.ts";
-import { agentStats, CLASSES, classify, clearCache, filed, staleCache, phaseTimes, phases, routes, speed } from "./api/speed.ts";
+import { agentStats, CLASSES, classify, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
 import { bar, statusCards, weekText, xLabel } from "./views/speed.js";
@@ -64,7 +64,6 @@ test("done and issues.landed count landed issues, not land runs", () => {
 });
 
 test("GET /api/speed takes a window (default week) and answers JSON", async () => {
-  clearCache();
   const get = async (q: string) => routes["GET /api/speed"](new Request(`http://x/api/speed${q}`), {}, new URL(`http://x/api/speed${q}`));
   expect((await (await get("?window=month")).json()).window).toBe("month");
   expect((await (await get("")).json()).window).toBe("week");
@@ -390,52 +389,41 @@ test("flakes count each test name; a row without tests counts under its check", 
   const row = (check: string, tests?: string[]) => ({ repo: "r", check, run: "x", at: at(1, 9), ...(tests ? { tests } : {}) });
   writeFileSync(file, JSON.stringify([row("tests", ["a.test.ts > one", "b.test.ts > two"]), row("tests", ["a.test.ts > one"]), row("tests"), row("types")]));
   try {
-    clearCache();
-    const d = await speed("week", now);
+      const d = await speed("week", now);
     expect(d.flaky).toBe(4);
     expect(d.flakes).toEqual([{ name: "a.test.ts > one", count: 2 }, { name: "b.test.ts > two", count: 1 }, { name: "tests", count: 1 }, { name: "types", count: 1 }]);
   } finally {
     rmSync(file, { force: true });
-    clearCache();
+    }
+});
+
+test("the day baseline in one read equals the baseline of seven spans each read alone", async () => {
+  const { baseline, figures, averageFigures } = await import("./api/speed.ts");
+  const at = now;
+  let seen = 0;
+  for (const w of ["hour", "day", "week", "month"] as const) {
+    const one = baseline(w, at);
+    const { n, step } = { hour: { n: 12, step: 3600_000 }, day: { n: 7, step: 864e5 }, week: { n: 1, step: 7 * 864e5 }, month: { n: 1, step: 30 * 864e5 } }[w];
+    const spans = Array.from({ length: n }, (_, i) => figures(speed(w, new Date(at.getTime() - (i + 1) * step))));
+    expect(one.prev).toEqual(spans[0]);
+    expect(one.base).toEqual(n > 1 ? averageFigures(spans) : spans[0]);
+    seen += spans.filter((f) => f.landed !== null).length;
   }
+  expect(seen).toBeGreaterThan(0); // the spans hold runs, so the two ways compare real figures
 });
 
-test("serve() warms /api/speed: week, day and month are computed before the first request", async () => {
-  const { withServer } = await import("./test-server.ts");
-  const { clearCache } = await import("./api/speed.ts");
-  clearCache();
-  const { server: s, at, stop } = await withServer();
-  try {
-    await s.warmed["speed.ts"];
-    const r = await at("/api/speed?window=week&baseline=1");
-    expect(r.status).toBe(200);
-  } finally { stop(); }
-});
-
-test("a change signal answers /api/speed from the kept values and rebuilds one speed() per turn after it", async () => {
-  const restoreTtl = withEnv({ ALEPH_UI_FETCH_TTL: "60" });
+test("GET /api/speed?baseline=1 reads the job records once for the window, the other windows and every span", async () => {
   setSystemTime(new Date(2026, 9, 28, 15));
-  const get = async () => (await routes["GET /api/speed"](new Request("http://x/api/speed?window=day&baseline=1"), {}, new URL("http://x/api/speed?window=day&baseline=1"))).json();
-  const tick = () => new Promise((r) => setTimeout(r, 0));
   const real = record.all;
   let calls = 0;
   const spy = spyOn(record, "all").mockImplementation((...a: []) => { calls++; return real(...a); });
   try {
-    clearCache();
-    const old = await get();
-    await tick();
     run({ kind: "land", condition: "landed", ...secs(0, 13, 60) });
     calls = 0;
-    staleCache();
-    expect((await get()).kinds.land.count).toBe(old.kinds.land.count);
-    expect(calls).toBe(0);
-    // Each tick is a turn of other work: the rebuild gives way to it after each speed().
-    const turns: number[] = [];
-    for (let i = 0; i < 12; i++) { const at = calls; await tick(); turns.push(calls - at); }
-    expect(calls).toBe(9); // day, month and the 7 spans of the day baseline
-    expect(Math.max(...turns)).toBe(1);
-    expect((await get()).kinds.land.count).toBe(old.kinds.land.count + 1);
-  } finally { spy.mockRestore(); setSystemTime(); restoreTtl(); clearCache(); }
+    const r = await routes["GET /api/speed"](new Request("http://x/api/speed?window=day&baseline=1"), {}, new URL("http://x/api/speed?window=day&baseline=1"));
+    expect(r.status).toBe(200);
+    expect(calls).toBe(1);
+  } finally { spy.mockRestore(); setSystemTime(); }
 });
 
 test("cardTrend writes a sub-point change with pct() and keeps the flat marker for 0", async () => {
@@ -460,7 +448,6 @@ test("asks: the window counts the Asks set, and those that came to Chris, in the
 });
 
 test("GET /api/speed?project= counts only that repo's runs and issues, in the answer and the baseline", async () => {
-  clearCache();
   // 60 days back (this week) and 67 days back (the week before), so no other test's window sees these runs.
   const land = (daysAgo: number, repo: string, i: number) => run({ kind: "land", condition: "landed", repo, on: `${repo}-${i}`, ...secs(daysAgo, 9, 60) });
   land(60, "alpha", 1); land(60, "beta", 1); land(60, "beta", 2);

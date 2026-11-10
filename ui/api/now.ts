@@ -2,8 +2,7 @@
 import type { Routes } from "../server.ts";
 import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import { eventIn, inProject, known, repoIn } from "./scope.ts";
-import type { State } from "../state.ts";
-import { loadState } from "../state-load.ts";
+import { state, type State } from "../state.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
 import { FINE, labelOf, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
 
@@ -16,12 +15,9 @@ export function forProject(s: State, project: string | null): State {
   return { ...s, stuck: mine(s.stuck), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
 }
 
-/** The `/api/state` body for one project (null for all) and the number of the build it came from. */
+/** The `/api/state` body for one project (null for all). */
 export async function stateBody(project: string | null) {
-  // Built in the worker, from a build that starts after this request: the server answers others meanwhile.
-  // The build is shared with the requests that came with this one, so this request annotates its own copy.
-  const { state, build } = await loadState();
-  const s = forProject(structuredClone(state), project);
+  const s = forProject(state(), project);
   const fit = await currentFit().catch(() => null);
   annotate([...s.stuck, ...s.running], fit);
   const u = summary();
@@ -34,12 +30,11 @@ export async function stateBody(project: string | null) {
       text: `${FINE}; ${weekly(week)}.`,
     };
   }
-  return { body: { ...s, usage: u, proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, build };
+  return { ...s, usage: u, proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
 }
 
 export const routes: Routes = {
   "GET /api/state": async (_req, _params, url) => {
-    const { body, build } = await stateBody(url.searchParams.get("project"));
-    return Response.json(body, { headers: { "x-aleph-state-build": String(build) } });
+    return Response.json(await stateBody(url.searchParams.get("project")));
   },
 };

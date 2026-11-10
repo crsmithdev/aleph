@@ -14,6 +14,7 @@ import type { Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
 import { logEvent } from "../infra/layout.ts";
+import { once, touch } from "../infra/sources.ts";
 import { jobId, subjectOf } from "../../../lib/naming.ts";
 
 /** A run in a record: the run and its id, the name of its run folder. */
@@ -50,6 +51,7 @@ export interface JobRecord {
 
 /** The folder of the records: `ALEPH_RECORDS_DIR`, else beside a ledger the environment names, else ~/.aleph/jobs. */
 export function recordsDir(): string {
+  touch("records");
   const e = process.env;
   if (e.ALEPH_RECORDS_DIR) return e.ALEPH_RECORDS_DIR;
   if (e.ALEPH_JOBS_DIR) return join(e.ALEPH_JOBS_DIR, ".records");
@@ -102,8 +104,10 @@ export function read(key: string): JobRecord | null {
 /** The folders of the records: the records folder, and with `live` false the archive too. */
 const folders = (live: boolean): string[] => (live ? [recordsDir()] : [recordsDir(), archiveDir()]);
 
-/** Every record, archived ones too; with `live` only the records that are not archived. */
-export function all(live = false): JobRecord[] {
+/** Every record, archived ones too; with `live` only the records that are not archived. A UI build pass reads them once (sources.ts). */
+export const all = (live = false): JobRecord[] => once(`records:${live}`, ["records"], () => readAll(live));
+
+function readAll(live: boolean): JobRecord[] {
   const out: JobRecord[] = [];
   for (const dir of folders(live)) {
     if (!existsSync(dir)) continue;

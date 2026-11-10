@@ -14,8 +14,7 @@ import { activeEnd, isLive, isStarting } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import { specChecksOf, stageRows, stageWorst, type IssueTally, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
-import { staleSync } from "../stale.ts";
-import { reader, storeDir, uiFetchTtl } from "../../issues/lib/store.ts";
+import { reader, storeDir } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
@@ -505,7 +504,14 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
 const AGENT_STEP: Record<Window, number> = { hour: 60_000, day: 15 * 60_000, week: HOUR, month: 6 * HOUR };
 
 /** `project` names one repo: then only its runs, Asks and flakes count. */
-export function speed(window: Window, now = new Date(), fit: Fit | null = null, project?: string): Speed {
+/** What `speed` reads: the job records, the store's lists and history at origin/main, and the flakes. A baseline reads them once for all its spans. */
+export interface Inputs { read: JobRecord[]; head: string; lists: ReturnType<typeof reader>; filed: Filed; flakes: ReturnType<typeof flakes> }
+export function inputs(): Inputs {
+  const head = originMain(storeDir());
+  return { read: allRecords(), head, lists: reader({ fetch: false, rev: head || undefined }), filed: filed(storeDir(), head), flakes: flakes() };
+}
+
+export function speed(window: Window, now = new Date(), fit: Fit | null = null, project?: string, inp = inputs()): Speed {
   const n = COUNT[window];
   const daily = window === "week" || window === "month";
   const stepMs = STEP[window];
@@ -519,7 +525,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const agents: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[] = [];
   const models = new Map<string, number[]>();
 
-  const read = allRecords();
+  const { read, lists } = inp;
   const entries = allRuns(false, read).filter((e) => repoIn(e.run.repo, project));
   const all = entries.map((x) => x.run as Run);
   const landed: Run[] = [];
@@ -574,8 +580,6 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     }).sort((a, b) => b.week - a.week).slice(0, 8);
     issues.week = per.length ? round(pct(per, 0.5), 2) : null;
   }
-  const head = originMain(storeDir());
-  const lists = reader({ fetch: false, rev: head || undefined });
   const statusOf = (ref: string): string | undefined => {
     const [repo, n] = splitId(ref);
     const item = repo ? lists.item(repo, n) : undefined;
@@ -605,12 +609,12 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     if (item) u.title = item.title;
     else if (lists.list(repo)) delete u.href;
   }
-  const ended = phaseTimes(all, filed(storeDir(), head), since.getTime(), now.getTime());
+  const ended = phaseTimes(all, inp.filed, since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number, q = 0.5) => {
     const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
     return inBucket.length ? round(pct(inBucket, q)) : null;
   };
-  const recent = flakes().filter((f) => Date.parse(f.at) >= since.getTime() && repoIn(f.repo, project));
+  const recent = inp.flakes.filter((f) => Date.parse(f.at) >= since.getTime() && repoIn(f.repo, project));
   const started = Array.from({ length: n }, () => 0);
   const costs = Array.from({ length: n }, () => ({} as Record<string, number>));
   for (const e of entries) {
@@ -653,14 +657,6 @@ function asksOf(records: JobRecord[], since: number, now: number): Speed["asks"]
   return { count: asks.length, manual: asks.filter(escalated).length };
 }
 
-const cache = staleSync<Speed>();
-/** Drop the kept answers and baselines: the next request builds them from the files as they are now. */
-export const clearCache = () => { cache.clear(); spans.clear(); };
-/** The files changed: the next request answers the kept values, and each is built again in its own turn after the answer. */
-export const staleCache = () => { cache.stale(); spans.stale(); };
-/** `speed`, kept `ALEPH_UI_FETCH_TTL` seconds like the other fetches. */
-export const cachedSpeed = (window: Window, fit: Fit | null = null, project?: string): Speed => cache.get(project ? `${window}:${project}` : window, uiFetchTtl() * 1000, () => speed(window, new Date(), fit, project));
-
 /** What a Status card shows for one span; a field is null when the span has no data for it. */
 export interface Figures { lost: number | null; hours: number | null; leadP50: number | null; leadP90: number | null; asks: number | null; landed: number | null; firstPass: number | null }
 /** The trend baseline of a window: `prev` is the span just before, `base` the average the trend compares with, `basis` says how it is taken. */
@@ -698,30 +694,11 @@ const BASELINE: Record<Window, { step: number; n: number; avg: boolean; basis: s
   month: { step: 30 * 24 * HOUR, n: 1, avg: false, basis: "the previous 30 days", prev: "the previous 30 days" },
 };
 
-export function baseline(window: Window, now = new Date(), fit: Fit | null = null, project?: string, span = (_i: number, at: Date) => figures(speed(window, at, fit, project))): Baseline {
+/** The baseline in one read of its inputs: each span is computed from the same records and store. */
+export function baseline(window: Window, now = new Date(), fit: Fit | null = null, project?: string, inp = inputs()): Baseline {
   const b = BASELINE[window];
-  const spans = Array.from({ length: b.n }, (_, i) => span(i, new Date(now.getTime() - (i + 1) * b.step)));
+  const spans = Array.from({ length: b.n }, (_, i) => figures(speed(window, new Date(now.getTime() - (i + 1) * b.step), fit, project, inp)));
   return { prev: spans[0], base: b.avg ? averageFigures(spans) : spans[0], basis: b.basis };
-}
-
-// Each span is kept alone, so the reload of a baseline builds one span (one `speed()`) in each turn of the event loop.
-const spans = staleSync<Figures>();
-const cachedBaseline = (window: Window, fit: Fit | null = null, project?: string): Baseline =>
-  baseline(window, new Date(), fit, project, (i, at) => spans.get(`${window}:${project ?? ""}:${i}`, uiFetchTtl() * 1000, () => figures(speed(window, at, fit, project))));
-
-/**
- * Fills the cache for the windows the Status page reads (week, day, month) once the server is up, so the
- * first page load after a land finds them computed. `speed` is synchronous (250-750 ms each), so each window
- * runs in its own turn of the event loop and a request that arrives meanwhile waits for one, not all three.
- */
-export async function warm(): Promise<void> {
-  const fit = await currentFit().catch(() => null);
-  for (const w of ["week", "day", "month"] as const) {
-    await new Promise<void>((r) => setTimeout(r, 0));
-    cachedSpeed(w, fit);
-    await new Promise<void>((r) => setTimeout(r, 0));
-    cachedBaseline(w, fit);
-  }
 }
 
 export const routes: Routes = {
@@ -730,11 +707,11 @@ export const routes: Routes = {
     if (!(WINDOWS as readonly string[]).includes(w)) return Response.json({ error: "window must be hour, day, week or month" }, { status: 400 });
     // `project`: only the runs and issues of that repo count.
     const project = url.searchParams.get("project") || undefined;
-    const fit = await currentFit().catch(() => null), d = cachedSpeed(w as Window, fit, project);
+    const fit = await currentFit().catch(() => null), inp = inputs(), now = new Date(), d = speed(w as Window, now, fit, project, inp);
     // `baseline=1`: the trend baseline of the window in the same answer, so the Status page makes one request.
     if (url.searchParams.get("baseline") !== "1") return Response.json(d);
-    // `day` and `month` are the answers the Efficiency page reads (its last-24-h and 30-day-average trends), so opening it after Status finds them.
-    const others = Object.fromEntries((["day", "month"] as const).filter((k) => k !== w).map((k) => [k, cachedSpeed(k, fit, project)]));
-    return Response.json({ ...d, baseline: cachedBaseline(w as Window, fit, project), others });
+    // `day` and `month` are the answers the Efficiency page reads (its last-24-h and 30-day-average trends).
+    const others = Object.fromEntries((["day", "month"] as const).filter((k) => k !== w).map((k) => [k, speed(k, now, fit, project, inp)]));
+    return Response.json({ ...d, baseline: baseline(w as Window, now, fit, project, inp), others });
   },
 };

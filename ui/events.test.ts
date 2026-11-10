@@ -3,8 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { countsInFactory, countsInRecords } from "./api/events.ts";
-import { cachedSpeed } from "./api/speed.ts";
+import { countsInFactory, countsInRecords } from "./updater.ts";
 import { putRun } from "../jobs/lib/records/record.ts";
 import type { Run } from "../jobs/lib/records/ledger.ts";
 
@@ -20,7 +19,11 @@ beforeAll(async () => {
   writeFileSync(join(base, "repos.json"), JSON.stringify({ p: { path: join(base, "p") }, q: { path: join(base, "q") }, "p-x": { path: join(base, "p-x") } }));
   restoreEnv = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: runs, ALEPH_ISSUES: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
   ({ server, stop } = await withServer({ warm: false }));
+  // A change names only the keys a page asked for: Status's key is kept from here on.
+  expect((await get("/api/state")).headers.get("x-aleph-keys")).toBe("/api/state");
 });
+
+const get = (path: string) => fetch(`http://127.0.0.1:${server.port}${path}`);
 
 afterAll(() => {
   stop();
@@ -51,10 +54,11 @@ async function changeAfter(act: () => void, query = ""): Promise<string | null> 
 
 const run = (on: string): Run => ({ kind: "build", job: on, name: on, on, condition: "running", told: false, started: "2026-11-04T10:00:00Z" });
 
-test("a run's write to its job record sends a change, also to a record made after the stream opened", async () => {
+test("a run's write to its job record sends a change naming the kept key, and the refetch has the write", async () => {
   putRun("old", run("r-1"));
-  expect(await changeAfter(() => putRun("old", { ...run("r-1"), phase: "worker" }))).toMatch(/event: change\ndata: \{"at":\d+\}/);
+  expect(await changeAfter(() => putRun("old", { ...run("r-1"), phase: "worker" }))).toMatch(/event: change\ndata: \{"keys":\["\/api\/state"\]\}/);
   expect(await changeAfter(() => putRun("new", run("r-2")))).not.toBeNull();
+  expect(JSON.stringify(await (await get("/api/state")).json())).toContain("r-2");
 });
 
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {
@@ -78,15 +82,6 @@ test("a stream with a project sends only the ev events of that project, and a ch
   expect(subjects).not.toContain("q-1.1");
   expect(subjects).not.toContain("p-x-1");
 }, 10_000);
-
-test("a change keeps the speed answer for one read, which builds a new one after it", async () => {
-  const before = cachedSpeed("week");
-  expect(cachedSpeed("week")).toBe(before);
-  expect(await changeAfter(() => putRun("s1", run("r-8")))).not.toBeNull();
-  expect(cachedSpeed("week")).toBe(before);
-  await new Promise((r) => setTimeout(r, 0));
-  expect(cachedSpeed("week")).not.toBe(before);
-});
 
 // The watchers pass names relative to the folder, as the tests above show; these files must not count.
 test("a temporary record or factory file and a log count as no change", () => {

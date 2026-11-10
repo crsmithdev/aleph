@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,10 @@ import { addPart } from "../issues/lib/parts.fixture.ts";
 import * as todos from "../issues/lib/todo.ts";
 import { askOf, setAsk, refIn } from "../jobs/lib/asks/ask.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { updater } from "./updater.ts";
+
+// The fixtures change between tests, with no watcher to see it: each test starts with no kept answer.
+beforeEach(() => updater.reset());
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
 // @ts-ignore plain JS, shared with the page

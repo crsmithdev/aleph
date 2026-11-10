@@ -21,7 +21,7 @@ async function toolSessions(toolTraces: Record<string, string[]>, days: number, 
   return Object.fromEntries(Object.entries(toolTraces).map(([tool, ids]) => [tool, [...new Set(ids.map((id) => session.get(id)).filter(Boolean))]]));
 }
 
-/** The response of `GET /api/agents` for `url`; the route and `warm` share it. */
+/** The response of `GET /api/agents` for `url`. */
 async function load(req: Request, url: URL): Promise<Response> {
     const asked = Number(url.searchParams.get("days"));
     const days = WINDOWS.includes(asked) ? asked : 7;
@@ -41,10 +41,3 @@ async function load(req: Request, url: URL): Promise<Response> {
 
 export const routes: Routes = { "GET /api/agents": (req, _p, url) => load(req, url) };
 
-/** Fills the caches for the default view (7 days, all projects); throws when a part fails. */
-export async function warm(): Promise<void> {
-  const body = await (await load(new Request("http://localhost/api/agents"), new URL("http://localhost/api/agents"))).json() as any;
-  if (body.skills.error) throw new Error(`agents warm-up: skills: ${body.skills.error}`);
-  if (body.sessions.error) throw new Error(`agents warm-up: sessions: ${body.sessions.error}`);
-  if (body.activity.langfuse && body.activity.langfuse !== "ok") throw new Error(`agents warm-up: activity: ${body.activity.langfuse}`);
-}

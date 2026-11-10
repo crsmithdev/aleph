@@ -11,6 +11,7 @@ import * as record from "./record.ts";
 import { isLive } from "../infra/process.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
+import { touch } from "../infra/sources.ts";
 import { contentText, fileSafe, jobId, setCodes, subjectOf } from "../../../lib/naming.ts";
 
 /** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. */
@@ -129,6 +130,7 @@ export function expand(p: string): string {
 export const runsDir = () => layout().ledger;
 
 export function loadRegistry(): Record<string, Repo> {
+  touch("registry");
   const file = expand(reposFile());
   const raw = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
   const repos: Record<string, Repo> = {};

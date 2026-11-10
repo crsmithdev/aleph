@@ -1,5 +1,6 @@
 /** One paged Langfuse fetch, shared by `activity` and the skills API. */
 import type { LangfuseConfig } from "../lib/env.ts";
+import { touch } from "../jobs/lib/infra/sources.ts";
 
 const PAGE = 100, POOL = 4, MAX_PAGES = 2000;
 
@@ -8,8 +9,10 @@ const PAGE = 100, POOL = 4, MAX_PAGES = 2000;
  * `POOL` at a time, each page tried twice. All pages at once overloaded Langfuse and a full week
  * timed out. A page that fails twice waits for the other requests to end, then throws: no request
  * outlives its caller. `partial` says the list held more pages than `MAX_PAGES`; `pages` is how many were read.
+ * `source` is the source the read counts as (sources.ts): the usage fit's read is renewed with the usage, not by the Langfuse poll.
  */
-export async function allPages<T = any>(cfg: LangfuseConfig, path: string, params: Record<string, string>, timeout: number): Promise<{ rows: T[]; partial: boolean; pages: number }> {
+export async function allPages<T = any>(cfg: LangfuseConfig, path: string, params: Record<string, string>, timeout: number, source = "langfuse"): Promise<{ rows: T[]; partial: boolean; pages: number }> {
+  touch(source);
   const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
   const get = async (n: number) => {
     const res = await fetch(`${cfg.baseUrl}${path}?${new URLSearchParams({ ...params, limit: String(PAGE), page: String(n) })}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(timeout) });

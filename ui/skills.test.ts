@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, listSkills } from "./api/skills.ts";
 import { withEnv, withServer } from "./test-server.ts";
+import { updater } from "./updater.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/skills.js";
 
@@ -77,7 +78,7 @@ afterAll(() => {
   stopApp(); lf.stop(true);
   restoreEnv();
 });
-beforeEach(() => { clearCache(); rmSync(join(tmp, "store.json"), { force: true }); down = false; asked = []; });
+beforeEach(() => { clearCache(); updater.reset(); rmSync(join(tmp, "store.json"), { force: true }); down = false; asked = []; });
 
 const get = async (p: string) => { const r = await (/^\/api\/skills(\?|$)/.test(p) ? listSkills(new Request(`http://localhost${p}`)) : appAt(p)); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
 
@@ -129,7 +130,7 @@ test("after a restart, a reload fetches only the rows of the last two hours and 
 
 
 
-test("pages are fetched concurrently, and serve() warms the skills and /api/agents caches so the first requests hit Langfuse zero times", async () => {
+test("pages are fetched concurrently, and a restart builds the saved keys at once: a request shares that build, and the next one hits Langfuse zero times", async () => {
   // Overlap is counted per list: the two lists run side by side even when each one pages serially.
   const active: Record<string, number> = {}, peak: Record<string, number> = {}, arrived: Record<string, number> = {}, waiting: Record<string, (() => void)[]> = {};
   let calls = 0, all = 0;
@@ -155,21 +156,22 @@ test("pages are fetched concurrently, and serve() warms the skills and /api/agen
       return Response.json({ data: u.pathname === "/api/public/traces" && page === 1 ? traces : data, meta: { totalPages: 4 } });
     },
   });
-  const restoreEnv = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${paged.port}` });
+  const restoreEnv = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${paged.port}`, ALEPH_FACTORY_DIR: join(tmp, "factory") });
   clearCache();
-  const { server: warmed, at, stop } = await withServer();
+  // The keys the last process kept: the restart builds them before any request.
+  mkdirSync(join(tmp, "ui"), { recursive: true });
+  writeFileSync(join(tmp, "ui", "keys.json"), JSON.stringify({ "/api/skills/aleph:pickup": NOW, "/api/agents?days=7": NOW }));
+  const { at, stop } = await withServer();
   try {
-    await warmed.warmed["skills.ts"]; // the end of the skills warm-up, not a clock
+    const r = await at("/api/skills/aleph:pickup"); // shares the build the restart started
+    expect(r.status).toBe(200);
     expect(calls).toBe(12); // 3 lists x 4 pages
     expect(peak["/api/public/traces"]).toBeGreaterThan(1);
     expect(peak["/api/public/observations"]).toBeGreaterThan(1);
-    const seen = calls;
-    const r = await listSkills(new Request("http://localhost/api/skills"));
-    expect(r.status).toBe(200);
-    expect(((await r.json()) as any).skills.length).toBeGreaterThan(0);
-    expect(calls).toBe(seen);
-    // The Agents page: every warm-up done, so none reads during the count.
-    await Promise.all(Object.values(warmed.warmed));
+    expect((await at("/api/skills/aleph:pickup")).status).toBe(200);
+    expect(calls).toBe(12);
+    // The Agents page: its build started at the restart too, so a request waits for it and reads nothing more.
+    expect((await at("/api/agents?days=7")).status).toBe(200);
     const allSeen = all;
     const a = await at("/api/agents?days=7");
     expect(a.status).toBe(200);

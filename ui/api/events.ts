@@ -1,25 +1,19 @@
 /**
- * `GET /api/events`: a server-sent stream. It sends `change` when a file that the live pages read changes (a run
- * record, a file of the factory folder, the issue store's ref); the page then loads its view again. Changes 500 ms
- * apart send one `change`, and two `change` events are at least 2 s apart, with the last change always sent. It sends
- * an `ev` event for each line added to the event log, with the event as JSON, at once, and a `ping` every 25 s, so
- * that the page can tell a quiet stream from a dead one. With `?project=<key>` the `ev` events are only those of an issue
- * or job of that project and those whose subject names no project (a routine), and none for a key that is not in the registry; `change` and `ping` go to every client. The watchers run only while a client is connected.
+ * `GET /api/events`: a server-sent stream. It sends `change` with `{ keys }` when the updater (ui/updater.ts) has
+ * built those keys again and their answers changed; a page then loads again the keys it reads. It sends an `ev`
+ * event for each line added to the event log, with the event as JSON, at once, and a `ping` every 25 s, so that the
+ * page can tell a quiet stream from a dead one. With `?project=<key>` the `ev` events are only those of an issue or
+ * job of that project and those whose subject names no project (a routine), and none for a key that is not in the
+ * registry; `change` and `ping` go to every client.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readSync, statSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
+import { existsSync, closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
-import { eventsDir, layout } from "../../jobs/lib/infra/layout.ts";
-import { recordsDir } from "../../jobs/lib/records/record.ts";
+import { eventsDir } from "../../jobs/lib/infra/layout.ts";
 import { eventIn } from "./scope.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
-import { staleCache } from "./speed.ts";
+import { eventFiles, updater } from "../updater.ts";
 
-/** Changes this close together send one event. */
-const SETTLE_MS = 500;
-/** The least time between two `change` events: each one makes every open page fetch and the server build. */
-const GAP_MS = 2_000;
 /** Under the server's idle timeout, so that it keeps a quiet stream open. */
 const PING_MS = 25_000;
 
@@ -30,8 +24,7 @@ const event = (name: string, data: string) => encoder.encode(`event: ${name}\nda
 const clients = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
 /** The session token of each client that opened its stream with the gate on. */
 const tokens = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
-let watchers: FSWatcher[] = [];
-let ping: Timer | undefined, settle: Timer | undefined, sentAt = 0;
+let ping: Timer | undefined;
 
 function send(bytes: Uint8Array, subject?: string): void {
   for (const [c, project] of clients) {
@@ -40,21 +33,14 @@ function send(bytes: Uint8Array, subject?: string): void {
   }
 }
 
-/** The kept speed answers are from before the change; the fetch that `change` brings answers them and builds them again after it. */
-function changed(): void {
-  settle ??= setTimeout(() => {
-    settle = undefined;
-    sentAt = Date.now();
-    staleCache();
-    send(event("change", JSON.stringify({ at: sentAt })));
-  }, Math.max(SETTLE_MS, sentAt + GAP_MS - Date.now()));
-}
+updater.onChange((keys) => send(event("change", JSON.stringify({ keys }))));
 
 /** How far into each day file of the event log the stream has sent, by file name. */
 const sent = new Map<string, number>();
 
 /** Send the whole lines a day file gained since the last send, each as an `ev` event. */
 function tail(file: string): void {
+  if (!clients.size) return;
   const path = join(eventsDir(), file);
   let size: number;
   try { size = statSync(path).size; } catch { return; }
@@ -73,31 +59,12 @@ function tail(file: string): void {
   }
 }
 
-function follow(dir: string, options: WatchOptions, counts: (file: string) => boolean): void {
-  if (!existsSync(dir)) return;
-  const w = watch(dir, options, (_event, file) => { if (file && counts(String(file))) changed(); });
-  w.on("error", (e) => console.error(`ui/api/events: watch of ${dir} failed: ${e.message}`));
-  watchers.push(w);
-}
+eventFiles.push(tail);
 
-/** A job record counts; its temporary file does not, as the rename that puts it in place does. */
-export const countsInRecords = (file: string): boolean => file.endsWith(".json");
-/** The logs change on every line of output and the page does not show them; a temporary file is renamed into place, and the rename counts. */
-export const countsInFactory = (file: string): boolean => !file.endsWith(".log") && !file.endsWith(".tmp");
-
+/** The stream sends only what is added after it starts: the page has the earlier events from /api/state. */
 function start(): void {
-  const { store } = layout();
-  mkdirSync(recordsDir(), { recursive: true });
-  follow(recordsDir(), {}, countsInRecords);
-  follow(factoryDir(), {}, countsInFactory);
-  // Each issue write moves this ref; the page reads the issues from it.
-  follow(join(store, ".git", "refs", "remotes", "origin"), {}, (file) => file === "main");
-  // The stream sends only what is added after it starts: the page has the earlier events from /api/state.
-  mkdirSync(eventsDir(), { recursive: true });
-  for (const f of readdirSync(eventsDir())) sent.set(f, statSync(join(eventsDir(), f)).size);
-  const w = watch(eventsDir(), {}, (_event, file) => { if (file && String(file).endsWith(".jsonl")) tail(String(file)); });
-  w.on("error", (e) => console.error(`ui/api/events: watch of ${eventsDir()} failed: ${e.message}`));
-  watchers.push(w);
+  const dir = eventsDir();
+  for (const f of existsSync(dir) ? readdirSync(dir) : []) sent.set(f, statSync(join(dir, f)).size);
   ping = setInterval(() => send(event("ping", JSON.stringify({ at: Date.now() }))), PING_MS);
 }
 
@@ -113,12 +80,8 @@ onLogout.push((token) => {
 });
 
 function stop(): void {
-  for (const w of watchers) w.close();
-  watchers = [];
   sent.clear();
   clearInterval(ping);
-  clearTimeout(settle);
-  settle = undefined;
 }
 
 export const routes: Routes = {

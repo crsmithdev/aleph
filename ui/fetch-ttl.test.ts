@@ -1,10 +1,10 @@
-import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { watch } from "node:fs";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { add } from "../issues/lib/todo.ts";
-import { cacheFetches, readFetched, readList, uiFetchTtl, writeList } from "../issues/lib/store.ts";
+import { fetchStore, readFetched, readList, skipFetches, writeList } from "../issues/lib/store.ts";
 import { routes } from "./api/issues.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
@@ -47,80 +47,60 @@ beforeAll(() => {
     mkdirSync(folder, { recursive: true });
     writeRun(join(folder), { kind: "build", condition: "running", started: "2026-10-27T10:00:00.000Z", name, job: name, repo, on: `${repo}-1` } as any);
   }
-  restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "30" });
-  cacheFetches(uiFetchTtl());
+  restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
+  skipFetches();
 });
 afterAll(() => {
-  cacheFetches(0);
+  skipFetches(false);
   restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 
-test("the UI fetches the work store at most once per 30 s, across reads and requests, and only the first fetch waits", async () => {
-  const t0 = 2_000_000_000_000;
-  const now = spyOn(Date, "now");
-  now.mockReturnValue(t0);
+test("with fetches skipped, as in the UI, no read and no request fetches the work store", async () => {
+  await settled();
   const before = fetches();
   state();
-  expect(fetches()).toBe(before + 1);
-  now.mockReturnValue(t0 + 5_000);
-  state();
   await routes["GET /api/issues"](new Request("http://x/api/issues"), {}, new URL("http://x/api/issues"));
-  expect(fetches()).toBe(before + 1);
-  now.mockReturnValue(t0 + 31_000);
-  state();
-  now.mockRestore();
-  // After the first, a fetch runs in the background.
-  await reached(() => fetches() >= before + 2);
-  expect(fetches()).toBe(before + 2);
+  readList({ key: "a" });
+  expect(fetches()).toBe(before);
 });
 
-test("a write fetches in the foreground even with the cache on, and builds on the fresh origin/main", async () => {
-  cacheFetches(uiFetchTtl());
+test("a write fetches in the foreground even with fetches skipped, and builds on the fresh origin/main", async () => {
   const other = join(base, "other");
   sh(base, "git", "clone", "-q", join(base, "items.git"), other);
   writeList({ key: "a" }, "give a a list", (doc) => { add(doc, "one"); return true; }, true);
-  const t0 = 3_000_000_000_000;
-  const now = spyOn(Date, "now");
-  now.mockReturnValue(t0);
-  try {
-    // The background fetch of the test before can still be open; let it end before this test counts.
-    await settled();
-    const before = fetches();
-    readList({ key: "a" });
-    // The read past the TTL starts one background fetch; its log line can come late under load.
-    await reached(() => fetches() >= before + 1);
-    expect(fetches()).toBe(before + 1);
-    await settled();
-    readList({ key: "a" });
-    expect(fetches()).toBe(before + 1);
-    sh(other, "git", "pull", "-q", "origin", "main");
-    sh(other, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "elsewhere");
-    sh(other, "git", "push", "-q", "origin", "main");
-    const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: other }).stdout.toString().trim();
-    const w = writeList({ key: "a" }, "write", (doc) => { add(doc, "two"); return true; });
-    expect(w).not.toBeNull();
-    expect(fetches()).toBe(before + 2);
-    const parent = Bun.spawnSync(["git", "rev-parse", `${w!.commit}^`], { cwd: join(base, "items") }).stdout.toString().trim();
-    expect(parent).toBe(head);
-    readList({ key: "a" });
-    expect(fetches()).toBe(before + 2);
-  } finally { now.mockRestore(); }
+  await settled();
+  const before = fetches();
+  sh(other, "git", "pull", "-q", "origin", "main");
+  sh(other, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "elsewhere");
+  sh(other, "git", "push", "-q", "origin", "main");
+  const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: other }).stdout.toString().trim();
+  const w = writeList({ key: "a" }, "write", (doc) => { add(doc, "two"); return true; });
+  expect(w).not.toBeNull();
+  expect(fetches()).toBe(before + 1);
+  const parent = Bun.spawnSync(["git", "rev-parse", `${w!.commit}^`], { cwd: join(base, "items") }).stdout.toString().trim();
+  expect(parent).toBe(head);
 });
 
-test("serve() leaves the cache off: only the UI process turns it on, in its main block", async () => {
-  cacheFetches(0);
+test("serve() turns fetches off for its process: the updater fetches the store instead", async () => {
+  skipFetches(false);
   const { stop } = await withServer({ warm: false });
   stop();
   const before = fetches();
   readList({ key: "a" });
-  readList({ key: "a" });
-  expect(fetches()).toBe(before + 2);
-  cacheFetches(uiFetchTtl());
+  expect(fetches()).toBe(before);
 });
 
-test("a background fetch that brings an older remote state cannot move origin/main back", async () => {
-  cacheFetches(uiFetchTtl());
+test("fetchStore fetches without blocking and says why it failed", async () => {
+  const before = fetches();
+  expect(await fetchStore()).toBeNull();
+  expect(fetches()).toBe(before + 1);
+  const bad = join(base, "not-a-repo");
+  mkdirSync(bad);
+  expect(await fetchStore(bad)).toMatch(/not a git repository/);
+});
+
+test("a fetch that brings an older remote state cannot move origin/main back", async () => {
   const items = join(base, "items");
   // the remote as it is before the write: the older state the stale fetch will bring
   sh(base, "git", "clone", "-q", "--bare", join(base, "items.git"), staleRemote);
@@ -128,14 +108,9 @@ test("a background fetch that brings an older remote state cannot move origin/ma
   sh(items, "git", "config", "remote.stale.fetch", "+refs/heads/*:refs/remotes/origin/*");
   const w = writeList({ key: "a" }, "write after the snapshot", (doc) => { add(doc, "written"); return true; });
   expect(w).not.toBeNull();
-  const now = spyOn(Date, "now");
-  now.mockReturnValue(4_000_000_000_000);
   writeFileSync(stale, "");
   await settled();
-  const dones = doneCount();
-  try { readList({ key: "a" }); } finally { now.mockRestore(); }
-  await reached(() => doneCount() > dones);
-  expect(doneCount()).toBeGreaterThan(dones);
+  await fetchStore();
   expect(Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: items }).stdout.toString().trim()).toBe(w!.commit);
   expect(readFetched({ key: "a" })!.items.some((i) => i.title === "written")).toBe(true);
 });
