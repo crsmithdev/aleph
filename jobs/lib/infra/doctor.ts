@@ -138,11 +138,23 @@ function inProgress(service: string): boolean {
 
 export async function homeCheck(): Promise<Check> {
   const url = HOME_URL();
+  let status: number;
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual" });
-    return r.status < 400 ? ok("aleph.home", `${url} answered ${r.status}`) : bad("aleph.home", `${url} answered ${r.status}`);
+    status = (await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual" })).status;
+    if (status >= 400) return bad("aleph.home", `${url} answered ${status}`);
   } catch (e: any) {
     return bad("aleph.home", `${url}: ${e?.message ?? e}`);
+  }
+  // A JSON route is gzipped by the server, so its body proves that home-proxy passes gzip through intact.
+  const api = new URL("/api/state", url).href;
+  try {
+    const r = await fetch(api, { signal: AbortSignal.timeout(5000), headers: { "accept-encoding": "gzip" }, decompress: false });
+    if (!r.ok) return bad("aleph.home", `${api} answered ${r.status}`);
+    const body = new Uint8Array(await r.arrayBuffer());
+    JSON.parse(new TextDecoder().decode(r.headers.get("content-encoding") === "gzip" ? Bun.gunzipSync(body) : body));
+    return ok("aleph.home", `${url} answered ${status}`);
+  } catch (e: any) {
+    return bad("aleph.home", `${api}: ${e?.message ?? e}`);
   }
 }
 

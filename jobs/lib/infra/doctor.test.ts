@@ -79,14 +79,26 @@ describe("units", () => {
 });
 
 test("aleph.home answers or does not", async () => {
-  const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => new Response("x", { status: new URL(r.url).pathname === "/down" ? 502 : 200 }) });
+  const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => new Response(new URL(r.url).pathname === "/api/state" ? "{}" : "x", { status: new URL(r.url).pathname === "/down" ? 502 : 200 }) });
   process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/`;
-  expect((await homeCheck()).ok).toBe(true);
+  expect(await homeCheck()).toMatchObject({ ok: true, detail: `http://127.0.0.1:${s.port}/ answered 200` });
   process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/down`;
   expect((await homeCheck()).ok).toBe(false);
   s.stop(true);
 });
 
+test("aleph.home fails when the JSON route's gzip body does not decode", async () => {
+  const json = JSON.stringify({ items: [] });
+  let body: BodyInit = Bun.gzipSync(json) as Uint8Array<ArrayBuffer>;
+  const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => new URL(r.url).pathname === "/api/state" ? new Response(body, { headers: { "content-type": "application/json", "content-encoding": "gzip" } }) : new Response("x") });
+  process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/`;
+  expect((await homeCheck()).ok).toBe(true);
+  body = json;
+  const c = await homeCheck();
+  expect(c.ok).toBe(false);
+  expect(c.detail).toContain(`http://127.0.0.1:${s.port}/api/state`);
+  s.stop(true);
+});
 
 test("a run with a pid, no exit and no process is lost", () => {
   expect(lostCheck().ok).toBe(true);
