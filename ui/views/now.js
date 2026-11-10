@@ -6,7 +6,7 @@ import { actButton, jobHref, clock, codeText, contentText, shownId, facts, tiles
 import { NAMES } from "../../lib/naming.ts";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
-import { ALERT, ASK, FINE, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
+import { verdict } from "../../lib/status-words.ts";
 
 export const view = {
   path: "/",
@@ -83,7 +83,6 @@ export function renderMonitor(s) {
   return card("Monitor", said, { id: "monitor", aside: `<span class="asof">${esc(m.day)}</span>`, label: `Monitor ${m.day}` });
 }
 
-let clientEvents = [];
 /** The events the stream sent since the page loaded, oldest first; the Herald merges them with the state's. */
 let streamed = [];
 const HERALD_KEEP = 50;
@@ -111,41 +110,13 @@ export function eventRow(ev, titles = {}) {
     `<span class="event-body">${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}${what ? `<span class="event-what">${esc(what)}</span>` : ""}${ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}</span></div>`;
 }
 
-/** Extract the plain-text status line verdict and reasons from state. */
-export function statusVerdict(s, stale = false) {
-  const safe = { factory: {}, stuck: [], asks: [], ...s };
-  const html = renderLede(safe, stale);
-  const m = html.match(/^<span class="say (\w+)">([\s\S]*?)<\/span>$/);
-  const toneClass = m ? m[1] : "fine";
-  const raw = m ? m[2] : html;
-  const text = raw.replace(/<[^>]+>/g, "").trim();
-  const tone = toneClass === "error" ? "alert" : toneClass === "warning" ? (text.startsWith(lead(ASK)) ? "ask" : "warning") : "fine";
-  return { tone, label: labelOf(tone, text), text, toneClass };
-}
-
-/** Record a client-side transition if state changed. */
-function trackStatusEvent(s, stale = false) {
-  const v = statusVerdict(s, stale);
-  const last = clientEvents[0];
-  if (!last || last.text !== v.text || last.tone !== v.tone) {
-    clientEvents.unshift({
-      at: s.now || new Date().toISOString(),
-      tone: v.tone,
-      label: v.label,
-      text: v.text,
-    });
-    if (clientEvents.length > 50) clientEvents.pop();
-  }
-}
-
 /** The Herald panel: sticky alerts on top, rolling event history stream below. */
 export function renderHerald(s) {
-  const cur = statusVerdict(s, outOfDateNow);
-  trackStatusEvent(s, outOfDateNow);
+  const cur = verdict(s, outOfDateNow);
   // An error is not pinned: the newest event already says it, and is marked live instead.
   const asks = (s.asks ?? []).map((i) => askRow(i, s.now));
   const stuck = (s.stuck ?? []).map(stuckRow(s));
-  const errs = errorLines(s), errors = errs.length;
+  const errs = cur.errors, errors = errs.length;
   const pinnedCount = asks.length + stuck.length + errors;
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
 
@@ -156,17 +127,9 @@ export function renderHerald(s) {
       `</section>`
     : "";
 
-  let history = (s.herald?.history?.length ? s.herald.history : clientEvents).map((x) => ({ ...x }));
-  if (!history.length) {
-    history = [{ at: s.now || new Date().toISOString(), tone: cur.tone, label: cur.label, text: cur.text }];
-  } else if (history[0].text.replace(/\.$/, "") !== cur.text.replace(/\.$/, "") || (history[0].text === cur.text && history[0].tone !== cur.tone)) {
-    const diff = Math.abs(Date.parse(history[0].at || "") - Date.parse(s.now || ""));
-    if (diff < 60000 && history[0].text.startsWith(cur.text.split(";")[0])) {
-      history[0] = { at: history[0].at || s.now, tone: cur.tone, label: cur.label, text: cur.text };
-    } else {
-      history.unshift({ at: s.now || new Date().toISOString(), tone: cur.tone, label: cur.label, text: cur.text });
-    }
-  }
+  // The server's history; the page's own verdict on top when it differs, as for a project's scope or an out-of-date state.
+  const history = [...(s.herald?.history ?? [])];
+  if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
 
   const status = history.map((ev, i) => ({ at: ev.at ?? "", html:
     `<div class="event-row ${esc(ev.tone)}${i === 0 && errors ? " live" : ""}">` +
@@ -185,7 +148,7 @@ export function renderHerald(s) {
     : "";
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
-  const badgeHtml = pinnedCount > 0 ? tag(`${pinnedCount} active`, stuck.length || errorLines(s).length ? "stuck" : "need") : tag("Calm", "done");
+  const badgeHtml = pinnedCount > 0 ? tag(`${pinnedCount} active`, stuck.length || errors ? "stuck" : "need") : tag("Calm", "done");
 
   return `<section id="herald" class="card herald-card" aria-label="Herald">` +
     `<div class="sh"><h2 id="h-herald">Herald</h2><div class="aside">${badgeHtml}</div></div>` +
@@ -250,42 +213,11 @@ function renderStatusLine(s, stale = false, w = "day") {
   return `<header class="ph shead"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}<div class="aside">${bar}</div></header>`;
 }
 
-const MAX_SAID = 3;
-
-/** What the status sentence says for an error line, most serious first. A line with no entry is said as it is, after these. */
-const ALERTS = [
-  ["red-ci", "GitHub CI is broken"],
-  ["red-main", "the build is failing on main"],
-  ["tick", TICK_STOPPED],
-  // No line says this one: a stuck job adds it. It is here for its rank.
-  ["jobs", JOBS_UNHEALTHY],
-  ["lands-stuck", "lands are stuck"],
-  ["queue-stuck", "queued jobs are not starting"],
-  ["issues-stuck", "new issues are not becoming jobs"],
-];
-const alertRank = (t) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
-
-/** The status sentence: "Alert: " and what is wrong; otherwise what asks for you, which leads, or the fine sentence, then a weekly usage of WEEKLY_WARN or more and the warning health lines; at most MAX_SAID parts, each a link but the usage and warning parts, which are plain text. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
+/** The status sentence of `verdict`, each part a link to its card but the plain ones. */
 export function renderLede(s, stale = false) {
-  const f = s.factory;
-  const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([key]) => key === l.key)?.[1] ?? l.text.replace(/\.$/, "")));
-  if (s.stuck.length) alerts.add(JOBS_UNHEALTHY);
-  const said = [...alerts].sort((a, b) => alertRank(a) - alertRank(b)).map((t) => [t, t === JOBS_UNHEALTHY && s.stuck.length ? "#jobs-stuck" : "#awaiting"]);
-  // An Ask still with the director does not need Chris yet.
-  const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
-  // With no alert, no pause and a fresh status, the Ask part leads the sentence, so it starts with a capital.
-  if (asks.length) said.push([alerts.size || f.paused || stale ? ASK : lead(ASK), "#awaiting"]);
-  const alert = alerts.size > 0;
-  if (f.paused && alert) said.push([PAUSED, ""]);
-  const week = s.usage?.now?.seven_day;
-  if (week >= WEEKLY_WARN) said.push([weekly(week), ""]);
-  for (const l of f.health || []) if (l.kind === "warn") said.push([localId(l.text.replace(/^health:\s*/, "")), ""]);
-  const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
-  if (stale) return `<span class="say error">${ALERT}this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
-  if (alert) return `<span class="say error">${ALERT}${parts}.</span>`;
-  if (asks.length && !f.paused) return `<span class="say warning">${parts}.</span>`;
-  const head = f.paused ? lead(PAUSED) : FINE;
-  return `<span class="say ${parts || f.paused ? "warning" : "fine"}">${head}${parts ? `; ${parts}` : ""}.</span>`;
+  const v = verdict(s, stale);
+  const parts = v.parts.map((p) => (p.href ? `<a href="${p.href}">${esc(p.text)}</a>` : esc(p.text))).join("; ");
+  return `<span class="say ${v.tone === "alert" ? "error" : v.tone === "ask" ? "warning" : v.tone}">${esc(v.head)}${parts}.</span>`;
 }
 
 const list = (html) => `<div class="list">${html}</div>`;
@@ -390,25 +322,11 @@ export function renderLanes(s) {
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */
 export function renderNeeds(s) {
-  const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
+  const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(verdict(s).errors.map(errorRow));
   if (!asks.length && !s.stuck.length) return "";
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
   return `<section id="needs" class="needs" aria-labelledby="h-needs">${sectionHead("Alerts", { id: "needs", count: asks.length + s.stuck.length })}` +
     group("awaiting", asks.length, asks.join(""), list) + group("jobs-stuck", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), list) + `</section>`;
-}
-
-/** How long past due a next tick may be before the tick counts as dead: covers an old state and a late timer. */
-const TICK_GRACE_MS = 5 * 60_000;
-
-/** Lines of the factory's own trouble that are errors: health (a red main among them) and a stopped tick; each once. */
-function errorLines(s) {
-  const f = s.factory;
-  const out = (f.health || []).filter((l) => l.kind === "alert").map((l) => ({ text: localId(l.text.replace(/^health:\s*/, "")), key: l.key }));
-  if (f.nextTick !== undefined && f.tickInProgress !== true) {
-    if (f.nextTick === null) out.push({ text: `${TICK_STOPPED}: aleph-tick.timer has no next run`, key: "tick" });
-    else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push({ text: `${TICK_STOPPED}: aleph-tick.timer was due at ${f.nextTick}`, key: "tick" });
-  }
-  return out.filter((l, i) => out.findIndex((o) => o.text === l.text) === i);
 }
 
 /** The agent line of a held or stuck job: a live run exists for it. */

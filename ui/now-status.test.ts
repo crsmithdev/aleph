@@ -5,7 +5,7 @@ import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
 import { held, job, state } from "./fixtures/status-state.ts";
 import { asksOf, issue, withFactory } from "./test-now.ts";
-import { labelOf } from "../lib/status-words.ts";
+import { labelOf, verdict } from "../lib/status-words.ts";
 
 const calmState = { ...withFactory({}), asks: [], stuck: [] };
 
@@ -181,5 +181,5 @@ test("one mapping gives each status sentence its Herald label, on the page too",
   expect(labelOf("warning", "Your attention is needed")).toBe("Ask");
   expect(labelOf("alert", "Alert: the build is failing on main")).toBe("Alert");
   expect(labelOf("fine", "Everything is fine")).toBe("Fine");
-  expect(view.statusVerdict({ ...calmState, factory: { ...calmState.factory, paused: true } }).label).toBe("Wait");
+  expect(verdict({ ...calmState, factory: { ...calmState.factory, paused: true } }).label).toBe("Wait");
 });

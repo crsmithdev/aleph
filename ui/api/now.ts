@@ -4,7 +4,6 @@ import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import { eventIn, inProject, known, repoIn } from "./scope.ts";
 import { state, type State } from "../state.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
-import { FINE, labelOf, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
 
 const DAY = 86_400_000;
 /** The length of each `?window=` in ms. */
@@ -25,17 +24,7 @@ export async function stateBody(project: string | null, ms = WINDOWS.week) {
   const from = Date.now() - ms;
   const fit = await currentFit().catch(() => null);
   annotate([...s.stuck, ...s.running], fit);
-  const u = summary();
-  const week = u?.now?.seven_day;
-  if (week !== undefined && week >= WEEKLY_WARN && s.herald?.history?.[0]?.tone === "fine") {
-    s.herald.history[0] = {
-      ...s.herald.history[0],
-      tone: "warning",
-      label: labelOf("warning", `${FINE}; ${weekly(week)}.`),
-      text: `${FINE}; ${weekly(week)}.`,
-    };
-  }
-  return { ...s, doneCount: doneStamps.filter((d) => d.at >= from).length, usage: u, proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
+  return { ...s, doneCount: doneStamps.filter((d) => d.at >= from).length, usage: summary(), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
 }
 
 export const routes: Routes = {

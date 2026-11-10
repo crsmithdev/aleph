@@ -18,9 +18,9 @@ import { afterOf, byPriority, partsOf, reader, isTracker } from "../issues/lib/s
 import { idOf, parentRef, parseIssueRef, refOf, status } from "../issues/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
-import type { Wk } from "./usage.ts";
+import { summary, type Wk } from "./usage.ts";
 import { card, priorityOf, stageOf } from "./issue.ts";
-import { ALERT, ASK, FINE, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED } from "../lib/status-words.ts";
+import { verdict } from "../lib/status-words.ts";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
 export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }
@@ -450,12 +450,8 @@ export function state(now = new Date()): State {
     if (j.trailers) a.trailers = j.trailers;
   }
   const timers = tickTimer();
-  const alertLines = (factory.health || []).filter((h) => h.kind === "alert").map((h) => h.text);
-  if (timers.nextTick === null && !timers.tickInProgress) alertLines.push(TICK_STOPPED);
-  if (stuck.length) alertLines.push(JOBS_UNHEALTHY);
-  const tone = alertLines.length ? "alert" : (att.items.length || factory.paused) ? "warning" : "fine";
-  const text = alertLines.length ? `${ALERT}${alertLines.join("; ")}` : att.items.length ? lead(ASK) : factory.paused ? lead(PAUSED) : FINE;
-  recordStatusTransition({ at: now.toISOString(), tone, label: labelOf(tone, text), text, reason: alertLines[0] });
+  const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, stuck, asks: att.items, usage: summary(now.getTime()) });
+  recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
   const redOf = mainRed();
   const events = readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS), titles: Record<string, string> = {};
   for (const e of events) {
