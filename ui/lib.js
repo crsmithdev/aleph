@@ -313,7 +313,6 @@ const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint pr
 /** The badge tone of a state (a job's, land's or issue's): run, done, need, stuck, or quiet for any other. */
 export const tone = (state) => TONES[state] ?? "quiet";
 
-// ---------- shared page parts: header, table cells, filter bar, pager ----------
 // The CSS for these is in app.css (.ph, table.tbl, .idl, .chips, .fbar, .seg, .pager).
 // Column order for every table: time, id or name, title, state badge, project, labels, numbers.
 
@@ -418,7 +417,6 @@ export function filterBar(groups) {
 export const searchBox = (ui, value, placeholder) =>
   `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}"></div>`;
 
-// ---------- sticky state: what the reader set on a component stays across refreshes, pages and reloads ----------
 // The address holds what changes the data or what a link shares (the window, the project, a filter); keep() holds
 // how a component shows it (a chart's form, its hidden series). One key per component, never per row or item.
 
@@ -446,8 +444,6 @@ export function restoreFolds(root) {
   }
 }
 
-// ---------- the address: a selection or a filter lives in the hash ----------
-
 /** The hash's query. */
 export const hashQuery = () => new URLSearchParams(location.hash.split("?")[1] ?? "");
 /** A hash split into its path and query; a hash with no path (`#?window=day`) is the path `/`. */
@@ -466,8 +462,6 @@ const withQuery = (changes) => {
 export const setQuery = (changes) => history.replaceState(null, "", withQuery(changes));
 /** Change the hash's query and load the route again: for a filter that changes what the API returns. */
 export const goQuery = (changes) => { location.hash = withQuery(changes); };
-
-// ---------- the page scope: the project and the window of a page, in the address and in storage ----------
 
 /** The `.fbar` in `.ph` holds what scopes the whole page; each change goes to the hash and loads the route again. */
 export function wireScope(root) {
@@ -538,8 +532,6 @@ export function scope(q = typeof location === "undefined" ? new URLSearchParams(
     },
   };
 }
-
-// ---------- the blocks of a page: tile, card, table, bar list ----------
 
 /**
  * The trend of a metric card: an arrow and a percent, green when good, amber when bad, muted when `lowerIsGood` is null.

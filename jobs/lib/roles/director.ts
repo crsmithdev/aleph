@@ -59,8 +59,6 @@ const RECORD_LINES = 20;
 const ALLOWED = ["Read", "Grep", "Glob", ...["status", "log", "show", "diff", "ls-files"].map((c) => `Bash(git ${c}:*)`), "Bash(ls:*)",
   "Bash(aleph jobs:*)", "Bash(aleph issue show:*)", "Bash(aleph issue list:*)"];
 
-// The cases.
-
 /** One Ask with no case text: on a store item, on a waiting run, or a proposed lesson. `on` is the item's ref, the run's folder name or the lesson's issue ref. */
 export type Case =
   | { at: "item"; on: string; repo: Repo; item: issues.Issue; ask: Ask }
@@ -119,8 +117,6 @@ export function actionsOf(c: Case): string[] {
   return acts.flatMap((a) => (a === "decide" && c.ask.options.length ? c.ask.options.map((o) => `decide:${o.label}`) : [a]));
 }
 
-// The record.
-
 /** One director decision, kept with its outcome. */
 export interface Decision {
   at: string; ref: string; on: string; reason: string; question: string;
@@ -156,8 +152,6 @@ const escalatedBefore = (c: Case, rec: Decision[]): boolean => {
   const last = rec.findLast((d) => d.on === c.on && d.reason === reasonName(c));
   return last?.outcome === "escalated" && last.question === questionOf(c);
 };
-
-// The escalation list.
 
 /** A held path the branch changes (a security path or bun.lock), or null; "unknown" when there is no branch to read. */
 export function heldChange(repo: Repo, branch: string | undefined): string | null | "unknown" {
@@ -203,8 +197,6 @@ export function escalation(c: Case, rec: Decision[] = readRecord()): { why: stri
 
 /** Whether closing or dropping this issue is Chris's: he filed it. */
 const chrisOwns = (item: issues.Issue): boolean => store.sourceOf(item) === "chris";
-
-// The prompt.
 
 const tail = (folder: string, file: string): string | null => {
   try {
@@ -326,8 +318,6 @@ ${onRun ? `- land: land the run's branch
 - note: a "text" to note on the item
 `;
 }
-
-// The reply.
 
 export type Action =
   | { do: "land" }

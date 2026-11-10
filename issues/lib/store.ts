@@ -204,8 +204,6 @@ export function runMedia(key: string, id: number | string, lists: Reader = reade
   return [...(parent ? mediaFiles(key, parent) : []), ...mediaFiles(key, item)];
 }
 
-// The fields.
-
 /** An item with an Ask in its job record: it waits for Chris, so it is never dispatched and never triaged. */
 const asks = (doc: Doc, item: Issue, repo: Place): boolean => record.issueAsk(record.read(`${doc.repo ?? repo.key}-${issues.refOf(item)}`)) !== null;
 
@@ -246,8 +244,6 @@ export const areasOf = (item: Issue): string[] => list(item.fm.areas);
 export const isSorted = (doc: Doc, item: Issue, repo: Place = { key: "" }): boolean =>
   asks(doc, item, repo) || issues.parentRef(item) !== undefined || isTracker(item)
   || (!planSet(item) && (partsOf(doc, item).length > 0 || takenIn(item) || (!repo.author && !!item.spec.trim())));
-
-// The read.
 
 /** Lists by repo key, each read from the store once for the reader's life. */
 export interface Reader {
@@ -306,8 +302,6 @@ export function buildableIssue(repo: Place, id: number | string): Issue | null {
   const item = doc ? issues.find(doc, id) : undefined;
   return doc && item && isBuildable(doc, item, repo) ? item : null;
 }
-
-// The writes.
 
 /** Why a write did not happen, from what it threw. */
 const why = (e: any): string => e?.message ?? String(e);

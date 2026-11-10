@@ -4,8 +4,6 @@
 // Throughout: a full ID is `aleph-1430`, a short ID `a1430`; a code is a project's 1–2 letters; a job ID is
 // `<subject>#<n>`.
 
-// ---------- word sets ----------
-
 export const STATUSES = ["open", "parked", "done", "dropped"];
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"];
 export const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"];
@@ -50,8 +48,6 @@ export function word(set: string, w: string): string {
   if (set === "ask" && String(w).startsWith("proposal-")) return "proposal";
   return OLD[set]?.[w] ?? w;
 }
-
-// ---------- IDs ----------
 
 let codes: Record<string, string> = {};
 let keys: Record<string, string> = {};
@@ -109,8 +105,6 @@ export const refs = (text: unknown): string[] => [...String(text ?? "").matchAll
 /** Free text with each full issue ID of a project with a code in its short form. */
 export const shortText = (text: unknown): string => String(text ?? "").replace(FREE, shortId);
 
-// ---------- events ----------
-
 /** An event with its words checked; throws on a word outside its set. */
 export interface Event {
   at: string; by: string; subject: string; action: string; sub?: string; on?: string[]; file?: string; count?: string;
@@ -140,8 +134,6 @@ export function contentText(e: Partial<Event>): string {
   return [on, e.count, e.result && `→ ${e.result}`, e.file && `${on || !e.to ? "→ " : ""}${base(e.file)}`, e.to && `→ ${e.to}`]
     .filter(Boolean).join(" ");
 }
-
-// ---------- derived sets ----------
 
 /** The report lane of a job state. */
 export const lane = (state: string): string => ({ landed: "landed", waiting: "waiting", failed: "failed", returned: "failed" } as Record<string, string>)[state] ?? "other";

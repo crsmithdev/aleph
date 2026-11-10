@@ -36,8 +36,6 @@ export const TYPES = [
 const typeName = (id) => TYPES.find((t) => t.id === id)?.name ?? id;
 const dot = (type) => `<i class="mdot t-${esc(type)}" aria-hidden="true"></i>`;
 
-// ---------------------------------------------------------------- notes: status, as before
-
 const STATUS = { use: "in use", stale: "stale", never: "never read", lint: "lint problem" };
 /** A note's status: a refusal first; else in use when recall returned it in the last 7 days, stale when earlier, never when it never did. */
 export function noteStatus(n, now = Date.now()) {
@@ -47,8 +45,6 @@ export function noteStatus(n, now = Date.now()) {
 }
 /** The note rows of the overview with their status. */
 export const noteRows = (m, now = Date.now()) => (m.notes ?? []).map((n) => ({ ...n, status: noteStatus(n, now) }));
-
-// ---------------------------------------------------------------- the query
 
 const FRESH = [{ value: "", label: "Any" }, { value: "use", label: "Read in 7 days" }, { value: "never", label: "Never read" }, { value: "old", label: "Not written in 60 days" }, { value: "lint", label: "Lint problem" }];
 
@@ -82,8 +78,6 @@ export function typeCounts(results, o, status) {
 
 const renderTiles = (counts, o, loaded) => tiles("Memory types", TYPES.map((t) =>
   statCard({ k: t.name, v: t.id === "parametric" || !loaded ? "–" : String(counts[t.id]), note: t.holds, key: t.id, on: t.id === o.type })).join(""));
-
-// ---------------------------------------------------------------- the results, one layout per type
 
 const sel = (it, o) => `data-id="${esc(idOf(it))}" aria-selected="${idOf(it) === o.item}"`;
 const titleLink = (it) => (it.href ? `<a href="${esc(it.href)}">${esc(it.title)}</a>` : esc(it.title));
@@ -123,8 +117,6 @@ export function renderResults(results, o, status) {
     return xs.length ? `<section class="mgroup" aria-label="${esc(t.name)}">${sectionHead(t.name, { level: 3, count: xs.length, aside: dot(t.id) })}${LAYOUT[t.id](xs, o)}</section>` : "";
   }).join("");
 }
-
-// ---------------------------------------------------------------- the inspector
 
 /** Recalls per day over 30 days, oldest first, from the recall log. */
 function recallHistory(hist = []) {
@@ -177,8 +169,6 @@ export function renderInspector(it, n = null, status = "", hist = []) {
     (n ? `<p class="hint"><code>${esc(n.path)}</code></p>` : "") + `<div class="medit" hidden></div>`;
 }
 
-// ---------------------------------------------------------------- health, as before
-
 export function renderWrites(m) {
   return (m.writes.length
     ? moreFold(m.writes, (w) => `${q(esc(when(w.at) || w.at))} ${md(w.text).replace(/^<p>|<\/p>$/g, "")}`)
@@ -227,8 +217,6 @@ function renderBroad(m, rows) {
   const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: (m.writes ?? []).length, label: "Recent writes" });
   return `<div class="pair">${lintCard}${reads}</div><div class="pair">${budget}${writes}</div>`;
 }
-
-// ---------------------------------------------------------------- the page
 
 const projectBar = (m, project) => filterBar([{ label: "Project", name: "project", data: true, value: project, options: [{ value: "", label: "All" }, ...(m.scopes ?? [])] }]);
 const freshBar = (o) => filterBar([{ label: "Freshness", name: "fresh", value: o.fresh, options: FRESH }]);
@@ -377,8 +365,6 @@ function mount(root, m) {
   };
   search();
 }
-
-// ---------------------------------------------------------------- one note's page
 
 const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <span class="hint">${esc([n.kind, n.scope].filter(Boolean).join(" · "))}</span></li>`).join("")}</ul>` : `<p class="quiet">None.</p>`);
 

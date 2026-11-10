@@ -184,8 +184,6 @@ async function note(raw: string, url: URL): Promise<Response> {
   return json({ title: hit.title, path: hit.rel, archived: hit.archived, frontmatter: hit.fm, body: hit.body, text: hit.text, links: [...new Map(to.map((n) => [n.title, ref(n)])).values()], backlinks: from.map(ref).sort((a, b) => a.title.localeCompare(b.title)) });
 }
 
-// ---------------------------------------------------------------- writes
-
 const WHY = "edited on the Memory page";
 
 /** `vault <args>` through ui/action.ts. */

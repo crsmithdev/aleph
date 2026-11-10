@@ -340,8 +340,6 @@ export function measure(src: Sources, day: string, now = Date.now()): Table {
   };
 }
 
-// ---------------------------------------------------------------- the text
-
 const pct = (n: number, of: number): string => (of ? `${Math.round((100 * n) / of)}%` : "-");
 const num = (n: number | null, digits = 1): string => (n === null ? "-" : Number.isInteger(n) ? String(n) : n.toFixed(digits));
 const money = (n: number | null): string => (n === null ? "-" : `$${n.toFixed(2)}`);
@@ -381,8 +379,6 @@ export function renderTable(t: Table): string {
   out.push("", "## Not measured", "", ...LEFT_OUT.map((l) => `- ${l}`));
   return out.join("\n") + "\n";
 }
-
-// ---------------------------------------------------------------- the report on disk
 
 export const monitorDir = () => join(layout().factory, "monitor");
 

@@ -14,14 +14,12 @@ import { putRun } from "../records/record.ts";
 
 setDefaultTimeout(120_000);
 
-// ---- Dispatch gates: the start port is not called for the issue, and a hold record says why.
 beforeEach(setup);
 afterEach(teardown);
 {
 
 }
 
-// ---- Land gates.
 let root = "";
 let repo: Repo;
 let folder = "";

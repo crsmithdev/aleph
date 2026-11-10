@@ -204,7 +204,6 @@ export function write(r: JobRecord): void {
   rmSync(join(archiveDir(), nameOf(r.issue)), { force: true });
 }
 
-// ---------------------------------------------------------------------------
 // Runs: a run is its entry in its record, found by its id, the name of its run folder.
 
 /** Run id to record key, for the runs this process has seen. */
@@ -301,7 +300,6 @@ export function allRunRecords(live = false, records = all(live)): RunRecord[] {
   return out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-// ---------------------------------------------------------------------------
 // Events.
 
 /** Add an event to the record of `key`. */
@@ -312,7 +310,6 @@ export function addEvent(key: string, e: Omit<JobEvent, "at"> & { at?: string })
 /** The newest event of `kind` in the record of `key`. */
 export const lastEvent = (key: string, kind: string): JobEvent | undefined => read(key)?.events.findLast((e) => e.kind === kind);
 
-// ---------------------------------------------------------------------------
 // The next step.
 
 /** What the job does next: a function of its record only. The fields are the event fields of docs/naming.md. */

@@ -102,8 +102,6 @@ const chatBody = (d) => `<div class="chat">${d.turns.map((t) => chatTurn(d.id, t
 const isTable = (query) => query?.get?.("view") === "table";
 const isWaterfall = (query) => query?.get?.("view") === "waterfall";
 
-// ---- Waterfall: one row per turn, tool call and subagent on a shared time axis ----
-
 /** The waterfall's rows in draw order: each turn, then its calls nested by parent. */
 export function wfRows(turns) {
   const rows = [];

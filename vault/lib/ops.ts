@@ -139,7 +139,6 @@ function coreFindings(notes: Note[], draft: Note): { findings: Finding[]; hint: 
   return { findings: [], hint: "" };
 }
 
-// ---------------------------------------------------------------- init
 async function init(): Promise<void> {
   if (existsSync(join(root, "Home.md"))) { console.error(`vault already at ${root}`); exit(1); }
   const made: string[] = [];
@@ -160,8 +159,6 @@ async function init(): Promise<void> {
   const commit = commitAndPush("init vault", made);
   out({ op: "init", path: root, commit });
 }
-
-// ---------------------------------------------------------------- write
 
 async function write(): Promise<void> {
   requireVault();
@@ -240,7 +237,6 @@ async function write(): Promise<void> {
     }
   }
 
-  // Everything validated; now touch the disk.
   const touched: string[] = [join(root, "Home.md"), join(root, "daily", `${today()}.md`), dest];
   mkdirSync(dirname(dest), { recursive: true });
   const stamped = stampProvenance(draft, process.env.CLAUDE_CODE_SESSION_ID || undefined);
@@ -271,7 +267,6 @@ async function write(): Promise<void> {
   out({ op: archived.length ? "supersede" : "write", title: draft.title, path: relative(root, dest), archived, commit });
 }
 
-// ---------------------------------------------------------------- recall
 async function recall(): Promise<void> {
   requireVault();
   const q = rest.filter((a, i) => !a.startsWith("--") && rest[i - 1]?.startsWith("--") !== true).join(" ").trim().toLowerCase();
@@ -295,7 +290,6 @@ async function recall(): Promise<void> {
   out(hits.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
 }
 
-// ---------------------------------------------------------------- misses
 const asValue = (v: unknown): any => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
 /** A tool's output as text: a bare string, or the stdout of a result object. */
 function outText(v: unknown): string {
@@ -361,7 +355,6 @@ async function misses(): Promise<void> {
   });
 }
 
-// ---------------------------------------------------------------- lint
 async function lint(): Promise<void> {
   requireVault();
   const fixed: { note: string; path: string; repairs: string[] }[] = [];
@@ -383,7 +376,6 @@ async function lint(): Promise<void> {
   exit(result.refuse.length ? 1 : 0);
 }
 
-// ---------------------------------------------------------------- adopt
 /**
  * Commit a note that is already in the vault but that git has never seen.
  *
@@ -426,7 +418,6 @@ async function adopt(): Promise<void> {
   out({ op: "adopt", title: note.title, path: rel, template, commit });
 }
 
-// ---------------------------------------------------------------- rename-scope
 /**
  * Move every note in one scope to another. Read-only unless `--apply`.
  *
@@ -457,7 +448,6 @@ async function renameScopeOp(): Promise<void> {
   if (!apply && changes.length) console.error(`rename-scope changed nothing; rerun with --apply to move ${changes.length} notes from ${from} to ${to}`);
 }
 
-// ---------------------------------------------------------------- archive
 /**
  * Retire a note without writing its replacement.
  *
@@ -513,7 +503,6 @@ async function del(): Promise<void> {
   out({ op: "delete", title: hit.title, why, commit });
 }
 
-// ---------------------------------------------------------------- compile
 async function compile(): Promise<void> {
   requireVault();
   const date = positional[0] ?? today();

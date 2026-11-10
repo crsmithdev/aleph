@@ -64,8 +64,6 @@ export function checkName(name: string | undefined): string {
 
 const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
 
-/** How long a start waits for the unit to write `pid`; `ALEPH_PID_WAIT_MS` changes it. */
-
 /** What a start prints: the new run, its job and its folder. */
 export interface Started { run: string; job: string; folder: string }
 

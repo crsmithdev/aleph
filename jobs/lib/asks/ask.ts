@@ -192,8 +192,6 @@ export const askNote = (a: Ask): string =>
   (a.recommended ? ` My recommendation is ${a.recommended}.` : "") +
   (a.why.length ? ` Why: ${a.why.join("; ")}.` : "");
 
-// The Always rules.
-
 const alwaysFile = () => join(layout().factory, "always.json");
 
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
@@ -232,8 +230,6 @@ export const askSub = (reason: string): string | undefined => [reason, word("ask
 export const logAlways = (reason: string, ref: string, action: string, more: Partial<Event> = {}): void => {
   logEvent({ by: "rule", subject: ref, action, sub: askSub(reason), ...more });
 };
-
-// Setting an Ask on an issue.
 
 /**
  * Put `ask` on item `id` with the note `asks Chris: <said>`, as one store write. With `said` null the Ask is set and
@@ -312,8 +308,6 @@ export function askPartDropped(key: string, issue: issues.Issue, question: strin
   issues.touch(issue);
 }
 
-// Actions.
-
 /** Who decides an Ask: the director first, and Chris when it escalates. */
 export type Actor = "chris" | "director";
 
@@ -333,8 +327,6 @@ export function may(actor: Actor, action: string, ask: Ask | null | undefined, o
   if (on.waiting) return `the run ${on.waiting} asked about the spec and waits for a spec edit; use edit, or drop it`;
   return null;
 }
-
-// What clears an Ask.
 
 
 /**

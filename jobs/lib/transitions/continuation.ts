@@ -21,7 +21,6 @@ import { causeOf, type Fate } from "../records/outcome.ts";
 import * as record from "../records/record.ts";
 import { jobSpec, runFile } from "../records/run-files.ts";
 
-// ---------------------------------------------------------------------------
 // The worker brief
 
 // A worker that backgrounds a command and ends its turn is never woken again in a headless run.
@@ -117,7 +116,6 @@ export function issueBrief(item: { title: string; spec: string; notes: string[] 
   return { spec, rerun: !!again };
 }
 
-// ---------------------------------------------------------------------------
 // The rerun note: what the issue's next run reads, under "Note on the last run"
 
 /** Leave the note in the issue's job record: a `rerun` event. */
@@ -132,7 +130,6 @@ const rerunNote = (name: string): string => {
 /** The run started with the note: clear it. */
 export const clearRerun = (name: string): void => { if (rerunNote(name)) record.addEvent(name, { kind: "rerun-cleared", what: "the run started with the note" }); };
 
-// ---------------------------------------------------------------------------
 // What the unit starts after a run ends
 
 const BOUNCES = 2;
@@ -238,7 +235,6 @@ const failedTests = (run: Run | null, check: string): FailedTest[] => run?.check
 const quoteFailures = (failures: FailedTest[]): string =>
   failures.map((f) => `- ${f.file} > ${f.name}${f.message ? `\n${f.message.split("\n").map((l) => (l ? `    ${l}` : "")).join("\n")}` : ""}`).join("\n");
 
-// ---------------------------------------------------------------------------
 // Fix rounds: the runs before, and the failures they share. The rule itself is in worker-verdict.ts.
 
 /** The job's fix rounds before run `id`: its other build runs that a check or the reviewer sent back. */
@@ -268,7 +264,6 @@ export function repeatedFailure(folder: string, check: string, earlier: { id: st
 /** The worker's question: the text of its last `QUESTION:` line, or undefined when it has none. */
 export const questionOf = (result: string): string | undefined => lastTagged(result, "QUESTION");
 
-// ---------------------------------------------------------------------------
 // The rescue of a returned or failed run: which case it is, and the step
 
 /** The case of the safe default action taken on the run, or "" when none was. */

@@ -64,8 +64,6 @@ export function issueRows(d) {
   return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, own: r.own ?? { runs: 0, cost: 0 }, createdTime: r.createdTime ?? null, closedTime: r.closedTime ?? null, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: !!r.parent, parent: r.parent ? `${r.repo}-${r.parent}` : null }));
 }
 
-// ---- Fuzzy search ----
-
 /** The edit distance of two strings; a number over `max` when their lengths alone must pass it. */
 function edits(a, b, max) {
   if (Math.abs(a.length - b.length) > max) return max + 1;
@@ -155,8 +153,6 @@ export function filterRows(rows, o = {}, skip = []) {
   });
 }
 
-// ---- The table ----
-
 // Column order: time, id, title, state badge, project, labels, numbers. [key, label, { num }]
 export const COLUMNS = [["updated", "Updated"], ["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Jobs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }]];
 const RANK = { critical: 4, high: 3, medium: 2, low: 1 };
@@ -219,8 +215,6 @@ export function renderTable(rows, o = {}) {
   const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
   return `${dataTable(head, shown.map(renderRow).join(""))}${pager(shown.length, all.length, PAGE)}`;
 }
-
-// ---- The tiles and charts ----
 
 /** Whether a stored time is inside the span of `b`, the buckets of a window. */
 const within = (b) => (time) => { const t = isoMs(time); return t >= b.since && t < b.until; };
@@ -370,8 +364,6 @@ const renderCharts = (o, rows, tests) => {
     panelOf(chartKey("close"), closeFrame(closeTimes(rows, win, now))) +
     panelOf(chartKey("tests"), testsFrame(tests, o.project, win, now), "wide") + `</div>`;
 };
-
-// ---- The filters ----
 
 const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medium", "low"];
 
