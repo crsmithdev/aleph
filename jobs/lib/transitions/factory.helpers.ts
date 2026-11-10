@@ -100,7 +100,7 @@ export const dispatch = (f: ReturnType<typeof fakes>) => dispatchIssues(f.start,
 export const claimed = (name: string, evidence: string) => {
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `main for ${name}`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
-  return mk(name, "build", "failed", { reason: "no commit", alreadyMet: evidence });
+  return mk(name, "build", "failed", { cause: "no-commit", reason: "no commit", alreadyMet: evidence });
 };
 /** A suite run with these checks, as `aleph suite` does, then a dispatch. */
 export const withChecks = async (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<ChecksStop | null>) => {

@@ -74,20 +74,10 @@ test("getRun finds a run that another process wrote: it scans the records", () =
   expect(record.getRun("missing")).toBeNull();
 });
 
-test("a record from before docs/naming.md reads in the new words: waiting, returned, failed, the subs and the review call", () => {
-  const old = (o: Record<string, unknown>) => ({ ...run(), ...o }) as unknown as record.RunRecord;
-  record.write({ ...record.empty("aleph-7"), runs: [
-    old({ id: "1", condition: "awaiting", review: { call: "back", reason: "no" } }),
-    old({ id: "2", condition: "stuck", cause: "reviewer", failed: "review", next: "worker" }),
-    old({ id: "3", condition: "stuck", cause: "time-box" }),
-    old({ id: "4", condition: "dropped", fate: "by-hand" }),
-  ] });
-  const runs = record.read("aleph-7")!.runs;
-  expect(runs.map((x) => x.condition)).toEqual(["waiting", "returned", "failed", "dropped"]);
-  expect(runs.map((x) => x.cause ?? x.fate)).toEqual([undefined, "review", "timeout", "manual"]);
-  expect(runs[0].review).toEqual({ call: "returned", reason: "no" });
-  expect(record.getRun("2")?.condition).toBe("returned");
-  expect(record.all()[0].runs[0].condition).toBe("waiting");
+test("read returns a stored run's condition as it is: the word migration owns the old words", () => {
+  const old = { ...run(), id: "1", condition: "stuck", failed: "review" } as unknown as record.RunRecord;
+  record.write({ ...record.empty("aleph-7"), runs: [old] });
+  expect(record.read("aleph-7")!.runs[0].condition as string).toBe("stuck");
 });
 
 test("a write derives the cost of all runs and the fix rounds of the newest job", () => {
@@ -141,7 +131,7 @@ test("next: each run condition gives its step", () => {
     [[{ condition: "passed", next: "land" }, { kind: "director", condition: "passed" }], "land"],
   ];
   for (const [runs, step] of cases) expect([runs, record.next(rec(runs)).step]).toEqual([runs, step]);
-  expect(record.next(rec([{ condition: "failed", reason: "no commit" }, { kind: "director", condition: "done" }])).sub).toBe("no-commit");
+  expect(record.next(rec([{ condition: "failed", cause: "no-commit", reason: "no commit" }, { kind: "director", condition: "done" }])).sub).toBe("no-commit");
 });
 
 test("next: each case gives its step as event words", () => {

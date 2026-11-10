@@ -14,7 +14,7 @@ describe("an item that is already on main", () => {
   test("drop keeps the fact that a no-commit run ended with no commit", async () => {
     await job("nocom", "commit nocom.txt");
     const [agent] = runsOf("nocom");
-    updateRun(join(jobsDir, agent.id), { condition: "failed", reason: "no commit" });
+    updateRun(join(jobsDir, agent.id), { condition: "failed", cause: "no-commit", reason: "no commit" });
     const r = await aleph(["drop", "nocom", "dropped as a duplicate", "--quiet"]);
     expect(r.code).toBe(0);
     const after = state(agent.id);

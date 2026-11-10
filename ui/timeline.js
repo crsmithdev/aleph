@@ -2,7 +2,7 @@
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
 import { clamp, codeText, contentText, legendHtml, dur, esc, money, shortModel, tag, when } from "./lib.js";
-import { jobState, word } from "../lib/naming.ts";
+import { word } from "../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -42,7 +42,7 @@ export function axisTimes(times, x, max = 5) {
 const BAD = ["failed", "returned", "dropped"];
 const AUX = ["intake", "triage", "plan", "facts", "explain", "firefighter", "director", "monitor"];
 /** A run's bar colour: bad for a run that failed, land, aux for a run that does not build, else build. */
-const barTone = (r) => (BAD.includes(jobState(r.condition, r.failed)) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
+const barTone = (r) => (BAD.includes(r.condition) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
 
 /** A run's start and end in ms; a live run ends now, a run with no end ends where it started. */
 export function spanOf(r, now = Date.now()) {
@@ -113,7 +113,7 @@ export function barsOf(runs, { cost = false } = {}) {
   return runs.map(({ r, start, end }) => {
     seen[r.kind] = (seen[r.kind] ?? 0) + 1;
     const label = barLabel(r, count[r.kind] > 1 ? seen[r.kind] : 0, { cost, model: false });
-    return { start, end, tone: barTone(r), label, tip: `${label} · ${jobState(r.condition, r.failed)} · ${dur((end - start) / 1000)}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
+    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${dur((end - start) / 1000)}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
   });
 }
 
@@ -177,13 +177,13 @@ export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 const RUN_TONE = { returned: "stuck", failed: "stuck", dropped: "quiet", passed: "done", landed: "done", done: "done", waiting: "need", running: "run" };
 /** The event of one run: its job state as the tag, then `name` as the content and its reason as the note, or `what` in their place. */
 export function runEvent(x, name, what = null) {
-  const state = jobState(x.r.condition, x.r.failed), tone = RUN_TONE[state] ?? "quiet";
+  const state = x.r.condition, tone = RUN_TONE[state] ?? "quiet";
   return { at: x.end, tag: state, tone, html: what ?? [esc(name), x.r.reason && codeText(x.r.reason)].filter(Boolean).join(" · ") };
 }
 /** The events of a lane: each run that stopped or asks, with its reason. */
 const laneEvents = (runs, bars) => runs.flatMap((x, i) => {
   // A run that waits for you shows only with its question; the wait after it already shows.
-  const state = jobState(x.r.condition, x.r.failed);
+  const state = x.r.condition;
   if (!["returned", "failed", "dropped", "waiting"].includes(state) || (state === "waiting" && !x.r.reason)) return [];
   return [runEvent(x, bars[i].label)];
 });

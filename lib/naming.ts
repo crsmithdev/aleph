@@ -29,24 +29,14 @@ export const LANES = ["landed", "waiting", "failed", "other"];
 export const SPEEDS = ["landed", "returned", "failed", "reran", "dropped"];
 export const ROUTINES = ["monitor"];
 
-/** Old stored words, per set, and the new word each reads as. A word not listed is already new. */
+/** Old words, per set, that live code still writes or reads, and the new word each reads as. A word not listed is already new. */
 export const OLD: Record<string, Record<string, string>> = {
-  state: { awaiting: "waiting", stuck: "failed" },
-  stage: { planning: "working", blocked: "held", stuck: "failed" },
-  sub: {
-    "time-box": "timeout", "lock-busy": "locked", reviewer: "review", "no-answer": "unanswered", "own-list": "other",
-    "already-met": "met", "by-hand": "manual",
-  },
-  review: { land: "passed", back: "returned", ask: "waiting", pending: "running", error: "failed" },
   ask: {
     "held-path": "protected", review: "returned", "no-commit": "failed", "part-dropped": "incomplete",
     "intake-failed": "failed", rescue: "waiting", "run-cap": "capped",
   },
   gate: { pause: "paused", baseline: "red", "live-cap": "full", "busy-file": "busy", "loop-guard": "looping", "credit-wait": "credit" },
-  lane: { delivered: "landed", "needs you": "waiting", stuck: "failed" },
-  speed: { fixed: "returned", nothing: "failed", restarted: "reran" },
   actor: { You: "human", Rule: "rule", Gate: "gate", Director: "director", Firefighter: "firefighter", triage: "intake", planner: "intake" },
-  kind: { agent: "build", triage: "intake", plan: "intake", facts: "intake", explain: "director", firefighter: "director" },
   act: {
     land: "landed", drop: "dropped", "drop-issue": "dropped", decline: "dropped", rerun: "reran", retry: "reran", add: "filed",
     approve: "filed", answer: "answered", recommended: "answered", close: "done", "edit-goal": "changed",
@@ -58,13 +48,6 @@ export function word(set: string, w: string): string {
   if (set === "ask" && String(w).startsWith("proposal-")) return "proposal";
   return OLD[set]?.[w] ?? w;
 }
-
-/**
- * A job's state from a stored condition. `failed` is the stored name of what sent the job back: `review` or a check's
- * name. A `stuck` job that a reviewer or a check sent back is `returned`; any other `stuck` job is `failed`.
- */
-export const jobState = (condition: string, failed?: string): string =>
-  condition === "stuck" && failed ? "returned" : word("state", condition);
 
 // ---------- IDs ----------
 

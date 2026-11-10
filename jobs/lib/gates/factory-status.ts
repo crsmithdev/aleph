@@ -26,7 +26,7 @@ export const factoryDir = () => layout().factory;
 
 const pauseFile = () => join(factoryDir(), "paused");
 
-/** One record of why an issue waits: `kind` is the gate that bound, or `started`; `event` its log event, which older records lack. Records from before v6 name older kinds. */
+/** One record of why an issue waits: `kind` is the gate that bound, or `started`; `event` its log event, which a `started` record lacks. Records from before v6 name older kinds. */
 export interface HoldRecord { at: string; name: string; kind: string; text: string; event?: Event }
 
 /** The hold record kinds from before the 7 gates that did not stop a start: the issue was done, or its job was open. */

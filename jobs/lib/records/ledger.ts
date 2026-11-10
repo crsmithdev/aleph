@@ -13,7 +13,7 @@ import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
 import { contentText, fileSafe, jobId, setCodes, subjectOf } from "../../../lib/naming.ts";
 
-/** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. A record keeps old words; record.ts reads them as these. */
+/** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. */
 export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. A run from before 4 Nov 2026 may have a hidden check with its test counts. */
@@ -275,11 +275,6 @@ export function onOf(run: Run): number | string | undefined {
 /** The run's ask. Undefined when the run asks nothing. */
 export const askOf = (run: Run): Ask | undefined => run.ask;
 
-/** The second review of a run from before v6 phase 6: `review` of its state.json, else its folder's call.md. */
-export function reviewOf(e: Entry): Review | undefined {
-  return e.run.review ?? readCall(e.folder);
-}
-
 function pidAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch (e: any) { return e.code === "EPERM"; }
 }
@@ -402,35 +397,6 @@ export async function tell(line: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/** The last `VERDICT:` line of a review: `land`, `back <reason>` or `chris <question>`; null when it is none of them. */
-export function parseVerdict(result: string): Review | null {
-  const v = lastTagged(result, "VERDICT");
-  if (v === undefined) return null;
-  if (v === "land") return { call: "passed" };
-  const m = v.match(/^(back|chris)\s+(\S.*)$/);
-  return m ? { call: m[1] === "chris" ? "waiting" : "returned", reason: m[2] } : null;
-}
-
-/** The file in a run folder where the second review wrote its call. Runs from before v6 phase 6 keep it. */
-export const CALL_FILE = "call.md";
-
-/**
- * The review of the run in `folder`, derived from its call.md: a lone
- * `PENDING` line, a last line `ERROR: <reason>`, or the review ending in a
- * `VERDICT:` line. Undefined when there is no call.md.
- */
-export const readCall = (folder: string): Review | undefined => readVerdictFile(join(folder, CALL_FILE));
-
-/** The review a verdict file holds, as `Review` shows it, or undefined when the file is not there. */
-function readVerdictFile(file: string): Review | undefined {
-  let text: string;
-  try { text = readFileSync(file, "utf8"); } catch { return undefined; }
-  const last = text.trim().split("\n").at(-1)?.trim() ?? "";
-  if (last === "PENDING") return { call: "running" };
-  if (last.startsWith("ERROR:")) return { call: "failed", reason: last.slice(6).trim() };
-  return parseVerdict(text) ?? { call: "failed", reason: "no VERDICT line" };
 }
 
 /** The reason of a land that found the job lock taken: it did nothing to the job. */

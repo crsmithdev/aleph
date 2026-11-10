@@ -14,7 +14,7 @@ import type { Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
 import { logEvent } from "../infra/layout.ts";
-import { jobId, jobState, subjectOf, word } from "../../../lib/naming.ts";
+import { jobId, subjectOf } from "../../../lib/naming.ts";
 
 /** A run in a record: the run and its id, the name of its run folder. */
 export type RunRecord = Run & { id: string };
@@ -91,28 +91,10 @@ const fileOf = (key: string) => join(recordsDir(), nameOf(key));
 /** A record with nothing in it yet. */
 export const empty = (key: string): JobRecord => ({ issue: key, ask: null, wait: null, rounds: 0, cost: 0, runs: [], events: [] });
 
-/**
- * A run with the words of docs/naming.md: a record keeps the old words of its runs (`awaiting`, `stuck`, `time-box`,
- * a review call `back`, …), and every read maps them here, so no caller sees an old word.
- */
-function newWords(x: RunRecord): RunRecord {
-  const run = { ...x, condition: jobState(x.condition, x.failed) as Run["condition"] };
-  if (x.cause) run.cause = word("sub", x.cause) as Run["cause"];
-  if (x.fate) run.fate = word("sub", x.fate) as Run["fate"];
-  if (x.review) run.review = { ...x.review, call: word("review", x.review.call) as NonNullable<Run["review"]>["call"] };
-  return run;
-}
-
-/** A record as its text holds it, with the runs in new words. */
-function parse(text: string): JobRecord {
-  const r: JobRecord = JSON.parse(text);
-  return { ...r, runs: r.runs.map(newWords) };
-}
-
 /** The record of `key`, or null when there is none. */
 export function read(key: string): JobRecord | null {
   for (const file of [fileOf(key), join(archiveDir(), nameOf(key))]) {
-    try { return parse(readFileSync(file, "utf8")); } catch { /* not in this folder */ }
+    try { return JSON.parse(readFileSync(file, "utf8")); } catch { /* not in this folder */ }
   }
   return null;
 }
@@ -127,7 +109,7 @@ export function all(live = false): JobRecord[] {
     if (!existsSync(dir)) continue;
     for (const f of readdirSync(dir).sort()) {
       if (!f.endsWith(".json")) continue;
-      try { out.push(parse(readFileSync(join(dir, f), "utf8"))); } catch { /* a file mid-rename is not there yet */ }
+      try { out.push(JSON.parse(readFileSync(join(dir, f), "utf8"))); } catch { /* a file mid-rename is not there yet */ }
     }
   }
   return out;
@@ -259,7 +241,7 @@ function keyOfId(id: string): string | undefined {
       let text: string;
       try { text = readFileSync(join(dir, f), "utf8"); } catch { continue; }
       if (!text.includes(needle)) continue;
-      const r: JobRecord = parse(text);
+      const r: JobRecord = JSON.parse(text);
       if (r.runs.some((x) => x.id === id)) { keys.set(id, r.issue); return r.issue; }
     }
   }

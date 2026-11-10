@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
-import { allJobs, askOf, isOpen, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
+import { allJobs, askOf, isOpen, onOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 import { isLost } from "../infra/process.ts";
 import { causeOf } from "./outcome.ts";
 import { runFile, type RunFile } from "./run-files.ts";
@@ -145,7 +145,7 @@ export function view(j: Job): JobView {
   // The latest checks that ran; a returned or failed job shows its last run's, even none.
   const checks = r.condition === "returned" || r.condition === "failed" ? j.findLast((e) => e.run.checks)?.run.checks : j.findLast((e) => e.run.checks?.length)?.run.checks;
   if (Array.isArray(checks)) v.checks = checks;
-  const review = reviewOf(last);
+  const review = last.run.review;
   if (review) v.review = { call: review.call, ...(review.reason !== undefined && { reason: review.reason }) };
   if (r.condition === "landed" && r.check) v.check = r.check;
   if (isLost(last.folder)) v.lost = true;

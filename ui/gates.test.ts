@@ -21,7 +21,7 @@ import { contentText, setCodes } from "../lib/naming.ts";
 function setHolds(rows: HoldRecord[]): void {
   const names = new Set([...record.all().map((r) => r.issue), ...rows.map((x) => x.name)]);
   for (const n of names) record.update(n, (r) => {
-    r.events = rows.filter((x) => x.name === n).map((x) => (x.kind === "started" ? { at: x.at, kind: "started", what: x.text } : { at: x.at, kind: "hold", what: x.text, data: { gate: x.kind } }));
+    r.events = rows.filter((x) => x.name === n).map((x) => (x.kind === "started" ? { at: x.at, kind: "started", what: x.text } : { at: x.at, kind: "hold", what: x.text, data: { gate: x.kind, ...(x.event ? { event: x.event } : {}) } }));
   });
 }
 
@@ -57,8 +57,9 @@ beforeAll(async () => {
   logEvent({ at: ago(2), by: "firefighter", subject: "r-6", action: "answered", note: "r-6: picked the plain option" });
   logEvent({ at: ago(2.5), by: "director", subject: "r-8", action: "reran", sub: "capped", note: "the cause is fixed" });
   setHolds([
-    // An old record, from before the 7 gates, still reads.
-    { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live" },
+    // The log shows a hold's stored event, not its text; a hold with no event has no row.
+    { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live", event: { at: ago(5), by: "gate", subject: "r-3", action: "full", sub: "local" } },
+    { at: ago(6), name: "r-13", kind: "pause", text: "paused" },
     { at: ago(4), name: "r-3", kind: "started", text: "started" },
     { at: ago(60 * 24 * 9), name: "r-4", kind: "gate", text: "too old" },
   ]);
@@ -116,7 +117,7 @@ test("the log reads the hold, the rules Chris set, and the old rule, director an
     "firefighter | r-6 | answered | - | - | r-6: picked the plain option",
     "director | r-8 | reran | capped | - | the cause is fixed",
     "rule | r-5 | reran | rescue | → dropped | -",
-    "gate | r-3 | full | - | - | -",
+    "gate | r-3 | full | local | - | -",
     "human | rescue | changed | rescue | - | set to recommended",
     "human | run-cap | changed | capped | - | set to rerun",
     "human | proposal-claude-md:global | changed | - | - | set to approve",
@@ -278,7 +279,7 @@ const withHolds = (rows: HoldRecord[], f: () => void) => {
   setHolds(rows);
   try { f(); } finally { setHolds(was); }
 };
-const hold = (min: number, name = "r-9", text = "busy") => ({ at: ago(min), name, kind: "gate", text });
+const hold = (min: number, name = "r-9", text = "busy") => ({ at: ago(min), name, kind: "gate", text, event: { at: ago(min), by: "gate", subject: name, action: "busy" } });
 const gateLines = () => log().filter((e) => e.by === "gate");
 
 test("log collapses a run of identical gate events into one with times, first and last time", () => {

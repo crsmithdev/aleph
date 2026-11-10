@@ -1,8 +1,7 @@
 /**
  * Why a run stopped. `cause` is a closed code on the run's state; `reason` is only its sentence, and a drop
- * replaces the sentence. Logic reads `causeOf`, never `reason`. A run from before this field has only the
- * sentence, so `causeOf` reads the exact sentences that the unit wrote. The check runners return the cause
- * themselves (`ChecksStop` in checks.ts); `fromSentence` stays for those old runs.
+ * replaces the sentence. Logic reads `causeOf`, never `reason`. The check runners return the cause themselves
+ * (`ChecksStop` in checks.ts); the word migration (migrate.ts) gave each older run the cause its sentence states.
  */
 import type { Run } from "./ledger.ts";
 
@@ -21,30 +20,10 @@ export type Stated = { cause: Cause; checkName?: string };
 
 export const LOCK_BUSY = "job lock busy";
 
-const SENTENCES: [RegExp, Cause][] = [
-  [/^no commit$/, "no-commit"],
-  [/^time box$/, "timeout"],
-  [/^job lock busy$/, "locked"],
-  [/^API Error: 402/, "credit"],
-  [/^(fetch failed|systemd-run failed|worktree gone|checkout failed|bundle failed)/, "infra"],
-  [/^merge conflict/, "conflict"],
-  [/^main moved during the land; land again$/, "moved"],
-  [/^the branch changes docs\/todo\.md;/, "other"],
-  [/^(malformed (verdict|plan)|failed):/, "unanswered"],
-];
-
-/** What an exact sentence of the unit states, or null. A drop's sentence is free prose and states nothing. */
-function fromSentence(reason: string): Stated | null {
-  const row = SENTENCES.find(([re]) => re.test(reason));
-  if (row) return { cause: row[1] };
-  const check = reason.match(/^timed out: check (.+)$/) ?? reason.match(/^([\w-]+) failed$/);
-  return check ? { cause: "check", checkName: check[1] } : null;
-}
-
 const statedOf = (run: Run): Stated | null =>
   run.cause ? { cause: run.cause, checkName: run.checkName }
   : run.noCommit ? { cause: "no-commit" }
-  : fromSentence(run.reason ?? "");
+  : null;
 
 /** Why the run stopped, or undefined when no cause is known. */
 export const causeOf = (run: Run): Cause | undefined => statedOf(run)?.cause;

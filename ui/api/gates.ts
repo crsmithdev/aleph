@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
-import { allHolds, backendHold, baselines, type HoldRecord, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
+import { allHolds, backendHold, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
@@ -17,7 +17,7 @@ import { layout, readEvents } from "../../jobs/lib/infra/layout.ts";
 import { inProject } from "./scope.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
-import { word, type Event } from "../../lib/naming.ts";
+import type { Event } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 
@@ -112,29 +112,6 @@ function tickEntries(since: number): LogEntry[] {
   return readEvents(since).filter((e) => e.by !== "gate");
 }
 
-type Fields = Omit<Event, "at" | "by" | "subject">;
-
-/** The event of an old hold record, as near as its text gives it; the text is the note when no form fits. */
-function oldHold(h: HoldRecord): LogEntry {
-  const t = h.text;
-  let m: RegExpExecArray | null;
-  const f: Fields = (m = /^after (\S+)$/.exec(t)) ? { action: "after", on: m[1].split(",") }
-    : (m = /^its job is (\w+)$/.exec(t)) ? { action: word("state", m[1]) }
-    : /already (done|landed)/.test(t) ? { action: "done" }
-    : (m = /^the item is (\w+)$/.exec(t)) ? { action: m[1] === "gone" ? "dropped" : m[1] }
-    : /starting it$/.test(t) ? { action: "starting" }
-    : t === "not a goal" ? { action: "parent" }
-    : /holds the GPU$/.test(t) ? { action: "gpu" }
-    : (m = /^\d+ (local )?agent runs are live$/.exec(t)) ? { action: "full", ...(m[1] ? { sub: "local" } : {}) }
-    : (m = /^waits for (\S+): both (?:change the busy file (\S+)|use the (gpt-oss) server)$/.exec(t)) ? { action: "busy", on: [m[1]], file: m[2] ?? m[3] }
-    : (m = /^(\d+) runs in a row with no commit$/.exec(t)) ? { action: "looping", sub: "no-commit", count: `${m[1]} / ${m[1]}` }
-    : (m = /^(\d+) runs in the last hour$/.exec(t)) ? { action: "looping", sub: "starts", count: `${m[1]} / 1h` }
-    : (m = /^main is red at (\w+): ([\s\S]*)$/.exec(t)) ? { action: "red", on: [m[1]], note: m[2] }
-    : t === "paused" ? { action: "paused" }
-    : { action: word("gate", h.kind), note: t };
-  return { at: h.at, by: "gate", subject: h.name, ...f };
-}
-
 /** Chris's answers in the issue notes of the factory repos: the notes the UI and CLI write for him (`Chris: …`, `Chris decided: …`, `Chris approved it`). The note is the whole text. */
 function noteEntries(): LogEntry[] {
   const lists = reader({ fetch: false });
@@ -172,7 +149,7 @@ function collapse(entries: LogEntry[]): LogEntry[] {
 
 /** The log: the gate holds, the Always rules Chris set, the rule, director and firefighter events and his answers; the last LOG_DAYS days, newest first, `max` of each actor at most, so a busy actor does not push the others out. */
 export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, project?: string): LogEntry[] {
-  const holds = collapse(allHolds().filter((h) => h.kind !== "started").map((h) => h.event ?? oldHold(h)));
+  const holds = collapse(allHolds().flatMap((h) => (h.event ? [h.event] : [])));
   const seen: Record<string, number> = {};
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ at: g.at, by: "human", subject: reason, action: "changed", ...(askSub(reason) ? { sub: askSub(reason) } : {}), note: `set to ${g.action}` }));
   return [...holds, ...set, ...tickEntries(now - ms), ...noteEntries()]

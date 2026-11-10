@@ -45,7 +45,9 @@ test("after a land that failed 'job lock busy' the passed agent run is waiting t
   const agent = entry("build", "passed");
   agent.run.land = true;
   agent.run.next = "land";
-  expect(waitingToLand([[agent, entry("land", "failed", "job lock busy")]])).toEqual(["n1"]);
+  const busy = entry("land", "failed", "job lock busy");
+  busy.run.cause = "locked";
+  expect(waitingToLand([[agent, busy]])).toEqual(["n1"]);
   expect(waitingToLand([[agent, entry("land", "failed", "not landed")]])).toEqual([]);
 });
 

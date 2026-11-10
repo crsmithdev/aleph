@@ -88,19 +88,16 @@ Every value is lower case, in storage and on the page. A word means one thing in
 
 ### Old words
 
-Old files keep their words. A reader maps each old word through `OLD` in `lib/naming.ts`, and a writer writes only the new words.
+A writer writes only the new words. A one-time migration (`jobs/lib/records/migrate.ts`, run by the tick) rewrote the old words of the job records and the event log, so a reader reads the stored words as they are. `OLD` in `lib/naming.ts` keeps the ask, gate, actor and act maps that live code still uses; the migration owns the others.
 
 | Set | Old → new |
 |---|---|
-| Job state | awaiting → waiting; stuck → returned (sent back) or failed |
-| Stage | planning → working; blocked → held; stuck → waiting or failed |
+| Job state | awaiting, needs-you → waiting; stuck → returned (sent back) or failed |
 | Cause | time-box → timeout; lock-busy → locked; reviewer → review; no-answer → unanswered; own-list → other |
 | Fate | already-met → met; by-hand → manual |
 | Review call | land → passed; back → returned; ask → waiting; pending → running; error → failed |
 | Ask reason | held-path → protected; review → returned; no-commit → failed; part-dropped → incomplete; intake-failed → failed; rescue → waiting; run-cap → capped; proposal-* → proposal |
 | Gate | pause → paused; baseline → red; live-cap → full; busy-file → busy; loop-guard → looping; credit-wait → credit |
-| Report lane | delivered → landed; needs you → waiting; stuck → failed |
-| Speed class | fixed → returned; nothing → failed; restarted → reran |
 | Actor | You → human; Rule → rule; Gate → gate; Director → director; Firefighter → firefighter; triage, planner → intake |
-| Kind | agent → build; triage, plan, facts → intake; explain → director; firefighter → director |
+| Kind | agent → build; triage, plan → intake; explain → director; firefighter → director; facts stays, since readers tell it from the job's real runs |
 | Log act | land → landed; drop, drop-issue, decline → dropped; rerun, retry → reran; add, approve → filed; answer, recommended → answered; close → done; edit-goal → changed |

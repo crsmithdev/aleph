@@ -44,11 +44,13 @@ describe("ids", () => {
 
 describe("words", () => {
   test("old words read as new", () => {
-    expect(n.word("state", "awaiting")).toBe("waiting");
     expect(n.word("ask", "proposal-claude-md")).toBe("proposal");
     expect(n.word("actor", "You")).toBe("human");
-    expect(n.word("kind", "agent")).toBe("build");
-    expect(n.word("state", "landed")).toBe("landed");
+    expect(n.word("act", "land")).toBe("landed");
+    expect(n.word("act", "landed")).toBe("landed");
+  });
+  test("OLD keeps only the sets that live code still writes", () => {
+    expect(Object.keys(n.OLD).sort()).toEqual(["act", "actor", "ask", "gate"]);
   });
   test("the credit wait reads as the hold word credit", () => {
     expect(n.word("gate", "credit-wait")).toBe("credit");
@@ -56,11 +58,6 @@ describe("words", () => {
   });
   test("credit is a sub", () => {
     expect(n.event({ by: "gate", subject: "aleph-1", action: "failed", sub: "credit" }).sub).toBe("credit");
-  });
-  test("a sent-back stuck job is returned, any other stuck job failed", () => {
-    expect(n.jobState("stuck", "review")).toBe("returned");
-    expect(n.jobState("stuck", "test")).toBe("returned");
-    expect(n.jobState("stuck")).toBe("failed");
   });
   test("every set is lower case with no separator marks", () => {
     const sets = [n.STATUSES, n.ACTIONS, n.SUBS, n.ACTORS, n.KINDS, n.STAGES, n.LANES, n.SPEEDS];

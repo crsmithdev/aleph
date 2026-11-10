@@ -149,7 +149,7 @@ describe("state", () => {
 describe("a land that found the job lock busy", () => {
   test("does not make the job stuck, in the UI or in the facts", () => {
     run("20261027-000040-a", { job: "fac-7", name: "fac-7", condition: "passed", on: "fac-2", started: ago(3) });
-    run("20261027-000041-a", { kind: "land", job: "fac-7", name: "fac-7", condition: "failed", reason: "job lock busy", on: "fac-2", started: ago(2) });
+    run("20261027-000041-a", { kind: "land", job: "fac-7", name: "fac-7", condition: "failed", cause: "locked", reason: "job lock busy", on: "fac-2", started: ago(2) });
     const s = state(now);
     expect(s.stuck.map((j) => j.name)).not.toContain("fac-7");
     expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
@@ -193,9 +193,9 @@ describe("an intake run", () => {
 });
 
 describe("an issue that acceptance failed twice", () => {
-  test("a held run from before v6 phase 6 still reads: its old phase, and its second review's call.md as the Ask's review", () => {
-    run("20261027-000060-a", { job: "fac-60", name: "fac-60", condition: "waiting", ask: HELD, reason: "held path held/x.ts", stat: " held/x.ts | 1 +", phase: "check oracle" },
-      { "review.md": "Fine.\nVERDICT: pass\n", "call.md": "Merged and checked.\nVERDICT: land\n", "call-prompt.md": "old recipe\n" });
+  test("a held run from before v6 phase 6 still reads: its old phase, and its stored second review as the Ask's review", () => {
+    run("20261027-000060-a", { job: "fac-60", name: "fac-60", condition: "waiting", ask: HELD, reason: "held path held/x.ts", stat: " held/x.ts | 1 +", phase: "check oracle", review: { call: "passed" } },
+      { "review.md": "Fine.\nVERDICT: pass\n", "call-prompt.md": "old recipe\n" });
     try {
       const a = runAsks(state(now)).find((x) => x.id === "fac-60");
       expect(a).toBeDefined();

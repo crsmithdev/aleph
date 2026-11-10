@@ -86,7 +86,7 @@ describe("a land that found the job lock busy", () => {
   test("the job's state is the run that counts; the run list keeps the land", async () => {
     const ids = ["20261027-000040-a", "20261027-000041-a"];
     run(ids[0], { job: "fac-7", name: "fac-7", repo: "fac", condition: "passed", started: ago(3) });
-    run(ids[1], { kind: "land", job: "fac-7", name: "fac-7", repo: "fac", condition: "failed", reason: "job lock busy", started: ago(2) });
+    run(ids[1], { kind: "land", job: "fac-7", name: "fac-7", repo: "fac", condition: "failed", cause: "locked", reason: "job lock busy", started: ago(2) });
     try {
       const d = await (await get("/api/jobs/fac-7")).json();
       expect(d.condition).toBe("passed");
@@ -385,27 +385,6 @@ describe("render", () => {
     expect(ev).toContain('data-log="1" data-job="fac-9" data-file="output.log" data-as="transcript"');
     expect(ev).toContain('data-file="checks.log" title="checks.log, 2.0KiB">checks</button>');
     expect(h).toContain("$1.03");
-  });
-});
-
-describe("a worker round the reviewer sent back", () => {
-  test("an old stored stuck run that the reviewer sent back reads returned", async () => {
-    const ids = ["20261102-000101-a", "20261102-000102-a", "20261102-000103-a"];
-    const job = { job: "oth-sb", name: "oth-sb", repo: "oth", branch: "factory/oth-sb", failed: "review", started: ago(4), ended: ago(3.5) };
-    run(ids[0], { ...job, condition: "stuck", reason: "needs work", next: "worker", round: 0 }, { "review.md": "Redo it.\nVERDICT: fail\n" });
-    run(ids[1], { ...job, condition: "stuck", reason: "still wrong", round: 1, started: ago(3), ended: ago(2.5) }, { "review.md": "Still wrong.\nVERDICT: fail\n" });
-    run(ids[2], { job: "oth-sb", name: "oth-sb", repo: "oth", kind: "build", condition: "running", started: ago(2) });
-    try {
-      const j = await (await get("/api/jobs/oth-sb")).json();
-      const cond = Object.fromEntries(j.runs.map((r: any) => [r.id, r.condition]));
-      expect(cond).toEqual({
-        [ids[0]]: "returned", [`${ids[0]}-review`]: "returned",
-        [ids[1]]: "returned", [`${ids[1]}-review`]: "returned",
-        [ids[2]]: "running",
-      });
-    } finally {
-      for (const id of ids) rmSync(join(jobsDir, id), { recursive: true, force: true });
-    }
   });
 });
 

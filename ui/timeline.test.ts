@@ -90,9 +90,9 @@ describe("the event tags", () => {
   const tagTone = (e: any) => [e.tag, e.tone];
 
   test("a run's tag is its job state: returned for a sent-back run, failed for a broken one", () => {
-    expect(tagTone(runTag({ condition: "stuck", failed: "review" }))).toEqual(["returned", "stuck"]);
-    expect(tagTone(runTag({ condition: "stuck" }))).toEqual(["failed", "stuck"]);
-    expect(tagTone(runTag({ condition: "awaiting" }))).toEqual(["waiting", "need"]);
+    expect(tagTone(runTag({ condition: "returned", failed: "review" }))).toEqual(["returned", "stuck"]);
+    expect(tagTone(runTag({ condition: "failed" }))).toEqual(["failed", "stuck"]);
+    expect(tagTone(runTag({ condition: "waiting" }))).toEqual(["waiting", "need"]);
     expect(tagTone(runTag({ condition: "landed" }))).toEqual(["landed", "done"]);
   });
 
@@ -103,7 +103,7 @@ describe("the event tags", () => {
   });
 
   test("a run's event shows its bar label, then the reason as the note with no colon between them", () => {
-    const e = runTag({ condition: "stuck", failed: "review", reason: "checks failed" });
+    const e = runTag({ condition: "returned", failed: "review", reason: "checks failed" });
     expect(e.tag).toBe("returned");
     expect(e.html.startsWith("build 1")).toBe(true);
     expect(e.html).toBe("build 1 · checks failed");
@@ -112,9 +112,9 @@ describe("the event tags", () => {
 
   test("no event tag of a lane row has an upper-case letter", () => {
     const runs = [
-      run("worker", iso(0), iso(5), { condition: "stuck", failed: "review" }),
-      run("worker", iso(5.5), iso(10), { condition: "stuck" }),
-      run("worker", iso(30), iso(35), { condition: "awaiting", reason: "which one?" }),
+      run("worker", iso(0), iso(5), { condition: "returned", failed: "review" }),
+      run("worker", iso(5.5), iso(10), { condition: "failed" }),
+      run("worker", iso(30), iso(35), { condition: "waiting", reason: "which one?" }),
       run("worker", iso(60), iso(65), { condition: "failed" }),
       run("worker", iso(65.5), iso(70), { condition: "dropped" }),
     ];
@@ -127,7 +127,7 @@ describe("the event tags", () => {
 describe("the bar tips", () => {
   test("a tip keeps the label, the state word and the time, and drops the reason", () => {
     const iso = (m: number) => new Date(Date.parse("2026-11-01T10:00:00Z") + m * 60_000).toISOString();
-    const [b] = barsOf(spans([run("worker", iso(0), iso(5), { condition: "stuck", failed: "review", reason: "checks failed" })]));
+    const [b] = barsOf(spans([run("worker", iso(0), iso(5), { condition: "returned", failed: "review", reason: "checks failed" })]));
     expect(b.tip).toBe("build · returned · 5m 00s");
   });
 });

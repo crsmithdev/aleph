@@ -11,29 +11,14 @@ test("a stated cause wins over the sentence, so a drop does not change it", () =
   expect(failedCheckOf(run({ cause: "check", checkName: "tests", condition: "dropped", reason: "not needed" }))).toBe("tests");
 });
 
-test.each([
-  ["no commit", "no-commit", undefined],
-  ["time box", "timeout", undefined],
-  ["job lock busy", "locked", undefined],
-  ["fetch failed: x", "infra", undefined],
-  ["fetch failed", "infra", undefined],
-  ["merge conflict: a.ts", "conflict", undefined],
-  ["main moved during the land; land again", "moved", undefined],
-  ["the branch changes docs/todo.md; change the list with aleph issue", "other", undefined],
-  ["tests failed", "check", "tests"],
-  ["timed out: check types", "check", "types"],
-  ["malformed verdict: x", "unanswered", undefined],
-  ["malformed plan: x", "unanswered", undefined],
-  ["failed: x", "unanswered", undefined],
-] as const)("an old run with the sentence %p has the cause %p", (reason, cause, check) => {
-  expect(causeOf(run({ reason }))).toBe(cause);
-  expect(failedCheckOf(run({ reason }))).toBe(check);
+test("causeOf gives the stored cause, and none for a run with only a sentence: the word migration stated it", () => {
+  expect(causeOf(run({ cause: "timeout", reason: "time box" }))).toBe("timeout");
+  expect(causeOf(run({ reason: "time box" }))).toBeUndefined();
+  expect(failedCheckOf(run({ reason: "tests failed" }))).toBeUndefined();
 });
 
-test("a run the API refused for credit has the credit cause, stated or in its sentence", () => {
-  const line = "API Error: 402 This request would exceed your available credits";
-  expect(causeOf(run({ cause: "credit", reason: line }))).toBe("credit");
-  expect(causeOf(run({ reason: line }))).toBe("credit");
+test("a run the API refused for credit has the credit cause it states", () => {
+  expect(causeOf(run({ cause: "credit", reason: "API Error: 402 This request would exceed your available credits" }))).toBe("credit");
 });
 
 test("an old dropped run keeps its no-commit mark, and free prose states no cause", () => {
