@@ -14,7 +14,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Ask } from "../asks/ask.ts";
 import type { Entry, Run } from "./ledger.ts";
-import { causeOf } from "./outcome.ts";
+import { causeOf, policyOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
 import { logEvent } from "../infra/layout.ts";
 import { lockSync } from "../infra/locks.ts";
@@ -358,7 +358,8 @@ export const counting = (j: Entry[]): Entry => j.findLast((e) => counts(e.run)) 
 /**
  * The next step of the job. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
  * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a returned or failed run
- * goes to the rescue, unless the factory asked Chris about it; a landed, done or dropped job does nothing; an issue
+ * goes to the rescue, unless the factory asked Chris about it or its cause is not `rescuable` (`POLICY`): then it
+ * waits; a landed, done or dropped job does nothing; an issue
  * with no open run waits for its `wait`, else starts. The run that counts is the newest one that `counts`: a director
  * run changes the step through the Ask and the `director` event it writes, never as the run that counts.
  */
@@ -373,6 +374,7 @@ export function next(r: JobRecord): Step {
   if (last?.condition === "passed") return { step: "wait", action: "passed", to: "human" };
   if (last && (last.condition === "returned" || last.condition === "failed")) {
     if (r.events.some((e) => e.kind === "asked" && e.run === last.id)) return { step: "wait", action: "waiting", to: "human" };
+    if (!policyOf(causeOf(last)).rescuable) return { step: "wait", action: last.condition, ...subOf(last) };
     return { step: "rescue", action: last.condition, ...subOf(last) };
   }
   if (last?.condition === "landed") return { step: "none", action: "landed", ...(last.commit ? { on: [last.commit.slice(0, 7)] } : {}) };

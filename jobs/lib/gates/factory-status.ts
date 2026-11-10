@@ -18,7 +18,7 @@ import * as record from "../records/record.ts";
 import { allRuns, isWaiting, isBuild, loadRegistry, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { held, lock } from "../infra/locks.ts";
 import { isLive, isStarting } from "../infra/process.ts";
-import { causeOf } from "../records/outcome.ts";
+import { causeOf, policyOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "../infra/settings.ts";
 import { BACKENDS, probeBackend, readModels, viaOfRun, type Setting, type Tier, type Via } from "../routing/models.ts";
@@ -84,7 +84,7 @@ export function setPaused(on: boolean): void {
   else rmSync(pauseFile(), { force: true });
 }
 
-/** The backend the factory holds after a run stopped with the credit cause: `via` is the backend, `why` the run's line. */
+/** The backend the factory holds after a call on it ended with the API credit error: `via` is the backend, `why` the call's line. */
 export interface BackendHold { via: Via; why: string; since: string }
 
 const holdFile = () => join(factoryDir(), "backend-hold.json");
@@ -111,7 +111,7 @@ export function heldGoal(name: string): Bound | null {
 }
 
 /**
- * Holds the backend of a run that stopped with the credit cause, and tells Chris once. A backend already held keeps
+ * Holds the backend of a call that ended with the API credit error, and tells Chris once. A backend already held keeps
  * its line, so the jobs that follow it write no second alert.
  */
 export async function holdBackend(via: Via, why: string): Promise<void> {
@@ -507,18 +507,18 @@ export function clearCap(name: string): void {
 const capMarked = (name: string): boolean =>
   record.read(name)?.events.findLast((e) => e.kind === "cap" || e.kind === "cap-cleared")?.kind === "cap";
 
-/** How long ago the issue's newest build run that ended with the API credit error ended, or null when it has none. */
+/** How long ago the issue's newest build run whose cause has a wait (`waitMs`: the API credit error) ended, or null when it has none. */
 function creditWait(repoKey: string, name: string, all: Entry[], now: number): number | null {
-  const last = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.ended && causeOf(e.run) === "credit")
+  const last = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.ended && policyOf(causeOf(e.run)).waitMs > 0)
     .sort(byId).at(-1);
   return last ? now - Date.parse(last.run.ended!) : null;
 }
 
-/** How many jobs of the issue started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not, and a first run that ended with the API credit error did no work, so it does not count. */
+/** How many jobs of the issue started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not, and a first run whose cause does not count to the cap (`countsToCap`: the API credit error) does not count. */
 function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: number): number {
   return jobs.filter((j) => {
     const first = j.find((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind));
-    return first !== undefined && now - Date.parse(first.run.started) < 3600_000 && causeOf(first.run) !== "credit";
+    return first !== undefined && now - Date.parse(first.run.started) < 3600_000 && policyOf(causeOf(first.run)).countsToCap;
   }).length;
 }
 

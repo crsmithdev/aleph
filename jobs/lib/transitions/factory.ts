@@ -81,7 +81,7 @@ type Land = (name: string) => Promise<string | null>;
  * steps a pause kept (`startKept`), the rescue of returned, failed, killed and lost runs, the lands and the close of parents whose parts are done.
  * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each issue meets the 7 gates of issueDecision in
  * order; the first that binds skips it, and its hold record names that gate. Between Busy file and Loop guard an issue whose last build run ended with the
- * API credit error (`API Error: 402`) less than 10 minutes ago (`CREDIT_WAIT_MS`) waits out its credit wait with a `credit-wait` hold; the credit wait is
+ * API credit error (`API Error: 402`) less than 10 minutes ago (`waitMs` of `POLICY`) waits out its credit wait with a `credit-wait` hold; the credit wait is
  * not one of the 7 gates, because the issue's own last run decides it. The run a gate reads is the issue's newest build run (`nextRun`),
  * whose model names the backend the issue runs on. An issue no gate holds starts. Each start
  * holds a lock on its issue and re-reads the jobs under it, so two dispatches at once start an issue once. `start`

@@ -102,14 +102,14 @@ Then it asks each queued issue 7 gates, in order (`issue-decision.ts`, `factory-
 | Gate | Binds when | Result |
 |---|---|---|
 | Pause | `~/.aleph/factory/paused` exists | Nothing starts. Intake, director, suite, firefighter, corrections and episodes stop too. A unit's next step is kept in `paused-next` |
-| Backend | The factory holds a backend after a run stopped with the credit cause (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`) | Skip. Jobs on that backend do not start; jobs on other backends do |
+| Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`) | Skip. Jobs on that backend do not start; jobs on other backends do |
 | Baseline | The last `aleph suite` on main failed | Skip. Issues labelled `red-main` pass, so the fix can land |
 | Not ready | The issue is done, waits on `after`, or has an open job | Skip |
 | Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the issue to a tier with room |
 | Busy file | A file in the Edit surface had 3 land conflicts in 7 days and another open job names it | Skip |
 | Loop guard | The issue's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or `caps.json` sets | A `no-commit` or `run-cap` Ask in place of a start |
 
-Between Busy file and Loop guard a goal whose last build run ended with the API credit error (`API Error: 402`) less than 10 minutes ago (`CREDIT_WAIT_MS` in `jobs/lib/gates/issue-decision.ts`) is skipped with a `credit-wait` hold. The credit wait is not one of the 7 gates in `GATES`, because the goal's own last run decides it.
+Between Busy file and Loop guard a goal whose last build run ended with the API credit error (`API Error: 402`) less than 10 minutes ago (`waitMs` of `POLICY` in `jobs/lib/records/outcome.ts`) is skipped with a `credit-wait` hold. The credit wait is not one of the 7 gates in `GATES`, because the goal's own last run decides it.
 
 An issue that no gate holds starts. Each start holds the lock `goal-<name>`, so two dispatches start it once. GitHub CI on main does not gate.
 

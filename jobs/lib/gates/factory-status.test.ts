@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readList } from "../../../issues/lib/store.ts";
 import { setup, teardown, mk, newIssue } from "../transitions/factory.helpers.ts";
 import { firefighterLines, issueFacts, nextRun, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
+import { issueDecision } from "./issue-decision.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { logEvent, readEvents } from "../infra/layout.ts";
 
@@ -46,6 +47,14 @@ test("a first run that ended with the API credit error is no start, and the issu
   const f = allFacts(id);
   expect(f.startsInHour).toBe(1);
   expect(f.creditWait).toBe(5 * MIN);
+});
+
+test("first runs that ended with the API credit error set no run-cap Ask: past the credit wait, the hour count stays below the cap", () => {
+  const id = newIssue();
+  for (const m of [50, 40, 30, 20]) mk(`fac-${id}`, "build", "dropped", { started: ago(m * MIN), ended: ago((m - 5) * MIN), cause: "credit", reason: "API Error: 402" });
+  const f = allFacts(id);
+  expect(f.startsInHour).toBe(0);
+  expect(issueDecision({ ...f, done: () => false }).kind).toBe("ready");
 });
 
 test("a run whose stderr.log holds the credit error but that states no credit cause is a start and sets no credit wait", () => {

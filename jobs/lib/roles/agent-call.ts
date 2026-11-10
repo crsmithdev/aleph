@@ -9,6 +9,7 @@ import { closeSync, openSync, readFileSync, statSync } from "node:fs";
 import { BACKENDS, modelArgv, modelEnv, onGpu, viaOf } from "../routing/models.ts";
 import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
 import { outcome, replyOf, type Outcome } from "../gates/gate.ts";
+import { policyOf } from "../records/outcome.ts";
 import { roleCmd } from "../infra/settings.ts";
 import { logEvent } from "../infra/layout.ts";
 import { costDetails } from "../../../lib/pricing.ts";
@@ -106,7 +107,7 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   const out = readFileSync(o.stdout).subarray(seen).toString();
   const res = outcome(out);
   const cause = agentCause(step, res);
-  if (cause?.kind === "credit") await holdBackend(viaOf(model), cause.reason);
+  if (cause && policyOf(cause.kind).holdsBackend) await holdBackend(viaOf(model), cause.reason);
   const ev = resultOf(out);
   return {
     text: step.code === 0 ? replyOf(out).text : res.result, data: ev?.structured_output ?? undefined,

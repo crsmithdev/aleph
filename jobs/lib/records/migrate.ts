@@ -9,6 +9,7 @@ import { ACTIONS, subjectOf, word } from "../../../lib/naming.ts";
 import { eventsDir, layout } from "../infra/layout.ts";
 import { lastTagged, runsDir, type Review } from "./ledger.ts";
 import { archiveDir, lockRecord, recordsDir, type JobRecord } from "./record.ts";
+import type { Cause } from "./outcome.ts";
 
 /** The file whose presence says the migration ran. */
 export const markFile = (): string => join(layout().factory, "words-migrated");
@@ -23,7 +24,7 @@ const CALL: Record<string, string> = { land: "passed", back: "returned", ask: "w
 const KIND: Record<string, string> = { agent: "build", triage: "intake", plan: "intake", explain: "director", firefighter: "director" };
 
 /** The exact sentences of the unit, and the cause each states. A drop's sentence is free prose and states nothing. */
-const SENTENCES: [RegExp, string][] = [
+const SENTENCES: [RegExp, Cause][] = [
   [/^no commit$/, "no-commit"],
   [/^time box$/, "timeout"],
   [/^job lock busy$/, "locked"],

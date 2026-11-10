@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { newsLine, type Entry, type Run } from "./ledger.ts";
-import { setCodes } from "../../../lib/naming.ts";
-import { causeOf, failedCheckOf } from "./outcome.ts";
+import { CAUSES, setCodes } from "../../../lib/naming.ts";
+import { causeOf, failedCheckOf, policyOf, POLICY } from "./outcome.ts";
 
 const run = (o: Partial<Run>) => ({ kind: "build", job: "j", name: "n", repo: "fac", n: 1, condition: "failed", told: false, started: "", ...o }) as Run;
 const entry = (o: Partial<Run>): Entry => ({ id: "20200101-000000-n-1", folder: "f", run: run(o) });
@@ -19,6 +19,13 @@ test("causeOf gives the stored cause, and none for a run with only a sentence: t
 
 test("a run the API refused for credit has the credit cause it states", () => {
   expect(causeOf(run({ cause: "credit", reason: "API Error: 402 This request would exceed your available credits" }))).toBe("credit");
+});
+
+test("POLICY has one row per cause; only credit counts to no cap, has no rescue, holds its backend and waits", () => {
+  expect(Object.keys(POLICY).sort()).toEqual([...CAUSES].sort());
+  const plain = { countsToCap: true, rescuable: true, holdsBackend: false, waitMs: 0 };
+  for (const c of CAUSES) expect([c, POLICY[c]]).toEqual([c, c === "credit" ? { countsToCap: false, rescuable: false, holdsBackend: true, waitMs: 10 * 60_000 } : plain]);
+  expect(policyOf(undefined)).toBe(POLICY.other);
 });
 
 test("an old dropped run keeps its no-commit mark, and free prose states no cause", () => {

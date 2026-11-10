@@ -188,6 +188,12 @@ test("stepOf is next over the job's runs with the Ask of the record of its run t
   expect(record.stepOf(job([{ condition: "passed", next: "land" }, { kind: "land", condition: "failed", cause: "locked" }])).step).toBe("land");
 });
 
+test("stepOf: a run whose cause is not rescuable, as credit, waits; the rescue never sees it", () => {
+  const credit: Partial<Run> = { condition: "failed", cause: "credit", reason: "API Error: 402 This request would exceed your available credits" };
+  expect(record.stepOf(job([credit]))).toEqual({ step: "wait", action: "failed", sub: "credit" });
+  expect(record.stepOf(job([{ condition: "failed", cause: "no-commit" }])).step).toBe("rescue");
+});
+
 test("jobIdOf: a numbered run reads its n; an un-numbered one its place in start order on its subject in runs, else 1", () => {
   const runs = job([{ on: "aleph-1375", n: 6 }, { on: "aleph-1375" }, { on: undefined, kind: "monitor", name: "monitor", n: 14 }, { on: "aleph-1375" }]);
   expect(runs.map((e) => record.jobIdOf(e))).toEqual(["aleph-1375#6", "aleph-1375#1", "monitor#14", "aleph-1375#1"]);
