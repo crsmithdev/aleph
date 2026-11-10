@@ -521,3 +521,17 @@ test("speed: a build on an unchanged store spawns one git process and reads the 
   }
   expect(calls.filter((c) => c[0] === "git").length).toBeLessThanOrEqual(1);
 });
+
+test("classify: the restart loop starts at the run cap setting", () => {
+  const off = withEnv({ ALEPH_RUN_CAP: "5" });
+  try {
+    const t = (m: number) => new Date(2026, 9, 28, 8, m).toISOString();
+    const runs = [0, 1, 2, 3, 4, 5].map((i) => ({ kind: "build", job: `l${i}`, name: `l${i}`, repo: "fx", on: "fx-2", condition: "passed", started: t(i * 5), ended: t(i * 5 + 4) }) as any);
+    const out = classify(runs, () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+    const reran = out.classes.find((c) => c.key === "reran")!;
+    expect(reran.causes.map((c) => c.name)).toEqual(["Restart loop"]);
+    expect(reran.causes[0].text).toContain("6 or more");
+    expect(reran.issues).toBe(1);
+    expect(out.notCounted.runs).toBe(5);
+  } finally { off(); }
+});

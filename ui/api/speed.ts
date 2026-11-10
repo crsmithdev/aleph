@@ -17,7 +17,7 @@ import type { Routes } from "../server.ts";
 import { reader, storeDir } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
-import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
+import { LIVE_CAP, RUN_CAP } from "../../jobs/lib/infra/settings.ts";
 import { clip, issueHref, NAMES, parseId, SPEEDS, tail } from "../../lib/naming.ts";
 import { inProject, repoIn, scopeOf } from "./scope.ts";
 import { BUCKETS, buckets, quantile, WINDOWS, type Window } from "../../lib/windows.ts";
@@ -114,7 +114,7 @@ const CLASS_TEXT: Record<Class, string> = {
   landed: "The run whose work landed on main.",
   returned: "A run of the landing job before the run that landed: a fix round the issue needed.",
   failed: "A run that started after its issue had landed, or found the work already on main.",
-  reran: "A run that a later start replaced: another job of the same issue landed, or the issue started 4 or more times inside an hour.",
+  get reran() { return `A run that a later start replaced: another job of the same issue landed, or the issue started ${RUN_CAP() + 1} or more times inside an hour.`; },
   dropped: "A run of an issue that was then dropped or closed without landing.",
 };
 /** The breakdown's name of each stated cause that has one. */
@@ -130,7 +130,7 @@ const CAUSE_TEXT: Record<string, string> = {
   "After fix rounds": "The job landed on a later run, after one or more fix rounds.",
   "Issue had landed": "The run started after its issue had landed.",
   "Work on main from another issue": "The run found the work already on main, from another issue.",
-  "Restart loop": "The issue started 4 or more times inside an hour.",
+  get "Restart loop"() { return `The issue started ${RUN_CAP() + 1} or more times inside an hour.`; },
   "Needed Chris": "The run waited for Chris, or Chris restarted or dropped it by hand.",
   "Reviewer sent back": "The reviewer did not pass the run's work.",
   "Checks failed": "The run's checks failed or timed out.",
@@ -205,13 +205,13 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     if (lands.has(r)) cls = "landed";
     else if ([...lands].some((l) => l.job === r.job && t0(l) > a)) cls = "returned";
     else if (afterLand || r.fate === "met" || r.fate === "duplicate") cls = "failed";
-    else if (startsBefore >= 3 || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "reran";
+    else if (startsBefore >= RUN_CAP() || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "reran";
     else if (["done", "dropped", GONE].includes(statusOf(g) ?? "")) cls = "dropped";
     if (!cls) { skipped.push(row); continue; }
     const stated = CAUSE_NAME[causeOf(r) ?? "other"];
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "failed") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
-    else if (cls === "reran" && startsBefore >= 3) row.cause = "Restart loop";
+    else if (cls === "reran" && startsBefore >= RUN_CAP()) row.cause = "Restart loop";
     else if (r.condition === "waiting") row.cause = "Needed Chris";
     else if (r.failed === "review") row.cause = "Reviewer sent back";
     else if (r.failed) row.cause = "Checks failed";

@@ -14,6 +14,8 @@ import { join } from "node:path";
 import { layout, logEvent } from "../../../lib/layout.ts";
 import { readJsonOr, writeJson } from "../infra/json.ts";
 import { FULL, SUBS, word, type Event } from "../../../lib/naming.ts";
+import { INTAKE_TRIES, RUN_CAP } from "../infra/settings.ts";
+import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { parentOf, partsOf, writeList, type Place } from "../../../issues/lib/store.ts";
@@ -75,19 +77,22 @@ const REASONS = {
   "question": { kind: "input", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question", card: "decide", name: "Questions",
     line: "A job or an intake stopped on a choice that the spec leaves open.", problem: "Your answer is needed." },
   "no-commit": { kind: "input", actions: ["rerun", "close"], always: "", card: "unstick", name: "Jobs with no commit",
-    line: "The last 3 jobs of an issue ended with nothing committed.", problem: "The last 3 runs of {id} ended with no commit, so the factory stopped starting it.",
+    get line() { return `The last ${NO_COMMIT_LIMIT} jobs of an issue ended with nothing committed.`; },
+    get problem() { return `The last ${NO_COMMIT_LIMIT} runs of {id} ended with no commit, so the factory stopped starting it.`; },
     rerun: { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the issue." } },
   // Its `rerun` answer closes the issue as done (decideAsk); `close` drops it.
   "part-dropped": { kind: "input", actions: ["rerun", "close"], always: "", card: "decide", name: "Dropped sub-issues",
     line: "A sub-issue of an issue was dropped and no other sub-issue is open.", problem: "A sub-issue of {id} was dropped and no other sub-issue of it is open.",
     rerun: { label: "Close as done", hint: "Sets the issue to done; nothing more runs for it." } },
   "intake-failed": { kind: "input", actions: ["retry", "close"], always: "retry", card: "unstick", name: "Failed intake",
-    line: "Intake of an issue failed twice.", problem: "Intake of {id} failed: it gave no verdict, so no one has decided what to do with this issue." },
+    get line() { return `Intake of an issue failed ${INTAKE_TRIES() === 2 ? "twice" : `${INTAKE_TRIES()} times`}.`; },
+    problem: "Intake of {id} failed: it gave no verdict, so no one has decided what to do with this issue." },
   "rescue": { kind: "input", actions: ["decide", "drop"], always: "recommended", card: "unstick", name: "Rescue of a stuck job",
     line: "A stuck job with more than one way out.", problem: "Your answer is needed." },
   // Not Ask reasons of the spec; no new home is named for them.
   "run-cap": { kind: "input", actions: ["rerun", "close"], always: "", card: "unstick", name: "Job cap",
-    line: "An issue started 3 times in one hour.", problem: "The factory started {id} 3 times in one hour, so it stopped starting it until you run it again.",
+    get line() { return `An issue started ${RUN_CAP()} times in one hour.`; },
+    get problem() { return `The factory started {id} ${RUN_CAP()} times in one hour, so it stopped starting it until you run it again.`; },
     rerun: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
   "proposal-check": proposal("Proposed checks", "The correction memory proposes a check for a repo."),
   "proposal-claude-md": proposal("Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."),

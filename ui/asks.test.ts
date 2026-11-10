@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { asks, stuckBlocker } from "./asks.ts";
 import { ASK_REASONS, type Ask } from "../jobs/lib/asks/ask.ts";
 import type { Lesson } from "../jobs/lib/learning/corrections.ts";
+import { withEnv } from "./test-server.ts";
+import { reasonText } from "./asks.ts";
 import type { Job, NewIssue } from "./state.ts";
 
 /** Stored case text the fixtures put on their Ask while a test sets it. */
@@ -152,4 +154,16 @@ describe("stuck rows", () => {
     expect(stuckBlocker({ ...stuck, reason: "needs aleph-12.3 to land first" }, undefined, part)).toEqual({ id: "aleph-12.3", title: "Land the base", href: "#/issues/aleph/12.3" });
     expect(stuckBlocker({ ...stuck, reason: "the fix is in a143077" }, undefined, part)).toBeNull();
   });
+});
+
+test("run-cap and intake-failed texts read the settings", () => {
+  const off = withEnv({ ALEPH_RUN_CAP: "5", ALEPH_INTAKE_TRIES: "4" });
+  try {
+    const card = CASES["run-cap"]()[0];
+    expect(reasonText("run-cap").line).toMatch(/5/);
+    expect(reasonText("run-cap").line).not.toMatch(/3/);
+    expect(card.problem).toMatch(/5/);
+    expect(card.problem).toContain("5 times");
+    expect(reasonText("intake-failed").line).not.toContain("twice");
+  } finally { off(); }
 });
