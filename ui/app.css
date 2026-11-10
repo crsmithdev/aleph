@@ -798,10 +798,11 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-in); }
 .trio > .wide { grid-column: span 2; }
 .chartbox { width: 100%; height: 200px; min-width: 0; }
-/* A chart panel fills its grid cell; its chart takes the height the card leaves. */
+/* A chart panel fills its grid cell; its chart takes the height the card leaves. The basis is 0, not the content:
+   ECharts sizes its canvas to the box, so a box sized by its content grows each time the chart resizes. */
 aleph-chart { display: flex; min-width: 0; }
 aleph-chart > .card { flex: 1; }
-aleph-chart .chartbox { flex: 1; height: auto; min-height: 200px; }
+aleph-chart .chartbox { flex: 1 1 0; height: auto; min-height: 200px; }
 /* Status: Active Jobs is as tall as the Agent Time card below it. */
 aleph-chart.active .chartbox { min-height: 0; height: 58px; flex: none; }
 .bars { display: grid; grid-template-columns: minmax(80px, 200px) minmax(40px, 1fr) max-content; column-gap: var(--sp-12); }
