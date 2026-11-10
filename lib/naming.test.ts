@@ -8,6 +8,12 @@ beforeEach(() => n.setCodes({ aleph: "a", sidetone: "s", "btcx-tools": "b", clou
 afterAll(() => n.setCodes({}));
 
 describe("ids", () => {
+  test("an issue's page link comes from its full or short ID", () => {
+    expect(n.issueHref("aleph-1430")).toBe("#/issues/aleph/1430");
+    expect(n.issueHref("b3.1")).toBe("#/issues/btcx-tools/3.1");
+    expect(n.issueHref("monitor")).toBe("");
+  });
+
   test("short and full forms map both ways", () => {
     expect(n.shortId("aleph-1430")).toBe("a1430");
     expect(n.shortId("aleph-1359.1")).toBe("a1359.1");

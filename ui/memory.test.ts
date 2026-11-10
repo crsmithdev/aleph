@@ -24,6 +24,9 @@ let base: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const at = (p: string) => fetch(`http://127.0.0.1:${server.port}${p}`);
 const today = new Date(NOW).toISOString().slice(0, 10);
 
+/** The registry: a project filter names a key in it, or it matches nothing. */
+const REPOS = JSON.stringify({ other: { path: "/nonexistent/other" } });
+
 function note(dir: string, title: string, kind: string, scope: string, body: string, core = "") {
   writeFileSync(join(base, "vault", "wiki", dir, `${title}.md`),
     `---\nkind: ${kind}\nscope: ${scope}\nconfidence: measured\nupdated: ${today}\n${core ? `core: ${core}\n` : ""}supersedes: []\nsources: [trace:abc123]\n---\n${body}\n`);
@@ -55,7 +58,7 @@ beforeAll(async () => {
   git(base, "clone", "-q", join(base, "items.git"), join(base, "items"));
   git(join(base, "items"), "commit", "-q", "--allow-empty", "-m", "start");
   git(join(base, "items"), "push", "-q", "origin", "main");
-  writeFileSync(join(base, "repos.json"), "{}");
+  writeFileSync(join(base, "repos.json"), REPOS);
   mkdirSync(join(base, "jobs"));
   const restoreStore = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
   restoreEnv = () => { restoreStore(); restoreVault(); restoreHandoffs(); };
@@ -87,6 +90,13 @@ test("?project= keeps only that project's data", async () => {
   expect((await at("/api/memory/note?title=Use%20Bun&project=other")).status).toBe(404);
   const n: any = await (await at("/api/memory/note?title=Other%20trap&project=other")).json();
   expect(n.links).toEqual([]);  // Use Bun is another project's
+});
+
+test("?project= with a key not in the registry shows no notes", async () => {
+  const m: any = await (await at("/api/memory?project=zeta")).json();
+  expect(m.total).toBe(0);
+  const s: any = await (await at("/api/memory/search?q=&project=zeta")).json();
+  expect(s.results).toEqual([]);
 });
 
 test("a note has its links and backlinks; a missing note is 404", async () => {
@@ -226,7 +236,7 @@ test("prospective issues carry their priority, medium when they have none", asyn
     const t: any = await memoryTypes(join(base, "vault"), [], null);
     expect(t.prospective.issues.map((i: any) => i.priority)).toEqual(["critical", "medium"]);
   } finally {
-    writeFileSync(join(base, "repos.json"), "{}");
+    writeFileSync(join(base, "repos.json"), REPOS);
   }
 });
 

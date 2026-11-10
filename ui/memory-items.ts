@@ -4,7 +4,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { clip } from "../lib/naming.ts";
+import { clip, issueHref } from "../lib/naming.ts";
 import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
 import { readStore } from "../jobs/lib/learning/corrections.ts";
 import { episodesDir, KEEP_DAYS } from "../jobs/lib/learning/episode.ts";
@@ -12,6 +12,7 @@ import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
 import type { Note } from "../vault/lib/vault.ts";
 import { skillsDir } from "./api/skills.ts";
 import { handoffsDir, hooks, intent, prospectiveIssues, sessions } from "./memory-types.ts";
+import { memoryIn } from "./api/scope.ts";
 
 export const TYPES = ["semantic", "procedural", "episodic", "working", "prospective", "retrieval"] as const;
 export type Type = (typeof TYPES)[number];
@@ -117,7 +118,7 @@ async function episodic(root: string): Promise<Item[]> {
 function prospective(): Item[] {
   return prospectiveIssues().map((i) => ({
     type: "prospective", source: "issue", key: `${i.repo}/${i.id}`, title: `${i.repo}-${i.id}`, text: i.title, scope: i.repo, at: "", read: null, body: i.title, priority: i.priority,
-    href: `#/issues/${encodeURIComponent(i.repo)}/${i.id}`, effect: `The factory starts it when ${i.after.join(", ")} is done.`,
+    href: issueHref(`${i.repo}-${i.id}`), effect: `The factory starts it when ${i.after.join(", ")} is done.`,
   }));
 }
 
@@ -150,7 +151,7 @@ export function search(all: Item[], q: string, project: string | null, root: str
   const text = q.trim().toLowerCase();
   const rank = new Map<string, number>();
   if (text) rankNotes(openIndex(root, wiki), wiki, text, project ?? undefined).forEach((r, i) => rank.set(r.note.title, i));
-  const keep = (it: Item) => (!project || !it.scope || it.scope === project || it.scope === "global")
+  const keep = (it: Item) => memoryIn(it.scope, project)
     && (!text || (it.source === "note" ? rank.has(it.key) || it.title.toLowerCase().includes(text) : it.body.toLowerCase().includes(text) || it.title.toLowerCase().includes(text)));
   return all.filter(keep).map(({ body: _, ...it }) => ({ ...it, text: snippet({ ...it, body: _ }, text), ...(rank.has(it.key) && it.source === "note" ? { rank: rank.get(it.key) } : {}) }))
     .sort((a, b) => TYPES.indexOf(a.type) - TYPES.indexOf(b.type) || (a.rank ?? 1e9) - (b.rank ?? 1e9));

@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actButton, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, issueHref, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
@@ -141,8 +141,8 @@ const TONES = { running: "run", reran: "run", waiting: "ask", escalated: "ask", 
 /** An event's row: the time, the action in its tone, the subject's ID, then the issue's title, the sub and the content, and the note quiet after them. */
 export function eventRow(ev, titles = {}) {
   const tone = TONES[ev.action] ?? "quiet";
-  const p = parseId(ev.subject), title = titles[ev.subject] ?? "";
-  const id = p ? idLink(shownId(ev.subject), `#/issues/${encodeURIComponent(p.repo)}/${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`, { title: title || undefined }) : esc(shownId(ev.subject));
+  const to = issueHref(ev.subject), title = titles[ev.subject] ?? "";
+  const id = to ? idLink(shownId(ev.subject), to, { title: title || undefined }) : esc(shownId(ev.subject));
   const what = [ev.sub, contentText(ev)].filter(Boolean).join(" ");
   return `<div class="event-row ${tone}" data-by="${esc(ev.by)}">` +
     `<span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
@@ -400,7 +400,7 @@ function doneLane(s, win) {
 function queuedLane(s) {
   const rows = (s.queued ?? []).map((w) => {
     const dead = (w.waits ?? []).filter((b) => b.dead);
-    const id = repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo);
+    const id = repoIdLink(`${w.repo}-${w.id}`, issueHref(`${w.repo}-${w.id}`), w.repo);
     const hold = holdLine(w.ev);
     return laneCard("queued-row", metaRow({ id, chips: (hold ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");

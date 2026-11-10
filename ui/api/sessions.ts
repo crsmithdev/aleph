@@ -17,7 +17,6 @@ const ms = (iso?: string) => Date.parse(iso ?? "") || 0;
 
 /** A trace's project, by the rule that the Skills page uses too. */
 const projectOf = (t: any): string => traceProject(t.metadata?.cwd, t.tags);
-const matches = (t: any, project: string | null) => !project || traceIn(t, project);
 
 const taskTypes = (ts: any[]): string[] => {
   const out = new Set<string>();
@@ -60,7 +59,7 @@ function fail(e: unknown): Response {
 async function sessionTraces(id: string, project: string | null) {
   const cfg = config();
   const ts = (await traces(cfg, { sessionId: id })).filter((t) => t.sessionId === id || t.sessionId === undefined).sort(byTime);
-  return { cfg, ts: ts.filter((t) => matches(t, project)) };
+  return { cfg, ts: ts.filter((t) => traceIn(t, project)) };
 }
 
 function modelOf(obs: any[]): string | null {
@@ -168,7 +167,7 @@ function textBlocks(obs: any[], output: string) {
 export async function windowTraces(days: number, project: string | null): Promise<any[]> {
   const hour = 3600_000; // whole hours, so the cache key holds
   const from = new Date(Math.floor((Date.now() - Math.min(days > 0 ? days : 7, 90) * 86400_000) / hour) * hour).toISOString();
-  return (await traces(config(), { fromTimestamp: from })).filter((t) => t.sessionId && matches(t, project));
+  return (await traces(config(), { fromTimestamp: from })).filter((t) => t.sessionId && traceIn(t, project));
 }
 
 /** `GET /api/sessions`'s handler: the sessions of a window, called in-process by `/api/agents`. */

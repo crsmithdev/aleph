@@ -11,8 +11,7 @@ import { join } from "node:path";
 import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../../jobs/lib/infra/layout.ts";
 import { recordsDir } from "../../jobs/lib/records/record.ts";
-import { parseId } from "../../lib/naming.ts";
-import { inProject, known } from "./scope.ts";
+import { eventIn } from "./scope.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
 import { staleCache } from "./speed.ts";
@@ -36,7 +35,7 @@ let ping: Timer | undefined, settle: Timer | undefined, sentAt = 0;
 
 function send(bytes: Uint8Array, subject?: string): void {
   for (const [c, project] of clients) {
-    if (project && subject !== undefined && !(parseId(subject) ? inProject(subject, project) : known(project))) continue;
+    if (subject !== undefined && !eventIn(subject, project)) continue;
     try { c.enqueue(bytes); } catch { clients.delete(c); }
   }
 }

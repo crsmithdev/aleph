@@ -730,4 +730,4 @@ export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k,
 import { shortId, shortText } from "../lib/naming.ts";
 
 // The names and IDs of docs/naming.md, for the views.
-export { contentText, parseId, parseJob, setCodes, shownId } from "../lib/naming.ts";
+export { contentText, issueHref, parseId, parseJob, setCodes, shownId } from "../lib/naming.ts";

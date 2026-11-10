@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
+import { actButton, issueHref, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { askRow } from "./now.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
@@ -46,7 +46,7 @@ export function hashOptions(q = new URLSearchParams()) {
 /** A row's own number: `910` for an issue, `910.1` for a sub-issue. */
 const own = (r) => r.ref ?? r.id;
 export const ref = (r) => `${r.repo}-${own(r)}`;
-export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${own(r)}`;
+export const href = (r) => issueHref(ref(r));
 
 const DAY = 86_400_000;
 const ms = (s) => Date.parse(s) || 0;

@@ -1,6 +1,6 @@
 /**
  * `GET /api/memory`, `/api/memory/search?q=`, `/api/memory/note?title=`, `/api/memory/file?source=&key=`: the Memory view.
- * `?project=<key>` keeps the notes whose scope is that key. The POST routes are its writes: a note goes through
+ * `?project=<key>` keeps what `memoryIn` in ui/api/scope.ts puts in that project: its own notes and the global ones. The POST routes are its writes: a note goes through
  * `vault write`, `archive` or `delete`, so each is validated, committed and pushed; a handoff or an episode is a file.
  */
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
@@ -18,10 +18,11 @@ import { clearTypesCache, memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { uiCacheMs } from "../../jobs/lib/infra/settings.ts";
+import { memoryIn } from "./scope.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 const scopeOf = (n: Note) => String(n.fm.scope ?? "");
-const inScope = (project: string | null) => (n: Note) => !project || scopeOf(n) === project;
+const inScope = (project: string | null) => (n: Note) => memoryIn(scopeOf(n), project);
 const count = (xs: string[]) => Object.fromEntries([...new Set(xs)].sort().map((x) => [x, xs.filter((y) => y === x).length]));
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 

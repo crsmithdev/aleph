@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
+import { pageHead, sectionHead, blockersHtml, issueHref, bytes, chip, codeText, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS } from "../../lib/naming.ts";
 
@@ -174,7 +174,7 @@ function jobKpis(j, now = Date.now()) {
 export function renderJob(j) {
   const id = localId(j.name, j.repo), p = j.parent;
   // The issue the job works on: a part's parent, else the job's own item.
-  const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: `#/issues/${encodeURIComponent(j.repo)}/${j.item.id}` });
+  const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: issueHref(`${j.repo}-${j.item.id}`) });
   const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(iss.id, j.repo)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
   const nav = [iss ? `<a class="act" href="${esc(iss.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next sub-issue: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
   const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}` }) : ""}<span class="idp">${esc(localId(j.name, j.repo))}</span></div>`;

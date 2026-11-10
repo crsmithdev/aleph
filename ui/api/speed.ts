@@ -19,8 +19,8 @@ import { reader, storeDir, uiFetchTtl } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
-import { clip, NAMES, parseId } from "../../lib/naming.ts";
-import { inProject } from "./scope.ts";
+import { clip, issueHref, NAMES, parseId } from "../../lib/naming.ts";
+import { inProject, repoIn } from "./scope.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
 
@@ -256,7 +256,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     const top = [...group((r) => r.issue)].map(([issue, x]) => {
       const last = x.reduce((p, q) => (t0(q.run) > t0(p.run) ? q : p));
       const [repo, n] = splitId(issue);
-      return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: `#/issues/${encodeURIComponent(repo)}/${n}` };
+      return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: issueHref(`${repo}-${n}`) };
     }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.issue, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
     return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.issue)).size, causes, top };
   });
@@ -312,7 +312,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   const note = (key: string | undefined, k: Phase, secs: number) => {
     if (!key) return;
     const [repo, n] = splitId(key);
-    if (!per.has(key)) per.set(key, { id: key, href: `#/issues/${encodeURIComponent(repo)}/${n}`, outcome: "unlanded", filed: issue.get(key) ?? null, intake: null, queue: null, implement: null, land: null, lead: null });
+    if (!per.has(key)) per.set(key, { id: key, href: issueHref(`${repo}-${n}`), outcome: "unlanded", filed: issue.get(key) ?? null, intake: null, queue: null, implement: null, land: null, lead: null });
     per.get(key)![k] = secs;
   };
   const inWindow = (t: number) => t >= since && t <= now;
@@ -520,7 +520,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const models = new Map<string, number[]>();
 
   const read = allRecords();
-  const entries = allRuns(false, read).filter((e) => !project || e.run.repo === project);
+  const entries = allRuns(false, read).filter((e) => repoIn(e.run.repo, project));
   const all = entries.map((x) => x.run as Run);
   const landed: Run[] = [];
   for (const r of all) {
@@ -570,7 +570,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     for (const r of all) if (isAgentRun(r.kind) && issueOf(r) !== undefined) nRuns.set(`${r.repo}-${issueOf(r)}`, (nRuns.get(`${r.repo}-${issueOf(r)}`) ?? 0) + 1);
     issues.usage = keys.map((g) => {
       const [repo, n] = splitId(g);
-      return { goal: g, href: `#/issues/${encodeURIComponent(repo)}/${n}`, week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
+      return { goal: g, href: issueHref(`${repo}-${n}`), week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
     }).sort((a, b) => b.week - a.week).slice(0, 8);
     issues.week = per.length ? round(pct(per, 0.5), 2) : null;
   }
@@ -595,9 +595,9 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   for (const ls of Object.values(worst)) for (const t of [...ls.errors, ...ls.slow] as StageIssue[]) {
     const [repo, n] = splitId(t.issue);
     const item = repo ? lists.item(repo, n) : undefined;
-    if (item) Object.assign(t, { title: item.title, href: `#/issues/${encodeURIComponent(repo)}/${n}` });
+    if (item) Object.assign(t, { title: item.title, href: issueHref(`${repo}-${n}`) });
   }
-  const records = read.filter((r) => !project || inProject(r.issue, project));
+  const records = read.filter((r) => inProject(r.issue, project));
   const stages = { rows: stageRows({ runs: entries, specChecks: specChecksOf(records) }, since.getTime(), now.getTime()), worst };
   for (const u of issues.usage) {
     const [repo, n] = splitId(u.goal);
@@ -610,7 +610,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
     return inBucket.length ? round(pct(inBucket, q)) : null;
   };
-  const recent = flakes().filter((f) => Date.parse(f.at) >= since.getTime() && (!project || f.repo === project));
+  const recent = flakes().filter((f) => Date.parse(f.at) >= since.getTime() && repoIn(f.repo, project));
   const started = Array.from({ length: n }, () => 0);
   const costs = Array.from({ length: n }, () => ({} as Record<string, number>));
   for (const e of entries) {

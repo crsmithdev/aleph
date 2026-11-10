@@ -1,6 +1,6 @@
 /** The per-type blocks of `GET /api/memory`: where aleph keeps each of the seven memory types, read as it is. A source that is absent gives an empty list, never an error. */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { clip } from "../lib/naming.ts";
 import { claudeSettings } from "../hooks/lib/context.ts";
 import { langfuseConfig } from "../lib/env.ts";
@@ -13,6 +13,7 @@ import { coreNotes, START_BUDGET, startContext, type Note } from "../vault/lib/v
 import { activity } from "./activity.ts";
 import { skillsDir } from "./api/skills.ts";
 import { config, traces } from "./langfuse.ts";
+import { traceProject } from "./api/scope.ts";
 import { staleAsync } from "./stale.ts";
 import { handoffsDir as handoffsSetting, uiCacheMs } from "../jobs/lib/infra/settings.ts";
 
@@ -79,7 +80,7 @@ async function loadSessions(): Promise<Sessions | null> {
     return [...groups].map(([id, ts]) => {
       ts.sort((a, b) => ms(a) - ms(b));
       const input = ts[0].input;
-      return { id, project: ts[0].name || (ts[0].metadata?.cwd ? basename(String(ts[0].metadata.cwd)) : ""), firstPrompt: clip(typeof input === "string" ? input : JSON.stringify(input ?? ""), 120), turns: ts.length, last: ts.at(-1).timestamp as string };
+      return { id, project: traceProject(ts[0].metadata?.cwd, ts[0].tags), firstPrompt: clip(typeof input === "string" ? input : JSON.stringify(input ?? ""), 120), turns: ts.length, last: ts.at(-1).timestamp as string };
     }).sort((a, b) => b.last.localeCompare(a.last)).slice(0, 10);
   } catch { return null; }
 }

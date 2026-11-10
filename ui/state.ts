@@ -4,7 +4,7 @@
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
 import { readEvents } from "../jobs/lib/infra/layout.ts";
-import { parseId, type Event } from "../lib/naming.ts";
+import { issueHref, parseId, type Event } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
@@ -14,18 +14,16 @@ import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from 
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
-import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../issues/lib/store.ts";
-import { idOf, parentRef, parseIssueRef, PRIORITIES, refOf, status } from "../issues/lib/todo.ts";
+import { afterOf, byPriority, partsOf, reader, isTracker } from "../issues/lib/store.ts";
+import { idOf, parentRef, parseIssueRef, refOf, status } from "../issues/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import type { Wk } from "./usage.ts";
+import { card, priorityOf, stageOf } from "./issue.ts";
 import { ALERT, ASK, FINE, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED } from "../lib/status-words.ts";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
 export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }
-const hrefOf = (repo: Repo, ref: string) => `#/issues/${encodeURIComponent(repo.key)}/${ref}`;
-/** An item's priority; none, or an unknown one, reads medium. */
-const priorityOf = (item: any): string => PRIORITIES[rank(item)];
 const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.dead);
 
 /** A part of an issue as a flat card says it: "n/m" with a link to the parent. */
@@ -295,7 +293,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
   const blocker = (id: string): Wait => {
     const r = parseIssueRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
     return {
-      id, href: r ? hrefOf({ key: r.repo } as Repo, String(r.id)) : "", title: found?.title ?? "",
+      id, href: issueHref(id), title: found?.title ?? "",
       state: r && found && registry[r.repo] ? stagesOf(registry[r.repo]).get(String(r.id))?.stage ?? status(found) : null,
       // The dispatcher counts neither as done, so the wait does not end by itself.
       dead: !found ? null : status(found) === "dropped" ? "dropped" : isTracker(found) ? "tracker" : null,
@@ -355,7 +353,7 @@ export function state(now = new Date()): State {
     if (!repo.sandbox) continue;
     for (const item of lists.list(repo.key)?.items ?? []) {
       const id = `${repo.key}-${refOf(item)}`;
-      if (status(item) === "open") openById.set(id, { title: item.title, href: `#/issues/${encodeURIComponent(repo.key)}/${refOf(item)}` });
+      if (status(item) === "open") openById.set(id, { title: item.title, href: issueHref(id) });
       const after = afterOf(item);
       if (after.length) waitsOf.set(id, after[0]);
     }
@@ -385,7 +383,7 @@ export function state(now = new Date()): State {
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) {
       const ps = partsOf(doc!, item);
-      ps.forEach((g, i) => partOf.set(`${repo.key}-${refOf(g)}`, { n: i + 1, m: ps.length, parent: `${repo.key}-${refOf(item)}`, href: hrefOf(repo, refOf(item)) }));
+      ps.forEach((g, i) => partOf.set(`${repo.key}-${refOf(g)}`, { n: i + 1, m: ps.length, parent: `${repo.key}-${refOf(item)}`, href: issueHref(`${repo.key}-${refOf(item)}`) }));
     }
   }
   const doneItems: { at: number; repo: Repo; item: any; runs: Runs[]; since: string }[] = [];
@@ -398,11 +396,10 @@ export function state(now = new Date()): State {
     const stageById = stagesOf(repo);
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) {
-      const ref = refOf(item), id = `${repo.key}-${ref}`, href = hrefOf(repo, ref);
-      const st = stageById.get(ref)?.stage ?? status(item);
+      const ref = refOf(item), id = `${repo.key}-${ref}`, href = issueHref(id);
+      const st = stageOf(item, stageById.get(ref));
       // Done lists issues; a part shows under its issue.
       const top = parentRef(item) === undefined;
-      const card = (): NewIssue => ({ id, title: item.title, priority: priorityOf(item), status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created_time ?? ""), updated: String(item.fm.updated_time ?? ""), stage: st });
       const mineParts = partsOf(doc!, item);
       // Latest done holds the done parts and the done issues without parts; a done parent shows no card.
       if (st === "done" && (!top || mineParts.length === 0)) {
@@ -412,16 +409,7 @@ export function state(now = new Date()): State {
       }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       const ask = askOf(id);
-      if (st === "waiting" && ask) {
-        const c = card();
-        const q = ask.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
-        if (q) c.question = q;
-        if (ask.options.length) c.decision = ask;
-        c.ask = ask;
-        c.reason = ask.reason;
-        c.askKind = ask.kind;
-        awaitingItems.push(c);
-      }
+      if (st === "waiting" && ask) awaitingItems.push(card(repo.key, item, st, ask));
       else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated_time ?? item.fm.created_time ?? "") });
       // A parent shows a card in Running only while it waits to close: every part is done.
       if (st === "working" && mineParts.length) {
@@ -438,7 +426,7 @@ export function state(now = new Date()): State {
 
   doneItems.sort((a, b) => b.at - a.at);
   const done: DoneItem[] = doneItems.slice(0, DONE).map(({ at, repo, item, runs, since }) => ({
-    id: `${repo.key}-${refOf(item)}`, title: item.title, href: hrefOf(repo, refOf(item)), priority: priorityOf(item),
+    id: `${repo.key}-${refOf(item)}`, title: item.title, href: issueHref(`${repo.key}-${refOf(item)}`), priority: priorityOf(item),
     finished: at ? new Date(at).toISOString() : "", since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}),
     jobs: runs.map((r: Runs) => toJob(r)),
   }));

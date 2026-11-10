@@ -11,7 +11,7 @@ import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
-import { contentText, word } from "../../lib/naming.ts";
+import { contentText, issueHref, word } from "../../lib/naming.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
@@ -74,7 +74,6 @@ interface JobDetail extends Job {
   parent?: { id: string; href: string; n: number; of: number; next?: { id: string; href: string } };
 }
 
-const issueHref = (repo: string, ref: string) => `#/issues/${encodeURIComponent(repo)}/${ref}`;
 /** The item's spec and, for a part, its issue and its place among the parts. Nothing when the store cannot be read. */
 function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | "parent"> {
   const place = loadRegistry()[repo];
@@ -88,7 +87,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   if (!up) return out;
   const parts = partsOf(doc, up).map(todos.refOf);
   const n = parts.indexOf(todos.refOf(item)), next = parts[n + 1];
-  out.parent = { id: `${repo}-${todos.refOf(up)}`, href: issueHref(repo, todos.refOf(up)), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: `#/jobs/${encodeURIComponent(`${repo}-${next}`)}` } } : {}) };
+  out.parent = { id: `${repo}-${todos.refOf(up)}`, href: issueHref(`${repo}-${todos.refOf(up)}`), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: `#/jobs/${encodeURIComponent(`${repo}-${next}`)}` } } : {}) };
   return out;
 }
 

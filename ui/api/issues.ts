@@ -13,49 +13,30 @@ import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/records/sta
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, areasOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, readList, readLists } from "../../issues/lib/store.ts";
+import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, readList, readLists } from "../../issues/lib/store.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import * as todos from "../../issues/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
-import { githubBase, jobProjector, type NewIssue } from "../state.ts";
+import { githubBase, jobProjector } from "../state.ts";
+import { card, row, stageOf } from "../issue.ts";
+import { issueHref } from "../../lib/naming.ts";
+import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { filed } from "./speed.ts";
 import { readHolds } from "../../jobs/lib/gates/factory-status.ts";
+import { repoIn } from "./scope.ts";
+
+const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
 
 /** An issue id from a route: `7` or `7.1`; null for anything else. */
 const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Number(raw) : /^\d+\.\d+$/.test(raw) ? raw : null);
 
 
-const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
-
-export interface Row {
-  id: number; ref: string; repo: string; title: string; kind: string; status: string; priority: string | null; labels: string[];
-  after: string[]; created: string | null; createdTime: string | null; closed: string | null; closedTime: string | null; source: string | null; updated: string | null; updatedTime: string | null; notes: number;
-  /** The parent's ref: `"5"` for a child of `<repo>-5`; null for a top-level issue. */
-  parent: string | null;
-  stage?: string; why?: string;
-}
-
-function row(repo: string, i: todos.Issue): Row {
-  const createdTime = str(i.fm.created_time), closedTime = str(i.fm.closed_time), updatedTime = str(i.fm.updated_time);
-  const day = (t: string | null) => (t ? todos.today(new Date(t)) : null);
-  return {
-    id: i.id, ref: todos.refOf(i), repo, title: i.title, kind: str(i.fm.kind) ?? "task", status: todos.status(i), priority: str(i.fm.priority), labels: areasOf(i),
-    after: afterOf(i), created: day(createdTime), createdTime, closed: day(closedTime), closedTime, source: str(i.fm.source), updated: day(updatedTime), updatedTime, notes: i.notes.length, parent: todos.parentRef(i) ?? null,
-  };
-}
-
-/** Each row's stage, from the list already read and one pass over main's trailers. */
-function derived(repo: Repo, doc: todos.Doc, rows: Row[]): void {
-  let states;
-  try { states = repoStages(repo, { fetch: false, doc }); } catch { return; }
-  const byId = new Map(states.map((s) => [s.id, s]));
-  for (const r of rows) {
-    const s = byId.get(`${repo.key}-${r.ref}`);
-    if (s && r.status !== "parked") { r.stage = s.stage; r.why = s.why; }
-  }
+/** Each item's stage by ref, from the list already read and one pass over main's trailers; empty when the trailers cannot be read. */
+function stagesBy(repo: Repo, doc: todos.Doc, items?: string[]): Map<string, Stage> {
+  try { return new Map(repoStages(repo, { fetch: false, doc, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch { return new Map(); }
 }
 
 function list(url: URL): Response {
@@ -66,7 +47,7 @@ function list(url: URL): Response {
   const label = url.searchParams.get("label");
   if (status && !todos.STATUSES.includes(status as todos.Status)) return Response.json({ error: `status must be one of ${todos.STATUSES.join(", ")}` }, { status: 400 });
   if (wantRepo && !registry[wantRepo]) return Response.json({ error: `no repo named ${wantRepo}` }, { status: 404 });
-  let repos = Object.values(registry).filter((r) => !project || r.key === project);
+  let repos = Object.values(registry).filter((r) => repoIn(r.key, project));
   if (wantRepo) repos = repos.filter((r) => r.key === wantRepo);
   let docs: (todos.Doc | null)[];
   try { docs = readLists(repos); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
@@ -75,8 +56,8 @@ function list(url: URL): Response {
   for (const n of order) {
     const doc = docs[n];
     if (!doc) continue;
-    const rows = doc.items.map((i) => row(repos[n].key, i));
-    derived(repos[n], doc, rows);
+    const states = stagesBy(repos[n], doc);
+    const rows = doc.items.map((i) => row(repos[n].key, i, states.get(todos.refOf(i))));
     const items = rows.filter((r) => (!status || r.status === status) && (!label || r.labels.includes(label)));
     if (items.length) out.push(...items);
   }
@@ -98,7 +79,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const project = url.searchParams.get("project");
   const repo = loadRegistry()[params.repo];
   const ref = params.n;
-  if (!repo || !/^\d+(\.\d+)?$/.test(ref) || (project && project !== repo.key)) return Response.json({ error: "no such issue" }, { status: 404 });
+  if (!repo || !/^\d+(\.\d+)?$/.test(ref) || !repoIn(repo.key, project)) return Response.json({ error: "no such issue" }, { status: 404 });
   let doc: todos.Doc | null;
   try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
   const item = doc && todos.find(doc, ref);
@@ -107,8 +88,7 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const main = `refs/remotes/origin/${repo.main}`;
   const partRefs = partsOf(doc, item).map(todos.refOf);
-  let states = new Map<string, { stage: string; why: string }>();
-  try { for (const s of repoStages(repo, { fetch: false, doc, items: [ref, ...partRefs] })) states.set(s.id.slice(repo.key.length + 1), s); } catch {}
+  const states = stagesBy(repo, doc, [ref, ...partRefs]);
   const mine = todos.status(item) === "parked" ? undefined : states.get(ref);
   const state = mine ? { item: `${repo.key}-${ref}`, stage: mine.stage, why: mine.why } : null;
 
@@ -121,7 +101,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The Issue page: the `## Request`, then the parts, each with its Job.
   const parts = partRefs.map((g) => {
     const gi = todos.find(doc!, g), st = states.get(g);
-    return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: `#/issues/${encodeURIComponent(repo.key)}/${g}`, priority: String(gi?.fm.priority ?? "medium"), stage: st?.stage ?? (gi ? todos.status(gi) : "missing"), why: st?.why ?? "", jobs: jobsOf(g) };
+    return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: issueHref(`${repo.key}-${g}`), priority: String(gi?.fm.priority ?? "medium"), stage: gi ? stageOf(gi, st) : "missing", why: st?.why ?? "", jobs: jobsOf(g) };
   });
   // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
   const timeline = {
@@ -147,17 +127,9 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The Ask row of an issue that waits for Chris: the item `attend` builds, from the NewIssue as the state builds it.
   const stored = askOf(`${repo.key}-${ref}`);
   let ask: unknown;
-  if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") {
-    const id = `${repo.key}-${ref}`;
-    const c: NewIssue = { id, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${ref}`, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created_time ?? ""), updated: String(item.fm.updated_time ?? ""), stage: "waiting" };
-    const q = stored.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
-    if (q) c.question = q;
-    if (stored.options.length) c.decision = stored;
-    c.ask = stored; c.reason = stored.reason; c.askKind = stored.kind;
-    ask = attend({ runs: [], issues: [c] }, []).items[0];
-  }
+  if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") ask = attend({ runs: [], issues: [card(repo.key, item, "waiting", stored)] }, []).items[0];
 
-  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes, media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 /**

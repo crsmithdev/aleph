@@ -189,7 +189,7 @@ async function analyse(days: number, project: string | null): Promise<Analysis> 
     const meta = { ...list.find((o) => o.metadata?.cwd)?.metadata, ...t?.metadata };
     const session = t?.sessionId ?? (list.find((o) => (o as any).sessionId) as any)?.sessionId ?? list.find((o) => o.metadata?.session_id)?.metadata?.session_id ?? "";
     const proj = traceProject(meta.cwd, t?.tags);
-    if (project && proj !== project) continue; // an unknown project matches nothing
+    if (project && proj !== project) continue; // traceIn's rule, from the project already worked out
     const turn = list.find((o) => o.name === "turn");
     const prompt = turn ? text(turn.input) : "";
     const isTool = (o: Observation) => o !== turn && (o.metadata?.tool || String(o.type).toUpperCase() === "TOOL");

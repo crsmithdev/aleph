@@ -26,7 +26,9 @@ const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, 
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-speed-"));
-  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0", ALEPH_ISSUES: join(base, "issues") });
+  // A project filter names a registry key, or it matches nothing.
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ alpha: { path: "/nonexistent/alpha" }, beta: { path: "/nonexistent/beta" }, pc: { path: "/nonexistent/pc" } }));
+  restore = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0", ALEPH_ISSUES: join(base, "issues") });
   // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (stuck, model unset), a 5 h broken clock
   run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
   run({ kind: "build", condition: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });

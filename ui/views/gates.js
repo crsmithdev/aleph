@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { clamp, contentText, parseId, parseJob, setCodes, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { clamp, contentText, issueHref, parseId, parseJob, setCodes, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -170,8 +170,8 @@ export function renderHeld(d) {
 
 /** An ID of the log in its short form, as a link to its issue page: a job ID links to its subject's. Other text stays text. */
 function idHtml(id) {
-  const p = parseId(parseJob(id)?.subject ?? id);
-  return p ? idLink(shownId(id), `#/issues/${encodeURIComponent(p.repo)}/${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`, { title: String(id) }) : esc(shownId(id) || "–");
+  const to = issueHref(parseJob(id)?.subject ?? id);
+  return to ? idLink(shownId(id), to, { title: String(id) }) : esc(shownId(id) || "–");
 }
 
 /** The content of an event, `contentText`, with each ID as a link and the file's base name in mono with its full path as the title. */

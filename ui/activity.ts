@@ -2,14 +2,14 @@
  * The tools and hooks Claude Code used over the last days, and the
  * verify-gate's denials, for `/api/agents` and `/api/memory`. It reads Langfuse
  * observations (as `fetchObservations` does). `?project=<key>` keeps one
- * project: a Langfuse trace by its name or cwd.
+ * project: a Langfuse trace by the scope rule in `ui/api/scope.ts`.
  */
-import { basename } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../lib/env.ts";
 import type { Observation } from "../lib/otlp.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { today } from "../issues/lib/todo.ts";
 import { staleAsync } from "./stale.ts";
+import { traceIn } from "./api/scope.ts";
 import { allPages } from "./langfuse-pages.ts";
 import { uiCacheMs } from "../jobs/lib/infra/settings.ts";
 
@@ -52,15 +52,10 @@ function cached<T>(key: string, load: () => Promise<T>): Promise<{ value: T; cac
   return cache.get(key, uiCacheMs(), () => load().then((v) => ({ value: v as unknown, cachedAt: new Date().toISOString() }))) as Promise<{ value: T; cachedAt: string }>;
 }
 
-/** The ids of the traces of `project`: its session's cwd, or the trace's name, is the key. */
+/** The ids of the traces of `project`, by the scope rule. */
 async function projectTraces(cfg: LangfuseConfig, project: string, from: Date, to: Date): Promise<{ ids: Set<string>; partial: boolean }> {
   const { rows, partial } = await allPages(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() }, 15_000);
-  const ids = new Set<string>();
-  for (const t of rows) {
-    const cwd = t.metadata?.cwd;
-    if (t.name === project || (typeof cwd === "string" && basename(cwd) === project)) ids.add(t.id);
-  }
-  return { ids, partial };
+  return { ids: new Set(rows.filter((t) => traceIn(t, project)).map((t) => t.id)), partial };
 }
 
 export async function activity(days: number, project: string | null, now = new Date()): Promise<Activity> {

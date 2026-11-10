@@ -5,7 +5,9 @@
 import { suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
 import { allRuns, loadRegistry, onOf } from "../../jobs/lib/records/ledger.ts";
 import type { Routes } from "../server.ts";
-import { routes as issueRoutes, type Row } from "./issues.ts";
+import { repoIn } from "./scope.ts";
+import { routes as issueRoutes } from "./issues.ts";
+import type { Row } from "../issue.ts";
 
 /** Each issue's own runs and cost, by `<repo>-<ref>`. */
 function runTotals(): Map<string, { runs: number; cost: number }> {
@@ -39,7 +41,7 @@ export const routes: Routes = {
       if (own && up) { up.runs += own.runs; up.cost += own.cost; }
     }
     const issues = rows.map((r) => ({ ...r, ...sums.get(`${r.repo}-${r.ref}`)! }));
-    const projects = Object.keys(loadRegistry()).filter((k) => !project || k === project);
+    const projects = Object.keys(loadRegistry()).filter((k) => repoIn(k, project));
     return Response.json({ issues, projects, tests: Object.fromEntries(projects.map((k) => [k, suiteHistory(k)])) });
   },
 };

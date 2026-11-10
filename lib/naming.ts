@@ -78,6 +78,9 @@ export const fullId = (s: unknown): string => { const p = parseId(s); return p ?
 /** `a1430` for any issue ID of a project with a code; anything else unchanged. */
 export const shortId = (s: unknown): string => { const p = parseId(s); return p && codes[p.repo] ? `${codes[p.repo]}${tail(p)}` : String(s ?? ""); };
 
+/** `#/issues/aleph/1430.2`: the page of an issue, from any issue ID; "" for anything else. */
+export const issueHref = (s: unknown): string => { const p = parseId(s); return p ? `#/issues/${encodeURIComponent(p.repo)}/${tail(p)}` : ""; };
+
 /** What a run works on: its issue, else its routine (`monitor`), else its name. */
 export const subjectOf = (run: { on?: string; kind: string; name: string }): string => run.on ?? (ROUTINES.includes(run.kind) ? run.kind : run.name);
 
