@@ -23,6 +23,8 @@ let failOnce = new Set<number>();
 let failAlways = new Set<number>();
 /** The observations requests open at one time, and the most that were open together. */
 let open = 0, peak = 0;
+/** The fromStartTime of the last observations request. */
+let lastFrom = "";
 let base: string, fake: ReturnType<typeof Bun.serve>;
 let restore: () => void;
 
@@ -55,6 +57,7 @@ beforeAll(() => {
       if (!req.headers.get("authorization")?.startsWith("Basic ")) return new Response("no", { status: 401 });
       if (url.pathname === "/api/public/observations") {
         const n = Number(url.searchParams.get("page") ?? "1");
+        lastFrom = url.searchParams.get("fromStartTime") ?? "";
         obsHits++; open++; peak = Math.max(peak, open); nextHit();
         if (open === 4) atFour();
         try {
@@ -93,6 +96,24 @@ describe("activity", () => {
       await activity(7, null, now);
       expect(obsHits).toBe(2);
     } finally { closePass(); }
+  });
+
+  test("in a build pass a later read asks only for the last 10 min and keeps the rows read before; after an hour it reads the window again", async () => {
+    const min = 60_000, start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
+    try {
+      openPass({ langfuse: 1 }, "activity.test.later");
+      const a = await activity(7, null, now);
+      expect(Date.parse(lastFrom)).toBe(start);
+      obsPages = [[tool(0, "Bash", "tc")]];
+      openPass({ langfuse: 2 }, "activity.test.later");
+      const b = await activity(7, null, new Date(now.getTime() + 5 * min));
+      expect(Date.parse(lastFrom)).toBe(now.getTime() + min - 10 * min);
+      expect(b.tools.find((t) => t.name === "Bash")!.calls).toBe(a.tools.find((t) => t.name === "Bash")!.calls + 1);
+      openPass({ langfuse: 3 }, "activity.test.later");
+      // Two hours on is the next day, so the window starts a day later.
+      await activity(7, null, new Date(now.getTime() + 2 * 60 * min));
+      expect(Date.parse(lastFrom)).toBe(start + 24 * 60 * min);
+    } finally { closePass(); obsPages = [observations]; }
   });
 
   test("a week longer than the 499 pages the fetch read before comes back whole, four requests at a time, with a page that failed once", async () => {

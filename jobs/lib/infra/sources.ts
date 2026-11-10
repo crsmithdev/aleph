@@ -25,6 +25,8 @@ export function openPass(counts: Record<string, number>, env: string): void {
   for (const [k, e] of memo) if (!fresh(e)) memo.delete(k);
 }
 export const closePass = (): void => { gens = null; };
+/** The environment of the open pass, or null outside a build: a value kept across passes belongs to one environment. */
+export const passEnv = (): string | null => (gens ? lastEnv : null);
 
 /** `fn()`, kept while none of `sources` changes; a rejected promise is not kept. */
 export function once<T>(name: string, sources: string[], fn: () => T): T {

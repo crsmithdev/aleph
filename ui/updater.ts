@@ -10,7 +10,7 @@
  *   dirty, and its next request waits for a build. A key not asked for in 1 h is dropped.
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
- * - The skills folder is watched: a skill folder added or removed rebuilds the keys that read the skills.
+ * - The skills folder is watched: a skill folder added or removed, or a SKILL.md written, rebuilds the keys that read the skills.
  * - Langfuse is polled every 30 s (2 min for skills) while a key that reads it is kept; the work store is fetched
  *   every 30 s while a key that reads it is kept.
  * - The keys are saved to `<aleph>/ui/keys.json`; a restart builds them again at once, and requests share the builds.
@@ -48,7 +48,7 @@ export function keyOf(url: URL): string {
 export interface Got { answer: Answer; error?: string; since?: string }
 type Mark = { error: string; since: string };
 
-interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; dirty?: boolean; again?: boolean; building?: Promise<void> }
+interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked?: number; built?: number; again?: boolean; building?: Promise<void> }
 
 export interface Deps {
   build: (key: string, gens: Record<string, number>) => Promise<Built>;
@@ -80,6 +80,12 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
   const sig = (s: Slot) => `${s.hash}|${markOf(s) ? 1 : 0}`;
   const keysWith = (pick: (key: string, s: Slot) => boolean) => [...slots].filter(([k, s]) => pick(k, s)).map(([k]) => k);
   const bump = (source: string) => { gens[source] = (gens[source] ?? 0) + 1; };
+  // A mark is cleared only by a build that started after it: an iteration already running read the sources before the change.
+  const mark = (s: Slot) => { s.marked = (s.marked ?? 0) + 1; };
+  const dirty = (s: Slot) => (s.marked ?? 0) > (s.built ?? 0);
+  // A kept key mid-build builds once more; any other key waits for its next request. Rebuilding a key nobody asks
+  // for kept a 30-day Sessions build running back to back, each poll ending in another.
+  const due = (s: Slot) => { if (!kept(s)) mark(s); else if (s.building) s.again = true; };
 
   function save(): void {
     const f = file(), text = JSON.stringify(Object.fromEntries([...slots].map(([k, s]) => [k, s.asked])));
@@ -99,7 +105,8 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
     if (s.building) { s.again = true; return s.building; }
     s.building = (async () => {
       do {
-        s.again = s.dirty = false;
+        s.again = false;
+        const marks = s.marked ?? 0;
         try {
           const { answer, sources } = await build(key, { ...gens });
           s.sources = new Set([...sources, "action"]);
@@ -108,6 +115,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
         } catch (e) {
           fail(s, e instanceof Error ? e.message : String(e));
         }
+        s.built = marks;
       } while (s.again);
       s.building = undefined;
     })();
@@ -129,7 +137,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
   /** `source` changed: an idle key that read it waits for a build at its next request. */
   function stale(source: string): void {
     bump(source);
-    for (const s of slots.values()) if (s.sources.has(source)) { if (s.building) s.again = true; else if (!kept(s)) s.dirty = true; }
+    for (const s of slots.values()) if (s.sources.has(source)) due(s);
   }
 
   /** Build the kept keys that read a source changed since the last flush, then signal. */
@@ -147,7 +155,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       let s = slots.get(key);
       if (!s) { slots.set(key, (s = { asked: now(), sources: new Set() })); save(); }
       s.asked = now();
-      if (!s.answer || s.dirty) await (s.building ?? run(key, s));
+      if (!s.answer || dirty(s)) await (s.building ?? run(key, s));
       if (!s.answer) return { answer: { status: 502, body: { error: s.error } } };
       const m = markOf(s);
       return m ? { answer: s.answer, ...m } : { answer: s.answer };
@@ -157,18 +165,18 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
     changed(source: string): void {
       stale(source);
       // A key mid-build is marked too: stale() makes its build run once more, and the request waits for that run.
-      if (source === "action") for (const s of slots.values()) s.dirty = true;
+      if (source === "action") for (const s of slots.values()) mark(s);
       pending.add(source);
       settle ??= setTimeout(() => { settle = undefined; void flush(); }, SETTLE_MS);
     },
     /** One Langfuse poll: every key that reads it is due (skills every `SKILLS_EVERY` polls); the kept ones are built again. */
     async poll(): Promise<void> {
       const all = ++polls % SKILLS_EVERY === 0;
-      const due = keysWith((k, s) => s.sources.has("langfuse") && (all || !isSkills(k)));
-      if (!due.length) return;
+      const keys = keysWith((k, s) => s.sources.has("langfuse") && (all || !isSkills(k)));
+      if (!keys.length) return;
       bump("langfuse");
-      for (const k of due) { const s = slots.get(k)!; if (s.building) s.again = true; else if (!kept(s)) s.dirty = true; }
-      await refresh(due.filter((k) => kept(slots.get(k)!)));
+      for (const k of keys) due(slots.get(k)!);
+      await refresh(keys.filter((k) => kept(slots.get(k)!)));
     },
     /** One fetch of the work store while a kept key reads it; a failure marks those keys until a fetch works. */
     async fetchStore(): Promise<void> {
@@ -248,6 +256,9 @@ export const countsInRecords = (file: string): boolean => file.endsWith(".json")
 /** The logs change on every line of output and the page does not show them; a temporary file is renamed into place, and the rename counts. */
 export const countsInFactory = (file: string): boolean => !file.endsWith(".log") && !file.endsWith(".tmp");
 
+/** A skill folder added or removed, or its SKILL.md written: Memory reads each SKILL.md. */
+export const countsInSkills = (file: string): boolean => !file.includes("/") || /^[^/]+\/SKILL\.md$/.test(file);
+
 /** A note, a daily note, MEMORY.md or the recall log counts; git, the search index and Obsidian's settings do not. */
 export const countsInVault = (file: string): boolean => !/^\.(git|index|obsidian)(\/|$)/.test(file) && (file.endsWith(".md") || /^\.recall(-log)?\.json(l)?$/.test(file));
 
@@ -262,8 +273,7 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
   // Each issue write moves this ref; the builds read the issues from it.
   follow(join(layout().store, ".git", "refs", "remotes", "origin"), (f) => f === "main", "store");
   follow(dirname(repos), (f) => f === basename(repos), "registry");
-  // A skill folder added or removed; an edit inside a folder is not seen.
-  follow(skillsDir(), () => true, "skills");
+  follow(skillsDir(), countsInSkills, "skills", true);
   follow(eventsDir(), (f) => {
     if (!f.endsWith(".jsonl")) return false;
     for (const tail of eventFiles) tail(f);

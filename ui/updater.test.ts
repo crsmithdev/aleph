@@ -239,6 +239,47 @@ test("a key whose build ends first is signalled first: a fast key does not wait 
   expect(heard).toEqual([["/fast"], ["/slow"]]);
 });
 
+test("a poll during the build of a key nobody asked for in 10 min does not build it again; its next request does", async () => {
+  const f = fake(), u = createUpdater(f);
+  f.world["/a"] = { body: 1, sources: ["langfuse"] };
+  await u.get("/a");
+  const release = f.hold();
+  u.changed("action");
+  const asked = u.get("/a"); // a build of /a is running
+  f.tick(11 * 60_000);
+  const polling = u.poll();
+  release();
+  await asked;
+  await polling;
+  expect(f.log).toEqual(["/a", "/a"]);
+  f.world["/a"].body = 2;
+  expect((await u.get("/a")).answer.body).toBe(2);
+});
+
+test("a request that comes after the build an action started has begun waits for that build", async () => {
+  // Each build reads the world when it starts, as a real one does.
+  let body = 1, gate: Promise<void> | null = null, started = () => {};
+  const build = async () => { const seen = body; started(); if (gate) await gate; return { answer: { status: 200, body: seen } as Answer, sources: ["store"] }; };
+  const hold = () => { let go = () => {}; gate = new Promise((r) => { go = r; }); return () => { gate = null; go(); }; };
+  const next = () => new Promise<void>((r) => { started = r; });
+  const u = createUpdater({ build });
+  await u.get("/a");
+  body = 2;
+  const first = hold(), one = next();
+  u.changed("store");
+  const flushing = u.flush();
+  await one; // the first build read 2
+  body = 3; // the action writes
+  u.changed("action");
+  const second = hold(), two = next();
+  first();
+  await two; // the build after the action has begun, and read 3
+  const after = u.get("/a");
+  second();
+  expect((await after).answer.body).toBe(3);
+  await flushing;
+});
+
 test("a request after an action waits for a build that starts after it, even when a build was running", async () => {
   const f = fake(), u = createUpdater(f);
   f.world["/a"] = { body: 1, sources: ["store"] };

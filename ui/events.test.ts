@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { countsInFactory, countsInRecords } from "./updater.ts";
+import { countsInFactory, countsInRecords, countsInSkills } from "./updater.ts";
 import { putRun } from "../jobs/lib/records/record.ts";
 import type { Run } from "../jobs/lib/records/ledger.ts";
 
@@ -61,6 +61,11 @@ test("a run's write to its job record sends a change naming the kept key, and th
   expect(JSON.stringify(await (await get("/api/factory")).json())).toContain("r-2");
 });
 
+// AC1: the 3 s is the test's time limit, from the stream's first ping to the change.
+test("a write to a job record sends its change within 3 s", async () => {
+  expect(await changeAfter(() => putRun("old", { ...run("r-1"), phase: "checks" }))).toMatch(/"\/api\/factory"/);
+}, 3_000);
+
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {
   expect(await changeAfter(() => writeFileSync(join(factory, "paused"), ""))).not.toBeNull();
   expect(await changeAfter(() => writeFileSync(join(ref, "main"), "abc"))).not.toBeNull();
@@ -90,4 +95,11 @@ test("a temporary record or factory file and a log count as no change", () => {
   expect(countsInFactory("tick.log")).toBe(false);
   expect(countsInFactory("tick.json.4242.tmp")).toBe(false);
   expect(countsInFactory("paused")).toBe(true);
+});
+
+test("a skill folder or its SKILL.md counts as a skills change; another file in the folder does not", () => {
+  expect(countsInSkills("vault")).toBe(true);
+  expect(countsInSkills("vault/SKILL.md")).toBe(true);
+  expect(countsInSkills("vault/cli.ts")).toBe(false);
+  expect(countsInSkills("vault/refs/SKILL.md")).toBe(false);
 });

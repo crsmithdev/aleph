@@ -8,7 +8,7 @@ import { langfuseConfig, type LangfuseConfig } from "../lib/env.ts";
 import type { Observation } from "../lib/otlp.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { today } from "../issues/lib/todo.ts";
-import { once } from "../jobs/lib/infra/sources.ts";
+import { once, passEnv } from "../jobs/lib/infra/sources.ts";
 import { traceIn } from "./api/scope.ts";
 import { allPages } from "./langfuse-pages.ts";
 
@@ -42,6 +42,43 @@ export interface Activity {
 
 const isError = (o: Observation) => (o as any).level === "ERROR";
 
+/** The fields of an observation that the counts read. A row holds 2.4 KB of input and output on average (2026-11-10). */
+const slim = (o: any): Observation => ({
+  id: o.id, traceId: o.traceId, name: o.name, type: o.type, startTime: o.startTime, level: o.level,
+  metadata: { tool: o.metadata?.tool, verdict: o.metadata?.verdict },
+  ...(o.name === "verify-gate" ? { output: o.output } : {}),
+}) as any;
+
+/**
+ * The rows the build Worker keeps between passes. A pass reads only the last `LAG` and the part of its window
+ * not read yet; it reads all of it again each `FULL`, which takes in late writes older than `LAG`. A full
+ * 7-day read is 1,218 pages and a 30-day read is 2,000 (2026-11-10), too much for each 30 s poll.
+ * `cut` is the oldest row of a read that stopped at the page limit: a window that starts before it is partial.
+ */
+const LAG = 10 * 60_000, FULL = 3600_000;
+let kept: { env: string; rows: Map<string, Observation>; from: number; to: number; since: number; cut: number } | null = null;
+let reads: Promise<unknown> = Promise.resolve();
+
+async function readObservations(cfg: LangfuseConfig, from: number, to: number): Promise<{ rows: Observation[]; partial: boolean }> {
+  const read = async (a: number) => {
+    const got = await allPages(cfg, "/api/public/observations", { fromStartTime: new Date(a).toISOString(), toStartTime: new Date(to).toISOString() }, 15_000);
+    return { rows: got.rows.map(slim), partial: got.partial };
+  };
+  const env = passEnv();
+  if (env === null) return read(from);
+  // One read at a time: two windows of one pass would otherwise both reset the kept rows.
+  const run = reads.then(async () => {
+    if (!kept || kept.env !== env || to - kept.since > FULL || from < kept.from) kept = { env, rows: new Map(), from, to: from + LAG, since: to, cut: -Infinity };
+    const k = kept, got = await read(Math.max(k.from, k.to - LAG));
+    for (const o of got.rows) k.rows.set(o.id!, o);
+    if (got.partial) k.cut = Math.max(k.cut, got.rows.reduce((m, o) => Math.min(m, Date.parse(o.startTime ?? "") || Infinity), Infinity));
+    k.to = to;
+    return { rows: [...k.rows.values()].filter((o) => Date.parse(o.startTime ?? "") >= from), partial: from < k.cut };
+  });
+  reads = run.catch(() => {});
+  return run;
+}
+
 
 /** The ids of the traces of `project`, by the scope rule. */
 async function projectTraces(cfg: LangfuseConfig, project: string, from: Date, to: Date): Promise<{ ids: Set<string>; partial: boolean }> {
@@ -63,7 +100,7 @@ export async function activity(days: number, project: string | null, now = new D
   try {
     const got = await once(`${cfg.baseUrl}|${keys[0]}|${days}|${project ?? ""}`, ["langfuse"], async () => {
       const [all, mine] = await Promise.all([
-        allPages(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }, 15_000) as Promise<{ rows: Observation[]; partial: boolean }>,
+        readObservations(cfg, from.getTime(), to.getTime()),
         project ? projectTraces(cfg, project, new Date(from.getTime() - DAY), to) : null,
       ]);
       const rows = mine ? all.rows.filter((o) => o.traceId && mine.ids.has(o.traceId)) : all.rows;

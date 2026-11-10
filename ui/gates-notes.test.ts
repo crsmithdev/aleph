@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,7 +31,9 @@ beforeAll(() => {
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); note(add(doc, "b task"), "Chris decided: go on", new Date("2026-11-03T10:00:00Z")); add(doc, "c task").notes.push("- 2026-11-03 11:00: Chris decided: stop"); return true; }, true);
 });
-afterAll(() => { restoreEnv(); rmSync(base, { recursive: true, force: true }); });
+// The test's clock: the notes sit a day before it, inside the 7-day log.
+beforeAll(() => setSystemTime(Date.parse("2026-11-04T00:00:00Z")));
+afterAll(() => { setSystemTime(); restoreEnv(); rmSync(base, { recursive: true, force: true }); });
 
 test("log() shows an issue note `Chris dropped: <reason>` as a human drop on the issue, the note its text", async () => {
   const stub: any = { now: "2026-11-04T00:00:00.000Z", asks: [], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 }, queued: [] };

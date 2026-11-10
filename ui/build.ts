@@ -11,7 +11,7 @@ export type { Answer };
 export interface Built { answer: Answer; sources: string[] }
 
 /** The paths whose builds read Langfuse. */
-const LANGFUSE = /^\/api\/(sessions|agents|skills)(\/|\?|$)/;
+const LANGFUSE = /^\/api\/(sessions|skills)(\/|\?|$)/;
 const lane = (key: string) => (LANGFUSE.test(key) ? "langfuse" : "records");
 
 /** A Worker and the ids of the builds it has in hand, so a Worker that dies fails only its own builds. */
