@@ -3,10 +3,10 @@
  * the folder, the spawn, the time box, the cost, the ending, and the cleanup after a dead process.
  * `ALEPH_<ROLE>_CMD` replaces `claude`, which is how a test gives a fake, and
  * `ALEPH_<ROLE>_TIMEOUT` replaces the role's time box, in seconds.
- * `agentCall` is the other kind: a `claude` call that works in a git worktree (the worker and the reviewer).
+ * `agentCall` runs every call: the stall watch, the time box and the credit check.
  */
-import { modelArgv, modelEnv, onGpu } from "../routing/models.ts";
-import { gpuSlot } from "../gates/factory-status.ts";
+import { modelArgv, modelEnv, onGpu, readModels, viaOfRun } from "../routing/models.ts";
+import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
 import { appendFileSync, closeSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { outcome, replyOf, type Outcome } from "../gates/gate.ts";
@@ -36,31 +36,6 @@ const KILL_AFTER_MS = 30_000;
 /** Signal the process group that `pid` leads, and `pid` itself when the group is gone. */
 function killGroup(pid: number, signal: NodeJS.Signals): void {
   try { process.kill(-pid, signal); } catch { try { process.kill(pid, signal); } catch {} }
-}
-
-async function spawn(c: Call, input: string): Promise<{ output: string; text: string; data?: unknown; cost?: number; session?: string; failure?: string }> {
-  const role = c.role.toUpperCase();
-  const argv = modelArgv(roleCmd(role), c.model, ["--output-format", "stream-json", "--verbose", ...c.flags, ...(c.schema ? schemaFlags(c.schema) : [])]);
-  let release: (() => void) | null = null;
-  if (onGpu(c.model)) release = await gpuSlot(roleSeconds(role, c.seconds) * 1000);
-  // A process group of its own, so the time box ends the call's children too: one that kept the pipes open would hold the reads.
-  const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(c.model) }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe", detached: true });
-  let timedOut = false;
-  let kill: Timer | undefined;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    killGroup(p.pid, "SIGTERM");
-    kill = setTimeout(() => killGroup(p.pid, "SIGKILL"), KILL_AFTER_MS);
-  }, roleSeconds(role, c.seconds) * 1000);
-  try {
-    const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-    const failure = timedOut ? `${c.who} timed out` : code !== 0 ? `${c.who} exited ${code}` : undefined;
-    return { output: out + err, ...replyOf(out), data: structuredOf(out), session: sessionOf(out), failure };
-  } finally {
-    clearTimeout(timer);
-    clearTimeout(kill);
-    release?.();
-  }
 }
 
 /** The ledger's line for a role's run. `job` defaults to the folder's own name. The run's subject is `on`, else `monitor` for the monitor, else `name`. */
@@ -102,17 +77,39 @@ export function openRun(o: Opening): AgentRun {
   writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
   let prev: { input: string; session?: string } | undefined;
   let spent: number | undefined;
+  let credit = false;
   const call = async (input: string, cwd?: string, again = false) => {
     const write = again ? appendFileSync : writeFileSync;
     const resume = again ? prev?.session : undefined;
     const sent = again && !resume ? `${prev?.input ?? ""}\n\n${input}` : input;
     write(runFile(folder, "prompt.md"), again ? `\n\n---\n\n${sent}` : sent);
     const c = resume ? { ...o, flags: [...o.flags, "--resume", resume] } : o;
-    const r = await spawn(cwd === undefined ? c : { ...c, cwd }, sent);
-    write(runFile(folder, "output.log"), r.output);
-    prev = { input: sent, session: r.session };
+    const role = o.role.toUpperCase();
+    const log = runFile(folder, "output.log");
+    if (!again) writeFileSync(log, "");
+    const seen = statSync(log).size;
+    const argv = modelArgv(roleCmd(role), o.model, ["--output-format", "stream-json", "--verbose", ...c.flags, ...(o.schema ? schemaFlags(o.schema) : [])]);
+    let release: (() => void) | null = null;
+    if (onGpu(o.model)) release = await gpuSlot(roleSeconds(role, o.seconds) * 1000);
+    let w;
+    try {
+      w = await agentCall(o.role, argv, {
+        cwd: cwd ?? o.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(o.model) }, stdin: sent,
+        stdout: log, stderr: runFile(folder, "stderr.log"), limit: roleSeconds(role, o.seconds), stall: stallSeconds(),
+      });
+    } finally {
+      release?.();
+    }
+    const out = readFileSync(log).subarray(seen).toString();
+    const r = { ...replyOf(out), data: structuredOf(out) };
+    prev = { input: sent, session: sessionOf(out) };
     if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; patchRun(basename(folder), { cost: spent }); }
-    if (r.failure) throw new Error(r.failure);
+    if (w.cause?.kind === "credit") {
+      credit = true;
+      await holdBackend(viaOfRun(o, readModels()), w.cause.reason);
+    }
+    const failure = w.step.stalled ? stallReason() : w.step.timedOut ? `${o.who} timed out` : w.step.code !== 0 ? `${o.who} exited ${w.step.code}` : undefined;
+    if (failure) throw new Error(failure);
     return r;
   };
   return {
@@ -120,7 +117,7 @@ export function openRun(o: Opening): AgentRun {
     ask: async (input, cwd) => (await call(input, cwd)).text,
     askData: async (input, cwd) => (await call(input, cwd)).data,
     askAgain: async (input, cwd) => (await call(input, cwd, true)).data,
-    end: (reason, fields = {}) => endRun(folder, reason, fields),
+    end: (reason, fields = {}) => endRun(folder, reason, credit ? { ...fields, cause: "credit" } : fields),
   };
 }
 
@@ -148,8 +145,8 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
   }
 }
 
-/** The two `claude` calls that work in a git worktree. */
-export type AgentRole = "worker" | "reviewer";
+/** The roles that call `claude` through `agentCall`. */
+export type AgentRole = "worker" | "reviewer" | Opening["role"];
 
 /** Why a call gave no usable reply, and its kind. */
 export interface AgentCause { kind: "stalled" | "timeout" | "credit" | "other"; reason: string }
@@ -178,7 +175,7 @@ export function agentCause(r: Step, o: Outcome): AgentCause | null {
 
 /** Where and how an agent call runs: `limit` is the time box and `stall` the stall watch, both in seconds. */
 export interface AgentOptions {
-  cwd: string; env: Record<string, string | undefined>; stdin: string; stdout: string; stderr: string; limit: number; stall: number;
+  cwd?: string; env: Record<string, string | undefined>; stdin: string; stdout: string; stderr: string; limit: number; stall: number;
   onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void;
 }
 

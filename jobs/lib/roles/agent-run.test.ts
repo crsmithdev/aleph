@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { agentCause, endLost, openRun, type Opening } from "./agent-run.ts";
 import { allRuns, runsDir, stamp } from "../records/ledger.ts";
 import { getRun, jobIdOf, putRun } from "../records/record.ts";
+import { backendHold } from "../gates/factory-status.ts";
 import { lock } from "../infra/locks.ts";
 
 let base: string;
@@ -23,7 +24,7 @@ beforeAll(() => {
   process.env.ALEPH_JOBS_DIR = join(base, "jobs");
   process.env.XDG_RUNTIME_DIR = join(base, "run");
 });
-afterEach(() => { setSystemTime(); delete process.env.ALEPH_INTAKE_CMD; delete process.env.ALEPH_INTAKE_TIMEOUT; });
+afterEach(() => { setSystemTime(); delete process.env.ALEPH_INTAKE_CMD; delete process.env.ALEPH_INTAKE_TIMEOUT; delete process.env.ALEPH_STALL_SECONDS; });
 afterAll(() => { rmSync(base, { recursive: true, force: true }); process.env = saved; });
 
 test("a run holds its state, its prompt, its output and its ending", async () => {
@@ -38,7 +39,8 @@ test("a run holds its state, its prompt, its output and its ending", async () =>
   // The role loads no MCP server from the user's config.
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--strict-mcp-config");
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--disable-slash-commands");
-  expect(readFileSync(join(run.folder, "output.log"), "utf8")).toBe("reply\nnoise\n");
+  expect(readFileSync(join(run.folder, "output.log"), "utf8")).toBe("reply\n");
+  expect(readFileSync(join(run.folder, "stderr.log"), "utf8")).toBe("noise\n");
   run.end("ok", { route: "close" });
   const r = getRun(basename(run.folder))!;
   expect(r).toMatchObject({ condition: "done", reason: "ok", route: "close" });
@@ -103,6 +105,21 @@ test("a run past its time box is killed and says it timed out", async () => {
   const run = openRun(opening);
   await expect(run.ask("x")).rejects.toThrow("the reviewer timed out");
   expect(existsSync(join(run.folder, "output.log"))).toBe(true);
+});
+
+test("a run that ends with the API credit error has cause credit and holds its backend", async () => {
+  fake(`echo '{"type":"result","is_error":true,"result":"API Error: 402 no credit"}'; exit 1`);
+  const run = openRun(opening);
+  await expect(run.ask("x")).rejects.toThrow("the reviewer exited 1");
+  run.end("failed: no credit", { cause: "unanswered" });
+  expect(getRun(basename(run.folder))).toMatchObject({ condition: "done", cause: "credit" });
+  expect(backendHold()).toMatchObject({ why: "API Error: 402 no credit" });
+});
+
+test("a run that prints nothing for the stall time fails with the stall reason", async () => {
+  fake("exec tail -f /dev/null");
+  process.env.ALEPH_STALL_SECONDS = "1";
+  await expect(openRun(opening).ask("x")).rejects.toThrow("stalled: no output for 1 seconds");
 });
 
 test("the time box ends the call's children too, so a child that holds the output pipe does not hold the run", async () => {
