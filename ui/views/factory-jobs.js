@@ -1,10 +1,10 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
-import { get } from "../router.js";
-import { card, pagedTable, dur, empty, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, searchBox, setQuery, statCard, cardTrend, tiles, scope } from "../lib.js";
+import { get, redraw } from "../router.js";
+import { card, pagedTable, dur, empty, error, esc, failMessage, heads, loadingLine, onTile, pageHead, searchBox, setQuery, statCard, cardTrend, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./jobs.js";
-import { bucketOf, lastPeriod, loadSpeed, trendOn, usable } from "./speed.js";
+import { bucketOf, flowOf, lastPeriod, trendOn, usable } from "./speed.js";
 
 export const STAGES = [
   ["lead", NAMES.lead, "From filing to the last land."],
@@ -81,16 +81,16 @@ export const chartKey = (k) => `factory/jobs/${k}`;
 
 const table = (labels, num, rows) => !rows.length ? empty("No row to show.") : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`));
 
-/** The page body for a stage. `day` is /api/flow for the last 24h, or null. `jobs` is /api/jobs for the window, or null while it loads; `f` is the route query. */
+/** The page body for a stage. `day` is /api/flow for the last 24h, or null. `jobs` is /api/jobs for the window, null while it loads, or the Error of a failed load; `f` is the route query. */
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   const [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
-  const head = renderScope(jobs ?? [], { ...f, window: f.window ?? d.window });
+  const head = renderScope(Array.isArray(jobs) ? jobs : [], { ...f, window: f.window ?? d.window });
   return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: head })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
     `<div class="trio">${panelOf(chartKey("trend"), trendFrame(d, key, name, text))}${panelOf(chartKey("strip"), stripFrame(d, key, name))}${panelOf(chartKey("slowest"), slowestFrame(d, key))}</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
     card("Build Time by Model", table(["Model", "Jobs", "p50"], ["Jobs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
-    card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
+    card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs instanceof Error ? error(jobs.message) : jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
 }
 
 /** The old address. */
@@ -98,9 +98,6 @@ export const redirect = (hash) => {
   const [path, query] = String(hash ?? "").split(/\?(.*)/s);
   return path === "#/status/performance" ? "#/factory/jobs" : path === "#/jobs" ? `#/factory/jobs${query ? `?${query}` : ""}` : null;
 };
-
-let listed = null; // { url, jobs }: /api/jobs for the window shown
-const jobsNow = (q) => (listed?.url === listUrl(null, q) ? listed.jobs : null);
 
 export const view = {
   path: "/factory/jobs",
@@ -111,36 +108,26 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/flow?window=${s.window}`); },
   live: true,
   refresh: 60,
-  render: (d, _params, q) => renderFactoryJobs(d, usable("day"), q?.get("stage") ?? "lead", jobsNow(q ?? new URLSearchParams()), Object.fromEntries(q ?? [])),
-  mount: async (root, d) => {
-    const draw = (k) => renderFactoryJobs(d, usable("day"), k, jobsNow(hashQuery()), Object.fromEntries(hashQuery()));
-    const wire = () => {
-      const stage = hashQuery().get("stage") ?? "lead", [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
-      onTile(root.querySelector("#perf"), (k) => {
-        setQuery({ stage: k });
-        root.innerHTML = draw(k);
-        wire();
-        root.querySelector(`button[data-tile="${k}"]`)?.focus();
-      });
-      scope().wire(root);
-      // Each panel draws the frame of the stage shown; its form and hidden series are its own.
-      for (const [k, fr] of Object.entries(FRAMES)) {
-        const el = root.querySelector(`aleph-chart[key="${chartKey(k)}"]`);
-        if (el) el.frame = fr(d, key, name, text);
-      }
-    };
-    wire();
-    wireJobs(root, () => jobsNow(hashQuery()));
-    const url = listUrl(null, hashQuery());
-    const got = get(url).then(async (r) => (r.ok ? r.json() : new Error(failMessage(url, r.status, await r.text())))).catch((e) => e);
-    if (trendOn(d)) await loadSpeed("day");
-    const answer = await got, failed = answer instanceof Error, jobs = failed ? answer : answer.jobs;
-    if (!root.querySelector("#perf")) return;
-    if (!failed) listed = { url, jobs };
-    if (!failed || trendOn(d)) {
-      root.innerHTML = draw(hashQuery().get("stage") ?? "lead");
-      wire();
+  // `d.day` is /api/flow for the last 24h and `d.jobs` is /api/jobs for the window, which `more` adds; the page draws without them first.
+  render: (d, _params, q) => renderFactoryJobs(d, usable(d.day), q?.get("stage") ?? "lead", d.jobs ?? null, Object.fromEntries(q ?? [])),
+  more: async (d, q) => {
+    const url = listUrl(null, q);
+    const jobs = get(url).then(async (r) => (r.ok ? (await r.json()).jobs : new Error(failMessage(url, r.status, await r.text())))).catch((e) => e);
+    return { ...d, day: trendOn(d) ? await flowOf("day", q) : null, jobs: await jobs };
+  },
+  mount: (root, d, q) => {
+    const stage = q.get("stage") ?? "lead", [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
+    onTile(root.querySelector("#perf"), async (k) => {
+      setQuery({ stage: k });
+      await redraw();
+      root.querySelector(`button[data-tile="${k}"]`)?.focus();
+    });
+    scope().wire(root);
+    // Each panel draws the frame of the stage shown; its form and hidden series are its own.
+    for (const [k, fr] of Object.entries(FRAMES)) {
+      const el = root.querySelector(`aleph-chart[key="${chartKey(k)}"]`);
+      if (el) el.frame = fr(d, key, name, text);
     }
-    if (failed) root.querySelector("#jobs-table").innerHTML = error(answer.message);
+    wireJobs(root, () => (Array.isArray(d.jobs) ? d.jobs : null));
   },
 };

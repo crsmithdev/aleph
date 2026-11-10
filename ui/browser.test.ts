@@ -158,6 +158,42 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     } finally { own.stop(); }
   }, 60_000);
 
+  test("Automation: a cap save keeps the Monitor fold open through the redraw", async () => {
+    const own = await startRig((env) => { const dir = join(env.ALEPH_FACTORY_DIR, "monitor"); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, "2026-11-03.json"), JSON.stringify({ day: "2026-11-03", table: { today: { stages: [], holds: [] }, trailing: { stages: [], holds: [] } }, text: "READER-TEXT", findings: ["FIRST-ONE"] })); });
+    try {
+      const pg = await own.open("#/automation");
+      await pg.when('document.querySelector("#monitor details") && document.querySelector("form.capform[data-cap=live]")');
+      await pg.ev(`(() => {
+        const d = document.querySelector("#monitor details"), f = document.querySelector("form.capform[data-cap=live]");
+        d.open = true;
+        d.old = true;
+        f.elements.live.value = "4";
+        f.requestSubmit();
+      })()`);
+      await pg.when('!document.querySelector("#monitor details").old');
+      expect(await pg.ev("document.querySelector(\"#monitor details\").open")).toBe(true);
+    } finally { own.stop(); }
+  }, 60_000);
+
+  test("Status: a fold opened before the /api/flow load ends stays open through the redraw after it", async () => {
+    await page.go("#/issues");
+    // Hold the first /api/flow answer until the test opens a fold on the page drawn before it.
+    await page.ev(`(() => {
+      const rf = window.fetch;
+      window.fetch = (u, o) => (String(u).startsWith("/api/flow") && !window.release ? new Promise((ok) => { window.release = () => ok(rf(u, o)); }) : rf(u, o));
+    })()`);
+    await page.ev('location.hash = "#/"');
+    const fold = '[...document.querySelectorAll("#view details[data-keep]")][0]';
+    await page.when(`window.release && ${fold}`);
+    expect(await page.ev('!!document.querySelector("#outcome .obar")')).toBe(false);
+    await page.ev(`${fold}.open = true; document.querySelector("#view > *").dataset.mark = "1"`);
+    await page.ev("window.release()");
+    await page.when('document.querySelector("#outcome .obar") && !document.querySelector("#view > *").dataset.mark');
+    expect(await page.ev(`${fold}.open`)).toBe(true);
+    await page.ev(`${fold}.open = false`);
+    await page.reload(); // Takes the patched fetch away.
+  }, 30_000);
+
   test("the sidebar collapses, keeps its links, and remembers it over a reload", async () => {
     await click("#collapse");
     await page.when('document.querySelector(".shell.collapsed")');
@@ -221,7 +257,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("a timed refresh re-renders, except over an armed button", async () => {
     // The shell reads the global setInterval when the route starts: keep the route's refresh as window.tick, and run it here.
     // The refresh loads only after a quiet minute: window.later() moves the page's clock past it.
-    // A fetch of /api/factory waits for window.gate, and counts in window.fetched after the load that reads it ends.
+    // A fetch of /api/factory waits for window.gate. A fetch of /api/flow, the last a Status load makes (its `more`), counts in
+    // window.fetched after the load that reads it ends.
     await page.ev(`(() => {
       const now = Date.now;
       window.skew = 0;
@@ -229,7 +266,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       window.later = () => { window.skew += 61_000; window.tick(); };
       window.setInterval = (f) => { window.tick = f; return 0; };
       const rf = window.fetch;
-      window.fetch = (u, o) => !String(u).startsWith("/api/factory") ? rf(u, o) : (window.gate ?? Promise.resolve()).then(() => rf(u, o)).then((r) => {
+      window.fetch = (u, o) => String(u).startsWith("/api/factory") ? (window.gate ?? Promise.resolve()).then(() => rf(u, o)) : !String(u).startsWith("/api/flow") ? rf(u, o) : rf(u, o).then((r) => {
         const j = r.json.bind(r);
         const count = () => { window.fetched = (window.fetched ?? 0) + 1; };
         r.json = () => j().then((d) => { setTimeout(count); return d; });

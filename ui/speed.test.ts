@@ -72,11 +72,6 @@ test("GET /api/flow takes a window (default week) and answers JSON", async () =>
   expect(b.window).toBe("week");
   expect(Object.keys(b.baseline).sort()).toEqual(["base", "basis", "prev"]);
   expect(Object.keys(b.baseline.prev)).toContain("asks");
-  // The Efficiency page reads the day and month answers: Status's one request fills them.
-  expect(Object.keys(b.others).sort()).toEqual(["day", "month"]);
-  expect(b.others.month.window).toBe("month");
-  const m = await (await get("?window=month&baseline=1")).json();
-  expect(Object.keys(m.others)).toEqual(["day"]);
 });
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {

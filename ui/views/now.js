@@ -1,10 +1,9 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { get } from "../router.js";
 import { actButton, jobHref, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, localId, issueHref, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
-import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
+import { bar, flowOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, shell as jobCard, statLines, trailerLine } from "./cards.js";
 import { verdict } from "../../lib/status-words.ts";
 
@@ -19,10 +18,12 @@ export const view = {
   combine: ([s, a]) => ({ ...s, asks: a.asks }),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = scope(q).window; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
+  // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
+  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(f), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f)}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
+  more: async (s, q) => ({ ...s, flow: await flowOf(scope(q).window, q, true) }),
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
-  mount: (root, s, q) => mountStatus(root, s, fetch, q),
+  mount: (root, _s, q) => { scope(q).wire(root); wireHeraldJump(root); },
   // An event from the stream goes into the Herald at once; the reload that follows draws it from the state.
   event: (root, ev) => {
     streamed.push(ev);
@@ -175,23 +176,6 @@ function wireHeraldJump(root) {
     }
   });
 }
-
-/** Fetch the window with its baseline in one request, then fill the scorecard. */
-export async function mountStatus(root, s, fetcher = get, q) {
-  const sc = scope(q), w = sc.window;
-  sc.wire(root);
-  wireHeraldJump(root);
-  await loadSpeed(w, fetcher, true);
-  const tiles = root.querySelector("#scorecard");
-  if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);
-  const outcome = root.querySelector("#outcome");
-  if (outcome) outcome.outerHTML = renderOutcome(speedOf(w));
-  const pipe = root.querySelector("#pipeline");
-  if (pipe) pipe.outerHTML = renderPipeline(speedOf(w));
-}
-
-
-
 
 /** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */
 function renderStatusLine(s, stale = false, w = "day") {

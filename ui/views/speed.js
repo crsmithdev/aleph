@@ -1,4 +1,4 @@
-// What the Status pages share: formats, the /api/flow cache, the merged causes, tiles and the usage pace.
+// What the Status pages share: formats, the /api/flow load, the merged causes, tiles and the usage pace.
 import { get } from "../router.js";
 import { count, cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, statCard, when, scope } from "../lib.js";
 
@@ -24,28 +24,17 @@ export function xLabel(at, window) {
   return hourLabel(d);
 }
 
-const got = new Map();
-let loadedFor = ""; // the project of the cached answers
-/** The last answer for a window, or null; a failed load is `{ error }`. */
-export const speedOf = (window) => got.get(window) ?? null;
-export const resetSpeed = () => got.clear();
-/** A usable answer for a window, or null. */
-export const usable = (window) => { const d = speedOf(window); return d && !d.error ? d : null; };
-/** Fetch a window of a project (the address's, by default) into the cache. A failed reload keeps the last good answer. */
-export async function loadSpeed(window, fetcher = get, baseline = false, project = scope().project) {
-  if (project !== loadedFor) { got.clear(); loadedFor = project; }
+/** /api/flow for `window` in the project of the query `q`, with the window's trend baseline (`d.baseline`) when
+ * `baseline`; `{ error }` when the load fails. */
+export async function flowOf(window, q, baseline = false) {
   try {
-    const res = await fetcher(`/api/flow?window=${window}${baseline ? "&baseline=1" : ""}${project ? `&project=${encodeURIComponent(project)}` : ""}`, { cache: "no-store" });
+    const res = await get(scope(q).url(`/api/flow?window=${window}${baseline ? "&baseline=1" : ""}`));
     if (!res.ok) throw new Error(`Could not load speed (${res.status}).`);
-    // With `baseline=1` the answer carries the window's trend baseline (`d.baseline`): one request per window.
-    const { others, ...d } = await res.json();
-    if (project !== loadedFor) return got.get(window); // the project changed while this loaded
-    got.set(window, d);
-    // The day and month answers come in the same answer (the Efficiency page reads them): one request fills all three.
-    for (const [k, v] of Object.entries(others ?? {})) if (k !== window) got.set(k, v);
-  } catch (e) { if (project === loadedFor && !usable(window)) got.set(window, { error: e.message }); }
-  return got.get(window);
+    return await res.json();
+  } catch (e) { return { error: e.message }; }
 }
+/** A usable /api/flow answer, or null. */
+export const usable = (d) => (d && !d.error ? d : null);
 
 /** The classes whose work did not reach main. */
 export const lostClasses = (d) => (d.classes ?? []).slice(2);

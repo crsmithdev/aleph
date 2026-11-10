@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { loadSpeed, speedOf } from "./views/speed.js";
-// @ts-ignore plain JS shared with the page
 import { parseHash, remember, scope, wireScope } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import * as eff from "./views/efficiency.js";
@@ -36,11 +34,13 @@ const PAGES: Record<string, { path: string; view: any; render: (w: string) => st
   agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
   status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
 };
-// Status and Agents load /api/factory, then the speed of the window the mount asks for: the request is the speed one.
+// Status and Agents load /api/factory, then the /api/flow of the window in their `more`: the request is the flow one.
 const request = (p: { view: any }, q: URLSearchParams): string => {
   if (typeof p.view.api === "function" && p.view !== now.view && p.view !== agents.view) return [p.view.api(null, q)].flat().join(" ");
   let url = "";
-  void loadSpeed(scope(q).window, async (u: string) => { url = u; return { ok: true, json: async () => ({}) } as any; });
+  const was = g.fetch;
+  g.fetch = async (u: string) => { if (u.startsWith("/api/flow")) url = u; return { ok: true, json: async () => ({}) }; };
+  try { void p.view.more({}, q); } finally { g.fetch = was; }
   return url;
 };
 const query = () => new URLSearchParams(location.hash.split("?")[1] ?? "");
@@ -66,7 +66,7 @@ test("picking an option on each page asks for that window and the page says its 
     click({ target: { closest: () => btn } });
     expect(query().get("window"), name).toBe(w);
     const url = request(p, query());
-    expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" ? "&baseline=1" : ""}`);
+    expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" || name === "status" ? "&baseline=1" : ""}`);
     const shown = p.render(w);
     expect(shown, `${name} ${w}`).toContain(name === "status" ? `data-value="${w}" aria-pressed="true"` : WORDS[w]);
     expect(html).toBeTruthy();
@@ -75,7 +75,7 @@ test("picking an option on each page asks for that window and the page says its 
 
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
   remember("window", "month");
-  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
+  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency || p === PAGES.status ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
   expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/flow?window=hour");
   expect(scope(new URLSearchParams("window=nope")).window).toBe("month");
 });
@@ -142,13 +142,3 @@ test("the Automation page asks for the chosen window and project", () => {
   expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toEqual(["/api/automation?window=day&project=alpha", "/api/factory?project=alpha"]);
 });
 
-test("an answer for a project that is no longer cached does not enter the cache", async () => {
-  let late: (v: unknown) => void = () => {};
-  const slow = () => new Promise((ok) => { late = ok; }).then(() => ({ ok: true, json: async () => ({ window: "week", who: "A", others: { day: { who: "A" } } }) }) as any);
-  const fast = async () => ({ ok: true, json: async () => ({ window: "week", who: "B", others: { day: { who: "B" }, month: { who: "B" } } }) }) as any;
-  const a = loadSpeed("week", slow as any, false, "A");
-  await loadSpeed("week", fast, false, "B");
-  late(0);
-  await a;
-  for (const w of ["week", "day", "month"]) expect((speedOf(w) as any).who, w).toBe("B");
-});

@@ -20,7 +20,7 @@ class FakeStream {
 
 /** A loader on a fake page: each fetch waits until the test answers it with `answer(i, body, keys)`. */
 function page() {
-  const asked: { url: string; done: (r: Response) => void }[] = [], drawn: unknown[] = [];
+  const asked: { url: string; done: (r: Response) => void }[] = [], drawn: unknown[] = [], firsts: boolean[] = [];
   let focused = false;
   const env = {
     fetch: (url: string) => new Promise<Response>((done) => asked.push({ url, done })),
@@ -30,13 +30,13 @@ function page() {
     armed: () => false,
     ok: () => {},
     fail: () => {},
-    draw: async (_route: unknown, data: unknown) => { drawn.push(data); },
+    draw: async (_route: unknown, data: unknown, first: boolean) => { drawn.push(data); firsts.push(first); },
     event: () => {},
   };
   const answer = (i: number, body: unknown, keys = "") =>
     asked[i].done(new Response(JSON.stringify(body), { headers: keys ? { "x-aleph-keys": keys } : {} }));
   const route = { view: { title: "Status", api: "/api/factory", live: true }, params: {}, query: new URLSearchParams() };
-  return { router: loader(env), asked, drawn, answer, route, focus: (on: boolean) => { focused = on; } };
+  return { router: loader(env), asked, drawn, firsts, answer, route, focus: (on: boolean) => { focused = on; } };
 }
 
 test("an older answer never draws over a newer one", async () => {
@@ -159,4 +159,53 @@ test("a view with two URLs reads both, joins them with its combine, and reloads 
   FakeStream.last.send("change", { keys: ["automation:week"] });
   await Promise.resolve();
   expect(p.asked.length).toBe(4);
+});
+
+/** A route whose view loads `/api/flow` in its `more` after its own data. */
+const withMore = (p: ReturnType<typeof page>) => ({ ...p.route, view: { ...p.route.view, more: async (d: any) => ({ ...d, flow: await (await p.router.get("/api/flow")).json() }) } });
+
+test("a view with more draws its data at once, then with what more adds, keeping the reader's state; a reload draws once", async () => {
+  const p = page(), route = withMore(p);
+  const shown = p.router.show(route);
+  p.answer(0, { n: 1 });
+  await new Promise((ok) => setTimeout(ok));
+  expect(p.drawn).toEqual([{ n: 1 }]);
+  p.answer(1, { w: 1 });
+  await shown;
+  // The second draw is not a first one: the page records and restores the open folds, the focus and the typed text.
+  expect([p.drawn, p.firsts]).toEqual([[{ n: 1 }, { n: 1, flow: { w: 1 } }], [true, false]]);
+  const again = p.router.reload();
+  p.answer(2, { n: 2 });
+  await new Promise((ok) => setTimeout(ok));
+  expect(p.drawn.length).toBe(2);
+  p.answer(3, { w: 2 });
+  await again;
+  expect(p.drawn.at(-1)).toEqual({ n: 2, flow: { w: 2 } });
+  expect(p.drawn.length).toBe(3);
+});
+
+test("a more that ends after the route changed does not draw", async () => {
+  const p = page(), route = withMore(p);
+  const shown = p.router.show(route);
+  p.answer(0, { n: 1 });
+  await new Promise((ok) => setTimeout(ok));
+  const next = p.router.show({ ...p.route });
+  p.answer(1, { w: 1 });
+  p.answer(2, { n: 2 });
+  await Promise.all([shown, next]);
+  expect(p.drawn).toEqual([{ n: 1 }, { n: 2 }]);
+});
+
+test("redraw draws the shown data again for the new query, and with fresh loads it again first", async () => {
+  const p = page();
+  const shown = p.router.show(p.route);
+  p.answer(0, { n: 1 });
+  await shown;
+  const q = new URLSearchParams("tile=x");
+  await p.router.redraw(q);
+  expect([p.drawn, p.firsts, p.router.shown.query.get("tile"), p.asked.length]).toEqual([[{ n: 1 }, { n: 1 }], [true, false], "x", 1]);
+  const fresh = p.router.redraw(q, true);
+  p.answer(1, { n: 2 });
+  await fresh;
+  expect([p.drawn.at(-1), p.firsts.at(-1)]).toEqual([{ n: 2 }, false]);
 });

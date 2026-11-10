@@ -75,18 +75,20 @@ test("the Status page puts Agent Time, Pipeline and the lanes in the main column
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
 });
 
-test("mountStatus fetches the week and fills the scorecard, the outcome bar and the Pipeline, and no other panel from /api/flow", async () => {
-  // @ts-ignore plain JS shared with the page
-  const { resetSpeed } = await import("./views/speed.js");
-  resetSpeed();
-  const tiles = { innerHTML: "" }, outcome = { outerHTML: "" }, pipe = { outerHTML: "" }, other = { innerHTML: "" };
-  const urls: string[] = [];
-  await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#outcome" ? outcome : s === "#pipeline" ? pipe : s === ".ph" ? null : other) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, baseline: BASE }) }; });
+/** The Status data after the view's `more`, with each /api/flow request in `urls` answered by `body`. */
+async function more(body: unknown, q = new URLSearchParams()) {
+  const was = globalThis.fetch, urls: string[] = [];
+  globalThis.fetch = (async (u: string) => { urls.push(u); return { ok: true, json: async () => body }; }) as any;
+  try { return { urls, s: await view.view.more({ ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, q) }; } finally { globalThis.fetch = was; }
+}
+
+test("more fetches the week with its baseline, and the page fills the scorecard, the outcome bar and the Pipeline from it", async () => {
+  const { urls, s } = await more({ ...WEEK, baseline: BASE });
   expect(urls).toEqual(["/api/flow?window=week&baseline=1"]);
-  expect(tiles.innerHTML).toContain("<b>38%<em> / 6.0h</em></b>");
-  expect(pipe.outerHTML).toContain('id="pipeline"');
-  expect(other.innerHTML).toBe("");
-  resetSpeed();
+  const page = view.view.render(s, {}, new URLSearchParams());
+  expect(page).toContain("<b>38%<em> / 6.0h</em></b>");
+  expect(page).toContain('class="obar"');
+  expect(page).not.toContain("Loading the outcomes");
 });
 
 test("the lanes: Running shows live agent runs of the cap and lists every open run; Done lists every done item", () => {
@@ -128,34 +130,18 @@ test("the sidebar links and the routes exist", async () => {
   }
 });
 
-test("mountStatus loads the window of the address", async () => {
-  const g: any = globalThis;
-  g.localStorage = { getItem: () => null, setItem: () => {} };
-  g.location = { hash: "#/?window=hour" };
-  g.history = { replaceState: () => {} };
-  // @ts-ignore plain JS shared with the page
-  const { resetSpeed } = await import("./views/speed.js");
-  resetSpeed();
-  const urls: string[] = [];
-  await view.mountStatus({ querySelector: () => null }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => WEEK }; }, new URLSearchParams("window=hour"));
-  expect(urls).toEqual(["/api/flow?window=hour&baseline=1"]);
-  resetSpeed();
-  delete g.localStorage; delete g.location; delete g.history;
+test("more loads the window of the address", async () => {
+  expect((await more(WEEK, new URLSearchParams("window=hour"))).urls).toEqual(["/api/flow?window=hour&baseline=1"]);
 });
 
-test("the outcome bar sits between the scorecard and the panels and mountStatus fills it", async () => {
-  // @ts-ignore plain JS shared with the page
-  const { resetSpeed } = await import("./views/speed.js");
-  resetSpeed();
+test("the outcome bar sits between the scorecard and the panels and fills once more brings /api/flow", async () => {
   const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams());
   const at = ['id="scorecard"', 'id="outcome"', 'id="pipeline"'].map((x) => page.indexOf(x));
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
   expect(page).toContain("Loading the outcomes");
-  const outcome = { outerHTML: "" };
-  const urls: string[] = [];
-  await view.mountStatus({ querySelector: (s: string) => (s === "#outcome" ? outcome : null) }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, classes: [...WEEK.classes, { key: "idle", name: "Idle", hours: 0, causes: [] }] }) }; }, new URLSearchParams("window=week"));
-  expect(outcome.outerHTML).toContain('class="obar"');
-  const h = outcome.outerHTML;
+  const { s } = await more({ ...WEEK, classes: [...WEEK.classes, { key: "idle", name: "Idle", hours: 0, causes: [] }] }, new URLSearchParams("window=week"));
+  const filled = view.view.render(s, {}, new URLSearchParams("window=week")), h = filled.slice(filled.indexOf('id="outcome"'), filled.indexOf('id="pipeline"'));
+  expect(h).toContain('class="obar"');
   expect(h).toContain("<h2 id=\"h-outcome\">Agent Time</h2>");
   expect(h).not.toContain("by outcome");
   const sep = h.indexOf('class="osep"');
@@ -168,8 +154,7 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   expect(needs).toContain('<h2 id="h-needs">Alerts</h2>');
   expect(needs).not.toContain("<h3>");
   expect(needs).not.toContain("Awaiting you");
-  expect(outcome.outerHTML.match(/<button /g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
-  resetSpeed();
+  expect(h.match(/<button /g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
 });
 
 test("the Status page titles a sub-issue link, with no goal and no Part", () => {

@@ -1,9 +1,9 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
-import { get } from "../router.js";
+import { get, redraw } from "../router.js";
 import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, heads, loadingLine, money, pageHead, pct, say, shortModel, statCard, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
-import { lastPeriod, loadSpeed, usable, usageCard } from "./speed.js";
+import { flowOf, lastPeriod, usageCard } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
@@ -123,9 +123,6 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
 /** The old address. */
 export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/capacity" ? "#/factory/agents" : null);
 
-const windowNow = () => scope().window;
-let modelsNow = null;
-
 export const view = {
   path: "/factory/agents",
   title: "Agents",
@@ -135,24 +132,20 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => scope(q).url("/api/factory"),
   live: true,
   refresh: 60,
-  render: (s, _params, q) => renderFactoryAgents(s, usable(scope(q).window), "live", scope(q).window),
-  mount: async (root, s) => {
-    const draw = (d) => {
-      root.innerHTML = renderFactoryAgents(s, d, "live", windowNow(), modelsNow);
-      scope().wire(root);
-      if (!d?.agents) return;
-      for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(d);
-    };
+  // `s.flow` is /api/flow for the window and `s.models` is /api/models, which `more` adds; the page draws without them first.
+  render: (s, _params, q) => renderFactoryAgents(s, s.flow ?? null, "live", scope(q).window, s.models ?? null),
+  more: async (s, q) => {
+    const [flow, models] = await Promise.all([flowOf(scope(q).window, q), get("/api/models").then((r) => r.json()).catch(() => null)]);
+    return { ...s, flow, models };
+  },
+  mount: (root, s) => {
+    scope().wire(root);
+    if (s.flow?.agents) for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(s.flow);
     root.onchange = async (e) => {
       const b = e.target.closest?.("#roles [data-tier]");
       if (!b || e.type !== "change") return;
       const m = await postJson("/api/models", { tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => say(b, err.message));
-      if (m) { modelsNow = m; if (root.querySelector("#capacity")) draw(usable(windowNow())); }
+      if (m) await redraw(true);
     };
-    draw(usable(windowNow()));
-    modelsNow = await get("/api/models").then((r) => r.json()).catch(() => null);
-    if (root.querySelector("#capacity")) draw(usable(windowNow()));
-    const d = await loadSpeed(windowNow());
-    if (root.querySelector("#capacity")) draw(d);
   },
 };

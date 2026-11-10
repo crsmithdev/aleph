@@ -1,5 +1,6 @@
 // The Flow page (was Efficiency): where agent time went, in hours. `d` is /api/flow for the window.
-import { count, card, empty, meter, sentence, statCard, dataTable, esc, hashQuery, heads, onTile, pageHead, pct, repoIdLink, setQuery, tiles, pagedTable, scope } from "../lib.js";
+import { redraw } from "../router.js";
+import { count, card, empty, meter, sentence, statCard, dataTable, esc, heads, onTile, pageHead, pct, repoIdLink, setQuery, tiles, pagedTable, scope } from "../lib.js";
 import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, plural, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
@@ -70,8 +71,6 @@ export const redirect = (hash) => {
   return ["#/status/efficiency", "#/factory/efficiency"].includes(path) ? `#/flow${query ? `?${query}` : ""}` : null;
 };
 
-const picked = () => hashQuery().get("tile") ?? ALL;
-
 export const view = {
   path: "/flow",
   title: "Flow",
@@ -82,17 +81,12 @@ export const view = {
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderEfficiency(d, q?.get("tile") ?? ALL),
-  mount: async (root, d) => {
-    const draw = () => { root.innerHTML = renderEfficiency(d, picked()); wire(); };
-    const wire = () => {
-      const page = root.querySelector("#eff");
-      scope().wire(root);
-      onTile(page, (k) => {
-        setQuery({ tile: k === ALL ? "" : k });
-        draw();
-        root.querySelector(`.tiles button[data-tile="${k}"], .obar button[data-tile="${k}"]`)?.focus();
-      });
-    };
-    wire();
+  mount: (root) => {
+    scope().wire(root);
+    onTile(root.querySelector("#eff"), async (k) => {
+      setQuery({ tile: k === ALL ? "" : k });
+      await redraw();
+      root.querySelector(`.tiles button[data-tile="${k}"], .obar button[data-tile="${k}"]`)?.focus();
+    });
   },
 };

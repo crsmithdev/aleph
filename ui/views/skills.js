@@ -1,6 +1,7 @@
 // One skill: how often it ran, from Langfuse. `renderSkill` takes /api/skills/:name and does not touch the DOM.
 // The list of skills is in sessions.js.
-import { card, crumb, dataTable, empty, esc, heads, idLink, pageHead, pager, span, when } from "../lib.js";
+import { redraw } from "../router.js";
+import { card, crumb, dataTable, empty, esc, heads, idLink, pageHead, pager, setQuery, span, when } from "../lib.js";
 import { panelOf } from "../chart.js";
 
 const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;
@@ -30,7 +31,7 @@ const PAGE = 50;
 const table = (name, head, rows, limit, none) => `<div data-t="${name}">${rows.length ? dataTable(head, rows.slice(0, limit).join("")) + pager(limit, rows.length, PAGE) : empty(none)}</div>`;
 
 export function renderSkill(d, limits = {}) {
-  const lim = (name) => limits[name] ?? PAGE;
+  const lim = (name) => Number(limits[name]) || PAGE;
   // Columns: time, session, title (prompt or message), project, numbers.
   const sessions = d.sessions.map((s) =>
     `<tr><td class="time">${esc(when(s.time))}</td><td>${sessionCell(s.id)}</td><td class="wide" title="${esc(s.prompt)}">${esc(s.prompt)}</td><td>${esc(s.project)}</td>` +
@@ -54,21 +55,17 @@ export const view = {
   title: "Skill",
   group: "claude",
   api: "/api/skills/:name",
-  render: (d) => renderSkill(d),
-  mount: (root, d) => {
-    const limits = {};
-    const wire = () => {
-      const el = root.querySelector(`aleph-chart[key="${chartKey(d.name)}"]`);
-      if (el) el.frame = usesFrame(d);
-    };
-    wire();
+  // A table's row limit is in the address under the table's name (`?sessions=100`).
+  render: (d, _params, q) => renderSkill(d, Object.fromEntries(q ?? [])),
+  mount: (root, d, q) => {
+    const el = root.querySelector(`aleph-chart[key="${chartKey(d.name)}"]`);
+    if (el) el.frame = usesFrame(d);
     root.onclick = (e) => {
       const more = e.target.closest?.("[data-t] button[data-more]");
       if (!more) return;
       const name = more.closest("[data-t]").dataset.t;
-      limits[name] = (limits[name] ?? 50) + Number(more.dataset.more);
-      root.innerHTML = renderSkill(d, limits);
-      wire();
+      setQuery({ [name]: String((Number(q.get(name)) || PAGE) + Number(more.dataset.more)) });
+      redraw();
     };
   },
 };

@@ -702,8 +702,6 @@ export const routes: Routes = {
     const fit = await currentFit().catch(() => null), inp = inputs(), now = new Date(), d = speed(w, now, fit, project, inp);
     // `baseline=1`: the trend baseline of the window in the same answer, so the Status page makes one request.
     if (url.searchParams.get("baseline") !== "1") return Response.json(d);
-    // `day` and `month` are the answers the Efficiency page reads (its last-24-h and 30-day-average trends).
-    const others = Object.fromEntries((["day", "month"] as const).filter((k) => k !== w).map((k) => [k, speed(k, now, fit, project, inp)]));
-    return Response.json({ ...d, baseline: baseline(w, now, fit, project, inp), others });
+    return Response.json({ ...d, baseline: baseline(w, now, fit, project, inp) });
   },
 };

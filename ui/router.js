@@ -1,9 +1,10 @@
 // The page shell: the router, the load path, the stream client and the action dispatch.
 //
 // Each module listed by /api/views exports
-// view = { path, title, group, order, icon?, render(data, params), mount?(root, data), event?(root, ev), api?, refresh?, live? }, and
+// view = { path, title, group, order, icon?, render(data, params, query), mount?(root, data, query), event?(root, ev), api?, more?, refresh?, live? }, and
 // may export redirect(hash) -> new hash | null for an address it took over:
-// `api` is the URL its data comes from (":params" filled in from the route),
+// `api` is the URL its data comes from (":params" filled in from the route), `more(data, query)` the promise of the data
+// with what the view loads after it (a first load draws before it and again after it),
 // `refresh` the seconds between reloads, `live` that /api/events also redraws it,
 // `icon` its sidebar glyph, a Font Awesome name. The page builds the sidebar from
 // them, in GROUPS order under the HEADERS, and routes by hash (#/jobs/aleph-52).
@@ -56,14 +57,26 @@ export function loader(env) {
     return res;
   }
 
+  /** Draw `data` for the load numbered `mine`, after the draw before it ends; false when a newer load or route came. */
+  async function put(route, mine, data, first) {
+    await drawn;
+    if (route !== shown || mine !== seq) return false; // the reader moved on, or a newer load started, while this loaded
+    // The reader armed a button while this loaded: the caller's check came too early, and the next reload catches up.
+    if (!first && env.armed()) return false;
+    route.data = data; // what `redraw` draws again
+    drawn = env.draw(route, data, first);
+    await drawn;
+    return true;
+  }
+
   // Each load takes a number; an answer that finds a newer number is dropped, so an old load never draws over a new one.
   // `drawn` is the last mount: the next draw waits for it.
   async function load(route, first) {
-    const mine = ++seq;
+    const mine = ++seq, more = route.view.more;
     let data = null;
     if (route.view.api) {
       try {
-        data = route.data = await dataOf(route, get);
+        data = await dataOf(route, get);
         if (route === shown) env.ok(route);
       } catch (e) {
         if (route !== shown || mine !== seq) return;
@@ -71,12 +84,19 @@ export function loader(env) {
         return;
       }
     }
-    await drawn;
-    if (route !== shown || mine !== seq) return; // the reader moved on, or a newer load started, while this loaded
-    // The reader armed a button while this loaded: the caller's check came too early, and the next reload catches up.
-    if (!first && env.armed()) return;
-    drawn = env.draw(route, data, first);
-    await drawn;
+    // A first load draws its data before `more` ends, so the page shows at once; a reload draws once, with all of it.
+    if (more && first && !(await put(route, mine, data, true))) return;
+    if (more) data = await more(data, route.query);
+    await put(route, mine, data, first && !more);
+  }
+
+  /** Draw the shown view again for the address's `query`: with its data, or with data loaded again when `fresh`. */
+  function redraw(query, fresh) {
+    if (!shown?.view) return;
+    shown.query = query;
+    if (fresh) return load(shown, false);
+    const route = shown;
+    return (drawn = drawn.then(() => (route === shown ? env.draw(route, route.data, false) : undefined)));
   }
 
   // One reload at a time; a call that comes during it makes one more. A reload waits while the reader types (the blur
@@ -136,7 +156,7 @@ export function loader(env) {
     return route.view ? load(route, true) : Promise.resolve();
   }
 
-  return { get, reload, blur, change, follow, check, show, get shown() { return shown; }, get keys() { return [...read]; } };
+  return { get, reload, redraw, blur, change, follow, check, show, get shown() { return shown; }, get keys() { return [...read]; } };
 }
 
 function compile(path) {
@@ -161,6 +181,10 @@ let page = null;
 /** A view's own GET: through the page's loader, so a `change` of its keys reloads the view, and with a `slot` an older
  * answer comes back null. A view a test mounts with no page fetches plainly. */
 export const get = (url, slot) => (page ? page.get(url, slot) : fetch(url, { cache: "no-store" }));
+
+/** Draw the shown view again through the one draw, after a choice of the reader changed the address (`setQuery`) or,
+ * with `fresh`, the server's data (an action). */
+export const redraw = (fresh = false) => page?.redraw(parseHash(location.hash).query, fresh);
 
 /** Wire the shell to the page and route to the hash. */
 export async function start() {
@@ -347,7 +371,8 @@ async function dispatch(e) {
   if (!b) return;
   const { act, label } = b.dataset;
   const name = b.dataset.name ?? (act === "approve" || act === "decline" ? b.dataset.id : undefined);
-  const note = (m) => { say(b.parentElement.lastElementChild, m); if (name) actMessages.set(name, m); };
+  // A draw that came while the action ran (a first load's `more`) replaced the row: draw again, and the row shows the kept message.
+  const note = (m) => { say(b.parentElement.lastElementChild, m); if (name) actMessages.set(name, m); if (!b.isConnected) redraw(); };
   if (act === "diff") {
     const panel = b.closest("article").querySelector(".diff-panel");
     if (!panel.hidden) { panel.hidden = true; openDiffs.delete(name); return; }

@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { dataOf, get } from "../router.js";
-import { clamp, contentText, issueHref, parseId, parseJob, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, recordState, restoreState, seg, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { redraw } from "../router.js";
+import { clamp, contentText, issueHref, parseId, parseJob, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { findingHtml } from "./now.js";
 import { askCard } from "./cards.js";
 
@@ -183,16 +183,6 @@ export function renderLog(d, by, limit = PAGE) {
     (rows ? dataTable(heads(["Logged", "By", "Subject", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
 }
 
-/** Load /api/automation again and draw the page with it. */
-async function redraw(root) {
-  const d = await dataOf({ view, params: null, query: hashQuery() }, get).catch(() => null);
-  if (!d) return;
-  const saved = recordState(root);
-  root.innerHTML = renderGates(d, hashQuery());
-  restoreState(root, saved);
-  scope().wire(root);
-}
-
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
 export function mount(root) {
   scope().wire(root);
@@ -205,7 +195,7 @@ export function mount(root) {
       try {
         await postJson("/api/automation/schedules", { name: sched.dataset.schedule, every: sched.elements.every.value.trim() });
       } catch (err) { btn.disabled = false; say(btn, `Could not save the interval: ${err.message}`); return; }
-      return redraw(root);
+      return redraw(true);
     }
     const form = e.target.closest?.("form.capform");
     if (!form) return;
@@ -215,7 +205,7 @@ export function mount(root) {
     try {
       await postJson("/api/automation/caps", { [key]: Number(form.elements[key].value) });
     } catch (err) { btn.disabled = false; say(btn, `Could not save the cap: ${err.message}`); return; }
-    await redraw(root);
+    await redraw(true);
   };
   root.onclick = async (e) => {
     const seg = e.target.closest?.("#gates-log .seg button");
@@ -223,7 +213,7 @@ export function mount(root) {
     const more = e.target.closest?.("#gates-log button[data-more]");
     if (more) {
       setQuery({ limit: String(limitOf(hashQuery(), PAGE) + Number(more.dataset.more)) });
-      return redraw(root);
+      return redraw();
     }
     const r = e.target.closest?.("button[data-rule]");
     if (r) {
@@ -234,7 +224,7 @@ export function mount(root) {
       try {
         await (mode ? postJson(`/api/automation/rules/${encodeURIComponent(rule)}/grant`, { action: mode }) : postJson(`/api/automation/rules/${encodeURIComponent(rule)}/revoke`));
       } catch (err) { buttons.forEach((b) => { b.disabled = false; }); say(seg, `Could not change the rule: ${err.message}`); return; }
-      await redraw(root);
+      await redraw(true);
       return;
     }
   };
