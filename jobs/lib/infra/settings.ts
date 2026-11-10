@@ -1,17 +1,16 @@
 /**
  * The factory's own settings: caps, time limits, rounds, switches and the agent commands. Each setting
- * has one name, one default and one parser here. The three directory variables ALEPH_ISSUES,
- * ALEPH_JOBS_DIR and ALEPH_FACTORY_DIR are read in layout.ts. A command that
+ * has one name, one default and one parser here. Paths under home are read in lib/paths.ts. A command that
  * only one call site uses stays at that call site.
  *
  * Each function reads at each call: a test changes the environment in-process, and launch.ts hands
  * every ALEPH_* variable to the units it starts.
  */
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { availableParallelism, homedir } from "node:os";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { alephPath, expand, home, vaultDir } from "../../../lib/paths.ts";
 import { layout } from "./layout.ts";
-import { touch } from "./sources.ts";
 
 const num = (name: string, dflt: number): number => Number(process.env[name] ?? dflt);
 
@@ -111,12 +110,8 @@ export const rescueOn = () => process.env.ALEPH_RESCUE !== "off";
 export const workerCmd = () => process.env.ALEPH_WORKER_CMD ?? "claude";
 export const reviewerCmd = () => process.env.ALEPH_REVIEWER_CMD ?? workerCmd();
 
-/** The vault folder. */
-export function vaultDir(): string { touch("vault"); return process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault"); }
-/** The handoffs folder: beside the vault (the link, not its target) unless the environment names it. */
 /** Chris's log of what reached him and why: the director reads it, and code does not. */
 export const needsYouLog = (): string => process.env.ALEPH_NEEDS_YOU_LOG ?? join(dirname(resolve(vaultDir())), "needs-you-log.md");
-export const handoffsDir = (): string => { touch("handoffs"); return process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), "handoffs"); };
 
 /** The id of the job this process runs for, if any. */
 export const jobId = (): string | undefined => process.env.ALEPH_JOB_ID;
@@ -128,27 +123,24 @@ export const windowsTimeCmd = (): string | undefined => process.env.ALEPH_WINDOW
 export const ruleCmd = () => process.env.ALEPH_RULE_CMD ?? "claude";
 export const doctorClockMs = () => Number(process.env.ALEPH_DOCTOR_CLOCK_MS ?? 15_000);
 export const homeUrl = () => process.env.ALEPH_HOME_URL ?? "http://aleph.home/";
-export const unitDir = () => process.env.ALEPH_UNIT_DIR ?? join(homedir(), ".config", "systemd", "user");
+export const unitDir = () => process.env.ALEPH_UNIT_DIR ?? join(home(), ".config", "systemd", "user");
 export const systemctlBin = () => process.env.ALEPH_SYSTEMCTL ?? "systemctl";
 export const jobForeground = (): boolean => process.env.ALEPH_JOB_FOREGROUND === "1";
-/** The repos file, unexpanded. */
-export const reposFile = () => process.env.ALEPH_REPOS ?? "~/.aleph/repos.json";
+/** The repos file. */
+export const reposFile = () => alephPath("ALEPH_REPOS", "repos.json");
 /** The port aleph-ui listens on, and the one the smoke check calls. */
 export const uiPort = (): string => process.env.ALEPH_UI_PORT ?? "3020";
 export const startCmd = (): string | undefined => process.env.ALEPH_START_CMD;
 export const runEnvFile = (): string | undefined => process.env.ALEPH_RUN_ENV;
-export const nowOverride = (): string | undefined => process.env.ALEPH_NOW;
 export const skillsDir = () => process.env.ALEPH_SKILLS_DIR ?? join(import.meta.dir, "..", "..", "..", "skills");
 /** The skills store. */
-/** The notes pinned on UI pages, and the answers to them (lib/annotations.ts). */
-export const annotationsFile = (): string => { touch("annotations"); return process.env.ALEPH_ANNOTATIONS ?? join(homedir(), ".aleph", "annotations.json"); };
-export const skillsStore = () => process.env.ALEPH_SKILLS_STORE ?? join(homedir(), ".aleph", "skills-store.json");
+export const skillsStore = () => alephPath("ALEPH_SKILLS_STORE", "skills-store.json");
 export const uiPassword = () => process.env.ALEPH_UI_PASSWORD ?? "";
 export const cliOverride = (): string | undefined => process.env.ALEPH_CLI;
 export const stateSlowMs = () => Number(process.env.ALEPH_STATE_SLOW_MS ?? 0);
-/** The usage file, unexpanded. */
-export const usageFileSetting = () => process.env.ALEPH_USAGE_FILE ?? "~/.aleph/usage.jsonl";
+/** The usage file. */
+export const usageFile = () => alephPath("ALEPH_USAGE_FILE", "usage.jsonl");
 export const usageFileSet = (): boolean => !!process.env.ALEPH_USAGE_FILE;
-/** The credentials file, unexpanded. */
-export const credentialsFileSetting = () => process.env.ALEPH_CLAUDE_CREDENTIALS ?? "~/.claude/.credentials.json";
+/** The credentials file. */
+export const credentialsFile = () => expand(process.env.ALEPH_CLAUDE_CREDENTIALS ?? join(home(), ".claude", ".credentials.json"));
 export const usageUrl = () => process.env.ALEPH_USAGE_URL ?? "https://api.anthropic.com/api/oauth/usage";

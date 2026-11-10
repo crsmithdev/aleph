@@ -4,7 +4,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import type { LangfuseConfig } from "./env.ts";
-import { allPages } from "../ui/langfuse-pages.ts";
+import { auth } from "./langfuse.ts";
 
 const MAX_FIELD = 4096;
 
@@ -74,13 +74,12 @@ export async function postSpans(cfg: LangfuseConfig, spans: Span[], timeoutMs = 
       scopeSpans: [{ scope: { name: "aleph-hooks" }, spans }],
     }],
   };
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
   try {
     const res = await fetch(`${cfg.baseUrl}/api/public/otel/v1/traces`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Basic ${auth}`,
+        authorization: auth(cfg),
         "x-langfuse-ingestion-version": "4",
       },
       body: JSON.stringify(body),
@@ -96,11 +95,10 @@ export interface Score { traceId: string; name: string; value: number; comment?:
 
 /** A score on a trace, through the scores API: OTLP has no score. */
 export async function postScore(cfg: LangfuseConfig, score: Score, timeoutMs = 3000): Promise<PostResult> {
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
   try {
     const res = await fetch(`${cfg.baseUrl}/api/public/scores`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Basic ${auth}` },
+      headers: { "content-type": "application/json", authorization: auth(cfg) },
       body: JSON.stringify({ ...score, dataType: "NUMERIC", comment: score.comment?.slice(0, 500) }),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -108,13 +106,6 @@ export async function postScore(cfg: LangfuseConfig, score: Score, timeoutMs = 3
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }
-}
-
-/** Only Langfuse proves ingestion; a 200 on the POST does not. */
-export async function fetchTrace(cfg: LangfuseConfig, traceId: string): Promise<unknown | null> {
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const res = await fetch(`${cfg.baseUrl}/api/public/traces/${traceId}`, { headers: { authorization: `Basic ${auth}` } });
-  return res.ok ? res.json() : null;
 }
 
 export interface Observation {
@@ -126,9 +117,4 @@ export interface Observation {
   output?: unknown;
   metadata?: Record<string, any> | null;
   startTime?: string;
-}
-
-/** Every observation that started in [from, to], paged through the observations API. */
-export async function fetchObservations(cfg: LangfuseConfig, from: Date, to: Date, timeoutMs = 15000): Promise<Observation[]> {
-  return (await allPages<Observation>(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }, timeoutMs)).rows;
 }

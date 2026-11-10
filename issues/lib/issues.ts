@@ -12,7 +12,7 @@ import { basename, extname } from "node:path";
 import { FULL } from "../../lib/naming.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";
 import { logEvent } from "../../jobs/lib/infra/layout.ts";
-import { git } from "../../jobs/lib/infra/git.ts";
+import { git } from "../../lib/git.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { recentRepos } from "../../jobs/lib/records/status.ts";
 import * as issues from "./todo.ts";

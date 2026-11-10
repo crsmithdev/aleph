@@ -4,7 +4,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import { langfuseConfig } from "../../lib/env.ts";
-import { attrs, fetchTrace, nano, postSpans, spanId, traceIdFor } from "../../lib/otlp.ts";
+import { http } from "../../lib/langfuse.ts";
+import { attrs, nano, postSpans, spanId, traceIdFor } from "../../lib/otlp.ts";
 
 const cfg = process.env.ALEPH_LIVE === "1" ? langfuseConfig() : null;
 const describeLive = cfg ? describe : describe.skip;
@@ -47,7 +48,7 @@ describeLive("live langfuse", () => {
         const query = line.match(/\{([\w-]+)\}/)?.[1];
         if (!query) continue;
         if (line.includes("INSERT INTO traces")) inserts.add(query);
-        else if (inserts.has(query) && line.includes("Done processing query") && (found = await fetchTrace(cfg!, traceId))) break read;
+        else if (inserts.has(query) && line.includes("Done processing query") && (found = await http(cfg!).trace(traceId))) break read;
       }
     }
     tail.stdin.end();

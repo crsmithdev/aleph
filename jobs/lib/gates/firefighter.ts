@@ -27,7 +27,7 @@ import { logEvent } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { askSlowLands } from "../land/rescue.ts";
 import { runFile } from "../records/run-files.ts";
-import { afterFiling } from "../transitions/factory.ts";
+import { afterFiling } from "../transitions/filing.ts";
 
 /** The most of a log that goes into an issue's request: its last LOG_LINES lines, cut to LOG_CHARS. */
 export const LOG_LINES = 200;

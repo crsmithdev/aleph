@@ -8,7 +8,7 @@
 import { basename } from "node:path";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { closeAndFile, note } from "../../../issues/lib/store.ts";
-import { filing } from "../transitions/factory.ts";
+import { filing } from "../transitions/filing.ts";
 import { fetchOrigin, followMain, git } from "../infra/git.ts";
 import { needsOf } from "../asks/ask.ts";
 import { allRuns, isWaiting, isAgentRun, onOf, trailerOf, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";

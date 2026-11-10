@@ -104,7 +104,7 @@ The tests, fixtures and testkits of a module are in its folder.
 
 ### The UI read path
 
-The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYED` list answer from it, and it builds them in a worker thread (`ui/build.ts`, `ui/build-worker.ts`). Each build records the sources it read (`jobs/lib/infra/sources.ts`); when a source changes, the updater builds the kept keys again and then sends `change` with their keys. `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
+The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYED` list answer from it, and it builds them in a worker thread (`ui/build.ts`, `ui/build-worker.ts`). Each build records the sources it read (`lib/sources.ts`); when a source changes, the updater builds the kept keys again and then sends `change` with their keys. `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
 
 ## Invariants
 

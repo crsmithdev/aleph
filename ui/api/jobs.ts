@@ -11,7 +11,7 @@ import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
-import { langfuse } from "../langfuse.ts";
+import { langfuse } from "../../lib/langfuse.ts";
 import { contentText, issueHref, parseId, subjectOf, tail } from "../../lib/naming.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";

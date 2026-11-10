@@ -25,7 +25,7 @@ import { INTAKE_TRIES } from "../infra/settings.ts";
 import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
-import { filing } from "../transitions/factory.ts";
+import { filing } from "../transitions/filing.ts";
 
 /** The model an intake run asks for. */
 const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;

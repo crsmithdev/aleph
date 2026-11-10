@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, listSkills, routes } from "./api/skills.ts";
-import { memory, use } from "./langfuse.ts";
+import { memory, use } from "../lib/langfuse.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { updater } from "./updater.ts";
 // @ts-ignore plain JS, shared with the page

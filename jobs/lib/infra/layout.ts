@@ -4,24 +4,20 @@
  * (issues, runs, factory) under ~/.aleph. The environment wins, variable by variable.
  */
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { event, type Event } from "../../../lib/naming.ts";
-import { touch } from "./sources.ts";
+import { alephPath } from "../../../lib/paths.ts";
+import { touch } from "../../../lib/sources.ts";
 
 export interface Layout { store: string; ledger: string; factory: string }
 
-const expand = (p: string): string => (p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p);
-
-const home = () => join(process.env.HOME || homedir(), ".aleph");
-const factory = () => expand(process.env.ALEPH_FACTORY_DIR ?? join(home(), "factory"));
+const factory = () => alephPath("ALEPH_FACTORY_DIR", "factory");
 
 /** Read at each call, so a changed environment is seen at once. Each path touches its source when read (sources.ts). */
 export function layout(): Layout {
-  const e = process.env;
   return {
-    get store() { touch("store"); return expand(e.ALEPH_ISSUES ?? join(home(), "issues")); },
-    get ledger() { touch("runs"); return expand(e.ALEPH_JOBS_DIR ?? join(home(), "runs")); },
+    get store() { touch("store"); return alephPath("ALEPH_ISSUES", "issues"); },
+    get ledger() { touch("runs"); return alephPath("ALEPH_JOBS_DIR", "runs"); },
     get factory() { touch("factory"); return factory(); },
   };
 }

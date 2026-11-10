@@ -5,12 +5,12 @@
  * Each kind of record has its own typed slot below; the key prefix is the kind.
  */
 import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { alephPath } from "../../lib/paths.ts";
 import type { Snapshot } from "./snapshot.ts";
 
 export function spoolDir(): string {
-  return process.env.ALEPH_SPOOL ?? join(homedir(), ".aleph", "spool");
+  return alephPath("ALEPH_SPOOL", "spool");
 }
 
 function pathFor(key: string): string {

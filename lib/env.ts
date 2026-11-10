@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { alephPath } from "./paths.ts";
 
 export interface LangfuseConfig {
   baseUrl: string;
@@ -9,7 +8,7 @@ export interface LangfuseConfig {
 }
 
 /** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
-export const envFile = (): string => process.env.ALEPH_ENV_FILE ?? join(homedir(), ".aleph", ".env");
+export const envFile = (): string => alephPath("ALEPH_ENV_FILE", ".env");
 
 /** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
 export function openRouterKey(): string | null {

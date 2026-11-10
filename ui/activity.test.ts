@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { activity } from "./activity.ts";
-import { closePass, openPass } from "../jobs/lib/infra/sources.ts";
-import { memory, use } from "./langfuse.ts";
+import { closePass, openPass } from "../lib/sources.ts";
+import { memory, use } from "../lib/langfuse.ts";
 
 const now = new Date(2026, 10, 4, 23, 0, 0);
 const at = (daysAgo: number, hour = 10) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour).toISOString();

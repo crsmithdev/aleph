@@ -4,24 +4,15 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { LangfuseConfig } from "../../lib/env.ts";
-import { allPages } from "../../ui/langfuse-pages.ts";
+import type { Langfuse } from "../../lib/langfuse.ts";
 
 const TRACE_CAP = 12 * 1024;
 
 interface Obs { id: string; type: string; name?: string; parentObservationId?: string; input?: unknown; output?: unknown; metadata?: Record<string, any>; startTime?: string }
 
-function dayRange(date: string): { from: string; to: string } {
-  const start = new Date(`${date}T00:00:00`);
-  const end = new Date(start.getTime() + 86400_000);
-  return { from: start.toISOString(), to: end.toISOString() };
-}
-
-async function get(cfg: LangfuseConfig, path: string): Promise<any> {
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const res = await fetch(`${cfg.baseUrl}${path}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`${res.status} on ${path}`);
-  return res.json();
+function dayRange(date: string): { from: Date; to: Date } {
+  const from = new Date(`${date}T00:00:00`);
+  return { from, to: new Date(from.getTime() + 86400_000) };
 }
 
 function str(v: unknown, max: number): string {
@@ -54,15 +45,14 @@ export function digestTrace(trace: { id: string; name?: string; metadata?: any; 
   return out.join("\n");
 }
 
-export async function traceDigest(cfg: LangfuseConfig, date: string): Promise<{ text: string; error?: string }> {
+export async function traceDigest(lf: Langfuse, date: string): Promise<{ text: string; error?: string }> {
   const { from, to } = dayRange(date);
   const parts: string[] = [];
   let size = 0;
   try {
-    const { rows } = await allPages(cfg, "/api/public/traces", { fromTimestamp: from, toTimestamp: to }, 15_000);
+    const { rows } = await lf.traces({ from, to });
     for (const t of rows) {
-      const full = await get(cfg, `/api/public/traces/${t.id}`);
-      const block = digestTrace(full);
+      const block = digestTrace((await lf.trace(t.id)) ?? t);
       if (size + block.length > TRACE_CAP) { parts.push(`… ${rows.length} traces on the day; digest capped at ${TRACE_CAP} bytes`); return { text: parts.join("\n\n") }; }
       parts.push(block);
       size += block.length;

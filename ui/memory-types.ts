@@ -11,10 +11,11 @@ import * as todos from "../issues/lib/todo.ts";
 import { coreNotes, START_BUDGET, startContext, type Note } from "../vault/lib/vault.ts";
 import { activity } from "./activity.ts";
 import { skillsDir } from "./api/skills.ts";
-import { langfuse, list } from "./langfuse.ts";
+import { langfuse } from "../lib/langfuse.ts";
+import { list } from "./langfuse.ts";
 import { traceProject } from "./api/scope.ts";
-import { later } from "../jobs/lib/infra/sources.ts";
-import { handoffsDir as handoffsSetting } from "../jobs/lib/infra/settings.ts";
+import { later } from "../lib/sources.ts";
+import { handoffsDir as handoffsSetting } from "../lib/paths.ts";
 
 const mtime = (p: string): string => { try { return statSync(p).mtime.toISOString(); } catch { return ""; } };
 const newest = (xs: (string | undefined | null)[]): string => xs.filter(Boolean).sort().at(-1) ?? "";

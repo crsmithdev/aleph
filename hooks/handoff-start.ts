@@ -12,7 +12,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { handoffsDir } from "../jobs/lib/infra/settings.ts";
+import { handoffsDir } from "../lib/paths.ts";
 import { repoScope } from "../vault/lib/vault.ts";
 
 const input = JSON.parse((await Bun.stdin.text()) || "{}");

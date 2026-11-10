@@ -18,7 +18,7 @@ import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../
 import { memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
-import { later, once } from "../../jobs/lib/infra/sources.ts";
+import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");

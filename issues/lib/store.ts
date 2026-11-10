@@ -13,7 +13,7 @@
  * `fm.labels` or name a task's path.
  */
 import * as record from "../../jobs/lib/records/record.ts";
-import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/infra/git.ts";
+import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
 import { layout, logEvent } from "../../jobs/lib/infra/layout.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";

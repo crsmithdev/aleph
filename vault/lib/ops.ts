@@ -5,8 +5,8 @@
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
-import { langfuseConfig } from "../../lib/env.ts";
-import { fetchObservations, type Observation } from "../../lib/otlp.ts";
+import { langfuse } from "../../lib/langfuse.ts";
+import type { Observation } from "../../lib/otlp.ts";
 import { serializeFrontmatter } from "../../lib/frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./git.ts";
 import { handoffsFor, traceDigest } from "./compile.ts";
@@ -14,7 +14,7 @@ import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
 import { budgetFindings, citedTraces, clock, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, links, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
-import { handoffsDir } from "../../jobs/lib/infra/settings.ts";
+import { handoffsDir } from "../../lib/paths.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
 export class Exit extends Error { constructor(readonly code: number) { super(`exit ${code}`); } }
@@ -311,12 +311,12 @@ async function misses(): Promise<void> {
   const raw = flag("days");
   const days = raw === undefined ? 7 : Number(raw);
   if (!(days > 0)) { console.error("usage: vault misses [--days N]"); exit(1); }
-  const cfg = langfuseConfig();
-  if (!cfg) { console.error("no Langfuse keys"); exit(1); }
+  const lf = langfuse();
+  if (!lf) { console.error("no Langfuse keys"); exit(1); }
   const to = new Date();
   const from = new Date(to.getTime() - days * 86400_000);
   let obs: Observation[];
-  try { obs = await fetchObservations(cfg, from, new Date(to.getTime() + 60_000)); }
+  try { obs = (await lf.observations({ from, to: new Date(to.getTime() + 60_000) })).rows; }
   catch (e) { console.error(`Langfuse failed: ${e instanceof Error ? e.message : e}`); exit(1); }
   obs = obs.filter((o) => !o.startTime || new Date(o.startTime) >= from).sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
 
@@ -518,8 +518,8 @@ async function compile(): Promise<void> {
   requireVault();
   const date = positional[0] ?? today();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { console.error("usage: vault compile [YYYY-MM-DD]"); exit(1); }
-  const cfg = langfuseConfig();
-  const traces = cfg ? await traceDigest(cfg, date) : { text: "", error: "no Langfuse keys" };
+  const lf = langfuse();
+  const traces = lf ? await traceDigest(lf, date) : { text: "", error: "no Langfuse keys" };
   const handoffs = handoffsFor(handoffsDir(), date);
   const dailyPath = join(root, "daily", `${date}.md`);
   const daily = existsSync(dailyPath) ? readFileSync(dailyPath, "utf8") : "";

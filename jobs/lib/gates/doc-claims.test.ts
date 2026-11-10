@@ -93,10 +93,10 @@ describe("a doc that does not match fails, quoting the claim", () => {
   });
 
   test("a claim that a file imports only some modules", () => {
-    expect(one("`jobs/lib/infra/settings.ts` imports only `node:fs`, `node:os`, `node:path`, `./layout.ts` and `./sources.ts`.")).toEqual([]);
+    expect(one("`jobs/lib/infra/settings.ts` imports only `node:fs`, `node:os`, `node:path`, `../../../lib/paths.ts` and `./layout.ts`.")).toEqual([]);
     const p = one("`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`.");
     expect(p).toHaveLength(1);
-    expect(p[0]).toStartWith('docs/x.md:1: "`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`": jobs/lib/infra/settings.ts imports node:fs, node:os, node:path, ./layout.ts, ./sources.ts; not ./sandbox.ts, ./gate.ts');
+    expect(p[0]).toStartWith('docs/x.md:1: "`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`": jobs/lib/infra/settings.ts imports node:fs, node:os, node:path, ../../../lib/paths.ts, ./layout.ts; not ./sandbox.ts, ./gate.ts');
   });
 });
 

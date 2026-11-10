@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import * as jobRecord from "../records/record.ts";
 import { basename, dirname, join } from "node:path";
 import { dispatchDetached } from "../transitions/launch.ts";
-import { afterFiling } from "../transitions/factory.ts";
+import { afterFiling } from "../transitions/filing.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
@@ -35,7 +35,8 @@ import { explainLesson, proposals, type Lesson } from "../learning/corrections.t
 import { logEvent } from "../infra/layout.ts";
 import { FULL, refs as idsIn, word } from "../../../lib/naming.ts";
 import type { Hold } from "../gates/issue-decision.ts";
-import { DIRECTOR_CAP, needsYouLog, vaultDir } from "../infra/settings.ts";
+import { DIRECTOR_CAP, needsYouLog } from "../infra/settings.ts";
+import { vaultDir } from "../../../lib/paths.ts";
 import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
 import { drop as dropJob, land as landJob, refusal } from "../transitions/transitions.ts";

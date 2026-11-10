@@ -9,7 +9,6 @@
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { FULL, parseId, shortText } from "../../lib/naming.ts";
-import { nowOverride } from "../../jobs/lib/infra/settings.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export type Status = (typeof STATUSES)[number];
@@ -69,7 +68,7 @@ const isoOf = (v: unknown): string | undefined => {
 };
 
 /** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
-export const clock = (): Date => (nowOverride() ? new Date(nowOverride()!) : new Date());
+export const clock = (): Date => (process.env.ALEPH_NOW ? new Date(process.env.ALEPH_NOW) : new Date());
 
 /** `<repo>-<n>` split into its parts, or null. */
 export function parseRef(s: string): { repo: string; id: number } | null {

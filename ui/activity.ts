@@ -1,15 +1,16 @@
 /**
  * The tools and hooks Claude Code used over the last days, and the
  * verify-gate's denials, for `/api/sessions` and `/api/memory`. It reads Langfuse
- * observations (as `fetchObservations` does). `?project=<key>` keeps one
+ * observations through the port in lib/langfuse.ts. `?project=<key>` keeps one
  * project: a Langfuse trace by the scope rule in `ui/api/scope.ts`.
  */
 import type { Observation } from "../lib/otlp.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { today } from "../issues/lib/todo.ts";
-import { once } from "../jobs/lib/infra/sources.ts";
+import { once } from "../lib/sources.ts";
 import { traceIn } from "./api/scope.ts";
-import { langfuse, recent, type Langfuse } from "./langfuse.ts";
+import { langfuse, type Langfuse } from "../lib/langfuse.ts";
+import { recent } from "./langfuse.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];

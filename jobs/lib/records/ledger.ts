@@ -3,7 +3,7 @@
  * liveness and locks. See docs/data-model.md.
  */
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { homedir, loadavg } from "node:os";
+import { loadavg } from "node:os";
 import { join } from "node:path";
 import { needsOf, type Ask } from "../asks/ask.ts";
 import { layout } from "../infra/layout.ts";
@@ -12,7 +12,8 @@ import { lock } from "../infra/locks.ts";
 import { isLive } from "../infra/process.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
-import { touch } from "../infra/sources.ts";
+import { touch } from "../../../lib/sources.ts";
+import { expand } from "../../../lib/paths.ts";
 import { contentText, fileSafe, parseId, parseJob, setCodes, subjectOf, tail } from "../../../lib/naming.ts";
 
 /** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. */
@@ -124,15 +125,11 @@ export interface Repo {
 
 export const OPEN: State[] = ["running", "passed", "waiting", "returned", "failed"];
 
-export function expand(p: string): string {
-  return p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p;
-}
-
 export const runsDir = () => layout().ledger;
 
 export function loadRegistry(): Record<string, Repo> {
   touch("registry");
-  const file = expand(reposFile());
+  const file = reposFile();
   const raw = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
   const repos: Record<string, Repo> = {};
   for (const [key, r] of Object.entries<any>(raw)) {

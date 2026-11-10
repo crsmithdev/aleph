@@ -2,7 +2,7 @@
  * The updater: the one owner of the UI server's derived data, and the one sender of `change`.
  *
  * A key is a GET route's path and its sorted query (`/api/flow?baseline=1&window=week`); its value is that route's
- * answer, built in the build Worker (ui/build.ts). A build records the sources it read (jobs/lib/infra/sources.ts).
+ * answer, built in the build Worker (ui/build.ts). A build records the sources it read (lib/sources.ts).
  * When a source changes, the updater builds again each kept key that read it, keeps the new answers (the old ones
  * are served until then), and only then sends `change` with the keys whose answer or mark changed.
  *
@@ -23,9 +23,9 @@ import { existsSync, mkdirSync, readFileSync, watch, writeFileSync, type FSWatch
 import { basename, dirname, join } from "node:path";
 import { factoryDir } from "../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../jobs/lib/infra/layout.ts";
-import { expand } from "../jobs/lib/records/ledger.ts";
 import { recordsDir } from "../jobs/lib/records/record.ts";
-import { annotationsFile, handoffsDir, reposFile, skillsDir, vaultDir } from "../jobs/lib/infra/settings.ts";
+import { reposFile, skillsDir } from "../jobs/lib/infra/settings.ts";
+import { annotationsFile, handoffsDir, vaultDir } from "../lib/paths.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
 import { fetchStore } from "../issues/lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
@@ -269,7 +269,7 @@ export const countsInVault = (file: string): boolean => !/^\.(git|index|obsidian
 /** Watch the sources, poll Langfuse, fetch the store and sweep the keys until `stopUpdater`; with `restore`, build the saved keys. */
 export function startUpdater({ restore = true }: { restore?: boolean } = {}): void {
   if (stops.length) return;
-  const repos = expand(reposFile());
+  const repos = reposFile();
   mkdirSync(recordsDir(), { recursive: true });
   mkdirSync(eventsDir(), { recursive: true });
   follow(recordsDir(), countsInRecords, "records");

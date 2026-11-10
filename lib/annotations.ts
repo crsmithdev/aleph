@@ -8,7 +8,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { annotationsFile } from "../jobs/lib/infra/settings.ts";
+import { annotationsFile } from "./paths.ts";
 import { refuse } from "./refusal.ts";
 
 export type By = "you" | "agent";

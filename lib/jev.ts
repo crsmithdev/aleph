@@ -5,14 +5,14 @@
  * cannot be called through chat/completions.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { openRouterKey } from "./env.ts";
+import { alephPath } from "./paths.ts";
 
 export const JEV_MODEL = "typesafe/jev-1.13";
 
 export type JudgeChoice = "jev" | "haiku";
-const choiceFile = () => process.env.ALEPH_JUDGE_FILE ?? join(homedir(), ".aleph", "judge");
+const choiceFile = () => alephPath("ALEPH_JUDGE_FILE", "judge");
 
 /**
  * Whether Jev screens before Haiku, everywhere aleph uses it: ALEPH_JUDGE,

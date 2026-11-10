@@ -1,19 +1,10 @@
-import { spawnSync } from "bun";
 import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
+import { git } from "../../lib/git.ts";
+
+export { git } from "../../lib/git.ts";
 
 export const TRAILER = "Co-Authored-By: Claude <noreply@anthropic.com>";
-
-export function git(dir: string, ...args: string[]): { ok: boolean; out: string } {
-  // Several facts gates write the vault in the same second; a git call that
-  // meets another's index.lock waits and tries again (6 facts lost to it, 1 to 3 Nov).
-  for (let i = 0; ; i++) {
-    const p = spawnSync(["git", "-C", dir, ...args], { stdout: "pipe", stderr: "pipe" });
-    const out = (p.stdout.toString() + p.stderr.toString()).trim();
-    if (p.exitCode === 0 || !out.includes("index.lock") || i === 10) return { ok: p.exitCode === 0, out };
-    Bun.sleepSync(200 * (i + 1));
-  }
-}
 
 export function tracked(dir: string, path: string): boolean {
   return git(dir, "ls-files", "--error-unmatch", "--", relative(dir, path)).ok;

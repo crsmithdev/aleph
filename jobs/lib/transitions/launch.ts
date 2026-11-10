@@ -5,7 +5,7 @@
  * or intake after a transition is a unit of its own too. The transitions themselves run in-process: see transitions.ts.
  */
 import { closeSync, mkdirSync, openSync } from "node:fs";
-import { homedir } from "node:os";
+import { home } from "../../../lib/paths.ts";
 import { dirname, join } from "node:path";
 import { factoryDir } from "../gates/factory-status.ts";
 import { LOW, type Repo } from "../records/ledger.ts";
@@ -17,7 +17,7 @@ export const CLI = join(import.meta.dir, "..", "..", "cli.ts");
 /** The caller's PATH with ~/.local/bin and the directory of this bun added at the end when missing. */
 export function runPath(env: Record<string, string | undefined> = process.env): string {
   const parts = (env.PATH ?? "").split(":").filter(Boolean);
-  for (const d of [join(process.env.HOME || homedir(), ".local", "bin"), dirname(process.execPath)]) if (!parts.includes(d)) parts.push(d);
+  for (const d of [join(home(), ".local", "bin"), dirname(process.execPath)]) if (!parts.includes(d)) parts.push(d);
   return parts.join(":");
 }
 

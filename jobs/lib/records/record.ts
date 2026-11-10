@@ -10,7 +10,6 @@
  * (`next`, `stepOf`) and the run's job ID (`jobIdOf`).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Ask } from "../asks/ask.ts";
 import type { Entry, Run } from "./ledger.ts";
@@ -18,7 +17,8 @@ import { causeOf, policyOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
 import { logEvent } from "../infra/layout.ts";
 import { lockSync } from "../infra/locks.ts";
-import { once, touch } from "../infra/sources.ts";
+import { once, touch } from "../../../lib/sources.ts";
+import { alephPath } from "../../../lib/paths.ts";
 import { jobId, subjectOf } from "../../../lib/naming.ts";
 
 /** A run in a record: the run and its id, the name of its run folder. */
@@ -57,9 +57,8 @@ export interface JobRecord {
 export function recordsDir(): string {
   touch("records");
   const e = process.env;
-  if (e.ALEPH_RECORDS_DIR) return e.ALEPH_RECORDS_DIR;
-  if (e.ALEPH_JOBS_DIR) return join(e.ALEPH_JOBS_DIR, ".records");
-  return join(e.HOME || homedir(), ".aleph", "jobs");
+  if (!e.ALEPH_RECORDS_DIR && e.ALEPH_JOBS_DIR) return join(e.ALEPH_JOBS_DIR, ".records");
+  return alephPath("ALEPH_RECORDS_DIR", "jobs");
 }
 
 /** The archive: finished records older than `ARCHIVE_DAYS` move here, beside the records folder. */

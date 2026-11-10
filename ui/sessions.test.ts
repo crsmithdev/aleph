@@ -2,8 +2,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { closePass, openPass } from "../jobs/lib/infra/sources.ts";
-import { memory, use } from "./langfuse.ts";
+import { closePass, openPass } from "../lib/sources.ts";
+import { memory, use } from "../lib/langfuse.ts";
 // @ts-ignore plain JS, shared with the page
 import { idLink, pageHead, when } from "./lib.js";
 import { listSessions, routes } from "./api/sessions.ts";

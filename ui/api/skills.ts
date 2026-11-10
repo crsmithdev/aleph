@@ -12,8 +12,8 @@ import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { scopeOf, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
-import { once, touch } from "../../jobs/lib/infra/sources.ts";
-import { langfuse, type Langfuse, type ObservationQuery, type TraceQuery } from "../langfuse.ts";
+import { once, touch } from "../../lib/sources.ts";
+import { langfuse, type Langfuse, type ObservationQuery, type TraceQuery } from "../../lib/langfuse.ts";
 import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 86400_000;

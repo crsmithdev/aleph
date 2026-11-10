@@ -1,6 +1,7 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { clip } from "../../lib/naming.ts";
-import { LangfuseError, list, need, type Langfuse } from "../langfuse.ts";
+import { LangfuseError, need, type Langfuse } from "../../lib/langfuse.ts";
+import { list } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { projectOf as projectOfUrl, scopeOf, traceIn, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";

@@ -1,13 +1,13 @@
 /**
  * The build Worker: it builds the updater's keys off the server's event loop, one at a time (ui/build.ts sends them).
  * A key is a GET route's path and query; its build is that route's handler, and the reply carries the answer and the
- * sources the build touched (jobs/lib/infra/sources.ts). Each message carries the server's environment and the change
+ * sources the build touched (lib/sources.ts). Each message carries the server's environment and the change
  * count of each source, so the build reads what the server would read and shares unchanged reads with earlier builds.
  * It carries the server's clock too: a test that fakes the server's clock gets builds on that clock.
  */
 import { join } from "node:path";
 import { skipFetches } from "../issues/lib/store.ts";
-import { closePass, openPass, setOnLater, touched } from "../jobs/lib/infra/sources.ts";
+import { closePass, openPass, setOnLater, touched } from "../lib/sources.ts";
 import { stateSlowMs } from "../jobs/lib/infra/settings.ts";
 import { loadRoutes, match } from "./server.ts";
 

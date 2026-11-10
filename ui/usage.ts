@@ -7,10 +7,11 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { allRuns, expand } from "../jobs/lib/records/ledger.ts";
-import { list, need } from "./langfuse.ts";
-import { once, touch } from "../jobs/lib/infra/sources.ts";
-import { credentialsFileSetting, usageFileSet, usageFileSetting, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
+import { allRuns } from "../jobs/lib/records/ledger.ts";
+import { need } from "../lib/langfuse.ts";
+import { list } from "./langfuse.ts";
+import { once, touch } from "../lib/sources.ts";
+import { credentialsFile, usageFile, usageFileSet, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
 
 export interface Snapshot { at: string; five_hour: number | null; seven_day: number; seven_day_resets_at: string | null }
 export interface Spend { at: number; model: string; cost: number }
@@ -24,8 +25,6 @@ const MIN_DOLLARS = 5;
 const HOUR = 3600_000;
 const STALE_MS = 25 * 60_000;
 
-const usageFile = () => expand(usageFileSetting());
-const credentialsFile = () => expand(credentialsFileSetting());
 const usageUrl = usageUrlSetting;
 
 /** Whether the last poll failed; the pages say "usage unknown" while it did. */

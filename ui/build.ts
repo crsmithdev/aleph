@@ -18,7 +18,7 @@ const lane = (key: string) => (LANGFUSE.test(key) ? "langfuse" : "records");
 interface Lane { w: Worker; mine: Map<number, { ok: (b: Built) => void; no: (e: Error) => void }> }
 const lanes = new Map<string, Lane>();
 
-/** Told when a Worker's slow read ends (`later` in jobs/lib/infra/sources.ts); the updater sets it. */
+/** Told when a Worker's slow read ends (`later` in lib/sources.ts); the updater sets it. */
 let later: (source: string) => void = () => {};
 export const onLater = (f: (source: string) => void): void => { later = f; };
 let ids = 0;

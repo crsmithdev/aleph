@@ -24,6 +24,10 @@ beforeAll(() => {
       const url = new URL(req.url);
       if (req.headers.get("authorization") !== `Basic ${btoa("pk:sk")}`) return new Response("no", { status: 401 });
       if (url.pathname.startsWith("/api/public/sessions/")) return new Response("{}", { status: url.pathname.endsWith("/s1") ? 200 : 404 });
+      if (url.pathname.startsWith("/api/public/traces/")) {
+        const id = url.pathname.split("/").at(-1);
+        return id === "t1" ? Response.json({ id }) : new Response("no", { status: id === "t2" ? 404 : 500 });
+      }
       const n = Number(url.searchParams.get("page"));
       asked.push(url); open++; peak = Math.max(peak, open);
       try {
@@ -80,4 +84,9 @@ test("a page that fails twice throws only after every open request has ended", a
   release();
   await expect(running).rejects.toThrow("500 on /api/public/traces");
   expect(open).toBe(0);
+});
+
+test("a trace comes back whole, null when Langfuse does not have it, and an error throws", async () => {
+  expect([await lf().trace("t1"), await lf().trace("t2")]).toEqual([{ id: "t1" }, null]);
+  await expect(lf().trace("t3")).rejects.toThrow("500 on /api/public/traces/t3");
 });

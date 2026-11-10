@@ -10,12 +10,12 @@
 import * as record from "../records/record.ts";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { allRuns, expand, loadRegistry, type Entry } from "../records/ledger.ts";
+import { allRuns, loadRegistry, type Entry } from "../records/ledger.ts";
 import { allHolds, flakeNames, flakes, stopsStart, type Flake, type HoldRecord } from "../gates/factory-status.ts";
 import { layout } from "../infra/layout.ts";
 import { git } from "../infra/git.ts";
 import { causeOf } from "../records/outcome.ts";
-import { usageFileSetting } from "../infra/settings.ts";
+import { usageFile } from "../infra/settings.ts";
 import { flakeTracker, reader, storeDir, type Reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { quantile } from "../../../lib/windows.ts";
@@ -327,7 +327,7 @@ export function readSources(): Sources {
     storeLog: storeLog(),
     flakes: flakes(),
     trackers: trackersOf(lists, keys),
-    usage: readJsonl(expand(usageFileSetting())),
+    usage: readJsonl(usageFile()),
   };
 }
 

@@ -7,13 +7,13 @@
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { langfuseConfig } from "../../../lib/env.ts";
-import { fetchTrace, traceIdFor } from "../../../lib/otlp.ts";
+import { langfuse } from "../../../lib/langfuse.ts";
+import { traceIdFor } from "../../../lib/otlp.ts";
 import { partsOf, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { section } from "../../../issues/lib/todo.ts";
 import { factoryDir } from "../gates/factory-status.ts";
-import { touch } from "../infra/sources.ts";
+import { touch } from "../../../lib/sources.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "../records/ledger.ts";
 import { landedCommits, repoStages } from "../records/status.ts";
@@ -106,12 +106,12 @@ const tokensOf = (trace: any): number | null => {
 
 async function langfuseFor(runs: Entry[]): Promise<Langfuse> {
   try {
-    const cfg = langfuseConfig();
-    if (!cfg) return { error: "no Langfuse config" };
+    const lf = langfuse();
+    if (!lf) return { error: "no Langfuse config" };
     const traces: { id: string; tokens: number | null }[] = [];
     for (const e of runs) {
       const id = traceIdFor(e.id);
-      traces.push({ id, tokens: tokensOf(await fetchTrace(cfg, id)) });
+      traces.push({ id, tokens: tokensOf(await lf.trace(id)) });
     }
     return { traces };
   } catch (e: any) {

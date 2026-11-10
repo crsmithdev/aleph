@@ -7,9 +7,9 @@
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { factoryDir } from "../gates/factory-status.ts";
-import { expand, runsDir } from "../records/ledger.ts";
+import { runsDir } from "../records/ledger.ts";
 import { all } from "../records/record.ts";
-import { reposFile, usageFileSetting } from "./settings.ts";
+import { reposFile, usageFile } from "./settings.ts";
 
 const KEEP_DAYS = 90;
 
@@ -36,14 +36,14 @@ export function retain(now = Date.now()): number {
   }
   if (existsSync(dir)) for (const f of readdirSync(dir)) if (!f.startsWith(".") && !held.has(f) && changed(join(dir, f)) < cut) drop(join(dir, f));
 
-  const usage = expand(usageFileSetting());
+  const usage = usageFile();
   if (existsSync(usage)) {
     const rows = readFileSync(usage, "utf8").split("\n").filter(Boolean);
     const keep = rows.filter((l) => { try { return !(Date.parse(JSON.parse(l).at) < cut); } catch { return true; } });
     if (keep.length < rows.length) { writeFileSync(usage, keep.map((l) => `${l}\n`).join("")); n += rows.length - keep.length; }
   }
 
-  const reg = expand(reposFile());
+  const reg = reposFile();
   if (existsSync(dirname(reg))) {
     for (const f of readdirSync(dirname(reg))) if (f.startsWith(`${basename(reg)}.bak-`) && statSync(join(dirname(reg), f)).mtimeMs < cut) drop(join(dirname(reg), f));
   }

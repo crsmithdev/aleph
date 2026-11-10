@@ -7,10 +7,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { langfuseConfig, type LangfuseConfig } from "../../../lib/env.ts";
+import { langfuse, type Langfuse } from "../../../lib/langfuse.ts";
 import { decide, nouls } from "../../../lib/jev.ts";
-import { fetchObservations } from "../../../lib/otlp.ts";
-import { allPages } from "../../../ui/langfuse-pages.ts";
+import type { Observation } from "../../../lib/otlp.ts";
 import { factoryDir } from "../gates/factory-status.ts";
 import { logEvent } from "../infra/layout.ts";
 
@@ -103,12 +102,8 @@ const lessonId = (sentence: string) => "l-" + createHash("sha256").update(senten
 
 interface Trace { id: string; name?: string; sessionId?: string; timestamp?: string; input?: unknown; output?: unknown }
 
-async function fetchTraces(cfg: LangfuseConfig, from: Date): Promise<Trace[]> {
-  return (await allPages<Trace>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString() }, 15_000)).rows;
-}
-
-async function chrisSignals(cfg: LangfuseConfig, from: Date, seen: Set<string>): Promise<Signal[]> {
-  const traces = (await fetchTraces(cfg, from))
+async function chrisSignals(lf: Langfuse, from: Date, seen: Set<string>): Promise<Signal[]> {
+  const traces = ((await lf.traces({ from })).rows as Trace[])
     .filter((t) => t.id && t.timestamp && Date.parse(t.timestamp) >= from.getTime())
     .sort((a, b) => Date.parse(a.timestamp!) - Date.parse(b.timestamp!));
   const lastBySession = new Map<string, Trace>();
@@ -135,19 +130,19 @@ async function chrisSignals(cfg: LangfuseConfig, from: Date, seen: Set<string>):
       fail(t.id, `jev failed on the trace: ${(e as Error).message}`);
       continue;
     }
-    out.push({ id: t.id, source: "chris", at: new Date(t.timestamp!).toISOString(), quote: cut(message), link: `${cfg.baseUrl}/trace/${t.id}` });
+    out.push({ id: t.id, source: "chris", at: new Date(t.timestamp!).toISOString(), quote: cut(message), link: `${lf.base}/trace/${t.id}` });
   }
   return out;
 }
 
-async function gateSignals(cfg: LangfuseConfig, from: Date, now: number, seen: Set<string>): Promise<Signal[]> {
-  const obs = await fetchObservations(cfg, from, new Date(now));
+async function gateSignals(lf: Langfuse, from: Date, now: number, seen: Set<string>): Promise<Signal[]> {
+  const obs: Observation[] = (await lf.observations({ from, to: new Date(now) })).rows;
   return obs
     .filter((o) => o.id && o.name === "verify-gate" && o.metadata?.verdict === "deny" && !seen.has(o.id) && Date.parse(o.startTime ?? "") >= from.getTime())
     .map((o) => ({
       id: o.id!, source: "gate" as const, at: new Date(o.startTime!).toISOString(),
       quote: cut(text(o.output).replace(/^deny:\s*/, "")),
-      link: o.traceId ? `${cfg.baseUrl}/trace/${o.traceId}` : cfg.baseUrl,
+      link: o.traceId ? `${lf.base}/trace/${o.traceId}` : lf.base,
     }));
 }
 
@@ -218,9 +213,9 @@ export async function mine(now: number, effects: Effects): Promise<Store> {
   const from = new Date(now - WINDOW);
   const seen = new Set(store.lessons.flatMap((l) => l.signals.map((s) => s.id)));
   const signals: Signal[] = [];
-  const cfg = langfuseConfig();
-  if (cfg) {
-    for (const f of [() => chrisSignals(cfg, from, seen), () => gateSignals(cfg, from, now, seen)]) {
+  const lf = langfuse();
+  if (lf) {
+    for (const f of [() => chrisSignals(lf, from, seen), () => gateSignals(lf, from, now, seen)]) {
       try { signals.push(...(await f())); } catch (e) { fail("corrections", `langfuse failed: ${(e as Error).message}`); }
     }
   }
