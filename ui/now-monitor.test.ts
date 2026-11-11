@@ -110,9 +110,28 @@ test("an event from the stream goes into the Herald at once", () => {
   const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { history: [], events: [] } };
   view.view.render(s, {}, new URLSearchParams());
   let html = "";
-  const herald = { set outerHTML(v: string) { html = v; } };
+  const herald = { querySelectorAll: () => [], set outerHTML(v: string) { html = v; } };
   view.view.event({ querySelector: (q: string) => (q === "#herald" ? herald : null) }, { at: "2026-11-09T11:59:00Z", by: "gate", subject: "aleph-6", action: "landed", on: ["aleph-6#2"] });
   expect(html).toContain('<span class="event-say"><a class="idl" href="#/jobs/aleph-6%232">aleph-6#2</a> landed</span>');
+});
+
+test("a Herald group keeps its open or closed state when a newer event arrives and the rows move, through the stream path", () => {
+  const ev = (at: string, subject: string, n: number) => ({ at, by: "gate", subject, action: "done", on: [`${subject}#${n}`] });
+  const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { history: [], events: [ev("2026-11-09T10:00:00Z", "aleph-1", 1), ev("2026-11-09T10:01:00Z", "aleph-1", 2), ev("2026-11-09T10:02:00Z", "aleph-2", 1), ev("2026-11-09T10:03:00Z", "aleph-2", 2)] } };
+  view.view.render(s, {}, new URLSearchParams());
+  // A fake page: `html` is the Herald as drawn, its details are rebuilt from it at each swap, closed unless the markup says open.
+  let html = view.renderHerald(s), details: any[] = [];
+  const build = () => { details = [...html.matchAll(/<details[^>]*data-fold="([^"]*)"[^>]*>/g)].map((m) => ({ id: m[1], open: false, dataset: { fold: m[1] }, querySelector: () => null, querySelectorAll: () => [] })); };
+  const herald = () => ({ querySelectorAll: (q: string) => (q === "details" ? details : []), set outerHTML(v: string) { html = v; build(); } });
+  const root = { querySelector: (q: string) => (q === "#herald" ? herald() : null) };
+  build();
+  expect(details.map((d) => d.id)).toEqual(["issue:aleph-2", "issue:aleph-1"]);
+  details[1].open = true; // aleph-1 open, aleph-2 closed.
+  // A newer event for aleph-1 (its summary and +N change), then one for aleph-3 that moves the rows.
+  view.view.event(root, ev("2026-11-09T11:00:00Z", "aleph-1", 3));
+  view.view.event(root, ev("2026-11-09T11:30:00Z", "aleph-3", 1));
+  expect(details.map((d) => [d.id, d.open])).toEqual([["issue:aleph-1", true], ["issue:aleph-2", false]]);
+  expect(html).toContain('<span class="event-more">+2</span>');
 });
 
 test("the Herald shows one row per chat session titled by its latest message's first line, the earlier turns behind an expand control, and no kind or name tag", () => {
@@ -132,8 +151,8 @@ test("the Herald shows one row per chat session titled by its latest message's f
     const titles = [...h.matchAll(/<span class="event-say">([^<]*)</g)].map((m) => m[1]).filter(Boolean);
     // Newest session first; its earlier turn is in the details, after the row of its latest turn.
     expect(titles).toEqual(["Then the footer", "Fix the title", "Other question"]);
-    expect(h.match(/<details class="herald-group">/g)).toHaveLength(1);
-    expect(h).toMatch(/<details class="herald-group"><summary>[^]*?Then the footer<span class="event-more">\+1<\/span>[^]*?<\/summary>[^]*?Fix the title/);
+    expect(h.match(/<details class="herald-group" data-fold="chat:s1">/g)).toHaveLength(1);
+    expect(h).toMatch(/<details class="herald-group" data-fold="chat:s1"><summary>[^]*?Then the footer<span class="event-more">\+1<\/span>[^]*?<\/summary>[^]*?Fix the title/);
     expect(h).not.toContain("event-id");
     expect(h).not.toMatch(/>chat</);
     expect(h).not.toContain("chat#");

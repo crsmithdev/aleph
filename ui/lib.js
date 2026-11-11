@@ -227,11 +227,11 @@ const PANELS = "[data-diff-for], .diff-panel#diff";
 const panelKey = (p) => p.getAttribute?.("data-diff-for") ?? "diff";
 const FIELDS = "input, textarea, select";
 
-/** `summary text` plus its position among the details with the same summary text. */
+/** The key of each details: its `data-fold` id (a fold whose summary text changes), else its `data-keep`, else `summary text`, plus its position among the details with the same key. */
 function detailsKeys(root) {
   const seen = new Map();
   return [...root.querySelectorAll("details")].map((el) => {
-    const text = el.dataset?.keep ?? (el.querySelector("summary")?.textContent ?? "").trim();
+    const text = el.dataset?.fold ?? el.dataset?.keep ?? (el.querySelector("summary")?.textContent ?? "").trim();
     const n = seen.get(text) ?? 0;
     seen.set(text, n + 1);
     return [`${text}#${n}`, el];
@@ -686,9 +686,9 @@ export const sentence = (t) => t[0] + t.slice(1).toLowerCase();
 /** Long text, clamped, with a button that opens and closes it. `html` is HTML. */
 export const clamp = (html) => `<div class="clamp">${html}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button>`;
 
-/** A fold: `summary` and `body` are HTML. `keep` keeps its open state across page loads; `cls` is the fold's class, as `more` for technical details; `head` is the summary's class. */
-export const fold = (summary, body, { open = false, keep = "", cls = "", head = "" } = {}) =>
-  `<details${cls ? ` class="${esc(cls)}"` : ""}${keep ? ` data-keep="${esc(keep)}"` : ""}${open ? " open" : ""}><summary${head ? ` class="${esc(head)}"` : ""}>${summary}</summary>${body}</details>`;
+/** A fold: `summary` and `body` are HTML. `keep` keeps its open state across page loads; `id` names the fold for a refresh (page memory, no storage), where its summary text changes; `cls` is the fold's class, as `more` for technical details; `head` is the summary's class. */
+export const fold = (summary, body, { open = false, keep = "", id = "", cls = "", head = "" } = {}) =>
+  `<details${cls ? ` class="${esc(cls)}"` : ""}${id ? ` data-fold="${esc(id)}"` : ""}${keep ? ` data-keep="${esc(keep)}"` : ""}${open ? " open" : ""}><summary${head ? ` class="${esc(head)}"` : ""}>${summary}</summary>${body}</details>`;
 
 /** The first `n` rows of a list; the rest sit under a "N more" fold. `row` returns the HTML inside one `<li>`. */
 export const moreFold = (items, row, n = 10) => {

@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, fold, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
+import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say } from "../../lib/naming.ts";
 import { bar, flowOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, shell as jobCard, statLines, trailerLine } from "./cards.js";
@@ -27,7 +27,10 @@ export const view = {
     streamed.push(ev);
     if (streamed.length > HERALD_KEEP) streamed.shift();
     const h = root.querySelector("#herald");
-    if (h && lastState) h.outerHTML = renderHerald(lastState);
+    if (!h || !lastState) return;
+    const saved = recordState(h);
+    h.outerHTML = renderHerald(lastState);
+    restoreState(root.querySelector("#herald"), saved);
   },
 };
 
@@ -122,16 +125,16 @@ export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
       `<span class="event-say">${line}${run ? ` <span class="event-run" title="${esc(run)}">${esc(run)}</span>` : ""}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
 }
 
-/** Rows of `lists`, each newest first: the newest event's row, with the older ones folded behind it; `row(ev, more, older)` draws one. */
-const grouped = (lists, row) => lists.map(([latest, ...earlier]) => ({ at: latest.at,
-  html: earlier.length ? fold(row(latest, earlier.length), `<div class="herald-older">${earlier.map((ev) => row(ev, 0, true)).join("")}</div>`, { cls: "herald-group" }) : row(latest) }));
+/** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones folded behind it; `row(ev, more, older)` draws one. The fold is named by `id`, so it keeps its state when its text or place changes. */
+const grouped = (groups, row) => groups.map(([id, [latest, ...earlier]]) => ({ at: latest.at,
+  html: earlier.length ? fold(row(latest, earlier.length), `<div class="herald-older">${earlier.map((ev) => row(ev, 0, true)).join("")}</div>`, { cls: "herald-group", id }) : row(latest) }));
 
 /** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */
 function issueRows(events, titles = {}, runs = {}) {
   const by = new Map();
   for (const ev of events) if (ev.subject !== "chat") by.set(ev.subject, [...(by.get(ev.subject) ?? []), ev]);
   // An older row is under its group's title, so it shows its run's title after its sentence instead.
-  return grouped([...by.values()], (ev, more, older) => eventRow(ev, older ? {} : titles, {}, more, older ? runs[ev.on?.[0]] : ""));
+  return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more, older) => eventRow(ev, older ? {} : titles, {}, more, older ? runs[ev.on?.[0]] : ""));
 }
 
 /** The rows of the chat events, newest first: one per session, its latest turn's newest event, with the earlier turns' behind an expand control. */
@@ -144,7 +147,7 @@ function chatRows(events, chats = {}) {
     const key = chats[turn]?.session ?? turn;
     sessions.set(key, [...(sessions.get(key) ?? []), ev]);
   }
-  return grouped([...sessions.values()], (ev, more) => eventRow(ev, {}, chats, more));
+  return grouped([...sessions].map(([k, v]) => [`chat:${k}`, v]), (ev, more) => eventRow(ev, {}, chats, more));
 }
 
 /** A status text without the "health: " of each health line, which older history entries carry. */
