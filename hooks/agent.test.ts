@@ -29,5 +29,7 @@ test("an agent's start context is AGENT.md and the core lines, without MEMORY.md
   const agent = JSON.parse(await hook([join(ROOT, "hooks", "vault-context.ts")], start, true)).hookSpecificOutput.additionalContext;
   expect(agent).toContain("# Aleph factory agent");
   expect(agent).toContain("Names are short.");
+  expect(agent).toContain("# Voice");
+  expect(chris).not.toContain("# Voice");
   expect(agent).not.toContain("Chris's profile.");
 });

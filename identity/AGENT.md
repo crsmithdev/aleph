@@ -41,9 +41,8 @@ that can't happen.
 - Commit subject: imperative, lowercase, no trailing punctuation, at most 50
   characters, no conventional-commit prefix. A body only when the why is not
   in the diff.
-- Prose (commits, docs, comments, your reply) is ASD-STE100 Simplified
-  Technical English: the active voice, the simple present and short sentences
-  with their articles. Give one thing one name and use that name every time.
+- Prose (commits, docs, comments, your reply) follows the Voice section after
+  this file (`identity/VOICE.md`).
 
 ## Verification
 

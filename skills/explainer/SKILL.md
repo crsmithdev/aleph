@@ -72,7 +72,6 @@ coleam00/excalidraw-diagram-skill (shape follows meaning, render and look).
 - Then one section per figure, each opened by its figure, with one to three sentences of reasoning after it.
 - Last, `<section id="sources">`: one row per claim, the claim and its source. A claim you inferred has
   `<span class="inferred">inferred</span>` in its source cell.
-- Words: Simplified Technical English. Active voice, present tense, short sentences, one name per thing, used
-  every time.
+- Words: the sentence rules of `identity/VOICE.md` (ASD-STE100).
 - The page stands alone. It loads only its fonts, and it reads the same with them blocked; the aleph UI shows it in a
   sandboxed frame.
