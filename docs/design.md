@@ -47,6 +47,7 @@ Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, an
 | `--muted` | #62688A | #8E96BA | headers, meta |
 | `--rule`, `--rule-2` | #DCD9EC, #E8E6F3 | #3A3F58, #2E3245 | borders, row lines |
 | `--lift` | `0 1px 3px`, `0 2px 8px` | heavier | the Ask card |
+| `--card-lift` | `0 1px 2px`, `0 6px 20px -8px` | heavier | the only edge of a card, a metric card and a detail panel |
 | `--float` | `0 6px 24px rgb(0 0 0 / .25)` | the same | kit widgets: the font picker, the annotations |
 | `--on-fill` | #fff | #fff | text on a coloured bar |
 
@@ -123,17 +124,17 @@ The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` te
 | `--fw-text` | 400 | text |
 | `--fw-mid` | 500 | ids, numbers |
 | `--fw-strong` | 600 | headings, table headers |
-| `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather | body, code, numbers, titles |
+| `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather | body, code, numbers, titles; `--metric` is Work Sans |
 | `--chart-scale`, `--chart-weight` | 1, 400 | text in the ECharts canvas: its relative size and weight |
 
-Weight 700 stays a literal on `.mark` and `.tile b`.
+Weight 700 stays a literal on `.mark`.
 
 #### Tracking and line height
 
 | Proposed token | Value | Uses | Where |
 |---|---|---|---|
-| `--ls-display` | `-0.01em` | 4 | `.mark`, `.shead .say`, `.shead .asof`, `.ph h1` |
-| `--ls-caps` | one tracking for uppercase keys | 4 (`.05em`, `.06em`, `.08em`) | `#nav li.head`, `.tile .k`, `.herald-sticky-head`, `.ins h4` |
+| `--ls-display` | `-0.02em`; `.mark` keeps `-0.01em` | 4 | `.mark`, `.shead .say`, `.shead .asof`, `.ph h1` |
+| `--ls-caps` | one tracking for uppercase keys | 4 (`.05em`, `.06em`, `.08em`); `.tile .k` is `.05em` | `#nav li.head`, `.tile .k`, `.herald-sticky-head`, `.ins h4` |
 
 | Do | Don't |
 |---|---|
@@ -171,7 +172,7 @@ Weight 700 stays a literal on `.mark` and `.tile b`.
 
 | Token | Value | Role |
 |---|---|---|
-| `--r-card` | 10px | cards |
+| `--r-card` | 12px | cards |
 | `--r-ctl` | 6px | controls |
 | `--r-tag` | 4px | badges, code blocks |
 | `--r-hair` | 2px | bars, marks |
@@ -335,7 +336,7 @@ A card is one section of a list page. It has a head and a body.
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Box | The section | | `--surface`, border `--rule`, radius `--r-card`, padding `--gap-in` |
+| 1 | Box | The section | | `--surface`, shadow `--card-lift`, no visible border, radius `--r-card`, padding `--gap-in` |
 | 2 | Title | What the section holds | | `--sans` `--fs-lg` `--fw-strong`, `--ink` |
 | 3 | Count | The number of items | yes | `--num` `--fs-sm` `--fw-mid`, `--muted` |
 | 4 | Aside | Controls, or one note | yes | `--fs-xs`, `--muted`; at the right |
@@ -361,7 +362,7 @@ A detail panel is one section of a detail page. It has a head and a body.
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Box | The section | | `--surface`, border `--rule`, radius `--r-card` |
+| 1 | Box | The section | | `--surface`, shadow `--card-lift`, no visible border, radius `--r-card` |
 | 2 | Head | The title of the section | | `--sans` `--fs-lg` `--fw-strong`, `--ink`; padding `--sp-14` `--sp-18` |
 | 3 | Aside | A note; in `detailPanel()`, text or a badge only | yes | `--fs-sm`, `--muted` |
 | 4 | Body | The content | | `detailPanel()`: padding `--sp-10` `--sp-18` `--sp-14`; `panel()`: the padding of its `.md` |
@@ -461,10 +462,10 @@ A metric card shows one headline number of a list page, with its key.
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Box | The card | | `--surface`, border `--rule`, radius `--r-card`, padding `--sp-12` `--sp-14` |
-| 2 | Key `k` | The measure | | `--sans` `--fs-xs` `--fw-strong`, capitals, `--muted` |
+| 1 | Box | The card | | `--surface`, shadow `--card-lift`, no visible border, radius `--r-card`, padding `--sp-12` `--sp-14` |
+| 2 | Key `k` | The measure | | `--sans` `--fs-xs` `--fw-strong`, capitals, `--muted`; breaks only between words, and moves the trend to the next line when the two do not fit |
 | 3 | Trend | The change from the baseline | yes | `--fs-sm` `--fw-strong`; `--good` when good, `--need` when bad, else `--muted` |
-| 4 | Value `v` | The number | | `--metric` 700, up to `--fs-metric`, tabular, `--ink`; one line |
+| 4 | Value `v` | The number | | `--metric` `--fw-strong`, `-0.025em`, up to `--fs-metric`, tabular, `--ink`; one line |
 | 5 | Second value `v2` | A second number after ` / `, such as the cap | yes | `--metric` at .62em, `--muted` |
 | 6 | Bar `extra` | A meter | yes | the meter |
 | 7 | Qualifier `q` or `note` | The names of the two values, or a note | | `--fs-xs`; one line; first name `--ink`, second `--muted` |
@@ -1179,8 +1180,9 @@ An empty state shows that there is nothing, that data loads, or that the data di
 
 | Part | Rule |
 |---|---|
-| Sidebar | `#nav`, 208px open, 48px when collapsed (`.shell.collapsed`); at 720px and narrower, a sticky bar at the top |
+| Sidebar | `#nav`, 208px open, 48px when collapsed (`.shell.collapsed`); at 720px and narrower, a sticky bar at the top: one row, the links scroll sideways, and the current link scrolls into view |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
+| Browser | `::selection` is `--focus` at 35%; scrollbars are thin, `--rule` on transparent |
 | Grid | `.tiles` holds metric cards; `.lanes` holds lanes; `.trio` holds chart panels; `.browse` is a list with its detail beside it, one column under 1100px |
 
 - **List page:** page head, metric cards, then cards.

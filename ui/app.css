@@ -9,7 +9,8 @@
   --ink-2: #4A4F6A;
   --muted: #62688A;
   --rule: #DCD9EC;
-  --lift: 0 1px 3px rgb(40 36 80 / .12), 0 2px 8px rgb(40 36 80 / .06);  /* the top Status card's shadow */
+  --lift: 0 1px 3px rgb(40 36 80 / .12), 0 2px 8px rgb(40 36 80 / .06);  /* the Ask card's shadow */
+  --card-lift: 0 1px 2px rgb(40 36 80 / .10), 0 6px 20px -8px rgb(40 36 80 / .22);  /* a card, a metric card, a detail panel: their only edge */
   --float: 0 6px 24px rgb(0 0 0 / .25);  /* the kit widgets: the font picker and the annotations */
   --on-fill: #fff;        /* text on a coloured bar */
   --rule-2: #E8E6F3;
@@ -41,7 +42,7 @@
   --fill-done: #437018;
   --fill-aux: #62688A;
   --display: 'Merriweather', Georgia, serif;
-  --metric: 'Merriweather', Georgia, serif;  /* the big numbers on the Status metric cards */
+  --metric: 'Work Sans', system-ui, sans-serif;  /* the big numbers on the metric cards and the KPI strip */
   --brand: 'Merriweather', Georgia, serif;  /* the sidebar wordmark */
   --sans: 'Work Sans', system-ui, sans-serif;
   --chart: var(--sans);   /* text inside the ECharts canvas, with its two relative settings */
@@ -63,7 +64,7 @@
   --fs-xl: 26px;          /* page title, in --display */
   --fs-metric: 32px;      /* the figure on a tile, in --metric */
   /* Radii and gaps. */
-  --r-card: 10px; --r-ctl: 6px; --r-tag: 4px; --r-hair: 2px; --r-pill: 999px;
+  --r-card: 12px; --r-ctl: 6px; --r-tag: 4px; --r-hair: 2px; --r-pill: 999px;
   --sp-2: 2px; --sp-4: 4px; --sp-6: 6px; --sp-8: 8px; --sp-10: 10px; --sp-12: 12px; --sp-14: 14px; --sp-16: 16px; --sp-18: 18px; --sp-20: 20px; --sp-24: 24px; --sp-28: 28px;
   --z-rowlink: 1; --z-sticky: 2; --z-overlay: 50; --indent-list: 18px; --dim: .6; --ctl-h: 28px; --bar-h: 10px;
   --gap: 24px;            /* between the blocks of a page */
@@ -121,6 +122,7 @@
     --muted: #8E96BA;
     --rule: #3A3F58;
     --lift: 0 1px 3px rgb(0 0 0 / .45), 0 2px 8px rgb(0 0 0 / .3);
+    --card-lift: 0 1px 2px rgb(0 0 0 / .35), 0 6px 20px -8px rgb(0 0 0 / .55);
     --float: 0 6px 24px rgb(0 0 0 / .25);
     --on-fill: #fff;
     --rule-2: #2E3245;      /* editorGroup.border */
@@ -154,6 +156,7 @@
     --muted: #8E96BA;
     --rule: #3A3F58;
     --lift: 0 1px 3px rgb(0 0 0 / .45), 0 2px 8px rgb(0 0 0 / .3);
+    --card-lift: 0 1px 2px rgb(0 0 0 / .35), 0 6px 20px -8px rgb(0 0 0 / .55);
     --float: 0 6px 24px rgb(0 0 0 / .25);
     --on-fill: #fff;
     --rule-2: #2E3245;      /* editorGroup.border */
@@ -213,8 +216,8 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 main { min-width: 0; }
 .page { max-width: 2400px; margin: 0 auto; padding: var(--sp-28) var(--sp-24) 64px; }
 .shead { align-items: center; gap: var(--sp-8) var(--sp-12); margin: 0 0 var(--sp-20); flex-wrap: wrap; }
-.shead .say { font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: -0.01em; flex: 1 1 20rem; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-.shead .asof { flex: none; font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: -0.01em; }
+.shead .say { font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: -0.02em; flex: 1 1 20rem; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.shead .asof { flex: none; font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: -0.02em; }
 .shead a { text-decoration: none; border-bottom: 1px solid var(--rule); }
 .shead a:hover { border-bottom-color: currentColor; }
 .shead .aside { flex: none; margin-left: auto; }
@@ -493,7 +496,7 @@ table.tbl .chips { white-space: nowrap; }
 
 /* ---------- page header (pageHead) ---------- */
 .ph { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-6) var(--sp-12); margin: 0 0 var(--sp-16); }
-.ph h1 { font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: -0.01em; margin: 0; }
+.ph h1 { font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: -0.02em; margin: 0; }
 .ph .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
 .ph .aside { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8) var(--sp-12); margin-left: auto; color: var(--muted); font-size: var(--fs-xs); }
 
@@ -605,15 +608,16 @@ p.aged { margin: 0 0 var(--sp-6); color: var(--stuck); font-size: var(--fs-sm); 
 @media (max-width: 720px) {
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .side {
-    position: sticky; z-index: var(--z-sticky); height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-10);
-    border-right: 0; border-bottom: 1px solid var(--rule); padding: var(--sp-8) var(--sp-16); overflow: visible;
+    position: sticky; z-index: var(--z-sticky); height: auto; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: var(--sp-10);
+    border-right: 0; border-bottom: 1px solid var(--rule); padding: var(--sp-6) var(--sp-16); overflow: visible;
   }
   .side .mark { padding: 0; flex: none; }
-  #nav { flex: 1 1 0; min-width: 0; }
+  /* One row: the links scroll sideways, and the router scrolls the current one into view. */
+  #nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   #collapse { display: none; }
   #logout { margin: 0; padding: var(--sp-4) var(--sp-8); }
   #nav li.head { display: none; }
-  #nav ul { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+  #nav ul { display: flex; flex-wrap: nowrap; gap: var(--sp-2); }
   #nav a { white-space: nowrap; padding: var(--sp-4) var(--sp-8); }
   #nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--ink); }
 }
@@ -746,15 +750,15 @@ pre { font: var(--fs-xs)/1.55 var(--mono); white-space: pre-wrap; overflow-wrap:
 :where(.page) h3 { font: var(--fw-strong) var(--fs-md)/1.3 var(--sans); margin: var(--sp-12) 0 var(--sp-6); }
 :where(.page) h4 { font: var(--fw-strong) var(--fs-xs)/1.3 var(--sans); color: var(--muted); margin: var(--sp-8) 0 var(--sp-4); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--gap-in); }
-.tile { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; padding: var(--sp-12) var(--sp-14); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); color: var(--ink-2); font: inherit; text-align: left; text-decoration: none; }
+.tile { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; padding: var(--sp-12) var(--sp-14); border: 1px solid transparent; box-shadow: var(--card-lift); border-radius: var(--r-card); background: var(--surface); color: var(--ink-2); font: inherit; text-align: left; text-decoration: none; }
 a.tile, button.tile { cursor: pointer; }
 a.tile:hover, button.tile:hover { border-color: var(--run); }
 button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(--run); }
-.tile .r1 { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-8); }
-.tile .k { color: var(--muted); font: var(--fw-strong) var(--fs-xs) var(--sans); letter-spacing: .08em; text-transform: uppercase; overflow-wrap: anywhere; }
+.tile .r1 { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--sp-2) var(--sp-8); }
+.tile .k { color: var(--muted); font: var(--fw-strong) var(--fs-xs) var(--sans); letter-spacing: .05em; text-transform: uppercase; }
 .tile { container-type: inline-size; }
 /* The value row never wraps: it shrinks with the card's width, from --fs-metric down to 16px. */
-.tile b { font: 700 clamp(16px, 13cqi, var(--fs-metric))/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile b { letter-spacing: -0.025em; font: var(--fw-strong) clamp(16px, 13cqi, var(--fs-metric))/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile b em { font: var(--fw-text) .62em/1 var(--metric); font-style: normal; color: var(--muted); }
 .tile .q { font-size: var(--fs-xs); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .q .m, .tile .q.m { color: var(--muted); }
@@ -764,7 +768,7 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
 table.tbl .tr { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
 table.tbl .tr.good { color: var(--good); }
 table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
-.card { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; padding: var(--gap-in); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); font-size: var(--fs-sm); }
+.card { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; padding: var(--gap-in); border: 1px solid transparent; box-shadow: var(--card-lift); border-radius: var(--r-card); background: var(--surface); font-size: var(--fs-sm); }
 .card .sh .aside { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .card p { margin: 0; color: var(--ink-2); }
 .card h2 { margin: 0; }
@@ -889,7 +893,7 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 .dp-page { display: flex; flex-direction: column; gap: var(--sp-16); }
 .dp-page > .ph, .dp-page > .status-row, .dp-page > .crumb, .dp-page > section, .dp-page section.dp-panel { margin: 0; }
 .dp-page > .ph h1 { flex: 1 1 32rem; min-width: 0; }
-.dp-panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-card); min-width: 0; }
+.dp-panel { background: var(--surface); border: 1px solid transparent; box-shadow: var(--card-lift); border-radius: var(--r-card); min-width: 0; }
 .dp-ph { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-6) var(--sp-12); padding: var(--sp-14) var(--sp-18) var(--sp-4); }
 .dp-ph h2 { margin: 0; font: var(--fw-strong) var(--fs-lg)/1.3 var(--sans); }
 .dp-prose { padding-bottom: var(--sp-14); }
@@ -1125,3 +1129,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .kit-swatch i { grid-row: span 2; height: var(--ctl-h); border: 1px solid var(--rule); border-radius: var(--r-ctl); }
 .kit-tok { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); font-size: var(--fs-xs); }
 .kit-row .meter { flex: 1 1 160px; }
+
+/* Browser surfaces take the palette. */
+::selection { background: color-mix(in srgb, var(--focus) 35%, transparent); }
+html { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
