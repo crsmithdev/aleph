@@ -6,7 +6,7 @@ import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
 import { askCard } from "./cards.js";
-import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
+import { costText, detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
 export const view = {
   path: "/issues",
@@ -632,7 +632,7 @@ export function renderIssue(d) {
     : "");
   const noteRow = (n) => {
     const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(shortText(n.text)) };
-    return `<li class="dp-ev"><span class="dp-at">${esc(e ? when(new Date(e.at)) : "")}</span><span>${tag(it.tag, it.tone)}</span><div class="dp-evt">${it.html}</div></li>`;
+    return eventHtml({ at: e?.at, ...it }, { el: "li", clamped: false });
   };
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
   const machineNotes = folded.length ? fold(`${folded.length} machine ${folded.length === 1 ? "note" : "notes"}`, `<ul class="notes">${folded.map(noteRow).join("")}</ul>`, { cls: "notes-fold" }) : "";

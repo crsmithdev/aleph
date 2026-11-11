@@ -761,7 +761,7 @@ A feed row shows one event in a feed. The newest event is first.
 
 | Helper | Reference |
 |---|---|
-| `eventRow(ev, titles)` in `ui/views/now.js` | `ui/views/now.js` |
+| `eventRow(ev, titles)` in `ui/views/now.js`; the Herald's status rows use its `feedRow()` | `ui/views/now.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -785,7 +785,7 @@ The findings list shows the numbered findings of a Monitor report.
 
 | Helper | Reference |
 |---|---|
-| `findingHtml(text)` in `ui/views/now.js`, one `<li>` each in `<ol class="findings">` | `ui/views/gates.js` |
+| `findingsList(findings)` in `ui/views/now.js`, one `findingHtml()` `<li>` each in `<ol class="findings">` | `ui/views/gates.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -796,7 +796,7 @@ The findings list shows the numbered findings of a Monitor report.
 
 | Do | Don't |
 |---|---|
-| `findingHtml(text)` | a finding list built in the view |
+| `findingsList(findings)` | a finding list built in the view |
 
 ### Labels
 
@@ -1234,7 +1234,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Sections built from `sectionHead()` with no card box | `ui/views/gates.js` (7), `ui/views/memory.js` (5), `ui/views/now.js` (4) | follow-up |
 | Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
 | Empty, loading and error lines written inline | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/session.js`, `ui/views/ideas.js` | follow-up |
-| Monitor findings built three ways; a feed row and a timeline event copied | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/issues.js` | follow-up |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |

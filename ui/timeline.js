@@ -120,6 +120,12 @@ const pct = (f) => (f * 100).toFixed(3);
 /** The time on the page: "11/02 08:11". */
 const timeOf = (at) => (Number.isFinite(at) ? when(new Date(at)) : "");
 
+/** An event's row: the time, the tag and the body. An event of more than about 3 lines (and with no log opening inside it) is clamped, with a button to read the rest, unless `clamped` is false. `el` is the row's element. */
+export function eventHtml(e, { el = "div", clamped = true } = {}) {
+  const long = clamped && !e.html.includes("data-logs") && e.html.replace(/<[^>]*>/g, "").length > 180;
+  return `<${el} class="dp-ev"><span class="dp-at">${esc(timeOf(e.at))}</span><span>${tag(e.tag, e.tone)}</span><div class="dp-evt">${long ? clamp(e.html) : e.html}</div></${el}>`;
+}
+
 /**
  * The Timeline panel. `segments` is `[{ title, aside?, rows }]`; a row is
  * `{ head, bars: [{ start, end, tone, label, tip, href? }], waits: [{ start, end, chris }], marks: [{ at, tone: "made" | "done", tip }], result, time, cost, events: [{ at?, tag, tone, html }] }`.
@@ -141,13 +147,9 @@ export function renderTimeline(segments) {
     r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting you" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
     r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ""} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}</${t}>`; }).join("") +
     (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
-  // An event of more than about 3 lines (and with no log opening inside it) is clamped, with a button to read the rest.
-  const evt = (html) => (!html.includes("data-logs") && html.replace(/<[^>]*>/g, "").length > 180
-    ? `<div class="dp-evt">${clamp(html)}</div>`
-    : `<div class="dp-evt">${html}</div>`);
   const events = (evs) => {
     const list = [...(evs ?? [])].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
-    return list.length ? `<div class="dp-evs">${list.map((e) => `<div class="dp-ev"><span class="dp-at">${esc(timeOf(e.at))}</span><span>${tag(e.tag, e.tone)}</span>${evt(e.html)}</div>`).join("")}</div>` : "";
+    return list.length ? `<div class="dp-evs">${list.map((e) => eventHtml(e)).join("")}</div>` : "";
   };
   const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${lane(r)}<span class="dp-res">${r.result ?? ""}</span><span class="num">${esc(r.time ?? "–")}</span><span class="num">${esc(r.cost ?? "–")}</span></div>${events(r.events)}</div>`;
   return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2>${legendHtml(key)}</div>` +

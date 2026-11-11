@@ -72,6 +72,18 @@ export function findingHtml(text) {
     : part.replace(/(&#?\w+;)|(\$?\d+(?:[.,]\d+)*%?)/g, (m, entity) => (entity ? m : `<b>${m}</b>`))).join("");
 }
 
+/** The findings of a Monitor report as a numbered list, each through findingHtml(). */
+export const findingsList = (findings) => `<ol class="findings">${findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`;
+
+/** A feed row: the time (the clock, or the day), the label in the tone, the ID's HTML and the body's HTML. `cls` is added to the row's class, `bodyCls` to the body's, `by` is the actor. */
+function feedRow({ tone, at, label, id = "", body, by, cls = "", bodyCls = "" }) {
+  return `<div class="event-row ${tone}${cls}"${by === undefined ? "" : ` data-by="${esc(by)}"`}>` +
+    `<span class="event-time">${esc(at ? (clock(at) || when(at)) : "")}</span>` +
+    `<span class="event-tone ${tone}">${esc(label)}</span>` +
+    `<span class="event-id">${id}</span>` +
+    `<span class="event-body${bodyCls}">${body}</span></div>`;
+}
+
 /** The events the stream sent since the page loaded, oldest first; the Herald merges them with the state's. */
 let streamed = [];
 const HERALD_KEEP = 50;
@@ -88,11 +100,8 @@ export function eventRow(ev, titles = {}, chats = {}) {
   const chat = ev.subject === "chat", to = issueHref(ev.subject), title = chat ? chats[ev.on?.[0]]?.title ?? "" : titles[ev.subject] ?? "";
   const id = chat ? "" : to ? idLink(shownId(ev.subject), to, { title: title || undefined }) : esc(shownId(ev.subject));
   const what = chat ? "" : [ev.sub, contentText(ev)].filter(Boolean).join(" ");
-  return `<div class="event-row ${tone(ev.action)}" data-by="${esc(ev.by)}">` +
-    `<span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
-    `<span class="event-tone ${tone(ev.action)}">${esc(ev.action)}</span>` +
-    `<span class="event-id">${id}</span>` +
-    `<span class="event-body">${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}${what ? `<span class="event-what">${esc(what)}</span>` : ""}${ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}</span></div>`;
+  return feedRow({ tone: tone(ev.action), at: ev.at, label: ev.action, id, by: ev.by,
+    body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}${what ? `<span class="event-what">${esc(what)}</span>` : ""}${ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
 }
 
 /** The rows of the chat events, newest first: one per session, its latest turn's newest event, with the earlier turns' behind an expand control. */
@@ -131,12 +140,8 @@ export function renderHerald(s) {
   const history = [...(s.herald?.history ?? [])];
   if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
 
-  const status = history.map((ev, i) => ({ at: ev.at ?? "", html:
-    `<div class="event-row ${esc(ev.tone)}${i === 0 && errors ? " live" : ""}">` +
-      `<span class="event-time">${esc(ev.at ? (clock(ev.at) || when(ev.at)) : "")}</span>` +
-      `<span class="event-tone ${esc(ev.tone)}">${esc(ev.label || ev.tone)}</span><span class="event-id"></span>` +
-      `<span class="event-body ${esc(ev.tone)}">${esc(eventText(ev))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}</span>` +
-    `</div>` }));
+  const status = history.map((ev, i) => ({ at: ev.at ?? "", html: feedRow({ tone: esc(ev.tone), at: ev.at, label: ev.label || ev.tone, cls: i === 0 && errors ? " live" : "", bodyCls: ` ${esc(ev.tone)}`,
+    body: `${esc(eventText(ev))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}` }) }));
   // The status changes and the events in one feed, newest first; the live status row stays on top.
   const live = errors ? status.shift() : null;
   const events = heraldEvents(s);
@@ -145,7 +150,7 @@ export function renderHerald(s) {
 
   const m = s.factory?.monitor;
   const monitorFindings = m?.findings?.length
-    ? fold(`Daily Monitor (${esc(m.day)})`, `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`, { cls: "more herald-findings", keep: "herald:findings" })
+    ? fold(`Daily Monitor (${esc(m.day)})`, findingsList(m.findings), { cls: "more herald-findings", keep: "herald:findings" })
     : "";
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.

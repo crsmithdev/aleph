@@ -23,6 +23,8 @@ import { label, option } from "./chart.js";
 import { xLabel } from "./views/speed.js";
 // @ts-ignore plain JS, shared with the page
 import { when } from "./lib.js";
+// @ts-ignore plain JS, shared with the page
+import * as tl from "./timeline.js";
 import { putRun } from "../jobs/lib/records/record.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
@@ -947,6 +949,19 @@ test("the Issue page's notes show an issue id in its short form", () => {
   } finally {
     setCodes({});
   }
+});
+
+test("the Issue page gives a machine note and a plain note each a dp-ev row with its time, tag and body", () => {
+  const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], goals: [], timeline: { runs: [] },
+    notes: ["- 2026-11-05T11:02:00.000Z: intake: sized it", "- 2026-11-05T11:03:00.000Z: call me back"].map(noteOf) };
+  const notes = v.renderIssue(d).match(/<ul class="notes">.*?<\/ul>/gs)!.join("");
+  const row = (tag: string, body: string) => new RegExp(`<li class="dp-ev"><span class="dp-at">\\d\\d/\\d\\d \\d\\d:\\d\\d</span><span><span [^>]*>${tag}</span></span><div class="dp-evt">${body}</div></li>`);
+  expect(notes).toMatch(row("intake", "sized it"));
+  expect(notes).toMatch(row("note", "call me back"));
+  // The rows are the timeline's own event rows, as list items and never clamped.
+  const ev = (at: string, tag: string, html: string) => tl.eventHtml({ at: Date.parse(at), tag, tone: "quiet", html }, { el: "li", clamped: false });
+  expect(notes).toContain(ev("2026-11-05T11:02:00.000Z", "intake", "sized it"));
+  expect(notes).toContain(ev("2026-11-05T11:03:00.000Z", "note", "call me back"));
 });
 
 describe("the labels say sub-issue and job", () => {

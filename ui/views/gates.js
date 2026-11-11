@@ -3,7 +3,7 @@
 import { redraw } from "../router.js";
 import { clamp, fold, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
-import { findingHtml } from "./now.js";
+import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
 
 export const view = {
@@ -91,7 +91,7 @@ export function renderMonitor(d) {
   if (!m) return `<section id="monitor" aria-label="Monitor">${head}<p>The monitor has not run.</p></section>`;
   const n = m.findings.length, first = n ? ` First: ${findingHtml(m.findings[0])}` : "";
   const summary = `${esc(m.day)}: ${n} ${n === 1 ? "finding" : "findings"}.${first}`;
-  const body = (n ? `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>` : "") +
+  const body = (n ? findingsList(m.findings) : "") +
     (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? error(`No reading: ${m.error}`, "The monitor reads again at its next run.") : "");
   return `<section id="monitor" aria-label="Monitor">${head}${fold(summary, body)}</section>`;
 }

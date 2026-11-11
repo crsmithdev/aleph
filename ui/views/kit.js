@@ -6,7 +6,7 @@ import { actButton, fold, linkButton, idLink, badge, bytes, clock, count, day, d
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
-import { eventRow, findingHtml, renderLanes } from "./now.js";
+import { eventRow, findingsList, renderLanes } from "./now.js";
 import { bar } from "./speed.js";
 
 const THEMES = ["system", "light", "dark"];
@@ -183,7 +183,7 @@ function renderKit(d, query) {
     spec("lanes", "Item card and lane", renderLanes(STATUS), "", ["Item card", "Lane"]) +
     spec("ask", "Ask card", askCard(ASK, STATUS.now)) +
     spec("feed", "Feed row", FEED.map((e) => eventRow(e)).join("")) +
-    spec("findings", "Findings list", `<ol class="findings">${["Two jobs ran over the cap at `09:12`.", "No check failed."].map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`) +
+    spec("findings", "Findings list", findingsList(["Two jobs ran over the cap at `09:12`.", "No check failed."])) +
 
     `<h2 class="kit-h">Labels</h2>` +
     spec("badge", "Badge", row(...["open", "running", "landed", "waiting", "failed", "parked", "dropped"].map(badge)) + row(...["critical", "high", "medium", "low"].map(priorityBadge)) + row(tag("any text"), tag("with a title", "need", "the title"))) +
