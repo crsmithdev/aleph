@@ -42,6 +42,9 @@ delete process.env.ALEPH_JOB_ID;
 delete process.env.ALEPH_JOB_RUN;
 // The job records follow the test ledger (`<ALEPH_JOBS_DIR>/.records`), never a folder the shell names.
 delete process.env.ALEPH_RECORDS_DIR;
+// A shell with ALEPH_UI_PASSWORD turns on the UI's login gate, and every UI test would get a 401. A test of the
+// gate sets the password itself.
+delete process.env.ALEPH_UI_PASSWORD;
 // Pin the test runner to UTC so timezone-independent dates and timestamps agree across environments.
 process.env.TZ = "UTC";
 // No test starts a detached dispatch or intake as a systemd unit: each new issue's filing would start one. A test

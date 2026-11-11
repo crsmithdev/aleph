@@ -9,6 +9,11 @@
       "concept": "the issue verbs import Asks, the registry and recent repos",
       "copies": ["issues/lib/issues.ts:16-20"],
       "reason": "issues.ts is the `aleph issue` verb layer: it sits above both the store and the factory's Asks and decides an Ask on close or drop. The store itself (store.ts, todo.ts) stays free of jobs/ (improve S1, 2026-11-10)."
+    },
+    {
+      "concept": "junit entity decode",
+      "copies": ["jobs/lib/gates/checks.ts:282", "jobs/lib/gates/keep-earn.ts:49"],
+      "reason": "keep-earn.ts runs in the target repo and imports nothing from aleph, so it keeps its own copy of unxml from checks.ts."
     }
   ]
 }

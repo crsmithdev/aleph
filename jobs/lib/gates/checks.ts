@@ -278,6 +278,7 @@ export function newTests(cwd: string, base: string, tip: string): NewTests[] {
   });
 }
 
+/** keep-earn.ts keeps a copy of this decode: it imports nothing from aleph. */
 const unxml = (s: string) => s.replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#10;/g, "\n").replace(/&amp;/g, "&");
 
 /** The cases that passed in bun's junit report: a `testcase` with no child element. */

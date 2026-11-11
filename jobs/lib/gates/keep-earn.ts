@@ -45,46 +45,51 @@ function covered(plan: Plan, filter: string): Map<string, number> {
   return hit;
 }
 
+/** Decodes the XML entities of a junit name. A copy of `unxml` in checks.ts: this file imports nothing from aleph. */
+const unxml = (s: string) => s.replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#10;/g, "\n").replace(/&amp;/g, "&");
+
 /** The cases that passed in bun's junit report, or null when a test file did not load: bun reports no case of such a file. */
-function passed(files: string[]): Set<string> | null {
+export function passed(files: string[]): Set<string> | null {
   if (!existsSync(REPORT)) return null;
   const xml = readFileSync(REPORT, "utf8");
-  const reported = new Set([...xml.matchAll(/<testcase name="[^"]*"[^>]*?file="([^"]*)"/g)].map((m) => m[1]));
+  const reported = new Set([...xml.matchAll(/<testcase name="[^"]*"[^>]*?file="([^"]*)"/g)].map((m) => unxml(m[1])));
   if (files.some((f) => !reported.has(f))) return null;
-  return new Set([...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"[^>]*\/>/g)].map((m) => `${m[2]} > ${m[1]}`));
+  return new Set([...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"[^>]*\/>/g)].map((m) => `${unxml(m[2])} > ${unxml(m[1])}`));
 }
 
-const plan: Plan = JSON.parse(readFileSync(process.argv[2], "utf8"));
-const left = new Set(plan.cases.map(id));
-const run = new Set<string>();
-const loaded = covered(plan, "^$");
-for (const c of plan.cases) {
-  if (late()) break;
-  // bun matches -t against the full name: the describe names and the case name, with spaces between.
-  const name = `(?:^|.* )${esc(c.name)}$`;
-  const alone = covered(plan, name);
-  const others = covered(plan, `^(?!${name})`);
-  const beyond = [...alone].filter(([l, n]) => n > (loaded.get(l) ?? 0)).map(([l]) => l);
-  for (const l of beyond) run.add(l);
-  if (plan.mutants.length ? [...alone.keys()].some((l) => !others.has(l)) : beyond.length) left.delete(id(c));
+if (import.meta.main) {
+  const plan: Plan = JSON.parse(readFileSync(process.argv[2], "utf8"));
+  const left = new Set(plan.cases.map(id));
+  const run = new Set<string>();
+  const loaded = covered(plan, "^$");
+  for (const c of plan.cases) {
+    if (late()) break;
+    // bun matches -t against the full name: the describe names and the case name, with spaces between.
+    const name = `(?:^|.* )${esc(c.name)}$`;
+    const alone = covered(plan, name);
+    const others = covered(plan, `^(?!${name})`);
+    const beyond = [...alone].filter(([l, n]) => n > (loaded.get(l) ?? 0)).map(([l]) => l);
+    for (const l of beyond) run.add(l);
+    if (plan.mutants.length ? [...alone.keys()].some((l) => !others.has(l)) : beyond.length) left.delete(id(c));
+  }
+  const spread = <T>(xs: T[], n: number) => (xs.length <= n ? xs : Array.from({ length: n }, (_, i) => xs[Math.floor((i * xs.length) / n)]));
+  const hit = spread(plan.mutants.filter((m) => run.has(`${m.path}:${m.line}`)), 10);
+  const picked = [...hit, ...spread(plan.mutants.filter((m) => !run.has(`${m.path}:${m.line}`)), 10 - hit.length)];
+  let ran = 0;
+  for (const m of picked) {
+    if (!left.size || late()) break;
+    const text = readFileSync(m.path, "utf8");
+    const lines = text.split("\n");
+    lines[m.line - 1] = m.text;
+    writeFileSync(m.path, lines.join("\n"));
+    rmSync(REPORT, { force: true });
+    bun(["--reporter=junit", `--reporter-outfile=${REPORT}`, ...plan.files.map((f) => `./${f}`)]);
+    writeFileSync(m.path, text);
+    ran++;
+    // A mutant that stops a test file from loading fails every case of it, so it shows nothing about one case.
+    const ok = passed(plan.files);
+    if (!ok) continue;
+    for (const c of [...left]) if (!ok.has(c)) left.delete(c);
+  }
+  console.log(`KEEP-EARN ${JSON.stringify({ unearned: late() ? [] : [...left], mutants: ran })}`);
 }
-const spread = <T>(xs: T[], n: number) => (xs.length <= n ? xs : Array.from({ length: n }, (_, i) => xs[Math.floor((i * xs.length) / n)]));
-const hit = spread(plan.mutants.filter((m) => run.has(`${m.path}:${m.line}`)), 10);
-const picked = [...hit, ...spread(plan.mutants.filter((m) => !run.has(`${m.path}:${m.line}`)), 10 - hit.length)];
-let ran = 0;
-for (const m of picked) {
-  if (!left.size || late()) break;
-  const text = readFileSync(m.path, "utf8");
-  const lines = text.split("\n");
-  lines[m.line - 1] = m.text;
-  writeFileSync(m.path, lines.join("\n"));
-  rmSync(REPORT, { force: true });
-  bun(["--reporter=junit", `--reporter-outfile=${REPORT}`, ...plan.files.map((f) => `./${f}`)]);
-  writeFileSync(m.path, text);
-  ran++;
-  // A mutant that stops a test file from loading fails every case of it, so it shows nothing about one case.
-  const ok = passed(plan.files);
-  if (!ok) continue;
-  for (const c of [...left]) if (!ok.has(c)) left.delete(c);
-}
-console.log(`KEEP-EARN ${JSON.stringify({ unearned: late() ? [] : [...left], mutants: ran })}`);
