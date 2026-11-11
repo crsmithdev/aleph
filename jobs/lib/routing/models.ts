@@ -74,10 +74,11 @@ export function modelEnv(model: string | undefined): Record<string, string | und
 
 /**
  * The settings of every agent role: Chris's own CLAUDE.md is left out, and `ALEPH_AGENT` tells the aleph hooks that
- * a factory agent runs, so they give it identity/AGENT.md in place of that file and skip what is for Chris.
+ * a factory agent runs, so they give it identity/AGENT.md in place of that file and skip what is for Chris. The effort
+ * is high whatever Chris sets for his own sessions: nobody watches an agent run to raise it.
  */
 const userMd = join(homedir(), ".claude", "CLAUDE.md");
-export const AGENT_SETTINGS = JSON.stringify({ claudeMdExcludes: [...new Set([userMd, existsSync(userMd) ? realpathSync(userMd) : userMd])], env: { ALEPH_AGENT: "1" } });
+export const AGENT_SETTINGS = JSON.stringify({ claudeMdExcludes: [...new Set([userMd, existsSync(userMd) ? realpathSync(userMd) : userMd])], effortLevel: "high", env: { ALEPH_AGENT: "1" } });
 
 /** The argv of a `claude -p` call on `model` (no `--model` when it is undefined), then the caller's flags. */
 export const modelArgv = (cmd: string, model: string | undefined, flags: string[]): string[] =>

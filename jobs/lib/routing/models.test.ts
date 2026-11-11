@@ -66,9 +66,10 @@ test("the argv passes the model's id, and no --model when there is none", () => 
   expect(modelArgv("claude", undefined, ["--x"])).toEqual(["claude", "-p", "--strict-mcp-config", "--disable-slash-commands", "--settings", AGENT_SETTINGS, "--x"]);
 });
 
-test("an agent role leaves out Chris's CLAUDE.md and says it is an agent", () => {
+test("an agent role leaves out Chris's CLAUDE.md, runs at high effort and says it is an agent", () => {
   const s = JSON.parse(AGENT_SETTINGS);
   expect(s.claudeMdExcludes).toContain(join(homedir(), ".claude", "CLAUDE.md"));
+  expect(s.effortLevel).toBe("high");
   expect(s.env).toEqual({ ALEPH_AGENT: "1" });
 });
 
