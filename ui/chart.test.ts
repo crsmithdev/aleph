@@ -101,3 +101,11 @@ test("a panel whose frame carries a mark says how old its data is and why, with 
   }
   expect(panel(time, "area")).not.toContain('class="aged"');
 });
+
+test("a null value is a gap that a line passes over, and a missing one is 0", () => {
+  const f = { ...time, rows: [{ at: at(27), a: 1, b: 3 }, { at: at(28), a: null }, { at: at(29), a: 2, b: 1 }] };
+  const [a, b] = option(f, "lines", T).series;
+  expect(a.data).toEqual([1, null, 2]);
+  expect(b.data).toEqual([3, 0, 1]);
+  expect(a.connectNulls).toBe(true);
+});

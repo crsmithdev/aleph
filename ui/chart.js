@@ -59,8 +59,8 @@ export function option(f, form, t, hidden = []) {
   const item = (r, v) => (r.href && v != null ? { value: v, href: r.href } : v);
   // A points form draws a dot only where the row has the key, so a row is one dot, not one dot per key.
   const none = f.over.kind === "time" && form === "points" ? null : 0;
-  // A share point with nothing to divide is a gap, not 0%.
-  const data = (k) => f.rows.map((r, i) => item(r, share ? (sums[i] ? ((r[k.key] ?? 0) / sums[i]) * 100 : null) : (r[k.key] ?? none)));
+  // A share point with nothing to divide is a gap, not 0%. A row whose key is null has no value there: a gap, not 0.
+  const data = (k) => f.rows.map((r, i) => item(r, share ? (sums[i] ? ((r[k.key] ?? 0) / sums[i]) * 100 : null) : r[k.key] === undefined ? none : r[k.key]));
   const value = { type: "value", min: 0, ...(share ? { max: 100 } : {}), minInterval: f.measure.unit === "count" && !share ? 1 : 0, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: fmt, hideOverlap: true } };
   const base = (k) => ({ name: k.name, data: data(k), ...(k.color ? { color: t[k.color] } : {}) });
   // A hidden legend frees the top band it takes; 8 px keeps the top y label inside the box.
@@ -81,7 +81,7 @@ export function option(f, form, t, hidden = []) {
         ? { ...base(k), type: "bar", stack: "all", barMaxWidth: 64 }
         : points
           ? { ...base(k), type: "line", symbol: "circle", symbolSize: 9, lineStyle: { width: 0 } }
-          : { ...base(k), type: "line", symbol: "none", ...(stack ? { stack: "all", lineStyle: { width: 1 }, areaStyle: { opacity: 0.6 } } : { lineStyle: { width: 2 } }) }),
+          : { ...base(k), type: "line", symbol: "none", ...(stack ? { stack: "all", lineStyle: { width: 1 }, areaStyle: { opacity: 0.6 } } : { lineStyle: { width: 2 }, connectNulls: true }) }),
     };
   }
   const stack = form !== "grouped", linked = f.rows.some((r) => r.href);

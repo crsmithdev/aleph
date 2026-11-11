@@ -204,8 +204,9 @@ describe("views", () => {
     expect(page).toContain('<aleph-chart key="issues/tests"');
     const all = v.testsFrame(d.tests, "", "week", now);
     expect(all.by.keys.map((k: any) => k.name)).toEqual(["fac tests", "fac passed on rerun", "oth tests", "oth passed on rerun"]);
-    expect(all.rows.map((r: any) => [r.at, r["fac tests"] ?? 0, r["fac passed on rerun"] ?? 0, r["oth tests"] ?? 0]))
-      .toEqual([[Date.parse("2026-11-04T10:00:00Z"), 120, 2, 0], [Date.parse("2026-11-04T11:00:00Z"), 0, 0, 40]]);
+    // A run of one project is a gap in the other's line, not a drop to 0.
+    expect(all.rows.map((r: any) => [r.at, r["fac tests"], r["fac passed on rerun"], r["oth tests"]]))
+      .toEqual([[Date.parse("2026-11-04T10:00:00Z"), 120, 2, null], [Date.parse("2026-11-04T11:00:00Z"), null, null, 40]]);
     const fac = v.testsFrame(d.tests, "fac", "month", now);
     expect(fac.by.keys.map((k: any) => k.name)).toEqual(["fac tests", "fac passed on rerun"]);
     expect(fac.rows.map((r: any) => r["fac tests"])).toEqual([120]);

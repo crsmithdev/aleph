@@ -182,7 +182,7 @@ Weight 700 stays a literal on `.mark`.
 
 | Token | Value | Role |
 |---|---|---|
-| `--ctl-h` | 28px | control height |
+| `--ctl-h` | 28px; 40px on a touch screen (`pointer: coarse`) | control height |
 | `--bar-h` | 10px | `.meter` and `.wf-bar` height |
 | `--dim` | .6 | opacity of a dimmed control |
 | `--z-rowlink` | 1 | `tr.rowlink` links |
@@ -464,7 +464,7 @@ A metric card shows one headline number of a list page, with its key.
 |---|---|---|---|---|
 | 1 | Box | The card | | `--surface`, shadow `--card-lift`, no visible border, radius `--r-card`, padding `--sp-12` `--sp-14` |
 | 2 | Key `k` | The measure | | `--sans` `--fs-xs` `--fw-strong`, capitals, `--muted`; breaks only between words, and moves the trend to the next line when the two do not fit |
-| 3 | Trend | The change from the baseline | yes | `--fs-sm` `--fw-strong`; `--good` when good, `--need` when bad, else `--muted` |
+| 3 | Trend | The change from the baseline | yes | `--fs-sm` `--fw-strong`, a pill (radius `--r-pill`); `--good` on `--done-bg` when good, `--need` on `--need-bg` when bad, else `--muted` on `--sunk` |
 | 4 | Value `v` | The number | | `--metric` `--fw-strong`, `-0.025em`, up to `--fs-metric`, tabular, `--ink`; one line |
 | 5 | Second value `v2` | A second number after ` / `, such as the cap | yes | `--metric` at .62em, `--muted` |
 | 6 | Bar `extra` | A meter | yes | the meter |
@@ -683,10 +683,9 @@ An item card shows one issue or one job in a lane.
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Box | The item | | `--surface`, border `--rule`, radius `--r-ctl`, padding `--sp-10` `--sp-12` |
-| 2 | Kind edge | The kind of work | | 4px at the left: land `--done`, worker `--run`, else `--rule` |
-| 3 | Meta row | Id, state, kind, part, time, duration | | `--fs-2xs`; 22px high; one line; badges `--fs-2xs` |
-| 4 | Title | The title of the item: a link when the item has a page, else text | | `--sans` `--fw-strong`; one line, ends in an ellipsis |
-| 5 | Hold | Why the item waits, and what blocks it | yes | `--fs-xs`, `--muted` |
+| 2 | Meta row | Id, state, kind, part, time, duration | | `--fs-2xs`; 22px high; one line; badges `--fs-2xs` |
+| 3 | Title | The title of the item: a link when the item has a page, else text | | `--sans` `--fw-strong`; one line, ends in an ellipsis |
+| 4 | Hold | Why the item waits, and what blocks it | yes | `--fs-xs`, `--muted` |
 
 - Put the short id of the item in `data-annotate`, so that a note stays on the item.
 
@@ -735,7 +734,7 @@ A lane is a column of item cards under a head with a count.
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Head | The name of the lane and its count | | the card title and count |
+| 1 | Head | The state dot, the name of the lane and its count | | the card title and count; an 8px dot: Running `--run`, Done `--done`, Queued `--muted` |
 | 2 | Cards | The item cards | | one column, `--sp-12` apart |
 | 3 | Empty line | The line when the lane has no items | | `--fs-sm`, `--muted` |
 

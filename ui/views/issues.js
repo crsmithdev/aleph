@@ -314,6 +314,8 @@ export function testsFrame(tests, project = "", win = "month", now = new Date())
       rows.set(t, row);
     }
   }
+  // A run time of one project is no run of the others: null, so their lines pass over it and do not drop to 0.
+  for (const row of rows.values()) for (const k of keys) row[k.key] ??= null;
   return { measure: { name: "Tests", unit: "count", agg: "sum" }, over: { kind: "time", window: win }, by: { keys }, rows: [...rows.values()].sort((a, b) => a.at - b.at), form: "lines", note: "Tests per suite run, and the tests that passed only on rerun." };
 }
 

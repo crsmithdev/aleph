@@ -202,6 +202,10 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 /* ---------- Now: lanes ---------- */
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-20); align-items: start; }
 .lane { min-width: 0; }
+/* Each lane head carries its state's dot: running, done, queued. */
+.lane .sh h2::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: var(--r-pill); margin-right: var(--sp-8); vertical-align: middle; background: var(--run); }
+#lane-done .sh h2::before { background: var(--done); }
+#lane-queued .sh h2::before { background: var(--muted); }
 .lane-card .ih { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8); }
 /* ---------- Now: blockers and needs ---------- */
 .blockers { flex-basis: 100%; display: grid; gap: var(--sp-4); }
@@ -265,7 +269,7 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .issue-row .problem { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
 .issue-row .actions { max-width: 100%; }
 .issue-row input.reason { max-width: 100%; }
-.issue-row[data-kind] { --kind: var(--stuck); --kind-bg: var(--stuck-bg); border-left: 4px solid var(--kind); }
+.issue-row[data-kind] { --kind: var(--stuck); --kind-bg: var(--stuck-bg); border-color: var(--kind); }
 .issue-row[data-kind="approval"] { --kind: var(--run); --kind-bg: var(--run-bg); }
 .issue-row[data-kind="input"] { --kind: var(--need); --kind-bg: var(--need-bg); }
 .issue-row[data-kind="error"] { background: var(--stuck-bg); }
@@ -544,11 +548,17 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
   .grid { grid-template-columns: minmax(0, 1fr); }
   .rail { position: static; }
 }
+/* A touch screen gets controls a finger can hit. */
+@media (pointer: coarse) { :root { --ctl-h: 40px; } }
 @media (max-width: 720px) {
   .shead .say { flex-basis: 100%; order: 3; }
+  /* A chart panel's form control goes under its title, so the title keeps the full width. */
+  .card .sh { flex-wrap: wrap; }
+  .card .sh .aside { flex-basis: 100%; margin-left: 0; }
   .shead .aside { order: 4; margin-left: 0; max-width: 100%; }
   .shead .fbar { flex-wrap: wrap; }
-  .page { padding: var(--sp-20) var(--sp-16) 48px; }
+  /* The kit dock (two 40px buttons, 8px apart, 16px from the edge) is fixed over the page; the end of the page clears it. */
+  .page { padding: var(--sp-20) var(--sp-16) calc(2 * 40px + 8px + 2 * 16px); }
   .ev { grid-template-columns: minmax(0, 1fr); }
   .ev > div { border-left: 0; border-top: 1px solid var(--rule-2); }
   .ev > div:first-child { border-top: 0; }
@@ -688,7 +698,7 @@ p.aged { margin: 0 0 var(--sp-6); color: var(--stuck); font-size: var(--fs-sm); 
 .wf-row { cursor: pointer; border-top: 1px solid var(--rule-2); content-visibility: auto; contain-intrinsic-size: auto 24px; }
 .wf-row:hover { background: var(--sunk); }
 .wf-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.wf-row.sel { background: var(--rule-2); box-shadow: inset 3px 0 0 var(--run); }
+.wf-row.sel { background: var(--run-bg); }
 .wf-row.k-turn { background: var(--sunk); }
 .wf-row.k-turn.sel { background: var(--rule-2); }
 .wf-bar { position: absolute; top: 7px; height: var(--bar-h); min-width: 2px; border-radius: var(--r-hair); background: var(--run); }
@@ -764,9 +774,9 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
 .tile b em { font: var(--fw-text) .62em/1 var(--metric); font-style: normal; color: var(--muted); }
 .tile .q { font-size: var(--fs-xs); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .q .m, .tile .q.m { color: var(--muted); }
-.tile .tr { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
-.tile .tr.good { color: var(--good); }
-.tile .tr.warn { color: var(--need); }
+.tile .tr { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; padding: 1px var(--sp-6); border-radius: var(--r-pill); background: var(--sunk); }
+.tile .tr.good { color: var(--good); background: var(--done-bg); }
+.tile .tr.warn { color: var(--need); background: var(--need-bg); }
 table.tbl .tr { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
 table.tbl .tr.good { color: var(--good); }
 table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
@@ -1023,9 +1033,6 @@ ul.logs .step { margin: var(--sp-6) 0; }
 /* The meta row has one fixed height whatever it holds; the container query below does not change it. */
 .lane-card > .ih { box-sizing: border-box; height: 22px; min-height: 22px; max-height: 22px; flex-wrap: nowrap; align-items: center; overflow: hidden; white-space: nowrap; }
 .lane-card > .ih > * { line-height: 1; align-self: center; }
-.cards > .job-card.small.lane-card { border-left: 4px solid var(--rule); }
-.cards > .job-card.small.lane-card.kind-land { border-left-color: var(--done); }
-.cards > .job-card.small.lane-card.kind-worker { border-left-color: var(--run); }
 .lane-card .blockers { margin-top: var(--sp-6); font-size: var(--fs-sm); }
 .job-card.small .ih > .blocked { flex: none; margin-left: auto; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 @container (max-width: 420px) {
