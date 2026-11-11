@@ -54,7 +54,7 @@ describe("a factory run", () => {
       const s = state(r.json.run);
       expect(s).toMatchObject({ condition: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/r.txt" });
       expect(s.next).toBeUndefined();
-      expect(s.review).toBeUndefined();
+      expect(s.review).toMatchObject({ call: "passed", model: expect.any(String) });
       expect(calls()).toBe(n + 1);
       expect(JSON.parse(readFileSync(join(jobsDir, r.json.run, "review.json"), "utf8"))).toMatchObject({ verdict: "pass" });
       noSecondReview(r.json.run);

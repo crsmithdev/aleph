@@ -33,8 +33,8 @@ export interface FailedTest { file: string; name: string; message: string }
 export interface TestRecord { ran: number; passed: number; failed: number; skipped: number; failures: FailedTest[] }
 
 /**
- * The second review's call: what it decided, or `running` while it ran and `failed` when it ended without one. A `chris`
- * VERDICT line reads as `waiting`. The second review went in v6 phase 6 (3 Nov 2026); only runs from before it have one.
+ * The reviewer's call on the run: `passed`, `returned` (a hold sent back as a fix round), `waiting` (a hold after the
+ * last round) or `failed` (no verdict); `running` is an older run's second review in progress. A call the API refused for credit records none.
  */
 type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string; model?: string };
 
@@ -64,7 +64,7 @@ export interface Run {
   on?: string;
   /** New shape: what the run waits on. */
   ask?: Ask;
-  /** A run from before v6 phase 6: its second review's call. */
+  /** The reviewer's call on a build run. */
   review?: Review;
   /** An agent run started with --land: it lands when it passes. */
   land?: boolean;

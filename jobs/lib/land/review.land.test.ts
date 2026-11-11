@@ -39,10 +39,10 @@ describe("a factory run", () => {
     expect(s).toMatchObject({ condition: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/x.txt" });
     expect(s.stat).toContain("held/x.txt");
     const run = r.json.run;
-    // No second review: no call.md, and no review call on the run or the job.
+    // No second review: no call.md. The run and the job carry the reviewer's call.
     expect(existsSync(join(jobsDir, run, "call.md"))).toBe(false);
-    expect(state(run).review).toBeUndefined();
-    expect((await jobView("fheld")).json.review).toBeUndefined();
+    expect(state(run).review).toMatchObject({ call: "passed" });
+    expect((await jobView("fheld")).json.review).toMatchObject({ call: "passed" });
     expect(state(run)).toMatchObject({ condition: "waiting", ask: { kind: "approval", reason: "held-path" } });
     expect(state(run).needs).toBeUndefined();
     const l = await land("fheld");

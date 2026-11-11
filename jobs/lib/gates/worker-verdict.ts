@@ -11,11 +11,11 @@ import { stopFields, type ChecksStop } from "./checks.ts";
 import type { Run } from "../records/ledger.ts";
 
 /** The fields of the run that a verdict sets. */
-export type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
+export type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "review" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
 export interface Verdict { outcome: Outcome; code: number }
 
-/** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict, `credit` its API credit error line when the API refused it. */
-export interface ReviewCall { reason: string | null; cost?: number; none?: boolean; credit?: string }
+/** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict, `credit` its API credit error line when the API refused it, `model` the reviewer model. */
+export interface ReviewCall { reason: string | null; cost?: number; none?: boolean; credit?: string; model?: string }
 
 /** What runs each step on the branch. */
 export interface VerdictPorts {
@@ -132,17 +132,18 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   if (rv.none && !rv.credit) rv = await call();
   // A call the API refused for credit did no work: the run stops as failed with the credit cause, as a worker's does, so it waits for credit and counts no run cap.
   if (rv.credit) return { outcome: { condition: "failed", cause: "credit", reason: rv.credit, ...facts }, code: 1 };
+  const review = (call: "passed" | "returned" | "waiting" | "failed") => ({ call, ...(rv.reason && { reason: rv.reason }), ...(rv.model && { model: rv.model }) });
   if (!rv.reason) {
     // A reviewed diff that changes a security path or a held path waits for Chris.
     const security = p.security();
     const rule = security ? `held path ${security}` : p.heldRule();
-    if (rule) return { outcome: { ...waiting("held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 };
-    return { outcome: { condition: "passed", ...facts }, code: 0 };
+    if (rule) return { outcome: { ...waiting("held-path", rule, [stat]), reason: rule, stat, review: review("passed"), ...facts }, code: 0 };
+    return { outcome: { condition: "passed", review: review("passed"), ...facts }, code: 0 };
   }
-  if (rv.none) return { outcome: { ...waiting("review", rv.reason, [stat]), cause: "review", reason: rv.reason, stat, ...facts }, code: 0 };
+  if (rv.none) return { outcome: { ...waiting("review", rv.reason, [stat]), cause: "review", reason: rv.reason, stat, review: review("failed"), ...facts }, code: 0 };
   const hold = reviewHold(done, earlier, rv.reason, rounds);
-  if ("round" in hold) return { outcome: { condition: "returned", cause: "review", reason: rv.reason, stat, ...facts, failed: "review", round: hold.round }, code: 1 };
-  return { outcome: { ...waiting("review", hold.reason, [stat]), cause: "review", reason: hold.reason, stat, ...facts }, code: 0 };
+  if ("round" in hold) return { outcome: { condition: "returned", cause: "review", reason: rv.reason, stat, review: review("returned"), ...facts, failed: "review", round: hold.round }, code: 1 };
+  return { outcome: { ...waiting("review", hold.reason, [stat]), cause: "review", reason: hold.reason, stat, review: review("waiting"), ...facts }, code: 0 };
 }
 
 /** Why a held run cannot land yet: the reviewer has given no verdict; null once it has (`review` is its review.json). */
