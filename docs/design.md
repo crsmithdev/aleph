@@ -1305,7 +1305,7 @@ A settings list is a group of rows. Each row holds one setting: its label, its c
 
 | Helper | Reference |
 |---|---|
-| `settings(label, rows)`; `setting(label, control, { id, hint, save, attrs })` | `ui/views/gates.js` and `ui/views/factory-agents.js`, which still build it by hand |
+| `settings(label, rows)`; `setting(label, control, { id, hint, save, attrs })` | `ui/views/gates.js`; `ui/views/factory-agents.js`, which still builds the worker tier checkbox by hand |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1490,7 +1490,11 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | A selected row is drawn three ways: `.mrow` (`--raised`, `--run` border), `tr.nrow` (inset `--run` bar), the nav (inset `--ink` bar) | `ui/app.css` | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
 | The Memory search field is 44px high and `--fs-lg`; every other page uses the one `searchBox()` size | `.memory .msearch` in `ui/app.css` | follow-up |
-| Settings and forms written by hand: a form in a table cell, a select in a table cell, a hand-built armed button | `ui/views/gates.js`, `ui/views/factory-agents.js`, `ui/views/memory.js` | aleph-1891 (pending) |
+| Settings and forms written by hand: the worker tier checkbox in the Agents Models settings; the Memory alias, link, core line and edit forms, hand `label.mform` and `div.mform` | `models()` in `ui/views/factory-agents.js`; `actions()`, `links()`, `coreForm()` and `edit()` in `ui/views/memory.js` | follow-up |
+| A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |
+| The Roles table's rows are hand `<tr>`s and its Failed Jobs link a hand `a.failed-jobs` | `roles()` in `ui/views/factory-agents.js` | follow-up |
+| A Jobs trend chart's p90 line takes the `hot` tone | `trendFrame()` in `ui/views/factory-jobs.js` | allowed |
+| The Checks, Build Time by Model and Jobs cards of the Jobs page show no count | `renderFactoryJobs()` in `ui/views/factory-jobs.js` | follow-up |
 | A table row's fold chevron is a hand `<button class="fold">`: no helper for a row toggle | `renderRow()` in `ui/views/issues.js` | follow-up |
 | The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/timeline.js` | follow-up |
 | The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/chart.js` | follow-up |
