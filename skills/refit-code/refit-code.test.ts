@@ -82,9 +82,9 @@ test("the hook blocks once per session for the same findings, and never a stop a
 test("the hook skips a change from before the session started", () => {
   write("a.ts", "export const a = 99;\n");
   const input = { hook_event_name: "Stop", session_id: "s3", cwd: root };
-  session("s3").set({ start: Date.now() + 60_000 });
+  session("s3").set({ start: 4e12 });
   expect(stop(input)).toBe("");
-  session("s3").set({ start: Date.now() - 60_000 });
+  session("s3").set({ start: 1 });
   expect(JSON.parse(stop(input)).decision).toBe("block");
 });
 
