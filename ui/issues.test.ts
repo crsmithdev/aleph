@@ -248,7 +248,7 @@ describe("views", () => {
     expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('key="issues/backlog"'));
     expect(h.indexOf('key="issues/backlog"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
-    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "updated", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age"]);
+    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age", "updated"]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
   });
 
@@ -812,8 +812,8 @@ describe("the Issue page shows the ask row", () => {
     const d = await getJson(`/api/issues/fac-1`);
     const date = "2026-11-02T09:00:00Z";
     const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date }] });
-    expect(h).toContain("<th>Commit</th><th>Subject</th><th>Committed</th>");
-    expect(h).toContain(`<tr><td><code>abcdef1</code></td><td class="wide" title="s">s</td><td class="time">${when(date)}</td>`);
+    expect(h).toContain('<th>Commit</th><th>Subject</th><th class="num">Committed</th>');
+    expect(h).toContain(`<tr><td><code>abcdef1</code></td><td class="wide" title="s">s</td><td class="time">${when(date)}</td></tr>`);
   });
 
   test("renderIssue shows empty() for no commits and pages the Commits table at 50", async () => {

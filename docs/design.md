@@ -509,13 +509,15 @@ A table shows items that have the same columns.
 | 6 | Row | One item | | `--sunk` on hover |
 | 7 | Row actions | The buttons of the row | yes | the row actions |
 
-- Put the columns in this order: id or name, title, time, state, priority, project, labels, then numbers.
+- Put the columns in this order: id or name, title, state, priority, project, labels, numbers, then time.
+- In an event log, put the time first. An event log is a table where each row is an event, read in time order.
 - Put each number at the right of the row. Align a number to the right.
 - Name the time column for the time it shows. Format it with `when()`.
 - Make an id with `idLink()` or `repoIdLink()`, a state with `badge()`, and labels with `chips()`.
 - Put the title in `td.wide`. Do not let other cells wrap.
 - Put each number in `td.num`. For `heads()`, list the column's label in `num`. For `sortHead()`, pass `{ num: true }`.
-- Put the time in `td.time`.
+- Put the time in `td.time`. It aligns to the right. For `heads()`, list its label in `num`. For `sortHead()`, pass
+  `{ num: true }`. A time that comes first goes in `td.time.lead`, which aligns to the left.
 - When a row goes to a page, make it `tr.rowlink` and put the link in `td.wide`.
 - To sort, use `sortHead()` and `wireTable()`. Keep the sort in the address as `sort` and `dir`.
 - When there are more than 50 rows, use `pagedTable()`, or `pager()` with `limitOf()`.

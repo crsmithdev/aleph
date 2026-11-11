@@ -477,7 +477,8 @@ table.tbl td:has(> .chips) { min-width: 16ch; }
 /* A long label is cut, so it never sets the column's width. overflow:hidden moves an inline-block's baseline to its bottom edge, so align by the bottom. */
 table.tbl .chip { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 table.tbl .num { text-align: right; font-family: var(--num); font-variant-numeric: tabular-nums; font-weight: var(--fw-mid); }
-table.tbl td.time { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+table.tbl td.time { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+table.tbl td.time.lead { text-align: left; }
 table.tbl .badge { margin-right: var(--sp-2); }
 table.tbl td.num.bad { color: var(--stuck); }
 table.tbl.fit { width: auto; min-width: 40%; }

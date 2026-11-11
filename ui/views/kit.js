@@ -63,9 +63,9 @@ const ISSUES = Array.from({ length: 8 }, (_, i) => ({
   title: ["Give each component in design.md a live render", "Fail CI on a new hard-coded colour in ui/", "Show the cost of each run on its job page"][i % 3],
   state: ["open", "landed", "failed", "waiting", "parked"][i % 5], project: i % 4 ? "aleph" : "sidetone", labels: i % 2 ? ["ui"] : ["ui", "design"], cost: (i * 1.37) % 9,
 }));
-const issueRow = (x) => `<tr><td>${idLink(x.id, "#/kit")}</td><td class="wide">${x.title}</td><td class="time">${when(x.at)}</td><td>${badge(x.state)}</td>` +
-  `<td>${x.project}</td><td>${chips(x.labels)}</td><td class="num">${money(x.cost)}</td></tr>`;
-const ISSUE_HEAD = (sort) => [sortHead("Issue", "id", sort), sortHead("Title", "title", sort), sortHead("Updated", "at", sort), "<th>State</th>", "<th>Project</th>", "<th>Labels</th>", sortHead("Cost", "cost", sort, { num: true })].join("");
+const issueRow = (x) => `<tr><td>${idLink(x.id, "#/kit")}</td><td class="wide">${x.title}</td><td>${badge(x.state)}</td>` +
+  `<td>${x.project}</td><td>${chips(x.labels)}</td><td class="num">${money(x.cost)}</td><td class="time">${when(x.at)}</td></tr>`;
+const ISSUE_HEAD = (sort) => [sortHead("Issue", "id", sort), sortHead("Title", "title", sort), "<th>State</th>", "<th>Project</th>", "<th>Labels</th>", sortHead("Cost", "cost", sort, { num: true }), sortHead("Updated", "at", sort, { num: true })].join("");
 
 const MD = `A paragraph with \`code\`, **bold**, *em* and a [link](#/kit).
 
@@ -192,7 +192,7 @@ function renderKit(d, query) {
     `<h2 class="kit-h">Actions</h2>` +
     spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`)) +
     spec("link-button", "Link button", row(linkButton("Issue", "#/kit"), linkButton("Next sub-issue: a1701", "#/kit"))) +
-    spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Started", "Title"]), `<tr class="rowlink"><td class="time">11/10 14:05</td><td class="wide"><a href="#/kit">A row that goes to its item</a></td></tr>`)) +
+    spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide"><a href="#/kit">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
     spec("command", "Command", row(cmd("aleph issue list aleph"), cmd("bun test", { primary: true, hint: "in the worktree" }))) +
     spec("filter", "Filter bar", filterBar([
       { label: "Status", name: "status", value: "open", options: ["open", "done", "dropped"] },

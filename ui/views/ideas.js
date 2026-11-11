@@ -13,8 +13,8 @@ const local = (s) => `${s.replace(" ", "T")}${s.length === 10 ? "T00:00" : ""}`;
 
 export function renderIdeas(rows, status) {
   const table = rows.length
-    ? dataTable(heads(["Idea", "Last Change", "Status", "Target", "Lenses", "Open Questions", "Spent"], ["Open Questions", "Spent"]),
-      rows.map((r) => `<tr><td class="wide" title="${esc(r.title)}"><a href="${href(r.slug)}">${esc(r.title)}</a></td><td class="time">${esc(day(local(r.last)))}</td><td>${badge(r.status)}</td><td>${esc(target(r.target))}</td><td>${esc(r.lenses.join(", ") || "–")}</td><td class="num">${r.questions}</td><td class="num">${money(r.spent)}</td></tr>`).join(""))
+    ? dataTable(heads(["Idea", "Status", "Target", "Lenses", "Open Questions", "Spent", "Last Change"], ["Open Questions", "Spent", "Last Change"]),
+      rows.map((r) => `<tr><td class="wide" title="${esc(r.title)}"><a href="${href(r.slug)}">${esc(r.title)}</a></td><td>${badge(r.status)}</td><td>${esc(target(r.target))}</td><td>${esc(r.lenses.join(", ") || "–")}</td><td class="num">${r.questions}</td><td class="num">${money(r.spent)}</td><td class="time">${esc(day(local(r.last)))}</td></tr>`).join(""))
     : empty(`No ${status} ideas.`, "Add one with <code>aleph idea add</code>.");
   return `<div class="page">${pageHead("Ideas", { count: rows.length })}${filterBar([{ label: "Status", name: "status", options: STATUSES, value: status }])}${table}</div>`;
 }

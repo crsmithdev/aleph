@@ -32,21 +32,21 @@ const table = (name, head, rows, limit, none) => `<div data-t="${name}">${rows.l
 
 export function renderSkill(d, limits = {}) {
   const lim = (name) => Number(limits[name]) || PAGE;
-  // Columns: session, title (prompt or message), time, project, numbers.
+  // Sessions: a list, time last. Errors: an event log, time first.
   const sessions = d.sessions.map((s) =>
-    `<tr><td>${sessionCell(s.id)}</td><td class="wide" title="${esc(s.prompt)}">${esc(s.prompt)}</td><td class="time">${esc(when(s.time))}</td><td>${esc(s.project)}</td>` +
-    `<td>${s.via === "slash" ? "slash command" : "Skill tool"}</td></tr>`);
+    `<tr><td>${sessionCell(s.id)}</td><td class="wide" title="${esc(s.prompt)}">${esc(s.prompt)}</td><td>${esc(s.project)}</td>` +
+    `<td>${s.via === "slash" ? "slash command" : "Skill tool"}</td><td class="time">${esc(when(s.time))}</td></tr>`);
   const errors = d.errors.map((e) =>
-    `<tr><td>${sessionCell(e.session)}</td><td class="wide" title="${esc(e.message)}">${esc(e.message)}</td><td class="time">${esc(when(e.time))}</td><td>${esc(e.project)}</td></tr>`);
+    `<tr><td class="time lead">${esc(when(e.time))}</td><td>${sessionCell(e.session)}</td><td class="wide" title="${esc(e.message)}">${esc(e.message)}</td><td>${esc(e.project)}</td></tr>`);
   const tools = d.tools.map((t) => `<tr><td><code>${esc(t.tool)}</code></td><td class="num">${t.count}</td></tr>`);
   const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`);
   return `<div class="page sp skills">${crumb("#/sessions", [["sessions", "#/sessions"], ["skills"], [d.name]])}` +
     pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
     (d.uses ? panelOf(chartKey(d.name), usesFrame(d)) : empty("This skill was not used in the window.", "Widen it with <code>?window=90</code> on the API.")) +
     card("Projects", table("projects", heads(["Project", "Uses"], ["Uses"]), projects, lim("projects"), "No project used this skill.")) +
-    card("Sessions", table("sessions", heads(["Session", "First Prompt Line", "Started", "Project", "Started by"]), sessions, lim("sessions"), "No session used this skill.")) +
+    card("Sessions", table("sessions", heads(["Session", "First Prompt Line", "Project", "Started by", "Started"], ["Started"]), sessions, lim("sessions"), "No session used this skill.")) +
     card("Tools Called After It, in the Same Turn", table("tools", heads(["Tool", "Calls"], ["Calls"]), tools, lim("tools"), "No tool ran after this skill in the same turn."), { label: "Tools called after it, in the same turn" }) +
-    card("Turns with Errors", table("errors", heads(["Session", "Error", "Started", "Project"]), errors, lim("errors"), "No turn with this skill had an error."), { count: d.errors.length, label: "Turns with errors" }) +
+    card("Turns with Errors", table("errors", heads(["Started", "Session", "Error", "Project"]), errors, lim("errors"), "No turn with this skill had an error."), { count: d.errors.length, label: "Turns with errors" }) +
     `</div>`;
 }
 

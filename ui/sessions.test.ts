@@ -262,7 +262,7 @@ test("the chat is the default: messages in Markdown, folded tool calls, one turn
   expect(h).toContain('<div class="clamp">')
   expect(h).toContain('aria-expanded="false">Show more</button>');
   expect(h).toContain('<span class="of">2 of 2</span>');
-  expect(v.renderSession(d, { id: "s1" }, TABLE)).toContain('<th class="num">Turn</th><th>Prompt</th><th>Started</th>');
+  expect(v.renderSession(d, { id: "s1" }, TABLE)).toContain('<th class="num">Turn</th><th>Prompt</th><th>Output</th>');
   expect(h).not.toContain("data-chat-from");
   expect(v.renderSession({ ...d, turns: [{ ...d.turns[0], prompt: "<script>x</script>" }] }, {}, new URLSearchParams())).not.toContain("<script>");
   expect(v.sessionView.api({ id: "a b" }, new URLSearchParams())).toBe("/api/sessions/a%20b/chat?limit=20");

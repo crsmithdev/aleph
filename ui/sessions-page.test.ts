@@ -47,12 +47,13 @@ describe("the Sessions page", () => {
     expect(h).toContain('<header class="ph"><h1>Sessions</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
     for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'title="s1" href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
-    expect(h).toContain("<th>Hook</th><th>Last Call</th>");
+    expect(h).toContain('<th class="num">Errors</th><th class="num">Last Call</th>');
     expect(h).toContain("<th>Denied</th><th>Reason</th>");
     expect(h).toContain('data-tile="tool:Bash"');
     const heads = (h.match(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g) ?? []).map((x: string) => x.replace(/<[^>]*>/g, ""));
     const at = heads.indexOf("Session");
-    expect(heads.slice(at, at + 4)).toEqual(["Session", "First Prompt", "Started", "Last Turn"]);
+    expect(heads.slice(at, at + 2)).toEqual(["Session", "First Prompt"]);
+    expect(heads.slice(at + 6, at + 8)).toEqual(["Started", "Last Turn"]);
     expect(h).toContain(`<td class="time">${when("2026-10-31T00:00:00Z")}</td><td class="time">${when("2026-10-31T01:00:00Z")}</td>`);
     const skills = h.slice(h.indexOf('aria-label="Skills"'), h.indexOf("</div>", h.indexOf('aria-label="Skills"')));
     expect(skills).not.toContain("days");

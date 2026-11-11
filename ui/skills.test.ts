@@ -203,7 +203,7 @@ test("a project tag with no cwd counts only when it is a registry key", async ()
 test("the skill detail uses section heads and fit tables", async () => {
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
   expect(detail).toContain('<div class="sh"><h2>Projects</h2>');
-  for (const t of ["<h2>Uses per Day</h2>", "<th>First Prompt Line</th>", "<th>Started by</th>", "<th>Session</th><th>First Prompt Line</th><th>Started</th><th>Project</th><th>Started by</th>", "<th>Session</th><th>Error</th><th>Started</th><th>Project</th>", "<h2>Tools Called After It, in the Same Turn</h2>", 'aria-label="Uses per Day"', 'aria-label="Tools called after it, in the same turn"']) expect(detail).toContain(t);
+  for (const t of ["<h2>Uses per Day</h2>", "<th>First Prompt Line</th>", "<th>Started by</th>", '<th>Session</th><th>First Prompt Line</th><th>Project</th><th>Started by</th><th class="num">Started</th>', "<th>Started</th><th>Session</th><th>Error</th><th>Project</th>", "<h2>Tools Called After It, in the Same Turn</h2>", 'aria-label="Uses per Day"', 'aria-label="Tools called after it, in the same turn"']) expect(detail).toContain(t);
   // The uses chart is a panel: its title, its label and its box come from the frame.
   expect(detail).toMatch(/<aleph-chart key="skills\/aleph:pickup"><section class="card" aria-label="Uses per Day"><div class="sh"><h2>Uses per Day<\/h2>[\s\S]*?<div class="chartbox" role="img" aria-label="Uses per Day: Uses \d+"><\/div>/);
   const f = v.usesFrame({ since: "2026-11-01", perDay: [1, 0, 2] });
