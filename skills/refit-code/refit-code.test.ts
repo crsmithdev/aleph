@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { scan } from "./clones.ts";
 import { accepted, changed, history, holes, rules, wilson } from "./cochange.ts";
 
 const HOOK = join(import.meta.dir, "hook.ts");
@@ -115,4 +116,16 @@ test("a copy the base already had does not block, and an accepted pair does not 
   expect(stop({ hook_event_name: "Stop", session_id: "s6", cwd: root })).toContain("a copy the base did not have");
   write(".refit.json", JSON.stringify({ accepted: [{ copies: ["ui/web.ts", "lib/money.ts", "ui/pay.ts"], reason: "web needs its own" }] }));
   expect(stop({ hook_event_name: "Stop", session_id: "s7", cwd: root })).toBe("");
+});
+
+test("scan throws with jscpd's stderr when jscpd writes no report", () => {
+  write(".jscpd.json", "{}");
+  expect(() => scan(root, "no-such-ref")).toThrow(/wrote no report: [\s\S]*\S/);
+});
+
+test("scan throws with jscpd's stderr when jscpd exits non-zero with a report but no violation", () => {
+  write("lib/money.ts", SETTLE);
+  write("ui/pay.ts", SETTLE);
+  write(".jscpd.json", JSON.stringify({ threshold: 0 }));
+  expect(() => scan(root)).toThrow(/jscpd exited 1: [\s\S]*over threshold/);
 });

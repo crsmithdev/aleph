@@ -18,13 +18,15 @@ export function scan(root: string, base?: string): { clones: Clone[]; violations
   if (!existsSync(join(root, ".jscpd.json"))) return { clones: [], violations: [] };
   const out = mkdtempSync(join(tmpdir(), "refit-"));
   try {
-    Bun.spawnSync([JSCPD, "--reporters", "json", "--output", out, "--silent", ...(base ? ["--baseline-from-ref", base] : []), "."], { cwd: root, stdout: "ignore", stderr: "ignore" });
-    const report = JSON.parse(readFileSync(join(out, "jscpd-report.json"), "utf8"));
+    const run = Bun.spawnSync([process.execPath, JSCPD, "--reporters", "json", "--output", out, "--silent", ...(base ? ["--baseline-from-ref", base] : []), "."], { cwd: root, stdout: "ignore", stderr: "pipe" });
+    const file = join(out, "jscpd-report.json");
+    if (!existsSync(file)) throw new Error(`jscpd exited ${run.exitCode} and wrote no report: ${run.stderr}`);
+    const report = JSON.parse(readFileSync(file, "utf8"));
     const side = (f: any) => ({ name: f.name, start: f.start, end: f.end, ...(f.function ? { function: f.function } : {}) });
-    return {
-      clones: report.duplicates.map((d: any) => ({ a: side(d.firstFile), b: side(d.secondFile), lines: d.lines, isNew: d.isNew === true })),
-      violations: (report.boundaries ?? []).flatMap((b: any) => b.violations.map((v: any) => ({ rule: b.name, copy: side(v.copy), owner: side(v.protected) }))),
-    };
+    const violations = (report.boundaries ?? []).flatMap((b: any) => b.violations.map((v: any) => ({ rule: b.name, copy: side(v.copy), owner: side(v.protected) })));
+    // jscpd exits 1 when it finds a boundary violation; any other failure is an error.
+    if (run.exitCode !== 0 && !violations.length) throw new Error(`jscpd exited ${run.exitCode}: ${run.stderr}`);
+    return { clones: report.duplicates.map((d: any) => ({ a: side(d.firstFile), b: side(d.secondFile), lines: d.lines, isNew: d.isNew === true })), violations };
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
