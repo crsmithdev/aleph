@@ -3,10 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
-import { currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
+import { currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, spends, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
 import { putRun } from "../jobs/lib/records/record.ts";
+import { memory, use } from "../lib/langfuse.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -193,6 +194,24 @@ test("a snapshot dated after the clock does not skew currentFit() or fit()", asy
     expect(await currentFit()).toEqual(base);
     expect(readSnapshots().some((s) => s.at === future.at)).toBe(false);
   } finally {
+    if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
+  }
+});
+
+test("a Langfuse trace on the session of a ledger run is not counted twice", async () => {
+  const keep = process.env.ALEPH_JOBS_DIR;
+  process.env.ALEPH_JOBS_DIR = join(dir, "runs");
+  const at = new Date(NOW - 2 * H).toISOString();
+  mkdirSync(join(dir, "runs", "r0"), { recursive: true });
+  putRun("r0", { n: 1, job: "j", session: "s1", model: "opus", cost: 6, started: at, ended: at } as any);
+  const trace = (session: string) => ({ id: `t-${session}`, sessionId: session, timestamp: at, totalCost: 6, metadata: { model: "opus" } });
+  use(memory({ traces: [trace("s1")], observations: [] }));
+  try {
+    expect((await spends(NOW - 6 * H)).reduce((n, s) => n + s.cost, 0)).toBe(6);
+    use(memory({ traces: [trace("s1"), trace("s2")], observations: [] }));
+    expect((await spends(NOW - 6 * H)).reduce((n, s) => n + s.cost, 0)).toBe(12);
+  } finally {
+    use(null);
     if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
   }
 });

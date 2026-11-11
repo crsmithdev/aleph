@@ -86,7 +86,7 @@ export function openRun(o: Opening): AgentRun {
       stdout: log, stderr: runFile(folder, "stderr.log"), limit: roleSeconds(o.role.toUpperCase(), o.seconds),
     });
     prev = { input: sent, session: r.session };
-    if (o.role === "chat" && !o.session && r.session) patchRun(basename(folder), { session: r.session });
+    if (!o.session && r.session) patchRun(basename(folder), { session: r.session });
     if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; patchRun(basename(folder), { cost: spent }); }
     if (r.cause?.kind === "credit") credit = true;
     const failure = r.step.stalled ? stallReason() : r.step.timedOut ? `${o.who} timed out` : r.step.code !== 0 ? `${o.who} exited ${r.step.code}` : undefined;

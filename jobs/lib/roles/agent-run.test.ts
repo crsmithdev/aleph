@@ -159,3 +159,10 @@ test("an agent gets no API key and no CLAUDECODE, so it bills the subscription",
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.CLAUDECODE;
 });
+
+test("a non-chat run records the session of its reply on its run", async () => {
+  fake(`echo '{"type":"result","is_error":false,"session_id":"s1","result":"ok"}'`);
+  const run = openRun(opening);
+  await run.ask("x");
+  expect(getRun(basename(run.folder))!.session).toBe("s1");
+});

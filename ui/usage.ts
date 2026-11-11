@@ -198,18 +198,18 @@ export function share(f: Fit | null, cost: number | undefined, model?: string): 
 }
 
 /** The dollars aleph saw spent since `from`: the ledger's runs, and Langfuse sessions the ledger does not price. */
-async function spends(from: number): Promise<Spend[]> {
+export async function spends(from: number): Promise<Spend[]> {
   const out: Spend[] = [];
-  const jobIds = new Set<string>();
+  const sessions = new Set<string>();
   for (const { run } of allRuns()) {
-    if (run.job) jobIds.add(run.job);
+    if (run.session) sessions.add(run.session);
     const at = Date.parse(run.ended ?? run.started);
     if (run.cost && at >= from) out.push({ at, model: run.model ?? "unknown", cost: run.cost });
   }
   try {
     const floor = Math.floor(from / HOUR) * HOUR;
     for (const t of (await list(need(), "traces", { from: new Date(floor) }, "usage")).rows) {
-      if (!t.sessionId || jobIds.has(t.sessionId) || !(t.totalCost > 0)) continue;
+      if (!t.sessionId || sessions.has(t.sessionId) || !(t.totalCost > 0)) continue;
       const at = Date.parse(t.timestamp);
       if (at >= from) out.push({ at, model: typeof t.metadata?.model === "string" ? t.metadata.model : "unknown", cost: t.totalCost });
     }
