@@ -26,7 +26,8 @@ In a live session, `/skill-doctor` shows each skill's cost per turn and the skil
 A line is load when one holds:
 
 - it is a **cache** of a lookup that costs one command or one file read (the agent can find it by looking);
-- only some branches need it, and it is not behind a pointer;
+- it does not apply to every task, and it is not behind a pointer (an always-loaded file holds only what every task
+  needs: the project in one line, non-standard commands, rules with no exception);
 - it says the same as another always-loaded line;
 - it is a model-invoked description of a skill that nothing but the user invokes.
 

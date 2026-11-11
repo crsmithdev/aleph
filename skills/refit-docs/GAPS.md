@@ -14,6 +14,9 @@ Is everything a user needs documented? Incompleteness is the most frequent doc i
   the content of GitHub README files", 2018, found many READMEs without purpose or status).
 - **Errors.** An error message a user sees with no doc of its cause or fix.
 - **Preconditions.** A how-to that needs a service, a key or a version it does not name.
+- **Reader questions.** Write 15 to 20 "How do I..." questions a user of this project asks (install, configure,
+  the main tasks, errors, integration). Mark each answered (a doc answers it with a working example), partial, or
+  unanswered. This finds gaps from the reader's side; `refs.ts` finds them from the code's side.
 
 ## Proof
 

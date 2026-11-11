@@ -47,7 +47,8 @@ the rediscovery result. For check 7, the user says the tool is unwanted. A `cont
 
 Delete a no-op, a discoverable fact or scaffolding whole. Rewrite emphasis as "Use X when Y". Give a vague bar a
 command, path or number. Add the reason in a clause. State a rule's scope. Move a hard rule into a hook, a deny
-rule or CI, then delete the line. For a contradiction, keep the rule the user decided and delete the other.
+rule or CI, then delete the line. For a contradiction, quote both lines to the user and ask which wins, or whether
+each holds under a condition; then delete the loser, or state both conditions.
 
 ## Hold
 

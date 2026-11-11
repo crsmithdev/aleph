@@ -8,7 +8,8 @@ description: >
   to improve, lint, audit, optimize or clean up agent files or skills, check
   they will be followed, cut context load, run agnix, make a repo
   agent-ready, before you add a skill, a CLAUDE.md line or a CLI command
-  (check), or when an agent had to guess or look up how to use the repo.
+  (check), when an agent had to guess or look up how to use the repo, or to
+  record what a session learned in CLAUDE.md (learn).
 ---
 
 # Refit agents
@@ -53,6 +54,7 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 | `act` | The fix of each finding the user picks | After a retro |
 | `lint` | agnix, `load.ts` and `content.ts` only, no model judgment, report in the terminal | A quick pass, or before a commit that touches agent files |
 | `check` | Each new agent file, line, skill, hook or CLI command in a plan, spec or diff, under every lens | Before or during a build |
+| `learn` | What a session learned, routed to the code, an agent file or the vault, each line gated by `check` | At the end of a session, or when the user asks to update CLAUDE.md |
 
 ## Retro
 
@@ -99,6 +101,20 @@ the always-loaded total before and after.
 3. **Judge.** Each item gets one verdict: **keep**, **move** (name where on the ladder), **merge** (name the
    file that already says it), **cut** (no branch needs it), or **fix** (name the lens and the change). Done
    when every item has a verdict.
+
+## Learn
+
+1. **Reflect.** List each place the session lost a turn: a lookup, a guess that failed, a correction from the
+   user, a command found by trial, a gotcha. For a past session, read its traces (Langfuse in aleph) or
+   `vault compile`. Done when each item names the turn it cost.
+2. **Route.** Each item goes to one place: the **code** when it can carry it (a usage line, an error message, a
+   script, a hook: an **interface** finding); the **vault** (`aleph:vault`) when it is about the user or holds
+   across repos; else an **agent file**: the root memory file when every task needs it, a nested `CLAUDE.md` or a
+   skill when only some do. Done when each item has one place.
+3. **Gate.** Run `check` on each proposed line: cut it when the agent can find it by looking, write it as a plain
+   imperative with its reason, and make sure it contradicts no line in context.
+4. **Propose.** Show each change as a diff with a one-line why. Apply only what the user approves; code changes go
+   on a branch as usual. Done when each item is applied, declined, or filed as an issue.
 
 ## Holds
 

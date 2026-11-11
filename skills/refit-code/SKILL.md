@@ -2,7 +2,8 @@
 name: refit-code
 description: >
   Refit a codebase: find where it does one thing more than one way, where a
-  module is shallow or leaks, where code is bigger than its job or dead, where
+  module is shallow or leaks, where code is bigger than its job, dead or does
+  work it does not need, where
   files and directories are not where a reader looks, and sweep or polish the
   repo. Use when asked to improve, review, clean up, simplify, deslop or tidy code,
   find duplication, drift, dead code or architecture problems, reorganize or
@@ -17,7 +18,7 @@ interface, depth, seam, adapter, leverage, locality) exactly.
 
 # Refit code
 
-One skill for the quality of a codebase. Six **lenses** each ask one question of the code; the modes below
+One skill for the quality of a codebase. Seven **lenses** each ask one question of the code; the modes below
 decide where and how they run. Read `PRINCIPLES.md`, `GLOSSARY.md`, `docs/naming.md` and `docs/adr/` first when
 they exist: they name owners and settled decisions. Read `.refit.json` at the repo root when it exists: its
 `accepted` list holds what the repo keeps on purpose, each `{"concept", "copies": ["file[:line]", ...],
@@ -32,10 +33,11 @@ they exist: they name owners and settled decisions. Read `.refit.json` at the re
 | **seams** | Does code reach past a module's interface? | [SEAMS.md](SEAMS.md) |
 | **slop** | Is this code bigger than its job? | [SLOP.md](SLOP.md) |
 | **dead** | Does this code run at all? | [DEAD.md](DEAD.md) |
+| **waste** | Does this code do work it does not need? | [WASTE.md](WASTE.md) |
 | **layout** | Are files and directories where a reader looks for them? | [LAYOUT.md](LAYOUT.md) |
 
 Where they meet: a pass-through module is **depth**, not slop; code that never runs is **dead**, code that runs
-but is too big is **slop**; once one-way merges copies, the owner's interface is a **depth** question; a seams
+but is too big is **slop**, code that runs more than it needs is **waste**; once one-way merges copies, the owner's interface is a **depth** question; a seams
 leak is often a missing depth module; the dead part of a partly dead file is **dead**, and where its live rest
 goes is **layout**; a file in the wrong place by the repo's own majority is the **sweep**, and whether that
 convention is right is **layout**. Report a candidate under one lens only.
@@ -78,7 +80,7 @@ one subagent over the whole repo, with the full seed. Each returns
 
 ## Act
 
-For each finding the user picks, in the order lowest risk first: dead, slop, one-way, seams, depth, then layout, so that files move once
+For each finding the user picks, in the order lowest risk first: dead, slop, one-way, waste, seams, depth, then layout, so that files move once
 their contents are final.
 
 1. Make the lens's fix. Delete or change whole: the code, its tests, fixtures, exports, docs entry and
@@ -117,6 +119,7 @@ tool.
 | slop | An impossible fallback or a needless assertion | unchecked | typescript-eslint, not yet wired |
 | slop | An empty or swallowing `catch`, an `any` | unchecked | a shrink-only ratchet, not yet wired |
 | dead | An export or file nothing uses | unchecked | knip, not yet wired |
+| waste | A path a user or test waits on grows slower | unchecked | a timing test with a ceiling, not yet wired |
 | depth | A one-line pass-through | model | `check` |
 | layout | A new file outside the directory of its callers and kind | model | `check` |
 | layout | An import between directories that the tree does not allow | unchecked | dependency-cruiser rules, not yet wired |
