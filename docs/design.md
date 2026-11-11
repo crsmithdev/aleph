@@ -78,11 +78,13 @@ Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, an
 |---|---|
 | a tone for a state: `--stuck` on a failed job | a tone for decoration |
 | `--series-*` for roles, the same role in the same colour on every chart | a new colour per chart |
+| an eighth key folded into `Other` | a colour made for an eighth key |
+| a value or a label in `--ink` next to its swatch | a value in the colour of its series |
 | text on its own `-bg`: `--need` on `--need-bg` | `--need` on `--stuck-bg` |
 
 #### Contrast
 
-The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` tests the stuck pair.
+The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` tests the stuck pair. When you change a data colour, run `validate_palette.js` from the `dataviz` skill on the seven series colours, once with `--mode light --surface "#FFFFFF"` and once with `--mode dark --surface "#292D3E"`. Deviations lists the checks that fail now.
 
 | Pair | Light | Dark |
 |---|---|---|
@@ -525,7 +527,7 @@ A table shows items that have the same columns.
 
 A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 
-**Use:** for a value over time, or for values by category. **Not for:** a share of one whole; use a meter.
+**Use:** for a value over time, or for values by category. **Not for:** a share of one whole; use a meter. A single value; use a metric card.
 
 | Helper | Reference |
 |---|---|
@@ -544,7 +546,10 @@ A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 - Do not write the title. The frame gives it.
 - Set `measure.unit` to `count`, `usd` or `seconds`. The unit sets the format of the axis and the tooltip.
 - Set `measure.agg` to `sum` for a flow, and to `max` for a level. A flow opens as Columns. A level opens as Area.
-- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`. For a state, set `color` to its tone: `run`, `done`, `need` or `stuck`. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours. Keep the colour of a key the same in all windows.
+- Show one measure on one value axis. For two measures, use two panels.
+- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to its tone: `run`, `done`, `need` or `stuck`. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
+- Keep the colour of a key the same in all windows. If a key can have no value in a window, set `color` on each key, because the keys after it move up one colour.
+- Show at most seven keys. Fold the rest into one key, `Other`.
 - Show a legend. When the frame has one key and the title names it, set `legend: false`.
 - When there is no data, the frame shows its `empty` line.
 - When the data did not rebuild, give `error` and `since`. The panel tells how old the data is.
@@ -1224,6 +1229,8 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Empty, loading and error lines written inline | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/session.js`, `ui/views/ideas.js` | follow-up |
 | Monitor findings built three ways; a feed row and a timeline event copied | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/issues.js` | follow-up |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
+| Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
+| Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | Charts outside the chart panel: the Agent Time bar, the recall histogram, the session waterfall | `ui/views/speed.js`, `ui/views/memory.js`, `ui/views/session.js` | follow-up |
 | One metric card written by hand (Backends) | `ui/views/factory-agents.js` | follow-up |
 | A table written by hand | `ui/views/memory.js` | follow-up |
