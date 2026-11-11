@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "../transitions/factory.ts";
@@ -46,11 +46,20 @@ test("a rescue that throws gives a failed event whose note holds the failure", a
 
 test("a run the API refused for credit waits: the rescue starts no rerun, recheck or drop, and writes no Ask", async () => {
   const id = newIssue();
-  mk(`fac-${id}`, "build", "failed", { cause: "credit", reason: "API Error: 402 This request would exceed your available credits" });
+  mk(`fac-${id}`, "build", "failed", { cause: "credit", reason: "API Error: 402 This request would exceed your available credits", ended: "2026-06-01T11:58:00.000Z" });
   const f = fakes();
-  await dispatchIssues(f.start, undefined, f.rescue);
+  setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+  try { await dispatchIssues(f.start, undefined, f.rescue); } finally { setSystemTime(); }
   expect(f.calls).toEqual([]);
   expect(ask(id)).toBeNull();
+});
+
+test("a run the API refused for credit that ended long ago is started again by the dispatch", async () => {
+  const id = newIssue();
+  mk(`fac-${id}`, "build", "failed", { cause: "credit", reason: "API Error: 402", ended: "2026-01-01T00:00:00.000Z" });
+  const f = fakes();
+  await dispatchIssues(f.start, undefined, f.rescue);
+  expect(f.calls).toEqual([`start fac-${id}`]);
 });
 
 test("a spec question run, then the director's answer: the job keeps its Ask or is started again, never open with neither", async () => {

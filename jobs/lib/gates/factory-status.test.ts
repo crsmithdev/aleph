@@ -125,3 +125,11 @@ test("a land that failed on a lock does not hide the job's passed build", () => 
   expect(f.open).toBe("passed");
   expect(f.job).not.toBeNull();
 });
+
+test("an open job whose last run ended with the API credit error holds the issue for the credit wait, then the issue is ready", () => {
+  const id = newIssue();
+  mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN), cause: "credit", reason: "API Error: 402" });
+  const decide = (at: number) => issueDecision({ ...issueFacts(loadRegistry().fac, readList({ key: "fac" })!.items.find((i) => i.id === id)!, allJobs(), at), done: () => false }).kind;
+  expect(decide(NOW)).toBe("credit-wait");
+  expect(decide(NOW + 6 * MIN)).toBe("ready");
+});

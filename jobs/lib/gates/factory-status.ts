@@ -444,7 +444,9 @@ export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null 
 
 /** The facts of an issue that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
 export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
-  const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat(), open = openJob(name, null, jobs);
+  const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat();
+  // A job whose last run ended with the API credit error is not open work: the credit-wait gate holds the issue for its wait, then it starts again.
+  const found = openJob(name, null, jobs), open = found && policyOf(causeOf(record.counting(found).run)).waitMs > 0 ? null : found;
   return {
     name, item,
     open: open ? record.counting(open).run.condition : null,
