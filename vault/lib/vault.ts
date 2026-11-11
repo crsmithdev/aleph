@@ -8,6 +8,7 @@ import { basename, dirname, join, relative } from "node:path";
 import { today } from "../../lib/day.ts";
 import { vaultDir } from "../../lib/paths.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
+import { probe } from "../../lib/git.ts";
 
 export const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -439,8 +440,8 @@ export function renameScope(notes: Note[], from: string, to: string): { note: No
 
 /** The scope of a session in `cwd`: the main checkout's folder name, so a worktree at `<repo>/.worktrees/<name>` takes the scope of `<repo>`. */
 export function repoScope(cwd: string): string {
-  const git = Bun.spawnSync(["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"], { stdout: "pipe", stderr: "ignore" });
-  return git.exitCode === 0 ? basename(dirname(git.stdout.toString().trim())) : basename(cwd);
+  const common = probe(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir");
+  return common.ok ? basename(dirname(common.out)) : basename(cwd);
 }
 
 /** The longest `core:` line, in characters. */

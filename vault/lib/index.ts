@@ -10,6 +10,7 @@ import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { screenWords as words, type Note } from "./vault.ts";
+import { probe } from "../../lib/git.ts";
 
 /** The reciprocal rank fusion constant. */
 const K = 60;
@@ -25,8 +26,8 @@ const aliasesOf = (n: Note): string[] => {
 };
 
 function head(root: string): string {
-  const p = Bun.spawnSync(["git", "-C", root, "rev-parse", "HEAD"], { stdout: "pipe", stderr: "ignore" });
-  return p.exitCode === 0 ? p.stdout.toString().trim() : "";
+  const p = probe(root, "rev-parse", "HEAD");
+  return p.ok ? p.out : "";
 }
 
 /** The index for `notes`, rebuilt first when the vault HEAD moved. */

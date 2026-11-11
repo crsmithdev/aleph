@@ -7,13 +7,14 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { probe } from "../../lib/git.ts";
 
 /** Key `<tree>\0HEAD` holds the HEAD sha; key `<tree>\0<path>` holds a hash of that dirty file. */
 export type Snapshot = Record<string, string>;
 
 function git(cwd: string, ...args: string[]): string | null {
-  const proc = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
-  return proc.exitCode === 0 ? proc.stdout.toString() : null;
+  const r = probe(cwd, ...args);
+  return r.ok ? r.out : null;
 }
 
 function worktreesOf(cwd: string): string[] {

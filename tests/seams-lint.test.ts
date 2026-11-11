@@ -44,3 +44,7 @@ test("the issue store reads from jobs/ only an issue's Ask in its job record", (
 test("only lib/day.ts writes a date as toISOString().slice(0, 10)", () => {
   expect(offenders(/toISOString\(\)\.slice\(0, 10\)/, ["lib/day.ts"])).toEqual([]);
 });
+
+test("only lib/git.ts and skills/improve/ spawn git directly", () => {
+  expect(offenders(/spawnSync\(\["git"/, ["lib/git.ts"]).filter((f) => !f.startsWith("skills/improve/"))).toEqual([]);
+});

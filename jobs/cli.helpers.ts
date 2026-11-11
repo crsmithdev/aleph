@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { probe } from "../lib/git.ts";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { allRuns, type Run } from "./lib/records/ledger.ts";
@@ -184,7 +185,7 @@ export const state = (run: string): any => getRun(run) ?? (() => { throw new Err
 export const stateNow = (run: string): { condition: string } => getRun(run) ?? { condition: "" };
 export const file = (run: string, f: string) => readFileSync(join(jobsDir, run, f), "utf8");
 export const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
-export const branchExists = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `job/${name}`]).exitCode === 0;
+export const branchExists = (name: string) => probe(repo, "rev-parse", "--verify", "-q", `job/${name}`).ok;
 
 // The reviewer: it keeps its prompt, then answers as the prompt's item asks (REVIEW: in the issue) with structured output, else passes.
 // REVIEW:none gives text with no structured output.

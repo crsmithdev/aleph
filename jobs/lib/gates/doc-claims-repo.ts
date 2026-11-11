@@ -14,6 +14,7 @@ import { spoolDir } from "../../../hooks/lib/handshake.ts";
 import { classifyEnvironment, GH_USER_CMD } from "../../../lib/env.ts";
 import { DEFAULT_WARN } from "../../../hooks/lib/context.ts";
 import { homedir, tmpdir } from "node:os";
+import { probe } from "../../../lib/git.ts";
 
 export const ROOT = resolve(import.meta.dir, "..", "..", "..");
 
@@ -25,8 +26,8 @@ export function repoDocs(root = ROOT): Doc[] {
 
 /** The repo's files: git's list when the root is a checkout, else a scan without node_modules. */
 function repoFiles(root: string): string[] {
-  const g = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root, stdout: "pipe", stderr: "ignore" });
-  if (g.exitCode === 0) return g.stdout.toString().split("\0").filter(Boolean);
+  const g = probe(root, "ls-files", "-z");
+  if (g.ok) return g.out.split("\0").filter(Boolean);
   return [...new Bun.Glob("**/*").scanSync({ cwd: root })].filter((f) => !f.includes("node_modules"));
 }
 

@@ -14,6 +14,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { handoffsDir } from "../lib/paths.ts";
 import { repoScope } from "../vault/lib/vault.ts";
+import { probe } from "../lib/git.ts";
 
 const input = JSON.parse((await Bun.stdin.text()) || "{}");
 if (process.env.ALEPH_JOB_ID || process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith("sdk")) process.exit(0);
@@ -41,9 +42,8 @@ const when = (path: string) => {
 const summary = (text: string) => text.match(/^summary:\s*(.+)$/m)?.[1].trim() ?? "no summary line";
 
 const short = handoffs.map((h) => `A handoff ${h.name ? `named ${h.name}` : "for this project"} waits at ${h.path}: ${summary(h.text)}. On the user's first prompt, run the aleph:pickup skill ${h.name ? `with the argument ${h.name}` : "with no argument"} before anything else, unless that prompt is plainly about other work; then do that work and say in one line that the handoff still waits.`).join("\n");
-const git = (...args: string[]) => Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-const status = git("status");
-const gitPart = status.exitCode === 0 ? `\n\ngit status:\n${status.stdout.toString().trim()}\n\ngit log -5:\n${git("log", "-5").stdout.toString().trim()}` : "";
+const status = probe(cwd, "status");
+const gitPart = status.ok ? `\n\ngit status:\n${status.out}\n\ngit log -5:\n${probe(cwd, "log", "-5").out}` : "";
 const texts = handoffs.map((h) => `${h.path}:\n\n${h.text.trim()}`).join("\n\n");
 const full = `${short}\n\nThe handoff text follows. The pickup skill needs no Read of the file.\n\n${texts}${gitPart}`;
 const additionalContext = full.length > 10000 ? short : full;

@@ -13,6 +13,7 @@
  */
 import { resolve } from "node:path";
 import { GH_USER_CMD } from "../lib/env.ts";
+import { probe } from "../lib/git.ts";
 
 try {
   const input = JSON.parse(await Bun.stdin.text());
@@ -30,8 +31,7 @@ try {
   /** The owner of a github.com remote URL, or null. */
   function remoteOwner(dir: string | null): string | null {
     if (!dir) return null;
-    const proc = Bun.spawnSync(["git", "-C", dir, "remote", "get-url", "origin"], { stdout: "pipe", stderr: "ignore" });
-    return proc.stdout.toString().match(/github\.com[:/]([^/\s]+)\//)?.[1] ?? null;
+    return probe(dir, "remote", "get-url", "origin").out.match(/github\.com[:/]([^/\s]+)\//)?.[1] ?? null;
   }
 
   /** The owner a write in `part` goes to, "" for a read, or null when the target is unknown. */

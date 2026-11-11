@@ -23,6 +23,7 @@ import { summary, type Wk } from "./usage.ts";
 import { card, stageOf } from "./issue.ts";
 import { verdict } from "../lib/status-words.ts";
 import { timer } from "../jobs/lib/infra/systemd.ts";
+import { probe } from "../lib/git.ts";
 
 const logged = new Set<string>();
 
@@ -173,8 +174,8 @@ export function githubBase(url: string): string | null {
 function commitUrl(repo: Repo | undefined, commit: string | undefined, bases: Map<string, string | null>): string | undefined {
   if (!repo || !commit) return undefined;
   if (!bases.has(repo.key)) {
-    const p = Bun.spawnSync(["git", "-C", repo.path, "remote", "get-url", "origin"], { stdout: "pipe", stderr: "ignore" });
-    bases.set(repo.key, p.exitCode === 0 ? githubBase(p.stdout.toString()) : null);
+    const p = probe(repo.path, "remote", "get-url", "origin");
+    bases.set(repo.key, p.ok ? githubBase(p.out) : null);
   }
   const base = bases.get(repo.key);
   return base ? `${base}/commit/${commit}` : undefined;
@@ -195,9 +196,9 @@ function landedTrailers(repo: Repo | undefined, commit: string | undefined): { k
   if (hit) return hit;
   const missed = misses.get(id);
   if (missed !== undefined && Date.now() - missed < MISS_MS) return [];
-  const p = Bun.spawnSync(["git", "-C", repo.path, "log", "-1", "--format=%(trailers:only,unfold)", commit], { stdout: "pipe", stderr: "ignore" });
-  if (p.exitCode !== 0) { misses.set(id, Date.now()); return []; }
-  const out = p.stdout.toString().split("\n").flatMap((l) => {
+  const p = probe(repo.path, "log", "-1", "--format=%(trailers:only,unfold)", commit);
+  if (!p.ok) { misses.set(id, Date.now()); return []; }
+  const out = p.out.split("\n").flatMap((l) => {
     const i = l.indexOf(":");
     return i > 0 ? [{ key: l.slice(0, i).trim(), value: l.slice(i + 1).trim() }] : [];
   });

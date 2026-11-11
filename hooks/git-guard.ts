@@ -18,6 +18,7 @@ import { basename, dirname, join, resolve } from "node:path";
 try {
   const { storeDir } = await import("../issues/lib/store.ts");
   const { vaultDir } = await import("../vault/lib/vault.ts");
+  const { probe } = await import("../lib/git.ts");
 
   const input = JSON.parse(await Bun.stdin.text());
   const filePath: string | undefined = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
@@ -35,8 +36,8 @@ try {
   while (!existsSync(dir) && dir !== dirname(dir)) dir = dirname(dir);
 
   function git(...args: string[]): string | null {
-    const proc = Bun.spawnSync(["git", "-C", dir, ...args], { stdout: "pipe", stderr: "ignore" });
-    return proc.exitCode === 0 ? proc.stdout.toString().trim() : null;
+    const r = probe(dir, ...args);
+    return r.ok ? r.out.trim() : null;
   }
 
   // A hand edit of the store races every aleph issue commit on its origin/main.

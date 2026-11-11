@@ -17,6 +17,7 @@ import type { Finding } from "./lib/scan.ts";
 
 try {
   const { scanDiff, scanFile } = await import("./lib/scan.ts");
+  const { probe } = await import("../lib/git.ts");
 
   const input = JSON.parse(await Bun.stdin.text());
   const command: string = input.tool_input?.command ?? "";
@@ -43,15 +44,15 @@ try {
   const dir = paths.includes(null) ? null : resolve(cwd, ...(paths as string[]));
 
   // A command that names a directory the hook cannot read could commit anything there. With no directory named, a cwd outside a repo has nothing to commit.
-  const inRepo = dir !== null && Bun.spawnSync(["git", "-C", dir, "rev-parse", "--git-dir"], { stdout: "ignore", stderr: "ignore" }).exitCode === 0;
+  const inRepo = dir !== null && probe(dir, "rev-parse", "--git-dir").ok;
   if (!inRepo) {
     if (named) deny(`secret-scan: cannot find the repo this commit runs in (${words.join(", ")}), so it cannot be scanned. Use a literal path, or prefix the command with ALEPH_SKIP_SCAN=1.`);
     process.exit(0);
   }
 
   function git(...args: string[]): string {
-    const proc = Bun.spawnSync(["git", "-C", dir!, ...args], { stdout: "pipe", stderr: "ignore" });
-    return proc.exitCode === 0 ? proc.stdout.toString() : "";
+    const r = probe(dir!, ...args);
+    return r.ok ? r.out : "";
   }
 
   const findings: Finding[] = scanDiff(git("diff", "--cached", "-U0", "--no-color"));

@@ -53,6 +53,11 @@ export function gitWith(o: { env?: Record<string, string>; stdin?: string | Uint
   }
 }
 
+/** `git` in `cwd`, not ok (and no throw) when `cwd` does not exist. */
+export function probe(cwd: string, ...args: string[]): { ok: boolean; out: string } {
+  return existsSync(cwd) ? git(cwd, ...args) : { ok: false, out: "" };
+}
+
 /** The pause between two tries of a step that met a held git lock: `sleep` waits, Bun.sleepSync unless the caller passes Bun.sleep and awaits it. A test replaces it to free the lock. */
 export const lockRetry = { pause: (sleep: (ms: number) => unknown = Bun.sleepSync): unknown => sleep(100 + Math.random() * 200) };
 
