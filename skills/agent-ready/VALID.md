@@ -39,7 +39,8 @@ Fix by hand. agnix's `--fix` only on one file, after `--dry-run --show-fixes` on
 
 ## Hold
 
-`agnix -t claude-code` (with `--strict` once the repo is clean) in a pre-commit hook or CI. A `.agnix.toml`
+`agnix -t claude-code` (with `--strict` once the repo is clean) in `.githooks/pre-commit`, which runs it on the
+staged agent files and refuses the commit when agnix fails or is missing. A `.agnix.toml`
 records the rules the repo turns off, each with its reason.
 
 ## Check

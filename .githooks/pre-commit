@@ -1,0 +1,7 @@
+#!/bin/sh
+# Run agnix on the staged agent files: each CLAUDE.md, each AGENTS.md and each markdown file under skills/.
+files=$(git diff --cached --name-only --diff-filter=ACMR -z -- '*CLAUDE.md' '*AGENTS.md' 'skills/*.md' | tr '\0' '\n' |
+  grep -E '(^|/)(CLAUDE|AGENTS)\.md$|^skills/.*\.md$')
+[ -z "$files" ] && exit 0
+command -v agnix >/dev/null || { echo "pre-commit: agnix is not on PATH; install it to commit agent files" >&2; exit 1; }
+echo "$files" | xargs -d '\n' agnix -t claude-code

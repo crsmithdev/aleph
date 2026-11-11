@@ -1,0 +1,7 @@
+# Each rule the repo turns off has its reason here.
+
+# XP-003 reads a path to the user's own data (~/.claude/, ~/.aleph/) as a portability problem. It is not one in a
+# file that only Chris's machine loads (VALID.md). The identity files load only there.
+[[overrides]]
+paths = ["identity/**"]
+disabled_rules = ["XP-003"]

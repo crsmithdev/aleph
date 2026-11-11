@@ -100,7 +100,7 @@ asks it) or **unchecked** (only a retro finds it). A finding that comes back mov
 
 | Lens | Hold | Kind | Tool |
 |---|---|---|---|
-| valid | An agent file that breaks its spec | unchecked | `agnix -t claude-code` in a pre-commit hook or CI, not yet wired |
+| valid | An agent file that breaks its spec | tool | `agnix -t claude-code` in `.githooks/pre-commit` |
 | load | Always-loaded tokens grow past the last total | unchecked | `load.ts` total as a shrink-only ratchet, not yet wired |
 | triggers | Two descriptions that claim one branch | model | `check` |
 | drift | A command, flag or path in an agent file that does not resolve | unchecked | `aleph doc-claims` in aleph; elsewhere a test that runs each named command |
