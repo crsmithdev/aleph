@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { chartKey, FRAMES, redirect, renderFactoryJobs, slowestFrame, stripFrame, trendFrame } from "./views/factory-jobs.js";
 // @ts-ignore plain JS shared with the page
-import { option } from "./chart.js";
+import { option, title } from "./chart.js";
 // @ts-ignore plain JS shared with the page
 import { wireJobs } from "./views/jobs.js";
 
@@ -49,7 +49,7 @@ test("three chart panels in one row replace the old cards, each says its data fo
   const row = lead.match(/<div class="trio">(.*?)<div class="pair">/s)![1];
   expect([...row.matchAll(/<aleph-chart key="([^"]*)"/g)].map((m) => m[1])).toEqual(["factory/jobs/trend", "factory/jobs/strip", "factory/jobs/slowest"]);
   expect([...row.matchAll(/class="chartbox"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual([
-    "Lead Time: p50 and p90 by Day: p90 peak 50m 00s, p50 peak 16m 40s",
+    "Lead Time by Day: p90 peak 50m 00s, p50 peak 16m 40s",
     "Lead Time: Time per Issue: landed peak 18m 20s",
     "Slowest 10: Intake peak 1m 40s, Queue peak 10m 00s, Build peak 1h 06m, Land peak 3m 20s",
   ]);
@@ -58,14 +58,16 @@ test("three chart panels in one row replace the old cards, each says its data fo
   expect(queue).toContain("<p>From intake to the first agent job. This includes waits for a slot or for another issue.</p>");
   expect(row).toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
   expect(queue).toContain("Queue peak 10m 00s");
-  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time: p50 and p90 by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
-  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time: p50 and p90 by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
+  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
+  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
 });
 
 test("each Jobs frame carries the stage's data, its colours and the issue link of its rows", () => {
   const t = trendFrame(D, "queue", "Queue", "From intake to the first agent job.");
   expect(t.rows.map((r: any) => [r.at, r.p50, r.p90])).toEqual([[D.buckets[0].at, 200, 900], [D.buckets[1].at, 100, 400]]);
   expect(t.by.keys.map((k: any) => [k.key, k.color])).toEqual([["p90", "hot"], ["p50", "run"]]);
+  // The measure is the stage alone, so the title takes the `<measure> by <dimension>` form and the legend names the perciles.
+  expect([title(t), t.by.keys.map((k: any) => k.name)]).toEqual(["Queue by Day", ["p90", "p50"]]);
   // The p50 is not a part of the p90, so the frame opens as two lines rather than stacked areas.
   expect([t.form, option(t, t.form, T).series.map((s: any) => s.stack ?? null)]).toEqual(["lines", [null, null]]);
   // A bucket with no time is 0, so the level still has a point.

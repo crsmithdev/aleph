@@ -27,7 +27,7 @@ const NONE = "No time to plot in this window.";
 
 /** The p50 and p90 of a stage by bucket, as two lines: a bucket with no time is 0. */
 export const trendFrame = (d, key, name, text) => ({
-  measure: { name: `${name}: p50 and p90`, unit: "seconds", agg: "max" },
+  measure: { name: name, unit: "seconds", agg: "max" },
   over: { kind: "time", window: d.window },
   by: { name: bucketOf(d)[0].toUpperCase() + bucketOf(d).slice(1), keys: [{ key: "p90", name: "p90", color: "hot" }, { key: "p50", name: "p50", color: "run" }] },
   rows: d.buckets.map((b) => ({ at: b.at, p90: b.p90?.[key] ?? 0, p50: b[key] ?? 0 })),
