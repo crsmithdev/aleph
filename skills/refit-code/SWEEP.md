@@ -7,8 +7,8 @@ That line runs through tests and docs, so place each one by where its check fall
 
 - A test whose subject no longer exists → **sweep**. The path does not resolve.
 - A test that duplicates three others → the **one-way** lens. That is a judgment.
-- A doc naming a command that no longer runs → **sweep**. The command exits non-zero.
-- A doc describing a design the code outgrew → the **one-way** lens (doc copies), or `/aleph:docs-writing`.
+- A doc naming a path, command or flag that no longer resolves, or describing a design the code outgrew →
+  [refit-docs](../refit-docs/SKILL.md) (its **true** and **copies** lenses).
 
 ## Tracked and untracked
 
@@ -30,13 +30,11 @@ lint from the manifest).
 | Scratch and one-off output | `*.log`, `*.tmp`, `*.bak`, `*.orig`, `.DS_Store`, dated or numbered names, `test2.ts`, `foo-copy.py` | No reference in the tree, no manifest or CI entry |
 | Ignore-rule gaps | A **tracked** file matching a build-output or machine-local shape | The file rebuilds, or it is local to one machine |
 | Orphaned fixtures and tests | For each test and fixture, resolve the subject it names | The subject is absent from the tree **and** from `HEAD` |
-| Stale doc references | Every path, command and flag a doc names | The path resolves; the command runs; the flag appears in `--help` |
 | Misplaced files | A file whose kind disagrees with its directory | The repo's own convention: the majority of that kind live elsewhere |
 
-Two of these need a stated threshold rather than a guess. For **misplaced files** the convention is the
-majority: if eleven hooks live in `hooks/` and one lives in `bin/`, the one is misplaced; a two-versus-three
-split is not a convention and not a finding. For **stale doc references**, resolve the reference rather than
-reading around it: a command that runs is current even where the prose around it reads dated.
+**Misplaced files** need a stated threshold rather than a guess: the convention is the majority. If eleven hooks
+live in `hooks/` and one lives in `bin/`, the one is misplaced; a two-versus-three split is not a convention and
+not a finding.
 
 ## Apply
 

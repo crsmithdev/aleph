@@ -26,8 +26,8 @@ other copy stays wrong. The **owner** is the one copy that stays; the others cal
 - **Recomputed state.** A value that one module computes and another recomputes from raw data instead of
   asking the first.
 - **Client and server copies.** One rule written once in `ui/` and once on the server.
-- **Doc copies.** One concept described in two docs, or a doc that states a rule the owner in code does not
-  follow. The code is the truth; the doc is the copy.
+- **Doc copies** belong to [refit-docs](../refit-docs/SKILL.md)'s copies lens; a doc that disagrees with code
+  is its true lens.
 
 ## Proof
 
@@ -39,8 +39,7 @@ the commit that fixed one copy and missed the other. Copies that only look alike
 
 Name the owner by layer: domain code over application code over UI over infrastructure, and the server over
 the client. Within one layer, the copy with the most callers or the module whose name already says the concept.
-Each other copy becomes a call to the owner, or goes. A doc copy names the owner (file and symbol) instead of
-restating its values.
+Each other copy becomes a call to the owner, or goes.
 
 ## Hold
 

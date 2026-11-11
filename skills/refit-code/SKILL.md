@@ -48,7 +48,7 @@ convention is right is **layout**. Report a candidate under one lens only.
 | `act` | The fix of each finding the user picks | After a retro |
 | `deepen <finding>` | [DEEPEN.md](DEEPEN.md): grill the design, design it twice, glossary and ADRs | A depth, seams or one-way finding that needs a new interface |
 | `check` | Each new thing in a plan, spec or diff, under every lens | Before or during a build |
-| `sweep` | [SWEEP.md](SWEEP.md): junk files, build output, orphaned fixtures, stale doc references, misplaced files | Before a commit, or first in any retro |
+| `sweep` | [SWEEP.md](SWEEP.md): junk files, build output, orphaned fixtures, misplaced files | Before a commit, or first in any retro |
 | `polish` | `sweep`, then [POLISH.md](POLISH.md): the ready-to-show gate | Someone is about to look at the repo |
 | hook | Every tool hold, at each Stop, with no model | Automatic |
 

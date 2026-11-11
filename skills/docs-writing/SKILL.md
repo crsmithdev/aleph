@@ -1,46 +1,29 @@
 ---
 name: docs-writing
 description: >
-  Writes and audits technical docs with Diataxis type gating and runnable
-  examples. Use when the user asks to review, audit or write docs, an API
-  reference, a how-to, or a README. NOT for: AGENTS.md, CLAUDE.md or skills
-  (use /aleph:writing-for-agents).
+  Writes technical docs with Diataxis type gating and runnable examples, and
+  holds the doc rules refit-docs audits against. Use when the user asks to
+  write or rewrite docs, an API reference, a how-to, or a README. NOT for:
+  reviewing or auditing docs (use /aleph:refit-docs); AGENTS.md, CLAUDE.md or
+  skills (use /aleph:writing-for-agents).
 ---
 
 # Documentation Writing
 
-- **IS:** writing and auditing technical documentation quality (Diataxis doc types, voice, structure, clarity, runnable code, formatting, navigation, content hygiene, agent-readable docs) for docs sites, API references, documentation-site tutorials, how-to docs, and existing READMEs.
+- **IS:** writing technical documentation, and the rules for its quality (Diataxis doc types, voice, structure, clarity, runnable code, formatting, navigation, content hygiene, agent-readable docs) for docs sites, API references, documentation-site tutorials, how-to docs, and existing READMEs.
 - **IS NOT:** editorial blog tutorials or articles, AGENTS.md or CLAUDE.md instructions (use `aleph:writing-for-agents`), marketing and landing-page copy, or the product's own error strings and CLI output (this skill covers the docs that describe them).
 
 ## Mode dispatch
 
-- Reviewing docs? → Audit workflow.
 - Writing or rewriting a page? → Writing workflow.
-- "Improve" or "fix" docs? → Audit first, then apply fixes yourself.
+- Reviewing, auditing or improving docs? → [refit-docs](../refit-docs/SKILL.md). Its lenses load the rules here by
+  prefix.
 
 ## Classify before anything else
 
 Doc type gates which rules apply, so classify every file first. Use the Diataxis compass: does the page serve **action** (doing) or **cognition** (understanding), and is the reader **acquiring** a skill or **applying** one?
 
 `structure-diataxis` holds the compass table and the split for a mixed page. Classify by the reader's task, not the filename. A README can orient or reference; a getting-started page can be a tutorial or a goal-directed how-to.
-
-## Audit workflow
-
-Track this checklist:
-
-```text
-Docs audit progress:
-- [ ] Step 1: Scope to changed files unless a full sweep was requested
-- [ ] Step 2: Classify each doc with the compass; name the audience
-- [ ] Step 3: Run CRITICAL categories (voice-, structure-), skipping rules the type-gating table excludes
-- [ ] Step 4: Run HIGH categories (clarity-, code-)
-- [ ] Step 5: Run remaining in-scope categories (format-, nav-, scan-, hygiene-, review-)
-- [ ] Step 6: Report per the output contract, by severity
-```
-
-Done when **every in-scope file has a verdict**: findings with a rule, an issue and a fix, or `✓ pass`. Every category in steps 3 to 5 has run on each file, and every rule that produced a finding has run again after the fixes.
-
-Load rule files by category prefix (`rules/voice-*.md`, then `rules/structure-*.md`, ...) only for in-scope categories.
 
 ## Writing workflow
 
@@ -87,24 +70,6 @@ Everything else applies to every type. Tutorials additionally get the `we` allow
 | 9 | Review & Testing | LOW-MEDIUM | `review-` | 3 |
 
 For the full rule list per category, read `rules/_sections.md`. The `*-defaults.md` files (voice, clarity, scan, review) are multi-check bundles.
-
-## Output contract (audit mode)
-
-```markdown
-## Documentation Audit Findings
-
-### path/to/file.md
-- [CRITICAL] `voice-defaults`: Passive voice obscures who performs the action.
-  - Fix: Rewrite "The configuration is loaded by the server" as "The server loads the configuration."
-
-### path/to/clean-file.md
-- ✓ pass
-```
-
-- Group by file; order by severity within each file.
-- Use `file:line` when available.
-- Every finding names the rule, states the issue, proposes a fix. No fix, not reportable.
-- List clean files as `✓ pass` so the author knows they were checked.
 
 ## Gotchas
 
