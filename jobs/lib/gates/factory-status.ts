@@ -158,7 +158,7 @@ export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Tier, 
 export const liveRuns = (runs?: Entry[]): number => { const models = readModels(); return liveEntries(runs).filter((e) => !onLocal(e.run, models)).length; };
 
 /** Live agent runs on the local backend, the count LOCAL_CAP checks. */
-export const liveLocal = (runs?: Entry[], models = readModels()): number => liveEntries(runs).filter((e) => onLocal(e.run, models)).length;
+const liveLocal = (runs?: Entry[], models = readModels()): number => liveEntries(runs).filter((e) => onLocal(e.run, models)).length;
 
 /**
  * Takes the GPU slot for one local call: no local agent run is live and the `gpu` lock is free. Waits up to `waitMs`;
@@ -181,7 +181,7 @@ export async function gpuSlot(waitMs: number): Promise<(() => void) | null> {
 const PAUSED: Bound = { why: "paused", text: "The factory is paused", ev: { action: "paused" } };
 
 /** The gates of the whole factory, in the order of GATES: the others are each issue's own. */
-export const FACTORY_GATES = ["pause", "backend", "live-cap"] as const satisfies readonly Gate[];
+const FACTORY_GATES = ["pause", "backend", "live-cap"] as const satisfies readonly Gate[];
 
 export type FactoryGate = (typeof FACTORY_GATES)[number];
 
@@ -350,7 +350,7 @@ export function flakeNames(f: Flake): { kind: "test" | "check"; name: string }[]
  * A health line for each repo whose last full suite took more than the budget. The full suite is
  * the check named `tests` or `test`. Only a pass on the first try counts: a rerun doubles the time.
  */
-export function suiteLines(runs: Entry[] = allRuns()): Health[] {
+function suiteLines(runs: Entry[] = allRuns()): Health[] {
   const last = new Map<string, { at: string; seconds: number }>();
   for (const { run } of runs) {
     const c = run.repo && (run.checks ?? []).find((c) => /^tests?$/.test(c.name) && c.ok && !c.rerun && c.files === undefined);
@@ -431,7 +431,7 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
 }
 
 /** Orders entries by run ID, the order of `allRunRecords`: a clock step back leaves `started` out of order. */
-export const byId = (a: Entry, b: Entry): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const byId = (a: Entry, b: Entry): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /**
  * The run an issue would start next: its newest build run, whose model says which backend the issue runs on. Null when the

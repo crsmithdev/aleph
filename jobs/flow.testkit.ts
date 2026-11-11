@@ -24,7 +24,7 @@ let depth = 0, saved: Record<string, string | undefined> = {}, savedCwd = "";
  * Run `f` under the CLI's environment (cli.helpers `env(extra)`) and in `base`, as `aleph` runs; then put both back.
  * Calls that overlap share one environment: the first sets it and the last puts it back, so they take the same `extra`.
  */
-export async function asCli<T>(extra: Record<string, string>, f: () => T | Promise<T>): Promise<T> {
+async function asCli<T>(extra: Record<string, string>, f: () => T | Promise<T>): Promise<T> {
   if (depth++ === 0) {
     saved = { ...process.env };
     savedCwd = process.cwd();
@@ -79,8 +79,6 @@ export const actionJob = (name: string, action: string, extra: Record<string, st
 /** `aleph land <name> [--checked]`. */
 export const land = (name: string, o: { checked?: boolean } = {}, extra: Record<string, string> = {}) =>
   cli(["land", name, ...(o.checked ? ["--checked"] : [])], extra);
-/** `aleph recheck <name>`. */
-export const recheck = (name: string, extra: Record<string, string> = {}) => cli(["recheck", name], extra);
 /** `aleph drop <name> [<reason>] [--quiet]`. */
 export const drop = (name: string, reason = "", quiet = false, extra: Record<string, string> = {}) =>
   cli(["drop", ...(quiet ? ["--quiet"] : []), "--", name, ...(reason ? [reason] : [])], extra);

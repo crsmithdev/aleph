@@ -103,7 +103,7 @@ const REASONS = {
 export const LIMITS = { headline: 12, situation: { words: 100 }, choice: { words: 50 } } as const;
 
 /** The sentences of a text, in order. A full stop inside a word or a path is not an end. */
-export const sentencesOf = (text: string): string[] => text.trim().split(/(?<=[.!?]["')\]]?)\s+/).filter(Boolean);
+const sentencesOf = (text: string): string[] => text.trim().split(/(?<=[.!?]["')\]]?)\s+/).filter(Boolean);
 
 /** The count of words in a text. */
 export const wordsOf = (text: string): number => text.trim().split(/\s+/).filter(Boolean).length;

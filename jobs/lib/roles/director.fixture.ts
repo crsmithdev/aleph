@@ -16,7 +16,7 @@ import { readEvents } from "../../../lib/layout.ts";
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export let base: string;
 let server: ReturnType<typeof Bun.serve>;
-export let told: string[] = [];
+let told: string[] = [];
 
 export function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -88,10 +88,6 @@ export function run(o: Partial<Run> & { name: string }, files: Record<string, st
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }
-
-/** A held run of issue 1 on branch `b`, with the reviewer's review.md. */
-export const held = (b: string, review = "Fine.\nVERDICT: pass\n") =>
-  run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "held-path", question: "", options: [], why: [] }, branch: b, reason: "held path x" }, { "review.md": review });
 
 export let landed: string[] = [];
 export let dropped: { name: string; reason: string; fate?: string }[] = [];

@@ -223,7 +223,7 @@ export const planSet = (item: Issue): boolean => item.fm.plan === "true";
 /** The flake tracker: a note log, never built. */
 export const isTracker = (item: Issue): boolean => item.fm.tracker === "true";
 /** Whether intake took the item in: its `intake` field, or a triage `build` or `plan` note from before intake. */
-export const takenIn = (item: Issue): boolean => item.fm.intake !== undefined || item.notes.some((n) => /: triage: (build|plan)\b/.test(n));
+const takenIn = (item: Issue): boolean => item.fm.intake !== undefined || item.notes.some((n) => /: triage: (build|plan)\b/.test(n));
 /**
  * An open issue a factory run can build: it has a spec, no parts and no Ask, and is neither to plan nor the tracker.
  * In a repo with `author`, a top-level issue builds only after intake took it in.
@@ -270,7 +270,7 @@ export function reader(o: { fetch?: boolean; rev?: string } = {}): Reader {
 }
 
 /** Rank of an item's priority: 3 for critical down to 0 for low. No priority, or an unknown one, ranks as medium. */
-export function rank(item: Issue): number {
+function rank(item: Issue): number {
   const i = (issues.PRIORITIES as readonly string[]).indexOf(String(item.fm.priority ?? ""));
   return i < 0 ? (issues.PRIORITIES as readonly string[]).indexOf("medium") : i;
 }

@@ -58,7 +58,7 @@ function looseId(file: string): string | null {
   return /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(id) && basename(dirname(dirname(file))) === "objects" ? id : null;
 }
 
-export async function clockChecks(): Promise<Check[]> {
+async function clockChecks(): Promise<Check[]> {
   const step = await watchWall(CLOCK_WINDOW_MS());
   const secs = Math.round(CLOCK_WINDOW_MS() / 1000);
   const checks = [Math.abs(step) > STEP_LIMIT_MS
@@ -89,7 +89,7 @@ export function gitChecks(): Check[] {
 const TIMERS = ["aleph-tick.timer", "aleph-suite.timer"];
 
 /** The time to each timer's next run, or that its service runs now. */
-export function timerChecks(now = Date.now()): Check[] {
+function timerChecks(now = Date.now()): Check[] {
   return TIMERS.map((unit) => {
     const name = `${unit} next run`;
     const t = timer(unit);

@@ -41,7 +41,7 @@ export function once<T>(name: string, sources: string[], fn: () => T): T {
 }
 
 /** Told the source `later:<name>` changed when a `later` read ends; the build Worker passes it to the updater. */
-export let onLater: (source: string) => void = () => {};
+let onLater: (source: string) => void = () => {};
 export const setOnLater = (f: (source: string) => void): void => { onLater = f; };
 
 /**

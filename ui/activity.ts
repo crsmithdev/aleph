@@ -25,7 +25,7 @@ const dayOf = (iso: string | number | undefined): string | null => {
 };
 const startOf = (key: string) => new Date(`${key}T00:00:00`);
 
-export interface Count { name: string; calls: number; errors: number; lastAt?: string }
+interface Count { name: string; calls: number; errors: number; lastAt?: string }
 export interface Activity {
   days: string[];
   langfuse: "ok" | "off" | "error";

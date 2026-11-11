@@ -11,12 +11,12 @@ import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/
 import { probe } from "../../lib/git.ts";
 
 export const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
-export type Kind = (typeof KINDS)[number];
-export const FOLDERS: Record<Kind, string> = { decision: "decisions", concept: "concepts", entity: "entities", project: "projects", gotcha: "gotchas" };
-export const CONFIDENCE = ["measured", "reported", "inferred"] as const;
-export const REQUIRED = ["kind", "scope", "confidence", "updated", "supersedes", "sources"] as const;
-export const LISTS = ["aliases", "supersedes", "consistent_with", "sources", "tags"] as const;
-export const LINE_BUDGET = 150;
+type Kind = (typeof KINDS)[number];
+const FOLDERS: Record<Kind, string> = { decision: "decisions", concept: "concepts", entity: "entities", project: "projects", gotcha: "gotchas" };
+const CONFIDENCE = ["measured", "reported", "inferred"] as const;
+const REQUIRED = ["kind", "scope", "confidence", "updated", "supersedes", "sources"] as const;
+const LISTS = ["aliases", "supersedes", "consistent_with", "sources", "tags"] as const;
+const LINE_BUDGET = 150;
 
 /**
  * The kinds Home indexes. A gotcha is what you search for when you hit it, not
@@ -25,21 +25,21 @@ export const LINE_BUDGET = 150;
  * notes and about seven a day, Home had weeks left as an inventory of
  * everything. It routes to the standing kinds; `recall` finds the rest.
  */
-export const HOME_KINDS: readonly string[] = ["decision", "project", "concept", "entity"];
+const HOME_KINDS: readonly string[] = ["decision", "project", "concept", "entity"];
 
 /**
  * Days before a note's claim wants a re-check, by kind. An architecture
  * decision decays slowly and a transient gotcha decays fast; a project note
  * describes current state, so it decays fastest of all.
  */
-export const DECAY_DAYS: Record<Kind, number> = { project: 30, gotcha: 60, decision: 180, concept: 365, entity: 365 };
+const DECAY_DAYS: Record<Kind, number> = { project: 30, gotcha: 60, decision: 180, concept: 365, entity: 365 };
 
 /**
  * Freshness and authority are different axes. A six-month-old claim someone
  * measured outlives a fresh one they guessed, so confidence widens or narrows
  * the window rather than gating it, as the old `measured`-only rule did.
  */
-export const CONFIDENCE_FACTOR: Record<string, number> = { measured: 1.5, reported: 1, inferred: 0.5 };
+const CONFIDENCE_FACTOR: Record<string, number> = { measured: 1.5, reported: 1, inferred: 0.5 };
 
 export { vaultDir };
 
@@ -74,7 +74,7 @@ function parseNote(path: string, root: string, text: string): Note {
   return { path, rel, title: basename(path, ".md"), fm: frontmatter === null ? {} : parseFrontmatter(frontmatter), hasFrontmatter: frontmatter !== null, body, text, wiki: rel.startsWith("wiki/"), archived: rel.startsWith("archive/") };
 }
 
-export function walk(dir: string, out: string[] = []): string[] {
+function walk(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.name.startsWith(".")) continue;
@@ -163,7 +163,7 @@ export function folderFor(kind: string): string | null {
   return (KINDS as readonly string[]).includes(kind) ? `wiki/${FOLDERS[kind as Kind]}` : null;
 }
 
-export function validTitle(title: string): boolean {
+function validTitle(title: string): boolean {
   return !/[\/\\:*?"<>|]/.test(title) && title.trim() === title && title.length > 0;
 }
 
@@ -248,7 +248,7 @@ function words(s: string): Set<string> {
  * is in use, whatever its `updated` line says, and the old rule could not tell
  * that from one nobody had opened.
  */
-export function staleness(note: Note, read: Record<string, string> = {}, now = new Date()): string | null {
+function staleness(note: Note, read: Record<string, string> = {}, now = new Date()): string | null {
   const kind = String(note.fm.kind ?? "");
   if (!(KINDS as readonly string[]).includes(kind)) return null;
   const updated = String(note.fm.updated ?? "");
@@ -445,7 +445,7 @@ export function repoScope(cwd: string): string {
 }
 
 /** The longest `core:` line, in characters. */
-export const CORE_MAX = 160;
+const CORE_MAX = 160;
 /** The bytes the SessionStart context may take: Claude Code shows a 2 KB preview in place of hook output over about 10,000 characters. */
 export const START_BUDGET = 6000;
 

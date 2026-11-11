@@ -124,7 +124,7 @@ export interface Repo {
   critical?: string[];
 }
 
-export const OPEN: State[] = ["running", "passed", "waiting", "returned", "failed"];
+const OPEN: State[] = ["running", "passed", "waiting", "returned", "failed"];
 
 export const runsDir = () => layout().ledger;
 
@@ -271,7 +271,7 @@ export function stamp(d = new Date()): string {
 }
 
 /** The `stamp` one second after the stamp `s`. */
-export function nextStamp(s: string): string {
+function nextStamp(s: string): string {
   const [y, mo, d, h, mi, se] = s.match(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)$/)!.slice(1).map(Number);
   return stamp(new Date(y, mo - 1, d, h, mi, se + 1));
 }
@@ -348,7 +348,7 @@ export async function admit(say: (line: string) => void = () => {}, a: Admission
 export const LOW = ["--property=CPUWeight=20", "--nice=10"];
 
 /** The agent output tags that a parser reads: a line `<TAG>: <value>` in a worker's or reviewer's text. `ERROR:` is not one. */
-export const TAGS = ["QUESTION", "VERDICT"] as const;
+const TAGS = ["QUESTION", "VERDICT"] as const;
 export type Tag = (typeof TAGS)[number];
 
 /** One sentence for prompts that says how a tag line is read. */

@@ -27,7 +27,7 @@ const when = (ev: any): number | undefined => {
 };
 
 /** The tool calls, the result text and the model of one stream-json transcript. It is an error when resultOf is not ok. */
-export function parseStream(stream: string): Parsed {
+function parseStream(stream: string): Parsed {
   const calls = new Map<string, Call>();
   let text = "", model: string | undefined;
   for (const line of stream.split("\n")) {

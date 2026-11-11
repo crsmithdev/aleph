@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 const JSCPD = join(import.meta.dir, "../../node_modules/.bin/jscpd");
 
-export type Side = { name: string; start: number; end: number };
+type Side = { name: string; start: number; end: number };
 export type Clone = { a: Side; b: Side; lines: number; isNew: boolean };
 export type Violation = { rule: string; copy: Side & { function?: string }; owner: Side & { function?: string } };
 

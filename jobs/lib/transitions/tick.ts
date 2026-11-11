@@ -30,7 +30,7 @@ import { editedWaits, toRescue } from "../land/rescue.ts";
 import { smokeStep } from "../gates/smoke.ts";
 
 /** How often each step with a fixed period runs. */
-export const EVERY_MS = { ci: 5 * 60_000, firefight: 5 * 60_000, episodes: 30 * 60_000 } as const;
+const EVERY_MS = { ci: 5 * 60_000, firefight: 5 * 60_000, episodes: 30 * 60_000 } as const;
 type Periodic = keyof typeof EVERY_MS;
 
 /**

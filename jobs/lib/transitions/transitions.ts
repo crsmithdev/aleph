@@ -42,7 +42,7 @@ export async function refusal(f: () => Promise<unknown>): Promise<string | null>
 }
 
 /** A start refused for a gate: `gate` and `ev` are the hold the dispatch records. */
-export class Held extends Refusal {
+class Held extends Refusal {
   constructor(why: string, readonly gate: Gate, readonly ev: Hold) { super(why); }
 }
 
@@ -65,7 +65,7 @@ export function checkName(name: string | undefined): string {
 const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
 
 /** What a start prints: the new run, its job and its folder. */
-export interface Started { run: string; job: string; folder: string }
+interface Started { run: string; job: string; folder: string }
 
 /** A started run, and in the foreground its unit's process, for the caller to wait on after the locks are gone. */
 export interface Start { started: Started; child?: ReturnType<typeof Bun.spawn> }
@@ -142,7 +142,7 @@ export interface JobArgs {
 }
 
 /** The argv of `aleph job` for these arguments. */
-export const jobCommand = (a: JobArgs): string[] =>
+const jobCommand = (a: JobArgs): string[] =>
   ["job", a.repo, a.name, "--spec", "-", ...(a.on !== undefined ? ["--on", String(a.on)] : []), ...(a.land ? ["--land"] : []), ...(a.model ? ["--model", a.model] : [])];
 
 /** The registry's repo for a key as typed: case and spaces do not count. */

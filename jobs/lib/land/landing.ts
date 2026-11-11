@@ -27,7 +27,7 @@ import { writeTitle } from "../roles/title.ts";
 import * as record from "../records/record.ts";
 
 /** What the repo's checks said about one commit. `why` is null when they pass; `log` is their part of checks.log. */
-export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
+interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
 
 export interface LandPorts {
   /** The `picked` checks on `commit`, which holds the work of `runs`. `changed` is what the commit changes; `picked.tests` holds the test files of each narrowed check. */
@@ -37,7 +37,7 @@ export interface LandPorts {
 }
 
 /** What a land says about a run. */
-export type Verdict = Pick<Run, "condition" | "reason" | "cause" | "checkName" | "commit" | "conflicts" | "checkItem">;
+type Verdict = Pick<Run, "condition" | "reason" | "cause" | "checkName" | "commit" | "conflicts" | "checkItem">;
 export type Landing = { outcome: Verdict; code: number };
 
 /** The run a land of this job takes its terms from: the last agent or recheck run. */

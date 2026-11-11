@@ -12,7 +12,7 @@ export function systemctl(...args: string[]): { ok: boolean; out: string } {
 }
 
 /** A oneshot service reports `activating` while it runs (exit 3), so read the state word and ignore the exit code. */
-export function inProgress(service: string): boolean {
+function inProgress(service: string): boolean {
   const state = systemctl("is-active", service).out.split("\n")[0]?.trim();
   return state === "activating" || state === "active";
 }

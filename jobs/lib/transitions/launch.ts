@@ -23,10 +23,10 @@ export function runPath(env: Record<string, string | undefined> = process.env): 
 }
 
 /** Units run in the foreground, as children: the tests, which have no systemd. */
-export const foreground = (): boolean => jobForeground();
+const foreground = (): boolean => jobForeground();
 
 /** The environment a unit gets: every `ALEPH_*` and `SIDETONE_*` variable, as `--setenv` flags. */
-export function passEnv(env: Record<string, string | undefined> = process.env): string[] {
+function passEnv(env: Record<string, string | undefined> = process.env): string[] {
   return Object.entries(env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
 }
 

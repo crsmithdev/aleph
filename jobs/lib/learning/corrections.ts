@@ -24,12 +24,12 @@ import { cutTitle, writeLine, writeTitle } from "../roles/title.ts";
 import { specText } from "../roles/issue-spec.ts";
 import { edit, find, parseIssueRef, setStatus, titleProblem } from "../../../issues/lib/todo.ts";
 
-export const CORRECTION_AT = 0.7;
+const CORRECTION_AT = 0.7;
 const WINDOW = 14 * 24 * 3600_000;
 const QUOTE = 300;
 const SENTENCE = 160;
 
-export interface Signal { id: string; source: "chris" | "gate" | "drop"; at: string; quote: string; link: string }
+interface Signal { id: string; source: "chris" | "gate" | "drop"; at: string; quote: string; link: string }
 export type Kind = "check" | "claude-md" | "skill";
 export type Lesson = {
   id: string; sentence: string; state: "open" | "proposed" | "approved" | "declined"; signals: Signal[]; count: number;

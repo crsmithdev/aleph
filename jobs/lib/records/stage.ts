@@ -16,10 +16,10 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { contentText, parseId, tail } from "../../../lib/naming.ts";
 
 /** The stages of docs/naming.md. */
-export type StageName = "new" | "queued" | "held" | "working" | "waiting" | "failed" | "landing" | "done" | "dropped" | "parked";
+type StageName = "new" | "queued" | "held" | "working" | "waiting" | "failed" | "landing" | "done" | "dropped" | "parked";
 
 /** Why an item stands where it does: the event fields of docs/naming.md. A field the naming sets have no word for is left out. */
-export interface Reason {
+interface Reason {
   /** One word from ACTIONS. */
   action?: string;
   /** One word from SUBS. */
@@ -34,7 +34,7 @@ export interface Reason {
 export interface Stage extends Reason { id: string; stage: StageName; why: string; of?: { n: number; m: number } }
 
 /** What stage() needs of an Ask. */
-export interface AskFact { kind: "input" | "approval"; reason: string }
+interface AskFact { kind: "input" | "approval"; reason: string }
 
 /** What stage() needs of an item. */
 export interface Subject {

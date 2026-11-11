@@ -2,8 +2,6 @@ import { attend } from "./asks.ts";
 import { state } from "./fixtures/status-state.ts";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
-// @ts-ignore
-export { trailerLine } from "./views/cards.js";
 
 /** Fixtures and helpers shared by the ui/now-*.test.ts files, after ui/test-browser.ts. */
 

@@ -17,7 +17,7 @@ function chromeArgv(profileDir: string): string[] {
 }
 
 /** A CDP connection over Chrome's pipe: commands on fd 3, answers and events on fd 4, each message ended by a NUL. */
-export class Pipe {
+class Pipe {
   private next = 1;
   private waiting = new Map<number, { ok: (v: any) => void; no: (e: Error) => void }>();
   private listeners: ((m: any) => void)[] = [];
@@ -64,13 +64,13 @@ export class Pipe {
 }
 
 /** A headless Chrome on a pipe, and the call that kills it. */
-export interface Chrome { cdp: Pipe; kill(): void }
+interface Chrome { cdp: Pipe; kill(): void }
 
 /**
  * Start Chrome with a profile under `base`. The first call waits for Chrome to start. A Chrome that closes its pipe is
  * killed and started once more, with a new profile.
  */
-export async function launchChrome(base: string): Promise<Chrome> {
+async function launchChrome(base: string): Promise<Chrome> {
   const waits: string[] = [];
   for (let n = 1; ; n++) {
     const profile = join(base, `profile${n}`);

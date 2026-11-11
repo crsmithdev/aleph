@@ -26,7 +26,7 @@ function inputOf(o: Obs): any {
 }
 
 /** One block per turn: cwd, final message, guardrail verdict, commands run. */
-export function digestTrace(trace: { id: string; name?: string; metadata?: any; observations?: Obs[] }): string {
+function digestTrace(trace: { id: string; name?: string; metadata?: any; observations?: Obs[] }): string {
   const obs = trace.observations ?? [];
   const cwd = trace.metadata?.cwd ?? trace.name ?? "";
   const turns = obs.filter((o) => o.name === "turn").sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));

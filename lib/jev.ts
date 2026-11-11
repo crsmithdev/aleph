@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 import { openRouterKey } from "./env.ts";
 import { alephPath } from "./paths.ts";
 
-export const JEV_MODEL = "typesafe/jev-1.13";
+const JEV_MODEL = "typesafe/jev-1.13";
 
 export type JudgeChoice = "jev" | "haiku";
 const choiceFile = () => alephPath("ALEPH_JUDGE_FILE", "judge");
@@ -31,7 +31,7 @@ const URL = () => process.env.ALEPH_JEV_URL ?? "https://openrouter.ai/api/alpha/
 
 export type Noul = { type: "noul"; instructions: string; criteria?: { true: string; false: string } };
 export type Question = { type: "choice"; instructions: string; criteria: Record<string, string> } | Noul;
-export type Answer =
+type Answer =
   | { type: "choice"; choice: string; probabilities?: Record<string, number>; confidence?: number }
   | { type: "noul"; noul: number };
 export interface Decision { answers: Record<string, Answer>; cost: number; model: string; ms: number }

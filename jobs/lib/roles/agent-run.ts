@@ -13,7 +13,7 @@ import { roleSeconds } from "../infra/settings.ts";
 import { runFile } from "../records/run-files.ts";
 import { callAgent, stallReason } from "./agent-call.ts";
 
-export interface Call {
+interface Call {
   role: string;
   /** The role's name in a failure: `${who} exited 1`. */
   who: string;
@@ -93,7 +93,7 @@ export function openRun(o: Opening): AgentRun {
   };
 }
 
-export function endRun(folder: string, reason: string, fields: Partial<Run> = {}): void {
+function endRun(folder: string, reason: string, fields: Partial<Run> = {}): void {
   patchRun(basename(folder), { condition: "done", reason, ...fields, phase: undefined, ended: new Date().toISOString() });
 }
 

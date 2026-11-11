@@ -4,7 +4,7 @@ import { git } from "../../lib/git.ts";
 
 export { git } from "../../lib/git.ts";
 
-export const TRAILER = "Co-Authored-By: Claude <noreply@anthropic.com>";
+const TRAILER = "Co-Authored-By: Claude <noreply@anthropic.com>";
 
 export function tracked(dir: string, path: string): boolean {
   return git(dir, "ls-files", "--error-unmatch", "--", relative(dir, path)).ok;

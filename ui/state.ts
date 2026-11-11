@@ -40,7 +40,7 @@ export interface Wait { id: string; href: string; title: string; state: string |
 const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.dead);
 
 /** A part of an issue as a flat card says it: "n/m" with a link to the parent. */
-export interface Part { n: number; m: number; parent: string; href: string }
+interface Part { n: number; m: number; parent: string; href: string }
 
 export interface Job {
   /** The job ID of the run that counts, `a1430#2`: the Job page's address and the one an action acts on. */
@@ -95,13 +95,13 @@ export interface NewIssue { id: string; title: string; priority?: string; status
   stage?: string }
 
 /** An issue in Running: its parts, each with its stage and the job that works on it. */
-export interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number }; /** When the work on it was first picked up. */ since: string; /** When it was last changed. */ at: string }
+interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number }; /** When the work on it was first picked up. */ since: string; /** When it was last changed. */ at: string }
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
-export interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
+interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
 
 /** One status transition or factory event in the Herald feed. */
-export interface HeraldHistoryItem {
+interface HeraldHistoryItem {
   at: string;
   tone: "alert" | "warning" | "fine" | "run" | "ask";
   label?: string;
@@ -114,7 +114,7 @@ const statusHistory: HeraldHistoryItem[] = [];
 const HERALD_EVENTS = 50;
 const MAX_STATUS_HISTORY = 50;
 
-export function recordStatusTransition(item: HeraldHistoryItem): void {
+function recordStatusTransition(item: HeraldHistoryItem): void {
   const last = statusHistory[0];
   if (!last || last.text !== item.text || last.tone !== item.tone) {
     statusHistory.unshift(item);
@@ -122,7 +122,7 @@ export function recordStatusTransition(item: HeraldHistoryItem): void {
   }
 }
 
-export function currentStatusHistory(): HeraldHistoryItem[] {
+function currentStatusHistory(): HeraldHistoryItem[] {
   return statusHistory.slice();
 }
 

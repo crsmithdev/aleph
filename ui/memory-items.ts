@@ -23,8 +23,8 @@ import { later } from "../lib/sources.ts";
 import { handoffsDir } from "../lib/paths.ts";
 import { memoryIn } from "./api/scope.ts";
 
-export const TYPES = ["semantic", "procedural", "episodic", "working", "prospective", "retrieval"] as const;
-export type Type = (typeof TYPES)[number];
+const TYPES = ["semantic", "procedural", "episodic", "working", "prospective", "retrieval"] as const;
+type Type = (typeof TYPES)[number];
 
 /** One memory. `body` is the text a search matches; the page gets `text`, a line of it. */
 export type Item = {

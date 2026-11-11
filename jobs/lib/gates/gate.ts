@@ -76,7 +76,7 @@ export const REVIEW_SCHEMA = {
 };
 
 /** What review.json holds: the reviewer's reply, with its failures cleaned. */
-export interface ReviewJson { verdict: "pass" | "hold"; summary: string; failures: { clause: string; observed: string }[] }
+interface ReviewJson { verdict: "pass" | "hold"; summary: string; failures: { clause: string; observed: string }[] }
 
 export interface Review { pass: boolean; reason: string; text: string; json: ReviewJson }
 

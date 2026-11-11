@@ -30,8 +30,10 @@ import { episodesDir } from "../jobs/lib/learning/episode.ts";
 import { fetchStore } from "../issues/lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
 
-export const SETTLE_MS = 500, KEEP_MS = 10 * 60_000, DROP_MS = 60 * 60_000;
-export const POLL_MS = 30_000, SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 60_000;
+const SETTLE_MS = 500;
+export const KEEP_MS = 10 * 60_000, DROP_MS = 60 * 60_000;
+const POLL_MS = 30_000;
+const SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 60_000;
 
 /** The GET routes whose answers the updater keeps. */
 export const KEYED = new Set([
@@ -223,8 +225,6 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
   };
 }
 
-export type Updater = ReturnType<typeof createUpdater>;
-
 /** The UI server's updater: the build Worker, `<aleph>/ui/keys.json` and the work store's origin. */
 export const updater = createUpdater({ build: workerBuild, file: () => join(dirname(layout().factory), "ui", "keys.json"), fetch: () => fetchStore() });
 onLater((source) => updater.changed(source));
@@ -264,7 +264,7 @@ export const countsInFactory = (file: string): boolean => !file.endsWith(".log")
 export const countsInSkills = (file: string): boolean => !file.includes("/") || /^[^/]+\/SKILL\.md$/.test(file);
 
 /** A note, a daily note, MEMORY.md or the recall log counts; git, the search index and Obsidian's settings do not. */
-export const countsInVault = (file: string): boolean => !/^\.(git|index|obsidian)(\/|$)/.test(file) && (file.endsWith(".md") || /^\.recall(-log)?\.json(l)?$/.test(file));
+const countsInVault = (file: string): boolean => !/^\.(git|index|obsidian)(\/|$)/.test(file) && (file.endsWith(".md") || /^\.recall(-log)?\.json(l)?$/.test(file));
 
 /** Watch the sources, poll Langfuse, fetch the store and sweep the keys until `stopUpdater`; with `restore`, build the saved keys. */
 export function startUpdater({ restore = true }: { restore?: boolean } = {}): void {

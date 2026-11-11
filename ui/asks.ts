@@ -3,7 +3,7 @@
  * the page only renders. One entry per run, issue that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
-import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Card, type Granted } from "../jobs/lib/asks/ask.ts";
+import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
 import { jobHref, parseId, refs, word } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
@@ -13,7 +13,7 @@ import type { Job, NewIssue } from "./state.ts";
  * A choice on an Ask card and the POST its button sends: `body` is the JSON, `confirm` asks for a second click, and `input`
  * is a text box whose text goes in the body under its name, after `lead`; with no text the body keeps its own value.
  */
-export interface Action {
+interface Action {
   act: string; label: string; hint: string; primary: boolean; /** The Ask's recommend names this action. */ recommended: boolean;
   path: string; body: Record<string, unknown>; confirm?: true; input?: { name: string; lead?: string };
 }
@@ -34,14 +34,13 @@ export interface AskItem {
   at?: string; since?: string; part?: { n: number; m: number; parent: string; href: string };
   agent?: boolean; trailers?: { key: string; value: string }[]; defaults?: string[]; followups?: string[];
 }
-export interface Details {
+interface Details {
   note?: string; stat?: string; review?: { call: string; reason?: string };
   ask?: Ask; signals?: { source: string; at: string; quote: string; link: string }[];
 }
-export type Always = Record<string, Granted>;
 
 /** A plain sentence from a raw note: no tags, no leads, no paths. */
-export function clean(text: unknown): string {
+function clean(text: unknown): string {
   const t = String(text ?? "")
     .replace(/<(task-notification|agent-message)\b[\s\S]*?(<\/\1>|$)/g, " ")
     .replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ")

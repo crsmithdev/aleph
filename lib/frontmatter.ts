@@ -2,7 +2,7 @@
  * The YAML subset the vault uses: `key: scalar`, `key: [a, b]`, and block
  * lists (`- item`). Quotes are honoured inside flow lists. Nothing nested.
  */
-export type Scalar = string;
+type Scalar = string;
 export type Frontmatter = Record<string, Scalar | Scalar[]>;
 
 export function splitFrontmatter(text: string): { frontmatter: string | null; body: string } {

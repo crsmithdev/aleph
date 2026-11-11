@@ -6,8 +6,8 @@
 
 export const STATUSES = ["open", "parked", "done", "dropped"];
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"];
-export const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"];
-export const ASKS = ["protected", "question", "incomplete", "capped", "proposal"];
+const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"];
+const ASKS = ["protected", "question", "incomplete", "capped", "proposal"];
 export const ACTIONS = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed"];
 /** Why a run stopped: the closed set of causes (outcome.ts `Cause`). */
 export const CAUSES = ["no-commit", "timeout", "stalled", "infra", "locked", "credit", "check", "conflict", "moved", "review", "unanswered", "other"] as const;
@@ -27,7 +27,7 @@ export const NAMES: Record<string, string> = {
 export const STAGES = ["new", "queued", "held", "working", "waiting", "failed", "landing", "done", "dropped", "parked"];
 export const LANES = ["landed", "waiting", "failed", "other"];
 export const SPEEDS = ["landed", "returned", "failed", "reran", "dropped"] as const;
-export const ROUTINES = ["monitor", "chat", "lens"];
+const ROUTINES = ["monitor", "chat", "lens"];
 
 /** Old words, per set, that live code still writes or reads, and the new word each reads as. A word not listed is already new. */
 export const OLD: Record<string, Record<string, string>> = {

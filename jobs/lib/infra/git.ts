@@ -31,9 +31,3 @@ export function addWorktree(repo: string, wt: string, branch: string, base: stri
   }
   return r;
 }
-
-/** The file at `path` in `rev`, or null when `rev` has no such file. */
-export function show(cwd: string, rev: string, path: string): string | null {
-  const r = git(cwd, "show", `${rev}:${path}`);
-  return r.ok ? r.out + "\n" : null;
-}

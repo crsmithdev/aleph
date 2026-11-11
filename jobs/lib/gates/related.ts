@@ -70,7 +70,7 @@ export function testsOf(map: ImportMap, targets: string[], globs: string[]): str
 }
 
 /** The names that bun test takes as test files. */
-export const BUN_TESTS = ["**/*.{test,spec}.{ts,tsx,js,jsx}", "**/*_{test,spec}.{ts,tsx,js,jsx}"];
+const BUN_TESTS = ["**/*.{test,spec}.{ts,tsx,js,jsx}", "**/*_{test,spec}.{ts,tsx,js,jsx}"];
 
 /**
  * The test files that a build run's change reaches: each changed test file and each test that depends on a changed
@@ -89,7 +89,7 @@ export function buildTests(changed: string[], map: ImportMap, globs: string[]): 
 }
 
 /** `run` with `files` after it as paths, so bun takes each one as a file and not as a name filter. */
-export const withTests = (run: string, files: string[]): string => `${run} ${files.map((f) => `'./${f.replaceAll("'", "'\\''")}'`).join(" ")}`;
+const withTests = (run: string, files: string[]): string => `${run} ${files.map((f) => `'./${f.replaceAll("'", "'\\''")}'`).join(" ")}`;
 
 const BUN_TEST = /^bun (?:run )?test$/;
 

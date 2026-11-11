@@ -7,8 +7,8 @@ import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { areasOf } from "./store.ts";
 import { status, type Doc } from "./todo.ts";
 
-export const CUT = 0.7;
-export const MAX_QUESTIONS = 50;
+const CUT = 0.7;
+const MAX_QUESTIONS = 50;
 
 export interface Triage { labels: string[]; maybeSame: { id: number; title: string; p: number }[] }
 

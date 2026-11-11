@@ -18,7 +18,7 @@ export type Via = "claude" | "local" | "openrouter";
 export interface Model { via: Via; id: string; price?: Rate }
 
 /** The llama-server of aleph-1282. */
-export const LOCAL_URL = "http://127.0.0.1:8012";
+const LOCAL_URL = "http://127.0.0.1:8012";
 export const OPUS_MODEL = "claude-opus-5-5";
 const OPENROUTER_URL = "https://openrouter.ai/api";
 
@@ -145,7 +145,7 @@ export const OFFERS = {
 export type Tier = keyof typeof OFFERS;
 export type Setting = { enabled: boolean; model: string };
 /** The tiers that can be disabled. */
-export const WORKERS = ["worker-low", "worker-medium"] as const;
+const WORKERS = ["worker-low", "worker-medium"] as const;
 /** The worker tier of a run's Claude model. */
 export const WORKER_TIER: Record<string, Tier | undefined> = { haiku: "worker-low", sonnet: "worker-medium" };
 /** The old slot names, read once and converted. */

@@ -41,20 +41,12 @@ export interface Doc {
 export interface Floor { next: number; parts: Record<string, number> }
 
 export { today };
-const pad = (n: number): string => String(n).padStart(2, "0");
 
 /** A time as ISO 8601 UTC, the form every issue time and note stamp has. */
 export const minute = (now = new Date()): string => now.toISOString();
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 /** A note line with the old local `YYYY-MM-DD HH:MM` stamp. */
 const OLD_STAMP = /^- (\d{4}-\d{2}-\d{2} \d{2}:\d{2}): /;
-/** A stored time as the local `YYYY-MM-DD HH:MM`; an old local time as it is; null for none. */
-export const localMinute = (v: unknown): string | null => {
-  if (typeof v !== "string" || !v) return null;
-  if (!ISO.test(v)) return v;
-  const d = new Date(v);
-  return `${today(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
 /** Mark an item changed at `now`. */
 export function touch(item: { fm: Record<string, unknown> }, now = new Date()): void {
   item.fm.updated_time = minute(now);
@@ -169,7 +161,7 @@ export const idOf = (item: Issue): number | string => (item.sub === undefined ? 
 /** A number resolves to the top-level issue, never to a part under it; a string like `"5.1"` to the part. */
 export const find = (doc: Doc, id: number | string): Issue | undefined => doc.items.find((i) => refOf(i) === String(id));
 // The max of `id` ignores `sub` on purpose: a part's id is its parent's number, so a part never takes a new issue number.
-export const nextId = (doc: Doc): number => Math.max(doc.items.reduce((m, i) => Math.max(m, i.id), 0), (doc.floor?.next ?? 1) - 1) + 1;
+const nextId = (doc: Doc): number => Math.max(doc.items.reduce((m, i) => Math.max(m, i.id), 0), (doc.floor?.next ?? 1) - 1) + 1;
 
 const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;
 export type Source = (typeof SOURCES)[number];
@@ -182,10 +174,10 @@ const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 
 export const KINDS = ["task", "bug", "check", "flake", "acceptance"] as const;
-export type Kind = (typeof KINDS)[number];
+type Kind = (typeof KINDS)[number];
 
 /** Matches `: ` anywhere in a title. */
-export const PREFIX = /: /;
+const PREFIX = /: /;
 export const TITLE_RULE = "an imperative of at most 60 characters that says what changes, not how, with no final period and no `<words>: ` prefix";
 
 /** Null, or the one problem a title has: a length over 60, a final `.`, or a `<words>: ` prefix. A child's leading `[Group] ` takes the place of the prefix, so the rest of its title is not tested for one. */

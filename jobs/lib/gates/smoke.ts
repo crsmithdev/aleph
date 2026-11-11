@@ -9,7 +9,7 @@ import { uiPort } from "../infra/settings.ts";
 import { factoryCookie } from "../infra/ui-token.ts";
 
 /** The file that holds the count of failures in a row. */
-export const smokeFile = () => join(layout().factory, "smoke.json");
+const smokeFile = () => join(layout().factory, "smoke.json");
 
 const PATHS = ["/", "/api/factory"];
 const TIMEOUT_MS = 15_000;

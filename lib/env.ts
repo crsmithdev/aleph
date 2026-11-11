@@ -8,7 +8,7 @@ export interface LangfuseConfig {
 }
 
 /** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
-export const envFile = (): string => alephPath("ALEPH_ENV_FILE", ".env");
+const envFile = (): string => alephPath("ALEPH_ENV_FILE", ".env");
 
 /** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
 export function openRouterKey(): string | null {
@@ -65,7 +65,7 @@ export function classifyEnvironment(ancestorArgvs: string[][], override = proces
 
 const DEPTH = 6;
 
-export function ancestorArgvs(): string[][] {
+function ancestorArgvs(): string[][] {
   const out: string[][] = [];
   let pid = process.ppid;
   for (let i = 0; i < DEPTH && pid > 1; i++) {

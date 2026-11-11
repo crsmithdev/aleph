@@ -282,7 +282,7 @@ export function newTests(cwd: string, base: string, tip: string): NewTests[] {
 const unxml = (s: string) => s.replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#10;/g, "\n").replace(/&amp;/g, "&");
 
 /** The cases that passed in bun's junit report: a `testcase` with no child element. */
-export const junitPassed = (xml: string): { file: string; name: string }[] =>
+const junitPassed = (xml: string): { file: string; name: string }[] =>
   [...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"[^>]*\/>/g)].map((m) => ({ file: unxml(m[2]), name: unxml(m[1]) }));
 
 /** The cases in bun's junit report that ran, passed or failed, as `file > name`. */
@@ -290,7 +290,7 @@ const junitRan = (xml: string): Set<string> =>
   new Set([...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"/g)].map((m) => `${unxml(m[2])} > ${unxml(m[1])}`));
 
 /** The record of bun's JUnit report `xml`. A `testsuite` inside a file's `testsuite` is a `describe`. */
-export function junitRecord(xml: string): TestRecord {
+function junitRecord(xml: string): TestRecord {
   const rec: TestRecord = { ran: 0, passed: 0, failed: 0, skipped: 0, failures: [] };
   const attr = (attrs: string, key: string) => unxml(attrs.match(new RegExp(`\\b${key}="([^"]*)"`))?.[1] ?? "");
   const suites: string[] = [];
@@ -359,7 +359,7 @@ const OPS: [RegExp, (m: string) => string][] = [
 const CALL = /^\s*(?:await\s+)?[\w$.]+\(.*\);?\s*$/;
 
 /** One mutant of a source line, or null: the first operator that applies, else the line empty when it is a call statement. */
-export function mutate(line: string): string | null {
+function mutate(line: string): string | null {
   const t = line.trim();
   if (!t || /^(?:\/\/|\/?\*|import\b|export\b.*\bfrom\b)/.test(t)) return null;
   for (const [re, op] of OPS) {

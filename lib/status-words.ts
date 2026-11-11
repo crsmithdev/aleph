@@ -2,21 +2,21 @@
 import { shortText } from "./naming.ts";
 
 /** The sentence when nothing is wrong and nothing asks for Chris. */
-export const FINE = "Everything is fine";
+const FINE = "Everything is fine";
 /** The start of the sentence when something is wrong. */
-export const ALERT = "Alert: ";
+const ALERT = "Alert: ";
 /** The parts of the sentence. A part that leads the sentence starts with a capital: see `lead`. */
-export const ASK = "your attention is needed";
-export const PAUSED = "the factory is paused";
-export const TICK_STOPPED = "the factory tick has stopped";
-export const JOBS_UNHEALTHY = "jobs are unhealthy";
+const ASK = "your attention is needed";
+const PAUSED = "the factory is paused";
+const TICK_STOPPED = "the factory tick has stopped";
+const JOBS_UNHEALTHY = "jobs are unhealthy";
 
 /** The weekly usage, in percent, from which the sentence says how high it is. The raw value is compared, so 89.6 is not yet. */
-export const WEEKLY_WARN = 90;
-export const weekly = (week: number) => `weekly usage is at ${Math.round(week)}%`;
+const WEEKLY_WARN = 90;
+const weekly = (week: number) => `weekly usage is at ${Math.round(week)}%`;
 
 /** A part as the first words of the sentence. */
-export const lead = (t: string) => t[0].toUpperCase() + t.slice(1);
+const lead = (t: string) => t[0].toUpperCase() + t.slice(1);
 
 /** The Herald label of a status sentence: its tone and its text decide it. */
 export const labelOf = (tone: string, text: string) =>
@@ -54,10 +54,10 @@ export interface Facts {
 }
 
 /** An error line: the factory's own trouble, in full, and the key of its alert. */
-export interface ErrorLine { text: string; key?: string }
+interface ErrorLine { text: string; key?: string }
 
 /** A part of the sentence and the anchor of the card it links to; "" for a plain part. */
-export interface Part { text: string; href: string }
+interface Part { text: string; href: string }
 
 export interface Verdict {
   /** `ask` when an Ask leads the sentence. */

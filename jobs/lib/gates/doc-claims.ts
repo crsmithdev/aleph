@@ -22,7 +22,7 @@ import { basename, dirname, join, normalize as normPath } from "node:path";
 export interface Doc { file: string; text: string }
 
 /** A default a doc states for a setting: where, the setting, and the text of the value. */
-export interface DefaultClaim { file: string; line: number; name: string; value: string; quote: string }
+interface DefaultClaim { file: string; line: number; name: string; value: string; quote: string }
 
 /** What the check compares the docs with. */
 export interface Truth {
@@ -51,7 +51,7 @@ function each(docs: Doc[], fn: (d: Doc, text: string, line: number) => void): vo
 }
 
 /** The defaults the docs state, one per mention. */
-export function defaultClaims(docs: Doc[]): DefaultClaim[] {
+function defaultClaims(docs: Doc[]): DefaultClaim[] {
   const out: DefaultClaim[] = [];
   each(docs, (d, text, line) => {
     const t = text.match(TABLE);
@@ -62,16 +62,16 @@ export function defaultClaims(docs: Doc[]): DefaultClaim[] {
 }
 
 /** A default stated in prose: the phrase (group 1 is the value), the code file and the pattern whose group 1 is the code's value. */
-export interface ProseDefault { phrase: RegExp; file: string; code: RegExp; name: string }
+interface ProseDefault { phrase: RegExp; file: string; code: RegExp; name: string }
 
 /** Each prose phrase and the code constant it states. */
-export const PROSE_DEFAULTS: ProseDefault[] = [
+const PROSE_DEFAULTS: ProseDefault[] = [
   { phrase: new RegExp(String.raw`\bno output for (\d[\d.]*\s+${UNIT})`, "g"), file: "jobs/lib/infra/settings.ts", code: /\bstallSeconds\b[^\n]*?,\s*([\d.]+)\)/, name: "stallSeconds" },
   { phrase: /\babove (\d*\.\d+) of the threshold/g, file: "hooks/lib/context.ts", code: /\bDEFAULT_WARN\s*=\s*([\d.]+)/, name: "DEFAULT_WARN" },
 ];
 
 /** The defaults the docs state in prose, one per mention. */
-export function proseClaims(docs: Doc[]): (DefaultClaim & { def: ProseDefault })[] {
+function proseClaims(docs: Doc[]): (DefaultClaim & { def: ProseDefault })[] {
   const out: (DefaultClaim & { def: ProseDefault })[] = [];
   each(docs, (d, text, line) => {
     for (const def of PROSE_DEFAULTS) for (const m of text.matchAll(def.phrase)) out.push({ file: d.file, line, name: def.name, value: m[1], quote: m[0], def });
@@ -82,7 +82,7 @@ export function proseClaims(docs: Doc[]): (DefaultClaim & { def: ProseDefault })
 const UNITS: Record<string, number> = { s: 1, second: 1, minute: 60, hour: 3600 };
 
 /** A doc value as the code would hold it: a number (times in seconds), else the text without backticks. */
-export function normalize(value: string): string | number {
+function normalize(value: string): string | number {
   const v = value.trim();
   const time = v.match(/^([\d.]+)\s+(s|second|minute|hour)s?$/);
   if (time) return Number(time[1]) * UNITS[time[2]];
@@ -95,7 +95,7 @@ export function normalize(value: string): string | number {
 const asValue = (v: string | number): string | number => typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v;
 
 /** The settings a doc names, each `ALEPH_*` word once; `ALEPH_<ROLE>_CMD` patterns are left out. */
-export function namesIn(docs: Doc[]): { name: string; file: string; line: number }[] {
+function namesIn(docs: Doc[]): { name: string; file: string; line: number }[] {
   const seen = new Set<string>();
   const out: { name: string; file: string; line: number }[] = [];
   each(docs, (d, text, line) => {
@@ -115,7 +115,7 @@ const REPO_URL = /https:\/\/github\.com\/crsmithdev\/aleph\/(?:blob|tree)\/main\
  * The repo paths a doc gives: a folder and a file with an extension in backticks (not under ~ or /),
  * the target of a relative markdown link (from the doc's folder), and a link to this repo on GitHub.
  */
-export function pathsIn(docs: Doc[]): { path: string; file: string; line: number }[] {
+function pathsIn(docs: Doc[]): { path: string; file: string; line: number }[] {
   const out: { path: string; file: string; line: number }[] = [];
   each(docs, (d, text, line) => {
     for (const m of text.matchAll(new RegExp(String.raw`\`(${PATH})(?::\d+(?:-\d+)?)?\``, "g"))) out.push({ path: m[1], file: d.file, line });
@@ -129,7 +129,7 @@ export function pathsIn(docs: Doc[]): { path: string; file: string; line: number
 }
 
 /** The `file:line` and `file:line-line` references in backticks, with the code name that a pair form puts beside the reference. */
-export function lineRefsIn(docs: Doc[]): { path: string; from: number; line: number; name?: string; quote: string; file: string; at: number }[] {
+function lineRefsIn(docs: Doc[]): { path: string; from: number; line: number; name?: string; quote: string; file: string; at: number }[] {
   const out: { path: string; from: number; line: number; name?: string; quote: string; file: string; at: number }[] = [];
   each(docs, (d, text, at) => {
     for (const m of text.matchAll(/`((?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[a-z]{1,5}):(\d+)(?:-(\d+))?`/g)) {
@@ -149,7 +149,7 @@ const SELECTOR_IN = new RegExp(String.raw`\`([.#][\w.#>+~: -]*[\w)])\`\s+(?:in|f
 const SYMBOL_OF = new RegExp(String.raw`\`(${PATH})\`'s\s+\`(${IDENT})(?:\(\))?\``, "g");
 
 /** The code names a doc places in a file: `` `name` in `path` ``, `from`, `of`, and `` `path`'s `name` ``. */
-export function symbolsIn(docs: Doc[]): { symbol: string; path: string; quote: string; file: string; line: number }[] {
+function symbolsIn(docs: Doc[]): { symbol: string; path: string; quote: string; file: string; line: number }[] {
   const out: { symbol: string; path: string; quote: string; file: string; line: number }[] = [];
   each(docs, (d, text, line) => {
     for (const m of text.matchAll(SYMBOL_IN)) out.push({ symbol: m[1], path: m[2], quote: m[0], file: d.file, line });
@@ -160,7 +160,7 @@ export function symbolsIn(docs: Doc[]): { symbol: string; path: string; quote: s
 }
 
 /** The claims that a file imports only some modules: `` `path` imports only `a`, `b` and `c` ``. */
-export function importClaimsIn(docs: Doc[]): { path: string; modules: string[]; quote: string; file: string; line: number }[] {
+function importClaimsIn(docs: Doc[]): { path: string; modules: string[]; quote: string; file: string; line: number }[] {
   const out: { path: string; modules: string[]; quote: string; file: string; line: number }[] = [];
   each(docs, (d, text, line) => {
     for (const m of text.matchAll(new RegExp(String.raw`\`(${PATH})\`[^.;]*?\bimports\s+only\s+((?:\`[^\`]+\`(?:\s*,\s*|\s+and\s+|,\s+and\s+)?)+)`, "g"))) {
@@ -171,7 +171,7 @@ export function importClaimsIn(docs: Doc[]): { path: string; modules: string[]; 
 }
 
 /** The module specifiers a source file imports, static, side-effect, re-export and dynamic. */
-export function importsOf(text: string): string[] {
+function importsOf(text: string): string[] {
   const out = new Set<string>();
   for (const m of text.matchAll(/^\s*(?:import|export)\b[^"'`;]*?\bfrom\s*["']([^"']+)["']/gm)) out.add(m[1]);
   for (const m of text.matchAll(/^\s*import\s*["']([^"']+)["']/gm)) out.add(m[1]);
@@ -180,7 +180,7 @@ export function importsOf(text: string): string[] {
 }
 
 /** The `--flags` of `aleph` and `aleph-ui` commands in code spans and code blocks, with the command they follow. */
-export function flagsIn(docs: Doc[]): { flag: string; command: string; file: string; line: number }[] {
+function flagsIn(docs: Doc[]): { flag: string; command: string; file: string; line: number }[] {
   const out: { flag: string; command: string; file: string; line: number }[] = [];
   for (const d of docs) {
     let fenced = false;

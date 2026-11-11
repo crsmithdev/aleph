@@ -63,7 +63,7 @@ async function exec(argv: string[], o: { cwd: string; env: Record<string, string
 }
 
 /** The text of the last result event (resultOf); else the last assistant text; else empty. */
-export function resultText(log: string): string {
+function resultText(log: string): string {
   let text = "";
   for (const line of log.split("\n")) {
     let ev: any;

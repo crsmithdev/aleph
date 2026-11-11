@@ -43,7 +43,7 @@ import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
 
 
 /** The buildable issues of each factory repo. */
-export const openIssues = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => buildableIssues(sandboxRepos(), lists);
+const openIssues = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => buildableIssues(sandboxRepos(), lists);
 
 /** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick's sweep still does. */
 
@@ -204,7 +204,7 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
 }
 
 /** True from 03:00 local, when the store has not been mined on this local date. */
-export function correctionsDue(now = Date.now()): boolean {
+function correctionsDue(now = Date.now()): boolean {
   if (new Date(now).getHours() < 3) return false;
   const at = readStore().minedAt;
   const t = Date.parse(at);
@@ -301,7 +301,7 @@ export async function episodeStep(): Promise<string[]> {
  * Main's state as the last suite run recorded it in baseline.json. A red record stays red until a later suite run
  * is green, also when main has moved since; a repo with no record is unchecked.
  */
-export function mainState(repo: Repo): MainState {
+function mainState(repo: Repo): MainState {
   const b = baselines()[repo.key];
   if (!b) return { state: "unchecked", line: "main is unchecked: no suite run yet" };
   return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };

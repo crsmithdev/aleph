@@ -9,8 +9,8 @@ import { join } from "node:path";
 import { git } from "../infra/git.ts";
 import { loadRegistry, type Entry, type Repo } from "./ledger.ts";
 
-export const DIFF_FILE = "diff.patch";
-export const STAT_FILE = "diff.stat";
+const DIFF_FILE = "diff.patch";
+const STAT_FILE = "diff.stat";
 
 export interface JobDiff { diff: string; stat: string }
 

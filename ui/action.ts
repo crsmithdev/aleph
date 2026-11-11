@@ -15,7 +15,7 @@ import { sameSite } from "./http.ts";
 import type { Handler } from "./server.ts";
 
 /** A failed action: the status and the reason the page shows. */
-export class Fail extends Error {
+class Fail extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 

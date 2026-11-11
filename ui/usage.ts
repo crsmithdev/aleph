@@ -197,7 +197,7 @@ export function share(f: Fit | null, cost: number | undefined, model?: string): 
 }
 
 /** The dollars aleph saw spent since `from`: the ledger's runs, and Langfuse sessions the ledger does not price. */
-export async function spends(from: number): Promise<Spend[]> {
+async function spends(from: number): Promise<Spend[]> {
   const out: Spend[] = [];
   const jobIds = new Set<string>();
   for (const { run } of allRuns()) {

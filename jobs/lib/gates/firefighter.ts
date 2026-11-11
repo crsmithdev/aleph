@@ -31,12 +31,12 @@ import { runFile } from "../records/run-files.ts";
 import { afterFiling } from "../transitions/filing.ts";
 
 /** The most of a log that goes into an issue's request: its last LOG_LINES lines, cut to LOG_CHARS. */
-export const LOG_LINES = 200;
+const LOG_LINES = 200;
 export const LOG_CHARS = 8000;
 /** The most of a log that goes into a note: one line. */
 const NOTE_CHARS = 300;
 
-export type Source = "baseline" | "ci";
+type Source = "baseline" | "ci";
 const SOURCE_NAME: Record<Source, string> = { baseline: "the baseline checks", ci: "GitHub CI on main" };
 
 /** One failure the firefighter files: the repo, the failing commit, what failed, and its log, read only when it is filed. */
@@ -44,7 +44,7 @@ export interface Red { repo: string; commit: string; source: Source; line: strin
 
 /** How the firefighter reads what is outside the factory directory, and what a new issue starts. Tests replace it. */
 export interface Ports extends store.Effects { gh: Gh }
-export const defaultPorts: Ports = { gh, after: afterFiling };
+const defaultPorts: Ports = { gh, after: afterFiling };
 
 /** The failed jobs' log of the GitHub CI run at `url`. */
 const ciLog = (ports: Ports, repo: Repo, url: string): string => {
@@ -57,7 +57,7 @@ const ciLog = (ports: Ports, repo: Repo, url: string): string => {
 const read = (path: string): string => { try { return readFileSync(path, "utf8"); } catch { return ""; } };
 
 /** The last LOG_LINES lines of a log, cut to LOG_CHARS from the front. */
-export function tail(text: string): string {
+function tail(text: string): string {
   const t = text.trimEnd().split("\n").slice(-LOG_LINES).join("\n");
   return t.length > LOG_CHARS ? `…${t.slice(t.length - LOG_CHARS + 1)}` : t;
 }
@@ -126,14 +126,14 @@ const holds = (i: issues.Issue, commit: string) => isRedMain(i) && (i.request.in
 const TITLES: Record<Source, string> = { baseline: "Fix the red main at", ci: "Fix the red CI on main at" };
 const titleOf = (r: Red) => (/^[0-9a-f]{7,}$/.test(r.commit) ? `${TITLES[r.source]} ${r.commit.slice(0, 7)}` : TITLES[r.source].replace(/ at$/, ""));
 
-export type Filed = { repo: string; commit: string; source: Source } & ({ filed: number } | { noted: number });
+type Filed = { repo: string; commit: string; source: Source } & ({ filed: number } | { noted: number });
 
 /**
  * File one red: nothing when an issue of the repo already holds its commit; a note on the newest open red-main issue
  * whose failure failed the same tests, when there is one; else a new critical issue with the log's tail. The check runs
  * again inside the write, on the store as it is then, so two ticks at once file it once.
  */
-export function fileRed(r: Red, effects: store.Effects = defaultPorts): Filed | null {
+function fileRed(r: Red, effects: store.Effects = defaultPorts): Filed | null {
   if ((store.reader().list(r.repo)?.items ?? []).some((i) => holds(i, r.commit))) return null;
   const repo = loadRegistry()[r.repo];
   if (!repo) return null;

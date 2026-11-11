@@ -40,7 +40,7 @@ export type Route =
   | { route: "ask"; reason: string; ask: Ask };
 
 /** The routes as recorded on the run and counted. */
-export type Applied = "build" | "close" | "done" | "ask";
+type Applied = "build" | "close" | "done" | "ask";
 export type Counts = Partial<Record<Applied, number>>;
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -530,7 +530,3 @@ export async function intakeIssue(repo: Repo, id: number, done: (ref: string) =>
   return { counts, skipped };
 }
 
-
-/** `build 1, close 2` for the tick's line; "none" when nothing was taken in. */
-export const countsLine = (c: Counts): string =>
-  Object.entries(c).map(([k, v]) => `${k} ${v}`).join(", ") || "none";

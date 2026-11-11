@@ -40,7 +40,7 @@ export function git(cwd: string, ...args: string[]): { ok: boolean; out: string 
   return gitWith({}, cwd, ...args);
 }
 
-export function gitWith(o: { env?: Record<string, string>; stdin?: string | Uint8Array }, cwd: string, ...args: string[]): { ok: boolean; out: string } {
+function gitWith(o: { env?: Record<string, string>; stdin?: string | Uint8Array }, cwd: string, ...args: string[]): { ok: boolean; out: string } {
   // Several facts gates write the vault in the same second; a git call that
   // meets another's index.lock waits and tries again (6 facts lost to it, 1 to 3 Nov).
   for (let i = 0; ; i++) {

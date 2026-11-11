@@ -13,7 +13,7 @@ import { refuse } from "./refusal.ts";
 
 export type By = "you" | "agent";
 export type Status = "open" | "resolved";
-export interface Reply { by: By; text: string; at: string }
+interface Reply { by: By; text: string; at: string }
 export interface Note { v: 2; id: string; url: string; selector: string; text: string; html: string; note: string; status: Status; by: By; replies: Reply[]; at: string }
 
 const BY: By[] = ["you", "agent"];

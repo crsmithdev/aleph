@@ -44,13 +44,13 @@ import { writeTitle } from "./title.ts";
 
 const DIRECTOR_MODEL = () => readModels().director?.model ?? OPUS_MODEL;
 /** One run per Ask: its time box in seconds. */
-export const SECONDS = 900;
+const SECONDS = 900;
 /** The most actions one run may take; the rest are refused. */
 export const MAX_ACTIONS = 10;
 /** The reasons whose Ask the director decides once per issue: a second one on the same issue goes to Chris. */
-export const ONCE_PER_ISSUE = ["run-cap", "rescue"];
+const ONCE_PER_ISSUE = ["run-cap", "rescue"];
 /** Changed files that put a run's land on the escalation list besides the security paths. */
-export const HELD_FILES = ["bun.lock"];
+const HELD_FILES = ["bun.lock"];
 const TAIL = 40;
 const MAX_FILE = 4000;
 const RECORD_LINES = 20;
@@ -65,7 +65,7 @@ export type Case =
   | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue }
   | { at: "lesson"; on: string; repo?: Repo; lesson: Lesson };
 
-export type Text = Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend">;
+type Text = Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend">;
 
 /** An item's number as the store and the ledger give it: a whole `n` as a number, a part as `"<n>.<k>"`. */
 const idOf = (i: issues.Issue): number | string => (i.sub === undefined ? i.id : issues.refOf(i));
@@ -107,10 +107,10 @@ export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = all
 const questionOf = (c: Case): string => (c.at === "lesson" ? c.lesson.sentence : c.ask.question);
 const reasonName = (c: Case): string => (c.at === "lesson" ? `proposal-${c.lesson.kind}` : c.ask.reason);
 /** The issue or thing the case is about, as the log names it: the item's ref, a run's item or job, a lesson's id. */
-export const refOf = (c: Case): string => (c.at === "run" ? c.entry.run.on ?? c.entry.run.name : c.on);
+const refOf = (c: Case): string => (c.at === "run" ? c.entry.run.on ?? c.entry.run.name : c.on);
 
 /** The actions Chris's card offers, each owed an effect: the reason's actions, with `decide` as one `decide:<label>` per option. */
-export function actionsOf(c: Case): string[] {
+function actionsOf(c: Case): string[] {
   if (c.at === "lesson") return ["approve", "decline"];
   const reason = reasonOf(c.ask.reason);
   const acts = actionsOn(reason, { run: c.at === "run", decision: c.ask.options.length > 0 });
@@ -154,7 +154,7 @@ const escalatedBefore = (c: Case, rec: Decision[]): boolean => {
 };
 
 /** A held path the branch changes (a security path or bun.lock), or null; "unknown" when there is no branch to read. */
-export function heldChange(repo: Repo, branch: string | undefined): string | null | "unknown" {
+function heldChange(repo: Repo, branch: string | undefined): string | null | "unknown" {
   if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return "unknown";
   const main = git(repo.path, "rev-parse", "--verify", "-q", `origin/${repo.main}`).ok ? `origin/${repo.main}` : repo.main;
   const fork = git(repo.path, "merge-base", main, `refs/heads/${branch}`);
@@ -182,7 +182,7 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
  * cannot be read), and a second run-cap or rescue Ask on an issue the director already
  * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
  */
-export function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
+function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
   if (c.at === "lesson" || c.ask.reason.startsWith("proposal-")) return { why: "a memory proposal is Chris's" };
   if (ONCE_PER_ISSUE.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
     return { why: `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris` };
@@ -258,7 +258,7 @@ const CASE_TEXT = (acts: string[]): string => `The case text is "case": its "hea
 const pastLines = (rec: Decision[]): string =>
   rec.slice(-RECORD_LINES).map((d) => `- ${d.at.slice(0, 16)} ${d.ref} (${d.reason}): ${d.outcome}${d.why ? ` (${d.why})` : ""}${d.applied.length ? `; did ${d.applied.join("; ")}` : ""}${d.refused.length ? `; refused ${d.refused.join("; ")}` : ""}`).join("\n") || "(none yet)";
 
-export function prompt(c: Case, escalated: string | null, rec: Decision[] = readRecord()): string {
+function prompt(c: Case, escalated: string | null, rec: Decision[] = readRecord()): string {
   const acts = actionsOf(c);
   const decisions = join(vaultDir(), "wiki", "decisions");
   const head = `You are the factory's director. Every Ask, a stop where the factory would wait for Chris, comes to you first. You decide it as Chris would, on your own judgement, or you escalate it to Chris with your recommendation. You have read-only tools: Read, Grep, Glob, and Bash for \`git status|log|show|diff|ls-files\`, \`ls\`, \`aleph jobs\` and \`aleph issue show|list\`. Change nothing yourself: you propose actions, and the code checks and applies them. Your working directory is the repo${c.repo ? ` ${c.repo.key}` : ""}.
@@ -396,14 +396,14 @@ function parseAction(raw: any): Action | string {
   }
 }
 
-export const describe = (a: Action): string =>
+const describe = (a: Action): string =>
   a.do === "land" ? "land" : a.do === "drop" ? `drop: ${a.reason}${a.after ? ` (after ${a.after.join(", ")})` : ""}`
   : a.do === "answer" ? `answer: ${a.option ? `${a.option}: ` : ""}${a.note}${a.after ? ` (after ${a.after.join(", ")})` : ""}`
   : a.do === "rerun" ? `rerun${a.note ? `: ${a.note}` : ""}` : a.do === "close" ? `close: ${a.note}` : a.do === "drop-issue" ? `drop-issue: ${a.reason}`
   : a.do === "edit-goal" ? `edit-goal${a.body !== undefined ? " (spec)" : ""}${a.after ? ` (after ${a.after.join(", ")})` : ""}` : a.do === "add" ? `add: ${a.title}` : `note: ${a.text}`;
 
 /** The case text in a raw object, or why it does not do. Text over a limit moves to `details` by whole sentences. */
-export function parseCaseText(raw: any, actions: string[]): Text | string {
+function parseCaseText(raw: any, actions: string[]): Text | string {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "not an object";
   const moved: string[] = [];
   const keep = (t: string, limit: { words: number }): string => {
@@ -449,7 +449,7 @@ export function parseReply(raw: any, actions: string[]): Reply | string {
 const sameAsk = (a: Ask | null | undefined, b: Ask): boolean => !!a && reasonOf(a.reason) === reasonOf(b.reason) && a.question === b.question && !a.situation?.trim();
 
 /** Whether the case's Ask is still the same one, with no case text. */
-export function stillOpen(c: Case): boolean {
+function stillOpen(c: Case): boolean {
   if (c.at === "lesson") return proposals().some((l) => l.id === c.lesson.id && l.state === "proposed" && !l.situation?.trim());
   if (c.at === "item") {
     const item = store.reader().item(c.repo.key, idOf(c.item));
@@ -460,7 +460,7 @@ export function stillOpen(c: Case): boolean {
 }
 
 /** Write the text on the Ask, when the Ask is still the same one. Whether it was written. */
-export function writeCaseText(c: Case, t: Text): boolean {
+function writeCaseText(c: Case, t: Text): boolean {
   if (c.at === "item") {
     const item = store.reader().item(c.repo.key, issues.refOf(c.item));
     const now = askOf(c.on);
@@ -487,7 +487,7 @@ export interface Ports extends store.Effects {
   /** Starts a dispatch; a new spec starts its issue at once. */
   dispatch?: () => void;
 }
-export const defaultPorts: Ports = {
+const defaultPorts: Ports = {
   land: (name) => refusal(async () => { await (await landJob(name, { lander: "director" }, { output: "ignore" })).child?.exited; }),
   drop: (name, reason, fate) => refusal(() => dropJob(name, { reason, quiet: true, fate })),
   dispatch: dispatchDetached,
@@ -637,7 +637,7 @@ function escalate(c: Case, base: Omit<Decision, "outcome">, text: Text | string 
 }
 
 /** One director run on one Ask: it decides or escalates. The decision, or null when another run holds the Ask. */
-export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | null> {
+async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | null> {
   const release = await lock(lockName(subjectOfCase(c)), 0);
   if (!release) return null;
   try {

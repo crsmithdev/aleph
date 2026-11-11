@@ -58,9 +58,9 @@ export interface StageRow {
   p90: number | null;
 }
 
-export interface HoldRow { kind: string; records: number; goals: number; hours: number }
+interface HoldRow { kind: string; records: number; goals: number; hours: number }
 
-export interface Window {
+interface Window {
   from: string; to: string;
   stages: StageRow[];
   asks: Record<string, number>;
@@ -88,7 +88,7 @@ export interface Table {
 }
 
 /** The metrics the design names that no recorded data gives; the table says so. */
-export const LEFT_OUT = [
+const LEFT_OUT = [
   "cost of the reviewer: a build run records only its worker's cost",
   "spec checks (before intake) with no usable result, and their time: the job record keeps only the cost",
   "time in each state of an item after its start (awaiting, answered): no record keeps those changes with their times",
@@ -99,7 +99,7 @@ export const LEFT_OUT = [
 const STAGES = ["intake", "spec-check", "build", "review", "recheck", "land", "director", "monitor"];
 
 /** Local midnight of `day` (YYYY-MM-DD), in ms. */
-export const dayStart = (day: string): number => new Date(`${day}T00:00:00`).getTime();
+const dayStart = (day: string): number => new Date(`${day}T00:00:00`).getTime();
 
 /** The local date `n` days after `day`. */
 export function addDays(day: string, n: number): string {
@@ -220,7 +220,7 @@ function quotaAt(usage: Sources["usage"], to: number): number | null {
   return best?.v ?? null;
 }
 
-export function windowOf(src: Sources, from: number, to: number): Window {
+function windowOf(src: Sources, from: number, to: number): Window {
   const h = holdRows(src.holds, from, to);
   return {
     from: new Date(from).toISOString(), to: new Date(to).toISOString(),
@@ -270,7 +270,7 @@ export function flakeHealth(f: FlakeSection): string[] {
 const factoryKeys = (): string[] => Object.values(loadRegistry()).filter((r) => r.sandbox).map((r) => r.key);
 
 /** Each factory repo's open flake tracker, read from `lists`. */
-export function trackersOf(lists: Reader, keys = factoryKeys()): Sources["trackers"] {
+function trackersOf(lists: Reader, keys = factoryKeys()): Sources["trackers"] {
   return keys.flatMap((key) => {
     const doc = lists.list(key);
     const t = doc && flakeTracker(doc);
@@ -380,7 +380,7 @@ export function renderTable(t: Table): string {
   return out.join("\n") + "\n";
 }
 
-export const monitorDir = () => join(layout().factory, "monitor");
+const monitorDir = () => join(layout().factory, "monitor");
 
 /** One day's report: the table, and the reader's ranked findings or why there are none. */
 export interface Report {

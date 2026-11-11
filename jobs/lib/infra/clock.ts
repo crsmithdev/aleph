@@ -16,7 +16,7 @@ const real: Clocks = { wall: () => Date.now(), mono: () => performance.now() };
 export const wallStepSince = (start: { wall: number; mono: number }, c: Clocks = real): number =>
   (c.wall() - start.wall) - (c.mono() - start.mono);
 
-export const clockStart = () => ({ wall: real.wall(), mono: real.mono() });
+const clockStart = () => ({ wall: real.wall(), mono: real.mono() });
 
 /** Watch both clocks for `windowMs`. Returns the step in milliseconds. */
 export async function watchWall(windowMs: number): Promise<number> {
@@ -25,7 +25,7 @@ export async function watchWall(windowMs: number): Promise<number> {
   return wallStepSince(start);
 }
 
-export function onWsl(): boolean {
+function onWsl(): boolean {
   if (windowsTimeCmd()) return true;
   if (process.env.WSL_DISTRO_NAME) return true;
   try { return /microsoft|wsl/i.test(readFileSync("/proc/version", "utf8")); } catch { return false; }

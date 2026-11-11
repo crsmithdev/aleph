@@ -65,9 +65,6 @@ export const isRunning = (e: Entry): boolean => ["live", "starting"].includes(pr
 /** Sidetone's rule (spec 14.10.4): `pid`, no `exit`, and that process names the folder. */
 export const isLive = (folder: string): boolean => processState({ folder, run: { condition: "done" } }) === "live";
 
-/** Made, running, and no `pid` yet, for STARTING_MS. */
-export const isStarting = (e: Entry): boolean => processState(e) === "starting";
-
 /** `pid`, no `exit`, and the process is gone: the run died without an end. */
 export const isLost = (folder: string): boolean => processState({ folder, run: { condition: "done" } }) === "lost";
 

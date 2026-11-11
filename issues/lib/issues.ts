@@ -53,7 +53,7 @@ function setAfter(repo: store.Place, doc: issues.Doc, i: issues.Issue, after: st
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
-export function readIssues(repo: store.Place): issues.Doc {
+function readIssues(repo: store.Place): issues.Doc {
   let doc: issues.Doc | null = null;
   try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
   return doc ?? refuse(`the work store has no list for ${repo.key}`);
@@ -160,7 +160,7 @@ export function list(repo: store.Place, o: { status?: string; label?: string; ki
   return filterRows(readIssues(repo), o);
 }
 
-export function filterRows(doc: issues.Doc, o: { status?: string; label?: string; kind?: string }): issues.Issue[] {
+function filterRows(doc: issues.Doc, o: { status?: string; label?: string; kind?: string }): issues.Issue[] {
   if (o.status && !issues.STATUSES.includes(o.status as issues.Status)) refuse(`status must be one of ${issues.STATUSES.join(", ")}`);
   return doc.items
     .filter((i) => (o.status ? issues.status(i) === o.status : ["open", "parked"].includes(issues.status(i))))

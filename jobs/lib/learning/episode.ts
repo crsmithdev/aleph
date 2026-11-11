@@ -34,7 +34,7 @@ function written(repo: Repo, item: issues.Issue, pages: string[]): boolean {
 }
 
 /** The repo's done issues with a ledger run in the last KEEP_DAYS and no episode page yet. */
-export function doneIssues(repo: Repo, now = Date.now()): issues.Issue[] {
+function doneIssues(repo: Repo, now = Date.now()): issues.Issue[] {
   const doc = readList(repo);
   if (!doc) return [];
   const specced = doc.items.filter((i) => !!i.spec.trim());
@@ -76,8 +76,8 @@ export function episodeTitle(repo: Repo, item: issues.Issue): string {
   return titleUnder(`${repo.key}-${issues.refOf(item)}`, item);
 }
 
-export interface Commit { sha: string; subject: string; stat: string }
-export type Langfuse = { error: string } | { traces: { id: string; tokens: number | null }[] };
+interface Commit { sha: string; subject: string; stat: string }
+type Langfuse = { error: string } | { traces: { id: string; tokens: number | null }[] };
 
 /** The land commits of the issue; a parent has those of its parts. */
 function commitsOf(repo: Repo, item: issues.Issue): Commit[] {
@@ -121,7 +121,7 @@ async function langfuseFor(runs: Entry[]): Promise<Langfuse> {
 
 const minutes = (e: Entry) => Math.max(0, Math.round((epoch(e.run.ended) - epoch(e.run.started)) / 60000)) || 0;
 
-export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
+function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
   const id = `${repo.key}-${issues.refOf(item)}`;
   const sources = [id, ...commits.map((c) => `commit:${c.sha.slice(0, 7)}`), ...runs.map((e) => `run:${e.id}`)];
   const aim = section(item.spec, "Goal") || item.spec.trim() || item.request.trim();
@@ -155,7 +155,7 @@ export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commi
 }
 
 /** Build the page and write it to the episodes folder. */
-export async function writeEpisode(repo: Repo, item: issues.Issue): Promise<{ title: string } | { error: string }> {
+async function writeEpisode(repo: Repo, item: issues.Issue): Promise<{ title: string } | { error: string }> {
   try {
     const title = episodeTitle(repo, item);
     const runs = runsOf(repo, item);
@@ -168,7 +168,7 @@ export async function writeEpisode(repo: Repo, item: issues.Issue): Promise<{ ti
 }
 
 /** Delete the pages last written more than KEEP_DAYS ago. */
-export function pruneEpisodes(now = Date.now()): void {
+function pruneEpisodes(now = Date.now()): void {
   const dir = episodesDir();
   if (!existsSync(dir)) return;
   for (const f of readdirSync(dir)) {

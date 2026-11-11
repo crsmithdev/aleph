@@ -5,22 +5,22 @@ import { basename, join } from "node:path";
 import { allRuns, type Run } from "./lib/records/ledger.ts";
 import { getRun, putRun } from "./lib/records/record.ts";
 import { unitAlive } from "./lib/infra/process.ts";
-export { unitAlive };
 import { config as storeConfig } from "../issues/lib/store.ts";
 import { renderItem } from "../issues/lib/todo.ts";
 import { parseId } from "../lib/naming.ts";
 import { fixture } from "../tests/git-fixture.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
-export let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, reviewer: string, fakeLog: string, setupLog: string;
-export let server: ReturnType<typeof Bun.serve>;
-export let lf: ReturnType<typeof Bun.serve>;
-export let lfStatus = 200;
-export let lfPosts: any[] = [];
+export let base: string, remote: string, repo: string, other: string, itemsRemote: string, jobsDir: string, fakeLog: string, setupLog: string;
+let items: string, fake: string, reviewer: string;
+let server: ReturnType<typeof Bun.serve>;
+let lf: ReturnType<typeof Bun.serve>;
+let lfStatus = 200;
+let lfPosts: any[] = [];
 /** The test's clock: the time setup made `base`, read once from its folder. The stamps a test writes sit at known distances from it. */
 export let now: number;
 export const told: string[] = [];
-export let onTell: ((text: string) => void) | undefined;
+let onTell: ((text: string) => void) | undefined;
 
 /**
  * Writes the fake start command: it starts the job in the background, as `systemd-run` does, and exits 0 once
@@ -64,7 +64,6 @@ const startPids = (startLog: string): number[] => {
   const dir = join(startLog, ".."), name = startLog.slice(dir.length + 1) + ".busy.";
   return readdirSync(dir).filter((f) => f.startsWith(name)).map((f) => Number(f.slice(name.length)));
 };
-export const starting = (startLog: string): boolean => startPids(startLog).length > 0;
 
 /** The pids of the `aleph dispatch` and `aleph intake` processes of this test file's factory, e.g. a detached one from a transition. */
 const dispatchPids = (): number[] => {
@@ -106,12 +105,6 @@ export const issueRuns = (id: string | number): string[] => (existsSync(jobsDir)
 /** The runs of the job `name`, oldest first, only those of `kind` when given: a folder name has the subject, not the job's name or kind. */
 export const jobRuns = (name: string, kind?: string): string[] => allRuns().filter((e) => e.run.name === name && (!kind || e.run.kind === kind)).map((e) => e.id);
 
-/** Every run of the issue has passed, and at least one exists: the start log comes before the run folder, so an empty list is not settled. */
-export const passed = (startLog: string, id: string | number): boolean => {
-  const runs = issueRuns(id);
-  return !starting(startLog) && runs.length > 0 && runs.every((r) => stateNow(r).condition === "passed");
-};
-
 const tail = (f: string, n = 15) => (existsSync(f) ? readFileSync(f, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "(none)");
 /** What a failed concurrency test needs to name its cause: the runs of the given issue ids with their pid and exit, and the factory logs. */
 export function diagnose(label: string, ids: number[], ...results: { code: number; stdout: string; stderr: string }[]): string {
@@ -122,7 +115,7 @@ export function diagnose(label: string, ids: number[], ...results: { code: numbe
 }
 const tail_ = (s: string) => s.trimEnd().split("\n").slice(-15).join("\n");
 
-export const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
@@ -164,7 +157,7 @@ export async function aleph(args: string[], extra: Record<string, string> = {}, 
   try { json = JSON.parse(stdout); } catch {}
   return { code, stdout, stderr: await new Response(p.stderr).text(), json };
 }
-export function specFile(text: string): string {
+function specFile(text: string): string {
   const f = join(base, `spec-${crypto.randomUUID()}.md`);
   writeFileSync(f, text);
   return f;
@@ -189,7 +182,7 @@ export const branchExists = (name: string) => probe(repo, "rev-parse", "--verify
 
 // The reviewer: it keeps its prompt, then answers as the prompt's item asks (REVIEW: in the issue) with structured output, else passes.
 // REVIEW:none gives text with no structured output.
-export const REVIEWER = `#!/bin/bash
+const REVIEWER = `#!/bin/bash
 prompt=$(cat)
 printf '%s' "$prompt" > "$FAKE_LOG/review-prompt"
 echo x >> "$FAKE_LOG/review-calls"
@@ -216,7 +209,7 @@ done();
 /** A shell command that returns once `file` exists or is gone. */
 export const waitCmd = (mode: "exists" | "gone", file: string): string => `${join(base, "wait")} ${mode} ${file}`;
 
-export const FAKE = `#!/bin/bash
+const FAKE = `#!/bin/bash
 prompt=$(cat)
 printf '%s' "$prompt" > "$FAKE_LOG/prompt"
 echo "$@" > "$FAKE_LOG/args"
