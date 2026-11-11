@@ -455,11 +455,11 @@ function entry(e: Entry): string {
 
 /**
  * The runs the report has not shown, oldest first; each is then marked
- * shown. `told` is Sidetone's flag and the report leaves it alone.
+ * shown, unless `peek`. `told` is Sidetone's flag and the report leaves it alone.
  */
-export function report(now = Date.now()): string {
+export function report(now = Date.now(), peek = false): string {
   loadRegistry();
-  const lines = runLines(now);
+  const lines = runLines(now, peek);
   const due = cameDue();
   if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));
   const eps = newEpisodes();
@@ -519,15 +519,15 @@ function cameDue(): string[] {
   return lines;
 }
 
-/** The runs the report has not shown, oldest first; each is then marked shown, and the last line counts the day's runs. */
-function runLines(now: number): string[] {
+/** The runs the report has not shown, oldest first; each is then marked shown unless `peek`, and the last line counts the day's runs. */
+function runLines(now: number, peek: boolean): string[] {
   const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.condition !== "running" && !isRunning(e));
   const lines: string[] = [];
   for (const l of LANES) {
     const here = fresh.filter((e) => laneOf(e) === l);
     if (here.length) lines.push(`${l}:`, ...here.map(entry));
   }
-  for (const e of fresh) patchRun(e.id, { shown: true });
+  if (!peek) for (const e of fresh) patchRun(e.id, { shown: true });
   const today = runsToday(now);
   if (lines.length) lines.push(`runs in the last 24 hours: ${today.length}, ${money(spentToday(now))} at the API price${paused() ? "; the factory is paused" : ""}`);
   return lines;

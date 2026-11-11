@@ -71,7 +71,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   dispatch: { usage: "aleph dispatch", purpose: "start every ready issue up to the live cap" },
   intake: { usage: "aleph intake <repo>-<n>", purpose: "run intake on an issue" },
   status: { usage: "aleph status [<repo>-<n>[.<k>]] [--json]", purpose: "show the stage of an issue, or the recent ones" },
-  report: { usage: "aleph report [--hook]", purpose: "show the runs not yet seen and the factory's health" },
+  report: { usage: "aleph report [--hook|--peek]", purpose: "show the runs not yet seen and the factory's health; --peek leaves the runs unseen" },
   pause: { usage: "aleph pause", purpose: "stop the factory from starting work" },
   resume: { usage: "aleph resume", purpose: "let the factory start work again" },
   always: { usage: "aleph always <list|grant <reason> <action>|revoke <reason>|timeout [<reason> <minutes>]>", purpose: "list and change the standing permissions" },
@@ -405,7 +405,8 @@ async function tickCmd(ctx: Ctx): Promise<void> {
  * `aleph report`: the runs not yet shown, how far each factory repo's
  * checkout is behind origin, and the health lines: the factory's alarms, then the
  * monitor's flake counts and its newest report. With --hook it prints the
- * SessionStart hook's JSON from hookLines, read-only, and nothing when there is nothing to act on.
+ * SessionStart hook's JSON from hookLines, read-only, and nothing when there is nothing to act on. With --peek the
+ * runs stay unshown, for a check or a test that is not Chris reading.
  */
 function reportCmd(ctx: Ctx): void {
   if (ctx.rest.includes("--hook")) {
@@ -414,7 +415,7 @@ function reportCmd(ctx: Ctx): void {
     if (lines.length) ctx.out({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") } });
     return;
   }
-  const lines = [report()];
+  const lines = [report(Date.now(), ctx.rest.includes("--peek"))];
   for (const repo of Object.values(loadRegistry()).filter((r) => r.sandbox)) {
     fetchOrigin(repo.path);
     lines.push(behind(repo) ?? "");
