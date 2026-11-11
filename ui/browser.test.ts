@@ -263,14 +263,14 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(r).toMatchObject({ values: 17, contrast: 13 });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
-    // The contents panel: one link per group and per specimen, each to an id on the page; a click scrolls and keeps the route.
-    expect(await page.ev(`(() => { const ids = [...document.querySelectorAll(".kit-toc a")].map((a) => a.getAttribute("href").slice(1)), want = document.querySelectorAll("h2.kit-h, .kit-spec[id]");
-      return { n: ids.length === want.length, ok: ids.every((i) => document.getElementById(i)), groups: [...document.querySelectorAll(".kit-toc a.grp")].map((a) => a.textContent) }; })()`)).toEqual({
-      n: true, ok: true, groups: ["Foundations", "Content", "Structure", "Data", "Lists of items", "Labels", "Actions", "Text", "Controls", "States"] });
-    await page.ev('document.querySelector(".kit-toc a[href=\'#kit-interaction\']").click()');
-    await page.when('(() => { const t = document.getElementById("kit-interaction").getBoundingClientRect().top; return t >= 0 && t < innerHeight; })()');
+    // The contents: one link per group and per specimen, each to an id on the page; a click scrolls, keeps the route and marks its entry.
+    expect(await page.ev(`(() => { const nav = document.querySelector(".toc"), ids = [...nav.querySelectorAll("a")].map((a) => a.getAttribute("href").slice(1)), want = document.querySelectorAll("h2.kit-h, .kit-spec[id]");
+      return { n: ids.length === want.length, ok: ids.every((i) => document.getElementById(i)), groups: [...nav.querySelectorAll("li:not(.sub) a")].map((a) => a.textContent) }; })()`)).toEqual({
+      n: true, ok: true, groups: ["Every component", "Foundations", "Content", "Structure", "Data", "Lists of items", "Labels", "Actions", "Text", "Controls", "States"] });
+    await page.ev('document.querySelector(".toc a[href=\'#kit-table\']").click()');
+    await page.when('document.querySelector(".toc a[aria-current]")?.textContent === "Table"');
     expect(await hash()).toMatch(/^#\/kit/);
-    expect(await page.ev('getComputedStyle(document.querySelector(".kit-toc")).position')).toBe("sticky");
+    expect(await page.ev('getComputedStyle(document.querySelector(".toc")).position')).toBe("sticky");
     // Mount the kit again through the theme pick: one click on the confirm button arms it and does not drop it.
     await page.ev('document.querySelector("button[data-theme-pick=light]").click()');
     await page.when('document.documentElement.dataset.theme === "light" && document.querySelector("[data-kit-confirm]")');

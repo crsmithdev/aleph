@@ -497,6 +497,13 @@ test("arm() arms on the first click, lets the second through, and restores the t
   expect(b2.textContent).toBe("Drop");
 });
 
+test("toc() links each entry to its section in place, indents a sub entry, and escapes a label", () => {
+  const t = lib.toc([["s-a", "A & B"], ["s-b", "B", true]], "<p>body</p>");
+  expect(t).toContain('<li><a href="#s-a">A &amp; B</a></li>');
+  expect(t).toContain('<li class="sub"><a href="#s-b">B</a></li>');
+  expect(t).toEndWith('<div class="toc-body"><p>body</p></div></div>');
+});
+
 test("tabs() opens one pane, setting() is a form only with a Save, statusLight() maps unknown to a muted dot", () => {
   const t = lib.tabs("T", [["a", "A"], ["b", "B"]], { a: "<p>1</p>", b: "<p>2</p>" }, "b");
   expect(t).toContain('data-tab="a"');

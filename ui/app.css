@@ -265,7 +265,25 @@ main { min-width: 0; }
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--sp-28); align-items: start; }
 .rail { position: sticky; top: 16px; }
 /* Status: Issues rows, then Lands 2/3 beside Jobs 1/3, then Triage; sections hold grids of cards */
-.page > section, section.wide { margin: 0 0 var(--sp-28); min-width: 0; }
+.page > section, .toc-body > section, section.wide { margin: 0 0 var(--sp-28); min-width: 0; }
+
+/* The contents (toc() in ui/lib.js): a rail at the right that stays in view, at 1100px and wider; a fold above the body under that. */
+.toc-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: var(--sp-28); align-items: start; }
+.toc-body { grid-area: 1 / 1; min-width: 0; }
+/* The rail ends above the kit dock: 136px tall, 16px from the bottom, so 168px with the 16px at the top. */
+.toc { grid-area: 1 / 2; position: sticky; top: var(--sp-16); max-height: calc(100vh - 168px); overflow-y: auto; font-size: var(--fs-sm); }
+.toc details { margin: 0; padding: 0; border: 0; }
+.toc summary { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); cursor: pointer; }
+.toc ol { list-style: none; margin: var(--sp-8) 0 0; padding: 0; border-left: 1px solid var(--rule); }
+.toc a { display: block; padding: var(--sp-2) var(--sp-10); color: var(--muted); text-decoration: none; }
+.toc .sub a { padding-left: var(--sp-24); }
+.toc a:hover { color: var(--ink); }
+.toc a[aria-current] { color: var(--ink); font-weight: var(--fw-strong); box-shadow: inset 2px 0 0 var(--ink); }
+.toc-body [id] { scroll-margin-top: var(--sp-16); }
+@media (max-width: 1100px) {
+  .toc-wrap { display: block; }
+  .toc { position: static; max-height: none; margin: 0 0 var(--sp-20); }
+}
 section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--sp-12); }
 .cards.one { grid-template-columns: minmax(0, 1fr); }
@@ -1186,13 +1204,6 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .kit-spec > .kit-rules { max-width: 72rem; font-size: var(--fs-sm); color: var(--ink-2); border-top: 1px solid var(--rule); padding-top: var(--sp-12); }
 .kit-rules ul { margin: 0; padding-left: var(--indent-list); }
 .kit-rules table { width: 100%; }
-/* The contents panel stays in view beside the specimens; on a phone it is left out. */
-.kit-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 14rem; gap: var(--sp-28); align-items: start; }
-.kit-toc { position: sticky; top: var(--sp-16); max-height: calc(100vh - 2 * var(--sp-16)); overflow-y: auto; display: flex; flex-direction: column; font-size: var(--fs-xs); }
-.kit-toc a { padding: var(--sp-2) 0 var(--sp-2) var(--sp-8); color: var(--ink-2); text-decoration: none; }
-.kit-toc a:hover { color: var(--ink); }
-.kit-toc a.grp { margin-top: var(--sp-8); padding-left: 0; color: var(--ink); font-weight: var(--fw-strong); }
-@media (max-width: 720px) { .kit-wrap { grid-template-columns: minmax(0, 1fr); } .kit-toc { display: none; } }
 .kit-h { font-family: var(--display); font-size: var(--fs-xl); margin: var(--sp-28) 0 var(--sp-12); }
 .kit-row { display: flex; flex-wrap: wrap; gap: var(--sp-12); align-items: center; margin-bottom: var(--sp-12); }
 .kit-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-8); }

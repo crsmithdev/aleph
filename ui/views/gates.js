@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, setting, settings, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, setting, settings, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
@@ -37,10 +37,13 @@ export const BY = { human: "need", rule: "done", director: "parked", firefighter
 
 const PAGE = 50;
 
+const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"], ["gates-waiting", "Waiting for You"], ["gates-repeats", "Rule Candidates"],
+  ["rules", "Rules"], ["gates-caps", "Controls"], ["gates-held", "Held Paths"], ["gates-log", "Log"]];
+
 export function renderGates(d, q = new URLSearchParams()) {
-  return `<div class="page gates">${pageHead("Automation", { aside: scope(q).bar() })}` +
+  return `<div class="page gates">${pageHead("Automation", { aside: scope(q).bar() })}` + toc(CONTENTS,
     renderNow(d) + (d.backend ? `<p class="quiet" id="gates-backend">Waiting for ${esc(d.backend.via)}: ${esc(d.backend.why)}</p>` : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
-    `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE)) + `</div>`;
+    `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE))) + `</div>`;
 }
 
 /** The environment variable that overrides each key of caps.json, as jobs/lib/infra/settings.ts names it. */
@@ -157,7 +160,7 @@ export function renderHeld(d) {
     ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${r.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>`).join("")
     : empty("No repo names held paths.", "Add held globs to a repo in the registry.");
   return card("Held Paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the job. A test is never held.</p>` +
-    `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`, { label: "Held paths" });
+    `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`, { id: "gates-held", label: "Held paths" });
 }
 
 /** An ID of the log in its short form, as a link to its issue page: a job ID links to its subject's. Other text stays text. */
@@ -190,6 +193,7 @@ export function renderLog(d, by, limit = PAGE) {
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
 export function mount(root) {
   scope().wire(root);
+  wireToc(root);
   root.onsubmit = async (e) => {
     const sched = e.target.closest?.("form[data-schedule]");
     if (sched) {

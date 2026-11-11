@@ -2,7 +2,7 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, arm, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, arm, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -20,14 +20,17 @@ export function section(doc, name) {
   return lines.slice(i + 1, end < 0 ? undefined : end).join("\n").trim();
 }
 
-let doc = "";
+let doc = "", items = [];
 /** One specimen: its name, a line on what it shows, its HTML, and the rules under the doc's heading `rules` (none for ""). Not a card, so a card in it is not nested. */
 const spec = (id, title, body, note = "", rules = title) => {
   const names = [rules].flat().filter(Boolean);
+  items.push([`kit-${id}`, title, true]);
   const text = names.length > 1 ? names.map((n) => `#### ${n}\n\n${section(doc, n)}`).join("\n\n") : names.length ? section(doc, names[0]) : "";
   return `<section class="kit-spec" id="kit-${id}" data-annotate="kit/${id}"><h3>${title}</h3>` +
     `<div class="kit-specimen">${note ? `<p class="hint">${note}</p>` : ""}${body}</div>${text ? `<div class="kit-rules md">${md(text)}</div>` : ""}</section>`;
 };
+/** A group heading of the page, and its entry in the contents. */
+const group = (name) => { const id = `kit-g-${name.toLowerCase().replace(/\W+/g, "-")}`; items.push([id, name]); return `<h2 class="kit-h" id="${id}">${name}</h2>`; };
 const row = (...xs) => `<div class="kit-row">${xs.join("")}</div>`;
 
 const FRAMES = {
@@ -130,36 +133,38 @@ function renderKit(d, query) {
   doc = d?.body ?? "";
   const theme = THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system";
   const sort = { key: "at", dir: -1 };
-  return `<div class="page kit">${crumb("#/", [["aleph", "#/"], ["kit"]])}` +
+  items = [["kit-every", "Every component"]];
+  const head = `<div class="page kit">${crumb("#/", [["aleph", "#/"], ["kit"]])}` +
     pageHead("Kit", { aside: seg("Theme", THEMES.map((t) => ({ label: t[0].toUpperCase() + t.slice(1), on: t === theme, attrs: ` data-theme-pick="${t}"` }))) }) +
-    `<p class="hint">Each component of <code>docs/design.md</code>, drawn by its own helper. Pin a note on a specimen with the annotate tool.</p>` +
-    `<div class="kit-wrap"><div class="kit-body">` +
-    `<section class="kit-spec" data-annotate="kit/every"><h3>Every component</h3><div class="kit-rules md">${md(section(doc, "Every component"))}</div></section>` +
+    `<p class="hint">Each component of <code>docs/design.md</code>, drawn by its own helper. Pin a note on a specimen with the annotate tool.</p>`;
+  const body = `<section class="kit-spec" id="kit-every" data-annotate="kit/every"><h3>Every component</h3><div class="kit-rules md">${md(section(doc, "Every component"))}</div></section>` +
 
-    `<h2 class="kit-h">Foundations</h2>` +
+    group("Foundations") +
     COLOURS.map(([id, name]) => spec(id, name, `<div class="kit-swatches" data-tokens="${id}"></div>`, id === "surfaces" ? "Each swatch: light on the left, dark on the right, read from the stylesheet." : "")).join("") +
     spec("contrast", "Contrast", `<div data-tokens="contrast"></div>`, "Each ratio is computed now from the light and the dark token values. Text needs 4.5:1.") +
     spec("type", "Type", `<div data-tokens="type"></div>`, "", ["Sizes", "Weights and families", "Tracking and line height"]) +
     spec("space", "Space and shape", `<div class="kit-row" data-tokens="space"></div><div class="kit-row" data-tokens="radius"></div><div class="kit-row" data-tokens="layers"></div>`, "",
       ["Spacing", "Radii", "Controls and layers", "Breakpoints and motion"]) +
 
-    `<h2 class="kit-h">Content</h2>` +
+    group("Content") +
     spec("values", "Values", dataTable(heads(["Kind", "Helper", "Renders", "Missing"]), VALUES.map(([k, h, f, xs, none]) =>
       `<tr><td>${k}</td><td><code>${h}</code></td><td class="num">${xs.map((x) => f(x)).join(", ")}</td><td class="num">${none ? '<span class="quiet">none</span>' : f(null) || '<span class="quiet">empty</span>'}</td></tr>`).join(""), { fit: true }),
       "Each helper's output now, and its output for no value.") +
     spec("words", "Words", pageHead("Running", { count: 3 }) + row(badge("running"), badge("landed"), priorityBadge("critical")) +
       empty("No job matches.", "Widen the window or clear a filter.") + error("The agents did not load.") + loadingLine("Jobs")) +
 
-    `<h2 class="kit-h">Structure</h2>` +
+    group("Structure") +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
     spec("detail-panel", "Detail panel", panel("kit-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 80 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>")) +
     spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +
     spec("status-row", "Status row", statusRow(badge("running"), priorityBadge("high"), chips(["ui", "design"])), "Built by statusRow().") +
     spec("card", "Card", card("Section", "<p>The body of a card.</p>", { count: 3, aside: actButton("Action") })) +
     spec("pair", "Pair", `<div class="pair">${card("First", "<p>Two cards side by side.</p>")}${card("Second", "<p>Each is at least 320px wide, so they stack on a phone.</p>")}</div>`) +
+    spec("contents", "Contents", toc([["kit-card", "Card"], ["kit-pair", "Pair"], ["kit-contents", "Contents", true]], "<p>The body of a page, beside its contents.</p>"),
+      "A small copy. The contents of this page, at the right, are the live ones.") +
     spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/kit-page</code>"]])) +
 
-    `<h2 class="kit-h">Data</h2>` +
+    group("Data") +
     spec("metric", "Metric card", tiles("Metric cards",
       statCard({ k: "Runs", v: "198", trend: cardTrend(198, 160, 171, { kind: "relative", lowerIsGood: false, format: String, basis: "4-week mean" }), note: "today" }) +
       statCard({ k: "Lead time", v: "2.4h", trend: cardTrend(2.4, 1.8, 2, { kind: "relative", lowerIsGood: true, format: String, basis: "4-week mean" }), note: "median" }) +
@@ -181,18 +186,18 @@ function renderKit(d, query) {
     spec("legend", "Legend", legendHtml([["build", "t-build"], ["bad", "t-bad"], ["land", "t-land"], ["wait", "t-wait"], ["awaiting you", "t-chris"]])) +
     spec("timeline", "Timeline", renderTimeline(TIMELINE)) +
 
-    `<h2 class="kit-h">Lists of items</h2>` +
+    group("Lists of items") +
     spec("lanes", "Item card and lane", renderLanes(STATUS), "", ["Item card", "Lane"]) +
     spec("ask", "Ask card", askCard(ASK, STATUS.now)) +
     spec("feed", "Feed row", FEED.map((e) => eventRow(e)).join("")) +
     spec("findings", "Findings list", findingsList(["Two jobs ran over the cap at `09:12`.", "No check failed."])) +
 
-    `<h2 class="kit-h">Labels</h2>` +
+    group("Labels") +
     spec("badge", "Badge", row(...["open", "running", "landed", "waiting", "failed", "parked", "dropped"].map(badge)) + row(...["critical", "high", "medium", "low"].map(priorityBadge)) + row(tag("any text"), tag("with a title", "need", "the title"))) +
     spec("chip", "Chip", chips(["ui", "design", "a-long-label-name"])) +
     spec("status-light", "Status light", row(statusLight("fine", "Local server: up"), statusLight("alert", "OpenRouter: down"), statusLight("unknown", "Monitor: –"))) +
 
-    `<h2 class="kit-h">Actions</h2>` +
+    group("Actions") +
     spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`)) +
     spec("link-button", "Link button", row(linkButton("Issue", "#/kit"), linkButton("Next sub-issue: a1701", "#/kit"))) +
     spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide"><a href="#/kit">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
@@ -204,10 +209,10 @@ function renderKit(d, query) {
     spec("disclosure", "Disclosure", fold("Closed by default", "<p>The body of a fold.</p>") + fold("Open by default", "<p>The body of a fold.</p>", { open: true }) +
       fold("Technical details", `<div class="body"><p>A run id and its log path.</p></div>`, { cls: "more" }) + clamp(`<p>${"A long text that clamps. ".repeat(30)}</p>`)) +
 
-    `<h2 class="kit-h">Text</h2>` +
+    group("Text") +
     spec("markdown", "Markdown and code", `<div class="md">${md(MD)}</div>`) +
     spec("diff", "Diff", `<div class="diff-panel">${diffHtml(DIFF)}</div>`) +
-    `<h2 class="kit-h">Controls</h2>` +
+    group("Controls") +
     spec("filter", "Filter bar", filterBar([
       { label: "Status", name: "status", value: "open", options: ["open", "done", "dropped"] },
       { label: "Project", name: "project", data: true, value: "", options: [{ value: "", label: "All" }, "aleph", "sidetone"] },
@@ -227,12 +232,12 @@ function renderKit(d, query) {
       `<span class="edit-only">${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true })}</span></div></div>`) +
     spec("states", "Empty state", empty("Nothing waits for you.", "An Ask shows here when the factory needs you.") + loadingLine("jobs") + error("The jobs did not load.") + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
 
-    `<h2 class="kit-h">States</h2>` +
+    group("States") +
     spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,
       `<button class="act" type="button" style="border-color:var(--ink-2)">Hover</button>`, seg("Pressed", [{ label: "Off", on: false, attrs: "" }, { label: "Pressed", on: true, attrs: "" }]),
       `<button class="act" type="button" disabled>Disabled</button>`) + `<div style="max-width:320px">${tiles("Pressed metric card", statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }))}</div>`,
-      "Focus and hover are drawn with inline styles, so they show without a pointer or a keyboard.", "States") +
-    `</div><nav class="kit-toc" aria-label="Contents"></nav></div></div>`;
+      "Focus and hover are drawn with inline styles, so they show without a pointer or a keyboard.", "States");
+  return `${head}${toc(items, body)}</div>`;
 }
 
 /** Each `--` custom property, light and dark, read from the stylesheets: the `:root` rules for light, `:root[data-theme="dark"]` over them for dark.
@@ -298,13 +303,9 @@ export const view = {
   mount: (root, _d, query) => {
     setTheme(THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system");
     drawTokens(root);
-    // The contents panel: a link to each group and each specimen. The router scrolls an in-page `#id` link and leaves the route.
-    root.querySelector(".kit-toc").innerHTML = [...root.querySelectorAll("h2.kit-h, .kit-spec[id]")].map((el) => {
-      if (el.tagName === "H2") el.id = `kit-group-${el.textContent.toLowerCase().replace(/\W+/g, "-")}`;
-      return `<a href="#${el.id}"${el.tagName === "H2" ? ' class="grp"' : ""}>${el.tagName === "H2" ? el.textContent : el.querySelector("h3").textContent}</a>`;
-    }).join("");
     wireTabs(root);
     wireEdit(root);
+    wireToc(root);
     root.onclick = (e) => { const b = e.target.closest("[data-kit-confirm]"); if (b && !arm(b, "Drop a1700? Click again")) b.textContent = "Dropped"; };
     for (const [k, f] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="kit/${k}"]`).frame = f;
     root.querySelector("[data-theme-pick]")?.parentElement.addEventListener("click", (e) => {
