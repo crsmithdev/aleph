@@ -43,13 +43,15 @@ All other hooks **fail open**. An error exits without a block, or prints nothing
 
 ### aleph report
 
-`aleph report --hook` (`reportCmd` in `jobs/commands.ts`) fetches `origin` for each factory repo, then injects:
+`aleph report --hook` (`reportCmd` in `jobs/commands.ts`) injects the lines `hookLines` in `jobs/lib/transitions/factory.ts` builds:
 
-- the runs that no session has shown yet;
-- how far each checkout is behind `origin/main`;
-- health lines, flake lines and the monitor's line.
+- `factory paused`, when the factory is paused;
+- the count of the asks that wait for Chris and the first 5 of their refs;
+- a line for each red main (`redMains`);
+- the stall health lines (`stallLines`);
+- one line for each sandbox checkout that is behind `origin/main`.
 
-It prints nothing when it has nothing to say.
+It fetches `origin` only for the sandbox repos. It prints nothing when `ALEPH_AGENT` is set, or when it has no lines. The unshown runs, the flake lines and the monitor's line are only in plain `aleph report`, which marks the runs it shows as shown unless `--peek`; the hook marks none.
 
 ### vault-recall
 
