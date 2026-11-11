@@ -205,8 +205,8 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 /* Running and Queued share a row; an empty lane shrinks to a dashed box of 220px. */
 .lanes-top { display: flex; gap: var(--sp-12); align-items: stretch; }
 .lanes-top > .lane { flex: 1 1 0; }
-.lanes-top > .lane.none { flex: 0 0 220px; padding: var(--sp-8) var(--sp-10); border: 1px dashed var(--rule); border-radius: var(--r-ctl); background: var(--sunk); }
-.lanes-top > .lane.none .sh { margin: 0; }
+.lanes-top > .lane.none { flex: 0 0 220px; display: flex; flex-direction: column; }
+.lanes-top > .lane.none .empty { flex: 1; padding: var(--sp-8) var(--sp-10); border: 1px dashed var(--rule); border-radius: var(--r-ctl); background: var(--sunk); }
 #lane-done .cards { grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
 /* Each lane head carries its state's dot: running, done, queued. */
 .lane .sh h2::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: var(--r-pill); margin-right: var(--sp-8); vertical-align: middle; background: var(--run); }

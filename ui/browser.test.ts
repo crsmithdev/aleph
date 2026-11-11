@@ -303,6 +303,39 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect([r.badge, r.date, r.dur]).toEqual([0, 0, 0]);
   }, 30_000);
 
+  test("an empty Queued lane keeps its head and rule level with Running's, and only its empty block is the dashed box", async () => {
+    await page.go("#/");
+    const measure = () => page.ev<any>(`import("/views/now.js").then(({ renderLanes }) => {
+      const main = document.createElement("div");
+      main.className = "rail-main";
+      main.innerHTML = renderLanes({ now: "2026-11-02T13:00:00Z", factory: {}, running: [{ name: "a1-1", started: "2026-11-02T12:00:00Z", item: { title: "One running job" } }], queued: [], done: [] });
+      document.body.append(main);
+      const r = (e) => e.getBoundingClientRect(), q = (s) => main.querySelector(s);
+      const run = q("#lane-running"), que = q("#lane-queued"), box = que.querySelector(".empty"), cards = run.querySelectorAll(".lane-card");
+      const out = {
+        head: [r(run.querySelector(".sh")).top - r(q("#lane-queued .sh")).top, r(run.querySelector(".sh")).bottom - r(que.querySelector(".sh")).bottom],
+        laneBorder: getComputedStyle(que).borderTopWidth, boxBorder: getComputedStyle(box).borderTopStyle, width: r(que).width,
+        top: r(box).top - r(cards[0]).top, bottom: r(box).bottom - r(cards[cards.length - 1]).bottom,
+        under: r(box).top - r(que.querySelector(".sh")).bottom, inside: [r(box).left - r(que).left, r(que).right - r(box).right],
+        wide: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+      main.remove();
+      return out;
+    })`);
+    const wide = await measure();
+    expect(Math.abs(wide.head[0])).toBeLessThanOrEqual(1);
+    expect(Math.abs(wide.head[1])).toBeLessThanOrEqual(1);
+    expect([wide.laneBorder, wide.boxBorder, wide.width]).toEqual(["0px", "dashed", 220]);
+    expect(Math.abs(wide.top)).toBeLessThanOrEqual(1);
+    expect(Math.abs(wide.bottom)).toBeLessThanOrEqual(1);
+    await page.width(390);
+    const narrow = await measure();
+    await page.width(1200);
+    expect(narrow.under).toBeGreaterThanOrEqual(0);
+    expect(Math.min(...narrow.inside)).toBeGreaterThanOrEqual(0);
+    expect(narrow.wide).toBeLessThanOrEqual(0);
+  }, 30_000);
+
   test("a timed refresh re-renders, except over an armed button", async () => {
     // The shell reads the global setInterval when the route starts: keep the route's refresh as window.tick, and run it here.
     // The refresh loads only after a quiet minute: window.later() moves the page's clock past it.
