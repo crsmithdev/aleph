@@ -197,14 +197,17 @@ export function share(f: Fit | null, cost: number | undefined, model?: string): 
   return { pct: cost * (own ?? f.pooled), pooled: own === undefined };
 }
 
-/** The dollars aleph saw spent since `from`: the ledger's runs, and Langfuse sessions the ledger does not price. */
+/** The dollars aleph saw spent since `from`: the ledger's runs (a build run's reviewer cost under the review's model), and Langfuse sessions the ledger does not price. */
 export async function spends(from: number): Promise<Spend[]> {
   const out: Spend[] = [];
   const sessions = new Set<string>();
   for (const { run } of allRuns()) {
     if (run.session) sessions.add(run.session);
+    for (const s of run.review?.sessions ?? []) sessions.add(s);
     const at = Date.parse(run.ended ?? run.started);
-    if (run.cost && at >= from) out.push({ at, model: run.model ?? "unknown", cost: run.cost });
+    const rv = run.review?.cost ?? 0;
+    if (run.cost && run.cost - rv > 0 && at >= from) out.push({ at, model: run.model ?? "unknown", cost: run.cost - rv });
+    if (rv > 0 && at >= from) out.push({ at, model: run.review!.model ?? "unknown", cost: rv });
   }
   try {
     const floor = Math.floor(from / HOUR) * HOUR;

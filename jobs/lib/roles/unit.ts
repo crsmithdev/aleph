@@ -668,12 +668,12 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
       const v = parseReview(w.data);
       writeFileSync(runFile(folder, "review.md"), typeof v === "string" ? w.text : v.text);
       const cost = w.cost;
-      const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true, model });
+      const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true, model, session: w.session });
       if (w.cause?.kind === "credit") return { ...none(w.cause.reason), credit: w.cause.reason };
       if (w.cause) return none(w.cause.reason);
       if (typeof v === "string") return none(v);
       writeFileSync(runFile(folder, "review.json"), JSON.stringify({ ...v.json, model }));
-      return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost, model };
+      return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost, model, session: w.session };
     });
   } catch (e) {
     return { reason: `reviewer: no verdict (${e instanceof Error ? e.message : e})`, none: true, model };

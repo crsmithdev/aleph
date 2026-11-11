@@ -14,8 +14,8 @@ import type { Run } from "../records/ledger.ts";
 export type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "review" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
 export interface Verdict { outcome: Outcome; code: number }
 
-/** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict, `credit` its API credit error line when the API refused it, `model` the reviewer model. */
-export interface ReviewCall { reason: string | null; cost?: number; none?: boolean; credit?: string; model?: string }
+/** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict, `credit` its API credit error line when the API refused it, `model` the reviewer model, `session` the session of this call. */
+export interface ReviewCall { reason: string | null; cost?: number; none?: boolean; credit?: string; model?: string; session?: string }
 
 /** What runs each step on the branch. */
 export interface VerdictPorts {
@@ -122,12 +122,14 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
 
   // The reviewer.
   const stat = p.stat();
-  let ms = 0;
+  let ms = 0, spent: number | undefined;
+  const sessions: string[] = [];
   const call = async () => {
     const t = Date.now();
     const rv = await p.review();
     ms += Date.now() - t;
-    if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
+    if (rv.session) sessions.push(rv.session);
+    if (rv.cost !== undefined) { facts.cost = (facts.cost ?? 0) + rv.cost; spent = (spent ?? 0) + rv.cost; }
     return rv;
   };
   let rv = await call();
@@ -135,7 +137,7 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   if (rv.none && !rv.credit) rv = await call();
   // A call the API refused for credit did no work: the run stops as failed with the credit cause, as a worker's does, so it waits for credit and counts no run cap.
   if (rv.credit) return { outcome: { condition: "failed", cause: "credit", reason: rv.credit, ...facts }, code: 1 };
-  const review = (call: "passed" | "returned" | "waiting" | "failed") => ({ call, ...(rv.reason && { reason: rv.reason }), ...(rv.model && { model: rv.model }), seconds: Math.round(ms / 1000) });
+  const review = (call: "passed" | "returned" | "waiting" | "failed") => ({ call, ...(rv.reason && { reason: rv.reason }), ...(rv.model && { model: rv.model }), ...(spent !== undefined && { cost: spent }), ...(sessions.length && { sessions }), seconds: Math.round(ms / 1000) });
   if (!rv.reason) {
     // A reviewed diff that changes a security path or a held path waits for Chris.
     const security = p.security();

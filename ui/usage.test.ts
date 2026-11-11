@@ -215,3 +215,20 @@ test("a Langfuse trace on the session of a ledger run is not counted twice", asy
     if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
   }
 });
+
+test("a build run's reviewer cost is spent on the review's model, and each reviewer session's Langfuse trace is skipped", async () => {
+  const keep = process.env.ALEPH_JOBS_DIR;
+  process.env.ALEPH_JOBS_DIR = join(dir, "runs");
+  const at = new Date(NOW - 2 * H).toISOString();
+  mkdirSync(join(dir, "runs", "r1"), { recursive: true });
+  putRun("r1", { n: 1, job: "j", session: "s1", model: "claude-sonnet-5-5", cost: 5, review: { call: "passed", model: "claude-opus-5-5", cost: 3, sessions: ["rs1", "rs2"] }, started: at, ended: at } as any);
+  use(memory({ traces: [{ id: "t-rs1", sessionId: "rs1", timestamp: at, totalCost: 1, metadata: { model: "claude-opus-5-5" } }, { id: "t-rs2", sessionId: "rs2", timestamp: at, totalCost: 2, metadata: { model: "claude-opus-5-5" } }], observations: [] }));
+  try {
+    const by: Record<string, number> = {};
+    for (const s of await spends(NOW - 6 * H)) by[s.model] = (by[s.model] ?? 0) + s.cost;
+    expect(by).toEqual({ "claude-sonnet-5-5": 2, "claude-opus-5-5": 3 });
+  } finally {
+    use(null);
+    if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
+  }
+});

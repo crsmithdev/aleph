@@ -94,8 +94,18 @@ describe("checks", () => {
 describe("after the checks", () => {
   test("a pass states the checked base and tip and the reviewer's costs", async () => {
     const { p, calls } = ports({ reviews: [{ reason: null, cost: 0.5, model: "m1" }] });
-    expect(await workerVerdict(branch({ facts: { cost: 1 } }), p)).toEqual({ outcome: { condition: "passed", cost: 1.5, review: { call: "passed", model: "m1", seconds: 0 }, ...checked }, code: 0 });
+    expect(await workerVerdict(branch({ facts: { cost: 1 } }), p)).toEqual({ outcome: { condition: "passed", cost: 1.5, review: { call: "passed", model: "m1", cost: 0.5, seconds: 0 }, ...checked }, code: 0 });
     expect(calls).toEqual(["checks", "docClaims", "keepGate", "oracle", "review", "security"]);
+  });
+
+  test("the reviewer's cost is on the review with its sessions; the run's cost is the worker's plus the reviewer's", async () => {
+    const { p } = ports({ reviews: [{ reason: null, cost: 3, model: "claude-opus-5-5", session: "rs" }] });
+    const v = await workerVerdict(branch({ facts: { cost: 2 } }), p);
+    expect(v.outcome.cost).toBe(5);
+    expect(v.outcome.review).toMatchObject({ cost: 3, model: "claude-opus-5-5", sessions: ["rs"] });
+    // A reviewer called twice records both calls' sessions, as its cost sums both calls.
+    const twice = await workerVerdict(branch({ facts: { cost: 2 } }), ports({ reviews: [{ reason: "reviewer: no verdict", none: true, cost: 1, session: "r1" }, { reason: null, cost: 2, session: "r2" }] }).p);
+    expect(twice.outcome.review).toMatchObject({ cost: 3, sessions: ["r1", "r2"] });
   });
 
   test("a security path runs Verify and the reviewer, then waits for Chris with a held-path Ask", async () => {
