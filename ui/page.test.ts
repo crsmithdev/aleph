@@ -37,4 +37,6 @@ test("the style sheet defines the dim, control, bar and spacing tokens and uses 
   const rest = css.replace(root, "");
   expect(rest).not.toMatch(/opacity:\s*\.6\b|(?:min-)?height:\s*28px/);
   expect(rest).not.toMatch(/(?<![\w-])(?:(?:row-|column-)?gap|padding[\w-]*|margin[\w-]*):[^;}]*\b(?:14|18|20|24|28)px/);
+  const spacing = [...rest.matchAll(/(?<![\w-])(?:(?:row-|column-)?gap|padding[\w-]*|margin[\w-]*|scroll-padding[\w-]*):([^;}]*)/g)].map((m) => m[1]);
+  expect(spacing.filter((v) => /(?<![\w.-])-?\d*\.?\d+px/.test(v.replace(/(?<![\w.-])-?1px/g, "")))).toEqual([]);
 });

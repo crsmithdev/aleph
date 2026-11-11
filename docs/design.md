@@ -30,6 +30,8 @@ The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with i
 
 Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, and the `color-mix()` of `.cmd .cp`, all in `ui/app.css`.
 
+Allowed size literals: a width, a height, a position offset, a 1px hairline, and an `em`, `ch`, `%` or `vh` value. A padding, margin, gap or scroll-padding outside `:root` is `0`, `1px`, or built from `--sp-*` and `--gap`. A value above `--sp-28` is a `calc()` of tokens, such as `calc(2 * var(--gap))` for 48px.
+
 ## Foundations
 
 ### Colour
@@ -1276,14 +1278,14 @@ From `bun skills/design-language/scripts/inventory.ts ui --summary`.
 
 | group | kind | count |
 |---|---|---|
-| colour | literal | 5 |
-| colour | token-def | 95 |
+| colour | literal | 6 |
+| colour | token-def | 98 |
 | effect | literal | 36 |
-| effect | token-use | 7 |
+| effect | token-use | 10 |
 | format | helper-bypass | 42 |
-| size | literal | 140 |
+| size | literal | 131 |
 | size | token-def | 18 |
-| size | token-use | 522 |
-| type | literal | 33 |
+| size | token-use | 563 |
+| type | literal | 34 |
 | type | token-def | 42 |
-| type | token-use | 50 |
+| type | token-use | 52 |

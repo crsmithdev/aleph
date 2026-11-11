@@ -188,7 +188,7 @@ test("the waterfall at 390 px: the detail pane stacks under a grid that scrolls 
   const narrow = html.match(/@media \(max-width: 720px\) \{([\s\S]*?)\n\}/g)!.find((b) => b.includes(".wf "))!;
   expect(narrow).toMatch(/\.wf \{ grid-template-columns: minmax\(0, 1fr\); \}/);
   expect(narrow).toMatch(/\.wf-detail \{ position: static; max-height: none; \}/);
-  expect(narrow).toMatch(/\.wf-grid \{ max-height: \d+vh; overflow: auto; scroll-padding-top: 24px; \}/);
+  expect(narrow).toMatch(/\.wf-grid \{ max-height: \d+vh; overflow: auto; scroll-padding-top: var\(--sp-24\); \}/);
 });
 
 test("the Turn page uses pageHead, idLink and when", async () => {
