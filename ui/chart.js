@@ -1,7 +1,7 @@
 // The chart panel: `<aleph-chart key="view/chart">` draws a frame as a card that fills its box. The title, the
 // colours, the units, the aria label, the empty line and the forms on offer come from the frame. The form and the
 // hidden series stay per panel through keep(). A row with an `href` links to its issue: the option carries the link
-// of every point, a category frame lists its linked rows under the chart, and a click on a bar or a label opens it.
+// of every point, and a click on a bar or a label opens it.
 //
 // A frame:
 //   measure: { name, unit: "count" | "usd" | "seconds", agg: "sum" | "max" }
@@ -14,7 +14,7 @@
 //   legend: false hides the legend, for a frame of one key that the title already names.
 //   error, since: the mark of data that failed to rebuild; the panel says how old it is and why.
 // The kind of `over` is the group, and the group gives the forms.
-import { card, chart, count, dur, empty, esc, idLink, keep, kept, legend, markLine, money, pct, readTokens, seg } from "./lib.js";
+import { card, chart, count, dur, empty, esc, keep, kept, legend, markLine, money, pct, readTokens, seg } from "./lib.js";
 import { xLabel } from "./views/speed.js";
 
 /** The forms of each group. The default is the first, except that a time frame of a flow (agg "sum") opens as columns. */
@@ -96,16 +96,12 @@ export function option(f, form, t, hidden = []) {
   };
 }
 
-/** The panel's markup for frame `f` in `form`: the card, its form control, the chart box and the links of its rows, or the empty line. */
+/** The panel's markup for frame `f` in `form`: the card, its form control and the chart box, or the empty line. */
 export function panel(f, form) {
   const mark = f.error && f.since ? `<p class="aged" role="alert">${esc(markLine(title(f), f))}</p>` : "";
   if (!shown(f).length) return card(title(f), mark + empty(f.empty ?? "Nothing to plot in this window."));
   const forms = seg("Chart form", FORMS[f.over.kind].map((x) => ({ label: x.label, icon: x.icon, on: x.key === form, attrs: ` data-form="${esc(x.key)}"` })));
-  // A category frame names each row on its axis, so each row with an issue link gets one here too, for a reader
-  // who cannot click a bar.
-  const links = f.over.kind === "category" ? f.rows.filter((r) => r.href) : [];
-  const list = links.length ? `<p class="quiet">${links.map((r) => idLink(r.name, r.href)).join(" · ")}</p>` : "";
-  return card(title(f), mark + (f.note ? `<p>${esc(f.note)}</p>` : "") + `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>${list}`, { aside: forms });
+  return card(title(f), mark + (f.note ? `<p>${esc(f.note)}</p>` : "") + `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>`, { aside: forms });
 }
 
 /** A chart panel with its first markup, so the page reads the same before the element draws. `cls` is the panel's grid class. */

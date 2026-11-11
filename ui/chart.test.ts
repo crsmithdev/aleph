@@ -74,7 +74,7 @@ test("a frame's own empty line replaces the default, and its note is under the t
   expect(h).toContain("<h2>Agents Live by Role</h2>");
 });
 
-test("the option and the markup carry the link of a row: the point of a time frame, the bar and the label of a category frame", () => {
+test("the option carries the link of a row: the point of a time frame, the bar and the label of a category frame; the markup lists no links", () => {
   const t = { ...time, rows: [{ at: at(27), a: 1, href: "#/factory/jobs/a1" }, { at: at(28), a: 2 }] };
   expect(option(t, "points", T).series[0].data).toEqual([{ value: 1, href: "#/factory/jobs/a1" }, 2]);
   const c = { ...cat, rows: [{ name: "a1", a: 1, href: "#/factory/jobs/a1" }, { name: "Worker", a: 3 }] };
@@ -82,9 +82,7 @@ test("the option and the markup carry the link of a row: the point of a time fra
   expect(o.series[0].data).toEqual([{ value: 1, href: "#/factory/jobs/a1" }, 3]);
   expect(o.yAxis.triggerEvent).toBe(true);
   expect(o.yAxis.axisLabel.interval).toBe(0);
-  const h = panel(c, "stacked");
-  expect(h).toContain('<a class="idl" href="#/factory/jobs/a1">a1</a>');
-  expect(panel({ ...c, rows: [{ name: "Worker", a: 3 }] }, "stacked")).not.toContain('<a class="idl"');
+  expect(panel(c, "stacked")).not.toContain('<a class="idl"');
 });
 
 test("the time group offers points, for one dot per row, and a kept points form stays", () => {

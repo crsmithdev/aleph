@@ -56,7 +56,7 @@ test("three chart panels in one row replace the old cards, each says its data fo
   // The stage's own line sits under the trend's title; each panel keeps its own empty line.
   expect(row).toContain("<p>From filing to the last land.</p>");
   expect(queue).toContain("<p>From intake to the first agent job. This includes waits for a slot or for another issue.</p>");
-  expect(row).toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
+  expect(lead).not.toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
   expect(queue).toContain("Queue peak 10m 00s");
   expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
   expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
