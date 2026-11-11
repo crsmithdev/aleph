@@ -15,7 +15,10 @@ let fake: ReturnType<typeof Bun.serve>;
 
 const lf = () => http({ baseUrl: `http://127.0.0.1:${fake.port}`, publicKey: "pk", secretKey: "sk" });
 const rows = (n: number) => Array.from({ length: n }, (_, i) => [{ id: `r${i + 1}` }]);
-const ticks = async () => { for (let i = 0; i < 100; i++) await new Promise((r) => setTimeout(r, 0)); };
+/** The waits of `when`; `poke` resolves each one whose condition holds, on each change the fake or a spy sees. */
+let waits: [() => boolean, () => void][] = [];
+const poke = () => { waits = waits.filter(([ok, done]) => !ok() || (done(), false)); };
+const when = (ok: () => boolean) => new Promise<void>((done) => { waits.push([ok, done]); poke(); });
 
 beforeAll(() => {
   fake = Bun.serve({
@@ -29,7 +32,7 @@ beforeAll(() => {
         return id === "t1" ? Response.json({ id }) : new Response("no", { status: id === "t2" ? 404 : 500 });
       }
       const n = Number(url.searchParams.get("page"));
-      asked.push(url); open++; peak = Math.max(peak, open);
+      asked.push(url); open++; peak = Math.max(peak, open); poke();
       try {
         if (failAlways.has(n)) return new Response("boom", { status: 500 });
         if (n > 1) await hold;
@@ -40,7 +43,7 @@ beforeAll(() => {
   });
 });
 afterAll(() => fake.stop(true));
-beforeEach(() => { pages = rows(1); failOnce = new Set(); failAlways = new Set(); hold = Promise.resolve(); open = 0; peak = 0; asked = []; });
+beforeEach(() => { pages = rows(1); failOnce = new Set(); failAlways = new Set(); hold = Promise.resolve(); open = 0; peak = 0; asked = []; waits = []; });
 
 test("a read asks Langfuse's list with its query, and a session is known when Langfuse answers it", async () => {
   const from = new Date("2026-11-01T00:00:00Z"), to = new Date("2026-11-02T00:00:00Z");
@@ -59,7 +62,7 @@ test("a list of 520 pages comes back whole, four requests at a time, with a page
   let release = () => {};
   hold = new Promise<void>((r) => { release = r; });
   const running = lf().observations({});
-  await ticks();
+  await when(() => open === 4);
   expect(peak).toBe(4);
   release();
   const got = await running;
@@ -77,8 +80,17 @@ test("a page that fails twice throws only after every open request has ended", a
   failAlways = new Set([3]);
   let release = () => {}, ended = false;
   hold = new Promise<void>((r) => { release = r; });
+  // The client sees page 3's second 500, then a macrotask drains every microtask it runs on that answer.
+  const real = globalThis.fetch;
+  let fails = 0;
+  globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+    const res = await real(...args);
+    if (res.status === 500) { fails++; poke(); }
+    return res;
+  }) as typeof fetch;
   const running = lf().traces({}).finally(() => { ended = true; });
-  await ticks();
+  try { await when(() => fails === 2); } finally { globalThis.fetch = real; }
+  await new Promise((r) => setImmediate(r));
   // Page 3 failed twice, but pages 2, 4 and 5 are still open on `hold`.
   expect([open, ended]).toEqual([3, false]);
   release();

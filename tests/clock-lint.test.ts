@@ -21,6 +21,7 @@ const RULES: [string, RegExp][] = [
   ["wall clock: performance.now()", /\bperformance\.now\(/],
   ["wall clock: process.hrtime or Bun.nanoseconds", /\bprocess\.hrtime\b|\bBun\.nanoseconds\(/],
   ["timer: setInterval", /\bsetInterval\(/],
+  ["timer: a loop of timer ticks", /\bfor\s*\(.*\bsetTimeout\(/],
   ["timer: setTimeout with a delay", /\bsetTimeout\((?!\s*[\w.]+\s*(?:,\s*0\s*)?\))/],
   ["sleep: Bun.sleep or sleepSync", /\bsleep(?:Sync)?\(/],
   ["sleep: in a shell command", /\bsleep\s+[\d.$]/],

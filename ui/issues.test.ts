@@ -472,12 +472,14 @@ describe("views", () => {
     expect(option(v.closeFrame(c), "grouped", t).series.find((s: any) => s.name === "p90").color).toBe(t.muted);
   });
 
-  test("the window sets the Filed and Closed tiles; the Open tile is a Status card; the head holds the window; the form comes first", async () => {
-    const now = new Date("2026-11-01T12:00");
-    const rows = v.issueRows({ issues: [
-      { id: 1, repo: "f", title: "a", status: "done", labels: [], createdTime: iso("2026-11-01"), closedTime: iso("2026-11-01"), runs: 0, cost: 0 },
-      { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-28"), closedTime: iso("2026-10-28"), runs: 0, cost: 0 },
-    ] });
+  const now = new Date("2026-11-01T12:00");
+  const twoDone = () => v.issueRows({ issues: [
+    { id: 1, repo: "f", title: "a", status: "done", labels: [], createdTime: iso("2026-11-01"), closedTime: iso("2026-11-01"), runs: 0, cost: 0 },
+    { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-28"), closedTime: iso("2026-10-28"), runs: 0, cost: 0 },
+  ] });
+
+  test("the window sets the Filed and Closed counts and the table under their tiles", () => {
+    const rows = twoDone();
     expect(v.stats(rows, now, "day")).toMatchObject({ filed: 1, closed: 1 });
     expect(v.stats(rows, now, "hour")).toMatchObject({ filed: 0, closed: 0 });
     expect(v.stats(rows, now, "week")).toMatchObject({ filed: 2, closed: 2 });
@@ -488,10 +490,15 @@ describe("views", () => {
       expect(v.filterRows(recent, { tile, window: "day" })).toHaveLength(1);
       expect(v.filterRows(recent, { tile, window: "week" })).toHaveLength(2);
     }
+  });
+
+  test("the tiles name Filed, Closed and Open Age, show a dash for a missing value, and tone a change", () => {
+    const rows = twoDone();
     const html = v.renderTiles(v.stats(rows, now, "day"), "open", "day");
     for (const k of ["Filed", "Closed", "Open Age"]) expect(html).toContain(`>${k}<`);
     for (const k of ["Filed, last", "Closed, last", "Median open age"]) expect(html).not.toContain(k);
     expect(html).toContain("<span>open</span><span class=\"m\"> / in store</span>");
+    expect(html).not.toContain("7 days");
     const bare = v.renderTiles({ ...v.stats(rows, now, "day"), medianAge: null, oldest: null, runs: undefined, cost: undefined } as any, "open", "day");
     expect(bare).not.toMatch(/undefined|NaN/);
     expect(bare).toContain("<b>–</b>");
@@ -499,13 +506,15 @@ describe("views", () => {
     expect(up).toContain("<span>open age</span><span class=\"m\"> / oldest</span>");
     expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Closed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bgood\b/);
     expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Filed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bwarn\b/);
-    expect(html).not.toContain("7 days");
+  });
+
+  test("the Open tile is a Status card", () => {
+    const html = v.renderTiles(v.stats(twoDone(), now, "day"), "open", "day");
     const open = html.match(/<button[^>]*class="tile sc"[\s\S]*?<\/button>/)![0];
     expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(3);
-    const page = v.view.render(await getJson("/api/issues"), {}, new URLSearchParams("window=day"));
-    const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
-    expect(head).toContain('<span class="count">last day</span>');
-    expect(page).not.toContain("Filed and closed per");
+  });
+
+  test("the flow chart counts each issue in the bucket of its minute or hour", () => {
     const t = new Date(2026, 10, 4, 16, 0), tr = [{ status: "done", createdTime: iso("2026-11-04T15:30"), closedTime: iso("2026-11-04T15:45") }, { status: "open", createdTime: iso("2026-11-04T09:10") }];
     const fh = v.flow(tr, "hour", t), fd = v.flow(tr, "day", t);
     const hourAt = (s: string) => fh.ats.findIndex((at: number) => xLabel(at, "hour") === s);
@@ -516,6 +525,13 @@ describe("views", () => {
     expect(fh.closed[hourAt("3:45p")]).toBe(1);
     expect(fd.ats).toHaveLength(24);
     expect(fd.filed[dayAt("9a")]).toBe(1);
+  });
+
+  test("the head holds the project, then the window; the form comes before the table", async () => {
+    const page = v.view.render(await getJson("/api/issues"), {}, new URLSearchParams("window=day"));
+    const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
+    expect(head).toContain('<span class="count">last day</span>');
+    expect(page).not.toContain("Filed and closed per");
     expect(head).toContain('data-name="window"');
     for (const w of ["Hour", "Day", "Week", "Month"]) expect(head).toContain(`>${w}</button>`);
     expect(head).toContain('<select name="project"');

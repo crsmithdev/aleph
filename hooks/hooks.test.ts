@@ -335,7 +335,10 @@ describe("handshake prune", () => {
 });
 
 describe("obs hook generations", () => {
-  test("Stop emits one generation per requestId, parented to the turn, with usage", async () => {
+  // One Stop run on a two-request transcript; each test reads its spans and none writes.
+  const attr = (span: any, key: string) => span.attributes.find((a: any) => a.key === key)?.value?.stringValue;
+  let turn: any, gens: any[] = [];
+  beforeAll(async () => {
     const dir = mkdtempSync(join(tmpdir(), "aleph-gen-"));
     const transcript = join(dir, "t.jsonl");
     const usage = (input: number, output: number, read: number, create: number) => ({ input_tokens: input, output_tokens: output, cache_read_input_tokens: read, cache_creation_input_tokens: create });
@@ -358,19 +361,28 @@ describe("obs hook generations", () => {
     });
     expect(await proc.exited).toBe(0);
     server.stop();
+    rmSync(dir, { recursive: true, force: true }); rmSync(spool, { recursive: true, force: true });
     const spans = posted[0].resourceSpans[0].scopeSpans[0].spans;
-    const attr = (span: any, key: string) => span.attributes.find((a: any) => a.key === key)?.value?.stringValue;
-    const turn = spans.find((s: any) => s.name === "turn");
-    const gens = spans.filter((s: any) => attr(s, "langfuse.observation.type") === "generation");
+    turn = spans.find((s: any) => s.name === "turn");
+    gens = spans.filter((s: any) => attr(s, "langfuse.observation.type") === "generation");
+  });
+
+  test("Stop emits one generation per requestId, parented to the turn and named by its model", () => {
     expect(gens).toHaveLength(2);
     for (const g of gens) {
       expect(g.parentSpanId).toBe(turn.spanId);
       expect(g.name).toBe("claude-fable-5-1");
       expect(attr(g, "langfuse.observation.model.name")).toBe("claude-fable-5-1");
     }
+    expect(attr(gens[0], "langfuse.observation.metadata.request_id")).toBe("req_A");
+  });
+
+  test("a generation carries its request's usage, with no cache fields when the request read no cache", () => {
     expect(JSON.parse(attr(gens[0], "langfuse.observation.usage_details"))).toEqual({ input: 10, output: 20, cache_read_input_tokens: 300, cache_creation_input_tokens: 40 });
     expect(JSON.parse(attr(gens[1], "langfuse.observation.usage_details"))).toEqual({ input: 5, output: 7 });
-    expect(attr(gens[0], "langfuse.observation.metadata.request_id")).toBe("req_A");
+  });
+
+  test("a generation's cost prices each kind of token", () => {
     // fable 5.1: 10 in @ $10/M, 20 out @ $50/M, 300 cache read @ $0.25/M, 40 cache write @ $12.5/M
     const cost = JSON.parse(attr(gens[0], "langfuse.observation.cost_details"));
     expect(cost.input).toBeCloseTo(0.0001, 10);
@@ -378,10 +390,12 @@ describe("obs hook generations", () => {
     expect(cost.cache_read_input_tokens).toBeCloseTo(0.000075, 10);
     expect(cost.cache_creation_input_tokens).toBeCloseTo(0.0005, 10);
     expect(cost.total).toBeCloseTo(0.001675, 10);
+  });
+
+  test("a generation runs from the line before it to its first block", () => {
     // req_A ran from the user line (10:00:00) to its first block (10:00:02); req_B from the tool result (10:00:03) to 10:00:05
     expect(BigInt(gens[0].endTimeUnixNano) - BigInt(gens[0].startTimeUnixNano)).toBe(2_000_000_000n);
     expect(BigInt(gens[1].endTimeUnixNano) - BigInt(gens[1].startTimeUnixNano)).toBe(2_000_000_000n);
-    rmSync(dir, { recursive: true, force: true }); rmSync(spool, { recursive: true, force: true });
   });
 });
 

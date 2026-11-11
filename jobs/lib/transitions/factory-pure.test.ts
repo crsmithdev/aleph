@@ -89,7 +89,6 @@ test("a dispatch with checks, three factory repos and no open issues fetches the
     process.env.PATH = path;
   }
   const n = readFileSync(log, "utf8").split("\n").filter(Boolean).length;
-  console.log(`store fetches: ${n}`);
   expect(n).toBeLessThanOrEqual(2);
 });
 

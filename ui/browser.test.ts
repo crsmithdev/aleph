@@ -336,11 +336,14 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(narrow.wide).toBeLessThanOrEqual(0);
   }, 30_000);
 
-  test("a timed refresh re-renders, except over an armed button", async () => {
-    // The shell reads the global setInterval when the route starts: keep the route's refresh as window.tick, and run it here.
-    // The refresh loads only after a quiet minute: window.later() moves the page's clock past it.
-    // A fetch of /api/factory waits for window.gate. A fetch of /api/flow, the last a Status load makes (its `more`), counts in
-    // window.fetched after the load that reads it ends.
+  /**
+   * Opens Status with its timed refresh in the test's hands. The shell reads the global setInterval when the route
+   * starts: keep the route's refresh as window.tick, and run it here. The refresh loads only after a quiet minute:
+   * window.later() moves the page's clock past it. A fetch of /api/factory waits for window.gate. A fetch of
+   * /api/flow, the last a Status load makes (its `more`), counts in window.fetched after the load that reads it ends.
+   * The test ends with page.reload(), which takes the patched timer and fetch away.
+   */
+  const refreshRig = async () => {
     await page.ev(`(() => {
       const now = Date.now;
       window.skew = 0;
@@ -357,34 +360,46 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     })()`);
     await page.go("#/issues");
     await page.go("#/");
-    const mark = 'document.querySelector("#view > *").dataset.mark = "1"';
     const buttons = `document.querySelector('#view button.act[data-act="drop"], #view :not(.choice) > button.act[data-act="land"]')`;
+    await page.when(buttons);
+    // The first load draws its buttons before its `more` (/api/flow) ends: wait for that count, or a refresh's wait ends on it.
+    await page.when("(window.fetched ?? 0) > 0");
     const refresh = async () => {
       const n = await page.ev("window.fetched ?? 0");
       await page.ev("window.later()");
       await page.when(`(window.fetched ?? 0) > ${n}`);
     };
-    await page.when(buttons);
-    // The first load draws its buttons before its `more` (/api/flow) ends: wait for that count, or the wait below ends on it.
-    await page.when("(window.fetched ?? 0) > 0");
-    await page.ev(mark);
+    return { buttons, refresh, mark: () => page.ev('document.querySelector("#view > *").dataset.mark = "1"') };
+  };
+
+  test("a timed refresh re-renders the page", async () => {
+    const { refresh, mark } = await refreshRig();
+    await mark();
     await refresh();
-    expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBeUndefined(); // The refresh rendered.
-    // What the reader opened comes back after a refresh.
+    expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBeUndefined();
+    await page.reload();
+  }, 30_000);
+
+  test("what the reader opened comes back after a timed refresh", async () => {
+    const { refresh, mark } = await refreshRig();
     await page.ev('document.querySelector("#view details[data-keep]").open = true');
-    await page.ev(mark);
+    await mark();
     await refresh();
     expect(await page.ev('[document.querySelector("#view details[data-keep]").open, !!document.querySelector("#view > *").dataset.mark]')).toEqual([true, false]);
-    // A refresh is in flight when the button is armed: its answer must not render over it.
+    await page.reload();
+  }, 30_000);
+
+  test("a timed refresh in flight when a button is armed does not render over it", async () => {
+    const { buttons, mark } = await refreshRig();
     await page.ev("void (window.gate = new Promise((ok) => { window.release = ok; }))");
     const n = await page.ev("window.fetched ?? 0");
     await page.ev("window.later()");
     await page.ev(`${buttons}.click()`);
-    await page.ev(mark);
+    await mark();
     await page.ev("window.gate = null; window.release()");
     await page.when(`(window.fetched ?? 0) > ${n}`);
     expect(await page.ev('[!!document.querySelector("#view button.act.ask"), document.querySelector("#view > *").dataset.mark]')).toEqual([true, "1"]);
-    await page.reload(); // Takes the patched timer and fetch away.
+    await page.reload();
   }, 30_000);
 
   test("a change in the factory folder reloads a live page that used to poll", async () => {
@@ -624,12 +639,15 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     for (const n of await server()) expect(cli(["drop", n.id]).exitCode).toBe(0);
   }, 30_000);
 
-  test("the chat points a message at a note of the page, or at a new one picked from the chat", async () => {
+  /**
+   * Opens Status with a stand-in for the server's chat turn: it keeps each body the chat posts and ends the turn at
+   * once. `say` sends a message and returns the body it posted. `done` restores the page and drops every note.
+   */
+  const chatRig = async () => {
     await page.width(1200);
     await page.go("#/");
     const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
     const chat = 'document.getElementById("kit-chat").shadowRoot', note = 'document.getElementById("kit-annotate")';
-    // A stand-in for the server's turn: it keeps each body the chat posts and ends the turn at once.
     await page.ev(`(() => { window.sent = []; window.realFetch = fetch; window.fetch = (u, o) => u === "/api/chat"
       ? (sent.push(JSON.parse(o.body)), Promise.resolve(new Response("event: end\\ndata: {}\\n\\n", { headers: { "content-type": "text/event-stream" } })))
       : realFetch(u, o); })()`);
@@ -639,10 +657,22 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       await page.when(`sent.length === ${n + 1}`);
       return page.ev<{ text: string; annotations?: string[] }>("sent.at(-1)");
     };
-    const added = cli(["add", "--selector", "#nav", "--", "the nav"]);
-    expect(added.exitCode).toBe(0);
-    await page.when(`${note}.shadowRoot.querySelector(".count").textContent === "1"`);
-    const old = (await page.ev<{ id: string }[]>('fetch("/api/annotations").then((r) => r.json())'))[0].id;
+    /** Adds the page's first note, "#1 the nav", and returns its id. */
+    const navNote = async () => {
+      expect(cli(["add", "--selector", "#nav", "--", "the nav"]).exitCode).toBe(0);
+      await page.when(`${note}.shadowRoot.querySelector(".count").textContent === "1"`);
+      return (await page.ev<{ id: string }[]>('fetch("/api/annotations").then((r) => r.json())'))[0].id;
+    };
+    const done = async () => {
+      await page.ev(`window.fetch = realFetch; ${chat}.querySelector(".new").click(); ${chat}.querySelector(".fab").click()`);
+      for (const n of await page.ev<{ id: string }[]>('fetch("/api/annotations").then((r) => r.json())')) expect(cli(["drop", n.id]).exitCode).toBe(0);
+    };
+    return { chat, note, say, navNote, done };
+  };
+
+  test("the chat sends a chosen note of the page with the next message only", async () => {
+    const { chat, say, navNote, done } = await chatRig();
+    const old = await navNote();
     await page.ev(`${chat}.querySelector(".fab").click()`);
     expect(await page.ev(`${chat}.querySelector(".point").hidden`)).toBe(false);
     // The menu lists the page's note and a new pick; the chosen note shows as a chip and goes with the next message only.
@@ -653,6 +683,13 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect((await say("rename it")).annotations).toEqual([old]);
     expect(await page.ev(`${chat}.querySelector(".points").textContent`)).toBe("");
     expect((await say("and now?")).annotations).toBeUndefined();
+    await done();
+  }, 30_000);
+
+  test("a note picked from the chat comes back as the chip and goes with the next message", async () => {
+    const { chat, note, say, navNote, done } = await chatRig();
+    const old = await navNote();
+    await page.ev(`${chat}.querySelector(".fab").click()`);
     // New: the panel hides, a click picks an element, and the saved note comes back as the chip.
     await page.ev(`${chat}.querySelector(".point").click()`);
     await page.ev(`${chat}.querySelector(".menu .pick").click()`);
@@ -665,19 +702,28 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     const fresh = await say("what is this");
     expect(fresh.annotations).toHaveLength(1);
     expect(fresh.annotations![0]).not.toBe(old);
-    // A cancelled pick attaches nothing.
+    await done();
+  }, 30_000);
+
+  test("a cancelled pick attaches nothing", async () => {
+    const { chat, done } = await chatRig();
+    await page.ev(`${chat}.querySelector(".fab").click()`);
     await page.ev(`${chat}.querySelector(".point").click()`);
     await page.ev(`${chat}.querySelector(".menu .pick").click()`);
     await page.ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))');
     await page.when(`!${chat}.querySelector(".pop").hidden`);
     expect(await page.ev(`${chat}.querySelector(".points").textContent`)).toBe("");
-    // Without the annotate tool the button does not show, and the chat still sends.
+    await done();
+  }, 30_000);
+
+  test("without the annotate tool the chat hides its point button and still sends", async () => {
+    const { chat, note, say, done } = await chatRig();
     await page.ev(`${note}.id = "kit-annotate-off"`);
-    await page.ev(`${chat}.querySelector(".fab").click(); ${chat}.querySelector(".fab").click()`);
+    await page.ev(`${chat}.querySelector(".fab").click()`);
     expect(await page.ev(`${chat}.querySelector(".point").hidden`)).toBe(true);
     expect((await say("plain")).text).toBe("plain");
-    await page.ev(`document.getElementById("kit-annotate-off").id = "kit-annotate"; window.fetch = realFetch; ${chat}.querySelector(".new").click(); ${chat}.querySelector(".fab").click()`);
-    for (const n of await page.ev<{ id: string }[]>('fetch("/api/annotations").then((r) => r.json())')) expect(cli(["drop", n.id]).exitCode).toBe(0);
+    await page.ev('document.getElementById("kit-annotate-off").id = "kit-annotate"');
+    await done();
   }, 30_000);
 
   test("the chat keeps a session per idea page and returns to the general one", async () => {
