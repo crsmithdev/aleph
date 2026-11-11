@@ -2,7 +2,7 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, idLink, badge, dur, error, loading, money, scope, when, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loading, mean, money, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -110,6 +110,22 @@ const FEED = [
 ];
 const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }] };
 
+const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill)$/],
+  ["tones", "Tones", /^--(run|done|need|stuck|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/],
+  ["data", "Data colours", /^--(series|chart|seg|fill)-/]];
+// The pairs of the doc's Contrast table.
+const PAIRS = [["--ink", "--surface"], ["--ink-2", "--surface"], ["--muted", "--surface"], ["--muted", "--bg"], ["--muted", "--sunk"], ["--muted", "--raised"],
+  ["--need", "--need-bg"], ["--stuck", "--stuck-bg"], ["--done", "--done-bg"], ["--run", "--run-bg"], ["--hot", "--surface"], ["--focus", "--surface"], ["--on-fill", "--seg-reran"]];
+const AGO = new Date(T0 - 3 * 36e5);
+const VALUES = [
+  ["Absolute time", "when()", when, [AGO]], ["Day", "day()", day, [AGO]], ["Axis hour", "hourLabel()", hourLabel, [new Date(2026, 10, 10, 4), new Date(2026, 10, 10, 13, 36)], "none"],
+  ["Clock", "clock()", clock, [AGO.toISOString()]], ["Duration from seconds", "dur()", dur, [43, 245, 3720, 187200]], ["Duration from milliseconds", "durMs()", durMs, [850, 1200]],
+  ["Duration between two times", "span()", (a) => span(a, new Date(T0).toISOString()), [AGO.toISOString()]], ["Cost", "money()", money, [1.25, 0.003]], ["Weekly share", "wkText()", wkText, [{ pct: 1.4 }]],
+  ["Percent", "pct()", pct, [12, 0.4, 0.03]], ["Count", "count()", count, [12345]], ["Id", "idLink()", (x) => idLink(x, "#/kit"), ["a52"], "none"],
+  ["Model", "shortModel()", shortModel, ["claude-opus-5-5"]], ["Bytes", "bytes()", bytes, [1536], "none"], ["Mean", "mean()", mean, [2.44]],
+  ["Hours", "hours()", hours, [3.2, 12]], ["Days", "days()", days, [12]],
+];
+
 function renderKit(d, query) {
   doc = d?.body ?? "";
   const theme = THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system";
@@ -120,9 +136,18 @@ function renderKit(d, query) {
     `<section class="kit-spec" data-annotate="kit/every"><h3>Every component</h3><div class="kit-rules md">${md(section(doc, "Every component"))}</div></section>` +
 
     `<h2 class="kit-h">Foundations</h2>` +
-    spec("colour", "Colour", `<div class="kit-swatches" data-tokens="colour"></div>`, "Every colour token on <code>:root</code>, read from the stylesheet.", "") +
-    spec("type", "Type", `<div data-tokens="type"></div>`, "", "") +
-    spec("space", "Space and shape", `<div class="kit-row" data-tokens="space"></div><div class="kit-row" data-tokens="radius"></div>`, "", "") +
+    COLOURS.map(([id, name]) => spec(id, name, `<div class="kit-swatches" data-tokens="${id}"></div>`, id === "surfaces" ? "Each swatch: light on the left, dark on the right, read from the stylesheet." : "")).join("") +
+    spec("contrast", "Contrast", `<div data-tokens="contrast"></div>`, "Each ratio is computed now from the light and the dark token values. Text needs 4.5:1.") +
+    spec("type", "Type", `<div data-tokens="type"></div>`, "", ["Sizes", "Weights and families", "Tracking and line height"]) +
+    spec("space", "Space and shape", `<div class="kit-row" data-tokens="space"></div><div class="kit-row" data-tokens="radius"></div><div class="kit-row" data-tokens="layers"></div>`, "",
+      ["Spacing", "Radii", "Controls and layers", "Breakpoints and motion"]) +
+
+    `<h2 class="kit-h">Content</h2>` +
+    spec("values", "Values", dataTable(heads(["Kind", "Helper", "Renders", "Missing"]), VALUES.map(([k, h, f, xs, none]) =>
+      `<tr><td>${k}</td><td><code>${h}</code></td><td class="num">${xs.map((x) => f(x)).join(", ")}</td><td class="num">${none ? '<span class="quiet">none</span>' : f(null) || '<span class="quiet">empty</span>'}</td></tr>`).join(""), { fit: true }),
+      "Each helper's output now, and its output for no value.") +
+    spec("words", "Words", pageHead("Running", { count: 3 }) + row(badge("running"), badge("landed"), priorityBadge("critical")) +
+      empty("No job matches.", "Widen the window or clear a filter.") + error("The agents did not load.") + loading("Jobs")) +
 
     `<h2 class="kit-h">Structure</h2>` +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
@@ -185,32 +210,63 @@ function renderKit(d, query) {
     spec("diff", "Diff", `<div class="diff-panel">${diffHtml(DIFF)}</div>`) +
     `<h2 class="kit-h">Controls</h2>` +
     spec("states", "Empty state", empty("Nothing waits for you.", "An Ask shows here when the factory needs you.") + loading("jobs") + error("The jobs did not load.")) +
+
+    `<h2 class="kit-h">States</h2>` +
+    spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,
+      `<button class="act" type="button" style="border-color:var(--ink-2)">Hover</button>`, seg("Pressed", [{ label: "Off", on: false, attrs: "" }, { label: "Pressed", on: true, attrs: "" }]),
+      `<button class="act" type="button" disabled>Disabled</button>`) + `<div style="max-width:320px">${tiles("Pressed metric card", statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }))}</div>`,
+      "Focus and hover are drawn with inline styles, so they show without a pointer or a keyboard.", "States") +
     `</div>`;
 }
 
-/** The custom properties of every `:root` rule in the page's stylesheets, in order, without the kit and Web Awesome bridges. */
-function rootTokens() {
-  const names = new Set();
+/** Each `--` custom property, light and dark, read from the stylesheets: the `:root` rules for light, `:root[data-theme="dark"]` over them for dark.
+ * Kit and Web Awesome bridges are left out. A `var()` in a value is resolved in its own theme. */
+function themeTokens() {
+  const light = {}, dark = {};
   for (const sheet of document.styleSheets) {
     let rules;
     try { rules = sheet.cssRules; } catch { continue; }
-    for (const r of rules) if (r.selectorText === ":root") for (const p of r.style) if (p.startsWith("--") && !/^--(wa|kit)-/.test(p)) names.add(p);
+    for (const r of rules) {
+      const into = r.selectorText === ":root" ? light : r.selectorText === ':root[data-theme="dark"]' ? dark : null;
+      if (into) for (const p of r.style) if (p.startsWith("--") && !/^--(wa|kit)-/.test(p)) into[p] = r.style.getPropertyValue(p).trim();
+    }
   }
-  return [...names];
+  const resolve = (map, v, n = 0) => (n > 8 ? v : v.replace(/var\((--[\w-]+)\)/g, (m, k) => (k in map ? resolve(map, map[k], n + 1) : m)));
+  const both = { ...light, ...dark };
+  return Object.fromEntries(Object.keys(light).map((k) => [k, { light: resolve(light, light[k]), dark: resolve(both, both[k]) }]));
 }
 
+// WCAG contrast of two CSS colours: a canvas turns each into sRGB.
+const ctx = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+function lum(colour) {
+  ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = "#000"; ctx.fillStyle = colour; ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).map((v) => (v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+
 function drawTokens(root) {
-  const css = getComputedStyle(document.documentElement), names = rootTokens(), val = (n) => css.getPropertyValue(n).trim();
+  const t = themeTokens(), names = Object.keys(t), val = (n) => t[n].light;
   const fill = (kind, html) => { const el = root.querySelector(`[data-tokens="${kind}"]`); if (el) el.innerHTML = html; };
-  fill("colour", names.filter((n) => CSS.supports("color", val(n))).map((n) =>
-    `<div class="kit-swatch"><i style="background:var(${n})"></i><code>${n}</code><span class="quiet">${val(n)}</span></div>`).join(""));
+  const colours = names.filter((n) => CSS.supports("color", t[n].light));
+  for (const [id, , re] of COLOURS) fill(id, colours.filter((n) => re.test(n)).map((n) =>
+    `<div class="kit-swatch"><i><b style="background:${t[n].light}"></b><b style="background:${t[n].dark}"></b></i><code>${n}</code><span class="quiet">${t[n].light} / ${t[n].dark}</span></div>`).join(""));
+  const cell = (r) => `<td class="num">${r.toFixed(2)}${r < 4.5 ? ` ${tag("below 4.5", "stuck")}` : ""}</td>`;
+  fill("contrast", dataTable(heads(["Pair", "Light", "Dark"], ["Light", "Dark"]), PAIRS.map(([f, b]) =>
+    `<tr><td><code>${f}</code> on <code>${b}</code></td>${cell(ratio(t[f].light, t[b].light))}${cell(ratio(t[f].dark, t[b].dark))}</tr>`).join(""), { fit: true }));
   fill("type", names.filter((n) => n.startsWith("--fs-")).map((n) =>
     `<p style="font-size:var(${n})"><code>${n}</code> ${val(n)}: The factory landed 12 issues.</p>`).join("") +
-    ["--display", "--sans", "--mono", "--num"].map((n) => `<p style="font-family:var(${n})"><code>${n}</code> The factory landed 12 issues, 0123456789.</p>`).join(""));
-  fill("space", names.filter((n) => n.startsWith("--sp-")).map((n) =>
+    ["--display", "--sans", "--mono", "--num"].map((n) => `<p style="font-family:var(${n})"><code>${n}</code> ` +
+      ["--fw-text", "--fw-mid", "--fw-strong"].map((w) => `<span style="font-weight:var(${w})">The factory landed 12 issues, 0123456789.</span>`).join(" · ") + "</p>").join(""));
+  fill("space", names.filter((n) => n.startsWith("--sp-") || n === "--gap" || n === "--gap-in").map((n) =>
     `<div class="kit-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1)"></i><code>${n}</code></div>`).join(""));
   fill("radius", names.filter((n) => n.startsWith("--r-")).map((n) =>
     `<div class="kit-tok"><i style="width:48px;height:32px;border:1px solid var(--ink-2);border-radius:var(${n})"></i><code>${n}</code></div>`).join(""));
+  fill("layers", ["--lift", "--card-lift", "--float"].map((n) =>
+    `<div class="kit-tok"><i style="width:96px;height:48px;background:var(--surface);border-radius:var(--r-ctl);box-shadow:var(${n})"></i><code>${n}</code></div>`).join("") +
+    `<div class="kit-tok"><i style="width:96px;height:var(--ctl-h);border:1px solid var(--ink-2);border-radius:var(--r-ctl)"></i><code>--ctl-h ${val("--ctl-h")}</code></div>` +
+    `<div class="kit-tok"><i style="width:96px;height:var(--bar-h);background:var(--series-1);border-radius:var(--r-hair)"></i><code>--bar-h ${val("--bar-h")}</code></div>` +
+    `<div class="kit-tok"><i style="width:96px;height:32px;background:var(--series-1);opacity:var(--dim)"></i><code>--dim ${val("--dim")}</code></div>`);
 }
 
 const setTheme = (t) => (t === "system" ? delete document.documentElement.dataset.theme : (document.documentElement.dataset.theme = t));

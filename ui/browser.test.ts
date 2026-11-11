@@ -251,13 +251,16 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       specimens: document.querySelectorAll('[data-annotate^="kit/"]').length,
       swatches: document.querySelectorAll(".kit-swatch").length,
       charts: document.querySelectorAll("aleph-chart canvas").length,
-      noRules: [...document.querySelectorAll(".kit-spec")].filter((s) => !s.querySelector(".kit-rules li")).map((s) => s.querySelector("h3").textContent),
+      noRules: [...document.querySelectorAll(".kit-spec")].filter((s) => !s.querySelector(".kit-rules")?.textContent.trim()).map((s) => s.querySelector("h3").textContent),
+      values: document.querySelectorAll("#kit-values .kit-specimen tbody tr").length,
+      contrast: document.querySelectorAll('[data-tokens="contrast"] tbody tr').length,
       theme: document.documentElement.dataset.theme,
       error: /Could not load|failed to render/.test(document.querySelector("#view").textContent.replace("Could not load jobs.", "")),
     })`);
     expect(r).toMatchObject({ theme: "dark", error: false, charts: 3 });
-    // Each specimen shows its rules from docs/design.md; the tokens and the variants of a component have none.
-    expect(r.noRules).toEqual(["Colour", "Type", "Space and shape", "Table, fit", "Table, empty", "Chart panel, no data"]);
+    // Each specimen shows its rules from docs/design.md; the variants of a component have none.
+    expect(r.noRules).toEqual(["Table, fit", "Table, empty", "Chart panel, no data"]);
+    expect(r).toMatchObject({ values: 17, contrast: 13 });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
     await page.go("#/jobs");
