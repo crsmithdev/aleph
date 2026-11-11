@@ -29,7 +29,7 @@ Aleph loads into each Claude Code session and adds memory, tracing and a few che
 - **Director.** An agent answers the factory's questions when it can, and passes the rest on with a short case. An "Always" button turns an answer into a rule.
 - **Model routing.** Small changes go to Haiku or Sonnet, larger ones to Opus. Small tiers can run on a local model instead. [Routing](docs/routing.md)
 - **Web UI.** Status, issues, jobs, cost, agents, sessions and memory, in light and dark. [UI](docs/ui.md)
-- **Skills.** 27 skills: grill a plan, red-team it, write a spec, test first, debug, review a branch, clean up a repo, write docs, hand off a session. Run one with `/aleph:<name>`.
+- **Skills.** 28 skills: grill a plan, red-team it, write a spec, test first, debug, review a branch, clean up a repo, write docs, hand off a session. Run one with `/aleph:<name>`.
 
 ## Quick start
 
