@@ -122,7 +122,7 @@ test("selecting a class shows its causes; selecting Lost time again restores the
   expect(one).toContain("<h2>Returned Causes</h2>");
   expect(all).toContain('data-tile="returned"');
   for (const w of ["fixed", "Late", "Restarted"]) expect(all).not.toContain(w);
-  expect(one).toContain('data-tile="returned" style="flex:4" aria-pressed="true"');
+  expect(one).toContain(`data-tile="returned" style="flex:${4 / 14}" aria-pressed="true"`);
   expect(one).not.toContain("No commit");
   expect(renderEfficiency(D, "all")).toBe(all);
   expect(all).toContain('data-tile="all" aria-pressed="true"');

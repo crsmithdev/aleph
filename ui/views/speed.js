@@ -98,8 +98,9 @@ export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
   if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`, "Widen the window or clear the project.");
   const said = (c) => `${hours(c.hours)} ${pct((c.hours / total) * 100)}`;
-  const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" aria-label="${esc(`${c.key} ${said(c)}`)}" title="${esc(c.text)}"></button>`;
-  const group = (xs) => (xs.length ? `<div class="osegs" style="flex:${xs.reduce((a, c) => a + c.hours, 0)}">${xs.map(seg).join("")}</div>` : "");
+  // Flex grows are shares that sum to 1 in each row: grows summing under 1 leave the row part empty.
+  const seg = (c, of) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours / of}" aria-pressed="${c.key === key}" aria-label="${esc(`${c.key} ${said(c)}`)}" title="${esc(c.text)}"></button>`;
+  const group = (xs) => { const h = xs.reduce((a, c) => a + c.hours, 0); return xs.length ? `<div class="osegs" style="flex:${h / total}">${xs.map((c) => seg(c, h)).join("")}</div>` : ""; };
   const good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost);
   const sep = good.length && lost.length ? `<i class="osep" role="separator" title="Left of the line reached main; right of it did not"></i>` : "";
   const legend = [...good, ...lost].map((c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)} <em>${esc(said(c))}</em></span>`).join("");
