@@ -10,12 +10,16 @@ this file holds how to read them and the limits agnix may not know yet.
   `MCP-`, `REF-` (imports and links), `XML-`, `PE-` (prompt engineering), `XP-` (cross-tool). `agnix explain <ID>`
   gives a rule's source and level (MUST or SHOULD). Add `-t cursor`, `codex` or `kiro` when the repo serves them.
 - **Plugin manifest.** `claude plugin validate <dir>` when the repo is a plugin or a marketplace.
-- **Limits** (Anthropic skill best practices and the Claude Code memory and skills docs):
-  - skill `name`: at most 64 characters, `[a-z0-9-]`, no `anthropic` or `claude`, equal to its directory name;
+- **Limits** (the Agent Skills spec at agentskills.io/specification, Anthropic skill best practices, and the Claude
+  Code memory and skills docs):
+  - skill `name`: at most 64 characters, `[a-z0-9-]`, no hyphen at the start or the end, no `--`, no `anthropic`
+    or `claude`, equal to its directory name;
+  - optional fields: `license`, `compatibility` (at most 500 characters), `metadata` (string keys to string
+    values), `allowed-tools` (a space-separated string);
   - skill `description`: not empty, at most 1,024 characters, third person, says what and when; the listing
     cuts `description` + `when_to_use` at 1,536 characters;
-  - `SKILL.md` body under 500 lines; reference files one link deep from it; a reference file over 100 lines opens
-    with a table of contents; forward slashes in paths;
+  - `SKILL.md` body under 500 lines (`AS-012`); reference files one link deep from it (`AS-013`); forward slashes
+    in paths. The token budget and the rest of the skill's shape are **structure**;
   - `@` imports at most 4 hops deep; `MEMORY.md` loads only its first 200 lines or 25 KB;
   - Codex stops reading `AGENTS.md` files at 32 KiB in total (`project_doc_max_bytes`).
 

@@ -12,7 +12,6 @@ across all descriptions at once.
 - **A buried lead.** The description opens with history or identity, not what the skill does. The listing cuts
   long descriptions from the end.
 - **First or second person** ("I help", "you can"), where the spec asks for the third.
-- **A name clash.** A project skill or command with the name of a global one hides the global one.
 - **A dead pointer.** A memory line or skill that names a skill, file or command that does not exist.
 
 ## Proof

@@ -34,6 +34,12 @@ Run `bun <skill dir>/content.ts <repo>` first: it gives the regex candidates (`e
 **Policy on agnix.** `PE-003` and `CC-MEM-007` turn "should" into "must", so their fix adds the emphasis that
 check 3 removes. Read them as check 5: rewrite the line as a plain imperative with a bar ("Run `bun test`").
 
+**The contradiction sweep** for check 1. Give one subagent every always-loaded file in `load.ts`, the ones under
+the home directory too, and every skill body. It lists each rule as topic, directive and `file:line`, groups the
+rules by topic, and returns each pair that one task cannot obey both of. It also returns each pair that agrees only
+under a condition that neither line states. A pair across scopes (the user's global memory file and the repo's)
+counts, because both load in one session.
+
 **The rediscovery test** for check 2: give a subagent the repo and none of its agent files, and ask it each fact
 the file states. Each fact it finds with one command or one file read is a candidate to cut.
 

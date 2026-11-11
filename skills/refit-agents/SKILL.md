@@ -3,18 +3,19 @@ name: refit-agents
 description: >
   Refit a repo for agents: lint and slim the files loaded into an agent's
   context (CLAUDE.md, AGENTS.md, skills, subagents, commands, hooks, MCP
-  config), and find where an agent cannot build, test, run or use the repo's
-  CLIs without help, or which lines an agent will not follow. Use when asked
-  to improve, lint, audit, optimize or clean up agent files or skills, check
-  they will be followed, cut context load, run agnix, make a repo
-  agent-ready, before you add a skill, a CLAUDE.md line or a CLI command
-  (check), or when an agent had to guess or look up how to use the repo.
+  config), check skill structure and where each file is installed, and find
+  where an agent cannot build, test, run or use the repo's CLIs without help,
+  or which lines conflict or an agent will not follow. Use when asked to
+  improve, lint, audit, debloat or clean up agent files or skills, check they
+  will be followed, cut context load, run agnix, make a repo agent-ready,
+  before you add a skill, a CLAUDE.md line or a CLI command (check), or when
+  an agent had to guess or look up how to use the repo.
 ---
 
 # Refit agents
 
 [refit-code](../refit-code/SKILL.md) for agents. refit-code asks whether the code is good; this asks whether an agent can
-use and change the repo without help, and what the repo costs the agent's context. Seven **lenses** each ask one
+use and change the repo without help, and what the repo costs the agent's context. Nine **lenses** each ask one
 question; the modes decide where and how they run. Read `PRINCIPLES.md` and `.refit.json` at the repo root
 when they exist: its `accepted` list, shared with refit-code, holds what the repo keeps on purpose, each
 `{"concept", "copies": ["file[:line]", ...], "reason"}`, and
@@ -31,13 +32,18 @@ context.
 |---|---|---|
 | **valid** | Does each agent file parse and meet its spec? | [VALID.md](VALID.md) |
 | **load** | Does each always-loaded line earn its tokens? | [LOAD.md](LOAD.md) |
+| **structure** | Does each skill load in tiers, so that the agent reads only what its branch needs? | [STRUCTURE.md](STRUCTURE.md) |
 | **triggers** | Does each description fire on its branches, and only there? | [TRIGGERS.md](TRIGGERS.md) |
 | **drift** | Does each agent file agree with the code and with the other agent files? | [DRIFT.md](DRIFT.md) |
 | **adherence** | Will the agent follow each line, every time, at the least cost? | [ADHERENCE.md](ADHERENCE.md) |
 | **interface** | Can an agent build, test, run and use the repo with no one to ask? | [INTERFACE.md](INTERFACE.md) |
 | **safety** | Can an agent file leak a secret, grant too much, or run code nobody reviewed? | [SAFETY.md](SAFETY.md) |
+| **install** | Is each agent file installed once, at the scope that needs it, from its source? | [INSTALL.md](INSTALL.md) |
 
-Where they meet: a file that does not parse is **valid**, a file that parses but costs too much is **load**; a
+Where they meet: a file that does not parse is **valid**, a file that parses but costs too much is **load**; an
+always-loaded line is **load**, and a skill body or reference that carries what its branch does not need is
+**structure**; a file under the home directory that copies the repo is **install**, and a line in it that disagrees
+with the repo is **drift**; a
 description too long is **load**, one that fires on the wrong prompts is **triggers**; a line the agent can find
 by looking is **adherence** while it is right and **drift** once it is wrong; two lines that contradict are
 **adherence** inside the agent files and **drift** against the code; a doc that restates
@@ -51,7 +57,7 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 |---|---|---|
 | `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and hold, report | Find what to improve |
 | `act` | The fix of each finding the user picks | After a retro |
-| `lint` | agnix, `load.ts` and `content.ts` only, no model judgment, report in the terminal | A quick pass, or before a commit that touches agent files |
+| `lint` | agnix, `load.ts`, `content.ts` and `install.ts` only, no model judgment, report in the terminal | A quick pass, or before a commit that touches agent files |
 | `check` | Each new agent file, line, skill, hook or CLI command in a plan, spec or diff, under every lens | Before or during a build |
 
 ## Retro
@@ -59,10 +65,11 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 1. **Baseline.** Run the repo's own build and test commands from its manifest; a red baseline ends the run.
    Record the commit and `git status --porcelain`. Done when the baseline is green and recorded.
 2. **Inventory.** Run `bun <skill dir>/load.ts <repo>` for the context load (always, lazy, skills, hooks),
-   `bun <skill dir>/content.ts <repo>` for the adherence candidates and the tools the files name, and
+   `bun <skill dir>/content.ts <repo>` for the adherence candidates and the tools the files name,
+   `bun <skill dir>/install.ts <repo>` from the main checkout for the user and project installs, and
    `agnix -t claude-code --format json .` from the repo root (the target is `generic`, `cursor`, `codex` or `kiro`
    when the repo serves those tools). List the repo's CLIs: `bin/`, the manifest's `bin` and `scripts`, the
-   Makefile or justfile targets. Done when you have the load JSON, the agnix JSON and the CLI list.
+   Makefile or justfile targets. Done when you have the load, install and agnix JSON and the CLI list.
 3. **Hunt.** Spawn one Explore subagent per lens in one message, except **valid**, which you read from the agnix
    JSON yourself. Give each its lens file's Signals section verbatim, the inventory, and the agent files or CLIs
    in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done when each
@@ -74,22 +81,24 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 
 ## Act
 
-refit-code's [Act](../refit-code/SKILL.md#act), in this order: valid, safety, drift, load, triggers, adherence, then
-interface, so that text is right before it is cut and cut before it is reworded, and code changes come last. A
+refit-code's [Act](../refit-code/SKILL.md#act), in this order: valid, safety, install, drift, load, structure,
+triggers, adherence, then interface. Each file then has one source before its text is edited, text is right before
+it is cut and cut before it is reworded, and code changes come last. A
 cut moves material down the ladder of [writing-for-agents](../writing-for-agents/SKILL.md) before it deletes it.
 After each finding, run agnix, `load.ts` and `content.ts` with the baseline: a new agnix error is red, and the commit records
 the always-loaded total before and after.
 
 ## Lint
 
-1. Run agnix, `load.ts` and `content.ts` as in Inventory.
+1. Run agnix, `load.ts`, `content.ts` and `install.ts` as in Inventory.
 2. Read each agnix error and warning by hand, with [VALID.md](VALID.md). Never run `--fix`, `--fix-safe` or
    `--fix-unsafe` over the whole repo: XML-001 reads a bare `<placeholder>` in prose as an unclosed tag, and its
    fix adds a closing tag. Fix by hand, or pass the one file whose fixes you read with `--dry-run --show-fixes`.
    Read `PE-003` and `CC-MEM-007` by the policy in [ADHERENCE.md](ADHERENCE.md): their fix adds emphasis.
 3. Report in the terminal: agnix counts before and after, each finding with `file:line` and its fix, the
    always-loaded total, the five largest always-loaded items, the `content.ts` counts with the five files that
-   have most hits, and the tools the files name for the user to confirm.
+   have most hits, the tools the files name for the user to confirm, and each `copies`, `shadow` and `dangling`
+   entry from `install.ts`.
 
 ## Check
 
@@ -109,12 +118,15 @@ asks it) or **unchecked** (only a retro finds it). A finding that comes back mov
 |---|---|---|---|
 | valid | An agent file that breaks its spec | tool | `agnix -t claude-code` in `.githooks/pre-commit` |
 | load | Always-loaded tokens grow past the last total | tool | `load.test.ts`: "the always-loaded tokens inside the repo stay at or under the recorded total" |
+| structure | A body over 500 lines, a reference more than one link deep | tool | agnix `AS-012`, `AS-013` in `.githooks/pre-commit` |
+| structure | A body over 5,000 tokens, an orphan, a chain from a reference | unchecked | none |
 | triggers | Two descriptions that claim one branch | model | `check` |
 | drift | A command, flag or path in an agent file that does not resolve | unchecked | `aleph doc-claims` in aleph; elsewhere a test that runs each named command |
 | adherence | Emphasis, scaffolding, vague bars, unreasoned rules, dated text | unchecked | `content.ts` counts as a shrink-only ratchet, not yet wired |
 | adherence | A contradiction, a discoverable fact, a hard rule left in prose | model | `check` |
 | interface | A CLI command with no usage, or one whose `--help` runs it | unchecked | a test that runs `<cli> <cmd> --help` for each command and asserts no side effect |
 | safety | A secret, an unpinned MCP server, a hook that fails open | unchecked | agnix security rules; a secret scan over agent files |
+| install | A copy under the home directory, a shadow, a dangling link | unchecked | `install.ts` in `lint`, by hand |
 
 ## Red flags
 

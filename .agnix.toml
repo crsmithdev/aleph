@@ -5,3 +5,9 @@
 [[overrides]]
 paths = ["identity/**"]
 disabled_rules = ["XP-003"]
+
+# The install lens audits the user and project scopes, so the scope directories are its subject, not a portability
+# problem.
+[[overrides]]
+paths = ["skills/refit-agents/INSTALL.md"]
+disabled_rules = ["XP-003"]
