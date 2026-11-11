@@ -65,5 +65,7 @@ describe("specs", () => {
     expect(h).toContain("<li>one</li>");
     expect(h).toContain("&lt;script&gt;");
     expect(h).toContain("<h1>Alpha spec</h1>");
+    expect(h).toContain("<code>a/docs/specs/2026-10-01-alpha.md</code>");
+    expect(h).toContain('class="status-row"');
   });
 });

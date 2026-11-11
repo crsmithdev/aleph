@@ -212,11 +212,20 @@ test("the skill detail uses detail panels and fit tables", async () => {
   expect([f.measure, f.by.keys.map((k: any) => k.name)]).toEqual([{ name: "Uses by Day", unit: "count", agg: "sum" }, ["Uses"]]);
   expect(detail).not.toContain("<h3>");
   expect(detail).not.toContain("<style");
+  // Under the page head: the status row and the KPI strip; the short tables are fit and the tool names are code.
+  expect(detail).toContain('class="status-row"');
+  expect(detail).toContain("dp-kpis");
+  const fit = (name: string) => detail.match(new RegExp(`data-t="${name}"><div class="tscroll"><table class="(tbl[^"]*)"`))?.[1];
+  expect(["projects", "tools", "sessions", "errors"].map(fit)).toEqual(["tbl fit", "tbl fit", "tbl", "tbl"]);
+  expect(detail).toMatch(/<td><code>[^<]+<\/code><\/td><td class="num">/);
 });
 
 test("the skill detail leaves out each panel with no rows and pages Sessions at 50", () => {
   const base = { name: "x", uses: 1, days: 7, since: "2026-11-01", perDay: [1], sessions: [], errors: [], tools: [], projects: [] };
-  expect(v.renderSkill(base)).not.toContain("dp-panel");
+  expect(v.renderSkill(base)).not.toContain("dp-fold");
+  const unused = v.renderSkill({ ...base, uses: 0, perDay: [0] });
+  expect(unused).not.toContain("aleph-chart");
+  expect(unused).not.toContain("This skill was not used");
   const sessions = Array.from({ length: 51 }, (_, i) => ({ id: `s${i}abcdefgh`, time: "2026-11-01T00:00:00Z", prompt: "p", project: "a", via: "slash" }));
   const h = v.renderSkill({ ...base, sessions });
   expect(h).toContain("50 of 51");
