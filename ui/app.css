@@ -797,6 +797,9 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-4); padding-right: var(--sp-4); }
 .event-row { display: grid; grid-template-columns: 55px 70px 64px 1fr; align-items: baseline; gap: var(--sp-8); padding: var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-xs); }
 .event-row:last-child { border-bottom: none; }
+.herald-chat { margin: 0; padding: 0; border: 0; }
+.herald-chat > summary { display: flex; align-items: baseline; padding: 0; }
+.herald-chat > summary .event-row { flex: 1; min-width: 0; }
 /* The event of an alert that still holds: tinted and ringed like an Ask card, as the Herald pins no copy of it. */
 .event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-8) var(--sp-10); margin-bottom: var(--sp-6); }
 .event-time { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }

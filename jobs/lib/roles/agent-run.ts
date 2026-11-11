@@ -36,6 +36,8 @@ export interface Opening extends Call {
   job?: string;
   repo?: string;
   on?: string;
+  /** The session the run resumes: the run's session key, so the turns of one conversation share it. Without it the key is the reply's session. */
+  session?: string;
   /** Names a lock from the run's job: the run holds it from before it is `running` until `end`, so `endLost` leaves it alone. */
   lock?: (job: string) => string;
 }
@@ -65,7 +67,7 @@ export function openRun(o: Opening): AgentRun {
     const job = o.job ?? basename(folder);
     // No other process takes a lock named from a job with no run yet.
     if (o.lock) release = lockSync(o.lock(job), 0)!;
-    putRun(basename(folder), { kind: o.role, job, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now(), n });
+    putRun(basename(folder), { kind: o.role, job, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), ...(o.session ? { session: o.session } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now(), n });
   });
   const folder = join(runsDir(), id);
   writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
@@ -84,6 +86,7 @@ export function openRun(o: Opening): AgentRun {
       stdout: log, stderr: runFile(folder, "stderr.log"), limit: roleSeconds(o.role.toUpperCase(), o.seconds),
     });
     prev = { input: sent, session: r.session };
+    if (o.role === "chat" && !o.session && r.session) patchRun(basename(folder), { session: r.session });
     if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; patchRun(basename(folder), { cost: spent }); }
     if (r.cause?.kind === "credit") credit = true;
     const failure = r.step.stalled ? stallReason() : r.step.timedOut ? `${o.who} timed out` : r.step.code !== 0 ? `${o.who} exited ${r.step.code}` : undefined;

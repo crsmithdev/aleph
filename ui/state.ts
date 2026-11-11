@@ -9,8 +9,8 @@ import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { isWaiting, issueKeyOf, loadRegistry, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
-import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
+import { isWaiting, issueKeyOf, loadRegistry, runOfJob, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
+import { allJobs, isOpen, readFile, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting, jobIdOf } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
@@ -43,11 +43,26 @@ const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.de
 /** A part of an issue as a flat card says it: "n/m" with a link to the parent. */
 interface Part { n: number; m: number; parent: string; href: string }
 
+/** A chat run's title: the first line of its `chat: <message>` command, trimmed. */
+const chatTitle = (e: Entry): string => (readFile(e, "command.txt") ?? "").split("\n")[0].replace(/^chat:/, "").trim();
+
+/** The chat run each `chat` event of `events` names, by its job ID: its title and its session key. */
+export function heraldChats(events: Event[], runs: Entry[]): Record<string, { title: string; session?: string }> {
+  const chats: Record<string, { title: string; session?: string }> = {};
+  for (const e of events) {
+    const chat = e.subject === "chat" && e.on?.[0] && !(e.on[0] in chats) ? runOfJob(e.on[0], runs) : undefined;
+    if (chat) chats[e.on![0]] = { title: chatTitle(chat), session: chat.run.session };
+  }
+  return chats;
+}
+
 export interface Job {
   /** The job ID of the run that counts, `a1430#2`: the Job page's address and the one an action acts on. */
   id: string;
   name: string; repo: string; item: { id: number | string; title: string; priority?: string } | null;
   condition: string; phase?: string; reason?: string; question?: string;
+  /** A chat run's title: the first line of its message. */
+  title?: string;
   started: string;
   /** The current (last) run: its kind and start. `started` is the job's first. */
   run: { id: string; kind: string; started: string };
@@ -157,7 +172,8 @@ export interface State {
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
   /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
-  herald?: { history: HeraldHistoryItem[]; events: Event[]; /** The title of each issue the events name, by its full ID. */ titles: Record<string, string> };
+  herald?: { history: HeraldHistoryItem[]; events: Event[]; /** The title of each issue the events name, by its full ID. */ titles: Record<string, string>;
+    /** The chat run each `chat` event names, by its job ID: the message's first line and the run's session key. */ chats: Record<string, { title: string; session?: string }> };
 }
 
 const DONE = 10;
@@ -232,6 +248,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       defaults: v.defaults, followups: v.followups,
     };
     for (const k of ["phase", "reason", "question", "ended", "model", "tier"] as const) if (v[k] !== undefined) job[k] = v[k];
+    if (v.run.kind === "chat") job.title = chatTitle(runs.find((e) => e.id === v.run.id) ?? counting(runs));
     if (v.cost !== undefined) job.cost = v.cost;
     if (v.commit) {
       job.commit = v.commit;
@@ -455,7 +472,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), events, titles },
+    herald: { history: currentStatusHistory(), events, titles, chats: heraldChats(events, jobs.flat()) },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {

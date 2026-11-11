@@ -86,7 +86,7 @@ export const routes: Routes = {
     const shots = imagesOf(images);
     if (typeof shots === "string") return Response.json({ error: shots }, { status: 400 });
     const run = openRun({
-      role: "chat", who: "the chat agent", model: OPUS_MODEL, seconds: 3600, cwd: ROOT, name: "chat", command: `chat: ${text.slice(0, 120)}`, shown: true, lock: chatLock,
+      role: "chat", who: "the chat agent", model: OPUS_MODEL, seconds: 3600, cwd: ROOT, name: "chat", command: `chat: ${text.slice(0, 120)}`, shown: true, session: typeof session === "string" && session ? session : undefined, lock: chatLock,
       flags: ["--permission-mode", "bypassPermissions", "--append-system-prompt", SYSTEM + (idea ? building(idea) : ""), ...(typeof session === "string" && session ? ["--resume", session] : [])],
     });
     const ids = Array.isArray(annotations) ? annotations.filter((x): x is string => typeof x === "string") : [];

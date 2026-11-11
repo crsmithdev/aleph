@@ -178,7 +178,7 @@ export function renderJob(j) {
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
-    pageHead(j.item?.title || id, { aside: nav }) + `${pills}${next}${blocked}` +
+    pageHead(j.item?.title || j.title || id, { aside: nav }) + `${pills}${next}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     (j.condition === "waiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") +
     jobKpis(j) + renderTimeline(jobSegments(j)) +

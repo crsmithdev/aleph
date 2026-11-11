@@ -8,13 +8,13 @@ import { allRuns } from "../jobs/lib/records/ledger.ts";
 
 let base: string, at: Awaited<ReturnType<typeof withServer>>["at"], stop: () => void, restoreEnv: () => void;
 
-// The fake agent says its argv and its prompt back as stream-json, as `claude -p --output-format stream-json` does.
+// The fake agent says its argv and its prompt back as stream-json, as `claude -p --output-format stream-json` does; its result carries the run records as they are while it runs.
 const FAKE = `#!/usr/bin/env bash
 prompt=$(cat)
 args="$*"
 echo '{"type":"system","subtype":"init","session_id":"s1"}'
 jq -cn --arg t "$prompt" --arg a "$args" '{type:"assistant",session_id:"s1",message:{content:[{type:"text",text:$t},{type:"tool_use",name:"Bash",input:{command:$a}}]}}'
-echo '{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1","total_cost_usd":0.25}'
+jq -cn --arg l "$(jq -cs . "$ALEPH_JOBS_DIR"/.records/*.json)" '{type:"result",subtype:"success",is_error:false,result:"ok",session_id:"s1",total_cost_usd:0.25,ledger:$l}'
 `;
 
 beforeAll(async () => {
@@ -68,6 +68,15 @@ test("the notes a message points at come first, once, from any page and in any s
 test("a session resumes the conversation", async () => {
   const t = await turn({ text: "again", session: "s1" });
   expect(t.data[1].message.content[1].input.command).toContain("--resume s1");
+});
+
+test("the turns of one session carry the same session key in the ledger", async () => {
+  const session = (await turn({ text: "first" })).data.find((e) => e.type === "result").session_id;
+  const second = (await turn({ text: "second", session })).data.find((e) => e.type === "result");
+  // While the resumed turn runs, its run already carries the session.
+  expect(JSON.parse(second.ledger).flatMap((r: { runs: { condition: string }[] }) => r.runs).find((r: { condition: string }) => r.condition === "running").session).toBe(session);
+  const keys = allRuns().filter((e) => e.run.kind === "chat").sort((a, b) => a.run.made! - b.run.made!).slice(-2).map((e) => e.run.session);
+  expect(keys).toEqual([session, session]);
 });
 
 test("an empty text is refused", async () => {

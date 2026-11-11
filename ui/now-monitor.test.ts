@@ -2,6 +2,13 @@ import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 import { withFactory } from "./test-now.ts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { heraldChats } from "./state.ts";
+import { withEnv } from "./test-server.ts";
+import { allRuns } from "../jobs/lib/records/ledger.ts";
+import { putRun } from "../jobs/lib/records/record.ts";
 
 const calm = { ...withFactory({}), asks: [], stuck: [] };
 test("the Pipeline card shows the 6 stages of the window in order with runs per issue and p90, and no other role", () => {
@@ -99,4 +106,29 @@ test("an event from the stream goes into the Herald at once", () => {
   expect(html).toContain(">landed</span>");
   expect(html).toContain('href="#/issues/aleph/6">aleph-6</a></span>');
   expect(html).toContain('<span class="event-what">aleph-6#2</span>');
+});
+
+test("the Herald shows one row per chat session titled by its latest message's first line, the earlier turns behind an expand control, and no kind or name tag", () => {
+  const base = mkdtempSync(join(tmpdir(), "aleph-herald-chat-")), restore = withEnv({ ALEPH_JOBS_DIR: base });
+  try {
+    // Three chat runs, each with a multi-line message; the first and the third are turns of one session.
+    const said = ["  Fix the title \nwith more", "Other question\nhere", "\tThen the footer  \nand the rest"], sessions = ["s1", "s2", "s1"];
+    said.forEach((text, i) => {
+      const id = `20261109-10000${i}-chat-${i + 1}`;
+      mkdirSync(join(base, id));
+      putRun(id, { kind: "chat", job: id, name: "chat", condition: "done", started: "2026-11-09T10:00:00Z", n: i + 1, session: sessions[i] } as any);
+      writeFileSync(join(base, id, "command.txt"), `chat: ${text}\n`);
+    });
+    const events = [1, 2, 3].map((n) => ({ at: `2026-11-09T1${n}:00:00Z`, by: "gate", subject: "chat", action: "done", on: [`chat#${n}`] }));
+    const s = { ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, chats: heraldChats(events, allRuns()) } };
+    const h = view.renderHerald(s);
+    const titles = [...h.matchAll(/<span class="event-title"[^>]*>([^<]*)</g)].map((m) => m[1]);
+    // Newest session first; its earlier turn is in the details, after the row of its latest turn.
+    expect(titles).toEqual(["Then the footer", "Fix the title", "Other question"]);
+    expect(h.match(/<details class="herald-chat">/g)).toHaveLength(1);
+    expect(h).toMatch(/<details class="herald-chat"><summary>[^]*?Then the footer[^]*?<\/summary>[^]*?Fix the title/);
+    expect(h.match(/<span class="event-id"><\/span><span class="event-body"><span class="event-title"/g)).toHaveLength(3);
+    expect(h).not.toMatch(/>chat</);
+    expect(h).not.toContain("chat#");
+  } finally { restore(); rmSync(base, { recursive: true, force: true }); }
 });

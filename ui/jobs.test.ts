@@ -193,6 +193,15 @@ describe("GET /api/jobs/:id", () => {
     expect(html).toContain('<span class="quiet">Waits on</span>');
     expect(html).toContain(`data-act="unblock" data-path="/api/issues/oth-${open}/unblock"`);
   });
+  test("a chat run's Job page is titled by the first line of its message, not chat", async () => {
+    const id = "20261027-000060-a";
+    run(id, { job: id, name: "chat", kind: "chat", condition: "done", started: ago(1) }, { "command.txt": "chat:   Fix the title \nand the rest\n" });
+    try {
+      const j = await (await get(jp("chat#1"))).json();
+      expect(j.title).toBe("Fix the title");
+      expect(v.renderJob(j)).toContain("<h1>Fix the title</h1>");
+    } finally { rmSync(join(jobsDir, id), { recursive: true }); removeRun(id); }
+  });
   test("404 for an unknown name, or another project's job", async () => {
     expect((await get(jp("nope#1"))).status).toBe(404);
     expect((await get(jp("fac-9#3", "?project=oth"))).status).toBe(404);
