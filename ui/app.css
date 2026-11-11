@@ -973,9 +973,9 @@ table.tbl td.eff { white-space: normal; min-width: 22ch; }
 .ins h4 { margin: var(--sp-14) 0 var(--sp-6); font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: var(--ls-caps); }
 .ins .mreach { margin-top: var(--sp-10); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-ctl); background: var(--sunk); }
 .ins .mreach h4 { margin-top: 0; }
-.ins .mform { display: flex; gap: var(--sp-6); align-items: center; flex-wrap: wrap; margin-top: var(--sp-8); }
-.ins .mform.col { flex-direction: column; align-items: stretch; }
-.ins .mform input, .ins .mwhy { flex: 1; min-width: 140px; }
+.ins .srow { grid-template-columns: minmax(0, 1fr); }
+.ins .srow .hint { grid-column: 1; }
+.ins .macts .field { flex: 1; min-width: 140px; }
 .ins textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: var(--fs-xs); }
 .ins .macts { display: flex; gap: var(--sp-6); flex-wrap: wrap; align-items: center; margin-top: var(--sp-14); padding-top: var(--sp-12); border-top: 1px solid var(--rule-2); }
 tr.nrow { cursor: pointer; }

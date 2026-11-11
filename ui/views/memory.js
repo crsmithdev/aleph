@@ -4,7 +4,8 @@
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
 import { panelOf } from "../chart.js";
-import { actButton, bytes, count, fold, linkButton, codeText, facts, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, miss, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { detailPanel, panel } from "../timeline.js";
+import { actButton, badge, bytes, count, fold, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, miss, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -123,7 +124,7 @@ export function renderResults(results, o, status) {
 export const recallFrame = (hist = []) => ({
   measure: { name: "Recalls per Day", unit: "count", agg: "sum" },
   over: { kind: "time", window: "week" },
-  by: { keys: [{ key: "recalls", name: "Recalls" }] },
+  by: { keys: [{ key: "recalls", name: "recalls" }] },
   rows: hist.map((n, i) => ({ at: Date.now() - (hist.length - 1 - i) * DAY, recalls: n })),
   legend: false,
 });
@@ -131,7 +132,7 @@ export const recallFrame = (hist = []) => ({
 /** The chart panel of a note's recalls (`inspect` sets its frame), or the line that there were none. */
 const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : `<h4>Recall history, 30 days</h4>${empty("No recall in the last 30 days.", "A note shows here once recall returns it.")}`;
 
-const why = `<input class="mwhy" name="why" placeholder="Why (optional)" aria-label="Why">`;
+const why = field("Why (optional)", inputBox("why"));
 // `data-mact`, not `data-act`: router.js runs its own command for every `button.act[data-act]`.
 const act = (label, a, o = {}) => actButton(label, { mact: a }, o);
 
@@ -139,32 +140,32 @@ const act = (label, a, o = {}) => actButton(label, { mact: a }, o);
 function actions(it) {
   const file = ["handoff", "episode", "memory-md"].includes(it.source);
   const rows = {
-    note: `${act("Edit", "edit", { primary: true })}${why}${act("Archive", "archive")}${act("Delete", "delete", { cls: "danger" })}`,
+    note: `${act("Edit", "edit", { primary: true })}${why}${act("Archive", "archive")}${act("Delete", "delete")}`,
     "memory-md": act("Edit", "edit", { primary: true }),
-    handoff: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete", { cls: "danger" })}`,
-    episode: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete", { cls: "danger" })}`,
-    issue: `${act("Drop", "drop", { cls: "danger" })}`,
+    handoff: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete")}`,
+    episode: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete")}`,
+    issue: `${act("Drop", "drop")}`,
     proposal: `${act("Approve", "approve", { primary: true })}${act("Decline", "decline")}`,
-    miss: `<label class="mform"><span>Add as an alias of</span><input name="target" list="mem-titles" placeholder="Note title"></label>${act("Add alias", "alias", { primary: true })}`,
+    miss: setting("Add as an alias of", inputBox("target", "", { id: "mem-alias", attrs: ' list="mem-titles" placeholder="Note title"' }), { id: "mem-alias", save: "Add alias", attrs: ' data-mact="alias"' }),
   }[it.source];
-  const ro = ["rules", "skill", "hook"].includes(it.source) ? `<p class="hint">A file in the repo: change it on a branch.</p>` : "";
+  const ro = ["rules", "skill", "hook"].includes(it.source) ? note("A file in the repo: change it on a branch.") : "";
   return `<div class="macts" data-file="${file}">${rows ?? ""}${it.href && it.source !== "note" ? linkButton("Open", it.href) : ""}</div>${ro}`;
 }
 
 /** The note's links out, each with Unlink, the notes that link to it, and a field to add a link. */
-const links = (n) => `<h4>Links to</h4>${n.links?.length ? `<ul>${n.links.map((l) => `<li>${link(l.title)} ${actButton("Unlink", { mact: "unlink", target: l.title }, { cls: "small" })}</li>`).join("")}</ul>` : q("None.")}` +
-  `<h4>Linked from</h4>${n.backlinks?.length ? `<ul>${n.backlinks.map((l) => `<li>${link(l.title)}</li>`).join("")}</ul>` : q("None.")}` +
-  `<div class="mform"><input name="target" list="mem-titles" placeholder="Note title" aria-label="Link to a note">${act("Link", "link")}</div>`;
+const links = (n) => `<h4>Links to</h4>${n.links?.length ? `<ul>${n.links.map((l) => `<li>${link(l.title)} ${actButton("Unlink", { mact: "unlink", target: l.title })}</li>`).join("")}</ul>` : empty("No links out.", "Add one with the field below.")}` +
+  `<h4>Linked from</h4>${n.backlinks?.length ? `<ul>${n.backlinks.map((l) => `<li>${link(l.title)}</li>`).join("")}</ul>` : empty("No note links here.", "A note links here when it names this one in double brackets.")}` +
+  setting("Link to a note", inputBox("target", "", { id: "mem-link", attrs: ' list="mem-titles" placeholder="Note title"' }), { id: "mem-link", save: "Link", attrs: ' data-mact="link"' });
 
 /** The core line: the note's one line in the start context of its scope. Blank takes the note out. */
-const coreForm = (n) => `<label class="mform col"><span>Core line, in every ${esc(n.frontmatter?.scope ?? "")} session's start context</span>` +
-  `<input name="core" value="${esc(n.frontmatter?.core ?? "")}" placeholder="None: the note is reached by recall only" maxlength="160"></label>${act("Save core line", "core")}`;
+const coreForm = (n) => setting("Core line", inputBox("core", n.frontmatter?.core, { id: "mem-core", attrs: ' placeholder="None: the note is reached by recall only" maxlength="160"' }),
+  { id: "mem-core", hint: `In every ${n.frontmatter?.scope ?? ""} session's start context.`, save: "Save core line", attrs: ' data-mact="core"' });
 
 /** The inspector for `it`; `n` is /api/memory/notes/:title's answer when `it` is a note, `hist` its recalls per day. */
 export function renderInspector(it, n = null, status = "", hist = []) {
   if (!it) return empty("No memory selected.", "Select a memory to see what it says, how it reaches the agent and what can change.");
   const fm = n?.frontmatter ?? {};
-  const head = `<p class="mtype">${dot(it.type)}${esc(typeName(it.type))} · ${esc(it.source === "memory-md" ? "MEMORY.md" : it.source)}${status ? ` · ${esc(STATUS[status])}` : ""}</p><h3>${esc(it.title)}</h3>`;
+  const head = `<p class="mtype">${dot(it.type)}${esc(typeName(it.type))} · ${esc(it.source === "memory-md" ? "MEMORY.md" : it.source)}${status ? ` · ${badge(STATUS[status])}` : ""}</p><h3>${esc(it.title)}</h3>`;
   // The claim first; the rest of the note folds, so how it reaches the agent stays in view.
   const [claim, ...rest] = (n?.body ?? "").trim().split(/\n\s*\n/);
   const what = n ? `<article class="note">${md(claim)}</article>${rest.length ? `${fold("The whole note", `<article class="note">${md(rest.join("\n\n"))}</article>`, { cls: "fold" })}` : ""}` : `<p>${codeText(it.text)}</p>`;
@@ -294,8 +295,7 @@ async function edit(btn, it) {
   const res = it.source === "note" ? null : await get(fileUrl(it), "mem-file");
   if (it.source !== "note" && !res) return;
   const text = it.source === "note" ? live.note?.text : (await res.json()).text;
-  box.innerHTML = `<label class="mform col"><span>The whole text${it.source === "note" ? ", frontmatter first. vault write checks it" : ""}</span><textarea name="text" rows="16" spellcheck="false">${esc(text ?? "")}</textarea></label>` +
-    `<div class="macts">${act("Save", "save", { primary: true })}${act("Cancel", "cancel")}</div>`;
+  box.innerHTML = form("mem-edit", [field("The whole text", `<textarea name="text" rows="16" spellcheck="false">${esc(text ?? "")}</textarea>`, { hint: it.source === "note" ? "Frontmatter first. vault write checks it." : "" })], "Save text", ' data-mact="save"') + act("Cancel", "cancel");
   box.hidden = false;
   box.querySelector("textarea").focus();
 }
@@ -316,12 +316,12 @@ const WRITES = {
 /** A write that removes something asks for a second click. */
 const ARMED = new Set(["delete", "file-delete", "drop"]);
 
-async function write(btn) {
-  const a = btn.dataset.mact, it = live.results?.find((x) => idOf(x) === here().item);
+async function write(btn, a = btn.dataset.mact) {
+  const it = live.results?.find((x) => idOf(x) === here().item);
   if (!it) return;
   if (a === "edit") return edit(btn, it);
   if (a === "cancel") { const box = btn.closest(".medit"); box.hidden = true; box.innerHTML = ""; return; }
-  if (ARMED.has(a) && arm(btn, `Confirm ${btn.textContent.toLowerCase()}`)) return;
+  if (ARMED.has(a) && arm(btn, `${btn.textContent} ${it.title}? Click again`)) return;
   const ins = btn.closest(".ins"), field = (name) => ins.querySelector(`[name="${name}"]`)?.value ?? "";
   const f = { text: field("text"), core: field("core"), target: field("target"), why: field("why") };
   const [url, body] = WRITES[a](it, f, btn);
@@ -330,7 +330,7 @@ async function write(btn) {
     await postJson(url, body);
     if (a === "delete" || a === "file-delete" || a === "drop" || a === "approve" || a === "decline" || a === "archive") setQuery({ item: "" });
     await refresh();
-  } catch (e) { say(btn, e.message); btn.disabled = false; }
+  } catch (e) { say(btn, `${a} failed: ${e.message}`); btn.disabled = false; }
 }
 
 function mount(root, m) {
@@ -368,6 +368,11 @@ function mount(root, m) {
       if (innerWidth <= 1100) root.querySelector("#mem-inspector").scrollIntoView({ block: "start" });
     }
   };
+  // The forms of the inspector (a core line, a link, an alias, the editor) submit here; Enter in a field submits too.
+  root.onsubmit = (e) => {
+    const f = e.target.closest?.("#mem-inspector form[data-mact]");
+    if (f) { e.preventDefault(); write(e.submitter, f.dataset.mact); }
+  };
   // Enter or Space on a focused row is a click on it; a key on the title's link is left to the link.
   root.onkeydown = (e) => {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".mrow")) { e.preventDefault(); e.target.click(); }
@@ -375,18 +380,21 @@ function mount(root, m) {
   search();
 }
 
-const crumbs = (t) => `<ul>${t.map((n) => `<li>${link(n.title)} <span class="hint">${esc([n.kind, n.scope].filter(Boolean).join(" · "))}</span></li>`).join("")}</ul>`;
+// A frontmatter key in Title Case: written_by is "Written by", last_verified is "Last Verified" (docs/design.md, Words).
+const SMALL = new Set("a an the and but or nor as at by for from in of on per to vs with".split(" "));
+const titleKey = (k) => k.split(/[_-]/).map((w, i) => (i && SMALL.has(w) ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
+const crumbs = (t) => `<ul>${t.map((n) => `<li>${link(n.title)}${meta([esc(n.kind), esc(n.scope)])}</li>`).join("")}</ul>`;
 
-/** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. A card with no links is left out. */
+/** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. A panel with no links is left out. */
 export function renderNote(n) {
-  const fm = Object.entries(n.frontmatter).map(([k, v]) => [k, esc(Array.isArray(v) ? v.join(", ") : v)]).filter(([, v]) => v);
-  const links = (title, t, id) => (t.length ? card(title, crumbs(t), { id, count: t.length }) : "");
-  return `<div class="page">${crumb("#/memory", [["memory", "#/memory"], [n.title]])}${pageHead(n.title)}` +
-    (n.archived ? `<p class="quiet">Archived.</p>` : "") +
-    `<p class="hint"><code>${esc(n.path)}</code></p>` +
+  const fm = Object.entries(n.frontmatter).map(([k, v]) => [titleKey(k), esc(Array.isArray(v) ? v.join(", ") : v)]).filter(([, v]) => v);
+  const links = (title, t) => (t.length ? detailPanel(title, esc(count(t.length)), crumbs(t)) : "");
+  return `<div class="page dp-page">${crumb("#/memory", [["memory", "#/memory"], [n.title]])}${pageHead(n.title)}` +
+    (n.archived ? note("Archived.") : "") +
+    note(n.path) +
     (fm.length ? facts(fm) : "") +
-    `<article class="note">${md(n.body)}</article>` +
-    links("Links to", n.links, "links") + links("Linked from", n.backlinks, "backlinks") + `</div>`;
+    panel("note", "Note", `<div class="md">${md(n.body)}</div>`) +
+    links("Links to", n.links) + links("Linked from", n.backlinks) + `</div>`;
 }
 
 export const noteView = {

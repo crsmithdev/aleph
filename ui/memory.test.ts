@@ -10,9 +10,11 @@ import { items } from "./memory-items.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
-import { dataTable, empty, heads, pageHead, priorityBadge, scope } from "./lib.js";
+import { badge, dataTable, empty, heads, md, pageHead, priorityBadge, scope } from "./lib.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
+// @ts-ignore
+import { panel } from "./timeline.js";
 // @ts-ignore
 import { noteView } from "./views/memory.js";
 
@@ -244,9 +246,10 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   const note = { type: "semantic", source: "note", key: "N", title: "N", text: "", scope: "", at: "", read: null, effect: "" };
   const h = v.renderInspector(note, n, "use", hist);
   expect(h).toContain('<aleph-chart key="memory/recall"');
-  expect(h).toContain('aria-label="Recalls per Day: Recalls 3"');
+  expect(h).toContain('aria-label="Recalls per Day: recalls 3"');
   expect(h).not.toContain("mhist");
   expect(h).not.toContain("<i title=");
+  expect(v.recallFrame(hist).by.keys[0].name).toBe("recalls");
   expect(v.recallFrame(hist).rows.map((r: any) => r.recalls)).toEqual(hist);
   expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain(empty("No recall in the last 30 days.", "A note shows here once recall returns it."));
 });
@@ -342,14 +345,21 @@ test("the page is the search, the freshness filter, seven type tiles, the result
   expect(h).toMatch(/data-tile="parametric"[^]*?<b>–<\/b>/);
   expect(v.renderMemory(page, v.options(), null)).toContain("Loading memory");
   expect(v.view.api({}, new URLSearchParams("project=aleph"))).toBe("/api/memory?project=aleph");
-  const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
+  const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha", written_by: "w", last_verified: "2026-11-01" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
   const none = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "x", links: [], backlinks: [] });
-  expect(none).not.toContain('id="links"');
-  expect(none).not.toContain('id="backlinks"');
-  expect(nh).not.toContain('id="links"');
-  expect(nh).toContain('<section class="card" id="backlinks"');
-  expect(nh).toMatch(/id="h-backlinks">Linked from<\/h2><span class="count">1<\/span>/);
+  // A section with no links is left out: neither its detailPanel() nor a card.
+  for (const t of ["<span>Links to</span>", "<span>Linked from</span>", 'class="card"']) expect(none).not.toContain(t);
+  expect(nh).not.toContain("<span>Links to</span>");
+  expect(nh).not.toContain('<section class="card" id="backlinks"');
+  expect(nh).toContain('<details class="dp-panel dp-fold" open><summary><span>Linked from</span><span class="dp-aside">1</span></summary>');
+  const out = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: {}, body: "x", links: [{ title: "U", kind: "gotcha", scope: "a" }], backlinks: [] });
+  expect(out).toContain('<details class="dp-panel dp-fold" open><summary><span>Links to</span><span class="dp-aside">1</span></summary><div class="dp-body"><ul><li><a href="#/memory/U">U</a>');
+  expect(out).not.toContain('<section class="card" id="links"');
+  expect(out).not.toContain("<span>Linked from</span>");
+  expect(nh).toContain(panel("note", "Note", `<div class="md">${md("see [[U]]")}</div>`));
+  for (const t of ["<dt>Kind</dt>", "<dt>Written by</dt>", "<dt>Last Verified</dt>"]) expect(nh).toContain(t);
+  expect(nh).not.toContain("<dt>kind</dt>");
 });
 
 test("each type has its own layout, filters keep by type and freshness, and the tiles count before the type filter", () => {
@@ -416,6 +426,12 @@ test("the inspector says how a memory reaches the agent, shows its recall histor
     expect(h).toContain(t);
   // No button of the page carries data-act, which router.js's own handler takes.
   expect(h).not.toContain("data-act=");
+  expect(h).toContain(`· ${badge("in use")}`);
+  expect(h).not.toMatch(/class="act[^"]* (danger|small)/);
+  const bare = v.renderInspector(it({}), { ...n, links: [], backlinks: [] }, "use");
+  expect(bare).toContain(empty("No links out.", "Add one with the field below."));
+  expect(bare).toContain(empty("No note links here.", "A note links here when it names this one in double brackets."));
+  expect(bare).not.toContain("None.");
   const hand = v.renderInspector(it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }));
   for (const t of ['data-mact="edit"', 'data-mact="file-delete"']) expect(hand).toContain(t);
   expect(hand).not.toContain("Recall history");

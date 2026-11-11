@@ -1580,7 +1580,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Memory Source cell is a hand `td.mono` with a link to the memory's page: a rule, a skill or a note has a title, not an ID, so `idLink()` does not fit | `ruleRow()` in `ui/views/memory.js` | allowed |
 | The legend of the Memory read chart uses `c-use`, `c-stale` and `c-never`, the classes of its meter segments, not timeline classes: no timeline class has the colour of "never" (`--rule`) | `readChart()` in `ui/views/memory.js` | follow-up |
 | The Memory page head has a Window control that does nothing: the memory API takes no window, and `scope().bar()` always draws one | `renderMemory()` in `ui/views/memory.js` | follow-up |
-| Forms written by hand: the Memory alias, link, core line and edit forms, hand `label.mform` and `div.mform` | `actions()`, `links()`, `coreForm()` and `edit()` in `ui/views/memory.js` | follow-up |
+| The Memory inspector's buttons carry `data-mact` and a handler of their own, not the router's `act`: a write reads the Why field and the open memory, and a form submits to the same handler | `act()`, `write()` in `ui/views/memory.js` | allowed |
 | A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | The Roles table's rows are hand `<tr>`s and its Failed Jobs link a hand `a.failed-jobs` | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | A Jobs trend chart's p90 line takes the `hot` tone | `trendFrame()` in `ui/views/factory-jobs.js` | allowed |
@@ -1589,7 +1589,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/timeline.js` | follow-up |
 | The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/chart.js` | follow-up |
 | The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |
-| A textarea and a checkbox are written by hand: no helper | `ui/views/issues.js` | follow-up |
+| A textarea and a checkbox are written by hand: no helper | `ui/views/issues.js`, and the Memory editor in `ui/views/memory.js` | follow-up |
 | The Job page's Waits-on block is a hand `dp-blocked`, as on the Issue page: `blockersHtml()` writes only the items | `renderJob()` in `ui/views/jobs.js` | follow-up |
 | Quiet labels inside a line are hand `span.quiet`: the Next line, the check name after a failed test, the `logs:` label of a run's log buttons, a run's job ID in its event, the Work lane's head. `note()` makes a whole line, not a label | `renderJob()`, `logButtons()`, `jobEvent()`, `jobSegments()` in `ui/views/jobs.js` | follow-up |
 | A transcript's steps are hand `div.step`: no helper for a tool call with its input and result | `renderTranscript()` in `ui/views/jobs.js` | follow-up |
