@@ -25,12 +25,12 @@
       </svg>aleph</a>
     <div id="nav"></div>
     <a id="logout" href="#" title="Log out" hidden><wa-icon name="right-from-bracket" aria-hidden="true"></wa-icon><span class="lbl">Log out</span></a>
-    <button id="collapse" type="button" aria-label="Collapse the sidebar" aria-expanded="true">&lt;&lt;</button>
+    <button id="collapse" type="button" aria-label="Collapse the sidebar" title="Collapse the sidebar" aria-expanded="true">&lt;&lt;</button>
   </nav>
   <main>
     <p id="offline" role="alert" hidden>The server is unreachable. Showing the last data.</p>
-    <p id="aged" role="alert" hidden></p>
-    <p id="stale" role="alert" hidden>The server runs older code than the checkout. Restart it: <code>systemctl --user restart aleph-ui</code></p>
+    <div id="aged" hidden></div>
+    <div id="stale" hidden></div>
     <div id="view"></div>
   </main>
 </div>
@@ -42,7 +42,9 @@
     const show = (collapsed) => {
       shell.classList.toggle("collapsed", collapsed);
       button.textContent = collapsed ? ">>" : "<<";
-      button.setAttribute("aria-label", collapsed ? "Expand the sidebar" : "Collapse the sidebar");
+      const label = collapsed ? "Expand the sidebar" : "Collapse the sidebar";
+      button.setAttribute("aria-label", label);
+      button.title = label;
       button.setAttribute("aria-expanded", String(!collapsed));
     };
     try { const v = localStorage.getItem(KEY); show(v === null ? localStorage.getItem(OLD) === "1" : JSON.parse(v) === true); } catch {}

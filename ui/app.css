@@ -605,6 +605,8 @@ pre.stat b { color: var(--need); }
 .ev.one { grid-template-columns: minmax(0, 1fr); }
 .q { margin: var(--sp-10) 0 0; font-size: var(--fs-sm); max-width: 76ch; }
 #offline, #stale, #aged { margin: 0; padding: var(--sp-6) var(--sp-24); background: var(--stuck-bg); color: var(--stuck); font-size: var(--fs-sm); text-align: center; }
+#stale .notice, #aged .notice { display: inline; margin: 0; color: inherit; }
+#stale .cmd { margin-left: var(--sp-8); }
 .notice { margin: 0 0 var(--sp-6); color: var(--muted); font-size: var(--fs-sm); }
 .notice.bad { color: var(--stuck); }
 /* ---------- shell: sidebar and views ---------- */
@@ -642,7 +644,6 @@ pre.stat b { color: var(--need); }
 .error p { margin: 0; color: var(--stuck); }
 .error .hint { color: var(--muted); font-size: var(--fs-sm); margin-top: var(--sp-2); }
 .page h1 { font-family: var(--display); font-weight: var(--fw-text); }
-.nf h1 { font: var(--fw-text) var(--fs-xl)/1.35 var(--display); margin: 0 0 var(--sp-6); }
 .md h1, .md h2, .md h3, .md h4 { font: var(--fw-strong) var(--fs-lg)/1.35 var(--sans); margin: var(--sp-14) 0 var(--sp-6); }
 .md h1 { font-size: var(--fs-lg); }
 .md pre { background: var(--sunk); padding: var(--sp-8) var(--sp-10); border-radius: var(--r-tag); overflow-x: auto; font: var(--fs-xs)/1.55 var(--mono); }

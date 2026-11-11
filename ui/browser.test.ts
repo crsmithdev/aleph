@@ -9,7 +9,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   afterAll(() => rig?.stop());
 
   const hash = () => page.ev<string>("location.hash");
-  const title = () => page.ev<string>('document.querySelector("#view h1")?.textContent ?? ""');
   const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
 
   test("the sidebar opens with the Factory header, with no link above it", async () => {
@@ -27,7 +26,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       await page.go(href);
       expect([href, await page.ev('document.querySelector("#nav a[aria-current]")?.textContent')]).toEqual([href, name]);
       expect(await page.ev('document.title')).toBe(`${name} · aleph`);
-      expect(await page.ev<string>('document.querySelector("#view").textContent')).not.toMatch(/Could not load|failed to render/);
+      expect(await page.ev('!!document.querySelector("#view > .page > .error")')).toBe(false);
     }
     expect(page.errors).toEqual([]);
   }, 60_000);
@@ -74,8 +73,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("an unknown address says so and links to Status", async () => {
     await page.go("#/nothing/here");
-    expect(await title()).toContain("Nothing at /nothing/here");
+    expect(await page.ev('document.querySelector("#view header.ph h1")?.textContent')).toBe("Nothing at /nothing/here");
+    expect(await page.ev('document.querySelectorAll("#view h1").length')).toBe(1);
     expect(await page.ev('document.querySelector("#view a[href=\\"#/\\"]").textContent')).toBe("Status");
+  }, 30_000);
+
+  test("a failed first load shows a line and a hint, and a stale server shows its command", async () => {
+    await page.ev('(() => { const f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/issues") ? Promise.reject(new Error("down")) : f(u, o); })()');
+    await page.go("#/issues");
+    expect(await page.ev('document.querySelector("#view .error .hint")?.textContent')).toBeTruthy();
+    expect(await page.ev('document.querySelector("#view .error p").textContent')).toBe("Issues did not load: down");
+    await page.reload();
+    // The server's stale header shows a notice with the restart command, which is copyable.
+    await page.ev('(() => { const f = window.fetch; window.fetch = (u, o) => f(u, o).then((r) => new Response(r.body, { status: r.status, headers: [...r.headers, ["x-aleph-stale", "1"]] })); })()');
+    await page.ev('dispatchEvent(new Event("hashchange"))');
+    await page.when('document.querySelector("#stale .notice.bad")');
+    expect(await page.ev('document.querySelector("#stale .cmd").dataset.cmd')).toBe("systemctl --user restart aleph-ui");
+    await page.reload();
   }, 30_000);
 
   test("Issues: a filter, a sort and the search change the table in place", async () => {
@@ -200,7 +214,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("the sidebar collapses, keeps its links, and remembers it over a reload", async () => {
+    const tip = () => page.ev('[document.querySelector("#collapse").title, document.querySelector("#collapse").getAttribute("aria-label")]');
+    const [t0, a0] = await tip();
+    expect(t0).toBe(a0);
     await click("#collapse");
+    const [t1, a1] = await tip();
+    expect([t1, t1 === t0]).toEqual([a1, false]);
     await page.when('document.querySelector(".shell.collapsed")');
     expect(await page.ev('document.querySelector("#nav a").getBoundingClientRect().width')).toBeLessThan(60);
     await page.reload();
@@ -255,7 +274,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       values: document.querySelectorAll("#kit-values .kit-specimen tbody tr").length,
       contrast: document.querySelectorAll('[data-tokens="contrast"] tbody tr').length,
       theme: document.documentElement.dataset.theme,
-      error: /Could not load|failed to render/.test(document.querySelector("#view").textContent.replace("Could not load jobs.", "")),
+      error: !!document.querySelector("#view > .page > .error"),
     })`);
     expect(r).toMatchObject({ theme: "dark", error: false, charts: 3 });
     // Each specimen shows its rules from docs/design.md; the variants of a component have none.

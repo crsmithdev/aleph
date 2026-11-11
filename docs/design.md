@@ -1482,6 +1482,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
 | Two `act()` wrappers with different signatures; `shell()` has no callers | `ui/views/cards.js`, `ui/views/memory.js` | follow-up |
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
+| Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |
 | A selected row is drawn three ways: `.mrow` (`--raised`, `--run` border), `tr.nrow` (inset `--run` bar), the nav (inset `--ink` bar) | `ui/app.css` | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |

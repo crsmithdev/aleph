@@ -11,7 +11,7 @@
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
 import { setCodes } from "../lib/naming.ts";
-import { arm, postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
+import { arm, cmd, notice, pageHead, postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
@@ -200,7 +200,11 @@ export async function start() {
     const res = await fetch(url, { cache: "no-store" });
     if (res.status === 401) { location.reload(); return res; }
     if (res.headers.get("x-aleph-login") === "1") $("logout").hidden = false;
-    $("stale").hidden = res.headers.get("x-aleph-stale") !== "1";
+    const stale = res.headers.get("x-aleph-stale") === "1";
+    if (stale === $("stale").hidden) {
+      $("stale").hidden = !stale;
+      $("stale").innerHTML = stale ? notice("The server runs older code than the checkout. Restart it:", true) + cmd("systemctl --user restart aleph-ui") : "";
+    }
     const v = res.headers.get("x-aleph-version");
     if (v && version && v !== version && !typing()) location.reload();
     if (v && !version) version = v;
@@ -221,11 +225,11 @@ export async function start() {
     // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
     const saved = first ? null : recordState($("view"));
     try { $("view").innerHTML = view.render(data, params, query); }
-    catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; return; }
+    catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`, "Reload the page. If it stays, this is a bug in the view.")}</div>`; return; }
     if (saved) restoreState($("view"), saved);
     const mark = markOf(data);
     $("aged").hidden = !mark;
-    $("aged").textContent = mark ? markLine(view.title, mark) : "";
+    $("aged").innerHTML = mark ? notice(markLine(view.title, mark), true) : "";
     // Keyed <details> keep their open state by data-keep, and that state goes through keep(),
     // one key per fold: it survives a redraw and a reload. A fold the reader never touched
     // has no kept state, and shows its own default.
@@ -248,7 +252,7 @@ export async function start() {
     fail: ({ view }, e, first) => {
       failed = true;
       checkOut();
-      if (first) $("view").innerHTML = `<div class="page">${error(`Could not load ${view.title}: ${e.message}`)}</div>`;
+      if (first) $("view").innerHTML = `<div class="page">${error(`${view.title} did not load: ${e.message}`)}</div>`;
       else $("offline").hidden = false;
     },
     draw,
@@ -298,7 +302,7 @@ export async function start() {
     if (!m) {
       page.show({ view: null });
       document.title = "Not found · aleph";
-      $("view").innerHTML = `<div class="page nf"><h1>Nothing at ${esc(path)}</h1>${empty("No view has this address.", `Go to <a href="#/">Status</a> or pick a view from the list.`)}</div>`;
+      $("view").innerHTML = `<div class="page nf">${pageHead(`Nothing at ${path}`)}${empty("No view has this address.", `Go to <a href="#/">Status</a> or pick a view from the list.`)}</div>`;
       $("offline").hidden = true;
       return;
     }
@@ -412,7 +416,7 @@ async function dispatch(e) {
   // The button's request: its body, and the box's text under the box's name after its lead.
   const body = JSON.parse(b.dataset.body || "{}"), typed = box?.value.trim() ?? "";
   if (typed) body[box.name] = (box.dataset.lead ?? "") + typed;
-  if (box && body[box.name] === undefined) { note("Type an answer first"); return; }
+  if (box && body[box.name] === undefined) { note(`${act} failed: type an answer first`); return; }
   const bs = [...(b.closest(".actions") ?? b.parentElement).querySelectorAll("button.act")];
   bs.forEach((x) => { x.disabled = true; });
   if (name) actMessages.delete(name);
