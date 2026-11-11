@@ -1,12 +1,10 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
-import { actButton, actMessages, fold, clock, codeText, denyReasons, diffHtml, dur, esc, openDiffs, priorityBadge, repoIdLink, span, tag, when } from "../lib.js";
+import { actButton, actMessages, fold, clock, codeText, denyReasons, diffHtml, dur, esc, inputBox, meta, note, openDiffs, priorityBadge, repoIdLink, span, subHead, tag, when } from "../lib.js";
 import { shortText, shortId, jobHref, parseId } from "../../lib/naming.ts";
 
 /** A job's id, linking to its page. */
 export const itemId = (j) => repoIdLink(j.name, j.href || jobHref(j.id));
-export const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
 export const actMsg = (name) => (actMessages.has(name) ? `<span class="act-msg" role="alert">${esc(actMessages.get(name))}</span>` : "");
-export const act = (verb, name, label, primary = false) => actButton(label, { act: verb, name, label }, { primary });
 /** The checks of a run as fact rows: `Tests 71s ✓`. */
 export const checkFacts = (j) =>
   (j.checks || []).map((c) => [c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(dur(c.seconds))} ${c.ok ? "✓" : "✗"}`]);
@@ -23,9 +21,7 @@ const trailer = (t, j, now) => {
 };
 /** The trailers of a job as one small line; empty when it has none. */
 export const trailerLine = (j, now) =>
-  j.trailers?.length ? `<p class="trailers-line">${j.trailers.map((t) => trailer(t, j, now)).join(" · ")}</p>` : "";
-/** One card shell. */
-export const shell = (size, cls, inner, tag = "article") => `<${tag} class="job-card ${size} ${cls}">${inner}</${tag}>`;
+  j.trailers?.length ? meta(j.trailers.map((t) => trailer(t, j, now))) : "";
 
 const STAT_FILES = 12;
 
@@ -53,10 +49,10 @@ export const askShell = (cls, attrs, key, meta, label, title, tag, desc, rest) =
   `<article class="job-card small issue-row ${cls}" ${attrs}>` +
   `<div class="ask-box">${meta}${fold(`<span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${esc(label)}:</b> <span class="ask-title">${esc(title)}</span></span>${tag ? `<span class="ask-tag">${esc(tag)}</span>` : ""}`, desc, { cls: "ask-fold", keep: `ask:${key}`, head: "ask-head" })}${rest}</div></article>`;
 
-/** The options, recommended mark and context of a decision with fields. */
-function decisionBody(d) {
+/** The options, recommended mark and context of a decision with fields; `mark` is false when a choice already carries the mark. */
+function decisionBody(d, mark) {
   return `<p class="dq">${codeText(d.question)}</p>` +
-    `<ul class="opts">${d.options.map((o) => `<li${o.label === d.recommended ? ' class="rec"' : ""}><b>${codeText(o.label)}</b>${o.label === d.recommended ? ` ${tag("Recommended", "run")}` : ""} <span class="line">${codeText(o.line)}</span></li>`).join("")}</ul>` +
+    `<ul class="opts">${d.options.map((o) => `<li${mark && o.label === d.recommended ? ' class="rec"' : ""}><b>${codeText(o.label)}</b>${mark && o.label === d.recommended ? ` ${tag("Recommended", "run")}` : ""} <span class="line">${codeText(o.line)}</span></li>`).join("")}</ul>` +
     (d.why?.length ? `<ul class="why">${d.why.map((w) => `<li>${codeText(w)}</li>`).join("")}</ul>` : "");
 }
 
@@ -71,14 +67,14 @@ function actionButton(a, name) {
 function askDetails(i) {
   const d = i.details ?? {};
   const isRun = i.key?.startsWith("run:");
-  const sig = (d.signals ?? []).map((g) => `<li>${esc(g.at)} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
-  const body = (i.more ?? []).map((t) => `<p class="quiet q">${esc(shortText(t))}</p>`).join("") +
-    (d.note ? `<p class="quiet q">${esc(d.note)}</p>` : "") +
-    (d.ask ? decisionBody(d.ask) : "") +
+  const sig = (d.signals ?? []).map((g) => `<li>${esc(when(g.at))} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
+  const body = (i.more ?? []).map((t) => note(shortText(t))).join("") +
+    (d.note ? note(d.note) : "") +
+    (d.ask ? decisionBody(d.ask, !(i.actions ?? []).some((a) => a.recommended)) : "") +
     (sig ? `<ul>${sig}</ul>` : "") +
-    (d.review ? `<p class="quiet q">Reviewer: ${esc(d.review.call)}${d.review.reason ? `: ${esc(d.review.reason)}` : ""}</p>` : "") +
-    (d.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(d.stat)}</pre></div></div>` : "") +
-    (isRun ? `<div class="actions">${act("diff", i.id, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(i.id)}"${openDiffs.has(i.id) ? `>${diffHtml(openDiffs.get(i.id))}` : " hidden>"}</div>` : "");
+    (d.review ? note(`Reviewer: ${d.review.call}${d.review.reason ? `: ${d.review.reason}` : ""}`) : "") +
+    (d.stat ? `<div class="ev one"><div>${subHead("Diff")}<pre class="stat">${statLines(d.stat)}</pre></div></div>` : "") +
+    (isRun ? `<div class="actions">${actButton("Diff", { act: "diff", name: i.id, label: "Diff" })}</div><div class="diff-panel" data-diff-for="${esc(i.id)}"${openDiffs.has(i.id) ? `>${diffHtml(openDiffs.get(i.id))}` : " hidden>"}</div>` : "");
   return body ? fold("Technical details", `<div class="body">${body}</div>`, { cls: "more", keep: `more:${i.key ?? i.id}` }) : "";
 }
 
@@ -98,13 +94,13 @@ export function askCard(i, now = new Date().toISOString()) {
     if (a.input?.name === "reason") {
       const p = parseId(i.id);
       const n = p ? `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}` : "";
-      return `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(p?.repo ?? "")}" data-id="${esc(n)}" data-lead="${esc(a.input.lead ?? "")}" value="${esc(denyReasons.get(i.id) ?? "")}">`;
+      return inputBox("reason", denyReasons.get(i.id), { attrs: ` class="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(p?.repo ?? "")}" data-id="${esc(n)}" data-lead="${esc(a.input.lead ?? "")}"` });
     }
-    return a.input ? `<input class="reason" type="text" name="${esc(a.input.name)}" maxlength="500" placeholder="Your answer" hidden aria-label="Answer for ${esc(i.id)}">` : "";
+    return a.input ? inputBox(a.input.name, "", { attrs: ` class="reason" maxlength="500" placeholder="Your answer" hidden aria-label="Answer for ${esc(i.id)}"` }) : "";
   };
   const name = i.key?.startsWith("run:") ? i.id : undefined;
   const choices = acts.map((a) => askChoice(a, inputFor(a), name));
-  if (i.always) choices.splice(acts.length ? 1 : 0, 0, `<div class="choice">${actButton(i.always.label, { act: "always", reason: i.always.reason ?? i.reason, action: i.always.action, first: acts[0]?.act ?? "", label: i.always.label }, { cls: "always" })}<div class="choice-text"><span class="effect">${codeText(i.always.hint)}</span></div></div>`);
+  if (i.always) choices.splice(acts.length ? 1 : 0, 0, `<div class="choice">${actButton(i.always.label, { act: "always", reason: i.always.reason ?? i.reason, action: i.always.action, first: acts[0]?.act ?? "", label: i.always.label }, { kind: "always" })}<div class="choice-text"><span class="effect">${codeText(i.always.hint)}</span></div></div>`);
   const key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });

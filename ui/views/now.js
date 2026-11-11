@@ -4,7 +4,7 @@
 import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, count, empty, error, esc, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say as sayParts } from "../../lib/naming.ts";
 import { bar, flowOf, statusCards, usable } from "./speed.js";
-import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
+import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
 import { verdict } from "../../lib/status-words.ts";
 
 export const view = {

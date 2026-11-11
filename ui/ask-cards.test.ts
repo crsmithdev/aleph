@@ -7,6 +7,8 @@ import { join } from "node:path";
 import * as view from "./views/now.js";
 // @ts-ignore cards.js is plain JS, shared with the page
 import { askCard } from "./views/cards.js";
+// @ts-ignore lib.js is plain JS, shared with the page
+import { denyReasons, when } from "./lib.js";
 import { shortId } from "../lib/naming.ts";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { asksOf, prop } from "./test-now.ts";
@@ -129,4 +131,33 @@ test("the id, priority, date and runtime sit inside the coloured box of an Ask c
     const head = box.slice(0, box.indexOf("<details"));
     for (const c of ['class="idl"', 'class="badge', 'class="num date"', 'class="num dur"']) expect(head).toContain(c);
   }
+});
+
+const plain = (o: object = {}) => ({ id: "tools-4", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a second input file", situation: "Decide it.", actions: [], ...o });
+
+test("a signal's time in Technical details shows through when(), not as the raw ISO string", () => {
+  const at = "2026-10-27T17:00:00Z";
+  const row = askCard(plain({ details: { signals: [{ at, source: "slack", quote: "ship it" }] } }), "2026-10-27T17:00:00Z");
+  expect(row).toContain(`<li>${when(at)} slack: ship it</li>`);
+  expect(row).not.toContain(at);
+});
+
+test("a decide card marks the recommendation once, on the action when one carries it, else on the option", () => {
+  const options = [{ label: "Split it", line: "Two issues." }, { label: "Keep it", line: "One issue." }];
+  const ask = { question: "Split?", options, recommended: "Split it", why: [] };
+  const act = (label: string, recommended: boolean) => ({ act: "decide", label, hint: `Pick ${label}.`, primary: recommended, recommended, path: "/api/issues/tools-4/decide", body: { label } });
+  const row = askCard(plain({ details: { ask }, actions: [act("Split it", true), act("Keep it", false)] }), "2026-10-27T17:00:00Z");
+  expect(row.match(/Recommended/g)).toHaveLength(1);
+  const held = askCard(plain({ escalated: false, details: { ask } }), "2026-10-27T17:00:00Z");
+  expect(held.match(/Recommended/g)).toHaveLength(1);
+  expect(held).toContain('<li class="rec"><b>Split it</b>');
+});
+
+test("the reason box is an inputBox() with its attributes and the reason kept in denyReasons", () => {
+  denyReasons.set("tools-4", "not now");
+  const row = askCard(plain({ actions: [{ act: "deny", label: "Deny", hint: "Closes it.", path: "/api/issues/tools-4/drop", body: {}, input: { name: "reason", lead: "Chris denied: " } }] }), "2026-10-27T17:00:00Z");
+  denyReasons.delete("tools-4");
+  const input = row.match(/<input [^>]*>/)![0];
+  expect(input.startsWith('<input name="reason" type="text" value="not now"')).toBe(true);
+  for (const a of ['aria-label="Reason to deny tools-4"', 'data-repo="tools"', 'data-id="4"', 'data-lead="Chris denied: "', "hidden", 'maxlength="200"']) expect(input).toContain(a);
 });

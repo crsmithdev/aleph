@@ -1567,7 +1567,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
-| Two `act()` wrappers with different signatures; `shell()` has no callers | `ui/views/cards.js`, `ui/views/memory.js` | follow-up |
+| Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/cards.js` | follow-up |
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |
