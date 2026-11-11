@@ -60,3 +60,14 @@ describe("dark theme --stuck on --stuck-bg", () => {
     });
   }
 });
+
+describe("light theme series on --surface", () => {
+  const light = /:root\s*\{([^}]*)\}/.exec(html);
+  for (const name of ["series-3", "series-4", "series-5"]) {
+    test(`--${name} meets 3:1`, () => {
+      if (!light) throw new Error("no light :root block in app.css");
+      const ratio = contrast(token(light[1], name), token(light[1], "surface"));
+      expect(ratio).toBeGreaterThanOrEqual(3);
+    });
+  }
+});

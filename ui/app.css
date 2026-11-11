@@ -20,7 +20,7 @@
   --done: #437018;        /* delivered: green */
   --done-bg: #EDF2E8;
   --run: #3B5FC8;         /* running: blue */
-  --series-1: #2A78D6; --series-2: #EB6834; --series-3: #1BAF7A; --series-4: #EDA100; --series-5: #E87BA4;  /* agent roles in charts */
+  --series-1: #2A78D6; --series-2: #EB6834; --series-3: #169A69; --series-4: #C28000; --series-5: #DC5F92;  /* agent roles in charts */
   --chart-6: #7E57C2; --chart-7: #0E7C9E;  /* extra chart series */
   --run-bg: #EBEFFA;
   --add: #437018;
