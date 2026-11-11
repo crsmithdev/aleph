@@ -209,31 +209,3 @@ test("redraw draws the shown data again for the new query, and with fresh loads 
   await fresh;
   expect([p.drawn.at(-1), p.firsts.at(-1)]).toEqual([{ n: 2 }, false]);
 });
-
-test("a change sent before the stream opened is caught: opening it loads the view again once the first load ends", async () => {
-  const p = page();
-  const shown = p.router.show(p.route);
-  FakeStream.last.onopen();
-  await Promise.resolve();
-  expect(p.asked.length).toBe(1);
-  p.answer(0, { n: "before the change" });
-  await shown;
-  await Promise.resolve();
-  expect(p.asked.length).toBe(2);
-  p.answer(1, { n: "after the change" });
-  await new Promise((r) => setTimeout(r));
-  expect(p.drawn).toEqual([{ n: "before the change" }, { n: "after the change" }]);
-  expect(p.firsts).toEqual([true, false]);
-});
-
-test("opening the stream draws again only when the view's data changed", async () => {
-  const p = page();
-  const shown = p.router.show(p.route);
-  p.answer(0, { n: 1 });
-  await shown;
-  FakeStream.last.onopen();
-  await new Promise((r) => setTimeout(r));
-  p.answer(1, { n: 1 });
-  await new Promise((r) => setTimeout(r));
-  expect(p.drawn).toEqual([{ n: 1 }]);
-});

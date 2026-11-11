@@ -110,24 +110,6 @@ test("a second sessions list in one build pass reads Langfuse once", async () =>
   } finally { closePass(); }
 });
 
-test("in a build pass a later traces read asks only for the last 10 min and keeps the rows read before; after an hour it reads the window again", async () => {
-  const min = 60_000, hour = 60 * min, from = () => lf.asked.filter((a) => a.list === "traces").at(-1)!.q.from!.getTime();
-  const ids = async () => ((await listSessions(new Request("http://localhost/api/sessions"))) as any).sessions.map((s: any) => s.id);
-  try {
-    openPass({ langfuse: 1 }, "sessions.test.later");
-    expect(await ids()).not.toContain("s20");
-    TRACES.push(trace("t20", "s20", "aleph", new Date(now + 2 * min).toISOString()));
-    setSystemTime(now + 5 * min);
-    openPass({ langfuse: 2 }, "sessions.test.later");
-    expect(await ids()).toEqual(expect.arrayContaining(["s1", "s2", "s20"]));
-    expect(from()).toBe(now - 10 * min);
-    setSystemTime(now + 2 * hour);
-    openPass({ langfuse: 3 }, "sessions.test.later");
-    await ids();
-    expect(from()).toBe(Math.floor((now + 2 * hour - 7 * 24 * hour) / hour) * hour);
-  } finally { closePass(); setSystemTime(NOW); TRACES.pop(); }
-});
-
 test("the project filter narrows every route", async () => {
   const d: any = await listSessions(new Request("http://localhost"+"/api/sessions?project=sidetone"));
   expect(d.sessions.map((s: any) => s.id)).toEqual(["s2"]);

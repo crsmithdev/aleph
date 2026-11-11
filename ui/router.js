@@ -41,7 +41,7 @@ export async function dataOf(route, get) {
  * second click), ok(route), fail(route, error, first), draw(route, data, first) -> the mount's promise, event(ev).
  */
 export function loader(env) {
-  let shown = null, seq = 0, drawn = Promise.resolve(), pending = false, reloading = false, again = false, events = null, heardAt = 0, firstLoad = Promise.resolve();
+  let shown = null, seq = 0, drawn = Promise.resolve(), pending = false, reloading = false, again = false, events = null, heardAt = 0;
   const read = new Set(); // the keys the shown view's loads returned
 
   const slots = new Map(); // a view's own load by name: the number of its newest call
@@ -71,16 +71,12 @@ export function loader(env) {
 
   // Each load takes a number; an answer that finds a newer number is dropped, so an old load never draws over a new one.
   // `drawn` is the last mount: the next draw waits for it.
-  // `quiet`: draw nothing when the data equals what the view shows, so a check for a missed change does not redraw the page.
-  async function load(route, first, quiet) {
+  async function load(route, first) {
     const mine = ++seq, more = route.view.more;
     let data = null;
     if (route.view.api) {
       try {
         data = await dataOf(route, get);
-        const raw = JSON.stringify(data);
-        if (quiet && mine === seq && route === shown && raw === route.raw) return;
-        route.raw = raw;
         if (route === shown) env.ok(route);
       } catch (e) {
         if (route !== shown || mine !== seq) return;
@@ -105,13 +101,13 @@ export function loader(env) {
 
   // One reload at a time; a call that comes during it makes one more. A reload waits while the reader types (the blur
   // runs it) and does not draw over a button armed for its second click, which stands for five seconds at most.
-  async function reload(quiet) {
+  async function reload() {
     if (!shown?.view) return;
     if (reloading) { again = true; return; }
     if (env.armed()) return;
     if (env.focused()) { pending = true; return; }
     reloading = true;
-    try { await load(shown, false, quiet === true); } finally { reloading = false; }
+    try { await load(shown, false); } finally { reloading = false; }
     if (again) { again = false; reload(); }
   }
 
@@ -133,6 +129,7 @@ export function loader(env) {
     events?.close();
     events = null;
     if (!shown?.view?.live || env.hidden()) return;
+    let lost = false;
     const es = events = new env.EventSource(scope(shown.query).url("/api/events"));
     heardAt = Date.now();
     const heard = () => { heardAt = Date.now(); };
@@ -141,10 +138,10 @@ export function loader(env) {
     // An event of the event log, as it is written: a view with `event` shows it before the reload that `change` brings.
     es.addEventListener("ev", (m) => { heard(); try { env.event(JSON.parse(m.data)); } catch (e) { console.error("event failed", e); } });
     es.onerror = () => {
+      lost = true;
       if (es.readyState === env.EventSource.CLOSED && es === events) setTimeout(() => { if (es === events) { follow(); reload(); } }, 2000);
     };
-    // A change sent before the stream opened reached no one, so each open loads again once the first load ends.
-    es.onopen = () => { heard(); firstLoad.then(() => reload(true)); };
+    es.onopen = () => { heard(); if (lost) reload(); };
   }
 
   /** Open the stream again when it went quiet for 60 s. */
@@ -157,7 +154,7 @@ export function loader(env) {
     shown = route;
     read.clear();
     follow();
-    return (firstLoad = route.view ? load(route, true) : Promise.resolve());
+    return route.view ? load(route, true) : Promise.resolve();
   }
 
   return { get, reload, redraw, blur, change, follow, check, show, get shown() { return shown; }, get keys() { return [...read]; } };
