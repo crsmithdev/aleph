@@ -16,7 +16,7 @@ import { callAgent, resultOf, stallReason, type Reply } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
-import { admit, isAgentRun, onOf, allRuns, loadRegistry, newsLine, readEnvFile, tell, trailerOf, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
+import { admit, isAgentRun, onOf, allRuns, issueKeyOf, loadRegistry, newsLine, readEnvFile, tell, trailerOf, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
@@ -270,6 +270,16 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   if (dropped || there) {
     appendFileSync(runFile(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
     jobRecord.patchRun(basename(folder), { next: undefined });
+    return;
+  }
+  // A parked issue's job keeps its `next` and its branch: the dispatch lands it once the issue is open (waitingToLand).
+  const on = onOf(run);
+  const item = next === "land" && repo && on !== undefined ? reader().item(repo.key, on) : undefined;
+  const parked = item !== undefined && issues.status(item) === "parked";
+  if (parked) {
+    const reason = `issue ${issueKeyOf(run)} is parked`;
+    appendFileSync(runFile(folder, "next.log"), `${reason}: no land started\n`);
+    jobRecord.patchRun(basename(folder), { reason });
     return;
   }
   const back = nextBrief(folder, run);
