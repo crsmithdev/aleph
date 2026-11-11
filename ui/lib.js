@@ -83,8 +83,8 @@ export const loadingLine = (what) => `<p class="quiet" role="status">Loading ${e
 export const loading = (title) => `<div class="page"><p class="quiet loading" role="status">Loading ${esc(title)}…</p></div>`;
 
 /** The error state: what failed, and what to try. */
-export const error = (line, hint = "Check that aleph-ui is running, then reload.") =>
-  `<div class="error" role="alert"><p>${esc(line)}</p><p class="hint">${esc(hint)}</p></div>`;
+export const error = (line, hint = "Check that aleph-ui is running, then reload.", { detail = "" } = {}) =>
+  `<div class="error" role="alert"><p>${esc(line)}</p><p class="hint">${esc(hint)}</p>${detail ? fold("Technical details", `<pre>${esc(detail)}</pre>`) : ""}</div>`;
 
 /** A note above data that still shows: `bad` marks that the data is stale or wrong. */
 export const notice = (line, bad = false) => `<p class="notice${bad ? " bad" : ""}" role="${bad ? "alert" : "status"}">${esc(line)}</p>`;
@@ -369,7 +369,34 @@ export function blockersHtml(waits, repo, id) {
   return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> ${actButton(label, { act: "unblock", path: `${issueApi(repo, id)}/unblock`, label })}</div>`;
 }
 
-export const idLink = (id, href, { title } = {}) => `<a class="idl"${title === undefined ? "" : ` title="${esc(title)}"`} href="${esc(safeHref(href))}">${esc(id)}</a>`;
+export const idLink = (id, href, { title } = {}) => {
+  const t = title === undefined ? "" : ` title="${esc(title)}"`;
+  return href ? `<a class="idl"${t} href="${esc(safeHref(href))}">${esc(id)}</a>` : `<span class="idp"${t}>${esc(id)}</span>`;
+};
+/** A commit as its short hash, linked to `url` when there is one. */
+export const shaLink = (hash, url) => idLink(String(hash).slice(0, 7), url, { title: hash });
+
+/** "–" for a value that is missing, with the reason as its title. */
+export const miss = (reason) => `<span title="${esc(reason)}">–</span>`;
+/** A count with its noun: "1 run", "2 runs"; `many` is for a plural that is not `one` + "s". */
+export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** A muted line of `parts` (HTML), with a "·" between them; an empty part is left out. */
+export const meta = (parts) => `<p class="meta">${parts.filter(Boolean).map((p) => `<span>${p}</span>`).join("")}</p>`;
+/** A plain sentence under a head or beside a list. */
+export const note = (text) => `<p class="note">${esc(text)}</p>`;
+/** A head inside a card, under its title. */
+export const subHead = (text) => `<h3 class="sub-head">${esc(text)}</h3>`;
+/** One table cell of text: `num` right-aligns it; a `wide` cell is the stretching one and shows its text as its title, or `title`. */
+export const cell = (v, { num = false, wide = false, title } = {}) => {
+  const t = title ?? (wide ? v : undefined);
+  return `<td${num || wide ? ` class="${[num && "num", wide && "wide"].filter(Boolean).join(" ")}"` : ""}${t === undefined ? "" : ` title="${esc(t)}"`}>${esc(v)}</td>`;
+};
+/** A table row of `cells` (each from `cell` or other `<td>` HTML). */
+export const row = (cells) => `<tr>${cells.join("")}</tr>`;
+/** A stack of rows or cards (HTML). */
+export const list = (html) => `<div class="list">${html}</div>`;
+/** A named part of a page or card (HTML), with an id to link to. */
+export const group = (id, html) => `<div class="group" id="${esc(id)}">${html}</div>`;
 
 /** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */
 export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb"><a href="${esc(safeHref(back))}" aria-label="Back">«</a> ${parts.map(([t, h]) => (h ? `<a href="${esc(safeHref(h))}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join(" / ")}</nav>`;
@@ -697,9 +724,9 @@ export function onTile(el, fn) {
   });
 }
 
-/** A block of a page: the section head (`sectionHead`'s options; `id` is also the section's id), then its body. `label` is the aria label, the title by default. */
-export const card = (title, body, { count, aside, id, level, cls = "", label = title } = {}) =>
-  `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${sectionHead(title, { count, aside, id, level })}${body}</section>`;
+/** A block of a page: the section head (`sectionHead`'s options; `id` is also the section's id), `lede` as one summary sentence, then its body. `label` is the aria label, the title by default. */
+export const card = (title, body, { count, aside, id, level, cls = "", label = title, lede } = {}) =>
+  `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${sectionHead(title, { count, aside, id, level })}${lede ? `<p class="lede">${esc(lede)}</p>` : ""}${body}</section>`;
 
 /** The one table: `head` is the cells of the header row, or "" for none; `rows` the rows. */
 export const dataTable = (head, rows, { fit = false, id = "" } = {}) =>
@@ -837,9 +864,9 @@ export function say(el, text) {
   n.textContent = text;
 }
 
-/** An `.act` button: `data` becomes data attributes; `o` has `primary`, `cls` (more classes) and `type` (default button). */
+/** An `.act` button: `data` becomes data attributes; `o` has `primary`, `kind` ("danger", "small" or "always"), `cls` (more classes) and `type` (default button). */
 export const actButton = (label, data = {}, o = {}) =>
-  `<button class="act${o.primary ? " primary" : ""}${o.cls ? ` ${o.cls}` : ""}" type="${o.type ?? "button"}"` +
+  `<button class="act${o.primary ? " primary" : ""}${o.kind ? ` ${esc(o.kind)}` : ""}${o.cls ? ` ${o.cls}` : ""}" type="${o.type ?? "button"}"` +
   Object.entries(data).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("") + `>${esc(label)}</button>`;
 
 /** A link that looks like a button, to another page: navigation only. `label` names the page; `href` goes through `safeHref`. */

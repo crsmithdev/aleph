@@ -193,6 +193,47 @@ test("tone maps the feed's actions to the badge tones, and any other action to q
   expect(tone("no-such-action")).toBe("quiet");
 });
 
+test("miss, plural, meta and shaLink", () => {
+  expect(lib.miss("no run")).toBe('<span title="no run">–</span>');
+  expect(lib.plural(1, "run", "runs")).toBe("1 run");
+  expect(lib.plural(2, "run", "runs")).toBe("2 runs");
+  expect(lib.plural(2, "child", "children")).toBe("2 children");
+  expect(lib.plural(0, "run")).toBe("0 runs");
+  expect(lib.meta(["a", "", "b"]).match(/<span>/g)).toHaveLength(2);
+  expect(lib.meta(["a", "", "b"])).toStartWith('<p class="meta">');
+  const hash = "0123456789abcdef";
+  expect(lib.shaLink(hash, "https://x/c/1")).toBe('<a class="idl" title="0123456789abcdef" href="https://x/c/1">0123456</a>');
+  expect(lib.shaLink(hash)).toBe('<span class="idp" title="0123456789abcdef">0123456</span>');
+  expect(idLink("a1")).toBe('<span class="idp">a1</span>');
+  expect(idLink("a1", "")).toBe('<span class="idp">a1</span>');
+  expect(repoIdLink("aleph-1", undefined)).toContain('<span class="idp"');
+});
+
+test("cell, row, note, subHead, list and group", () => {
+  expect(lib.cell("x", { wide: true })).toBe('<td class="wide" title="x">x</td>');
+  expect(lib.cell(5, { num: true })).toBe('<td class="num">5</td>');
+  expect(lib.cell("a<b", { title: "why" })).toBe('<td title="why">a&lt;b</td>');
+  expect(lib.cell("p")).toBe("<td>p</td>");
+  expect(lib.row([lib.cell("a"), lib.cell(1, { num: true })])).toBe('<tr><td>a</td><td class="num">1</td></tr>');
+  expect(lib.note("a<b")).toBe('<p class="note">a&lt;b</p>');
+  expect(lib.subHead("Steps")).toBe('<h3 class="sub-head">Steps</h3>');
+  expect(lib.list("<p>x</p>")).toBe('<div class="list"><p>x</p></div>');
+  expect(lib.group("g&1", "<p>x</p>")).toBe('<div class="group" id="g&amp;1"><p>x</p></div>');
+});
+
+test("actButton kinds, card lede and error detail", () => {
+  expect(actButton("Drop", {}, { kind: "danger" })).toBe('<button class="act danger" type="button">Drop</button>');
+  expect(actButton("Go", {}, { kind: "small", primary: true })).toContain('class="act primary small"');
+  const c = card("T", "<p>b</p>", { lede: "One line." });
+  expect(c).toContain('</div><p class="lede">One line.</p><p>b</p>');
+  expect(card("T", "b")).not.toContain("lede");
+  const e = error("Could not load X.", undefined, { detail: "answered 500: <boom>" });
+  expect(e).toContain("Technical details");
+  expect(e).toMatch(/<details[^>]*><summary>Technical details<\/summary><pre>answered 500: &lt;boom&gt;<\/pre><\/details>/);
+  expect(e.indexOf("Check that aleph-ui is running")).toBeLessThan(e.indexOf("Technical details"));
+  expect(error("Could not load X.")).not.toContain("<details");
+});
+
 test("idLink and pageHead", () => {
   expect(idLink("aleph-1", "#/jobs/aleph-1")).toBe('<a class="idl" href="#/jobs/aleph-1">aleph-1</a>');
   expect(idLink("x", "javascript:alert(1)")).toContain('href="#"');
