@@ -92,8 +92,8 @@ test("a dotted ref in after, parts and on resolves to the issue, its runs and it
 
   const open = mk("open");
   const f = facts(repo, open);
-  expect(f.items["5.1"]).toBeDefined();
-  expect(f.runs["5.1"]).toBeDefined();
+  expect(f.items["5.1"]).toMatchObject({ id: "demo-5.1", status: "open" });
+  expect(f.runs["5.1"]).toEqual([{ id: "demo-5.1#1", kind: "build", condition: "running", open: true }]);
   const st = (items: (number | string)[], doc = open) => repoStages(repo, { fetch: false, doc, items });
   expect(st(["5.1"]).map((s) => ({ id: s.id, stage: s.stage }))).toEqual([{ id: "demo-5.1", stage: "working" }]);
   const blocked = st(["5.2"])[0];

@@ -123,7 +123,7 @@ test("a land that failed on a lock does not hide the job's passed build", () => 
   mk(`fac-${id}`, "land", "failed", { job, started: ago(10 * MIN), ended: ago(5 * MIN), cause: "locked", reason: "busy lock" });
   const f = allFacts(id);
   expect(f.open).toBe("passed");
-  expect(f.job).not.toBeNull();
+  expect(f.job).toBe(`fac-${id}#1`);
 });
 
 test("an open job whose last run ended with the API credit error holds the issue for the credit wait, then the issue is ready", () => {

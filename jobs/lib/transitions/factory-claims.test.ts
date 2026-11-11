@@ -29,7 +29,8 @@ for (const red of [false, true]) {
     await withChecks(f, async () => (red ? { cause: "check" as const, checkName: "tests", reason: "tests failed" } : null));
     if (red) {
       expect(f.calls).toEqual([]);
-      expect(ask(id)).not.toBeNull();
+      expect(ask(id)).toMatchObject({ reason: "rescue", recommended: "Rerun", why: [`Run: fac-${id}, failed`, "Reason: no commit", "Claim: main has it"] });
+      expect(ask(id)!.question).toStartWith(`fac-${id} says the goal is already met again, but main is red at `);
       expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
     } else {
       expect(f.calls).toEqual([`drop fac-${id}`]);
@@ -106,7 +107,7 @@ test("the second no-commit run with no claim asks Chris: no drop and the issue s
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit" }, { "result.md": lines(30) });
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(ask(id)).not.toBeNull();
+  expect(ask(id)).toMatchObject({ reason: "rescue", question: `fac-${id} hit the same case again (no-commit): how should the factory go on?`, why: [`Run: fac-${id}, failed`, "Reason: no commit", "A rerun did not clear it"] });
   expect(notes(id)).toContain("hit the same case again");
 });
 
@@ -122,7 +123,7 @@ test("a second infrastructure failure of one issue gets an Ask", async () => {
   mk(`fac-${id}`, "land", "failed", { cause: "infra", reason: "fetch failed", job: b[0].run.job });
   await dispatch(f);
   expect(f.calls).toEqual([`land fac-${id}`]);
-  expect(ask(id)).not.toBeNull();
+  expect(ask(id)).toMatchObject({ reason: "rescue", question: `fac-${id} hit the same case again (infra): how should the factory go on?`, why: [`Run: fac-${id}, failed`, "Reason: fetch failed", "A rerun did not clear it"] });
 });
 
 test("a land that failed with a merge conflict is dropped and the issue reruns; the second one gets an Ask", async () => {
@@ -140,7 +141,7 @@ test("a land that failed with a merge conflict is dropped and the issue reruns; 
   mk(`fac-${id}`, "land", "failed", { cause: "conflict", reason: "merge conflict", conflicts: ["a.ts"], job: b.job });
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(ask(id)).not.toBeNull();
+  expect(ask(id)).toMatchObject({ reason: "rescue", question: `fac-${id} hit the same case again (land-conflict): how should the factory go on?`, why: [`Run: fac-${id}, failed`, "Reason: merge conflict", "A rerun did not clear it"] });
 });
 
 test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an always: Rerun note", async () => {

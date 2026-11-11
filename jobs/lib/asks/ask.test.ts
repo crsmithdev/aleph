@@ -6,16 +6,22 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
+import { readList } from "../../../issues/lib/store.ts";
+import { newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
 const ask: Ask = { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
 
-test("askChris with a null text sets the Ask and adds no note", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ask-"));
-  const old = process.env.ALEPH_HOME;
+test("askChris with a null text sets the Ask and adds no note; an unknown issue gets none", () => {
+  setup();
   try {
-    expect(askChris({ key: "nope" } as any, 1, ask, null)).toBeTruthy();
-  } finally { rmSync(dir, { recursive: true, force: true }); if (old !== undefined) process.env.ALEPH_HOME = old; }
+    const id = newIssue();
+    expect(askChris({ key: "fac" }, id, ask, null)).toBeNull();
+    expect(askOf(`fac-${id}`)).toEqual(ask);
+    expect(issues.find(readList({ key: "fac" })!, id)!.notes).toEqual([]);
+    expect(askChris({ key: "fac" }, 999, ask, null)).toBe("no issue 999");
+    expect(askOf("fac-999")).toBeNull();
+  } finally { teardown(); }
 });
 
 test("setAsk keeps the Ask whole in the issue's job record, and askOf reads it back", () => {

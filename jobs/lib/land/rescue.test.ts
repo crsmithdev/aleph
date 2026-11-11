@@ -62,7 +62,7 @@ test("a run the API refused for credit that ended long ago is started again by t
   expect(f.calls).toEqual([`start fac-${id}`]);
 });
 
-test("a spec question run, then the director's answer: the job keeps its Ask or is started again, never open with neither", async () => {
+test("a spec question run, then the director's answer: the answer is refused, and the job keeps its Ask and starts nothing", async () => {
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
@@ -72,12 +72,11 @@ test("a spec question run, then the director's answer: the job keeps its Ask or 
   const c = pendingCases([loadRegistry().fac]).find((x) => x.on === `fac-${id}`)!;
   if (c.at === "lesson") throw new Error("not an item case");
   const r = await applyActions(c, [{ do: "answer", note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop, after: () => {} });
-  // The next dispatch: the director's answer must not leave the issue open with no Ask and no run.
+  // The run waits for a spec edit: the director's answer is refused, and the next dispatch keeps the Ask and starts nothing.
+  expect(r.refused).toEqual([`answer: the grep wins: the run fac-${id} asked about the spec and waits for a spec edit; use edit, or drop it`]);
   await dispatchIssues(f.start, undefined, f.rescue);
-  const hasAsk = ask(id) !== null;
-  const started = f.specs.length > 0;
-  expect(hasAsk || started).toBe(true);
-  expect(r.refused.length + (started ? 1 : 0)).toBeGreaterThan(0);
+  expect(ask(id)).toMatchObject({ reason: "question", options: [] });
+  expect(f.specs).toEqual([]);
 });
 
 test("a time box that runs out on a child filed with from: asks Chris and sets no plan, as intake skips a child", async () => {
@@ -87,6 +86,7 @@ test("a time box that runs out on a child filed with from: asks Chris and sets n
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);
   expect(f.calls).toEqual([]);
-  expect(ask(id)).not.toBeNull();
+  expect(ask(id)).toMatchObject({ reason: "rescue", recommended: "Rerun", options: [{ label: "Rerun" }, { label: "Another way" }] });
+  expect(ask(id)!.why).toContain("Intake cannot split it again");
   expect(issues.find(readList(loadRegistry().fac)!, id)!.fm.plan).toBeUndefined();
 });
