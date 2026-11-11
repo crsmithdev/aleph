@@ -296,7 +296,17 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(r).toMatchObject({ theme: "dark", error: false, charts: 3 });
     // Each specimen shows its rules from docs/design.md; the variants of a component have none.
     expect(r.noRules).toEqual(["Table, fit", "Table, empty", "Chart panel, no data"]);
-    expect(r).toMatchObject({ values: 17, contrast: 13 });
+    expect(r).toMatchObject({ values: 22, contrast: 13 });
+    // The new specimens each have an id, the buttons their three kinds, the row action a last td.acts, and the Failed series is the Stuck colour.
+    expect(await page.ev(`({
+      ids: ["kit-list", "kit-row-cell"].map((i) => !!document.querySelector("#" + i + ".kit-spec")),
+      list: !!document.querySelector("#kit-list .list > .card") && document.querySelectorAll("#kit-list .group[id]").length,
+      lede: document.querySelector("#kit-card .lede")?.textContent,
+      cell: document.querySelector("#kit-row-cell td.wide")?.title,
+      kinds: ["danger", "small", "always"].map((k) => !!document.querySelector("#kit-button .act." + k)),
+      acts: !!document.querySelector("#kit-row-actions tbody td.acts:last-child .act.small"),
+      failed: document.querySelector('aleph-chart[key="kit/category"]').frame.by.keys.map((k) => k.color).slice(1),
+    })`)).toEqual({ ids: [true, true], list: 2, lede: "One sentence that sums up the card.", cell: "A title that takes the spare width, with its text as its title", kinds: [true, true, true], acts: true, failed: ["stuck", "stuck"] });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
     // The contents: one link per group and per specimen, each to an id on the page; a click scrolls, keeps the route and marks its entry.

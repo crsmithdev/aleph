@@ -2,7 +2,7 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, arm, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -43,7 +43,7 @@ const FRAMES = {
   category: {
     measure: { name: "Outcomes", unit: "count", agg: "sum" },
     over: { kind: "category", name: "Role" },
-    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: "need" }, { key: "stuck", name: "Stuck", color: "stuck" }] },
+    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: "stuck" }, { key: "stuck", name: "Stuck", color: "stuck" }] },
     rows: [{ name: "Worker", succeeded: 31, failed: 4, stuck: 1 }, { name: "Triage", succeeded: 12, failed: 1, stuck: 0 }, { name: "Reviewer", succeeded: 9, failed: 2, stuck: 2 }],
   },
   cost: {
@@ -127,6 +127,8 @@ const VALUES = [
   ["Percent", "pct()", pct, [12, 0.4, 0.03]], ["Count", "count()", count, [12345]], ["Id", "idLink()", (x) => idLink(x, "#/kit"), ["a52"], "none"],
   ["Model", "shortModel()", shortModel, ["claude-opus-5-5"]], ["Bytes", "bytes()", bytes, [1536], "none"], ["Mean", "mean()", mean, [2.44]],
   ["Hours", "hours()", hours, [3.2, 12]], ["Days", "days()", days, [12]],
+  ["Missing value", "miss()", miss, ["No cost recorded"], "none"], ["Commit", "shaLink()", (x) => shaLink(x, "#/kit"), ["3f9a1c2d4e5b"], "none"],
+  ["Meta line", "meta()", (x) => meta(x), [["11/10", "", "4m 05s"]], "none"], ["Note", "note()", note, ["A side note."], "none"], ["Sub-head", "subHead()", subHead, ["Recent runs"], "none"],
 ];
 
 function renderKit(d, query) {
@@ -151,14 +153,17 @@ function renderKit(d, query) {
       `<tr><td>${k}</td><td><code>${h}</code></td><td class="num">${xs.map((x) => f(x)).join(", ")}</td><td class="num">${none ? '<span class="quiet">none</span>' : f(null) || '<span class="quiet">empty</span>'}</td></tr>`).join(""), { fit: true }),
       "Each helper's output now, and its output for no value.") +
     spec("words", "Words", pageHead("Running", { count: 3 }) + row(badge("running"), badge("landed"), priorityBadge("critical")) +
-      empty("No job matches.", "Widen the window or clear a filter.") + error("The agents did not load.") + loadingLine("Jobs")) +
+      empty("No job matches.", "Widen the window or clear a filter.") + error("Could not load the agents.") + loadingLine("Jobs")) +
 
     group("Structure") +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
-    spec("detail-panel", "Detail panel", panel("kit-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 80 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>")) +
+    spec("detail-panel", "Detail panel", panel("kit-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 76 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>")) +
     spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +
     spec("status-row", "Status row", statusRow(badge("running"), priorityBadge("high"), chips(["ui", "design"])), "Built by statusRow().") +
-    spec("card", "Card", card("Section", "<p>The body of a card.</p>", { count: 3, aside: actButton("Action") })) +
+    spec("card", "Card", card("Section", "<p>The body of a card.</p>", { count: 3, aside: actButton("Action") }) +
+      card("Section with a lede", subHead("Recent runs") + "<p>The body of a card.</p>", { lede: "One sentence that sums up the card." })) +
+    spec("list", "List and group", list(card("First", "<p>A card in a list.</p>") + card("Second", "<p>The list stacks its cards.</p>")) +
+      grp("kit-group-a", "<p>A group, with an id.</p>") + grp("kit-group-b", "<p>The next group.</p>")) +
     spec("pair", "Pair", `<div class="pair">${card("First", "<p>Two cards side by side.</p>")}${card("Second", "<p>Each is at least 320px wide, so they stack on a phone.</p>")}</div>`) +
     spec("contents", "Contents", toc([["kit-card", "Card"], ["kit-pair", "Pair"], ["kit-contents", "Contents", true]], "<p>The body of a page, beside its contents.</p>"),
       "A small copy. The contents of this page, at the right, are the live ones.") +
@@ -175,6 +180,8 @@ function renderKit(d, query) {
       statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }) +
       statCard({ k: "Selector", v: "3", note: "not pressed", key: "b" }))) +
     spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: id, title, state, project, labels, numbers, then time.") +
+    spec("row-cell", "Row and cell", dataTable(heads(["Role", "Title", "Runs"], ["Runs"]), trow([cell("Worker"), cell("A title that takes the spare width, with its text as its title", { wide: true }), cell("1,234", { num: true })]) +
+      trow([cell("Triage"), cell("A short title", { wide: true, title: "Another title" }), cell("12", { num: true })]))) +
     spec("table-fit", "Table, fit", dataTable(heads(["Role", "Runs", "p50"], ["Runs", "p50"]), `<tr><td>Worker</td><td class="num">31</td><td class="num">6m 40s</td></tr><tr><td>Triage</td><td class="num">12</td><td class="num">38s</td></tr>`, { fit: true }), "", "") +
     spec("table-empty", "Table, empty", empty("No job ran in this window.", "Pick a longer window."), "", "") +
     spec("chart", "Chart panel", `<div class="trio">${panelOf("kit/time", FRAMES.time)}${panelOf("kit/category", FRAMES.category)}${panelOf("kit/cost", FRAMES.cost)}</div>`,
@@ -198,11 +205,13 @@ function renderKit(d, query) {
     spec("status-light", "Status light", row(statusLight("fine", "Local server: up"), statusLight("alert", "OpenRouter: down"), statusLight("unknown", "Monitor: –"))) +
 
     group("Actions") +
-    spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`)) +
+    spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`) +
+      row(actButton("Danger", {}, { kind: "danger" }), actButton("Small", {}, { kind: "small" }), actButton("Always", {}, { kind: "always" }))) +
     spec("link-button", "Link button", row(linkButton("Issue", "#/kit"), linkButton("Next sub-issue: a1701", "#/kit"))) +
     spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide"><a href="#/kit">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
     spec("command", "Command", row(cmd("aleph issue list aleph"), cmd("bun test", { primary: true, hint: "in the worktree" }))) +
-    spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>`) +
+    spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>` +
+      dataTable(heads(["Job", "State", "Action"]), `<tr><td>${idLink("a1700", "#/kit")}</td><td>${badge("failed")}</td><td class="acts">${actButton("Retry", {}, { kind: "small" })}</td></tr>`)) +
     spec("form-message", "Form message", `<div class="actions">${actButton("Retry")}<span class="act-msg" role="alert">Retry failed: the job is already running.</span></div>`) +
     spec("confirm", "Two-click confirm", row(`<button class="act warn" type="button" data-kit-confirm>Drop</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
       "Click Drop: arm() asks for a second click, and the button goes back after 5 seconds. Beside it, the state of an answer that needs a reason.") +
@@ -231,7 +240,7 @@ function renderKit(d, query) {
       setting("Land after", inputBox("minutes", "0", { id: "kit-min", type: "number", attrs: ' min="0" step="1"' }), { id: "kit-min", save: "Save", hint: "0: waits for you." })])) +
     spec("edit", "Edit toggle", `<div class="editable"><p>${editable("<b>A title</b>", inputBox("title", "A title", { attrs: ' aria-label="Title"' }))}</p><div class="actions">${actButton("Edit", { editor: "start" }, { cls: "view-only" })}` +
       `<span class="edit-only">${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true })}</span></div></div>`) +
-    spec("states", "Empty state", empty("Nothing waits for you.", "An Ask shows here when the factory needs you.") + loadingLine("jobs") + error("The jobs did not load.") + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
+    spec("states", "Empty state", empty("Nothing waits for you.", "An Ask shows here when the factory needs you.") + loadingLine("jobs") + error("Could not load the jobs.", undefined, { detail: "GET /api/jobs: 502" }) + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
 
     group("States") +
     spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,

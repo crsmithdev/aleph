@@ -8,9 +8,9 @@ The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with i
 
 1. **One token set, two themes.** Colours are custom properties on `:root` in `ui/app.css`, set again for dark by `@media (prefers-color-scheme: dark)` and by `:root[data-theme="dark"]`. A view that uses only tokens gets dark mode free. Light is lavender; dark is Palenight.
 2. **Shared helpers build the parts.** Views call `ui/lib.js`; the CSS is in `ui/app.css`. A fix in one helper fixes every page.
-3. **Meaning is a tone.** `run`, `done`, `need`, `stuck`, `quiet` or `parked`, from `tone()` in `ui/lib.js`. One state has one colour on a badge, a series and a card, so a reader learns it once.
-4. **Numbers are tabular.** Tabular figures, at the right, so digits line up in a column.
-5. **Plain text states.** An empty state is one sentence and a hint. A missing value is what its helper shows (Content, Values), never `N/A` or `0`.
+3. **Meaning is a tone.** `run`, `done`, `need`, `stuck`, `quiet` or `parked`, from `tone()` in `ui/lib.js`. One state has one colour on a badge, a series and a card, so a reader learns it once. A tone comes only from `tone(state)`. A name that is not a state, such as an actor, is a `chip()`. A chart series for a state takes the colour of `tone(state)`.
+4. **Numbers are tabular.** Tabular figures, at the right, so digits line up in a column. The class is `.num` or `.tnum`; no other rule sets `font-variant-numeric`.
+5. **Plain text states.** An empty state is one sentence and a hint. A missing value is `–` from `miss(reason)`, with the reason as its title (Content, Values), never `N/A` or `0`. A zero stays `0`.
 
 ### Rules
 
@@ -167,11 +167,21 @@ Weight 700 stays a literal on `.mark`.
 | `--gap-in` | 16px, between metric cards |
 | `--gap` | 24px, between page blocks |
 | `--indent-list` | 18px, list indent |
+| `--dot-s` | 6px, a dot |
+| `--dot-m` | 8px, a dot; the ask dot |
+| `--dot-l` | 12px, a dot |
+| `--measure` | 76ch, the width of prose |
+
+- A dot is `--dot-s`, `--dot-m` or `--dot-l` wide and high. Its circle is `--r-pill`, never `50%`.
+- All prose is at most `--measure` wide. Do not write `80ch`.
+- A `position: sticky` `top` is `--sp-8` or `--sp-16`.
 
 | Do | Don't |
 |---|---|
 | `margin: calc(-1 * var(--sp-2))` | `margin: -2px` |
 | `width: 320px` | `width: var(--sp-28)` for a width |
+| `border-radius: var(--r-pill)` | `border-radius: 50%` |
+| `max-width: var(--measure)` | `max-width: 80ch` |
 
 #### Radii
 
@@ -194,13 +204,14 @@ Weight 700 stays a literal on `.mark`.
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
 | `--z-overlay` | 50 | kit widgets: font picker, annotations |
 
-A selected or parked item has a `box-shadow: inset` ring. A pipeline stage on the Status page is a 5px inset ring; its colour is the stage's failed share.
+A current item (the sidebar link, the contents entry) has an inset 2px `--ink` bar at the left. A selected row (`aria-selected="true"`: `.mrow`, `tr.nrow`) is `--sunk` with an inset 2px `--run` bar at the left. A parked item has a `box-shadow: inset` ring. A pipeline stage on the Status page is a 5px inset ring; its colour is the stage's failed share.
 
 #### Breakpoints and motion
 
 | Rule | Value |
 |---|---|
 | Breakpoints | 720px and 1100px, literal, as `@media` takes no tokens |
+| Container widths | four `@container` widths, literal: 760px, 560px (`pipeline`), 480px (`rail-main`) and 420px (`.tile`, `.lane-card`, `.issue-row`) |
 | Motion | `.15s ease-out` on borders and backgrounds; no animation; ECharts `animation: false` |
 
 ### The kit bridge
@@ -227,6 +238,15 @@ The kit widgets in `ui/vendor/kit` read these. Each points at a base token, so o
 
 Every displayed value goes through its helper in `ui/lib.js`. The Missing column gives what the helper shows for no value. Show that; do not replace it.
 
+- A missing value is always `–`, from the format helper. When there is no helper, write `miss(reason)`: the `–` carries the reason as its title. Zero stays `0`.
+- Show every integer through `count()`.
+- Write a count with its noun through `plural(n, one, many)`: `1 run`, `2 runs`. Give `many` when the plural is not `one` + `s`. A view has no copy of its own.
+- Show code in a line of text only through `codeText()`.
+- Make a line of facts about an item with `meta(parts)`: a muted `--fs-xs` line, its parts split by a `·` that the CSS draws. An empty part is left out.
+- Make a commit with `shaLink(hash, url)`: the short hash, an `idLink()` when there is a URL, a `span.idp` when there is none. `idLink(id, href)` also draws a `span.idp` when `href` is missing.
+- Make a side note with `note(text)`: `--fs-sm`, `--muted`, no margin. It replaces `p.quiet`, `p.quiet.q` and `p.hint` used as a side note.
+- Make the head of a part inside a card or a panel with `subHead(text)`: small capitals, `--muted`, sentence case. It is the only heading inside a card or a panel.
+
 | Kind | Example | Helper | Missing |
 |---|---|---|---|
 | Absolute time | 10/28 14:05 | `when()` | empty |
@@ -246,6 +266,11 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 | Mean | 2.4 | `mean()` | `–` |
 | Hours | 3.2h, 12h | `hours()` | `–` |
 | Days | 12d | `days()` | `–` |
+| Missing value | – | `miss(reason)` | the reason is its title |
+| Commit | 3f9a1c2 | `shaLink(hash, url)` | none |
+| Meta line | 11/10 · 4m 05s | `meta(parts)` | an empty part is left out |
+| Note | a side note | `note(text)` | none |
+| Sub-head | Recent runs | `subHead(text)` | none |
 
 | Do | Don't |
 |---|---|
@@ -262,6 +287,7 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 - Write a state, a priority and a chart key in lower case. States come from [Naming](naming.md); priorities are `critical`, `high`, `medium`, `low`.
 - Show a count as a muted number after its title, not in brackets.
 - Write an empty state as one sentence, then a hint that tells the reader what to do.
+- Write an error line as `Could not load X.` and a hint. Put the upstream message in a Technical details fold (`error()` with `detail`).
 - Offline, the page says "The server is unreachable. Showing the last data." (`ui/index.html`).
 
 | Do | Don't |
@@ -271,7 +297,7 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 | `Show 50 more` | `Click here to load more results` |
 | `running`, `landed`, `critical` | `Running`, `LANDED` |
 | `No job matches.` with the hint `Widen the window or clear a filter.` | `No data` |
-| `The agents did not load.` with the hint `Check that aleph-ui is running, then reload.` | `Error: fetch failed` |
+| `Could not load the agents.` with the hint `Check that aleph-ui is running, then reload.` and the upstream message in a Technical details fold | `Error: fetch failed` |
 | `Loading Jobs…` | a spinner with no text |
 
 ## Components
@@ -337,7 +363,7 @@ A card is one section of a list page. It has a head and a body.
 
 | Helper | Reference |
 |---|---|
-| `card(title, body, { count, aside, id })` | `ui/views/factory-agents.js` |
+| `card(title, body, { count, aside, id, lede })` | `ui/views/factory-agents.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -345,9 +371,12 @@ A card is one section of a list page. It has a head and a body.
 | 2 | Title | What the section holds | | `--sans` `--fs-lg` `--fw-strong`, `--ink` |
 | 3 | Count | The number of items | yes | `--num` `--fs-sm` `--fw-mid`, `--muted` |
 | 4 | Aside | Controls, or one note | yes | `--fs-xs`, `--muted`; at the right |
-| 5 | Body | The content | | `--fs-sm`, `--ink-2` |
+| 5 | Lede | One sentence that sums up the card | yes | `--fs-sm`, `--muted`; under the head |
+| 6 | Body | The content | | `--fs-sm`, `--ink-2` |
 
 - Do not put a card in a card.
+- Give `lede` as one sentence that sums up the card. A failure goes to `notice()`, not to the lede.
+- A heading inside a card is `subHead()`.
 - Give an `id` when a link goes to the section.
 
 | Do | Don't |
@@ -373,7 +402,7 @@ A detail panel is one section of a detail page. It has a head and a body.
 | 4 | Body | The content | | `detailPanel()`: padding `--sp-10` `--sp-18` `--sp-14`; `panel()`: the padding of its `.md` |
 | 5 | Code block | Logs or output | yes | `--mono` `--fs-xs`, `--ink-2` on `--sunk`, radius `--r-tag`; scrolls at 70% of the screen height |
 
-- For prose (Spec, Result, Description), use `panel()`. Wrap the prose in `<div class="md">`: that wrapper gives the padding and the 80ch width.
+- For prose (Spec, Result, Description), use `panel()`. Wrap the prose in `<div class="md">`: that wrapper gives the padding and the `--measure` (76ch) width.
 - For a section that the reader can close, use `detailPanel()`. It is open at first. Its aside is inside the summary, so a click there opens or closes the panel: put controls in the body.
 - When a section has no content, leave the panel out.
 
@@ -402,6 +431,7 @@ The KPI strip shows the headline facts of a detail page.
 - `v` and `sub` are HTML: escape text with `esc()`.
 - Set `text: true` when the value is words, not a number.
 - Give at most 6 cells. The cells wrap at every width, 150px minimum each.
+- A detail page opens with `statusRow()` and a KPI strip. The issue that builds a page chooses its KPIs with `aleph:metrics`.
 
 | Do | Don't |
 |---|---|
@@ -474,6 +504,28 @@ A pair puts two cards side by side.
 | Do | Don't |
 |---|---|
 | `<div class="pair">${card(a)}${card(b)}</div>` | two cards with a width of 50% each |
+
+#### List and group
+
+A list stacks rows or cards. A group is a named part of a page or a card.
+
+**Use:** a list for the rows or cards of one section; a group for a part that a link goes to. **Not for:** items with the same columns; use a table. **Not for:** two cards side by side; use the pair.
+
+| Helper | Reference |
+|---|---|
+| `list(html)`; `group(id, html)` | `ui/views/kit.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | List | The rows or cards | | `.list`: one column, `--sp-12` apart |
+| 2 | Group | A part, with an `id` | | `.grp`; `--sp-16` between groups |
+
+- Give each group an `id` that is unique on the page, so that a link can go to it.
+- Do not put a group in a group.
+
+| Do | Don't |
+|---|---|
+| `list(rows.map(card).join(""))` | a `<div>` with a grid written by hand |
 
 #### Contents
 
@@ -558,7 +610,7 @@ A table shows items that have the same columns.
 | 4 | Number cell `td.num` | A number | | `--num` `--fw-mid` tabular; at the right |
 | 5 | Sort arrow | `▲` or `▼` | yes | `--fs-xs` |
 | 6 | Row | One item | | `--sunk` on hover |
-| 7 | Row actions | The buttons of the row | yes | the row actions |
+| 7 | Row action | One small button in the last column, `td.acts` | yes | right-aligned, one line |
 
 - Put the columns in this order: id or name, title, state, priority, project, labels, numbers, then time.
 - In an event log, put the time first. An event log is a table where each row is an event, read in time order.
@@ -574,6 +626,8 @@ A table shows items that have the same columns.
 - To sort, use `sortHead()` and `wireTable()`. Keep the sort in the address as `sort` and `dir`.
 - When there are more than 50 rows, use `pagedTable()`, or `pager()` with `limitOf()`.
 - For a short table of names and numbers, set `fit: true`.
+- Make a row with `row(cells)` and a cell of text with `cell(v, { num, wide, title })` (Row and cell).
+- A row action goes in a last `td.acts` column, as a small button (Row actions). A data cell never holds a button.
 - On a phone, the table scrolls sideways in `.tscroll`.
 
 | Do | Don't |
@@ -582,6 +636,30 @@ A table shows items that have the same columns.
 | `Last Turn`, `Last Run` for the newest of many | `Latest` |
 | `Took` for a duration | `Duration`, `Elapsed` |
 | numbers in `td.num` | numbers at the left |
+
+#### Row and cell
+
+A row and a cell build the body of a `dataTable()`.
+
+**Use:** for each row of a table of text and numbers. **Not for:** a cell with markup, such as a badge or a link; write its `<td>` and pass it to `row()`.
+
+| Helper | Reference |
+|---|---|
+| `row(cells)`; `cell(v, { num, wide, title })` | `ui/views/kit.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Row | The cells of one item | | a `<tr>` |
+| 2 | Cell | One text value, escaped | | a `<td>`; `num` adds `td.num`, `wide` adds `td.wide` |
+| 3 | Title | The full text of a cell that can end in an ellipsis | | the `title` of the cell |
+
+- `cell()` escapes `v`. Give it text, not HTML.
+- A `wide` cell gets its text as its `title`. Give `title` to set another.
+- Show a missing value with `miss(reason)` in a `<td>` of your own, not with an empty `cell()`.
+
+| Do | Don't |
+|---|---|
+| `row([cell(id), cell(title, { wide: true }), cell(count(n), { num: true })])` | a `<tr>` string written by hand for text cells |
 
 #### Chart panel
 
@@ -607,7 +685,7 @@ A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 - Set `measure.unit` to `count`, `usd` or `seconds`. The unit sets the format of the axis and the tooltip.
 - Set `measure.agg` to `sum` for a flow, and to `max` for a level. A flow opens as Columns. A level opens as Area.
 - Show one measure on one value axis. For two measures, use two panels.
-- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to its tone: `run`, `done`, `need` or `stuck`. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
+- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to the colour of `tone(state)`: `run`, `done`, `need` or `stuck`. Two states can share a colour, such as Failed and Stuck, which are both `stuck` in the Agents outcome chart; the legend tells them apart. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
 - Keep the colour of a key the same in all windows. If a key can have no value in a window, set `color` on each key, because the keys after it move up one colour.
 - Show at most seven keys. Fold the rest into one key, `Other`.
 - Show a legend. When the frame has one key and the title names it, set `legend: false`.
@@ -771,7 +849,7 @@ An ask card asks Chris a question. It shows the question, the choices and the bu
 | 1 | Kind | approve, decide or unstick | | sets the colour, `-bg` and `-ring` of the card (`--approve`, `--decide`, `--unstick`) |
 | 2 | Box | The Ask | | `--surface`, border the ring of the kind, shadow `--lift`, radius `--r-card` |
 | 3 | Head | A dot, the kind, the title | | `--fs-lg` on the `-bg` of the kind; kind `--fw-strong` in the colour of the kind |
-| 4 | Question | The question, when the card is open | | `--fs-lg` `--fw-strong`; 80ch maximum |
+| 4 | Question | The question, when the card is open | | `--fs-lg` `--fw-strong`; `--measure` maximum |
 | 5 | Choices | One button for each answer | | `--sp-8` apart; when open, a 200px column of buttons, then the text |
 | 6 | Recommended | The mark on the recommended choice | yes | `--fs-xs` `--fw-strong`, the colour of the kind |
 | 7 | Details | Technical details | yes | a closed fold |
@@ -872,7 +950,7 @@ A badge shows a state. It has square corners.
 | 2 | Tone | The colour of the state | | run, done, need or stuck: the tone on its `-bg`; quiet: `--muted` on `--sunk`; parked: a `--muted` outline |
 
 - For other short status text, use `tag()`.
-- When you add a state, add it to the tone map of `tone()`. Do not add a class by hand.
+- When you add a state, add it to the tone map of `tone()`. Do not add a class by hand. A tone comes only from `tone(state)`.
 
 | Do | Don't |
 |---|---|
@@ -894,6 +972,7 @@ A chip shows a label. It has round ends.
 | 1 | Chip | One label | | `--fs-xs`, `--ink-2` on `--sunk`; radius `--r-pill`; one line; 16ch maximum in a table |
 
 - When there are no labels, `chips()` shows nothing. Do not write a placeholder.
+- A name that is not a state, such as an actor, is a `chip()`, not a badge.
 
 | Do | Don't |
 |---|---|
@@ -934,18 +1013,22 @@ A button starts an action on the server.
 
 | Helper | Reference |
 |---|---|
-| `actButton(label, data, { primary, cls })` | `ui/views/issues.js` |
+| `actButton(label, data, { primary, kind, cls })` | `ui/views/issues.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Button | A verb | | `--sans` `--fs-sm` `--fw-mid`, `--ink` on `--surface`, border `--rule`; `--ctl-h` high; radius `--r-ctl`; border `--ink-2` on hover |
 | 2 | Primary | The main action | yes | `--surface` on `--ink` |
 | 3 | Warn | An action that stops or drops work | yes | `--need` on `--need-bg`, border `--need` (Status page head only, Deviations) |
+| 4 | Danger | An action that cannot be undone | yes | `--stuck` text |
+| 5 | Small | An action in a row | yes | padding `--sp-6`, `--fs-2xs` |
+| 6 | Always | An action that a card marks as always allowed | yes | border and text in the colour `--k` of the card, else `--ink-2` |
 
 - Write the label as a short verb.
 - Give `act`, `path` and `label` in `data`. Give `body` as a JSON string when the request has one, and `name` to keep the message across a refresh. `ui/router.js` sends the request. Do not use `diff` or `always` as `act`: the router handles them on their own.
 - While the request runs, the router disables every button of the row. On success it removes the card and reloads the page. On failure it enables the buttons again and writes the form message.
 - Use one `primary` button in a group, or none.
+- Set `kind` to `danger`, `small` or `always`. Each has its own style.
 - Set `cls: "warn"` on an action that stops or drops work.
 - For Land, Drop and Pause, add `confirm` (Two-click confirm).
 
@@ -958,7 +1041,7 @@ A button starts an action on the server.
 
 A link button goes to another page. It looks like a button.
 
-**Use:** for navigation only: Issue, Next sub-issue, Trace. **Not for:** an action; use the button.
+**Use:** for navigation only: Issue, Next sub-issue, Trace. A link to another page or tool in a head or an aside is a link button. **Not for:** an action; use the button.
 
 | Helper | Reference |
 |---|---|
@@ -991,7 +1074,7 @@ A link goes to another page, or does a small action in place.
 | 3 | Row link | A table row that goes to its item | yes | the whole row is the target; the `<a>` is in `td.wide` |
 | 4 | Text button | A small action in place, such as Show more | yes | `--run`; underlined on hover |
 
-- Make an id with `idLink()` or `repoIdLink()`, never with a plain `<a>`.
+- Make an id with `idLink()` or `repoIdLink()`, never with a plain `<a>`. With no `href`, `idLink()` draws a `span.idp`.
 - Make a row that goes to a page with `tr.rowlink`, and put its one link in `td.wide`.
 - Use `button.link` for an action that stays on the page. Use `<a>` only to go to another address.
 
@@ -1031,18 +1114,19 @@ Row actions are the buttons of one row or one card.
 
 | Helper | Reference |
 |---|---|
-| `.actions` after the text of the row | `ui/views/issues.js` |
+| `.actions` after the text of the row; `td.acts` in a table | `ui/views/issues.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Row | The buttons and the form message | | `--sp-8` apart, `--sp-14` above; wraps |
 
-- Do not put a button in a table cell. A setting that has a Save button goes in a settings list.
+- In a table, a row action sits in a last `td.acts` column, as a small button (`kind: "small"`). A data cell never holds a button.
+- A setting that has a Save button goes in a settings list.
 - Show the result with `say()`.
 
 | Do | Don't |
 |---|---|
-| actions under the text of a row | a button in a table cell |
+| actions under the text of a row; a small button in `td.acts` | a button in a data cell |
 
 #### Form message
 
@@ -1137,7 +1221,7 @@ Markdown shows prose. A code block shows code or output.
 | 3 | Code block | Code or output | yes | `--mono` `--fs-xs` on `--sunk`, radius `--r-tag`; long lines wrap |
 | 4 | Table | A table in the prose | yes | `--fs-xs`, border `--rule` |
 
-- Keep prose at 80 characters wide or less. `.md` sets no width: put it in a `panel()`, or give its box `max-width: 80ch`.
+- Keep prose at `--measure` (76 characters) wide or less. `.md` sets no width: put it in a `panel()`, or give its box `max-width: var(--measure)`.
 - For code in a line of text, use `codeText()`.
 
 | Do | Don't |
@@ -1394,14 +1478,14 @@ An empty state shows that there is nothing, that data loads, or that the data di
 
 - The router shows `loading()` while a page loads, and `error()` when the first load fails. A view does not call them for its own data.
 - For a section that loads after the page, use `loadingLine(what)`: `Loading the diff…`.
-- Use `error(line, hint)` for a second fetch inside a card that failed. With no hint, it tells the reader to check aleph-ui and reload.
+- Use `error(line, hint, { detail })` for a second fetch inside a card that failed. The line is `Could not load X.`; with no hint, it tells the reader to check aleph-ui and reload. The upstream message goes in `detail`, in a Technical details fold.
 - Use `notice(line, bad)` for a note above data that still shows: a stale reload (`bad`, `role="alert"`) or a partial count. Do not write a `<p>` for it by hand.
 - The `empty()` hint is HTML: escape data with `esc()`. The `error()` hint is text.
 
 | Do | Don't |
 |---|---|
 | `empty("No job matches.", "Widen the window or clear a filter.")` | `<p class="quiet">No data</p>` |
-| `error("The agents did not load.")` | `Error: fetch failed` |
+| `error("Could not load the agents.", hint, { detail })` | `Error: fetch failed` |
 
 ## States
 
@@ -1412,7 +1496,8 @@ An empty state shows that there is nothing, that data loads, or that the data di
 | Pressed: segmented option | `aria-pressed="true"`; `--ink` on `--rule-2`, `--fw-strong` |
 | Pressed: metric card | `aria-pressed="true"`; `--raised` with a `--run` border |
 | Pressed: bar row | `aria-pressed="true"`; `--sunk`, label `--fw-strong` |
-| Selected | `aria-selected="true"` on a row that shows its detail beside it; three forms today (Deviations) |
+| Selected | `aria-selected="true"` on a row that shows its detail beside it; `--sunk` with an inset 2px `--run` bar |
+| Current | `aria-current` on the sidebar link or the contents entry; an inset 2px `--ink` bar |
 | Disabled | opacity `--dim` and a wait cursor, while a request runs |
 | Active | a command box moves 1px down |
 
@@ -1465,10 +1550,8 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Deviation | Where | Fix |
 |---|---|---|
 | Time column names differ | Tables | aleph-1360 (pending) |
-| Code-span writer copied across views | `ui/views/jobs.js`, `ui/views/issues.js`, `ui/views/now.js`, `ui/lib.js` | aleph-1375 (pending) |
 | Login sizes are literals | `ui/auth.ts` | follow-up |
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
-| A missing cell is empty in some tables and `–` in others | Tables | follow-up |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `costFrame()` in `ui/views/factory-agents.js` | allowed |
 | `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Waiting for You in `ui/views/gates.js`; Memory Health in `ui/views/memory.js`; the Status Alerts and lanes in `ui/views/now.js` | allowed |
@@ -1487,7 +1570,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |
-| A selected row is drawn three ways: `.mrow` (`--raised`, `--run` border), `tr.nrow` (inset `--run` bar), the nav (inset `--ink` bar) | `ui/app.css` | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
 | The Memory search field is 44px high and `--fs-lg`; every other page uses the one `searchBox()` size | `.memory .msearch` in `ui/app.css` | follow-up |
 | Settings and forms written by hand: the worker tier checkbox in the Agents Models settings; the Memory alias, link, core line and edit forms, hand `label.mform` and `div.mform` | `models()` in `ui/views/factory-agents.js`; `actions()`, `links()`, `coreForm()` and `edit()` in `ui/views/memory.js` | follow-up |
@@ -1499,7 +1581,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/timeline.js` | follow-up |
 | The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/chart.js` | follow-up |
 | The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |
-| A textarea, a checkbox, the id span `idp`, the plural of "job" and the `<code>` of a commit with no URL are written by hand: no helper | `ui/views/issues.js` | follow-up |
+| A textarea and a checkbox are written by hand: no helper | `ui/views/issues.js` | follow-up |
 | The File an Issue Project select takes its options from the registry after the page is drawn, written as hand `<option>` tags | `projectOptions()` in `ui/views/issues.js` | follow-up |
 
 ## Appendix
