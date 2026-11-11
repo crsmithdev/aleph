@@ -47,10 +47,16 @@ async function run(vault: string, prompt = PROMPT, env: Record<string, string> =
   return { out, code: await p.exited };
 }
 
-test("no note above 0.7: no output", async () => {
+test("no note above 0.85: no output", async () => {
   answer = () => 0.4;
   const r = await run(dir);
   expect(r).toEqual({ out: "", code: 0 });
+  expect(asked.length).toBe(1);
+});
+
+test("every note at 0.8, under the 0.85 cut: no output", async () => {
+  answer = () => 0.8;
+  expect(await run(dir)).toEqual({ out: "", code: 0 });
   expect(asked.length).toBe(1);
 });
 

@@ -53,7 +53,7 @@ It prints nothing when it has nothing to say.
 
 ### vault-recall
 
-`hooks/vault-recall.ts` skips prompts under 20 characters. It ranks the wiki notes (`rankNotes` in `vault/lib/index.ts`), leaves out core notes and the notes this session has already seen, and asks Jev one yes/no question for each of the top 20, with a 1.5-second timeout. It injects at most 3 notes with p ≥ 0.7. It swallows every error. The judge choice `haiku` turns it off.
+`hooks/vault-recall.ts` skips prompts under 20 characters. It ranks the wiki notes (`rankNotes` in `vault/lib/index.ts`), leaves out core notes and the notes this session has already seen, and asks Jev one yes/no question for each of the top 20, with a 1.5-second timeout. It injects at most 3 notes with p ≥ 0.85. It swallows every error. The judge choice `haiku` turns it off.
 
 ## Guards
 

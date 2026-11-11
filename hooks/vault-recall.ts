@@ -2,7 +2,7 @@
 /**
  * UserPromptSubmit, synchronous: Jev picks the wiki notes that bear on the
  * prompt and they are injected as additionalContext. Silent when the prompt is
- * short, nothing matches, no note reaches 0.7, Jev fails, or `aleph judge haiku`.
+ * short, nothing matches, no note reaches 0.85, Jev fails, or `aleph judge haiku`.
  */
 import { readJsonOr } from "../lib/json.ts";
 import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -17,7 +17,7 @@ const MIN_PROMPT = 20;
 // Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout.
 const MAX_ASKED = 20;
 const MAX_INJECTED = 3;
-const CUT = 0.7;
+const CUT = 0.85;
 const JEV_TIMEOUT_MS = 1500;
 const SEEN_DAYS = 7;
 
