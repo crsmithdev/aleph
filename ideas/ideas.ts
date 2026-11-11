@@ -25,7 +25,7 @@ export interface Idea { slug: string; fm: Frontmatter; writeup: string; log: str
 
 export const ideasDir = (): string => alephPath("ALEPH_IDEAS", "ideas");
 
-export const slugOf = (title: string): string => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const slugOf = (title: string): string => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 /** The path of `idea.md`. */
 export const file = (slug: string): string => join(ideasDir(), slug, "idea.md");

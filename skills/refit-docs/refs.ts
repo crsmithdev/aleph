@@ -71,7 +71,7 @@ function prose(text: string): string[] {
 }
 
 /** What one doc names: links, code-span paths, env vars and flags, with their line. */
-export function named(text: string, clis: Set<string> = new Set()): { line: number; kind: Ref["kind"]; ref: string }[] {
+function named(text: string, clis: Set<string> = new Set()): { line: number; kind: Ref["kind"]; ref: string }[] {
   const lines = text.split("\n");
   const out: { line: number; kind: Ref["kind"]; ref: string }[] = [];
   prose(text).forEach((l, i) => {

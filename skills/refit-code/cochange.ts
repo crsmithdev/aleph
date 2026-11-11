@@ -17,7 +17,7 @@ import { scan } from "./clones.ts";
 const WIDE = 30;
 const SUPPORT = 10;
 const FLOOR = 0.6;
-export const BLOCK = 0.7;
+const BLOCK = 0.7;
 /** A test changes with its code by design; it is not a second copy of a concept. */
 const TEST = /(\.test\.|_test\.|(^|\/)tests?\/)/;
 const FIX = /\b(fix|fixes|fixed|stale|mismatch|wrong|again|drift)\b/i;
@@ -118,7 +118,7 @@ export function holes(root: string, change: Set<string>, all: Map<string, Rule[]
 }
 
 /** The files whose commits most often read as a fix, the strongest pairs and the largest copies of code: the retro's first candidates. */
-export function seed(root: string, since = "90.days") {
+function seed(root: string, since = "90.days") {
   const commits = history(root, 5000, since);
   const fixes = new Map<string, string[]>();
   for (const c of commits) if (FIX.test(c.subject)) for (const f of c.files) fixes.set(f, [...(fixes.get(f) ?? []), `${c.sha} ${c.subject}`]);

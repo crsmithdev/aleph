@@ -16,8 +16,8 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 
-export type Item = { file: string; kind: string; tokens: number; note?: string };
-export type Skill = { file: string; name: string; description: number; lines: number; invoked: "model" | "user" };
+type Item = { file: string; kind: string; tokens: number; note?: string };
+type Skill = { file: string; name: string; description: number; lines: number; invoked: "model" | "user" };
 export type Load = { total: number; always: Item[]; lazy: Item[]; skills: Skill[]; hooks: string[] };
 
 const SKIP = /(^|\/)(node_modules|\.git|\.worktrees|dist|build)\//;
@@ -29,7 +29,7 @@ const tokens = (s: string) => Math.ceil(s.length / 4);
 const glob = (root: string, ...patterns: string[]) => [...new Set(patterns.flatMap((p) => [...new Bun.Glob(p).scanSync({ cwd: root, dot: true })]))].filter((f) => !SKIP.test(f)).sort();
 
 /** The frontmatter of a markdown file, or {} when it has none. */
-export function front(text: string): Record<string, unknown> {
+function front(text: string): Record<string, unknown> {
   const m = text.match(/^---\n([\s\S]*?)\n---/);
   return m ? (Bun.YAML.parse(m[1]) as Record<string, unknown>) ?? {} : {};
 }

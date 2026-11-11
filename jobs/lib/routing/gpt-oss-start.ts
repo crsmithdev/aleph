@@ -5,14 +5,14 @@
 import { execFileSync, spawn } from "node:child_process";
 import { homedir } from "node:os";
 
-export const LAYERS = 24;
-export const FALLBACK = 12;
+const LAYERS = 24;
+const FALLBACK = 12;
 /** GPU share of llama-server with every expert layer on the CPU, KV cache and compute buffers included. */
-export const BASE_MIB = 3750;
+const BASE_MIB = 3750;
 /** GPU share that one expert layer adds. */
-export const LAYER_MIB = 400;
+const LAYER_MIB = 400;
 /** Free VRAM that must stay free after the load. */
-export const HEADROOM_MIB = 1536;
+const HEADROOM_MIB = 1536;
 
 /** The smallest --n-cpu-moe whose GPU share and headroom fit in `freeMiB`. */
 export function chooseNCpuMoe(freeMiB: number): number {
@@ -27,7 +27,7 @@ export function parseFreeMiB(out: string): number | null {
   return /^\d+$/.test(text) ? Number(text) : null;
 }
 
-export function readFreeMiB(): number | null {
+function readFreeMiB(): number | null {
   try {
     const out = execFileSync("nvidia-smi", ["--query-gpu=memory.free", "--format=csv,noheader,nounits"], { encoding: "utf8", timeout: 10_000 });
     return parseFreeMiB(out);

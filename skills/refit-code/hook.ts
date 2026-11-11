@@ -19,7 +19,7 @@ import { accepted, base, changed, history, holes, isAccepted, rules } from "./co
 const at = (s: { name: string; start: number; function?: string }) => `${s.name}:${s.start}${s.function ? ` (${s.function})` : ""}`;
 
 /** The block reason for the findings, or null when there are none. */
-export function reason(root: string, since = 0): string | null {
+function reason(root: string, since = 0): string | null {
   const from = base(root);
   const change = changed(root, from, since);
   if (!change.size) return null;

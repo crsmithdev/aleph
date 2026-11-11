@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { load, main } from "./load.ts";
 
 export type Hit = { line: number; check: string; text: string };
-export type File = { file: string; sentences: number; hits: Hit[] };
+type File = { file: string; sentences: number; hits: Hit[] };
 
 const CHECKS: [string, RegExp][] = [
   ["emphasis", /\b(IMPORTANT|CRITICAL|ESSENTIAL|MANDATORY|MUST|NEVER|ALWAYS|REQUIRED)\b|!!/],
@@ -32,7 +32,7 @@ const CHECKS: [string, RegExp][] = [
 ];
 
 /** Prose with code spans and fenced blocks blanked, line for line, so line numbers hold. */
-export function prose(text: string): string[] {
+function prose(text: string): string[] {
   let fence = false;
   return text.split("\n").map((l) => {
     if (/^\s*(```|~~~)/.test(l)) { fence = !fence; return ""; }
@@ -56,7 +56,7 @@ export function tools(text: string): string[] {
   return [...new Set(words)].filter((w) => Bun.which(w)).sort();
 }
 
-export function content(root: string, home = homedir()) {
+function content(root: string, home = homedir()) {
   const l = load(root, home);
   const abs = (f: string) => (f.startsWith("~") ? join(home, f.slice(1)) : join(root, f));
   const real = new Map([...l.always, ...l.lazy].map((i) => [realpathSync(abs(i.file)), i.file]));
