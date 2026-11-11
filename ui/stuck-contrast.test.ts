@@ -85,3 +85,20 @@ describe("dark theme --chart-6 and --chart-7 stay inside the --series-1 to --ser
     }
   }
 });
+
+describe("dark theme --muted", () => {
+  for (const block of darkBlocks()) {
+    const muted = token(block.body, "muted");
+    test(`${block.name} block --muted on --raised meets 4.5:1`, () => {
+      expect(contrast(muted, token(block.body, "raised"))).toBeGreaterThanOrEqual(4.5);
+    });
+    for (const name of ["surface", "bg", "sunk"]) {
+      test(`${block.name} block --muted on --${name} meets 4.5:1`, () => {
+        expect(contrast(muted, token(block.body, name))).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+    test(`${block.name} block --raised differs from --surface`, () => {
+      expect(token(block.body, "raised")).not.toBe(token(block.body, "surface"));
+    });
+  }
+});

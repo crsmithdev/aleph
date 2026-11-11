@@ -44,7 +44,7 @@ Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, an
 | `--raised` | #ECEAF6 | #32374D | a selected metric card |
 | `--ink` | #292D3E | #EEF1F8 | text |
 | `--ink-2` | #4A4F6A | #BFC7D5 | secondary text |
-| `--muted` | #62688A | #8E96BA | headers, meta |
+| `--muted` | #62688A | #9AA2C6 | headers, meta |
 | `--rule`, `--rule-2` | #DCD9EC, #E8E6F3 | #3A3F58, #2E3245 | borders, row lines |
 | `--lift` | `0 1px 3px`, `0 2px 8px` | heavier | the Ask card |
 | `--card-lift` | `0 1px 2px`, `0 6px 20px -8px` | heavier | the only edge of a card, a metric card and a detail panel |
@@ -85,15 +85,16 @@ Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, an
 
 #### Contrast
 
-The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` tests the stuck pair. When you change a data colour, run `validate_palette.js` from the `dataviz` skill on the seven series colours, once with `--mode light --surface "#FFFFFF"` and once with `--mode dark --surface "#292D3E"`. Deviations lists the checks that fail now.
+The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` tests the stuck pair and the dark `--muted` pairs. When you change a data colour, run `validate_palette.js` from the `dataviz` skill on the seven series colours, once with `--mode light --surface "#FFFFFF"` and once with `--mode dark --surface "#292D3E"`. Deviations lists the checks that fail now.
 
 | Pair | Light | Dark |
 |---|---|---|
 | `--ink` on `--surface` | 13.64 | 12.07 |
 | `--ink-2` on `--surface` | 8.02 | 8.02 |
-| `--muted` on `--surface` | 5.43 | 4.69 |
-| `--muted` on `--bg` | 4.93 | 5.36 |
-| `--muted` on `--sunk` | 4.57 | 5.83 |
+| `--muted` on `--surface` | 5.43 | 5.43 |
+| `--muted` on `--bg` | 4.93 | 6.21 |
+| `--muted` on `--sunk` | 4.57 | 6.75 |
+| `--muted` on `--raised` | 4.57 | 4.67 |
 | `--need` on `--need-bg` | 5.13 | 6.50 |
 | `--stuck` on `--stuck-bg` | 4.78 | 4.54 |
 | `--done` on `--done-bg` | 5.17 | 5.36 |
@@ -1257,7 +1258,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Earlier decisions | Absolute time is `10/28 14:05`, as aleph-199 decided. No other decision outranks the code. |
 | Browser checks | Responsive behaviour is read from the media queries, not seen. |
 | Colour token uses | The inventory counts colour definitions, not uses. |
-| Contrast | Only the listed pairs. `--muted` on `--rule-2` (4.41, 4.35) has no traced use. |
+| Contrast | Only the listed pairs. `--muted` on `--rule-2` (4.41, 5.04) has no traced use. |
 | Chart data | No chart was drawn with real data. |
 
 ### Bypasses that stay
