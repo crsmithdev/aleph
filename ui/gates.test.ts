@@ -178,7 +178,7 @@ const data = () => ({
 
 test("the view draws the sections in order, a closed gate, and the rule switches with only Ask me and the reason's mode", () => {
   const h = gates.renderGates(data());
-  const order = ["Waiting for You", "Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
+  const order = ["Waiting for the User", "Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
   const tiles = [...h.matchAll(/<div class="tile sc"><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
@@ -199,7 +199,7 @@ test("the view draws the sections in order, a closed gate, and the rule switches
     if (reason.startsWith("proposal-")) expect(modes).toEqual([]);
     else expect(modes).toEqual(r.always ? ["", r.always] : [""]);
     if (!r.always && !reason.startsWith("proposal-")) {
-      expect(row).toContain("The director decides first and sends the rest to you.");
+      expect(row).toContain("The director decides first and sends the rest to the user.");
       expect(row).not.toContain("No automatic mode");
     }
   }
@@ -315,6 +315,19 @@ test("POST /api/automation/caps refuses a missing header with 403 and bad values
     expect(typeof (await r.json()).error).toBe("string");
   }
   expect(readFileSync(capsPath(), "utf8")).toBe(seed);
+});
+
+test("the Gates page says the user, never you, your or Chris, in its visible text", () => {
+  const d = data();
+  const text = (h: string) => h.replace(/<[^>]*>/g, " ");
+  const h = gates.renderGates({ ...d, asks: [], repeats: [] });
+  expect(h).toContain(">Waiting for the User</h2>");
+  expect(h).toContain("Nothing waits for the user.");
+  expect(h).toContain("An Ask that needs the user shows here.");
+  expect(h).toContain("An Ask answered the same way 3 times shows here.");
+  expect(gates.renderGates(d)).toContain("decided without the user");
+  expect(h).toContain("wait for the user after the reviewer passes the job");
+  expect(text(h)).not.toMatch(/\b(you|your|Chris)\b/i);
 });
 
 test("a cap post writes the live cap only and leaves the old day and awaiting keys alone", async () => {
@@ -447,7 +460,7 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
   const h = gates.renderRules({ rules: [row] });
-  expect(h).toContain('<th>Ask</th><th class="num">Fired</th><th class="num">Rule</th><th class="num">Director</th><th class="num">Chris</th><th class="num">Fixed</th><th class="num">No Change</th>');
+  expect(h).toContain('<th>Ask</th><th class="num">Fired</th><th class="num">Rule</th><th class="num">Director</th><th class="num">User</th><th class="num">Fixed</th><th class="num">No Change</th>');
   expect(h).not.toMatch(/Manual|<th>[^<]*[()/]/);
   expect(h).toContain([5, 2, 1, 1, 1, 3].map((n) => `<td class="num">${n}</td>`).join(""));
   expect(h).not.toContain("2 rule, 1 director, 1 Chris");

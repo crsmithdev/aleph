@@ -125,6 +125,19 @@ describe("asks", () => {
     } finally { STORE = undefined; }
   });
 
+  test("no action hint says you or your, and the answer-taking hints name the user", () => {
+    STORE = { situation: "Stored situation." };
+    try {
+      const items = [...Object.values(CASES).flatMap((f) => f()), ...ofIssues(issue({ reason: "question", question: "q" }))];
+      const hints = items.flatMap((i) => [...i.actions, ...(i.always ? [i.always] : [])]).map((a) => a.hint);
+      expect(hints.length).toBeGreaterThan(5);
+      for (const h of hints) expect(h).not.toMatch(/\b(you|your)\b/i);
+      expect(hints).toContain("Takes the user's answer and starts the job again with it.");
+      expect(hints).toContain("Records the user's refusal on the issue and closes the question.");
+      expect(hints).toContain("Records the user's approval on the issue, and the factory starts it.");
+    } finally { STORE = undefined; }
+  });
+
   test("an issue with a reason the table does not name is a question", () => {
     expect(ofIssues(issue({ reason: "nope", question: "what now?" }))[0].reason).toBe("question");
   });

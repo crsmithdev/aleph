@@ -256,7 +256,7 @@ const addNote = post((b, params) => {
  */
 const answer = (verb: "note" | "decide" | "done", text: string) => post((_b, params) => {
   const { repo, n, item } = target(params);
-  if (todos.status(item) !== "open" || !awaitsChris(refIn(repo.key, item))) fail(409, "this issue is not waiting for you");
+  if (todos.status(item) !== "open" || !awaitsChris(refIn(repo.key, item))) fail(409, "this issue is not waiting for the user");
   return aleph(["issue", verb, "--", repo.key, String(n), text]);
 });
 

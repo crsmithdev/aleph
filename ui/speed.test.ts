@@ -219,7 +219,7 @@ test("classify: a held run that later landed is landed, its earlier held rounds 
   expect([runs("landed"), runs("returned"), runs("dropped")]).toEqual([1, 1, 1]);
 });
 
-test("classify: a drop's fate, not its prose, sets the failed class and the Needed Chris cause", () => {
+test("classify: a drop's fate, not its prose, sets the failed class and the Needed the user cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (todo: number, o: Record<string, unknown>) =>
     ({ n: 1, kind: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", on: `fx-${todo}`, condition: "failed", started: t(todo), ended: t(todo, 10), ...o }) as any;
@@ -230,7 +230,7 @@ test("classify: a drop's fate, not its prose, sets the failed class and the Need
     r(3, { reason: "found it already met" }),
     r(4, { reason: "duplicate of 2" }),
     r(5, { fate: "manual" }),
-    // No fate: the prose says by hand or aleph drop, but it has no Needed Chris cause.
+    // No fate: the prose says by hand or aleph drop, but it has no Needed the user cause.
     r(6, { reason: "dropped by hand" }),
     r(7, { reason: "aleph drop" }),
   ];
@@ -239,8 +239,9 @@ test("classify: a drop's fate, not its prose, sets the failed class and the Need
   expect(by("failed").runs).toBe(2);
   expect(by("failed").causes.map((c) => c.name)).toEqual(["Work on main from another issue"]);
   expect(by("dropped").runs).toBe(5);
-  expect(by("dropped").causes.map((c) => c.name).sort()).toEqual(["Needed Chris", "Other"]);
-  expect(by("dropped").causes.find((c) => c.name === "Needed Chris")!.runs).toBe(1);
+  expect(by("dropped").causes.map((c) => c.name).sort()).toEqual(["Needed the user", "Other"]);
+  expect(by("dropped").causes.find((c) => c.name === "Needed the user")!.runs).toBe(1);
+  expect(by("dropped").causes.find((c) => c.name === "Needed the user")!.text).toBe("The run waited for the user, or the user restarted or dropped it by hand.");
 });
 
 test("runs read their issue from on: a part counts under its own ref, an issue run under its number", () => {

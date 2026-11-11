@@ -37,7 +37,7 @@ export const BY = Object.fromEntries(["human", "rule", "director", "firefighter"
 
 const PAGE = 50;
 
-const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"], ["gates-waiting", "Waiting for You"], ["gates-repeats", "Rule Candidates"],
+const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"], ["gates-waiting", "Waiting for the User"], ["gates-repeats", "Rule Candidates"],
   ["rules", "Rules"], ["gates-caps", "Controls"], ["gates-held", "Held Paths"], ["gates-log", "Log"]];
 
 export function renderGates(d, q = new URLSearchParams()) {
@@ -59,9 +59,9 @@ function capSetting(f, key, label, value, note) {
 export function renderNow(d) {
   const m = d.metrics;
   const tilesHtml = [
-    statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without Chris", "asks"] } : { note: "no Ask decided" }) }),
+    statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without the user", "asks"] } : { note: "no Ask decided" }) }),
     statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed later"] }),
-    statCard({ k: "Rule candidates", v: count(d.repeats.length), note: "Asks you answered the same way 3+ times" }),
+    statCard({ k: "Rule candidates", v: count(d.repeats.length), note: "Asks answered the same way 3+ times" }),
     statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["in a hold", "issues"] }),
   ].join("");
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
@@ -110,14 +110,14 @@ export function renderSchedules(d) {
 /** The Asks routed to Chris, as the Status page's cards. */
 function renderWaiting(d) {
   const rows = d.asks.map((i) => askCard(i, d.now)).join("");
-  return card("Waiting for You", rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.", "An Ask that needs you shows here."), { id: "gates-waiting", count: d.asks.length });
+  return card("Waiting for the User", rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for the user.", "An Ask that needs the user shows here."), { id: "gates-waiting", count: d.asks.length });
 }
 
 /** Each kind of Ask that Chris answered the same way 3 or more times, with a button that makes the answer the rule when it is the reason's automatic mode. */
 export function renderRepeats(d) {
   const rows = d.repeats.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td></tr>`);
   const make = d.repeats.filter((r) => r.mode).map((r) => setting(r.name, actButton("Make it a rule", { rule: r.reason, mode: r.mode, label: "Make it a rule" })));
-  return card("Rule Candidates", rows.length ? pagedTable(heads(["Ask", "Answer", "Times"], ["Times"]), rows) + settings("Make a rule", make) : empty("No answer repeats.", "An Ask you answer the same way 3 times shows here."),
+  return card("Rule Candidates", rows.length ? pagedTable(heads(["Ask", "Answer", "Times"], ["Times"]), rows) + settings("Make a rule", make) : empty("No answer repeats.", "An Ask answered the same way 3 times shows here."),
     { id: "gates-repeats", count: d.repeats.length, label: "Rule candidates" });
 }
 
@@ -125,7 +125,7 @@ export function renderRepeats(d) {
 const timeoutRow = (r) => {
   const id = `timeout-${r.reason}`;
   return setting(`${r.name}: land after`, inputBox("minutes", r.timeout, { id, type: "number", attrs: ' min="0" step="1" inputmode="numeric" required' }) + " min with no answer",
-    { id, save: "Save", hint: r.timeout ? "Only when the director recommends the land." : "0: waits for you.", attrs: ` data-timeout="${esc(r.reason)}"` });
+    { id, save: "Save", hint: r.timeout ? "Only when the director recommends the land." : "0: waits for the user.", attrs: ` data-timeout="${esc(r.reason)}"` });
 };
 
 /** One row per Ask reason: how often it fired and who decided, then a settings list of who decides it. Ask me, or the reason's one automatic mode. */
@@ -144,19 +144,19 @@ export function renderRules(d) {
     } else {
       const btn = (mode, label, on) => ({ label, on, attrs: ` data-rule="${esc(r.reason)}" data-mode="${esc(mode)}"` });
       control = seg(`Who decides ${r.name}`, [btn("", "Ask me", !g), ...(r.mode ? [btn(r.mode, modeLabel(r.mode), g?.action === r.mode)] : [])]);
-      if (!r.mode) hint = "The director decides first and sends the rest to you.";
+      if (!r.mode) hint = "The director decides first and sends the rest to the user.";
       if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
     }
     return [setting(r.name, control, { hint }), ...(r.timeout !== undefined ? [timeoutRow(r)] : [])];
   });
-  return card("Rules", !rows ? empty("No rule.", "A rule shows here for each kind of Ask.") : dataTable(heads(["Ask", "Fired", "Rule", "Director", "Chris", "Fixed", "No Change"], ["Fired", "Rule", "Director", "Chris", "Fixed", "No Change"]), rows, { id: "rules-table" }) + settings("Who decides", decide), { id: "rules" });
+  return card("Rules", !rows ? empty("No rule.", "A rule shows here for each kind of Ask.") : dataTable(heads(["Ask", "Fired", "Rule", "Director", "User", "Fixed", "No Change"], ["Fired", "Rule", "Director", "User", "Fixed", "No Change"]), rows, { id: "rules-table" }) + settings("Who decides", decide), { id: "rules" });
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
 export function renderHeld(d) {
   const repos = d.repoHeld ?? [];
   const paths = (list) => `<div class="held">${list.map((p) => chip(p, { el: "code" })).join("")}</div>`;
-  return card("Held Paths", note("The security paths and a repo's held paths wait for Chris after the reviewer passes the job. A test is never held.") +
+  return card("Held Paths", note("The security paths and a repo's held paths wait for the user after the reviewer passes the job. A test is never held.") +
     facts([["Every repo", paths(d.held)], ...repos.map((r) => [r.repo, paths(r.held)])]) +
     (repos.length ? "" : empty("No repo names held paths.", "Add held globs to a repo in the registry.")), { id: "gates-held", label: "Held paths" });
 }

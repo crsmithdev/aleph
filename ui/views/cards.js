@@ -96,7 +96,7 @@ export function askCard(i, now = new Date().toISOString()) {
       const n = p ? `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}` : "";
       return inputBox("reason", denyReasons.get(i.id), { attrs: ` class="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(p?.repo ?? "")}" data-id="${esc(n)}" data-lead="${esc(a.input.lead ?? "")}"` });
     }
-    return a.input ? inputBox(a.input.name, "", { attrs: ` class="reason" maxlength="500" placeholder="Your answer" hidden aria-label="Answer for ${esc(i.id)}"` }) : "";
+    return a.input ? inputBox(a.input.name, "", { attrs: ` class="reason" maxlength="500" placeholder="Answer" hidden aria-label="Answer for ${esc(i.id)}"` }) : "";
   };
   const name = i.key?.startsWith("run:") ? i.id : undefined;
   const choices = acts.map((a) => askChoice(a, inputFor(a), name));
@@ -104,7 +104,7 @@ export function askCard(i, now = new Date().toISOString()) {
   const key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
-  const desc = `<p class="situation">${esc(shortText(i.situation ?? i.problem))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}${i.due ? ` <span class="muted">Lands at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
+  const desc = `<p class="situation">${esc(shortText(i.situation ?? i.problem))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to the user with its case text.</span>' : ""}${i.due ? ` <span class="muted">Lands at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
   return askShell(esc(i.reason), `data-annotate="${esc(shortId(i.id))}" data-kind="${esc(i.kind)}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, shortText(i.headline || i.title), i.tag, desc,
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
 }

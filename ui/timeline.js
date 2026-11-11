@@ -116,7 +116,7 @@ export function barsOf(runs, { cost = false } = {}) {
 }
 
 
-const LEGEND = { wait: "waiting", chris: "awaiting you", aux: "intake, facts", build: "build", bad: "failed or stuck", land: "land", made: "filed", done: "closed or accepted" };
+const LEGEND = { wait: "waiting", chris: "awaiting the user", aux: "intake, facts", build: "build", bad: "failed or stuck", land: "land", made: "filed", done: "closed or accepted" };
 const pct = (f) => (f * 100).toFixed(3);
 /** The time on the page: "11/02 08:11". */
 const timeOf = (at) => (Number.isFinite(at) ? when(new Date(at)) : "");
@@ -145,7 +145,7 @@ export function renderTimeline(segments) {
   // A bar too narrow for its label (about 600px of lane, 7px a letter) shows the first letter, as the land bar's clip did.
   const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);
   const lane = (r) => `<div class="dp-lane">` +
-    r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting you" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
+    r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting the user" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
     r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ` tabindex="0"`} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}<span class="sr">${esc(b.tip ?? b.label)}</span></${t}>`; }).join("") +
     (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
   const events = (evs) => {

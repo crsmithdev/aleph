@@ -131,7 +131,7 @@ const CAUSE_TEXT: Record<string, string> = {
   "Issue had landed": "The run started after its issue had landed.",
   "Work on main from another issue": "The run found the work already on main, from another issue.",
   get "Restart loop"() { return `The issue started ${RUN_CAP() + 1} or more times inside an hour.`; },
-  "Needed Chris": "The run waited for Chris, or Chris restarted or dropped it by hand.",
+  "Needed the user": "The run waited for the user, or the user restarted or dropped it by hand.",
   "Reviewer sent back": "The reviewer did not pass the run's work.",
   "Checks failed": "The run's checks failed or timed out.",
   "Stalled or timed out": "The run stalled, passed its time box or lost its process.",
@@ -212,7 +212,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "failed") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
     else if (cls === "reran" && startsBefore >= RUN_CAP()) row.cause = "Restart loop";
-    else if (r.condition === "waiting") row.cause = "Needed Chris";
+    else if (r.condition === "waiting") row.cause = "Needed the user";
     else if (r.failed === "review") row.cause = "Reviewer sent back";
     else if (r.failed) row.cause = "Checks failed";
     else if (stated) row.cause = stated;
@@ -221,7 +221,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     else if (/ failed$/.test(reason)) row.cause = "Checks failed";
     else if (/time box|stalled|timed out|lost/i.test(reason)) row.cause = "Stalled or timed out";
     else if (/no commit/i.test(reason)) row.cause = "No commit";
-    else if (r.fate === "manual") row.cause = "Needed Chris";
+    else if (r.fate === "manual") row.cause = "Needed the user";
     else if (passedState(r.condition) || /conflict/i.test(reason)) row.cause = "Passed, not landed";
     else row.cause = "Other";
     rows.get(cls)!.push(row);

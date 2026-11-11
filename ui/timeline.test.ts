@@ -179,7 +179,8 @@ describe("the timeline panel", () => {
     expect(h).toContain('<a class="dp-bar t-build" href="#/jobs/fac-1%231"');
     expect(h).toContain("Long spans are compressed");
     expect(h).not.toContain("dp-key");
-    expect(h).toContain('<ul class="legend"><li><i class="t-wait"></i>waiting</li><li><i class="t-chris"></i>');
+    expect(h).toContain('<ul class="legend"><li><i class="t-wait"></i>waiting</li><li><i class="t-chris"></i>awaiting the user</li>');
+    expect(h).not.toMatch(/awaiting you/i);
     expect(h).not.toContain('<i class="t-bad">');
     expect(h).toContain("&lt;b&gt;x&lt;/b&gt;");
     expect(h).not.toContain("<b>x");
@@ -194,7 +195,8 @@ describe("the timeline panel", () => {
     expect(at('id="h-timeline"')).toBeLessThan(at('id="h-request"'));
     expect(at('id="h-request"')).toBeLessThan(at("<span>Notes</span>"));
     expect(at("<span>Notes</span>")).toBeLessThan(at("<span>Commits</span>"));
-    expect(page).toContain("Awaiting you");
+    expect(page).toContain("Awaiting the user");
+    expect(page).not.toMatch(/awaiting you/i);
   });
 
   test("the formats", () => {

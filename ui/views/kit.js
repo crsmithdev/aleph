@@ -190,7 +190,7 @@ function renderKit(d, query) {
     spec("meter", "Meter", row(meter(64, "64%"), meter([{ pct: 50, cls: "c-use" }, { pct: 20 }], "50% and 20%"), meter(30, "30% with a mark at 70%", { mark: 70 })) +
       barList(barRow("Worker", 80, money(31.2), { top: true }) + barRow("Triage", 35, money(13.65)) + barRow("Reviewer", 12, money(4.7)))) +
     spec("outcome", "Outcome bar", bar(FLOW, "landed")) +
-    spec("legend", "Legend", legendHtml([["build", "t-build"], ["bad", "t-bad"], ["land", "t-land"], ["wait", "t-wait"], ["awaiting you", "t-chris"]])) +
+    spec("legend", "Legend", legendHtml([["build", "t-build"], ["bad", "t-bad"], ["land", "t-land"], ["wait", "t-wait"], ["awaiting the user", "t-chris"]])) +
     spec("timeline", "Timeline", renderTimeline(TIMELINE)) +
 
     group("Lists of items") +
@@ -237,10 +237,10 @@ function renderKit(d, query) {
     spec("settings", "Settings list", settings("Kit settings", [
       setting("Suite every", inputBox("every", "30min", { id: "kit-every", attrs: ' pattern="[1-9][0-9]*(s|min|h)" required' }), { id: "kit-every", save: "Save", hint: "A number and s, min or h." }),
       setting("Worker model", selectBox("Worker model", "model", ["opus", "sonnet"], "sonnet", { id: "kit-model" }), { id: "kit-model" }),
-      setting("Land after", inputBox("minutes", "0", { id: "kit-min", type: "number", attrs: ' min="0" step="1"' }), { id: "kit-min", save: "Save", hint: "0: waits for you." })])) +
+      setting("Land after", inputBox("minutes", "0", { id: "kit-min", type: "number", attrs: ' min="0" step="1"' }), { id: "kit-min", save: "Save", hint: "0: waits for the user." })])) +
     spec("edit", "Edit toggle", `<div class="editable"><p>${editable("<b>A title</b>", inputBox("title", "A title", { attrs: ' aria-label="Title"' }))}</p><div class="actions">${actButton("Edit", { editor: "start" }, { cls: "view-only" })}` +
       `<span class="edit-only">${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true })}</span></div></div>`) +
-    spec("states", "Empty state", empty("Nothing waits for you.", "An Ask shows here when the factory needs you.") + loadingLine("jobs") + error("Could not load the jobs.", undefined, { detail: "GET /api/jobs: 502" }) + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
+    spec("states", "Empty state", empty("Nothing waits for the user.", "An Ask shows here when the factory needs the user.") + loadingLine("jobs") + error("Could not load the jobs.", undefined, { detail: "GET /api/jobs: 502" }) + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
 
     group("States") +
     spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,

@@ -11,7 +11,7 @@ export const STAGES = [
   ["intake", NAMES.intake, "From filing to the end of the first intake."],
   ["queue", NAMES.queue, "From intake to the first agent job. This includes waits for a slot or for another issue."],
   ["implement", NAMES.build, "From the first agent job to the last finish with work to land."],
-  ["land", NAMES.land, "From the finish to the land. This includes waits for a review or for Chris."],
+  ["land", NAMES.land, "From the finish to the land. This includes waits for a review or for the user."],
 ];
 const PARTS = [["intake", NAMES.intake, "series-1"], ["queue", NAMES.queue, "series-2"], ["implement", NAMES.build, "series-3"], ["land", NAMES.land, "series-4"]];
 

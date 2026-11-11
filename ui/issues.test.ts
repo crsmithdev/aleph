@@ -783,9 +783,11 @@ describe("POST /api/issues/:id/retriage and rerun", () => {
     });
   }
 
-  test("an issue that is not waiting for you is a 409", async () => {
+  test("an issue that is not waiting for the user is a 409", async () => {
     const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "plain", { request: "x" }).id, true)!.value;
-    expect((await at(`/api/issues/fac-${n}/retriage`, { method: "POST", headers: h })).status).toBe(409);
+    const r = await at(`/api/issues/fac-${n}/retriage`, { method: "POST", headers: h });
+    expect(r.status).toBe(409);
+    expect(JSON.stringify(await r.json())).toContain("not waiting for the user");
   });
 });
 

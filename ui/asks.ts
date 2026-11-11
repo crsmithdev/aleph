@@ -73,7 +73,7 @@ const PROBLEM: Record<string, (c: Ctx) => string | undefined> = {
   review: (c) => {
     const r = c.run?.reviewCall;
     if (r?.call === "returned") return `The reviewer sent ${c.id} back twice${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
-    if (r?.call === "waiting") return `The reviewer left ${c.id} to you${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
+    if (r?.call === "waiting") return `The reviewer left ${c.id} to the user${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
     const back = /^the reviewer sent it back twice:\s*(.*)$/s.exec(c.run?.reason ?? "");
     if (back) return `The reviewer sent ${c.id} back twice: ${clean(back[1]).replace(/\.$/, "")}.`;
   },
@@ -119,7 +119,7 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
       case "retry": return [a("retriage", "Run intake again", "Removes the Ask; intake runs again at once.", issue("retriage"))];
       case "close": return [a("close", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue("drop"), { reason: "Chris closed it" })];
       case "deny":
-        return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue("drop"), { reason: "Chris denied it" }, { input: { name: "reason", lead: "Chris denied: " } })];
+        return [a("deny", "Deny", "Records the user's refusal on the issue and closes the question.", issue("drop"), { reason: "Chris denied it" }, { input: { name: "reason", lead: "Chris denied: " } })];
       case "approve":
         if (c.lesson) { const w = words(c.lesson); return [a("approve", `Reopen the issue: ${w.approve}`, `Reopens the issue that ${w.hint}.`, proposal("approve"))]; }
         return [a("approve", "Reopen the issue", "Reopens the proposal's issue with a spec for the factory.", proposal("approve"))];
@@ -131,14 +131,14 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
         if (d) return [...d.options].sort((x, y) => +(y.label === d.recommended) - +(x.label === d.recommended))
           .map((o) => a("decide", o.label, o.line || "Records this choice on the issue and lets the factory act on it.", issue("decide"), { label: o.label }));
         if (proseDecision(c.issue?.question).recommendation) return [a("decide", "Approve recommendation", "Records the recommended choice on the issue, and the factory acts on it.", issue("decide"), { recommendation: true })];
-        return [a("decide", "Approve it", "Records your approval on the issue, and the factory starts it.", issue("decide"), { approve: true })];
+        return [a("decide", "Approve it", "Records the user's approval on the issue, and the factory starts it.", issue("decide"), { approve: true })];
       }
       default: return [];
     }
   };
   const names = new Map<Action, string>();
   const acts = actionsOn(reason, { run: !!c.run, decision: !!c.issue?.decision }).flatMap((n) => {
-    const got = n === "answer" ? [a("answer", "Answer and rerun", "Takes your answer and starts the job again with it.", job("answer"), {}, { input: { name: "answer" } })] : one(n);
+    const got = n === "answer" ? [a("answer", "Answer and rerun", "Takes the user's answer and starts the job again with it.", job("answer"), {}, { input: { name: "answer" } })] : one(n);
     for (const x of got) names.set(x, x.act === "decide" && x.body.label ? `decide:${x.body.label}` : n);
     return got;
   });
@@ -191,15 +191,15 @@ function alwaysFor(reason: string, action: string, first: string | undefined): A
   if (!action) return undefined;
   const label = `${first ?? action} [auto-yes]`;
   const revoke = `Revoke with \`aleph always revoke ${reason}\`.`;
-  if (action === "recommended") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking you. ${revoke}` };
-  return { label, action, hint: `Does this one now. From now on, the factory does this without asking you. ${revoke}` };
+  if (action === "recommended") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking. ${revoke}` };
+  return { label, action, hint: `Does this one now. From now on, the factory does this without asking. ${revoke}` };
 }
 
 function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
   const key = standingKey(l);
   return {
     label: `${words(l).approve} [auto-yes]`, action: "approve", reason: key,
-    hint: `From now on, the factory reopens the issue for every ${words(l).every} without asking you. Revoke with \`aleph always revoke ${key}\`.`,
+    hint: `From now on, the factory reopens the issue for every ${words(l).every} without asking. Revoke with \`aleph always revoke ${key}\`.`,
   };
 }
 
