@@ -11,7 +11,7 @@ The report is rendered as a single self-contained HTML file in the OS temp direc
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Improve retro for {{repo name}}</title>
+    <title>Refit retro for {{repo name}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
       import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

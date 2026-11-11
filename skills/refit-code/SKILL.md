@@ -1,13 +1,13 @@
 ---
-name: improve
+name: refit-code
 description: >
-  Improve a codebase: find where it does one thing more than one way, where a
+  Refit a codebase: find where it does one thing more than one way, where a
   module is shallow or leaks, where code is bigger than its job or dead, where
   files and directories are not where a reader looks, and sweep or polish the
-  repo. Use when asked to review, clean up, simplify, deslop or tidy code,
+  repo. Use when asked to improve, review, clean up, simplify, deslop or tidy code,
   find duplication, drift, dead code or architecture problems, reorganize or
   restructure files and directories, get a repo ready to show, before you add a function, module,
-  parser, constant, route or doc section (check), or when the improve Stop
+  parser, constant, route or doc section (check), or when the refit-code Stop
   hook blocks.
 ---
 
@@ -15,11 +15,11 @@ Takes in Matt Pocock's `improve-codebase-architecture` (github.com/mattpocock/sk
 and `one-way`. Vocabulary: call the Skill tool with `aleph:codebase-design` and use its words (module,
 interface, depth, seam, adapter, leverage, locality) exactly.
 
-# Improve
+# Refit code
 
 One skill for the quality of a codebase. Six **lenses** each ask one question of the code; the modes below
 decide where and how they run. Read `PRINCIPLES.md`, `GLOSSARY.md`, `docs/naming.md` and `docs/adr/` first when
-they exist: they name owners and settled decisions. Read `.improve.json` at the repo root when it exists: its
+they exist: they name owners and settled decisions. Read `.refit.json` at the repo root when it exists: its
 `accepted` list holds what the repo keeps on purpose, each `{"concept", "copies": ["file[:line]", ...],
 "reason"}`, and an accepted candidate is reported as accepted, not as a finding.
 
@@ -67,7 +67,7 @@ one subagent over the whole repo, with the full seed. Each returns
    each subagent has returned.
 4. **Prove.** Open every location of every candidate and apply its lens's proof bar. Read
    [EXAMPLES.md](EXAMPLES.md) first to calibrate. A candidate that meets the bar is a finding; one that does not
-   is dropped with the reason; one `.improve.json` accepts is marked accepted. Where a lens has no hard proof,
+   is dropped with the reason; one `.refit.json` accepts is marked accepted. Where a lens has no hard proof,
    rate 1-5: 4-5 is a finding, 3 is a finding with the doubt stated, 1-2 is dropped. Done when each candidate
    has a verdict.
 5. **Owner and hold.** For each finding, its lens's Fix section names what changes, and its Hold section names
@@ -96,7 +96,7 @@ A finding that needs a new interface goes to `deepen` instead.
 2. **Ask each lens's Check question** of each item ([ONE-WAY.md](ONE-WAY.md) and the other lens files), with
    the searches it names. Record the searches and hit counts.
 3. **Judge.** Each item gets one verdict: **new**, **reuse** (name the path), **extend** (name the path),
-   **cut** (no case reaches it), or **second way** (on purpose: add it to `.improve.json` `accepted` with the
+   **cut** (no case reaches it), or **second way** (on purpose: add it to `.refit.json` `accepted` with the
    reason). Done when every item has a verdict with `file:line` or its search record.
 4. **Holds.** When the change makes one copy the owner of a concept or a module the owner of a seam, add its
    hold in the same change.
@@ -127,7 +127,7 @@ tool.
 `hook.ts` runs at each Stop on the change since the branch left the default branch, plus the working tree. It
 runs every **tool** hold of the table and blocks once per session for one set of findings; it never blocks a
 stop a hook already continued. When it blocks, for each finding: change the companion, call the owner, or add
-the pair to `.improve.json` `accepted` with its reason. [ONE-WAY.md](ONE-WAY.md) has the rules of its checks.
+the pair to `.refit.json` `accepted` with its reason. [ONE-WAY.md](ONE-WAY.md) has the rules of its checks.
 
 ## Red flags
 

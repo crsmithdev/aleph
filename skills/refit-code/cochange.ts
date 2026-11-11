@@ -80,9 +80,9 @@ export function rules(commits: Commit[]): Map<string, Rule[]> {
   return out;
 }
 
-/** The accepted second ways of the repo, from `.improve.json`. */
+/** The accepted second ways of the repo, from `.refit.json`. */
 export function accepted(root: string): Accepted[] {
-  const path = join(root, ".improve.json");
+  const path = join(root, ".refit.json");
   return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")).accepted ?? []) : [];
 }
 

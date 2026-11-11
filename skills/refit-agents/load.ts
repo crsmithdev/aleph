@@ -80,10 +80,12 @@ export function load(root: string, home = homedir()): Load {
   return { total: always.reduce((n, i) => n + i.tokens, 0), always: always.sort(big), lazy: lazy.sort(big), skills, hooks };
 }
 
-if (import.meta.main) {
+/** Print `fn` of a command line's `[root] [--home <dir>]` as JSON. */
+export function main(fn: (root: string, home: string) => unknown): void {
   const args = process.argv.slice(2);
   const i = args.indexOf("--home");
-  const home = i >= 0 ? args[i + 1] : homedir();
   const root = args.find((a, j) => !a.startsWith("--") && args[j - 1] !== "--home") ?? process.cwd();
-  console.log(JSON.stringify(load(resolve(root), home), null, 2));
+  console.log(JSON.stringify(fn(resolve(root), i >= 0 ? args[i + 1] : homedir()), null, 2));
 }
+
+if (import.meta.main) main(load);

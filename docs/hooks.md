@@ -20,7 +20,7 @@ After you change a hook, run `/reload-plugins`.
 | `PostToolUse` | `Write` | `handoff-saved.ts` | 10 | Ends the turn after a handoff file is written |
 | `Stop` | | `verify-gate.ts` | 45 | Blocks a claim of completion that no run supports |
 | `Stop` | | `context-gate.ts` | 10 | Warns on context fill; asks for a handoff after a compaction |
-| `Stop` | | `skills/improve/hook.ts` | 20 | Blocks once when a change leaves out a file that history changes with it, copies code a `.jscpd.json` boundary protects, or adds a copy of code the base did not have |
+| `Stop` | | `skills/refit-code/hook.ts` | 20 | Blocks once when a change leaves out a file that history changes with it, copies code a `.jscpd.json` boundary protects, or adds a copy of code the base did not have |
 
 `obs.ts` runs async on every event except `Stop`, `StopFailure` and `SessionEnd`, where it runs inline with a 5-second timeout.
 
@@ -102,9 +102,9 @@ A deny is `{decision: "block", reason: "Verify gate: …"}`. A judge that cannot
 
 The design is in [the context gate decision](context-gate.md).
 
-### improve
+### refit-code
 
-`skills/improve/hook.ts` checks the change since the branch left the default branch, plus the working tree. It uses no model. Co-change rules come from `skills/improve/cochange.ts`. Boundary rules and new copies of code come from one `jscpd` run (`skills/improve/clones.ts`) with `.jscpd.json`, compared with the branch's base. A pair recorded in `.improve.json` under `accepted` does not block. It blocks once per session for one set of findings. [The improve skill](../skills/improve/SKILL.md) has the rules.
+`skills/refit-code/hook.ts` checks the change since the branch left the default branch, plus the working tree. It uses no model. Co-change rules come from `skills/refit-code/cochange.ts`. Boundary rules and new copies of code come from one `jscpd` run (`skills/refit-code/clones.ts`) with `.jscpd.json`, compared with the branch's base. A pair recorded in `.refit.json` under `accepted` does not block. It blocks once per session for one set of findings. [The refit-code skill](../skills/refit-code/SKILL.md) has the rules.
 
 ### handoff-saved
 

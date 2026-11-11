@@ -1,6 +1,6 @@
 # Retro report
 
-One self-contained HTML file at `<tmpdir>/improve-retro-<timestamp>.html`, with `<tmpdir>` from `$TMPDIR`, else
+One self-contained HTML file at `<tmpdir>/refit-code-retro-<timestamp>.html`, with `<tmpdir>` from `$TMPDIR`, else
 `/tmp`. [HTML.md](HTML.md) has the scaffold, the diagram patterns, the style and the tone. Sweep and polish
 report in the terminal instead.
 
@@ -32,7 +32,7 @@ One `<article>` per finding, strongest first:
 
 ## Accepted and dropped
 
-Two tables. Accepted: each candidate that `.improve.json` keeps on purpose, with its recorded reason. Dropped:
+Two tables. Accepted: each candidate that `.refit.json` keeps on purpose, with its recorded reason. Dropped:
 candidate, lens, why it is not a finding. For the dead lens the dropped table is the **survivors**: each with
 the escape hatch that saved it.
 
