@@ -1,15 +1,15 @@
 # UI design language
 
-The design language of `ui/`, read from the code by the design-language skill (`skills/design-language/SKILL.md`). It goes from principles to foundations to components. Each component has what it is, when to use it, its parts with their style, its rules, and Do and Don't pairs. A value the rules do not allow is a deviation, listed at the end.
+The design language of `ui/`, read from the code by the design-language skill (`skills/design-language/SKILL.md`). It goes from principles to foundations, content and components, then to states and layout. A value that the rules do not allow is a deviation, listed at the end.
 
-The renders are on the Kit page, `#/kit` (`ui/views/kit.js`): each component and token, drawn by its own helper from fixture data, in light and dark. A new component gets a specimen there.
+The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with its own helper from fixture data, in light and dark, and shows each component's section beside its specimen. A new component gets a section here and a specimen there.
 
 ## Principles
 
-1. **One token set, two themes.** Colours are custom properties on `:root` in `ui/app.css`, re-set for dark by `@media (prefers-color-scheme: dark)` and by `:root[data-theme="dark"]`. A view that uses only tokens gets dark mode free. Light is lavender; dark is Palenight.
+1. **One token set, two themes.** Colours are custom properties on `:root` in `ui/app.css`, set again for dark by `@media (prefers-color-scheme: dark)` and by `:root[data-theme="dark"]`. A view that uses only tokens gets dark mode free. Light is lavender; dark is Palenight.
 2. **Shared helpers build the parts.** Views call `ui/lib.js`; the CSS is in `ui/app.css`. A fix in one helper fixes every page.
 3. **Meaning is a tone.** `run`, `done`, `need`, `stuck` or `quiet`, from `tone()` in `ui/lib.js`. One state has one colour on a badge, a series and a card, so a reader learns it once.
-4. **Numbers are tabular.** Tabular figures, right-aligned, so digits line up in a column.
+4. **Numbers are tabular.** Tabular figures, at the right, so digits line up in a column.
 5. **Plain text states.** An empty state is one sentence and a hint; a missing value is `–`.
 
 ### Rules
@@ -18,8 +18,7 @@ The renders are on the Kit page, `#/kit` (`ui/views/kit.js`): each component and
 |---|---|
 | a colour token; `readTokens()` in a chart | every colour |
 | `--fs-*`, `--r-*`, `--sp-*`, `--dim`, `--ctl-h`, `--bar-h` | sizes, radii, spacing, dimming, heights |
-| `when()`, `day()`, `hourLabel()`, `clock()`, `dur()`, `durMs()`, `money()`, `count()`, `pct()` | every displayed value |
-| `dataTable()`, `empty()`, `badge()` | tables, empty states, states |
+| the helpers in Content, Values | every displayed value |
 
 | Do | Don't |
 |---|---|
@@ -47,7 +46,7 @@ Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, an
 | `--ink-2` | #4A4F6A | #BFC7D5 | secondary text |
 | `--muted` | #62688A | #8E96BA | headers, meta |
 | `--rule`, `--rule-2` | #DCD9EC, #E8E6F3 | #3A3F58, #2E3245 | borders, row lines |
-| `--lift` | `0 1px 3px`, `0 2px 8px` | heavier | the top Status card |
+| `--lift` | `0 1px 3px`, `0 2px 8px` | heavier | the top Status card, the Ask card |
 | `--float` | `0 6px 24px rgb(0 0 0 / .25)` | the same | kit widgets: the font picker, the annotations |
 | `--on-fill` | #fff | #fff | text on a coloured bar |
 
@@ -72,8 +71,8 @@ Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, an
 |---|---|---|---|
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #1BAF7A, #EDA100, #E87BA4 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #C792EA, #89DDFF | extra series |
-| `--seg-landed`, `-returned`, `-failed`, `-reran`, `-dropped` | `--seg-landed` in `ui/app.css` | not re-set | outcome bar, under white text |
-| `--fill-run`, `--fill-stuck`, `--fill-done`, `--fill-aux` | `--fill-run` in `ui/app.css` | not re-set | Timeline bar fills, under white text |
+| `--seg-landed`, `-returned`, `-failed`, `-reran`, `-dropped` | `--seg-landed` in `ui/app.css` | not set again | outcome bar, under white text |
+| `--fill-run`, `--fill-stuck`, `--fill-done`, `--fill-aux` | `--fill-run` in `ui/app.css` | not set again | timeline bar fills, under white text |
 
 | Do | Don't |
 |---|---|
@@ -111,7 +110,7 @@ The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` te
 | `--fs-sm` | 13px | table cells, secondary text |
 | `--fs-md` | 14px | body |
 | `--fs-lg` | 15px | section headings |
-| `--fs-2xl` | 20px | brand mark, second metric value |
+| `--fs-2xl` | 20px | brand mark, KPI value |
 | `--fs-xl` | 26px | page title |
 | `--fs-metric` | 32px | metric value |
 
@@ -137,7 +136,7 @@ Weight 700 stays a literal on `.mark` and `.tile b`.
 | Do | Don't |
 |---|---|
 | `line-height: 1.45` | `line-height: 20px` |
-| uppercase only on small keys: `#nav li.head`, `.tile .k`, `.herald-sticky-head`, `.ins h4` | uppercase a section heading |
+| uppercase on the small keys that `--ls-caps` lists | uppercase on a section heading |
 
 ### Space and shape
 
@@ -187,7 +186,7 @@ Weight 700 stays a literal on `.mark` and `.tile b`.
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
 | `--z-overlay` | 50 | kit widgets: font picker, annotations |
 
-Shadows: `--lift`, `--float` for the kit widgets, and `box-shadow: inset` rings for selected and parked.
+A selected or parked item has a `box-shadow: inset` ring.
 
 #### Breakpoints and motion
 
@@ -218,7 +217,7 @@ The kit widgets in `ui/vendor/kit` read these. Each points at a base token, so o
 
 ### Values
 
-Every displayed value goes through its helper in `ui/lib.js`.
+Every displayed value goes through its helper in `ui/lib.js`. The Missing column gives what the helper shows for no value.
 
 | Kind | Example | Helper | Missing |
 |---|---|---|---|
@@ -231,7 +230,7 @@ Every displayed value goes through its helper in `ui/lib.js`.
 | Weekly share | ≈1.4% wk | `wkText()` | empty |
 | Percent | 12%, 0.4%, <0.1% | `pct()` | `–` |
 | Count | 12,345 | `count()` | none |
-| Id | a52 | `idLink()`; see [Naming](naming.md) | none |
+| Id | a52 | `idLink()`, `repoIdLink()`; see [Naming](naming.md) | none |
 | Model | opus | `shortModel()` | empty |
 | Bytes | 1.5KiB | `bytes()` | none |
 | Mean | 2.4 | `mean()` | `–` |
@@ -247,6 +246,13 @@ Every displayed value goes through its helper in `ui/lib.js`.
 
 ### Words
 
+- Write a page title, a section title and a column header in Title Case, with short words in lower case.
+- Write a key of a fact list and the label of a button in sentence case.
+- Write a state, a priority and a chart key in lower case. States come from [Naming](naming.md); priorities are `critical`, `high`, `medium`, `low`.
+- Show a count as a muted number after its title, not in brackets.
+- Write an empty state as one sentence, then a hint that tells the reader what to do.
+- Offline, the page says "The server is unreachable. Showing the last data." (`ui/index.html`).
+
 | Do | Don't |
 |---|---|
 | `Jobs per Item` | `Jobs Per Item`, `jobs per item` |
@@ -257,164 +263,181 @@ Every displayed value goes through its helper in `ui/lib.js`.
 | `The agents did not load.` with the hint `Check that aleph-ui is running, then reload.` | `Error: fetch failed` |
 | `Loading Jobs…` | a spinner with no text |
 
-- States come from [Naming](naming.md); priorities are `critical`, `high`, `medium`, `low`.
-- Offline: "The server is unreachable. Showing the last data." (`ui/index.html`).
-
 ## Components
-
-Each component, its helper and the view that follows the rules best.
-
-| Component | Helper | Reference view |
-|---|---|---|
-| Page head | `pageHead()` | `ui/views/jobs.js` |
-| Card | `card()` | `ui/views/factory-agents.js` |
-| Fact list | `facts()` | `ui/views/session.js` |
-| Metric card | `statCard()`, `cardTrend()`, `tiles()` | `statusCards()` in `ui/views/speed.js` |
-| Table | `dataTable()`, `sortHead()` | `ui/views/jobs.js` |
-| Chart panel | `panelOf()` | `ui/views/factory-agents.js` |
-| Meter | `meter()`, `barList()` | `ui/views/memory.js` |
-| Badge | `badge()` | `ui/views/jobs.js` |
-| Chip | `chips()` | `ui/views/issues.js` |
-| Button | `actButton()` | `ui/views/issues.js` |
-| Command | `cmd()` | `ui/views/issues.js` |
-| Filter bar | `filterBar()` | `ui/views/jobs.js` |
-| Pager | `pager()` | `ui/views/issues.js` |
-| Empty state | `empty()`, `loading()`, `error()` | `ui/views/jobs.js` |
-| Detail panel | `panel()`, `detailPanel()` in `ui/timeline.js` | `ui/views/jobs.js` |
-| KPI strip | `renderKpis()` in `ui/timeline.js` | `ui/views/jobs.js` |
-| Timeline | `renderTimeline()` in `ui/timeline.js` | `ui/views/jobs.js` |
-| Legend | `legendHtml()` | `ui/timeline.js` |
-| Item card | `laneCard()` in `ui/views/now.js`, `metaRow()` in `ui/views/cards.js` | `ui/views/now.js` |
-| Ask card | `askCard()` in `ui/views/cards.js` | `ui/views/now.js` |
-| Lane | `lane()` in `ui/views/now.js` | `ui/views/now.js` |
-| Feed row | `eventRow()` in `ui/views/now.js` | `ui/views/now.js` |
-| Findings list | `findingHtml()` in `ui/views/now.js` | `ui/views/gates.js` |
-| Status row, link button | none yet | `ui/views/jobs.js` |
 
 ### Every component
 
-These rules apply to all components. The section of a component adds its own rules.
+These rules apply to all components. The section of a component adds only its own rules.
 
 - Build each component with its helper. Do not write its markup by hand.
 - If a part has no helper, write it by hand and add a row to Deviations.
 - Use tokens for all colours, sizes, spaces and radii (Principles, Rules).
-- Format each value with its helper (Content, Values). Show a missing value as that table tells you.
+- Format each value with its helper, and show a missing value as Content, Values gives.
+- Write titles, keys, labels and counts as Content, Words gives.
 - Get the colour of a state from `tone()`. Do not choose a tone by hand.
-- Write headers and titles in Title Case, with short words in lower case (`Jobs per Item`). Write states in lower case.
-- Show a count as a muted number after its title. Do not put a count in brackets.
-- Give each control the states that States gives: `:focus-visible`, `aria-pressed`, and disabled while a request runs.
+- When a component has nothing to show, put `empty()` in its place. Keep the card around it.
+- Give each control the states that States gives.
 - When you add a component or a state, add a section here and a specimen on `#/kit`.
 
-Each component has the same sections: what it is, when to use it, its parts, its rules, and Do and Don't pairs. The Style column gives the tokens that the helper applies. You do not set them.
+Each section below has the same parts, in this order:
+
+1. One sentence on what the component is.
+2. **Use** and **Not for**: when to use it, and what to use in its place.
+3. **Helper** and **Reference**: the function that builds it, and the view that follows the rules best.
+4. **Parts**: each part, what it holds, whether it is optional, and its style. The helper applies the style. You do not set it.
+5. **Rules**: how to build it, then what it holds, how it behaves, and how it shows on a phone.
+6. **Do and Don't**: examples.
 
 ### Structure
 
 #### Page head
 
-The page head is the first part of a page. It shows the title, a count, and the controls of the page.
+The page head is the first part of a page. It shows the title, a count and the controls of the page.
 
-**Use:** once on each page.
+**Use:** once at the top of each page. **Not for:** a section title; use the card.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Crumb | The path to the page. Detail pages only | `--mono` `--fs-sm`, `--muted`; a link is `--ink` on hover |
-| 2 | Title | The name of the page | `--display` `--fs-xl`, `--ink` |
-| 3 | Count | The number of items on the page. Optional | `--num` `--fs-sm` `--fw-mid`, `--muted` |
-| 4 | Controls | Project, window, then the controls of the page | `--fs-xs`, `--muted`; at the right; wraps |
+| Helper | Reference |
+|---|---|
+| `pageHead(title, { count, aside })`; `crumb(back, parts)`; `scope().bar({ after })` | `ui/views/jobs.js` |
 
-- Make the head with `pageHead(title, { count, aside })`.
-- Put the head first. On a detail page, put `crumb()` above it.
-- On a list page, put the Project select and the window control in `aside`. Make them with `scope().bar()`. Put the controls of the page after them, in `after`.
-- Keep the project and the window in the address. Call `scope().wire(root)` in `mount`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Crumb | The path to the page | yes; detail pages only | `--mono` `--fs-sm`, `--muted`; a link is `--ink` on hover |
+| 2 | Title | The name of the page | | `--display` `--fs-xl`, `--ink` |
+| 3 | Count | The number of items on the page | yes | `--num` `--fs-sm` `--fw-mid`, `--muted` |
+| 4 | Controls | The Project select, the window, then the controls of the page | yes | `--fs-xs`, `--muted`; at the right; wraps |
+
+- On a detail page, put `crumb()` above the head.
+- On a list page, make the controls with `scope().bar()` and put them in `aside`. The bar starts with the Project select and the window. Give the controls of the page to the bar as `after`.
+- A detail page has no Project select.
+- Keep the project and the window in the address: call `scope().wire(root)` in `mount`.
+
+| Do | Don't |
+|---|---|
+| `pageHead("Jobs", { count: 128, aside: scope().bar() })` | `<h1>Jobs (128)</h1>` |
+| Project, window, then the controls of the page | a control of the page before the Project select |
 
 #### Card
 
 A card is one section of a list page. It has a head and a body.
 
-**Use:** for each section of a list page. On a detail page, use the detail panel.
+**Use:** for each section of a list page. **Not for:** a section of a detail page; use the detail panel.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Box | The section | `--surface`, border `--rule`, radius `--r-card`, padding `--gap-in` |
-| 2 | Title | What the section holds | `--sans` `--fs-lg` `--fw-strong`, `--ink` |
-| 3 | Count | The number of items. Optional | `--num` `--fs-sm` `--fw-mid`, `--muted` |
-| 4 | Aside | Controls, or one note. Optional | `--fs-xs`, `--muted`; at the right |
-| 5 | Body | The content | `--fs-sm`, `--ink-2` |
+| Helper | Reference |
+|---|---|
+| `card(title, body, { count, aside, id })` | `ui/views/factory-agents.js` |
 
-- Make the card with `card(title, body, { count, aside, id })`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Box | The section | | `--surface`, border `--rule`, radius `--r-card`, padding `--gap-in` |
+| 2 | Title | What the section holds | | `--sans` `--fs-lg` `--fw-strong`, `--ink` |
+| 3 | Count | The number of items | yes | `--num` `--fs-sm` `--fw-mid`, `--muted` |
+| 4 | Aside | Controls, or one note | yes | `--fs-xs`, `--muted`; at the right |
+| 5 | Body | The content | | `--fs-sm`, `--ink-2` |
+
 - Do not put a card in a card.
 - Give an `id` when a link goes to the section.
-- When the section has no content, put `empty()` in the body. Keep the card.
+
+| Do | Don't |
+|---|---|
+| `card("Recent Jobs", dataTable(…), { count: 12 })` | a section head with no box (`sectionHead()` alone) |
+| `card("Recent Jobs", empty("No job ran in this window."))` | no card when the section is empty |
 
 #### Detail panel
 
 A detail panel is one section of a detail page. It has a head and a body.
 
-**Use:** for each section of an issue page or a job page. On a list page, use the card.
+**Use:** for each section of an issue page or a job page. **Not for:** a section of a list page; use the card.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Box | The section | `--surface`, border `--rule`, radius `--r-card` |
-| 2 | Head | The title of the section | `--sans` `--fs-lg` `--fw-strong`, `--ink`; padding `--sp-14` `--sp-18` |
-| 3 | Aside | A note or a control. Optional | `--fs-sm`, `--muted` |
-| 4 | Body | The content | padding `--sp-10` `--sp-18` `--sp-14` |
-| 5 | Code block | Logs or output. Optional | `--mono` `--fs-xs`, `--ink-2` on `--sunk`, radius `--r-tag`; scrolls at 70% of the screen height |
+| Helper | Reference |
+|---|---|
+| `panel(id, title, body, aside)` and `detailPanel(title, aside, body)` in `ui/timeline.js` | `ui/views/jobs.js` |
 
-- For prose (Spec, Result, Description), use `panel(id, title, body, aside)` in `ui/timeline.js`.
-- For a section that the reader can close, use `detailPanel(title, aside, body)` in `ui/timeline.js`.
-- Make prose with `md()`. Keep prose at 80 characters wide or less.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Box | The section | | `--surface`, border `--rule`, radius `--r-card` |
+| 2 | Head | The title of the section | | `--sans` `--fs-lg` `--fw-strong`, `--ink`; padding `--sp-14` `--sp-18` |
+| 3 | Aside | A note or a control | yes | `--fs-sm`, `--muted` |
+| 4 | Body | The content | | padding `--sp-10` `--sp-18` `--sp-14` |
+| 5 | Code block | Logs or output | yes | `--mono` `--fs-xs`, `--ink-2` on `--sunk`, radius `--r-tag`; scrolls at 70% of the screen height |
+
+- For prose (Spec, Result, Description), use `panel()`. Put the prose in it with `md()`.
+- For a section that the reader can close, use `detailPanel()`. It is open at first.
+
+| Do | Don't |
+|---|---|
+| `panel("spec", "Spec", md(text))` | `card("Spec", …)` on a job page |
+| `detailPanel("Timeline", legendHtml(…), renderTimeline(…))` | a `<details>` written by hand for a section |
 
 #### KPI strip
 
 The KPI strip shows the headline facts of a detail page in one row.
 
-**Use:** once on a detail page, after the status row. On a list page, use metric cards.
+**Use:** once on a detail page. **Not for:** a list page; use metric cards.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Strip | The cells | the detail panel box; cells at 150px minimum, auto-fit |
-| 2 | Key | The name of the fact | `--fs-xs`, `--muted` |
-| 3 | Value | The fact | `--metric` `--fs-2xl` tabular; words: `--sans` `--fs-lg` |
-| 4 | Sub | One line about the value. Optional | `--fs-xs`, `--muted` |
+| Helper | Reference |
+|---|---|
+| `renderKpis([{ k, v, sub, text }])` in `ui/timeline.js` | `ui/views/jobs.js` |
 
-- Make the strip with `renderKpis([{ k, v, sub, text }])` in `ui/timeline.js`.
-- Format each value with its helper. Set `text: true` when the value is words.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Strip | The cells | | the detail panel box; cells 150px minimum, auto-fit |
+| 2 | Key | The name of the fact | | `--fs-xs`, `--muted` |
+| 3 | Value | The fact | | `--metric` `--fs-2xl` tabular; words: `--sans` `--fs-lg` |
+| 4 | Sub | One line about the value | yes | `--fs-xs`, `--muted` |
+
+- Set `text: true` when the value is words, not a number.
 - On a phone, the cells stack.
+
+| Do | Don't |
+|---|---|
+| `{ k: "Took", v: dur(245) }` | `{ k: "Took", v: "245s" }` |
+| `{ k: "Model", v: "opus", text: true }` | words in the number font |
 
 #### Status row
 
 The status row shows the state of the item on a detail page.
 
-**Use:** once on a detail page, after the page head.
+**Use:** once on a detail page, under the page head. **Not for:** a list page; a row of a table shows its own state.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | State | The state of the item | a badge |
-| 2 | Priority | The priority of the item | a priority badge |
-| 3 | Labels | The part and the labels. Optional | chips |
+| Helper | Reference |
+|---|---|
+| none yet (Deviations): `badge()`, `priorityBadge()` and `chips()` in a `div.status-row` | `ui/views/jobs.js` |
 
-- Put `badge()`, then `priorityBadge()`, then the chips, in a `div.status-row`.
-- The row has no helper yet (Deviations).
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | State | The state of the item | | a badge |
+| 2 | Priority | The priority of the item | | a priority badge |
+| 3 | Labels | The part and the labels | yes | chips |
+
+- Put the parts in this order: state, priority, labels.
+
+| Do | Don't |
+|---|---|
+| `badge("running")`, `priorityBadge("high")`, `chips(["ui"])` | the state as words in a sentence |
 
 #### Fact list
 
 A fact list shows the keys and values of one item.
 
-**Use:** for the properties of one item, or for the meta line of a row. Do not use a table of two columns.
+**Use:** for the properties of one item, or for the meta line of a row. **Not for:** many items; use a table.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Key | The name of the fact, in one or two words | `--fs-sm`, `--muted` |
-| 2 | Value | The fact | `--num` tabular, `--ink-2` |
+| Helper | Reference |
+|---|---|
+| `facts([[key, html]])` | `ui/views/session.js` |
 
-- Make the list with `facts([[key, html]])`.
-- Write each key in sentence case (`Started`, `Took`).
-- Format each value with its helper. The value is HTML: escape text with `esc()`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Key | The name of the fact, in one or two words | | `--fs-sm`, `--muted` |
+| 2 | Value | The fact | | `--num` tabular, `--ink-2` |
+
+- The value is HTML: escape text with `esc()`.
 - When a value is empty, `facts()` drops its row. Do not write a placeholder.
 
 | Do | Don't |
 |---|---|
-| `facts()` | a two-column table of keys and values |
+| `facts([["Started", when(t)], ["Took", dur(s)]])` | a two-column table of keys and values |
+| `["Model", esc(name)]` | `["Model", name]` with text that is not escaped |
 
 ### Data
 
@@ -422,96 +445,100 @@ A fact list shows the keys and values of one item.
 
 A metric card shows one headline number of a list page, with its key.
 
-**Use:** for the headline numbers of a list page. On a detail page, use the KPI strip.
+**Use:** for the headline numbers of a list page. **Not for:** a detail page; use the KPI strip. A number that needs more than these parts goes in a table under the cards.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Box | The card | `--surface`, border `--rule`, radius `--r-card`, padding `--sp-12` `--sp-14` |
-| 2 | Key | The measure, in two or three words | `--sans` `--fs-xs` `--fw-strong`, capitals, `--muted` |
-| 3 | Trend | The change from the baseline. Optional | `--fs-sm` `--fw-strong`; `--good` when good, `--need` when bad, else `--muted` |
-| 4 | Value | The number | `--metric` 700, up to `--fs-metric`, tabular, `--ink`; one line |
-| 5 | Second value | A second number after ` / `, such as the cap. Optional | `--metric` at .62em, `--muted` |
-| 6 | Bar | A meter. Optional | the meter |
-| 7 | Qualifier | The names of the two values, or a note | `--fs-xs`; each name in the colour of its value; one line |
+| Helper | Reference |
+|---|---|
+| `statCard({ k, v, v2, q, note, trend, extra, href, key, on })` in `tiles(label, html)`; `cardTrend()`; `onTile()` | `statusCards()` in `ui/views/speed.js` |
 
-- Make the card with `statCard({ k, v, v2, q, note, trend, extra, href, key, on })`. Put the cards in `tiles(label, html)`.
-- Write the key `k` in two or three words. The CSS sets it in capitals.
-- Format the value `v` with its helper. When the value is unknown, write `–` and give a `note` that tells why.
-- Use the second value `v2` only with `q`.
-- Write `q` as two names, `[first, second]`: one name for each value. Write each name in lower case, in one word or a few words. Each name has the colour of its value.
-- When the card has one value, write a `note` in place of `q`. Keep it to one line. The tooltip shows all of it.
-- Make the trend only with `cardTrend(value, base, prev, { kind, lowerIsGood, format, basis })`. Set `kind` to `points` for a share, and to `relative` for a time or a count. Set `lowerIsGood` to `null` when no direction is good. When there is no baseline, show no trend.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Box | The card | | `--surface`, border `--rule`, radius `--r-card`, padding `--sp-12` `--sp-14` |
+| 2 | Key `k` | The measure | | `--sans` `--fs-xs` `--fw-strong`, capitals, `--muted` |
+| 3 | Trend | The change from the baseline | yes | `--fs-sm` `--fw-strong`; `--good` when good, `--need` when bad, else `--muted` |
+| 4 | Value `v` | The number | | `--metric` 700, up to `--fs-metric`, tabular, `--ink`; one line |
+| 5 | Second value `v2` | A second number after ` / `, such as the cap | yes | `--metric` at .62em, `--muted` |
+| 6 | Bar `extra` | A meter | yes | the meter |
+| 7 | Qualifier `q` or `note` | The names of the two values, or a note | | `--fs-xs`; one line; first name `--ink`, second `--muted` |
+
+- Write the key in two or three words. The CSS sets it in capitals.
+- When the value is unknown, write `–` and give a `note` that tells why.
+- With `v2`, give `q` as `[first, second]`: one name for each value, in lower case, in one word or a few words.
+- With no `v2`, give a `note` in place of `q`. The tooltip shows all of the note.
+- Make the trend only with `cardTrend(value, base, prev, { kind, lowerIsGood, format, basis })`. Set `kind` to `points` for a share, and to `relative` for a time or a count. Set `lowerIsGood` to `null` when no direction is good. With no baseline, `cardTrend()` shows nothing.
 - Put only a `meter()` in `extra`.
-- Use `href` for a link to another page. Use `key` for a card that selects the view below it. Set `on` for the selected card, and connect it with `onTile()`.
-- When a number needs more than these parts, put it in a table below the cards.
+- For a link to another page, give `href`. For a card that selects the view under it, give `key`, set `on` on the selected card, and connect the cards with `onTile()`.
 
 | Do | Don't |
 |---|---|
-| `statCard({ k: "Worker slots", v: "2", v2: "5", q: ["in use", "cap"] })` | a `v2` with no `q` to name the two values |
+| `statCard({ k: "Worker slots", v: "2", v2: "5", q: ["in use", "cap"] })` | `v2` with no `q` |
 | `q: ["in use", "cap"]` | `q: ["In Use", "Maximum Capacity"]` |
+| `k: "Worker slots"` | `k: "Worker slots in use right now"` |
 | `v: "–"` with a note that tells why | `v: "0"` for an unknown value |
-| `statCard()` | card markup written by hand |
-| the KPI strip on a detail page (`renderKpis()` in `ui/timeline.js`) | a metric card on a detail page |
 
 #### Table
 
 A table shows items that have the same columns.
 
-**Use:** for a list of items. For the properties of one item, use a fact list.
+**Use:** for a list of items. **Not for:** the properties of one item; use a fact list.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Header | The name of each column | `--sans` `--fs-xs` `--fw-strong`, `--muted`; sorted column `--ink` |
-| 2 | Cell | One value | `--fs-sm`, `--ink`; padding `--sp-6` `--sp-12` `--sp-6` 0; rule `--rule-2` below; one line |
-| 3 | Title cell | The title of the item | takes the spare width, 16ch minimum; ends in an ellipsis |
-| 4 | Number cell | A number | `--num` `--fw-mid` tabular; at the right |
-| 5 | Sort arrow | `▲` or `▼` | `--fs-xs` |
-| 6 | Row | One item | `--sunk` on hover |
+| Helper | Reference |
+|---|---|
+| `dataTable(head, rows, { fit })`; `heads(labels, num)`, `sortHead()`, `wireTable()`; `pagedTable()` | `ui/views/jobs.js` |
 
-- Make the table with `dataTable(head, rows, { fit })`. Make the head with `heads(labels, num)` or `sortHead()`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Header | The name of each column | | `--sans` `--fs-xs` `--fw-strong`, `--muted`; the sorted column `--ink` |
+| 2 | Cell | One value | | `--fs-sm`, `--ink`; padding `--sp-6` `--sp-12` `--sp-6` 0; rule `--rule-2` below; one line |
+| 3 | Title cell `td.wide` | The title of the item | | takes the spare width, 16ch minimum; ends in an ellipsis |
+| 4 | Number cell `td.num` | A number | | `--num` `--fw-mid` tabular; at the right |
+| 5 | Sort arrow | `▲` or `▼` | yes | `--fs-xs` |
+| 6 | Row | One item | | `--sunk` on hover |
+| 7 | Row actions | The buttons of the row | yes | the row actions |
+
 - Put the columns in this order: time, id or name, title, state, project, labels, numbers.
-- Format the time with `when()`. Name the time column for the time it shows (`Started`, `Updated`).
-- Make an id with `idLink()` or `repoIdLink()`.
+- Name the time column for the time it shows. Format it with `when()`.
+- Make an id with `idLink()` or `repoIdLink()`, a state with `badge()`, and labels with `chips()`.
 - Put the title in `td.wide`. Do not let other cells wrap.
-- Show a state with `badge()` and labels with `chips()`.
-- Put each number in `td.num`, and name its column in `num`.
+- Put each number in `td.num`, and give its column name in `num`.
 - To sort, use `sortHead()` and `wireTable()`. Keep the sort in the address as `sort` and `dir`.
 - When there are more than 50 rows, use `pagedTable()`, or `pager()` with `limitOf()`.
 - For a short table of names and numbers, set `fit: true`.
-- When there are no rows, show `empty()` in place of the table.
-- Put the actions of a row in `.actions` under its text. Do not put a button in a cell.
 - On a phone, the table scrolls sideways in `.tscroll`.
 
 | Do | Don't |
 |---|---|
-| `Started`, `Updated`, `Committed`: the time column says which time | `Time`, `Date` |
+| `Started`, `Updated`, `Committed` | `Time`, `Date` |
 | `Last Turn`, `Last Run` for the newest of many | `Latest` |
 | `Took` for a duration | `Duration`, `Elapsed` |
-| numbers in `.num`: right, tabular | numbers left-aligned |
-| actions under a row's text (`.actions`) | a button in a table cell |
+| numbers in `td.num` | numbers at the left |
 
 #### Chart panel
 
 A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 
-**Use:** for a value over time, or for values by category. For a share of one whole, use a meter.
+**Use:** for a value over time, or for values by category. **Not for:** a share of one whole; use a meter.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Box | The chart | the card box |
-| 2 | Title | `<measure> by <dimension>`, from the frame | the card title |
-| 3 | Form control | The forms of the chart | a segmented control in the aside |
-| 4 | Legend | One item for each series. Optional | `--fs-xs`; at the top |
-| 5 | Plot | The series | labels `--chart`, 12px times `--chart-scale`, `--chart-weight`, `--ink`; lines `--rule`; 200px high minimum |
+| Helper | Reference |
+|---|---|
+| `panelOf(key, frame)` in `ui/chart.js` | `ui/views/factory-agents.js` |
 
-- Make the panel with `panelOf(key, frame)` in `render`. Set the `frame` of the element in `mount`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Box | The chart | | the card box |
+| 2 | Title | `<measure> by <dimension>`, from the frame | | the card title |
+| 3 | Form control | The forms of the chart | | a segmented control in the aside |
+| 4 | Legend | One item for each series | yes | `--fs-xs`; at the top |
+| 5 | Plot | The series | | labels `--chart`, 12px times `--chart-scale`, `--chart-weight`, `--ink`; lines `--rule`; 200px high minimum |
+
+- Call `panelOf()` in `render`. Set the `frame` of the element in `mount`.
 - Give each chart its own `key`, as `<view>/<chart>`.
+- Do not write the title. The frame gives it.
 - Set `measure.unit` to `count`, `usd` or `seconds`. The unit sets the format of the axis and the tooltip.
 - Set `measure.agg` to `sum` for a flow, and to `max` for a level. A flow opens as Columns. A level opens as Area.
-- Do not write the title. The frame gives it.
 - Give each key in `by` a colour token: a tone for a state, `series-1` to `series-5` for a role. Keep the colour of a key the same in all windows.
 - Show a legend. When the frame has one key and the title names it, set `legend: false`.
-- When there is no data, the frame shows its `empty` line. When a card holds only a chart, show `empty()` in place of the panel.
+- When there is no data, the frame shows its `empty` line.
 - When the data did not rebuild, give `error` and `since`. The panel tells how old the data is.
 - Put two or three panels side by side in `.trio`. Under 1100px, they stack.
 
@@ -519,84 +546,113 @@ A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 |---|---|
 | `color: "done"` in a frame's `by` | a hex colour in a series |
 | a legend on a stacked chart | a stacked chart with no legend |
+| `panelOf("agents/cost", frame)` | an ECharts instance made by the view |
 
 #### Legend
 
 A legend gives the colour of each series in a chart that is not a chart panel.
 
-**Use:** with the timeline, or with a chart that you draw yourself. A chart panel has its own legend.
+**Use:** with the timeline, or with a chart that you draw yourself. **Not for:** a chart panel; it has its own legend.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Item | The name of one series | `--fs-xs`, `--muted`; one row that wraps |
-| 2 | Swatch | The colour of the series | its token; 10px square, radius `--r-hair` |
+| Helper | Reference |
+|---|---|
+| `legendHtml([[label, cls]])` | `ui/timeline.js` |
 
-- Make the legend with `legendHtml([[label, cls]])`. The class `cls` sets the colour of the swatch.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Item | The name of one series | | `--fs-xs`, `--muted`; one row that wraps |
+| 2 | Swatch | The colour of the series | yes | its token; 10px square, radius `--r-hair` |
+
+- The class `cls` sets the colour of the swatch. With no `cls`, the item has no swatch.
+- Put the legend in the aside of the panel that holds the chart.
+
+| Do | Don't |
+|---|---|
+| `legendHtml([["build", "build"], ["land", "land"]])` | a legend with colours set inline |
 
 #### Meter
 
 A meter shows one share of a whole, or the segments of a whole.
 
-**Use:** for a share of a known whole. For a value over time, use a chart panel.
+**Use:** for a share of a known whole. **Not for:** a value over time; use a chart panel.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Track | The whole | `--sunk`, `--bar-h` high, radius `--r-hair` |
-| 2 | Fill | The share, or one segment | `--muted`; the largest row `--hot`; a segment its class |
-| 3 | Mark | A target, or the time gone. Optional | `--ink`, 2px wide |
+| Helper | Reference |
+|---|---|
+| `meter(parts, label, { mark })`; `barRow(label, pct, value, { top, key, on })` in `barList(rows)` | `ui/views/memory.js` |
 
-- Make the meter with `meter(parts, label, { mark })`. Give one percent, or segments as `{ pct, cls }`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Track | The whole | | `--sunk`, `--bar-h` high, radius `--r-hair` |
+| 2 | Fill | The share, or one segment | | `--muted`; the largest row `--hot`; a segment its class |
+| 3 | Mark | A target, or the time gone | yes | `--ink`, 2px wide |
+| 4 | Bar list label | The name of the row | bar list only | `--fs-sm`, `--ink`; 80px to 200px |
+| 5 | Bar list value | The value of the row | bar list only | tabular, `--ink-2`; at the right |
+| 6 | Selected row | The row that `key` selects | yes | `--sunk`; label `--fw-strong` |
+
+- Give one percent, or segments as `{ pct, cls }`.
 - Give a `label` as the text alternative. Leave it out only when the value shows next to the meter.
-- Give the meter a width from its container. The meter has no width of its own.
+- The meter has no width of its own. Its container gives it one.
 - For rows of a label, a meter and a value, use `barRow()` in `barList()`. Set `top` on the largest row.
 
-| # | Bar list part | Holds | Style |
-|---|---|---|---|
-| 1 | Label | The name of the row | `--fs-sm`, `--ink`; 80px to 200px |
-| 2 | Value | The value of the row | tabular, `--ink-2`; at the right |
-| 3 | Selected row | The row that `key` selects | `--sunk`; label `--fw-strong` |
+| Do | Don't |
+|---|---|
+| `meter(42, "42% used")` | a meter with no label and no value next to it |
+| `barRow(…, { top: true })` on the largest row | `--hot` set by hand |
 
 #### Outcome bar
 
 The outcome bar shows how the agent time of a window ended, by class.
 
-**Use:** once on the Status page.
+**Use:** once on the Status page. **Not for:** other data; use a meter or a chart panel.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Segment | The hours of one class | its `--seg-*` token; 28px high; the ends radius `--r-ctl` |
-| 2 | Separator | The line between work that reached main and work that did not | `--ink-2`, 2px |
-| 3 | Legend | The class, its hours and its share | `--fs-xs` tabular, `--ink-2`; numbers `--muted` |
+| Helper | Reference |
+|---|---|
+| `bar(d, key)` in `ui/views/speed.js`, from `/api/flow` | `ui/views/speed.js` |
 
-- Make the bar with `bar(d, key)` in `ui/views/speed.js`, from `/api/flow`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Segment | The hours of one class | | its `--seg-*` token; 28px high; the ends radius `--r-ctl` |
+| 2 | Separator | The line between work that reached main and work that did not | | `--ink-2`, 2px |
+| 3 | Legend | The class, its hours and its share | | `--fs-xs` tabular, `--ink-2`; numbers `--muted` |
+
 - Put the classes that reached main at the left of the separator.
-- Each segment selects its detail below the bar, with `aria-pressed`.
-- When there are no hours, show `empty()`.
+- Each segment selects its detail under the bar, with `aria-pressed`.
 - On a phone, the groups stack.
+
+| Do | Don't |
+|---|---|
+| `--seg-landed` on the landed segment | a tone token on a segment |
 
 #### Timeline
 
 The timeline shows the runs of an issue or a job over time, with their events.
 
-**Use:** in a detail panel of an issue page or a job page.
+**Use:** in a detail panel of an issue page or a job page. **Not for:** values over time; use a chart panel.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Axis | The times | `--fs-xs` tabular, `--muted` |
-| 2 | Head | The name of the run | `--fs-sm`; 160px to 220px |
-| 3 | Lane | The bars, waits and marks of the run | `--bg`, 22px high, radius `--r-tag` |
-| 4 | Bar | One step of the run | `--fs-2xs` `--fw-mid`, `--on-fill` on its `--fill-*` token; 18px high |
-| 5 | Wait | A time with no work | stripes of `--rule`; a wait for Chris: `--need` on `--need-bg` |
-| 6 | Mark | A point in time | made `--muted`, done `--ink`; 2px wide |
-| 7 | Result, time, cost | The end of the run | badge; `--fs-sm` tabular |
-| 8 | Event | One event of the run | `--fs-sm`; time `--fs-xs` tabular `--muted` |
+| Helper | Reference |
+|---|---|
+| `renderTimeline(segments)` in `ui/timeline.js` | `ui/views/jobs.js` |
 
-- Make the timeline with `renderTimeline(segments)` in `ui/timeline.js`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Axis | The times | | `--fs-xs` tabular, `--muted` |
+| 2 | Head | The name of the run | | `--fs-sm`; 160px to 220px |
+| 3 | Lane | The bars, waits and marks of the run | | `--bg`, 22px high, radius `--r-tag` |
+| 4 | Bar | One step of the run | | `--fs-2xs` `--fw-mid`, `--on-fill` on its `--fill-*` token; 18px high |
+| 5 | Wait | A time with no work | yes | stripes of `--rule`; a wait for Chris: `--need` on `--need-bg` |
+| 6 | Mark | A point in time | yes | made `--muted`, done `--ink`; 2px wide |
+| 7 | Result, time, cost | The end of the run | | badge; `--fs-sm` tabular |
+| 8 | Event | One event of the run | yes | `--fs-sm`; time `--fs-xs` tabular `--muted` |
+
 - Give one row for each run.
 - Give each bar a tone: `build`, `bad`, `land` or `aux`.
 - Put the events of a run under its row. A long event is clamped.
 - Put a legend from `legendHtml()` in the head of the panel.
 - Under 740px, the timeline scrolls sideways.
+
+| Do | Don't |
+|---|---|
+| `tone: "bad"` on a failed step | a `--fill-*` colour set by hand |
 
 ### Lists of items
 
@@ -604,82 +660,120 @@ The timeline shows the runs of an issue or a job over time, with their events.
 
 An item card shows one issue or one job in a lane.
 
-**Use:** in a lane on the Status page.
+**Use:** in a lane on the Status page. **Not for:** a list page; use a table.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Box | The item | `--surface`, border `--rule`, radius `--r-ctl`, padding `--sp-10` `--sp-12`; `--need` border when it waits for Chris |
-| 2 | Kind edge | The kind of work | 4px at the left: land `--done`, worker `--run`, else `--rule` |
-| 3 | Meta row | Id, state, kind, part, time, duration | `--fs-2xs`; 22px high; one line |
-| 4 | Title | The title of the item, as a link | `--sans` `--fw-strong`; one line, ends in an ellipsis |
+| Helper | Reference |
+|---|---|
+| `laneCard()` in `ui/views/now.js`; `metaRow()` in `ui/views/cards.js` | `ui/views/now.js` |
 
-- Make the card with `laneCard()` in `ui/views/now.js`. Make the meta row with `metaRow()` in `ui/views/cards.js`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Box | The item | | `--surface`, border `--rule`, radius `--r-ctl`, padding `--sp-10` `--sp-12`; border `--need` when it waits for Chris |
+| 2 | Kind edge | The kind of work | | 4px at the left: land `--done`, worker `--run`, else `--rule` |
+| 3 | Meta row | Id, state, kind, part, time, duration | | `--fs-2xs`; 22px high; one line; badges `--fs-2xs` |
+| 4 | Title | The title of the item, as a link | | `--sans` `--fw-strong`; one line, ends in an ellipsis |
+
 - Put the short id of the item in `data-annotate`, so that a note stays on the item.
+
+| Do | Don't |
+|---|---|
+| `data-annotate="a1700"` | a `data-annotate` that changes on each redraw |
 
 #### Ask card
 
-An ask card asks Chris a question. It shows the question, the options and the buttons that answer it.
+An ask card asks Chris a question. It shows the question, the choices and the buttons that answer it.
 
-**Use:** for each Ask that waits for Chris.
+**Use:** for each Ask that waits for Chris. **Not for:** a note with no answer; use a feed row.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Kind | approve, decide or unstick | sets the colour, `-bg` and `-ring` of the card (`--approve`, `--decide`, `--unstick`) |
-| 2 | Box | The Ask | `--surface`, border the ring of the kind, shadow `--lift`, radius `--r-card` |
-| 3 | Head | A dot, the kind, the title | `--fs-lg` on the `-bg` of the kind; kind `--fw-strong` in the colour of the kind |
-| 4 | Question | The question, when the card is open | `--fs-lg` `--fw-strong`; 80ch maximum |
-| 5 | Choices | One button for each answer | `--sp-8` apart; when open, a 200px column of buttons, then the text |
-| 6 | Recommended | The mark on the recommended choice | `--fs-xs` `--fw-strong`, the colour of the kind |
-| 7 | Details | Technical details. Optional | a closed fold |
+| Helper | Reference |
+|---|---|
+| `askCard(i)` in `ui/views/cards.js` | `ui/views/now.js` |
 
-- Make the card with `askCard(i)` in `ui/views/cards.js`.
-- Make each button with `actButton()`. Mark the recommended choice.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Kind | approve, decide or unstick | | sets the colour, `-bg` and `-ring` of the card (`--approve`, `--decide`, `--unstick`) |
+| 2 | Box | The Ask | | `--surface`, border the ring of the kind, shadow `--lift`, radius `--r-card` |
+| 3 | Head | A dot, the kind, the title | | `--fs-lg` on the `-bg` of the kind; kind `--fw-strong` in the colour of the kind |
+| 4 | Question | The question, when the card is open | | `--fs-lg` `--fw-strong`; 80ch maximum |
+| 5 | Choices | One button for each answer | | `--sp-8` apart; when open, a 200px column of buttons, then the text |
+| 6 | Recommended | The mark on the recommended choice | yes | `--fs-xs` `--fw-strong`, the colour of the kind |
+| 7 | Details | Technical details | yes | a closed fold |
+
+- Make each choice with `actButton()`. Mark the recommended choice.
 - When a choice needs a reason, use the reason box of the two-click confirm.
-- Put the technical details at the end, in a closed fold.
+- Put the technical details last, in a closed fold.
+
+| Do | Don't |
+|---|---|
+| the recommended choice marked | two choices marked |
+| technical details in a closed fold at the end | logs in the question |
 
 #### Lane
 
 A lane is a column of item cards under a head with a count.
 
-**Use:** for the Running, Queued and Done columns of the Status page.
+**Use:** for the Running, Queued and Done columns of the Status page. **Not for:** a list page; use a table.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Head | The name of the lane and its count | the card title and count |
-| 2 | Cards | The item cards | one column, `--sp-12` apart |
-| 3 | Empty line | The line when the lane has no items | `--fs-sm`, `--muted` |
+| Helper | Reference |
+|---|---|
+| `lane()` in `ui/views/now.js` | `ui/views/now.js` |
 
-- Make the lane with `lane()` in `ui/views/now.js`.
-- Put three lanes side by side in `.lanes`, `--sp-20` apart.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Head | The name of the lane and its count | | the card title and count |
+| 2 | Cards | The item cards | | one column, `--sp-12` apart |
+| 3 | Empty line | The line when the lane has no items | | `--fs-sm`, `--muted` |
+
+- Put three lanes side by side in `.lanes`, `--sp-20` apart. Under 760px, two columns; under 480px, one.
+
+| Do | Don't |
+|---|---|
+| `Running` with a muted `3` | `Running (3)` |
 
 #### Feed row
 
 A feed row shows one event in a feed. The newest event is first.
 
-**Use:** in the feed of the Status page.
+**Use:** in the feed of the Status page. **Not for:** the events of one run; use the timeline.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Time | The time of the event | `--mono` `--fs-xs` tabular, `--muted`; 55px |
-| 2 | Action | What happened, in lower case | `--fw-mid`, the colour of its tone; 70px |
-| 3 | Id | The item | `--mono` tabular; 64px; one line |
-| 4 | Body | The title, then what happened | title `--ink`, one line; what `--muted` |
-| 5 | Live row | The event in progress. Optional | `--unstick-bg`, border `--unstick-ring`, radius `--r-card` |
+| Helper | Reference |
+|---|---|
+| `eventRow(ev, titles)` in `ui/views/now.js` | `ui/views/now.js` |
 
-- Make the row with `eventRow(ev, titles)` in `ui/views/now.js`.
-- Format the time with `clock()`, else `when()`. Make the id with `idLink()`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Time | The time of the event | | `--mono` `--fs-xs` tabular, `--muted`; 55px |
+| 2 | Action | What happened, in lower case | | `--fw-mid`, the colour of its tone; 70px |
+| 3 | Id | The item | | `--mono` tabular; 64px; one line |
+| 4 | Body | The title, then what happened | | title `--ink`, one line; what `--muted` |
+| 5 | Live row | The event in progress | yes | `--unstick-bg`, border `--unstick-ring`, radius `--r-card` |
+
+- Format the time with `clock()`, else `when()`.
+
+| Do | Don't |
+|---|---|
+| `14:05 landed a1700` | `2026-11-10T14:05:00Z Landed` |
 
 #### Findings list
 
 The findings list shows the numbered findings of a Monitor report.
 
-**Use:** for a Monitor report, in a closed fold. The summary gives the day and the count.
+**Use:** for a Monitor report. **Not for:** other lists; use a table or `moreFold()`.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Finding | One finding | `--ink-2`, line height 1.35; `--sp-4` apart |
+| Helper | Reference |
+|---|---|
+| `findingHtml(text)` in `ui/views/now.js`, one `<li>` each in `<ol class="findings">` | `ui/views/gates.js` |
 
-- Make each finding with `findingHtml(text)` in `ui/views/now.js`, in one `<li>` of an `<ol class="findings">`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Fold | The report | | a closed fold; the summary gives the day and the count |
+| 2 | Finding | One finding | | `--ink-2`, line height 1.35; `--sp-4` apart |
+
+- Keep the fold closed.
+
+| Do | Don't |
+|---|---|
+| `findingHtml(text)` | a finding list built in the view |
 
 ### Labels
 
@@ -687,36 +781,45 @@ The findings list shows the numbered findings of a Monitor report.
 
 A badge shows a state. It has square corners.
 
-**Use:** for a state or a priority. For a label, use a chip.
+**Use:** for a state or a priority. **Not for:** a label; use a chip.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Badge | The state, in lower case | `--fs-xs` `--fw-strong`; radius `--r-tag`; one line |
-| 2 | Tone | The colour of the state | run, done, need or stuck: the tone on its `-bg`; quiet: `--muted` on `--sunk`; parked: a `--muted` outline |
+| Helper | Reference |
+|---|---|
+| `badge(state)`, `priorityBadge(p)`, `tag(text, tone, title)` | `ui/views/jobs.js` |
 
-- Make a state badge with `badge(state)`, and a priority badge with `priorityBadge(p)`.
-- For other short status text, use `tag(text, tone, title)`.
-- Take the words of a state from Naming.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Badge | The state | | `--fs-xs` `--fw-strong`; radius `--r-tag`; one line |
+| 2 | Tone | The colour of the state | | run, done, need or stuck: the tone on its `-bg`; quiet: `--muted` on `--sunk`; parked: a `--muted` outline |
+
+- For other short status text, use `tag()`.
 - When you add a state, add it to the tone map of `tone()`. Do not add a class by hand.
-- In an item card, the badge is `--fs-2xs`.
+
+| Do | Don't |
+|---|---|
+| `badge("failed")` | `tag("failed", "stuck")` |
+| `badge("failed")` | a chip for a state |
 
 #### Chip
 
 A chip shows a label. It has round ends.
 
-**Use:** for the labels of an item. For a state, use a badge.
+**Use:** for the labels of an item. **Not for:** a state; use a badge.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Chip | One label | `--fs-xs`, `--ink-2` on `--sunk`; radius `--r-pill`; one line; 16ch maximum in a table |
+| Helper | Reference |
+|---|---|
+| `chips(labels)` | `ui/views/issues.js` |
 
-- Make the chips with `chips(labels)`.
-- When there are no labels, show nothing. Do not write a placeholder.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Chip | One label | | `--fs-xs`, `--ink-2` on `--sunk`; radius `--r-pill`; one line; 16ch maximum in a table |
+
+- When there are no labels, `chips()` shows nothing. Do not write a placeholder.
 
 | Do | Don't |
 |---|---|
-| `badge("failed")` | a chip for a state |
-| `chips(["ui", "css"])` for labels | a badge for a label |
+| `chips(["ui", "css"])` | a badge for a label |
+| nothing for no labels | `–` for no labels |
 
 ### Actions
 
@@ -724,108 +827,162 @@ A chip shows a label. It has round ends.
 
 A button starts an action on the server.
 
-**Use:** for an action. For a link to another page, use the link button.
+**Use:** for an action. **Not for:** a link to another page; use the link button.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Button | A verb | `--sans` `--fs-sm` `--fw-mid`, `--ink` on `--surface`, border `--rule`; `--ctl-h` high; radius `--r-ctl`; border `--ink-2` on hover |
-| 2 | Primary | The main action. Optional | `--surface` on `--ink` |
-| 3 | Warn | An action that stops or drops work. Optional | `--need` on `--need-bg`, border `--need` (Status page head only, Deviations) |
-| 4 | Disabled | A request in progress | opacity `--dim`, wait cursor |
+| Helper | Reference |
+|---|---|
+| `actButton(label, data, { primary, cls })` | `ui/views/issues.js` |
 
-- Make the button with `actButton(label, data, { primary, cls })`.
-- Write the label as a short verb in sentence case (`Retry`, `Land`).
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Button | A verb | | `--sans` `--fs-sm` `--fw-mid`, `--ink` on `--surface`, border `--rule`; `--ctl-h` high; radius `--r-ctl`; border `--ink-2` on hover |
+| 2 | Primary | The main action | yes | `--surface` on `--ink` |
+| 3 | Warn | An action that stops or drops work | yes | `--need` on `--need-bg`, border `--need` (Status page head only, Deviations) |
+
+- Write the label as a short verb.
 - Give `act` and `path` in `data`. `ui/router.js` sends the request.
 - Use one `primary` button in a group, or none.
 - Set `cls: "warn"` on an action that stops or drops work.
 - For Land, Drop and Pause, add `confirm` (Two-click confirm).
 
+| Do | Don't |
+|---|---|
+| `Retry`, `Land` | `Click to retry this job` |
+| one primary button | two primary buttons side by side |
+
 #### Link button
 
 A link button goes to another page. It looks like a button.
 
-**Use:** for navigation only: Issue, Next sub-issue, Trace. For an action, use the button.
+**Use:** for navigation only: Issue, Next sub-issue, Trace. **Not for:** an action; use the button.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Link | The name of the page | the button style; no underline |
+| Helper | Reference |
+|---|---|
+| none yet (Deviations): `<a class="act" href="…">` | `ui/views/jobs.js` |
 
-- Write `<a class="act" href="…">`. The link button has no helper yet (Deviations).
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Link | The name of the page | | the button style; no underline |
+
+- Write the name of the page that the link opens.
+
+| Do | Don't |
+|---|---|
+| `<a class="act" href="#/issues/1700">Issue</a>` | a `<button>` that sets `location` |
 
 #### Command
 
 A command box shows a command for the reader to run. A click copies it.
 
-**Use:** for a command that the reader runs in a shell.
+**Use:** for a command that the reader runs in a shell. **Not for:** code in prose; use Markdown and code.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Box | The command | `--mono` `--fs-sm` `--fw-mid`, `--ink` on `--sunk`, border `--rule`, radius `--r-ctl`; wraps |
-| 2 | Hint | A note on the command. Optional | `--sans` `--fs-xs` |
-| 3 | Copy | The word `Copy` | `--sans` `--fs-xs`; a rule before it |
-| 4 | Primary | The command that the page asks for. Optional | `--surface` on `--ink` |
+| Helper | Reference |
+|---|---|
+| `cmd(text, { primary, hint })` | `ui/views/issues.js` |
 
-- Make the box with `cmd(text, { primary, hint })`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Box | The command | | `--mono` `--fs-sm` `--fw-mid`, `--ink` on `--sunk`, border `--rule`, radius `--r-ctl`; wraps |
+| 2 | Hint | A note on the command | yes | `--sans` `--fs-xs` |
+| 3 | Copy | The word `Copy` | | `--sans` `--fs-xs`; a rule before it |
+| 4 | Primary | The command that the page asks for | yes | `--surface` on `--ink` |
+
 - Use one `primary` command on a page, or none.
+
+| Do | Don't |
+|---|---|
+| `cmd("aleph issue list aleph")` | a `<pre>` that the reader must select to copy |
 
 #### Row actions
 
 Row actions are the buttons of one row or one card.
 
-**Use:** under the text of a row.
+**Use:** under the text of a row or a card. **Not for:** the actions of a page; put them in the page head.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Row | The buttons and the form message | `--sp-8` apart, `--sp-14` above; wraps |
+| Helper | Reference |
+|---|---|
+| `.actions` after the text of the row | `ui/views/issues.js` |
 
-- Put the buttons in `.actions` after the text of the row.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Row | The buttons and the form message | | `--sp-8` apart, `--sp-14` above; wraps |
+
 - Do not put a button in a table cell.
 - Show the result with `say()`.
+
+| Do | Don't |
+|---|---|
+| actions under the text of a row | a button in a table cell |
 
 #### Form message
 
 A form message shows the result of an action, next to its button.
 
-**Use:** after an action fails.
+**Use:** after an action fails. **Not for:** a page that did not load; use `error()`.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Message | What failed and why, in one line | `--fs-sm`, `--stuck` |
+| Helper | Reference |
+|---|---|
+| `say(el, text)`: makes `.act-msg` with `role="alert"` | `ui/router.js` |
 
-- Write the message with `say(el, text)`. It makes `.act-msg` with `role="alert"`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Message | What failed and why, in one line | | `--fs-sm`, `--stuck` |
+
+- Write what failed, then why.
+- `say()` puts the message after the button, and the next result replaces it.
+
+| Do | Don't |
+|---|---|
+| `say(btn, "Land failed: the branch has conflicts.")` | `alert()` |
 
 #### Two-click confirm
 
 The two-click confirm asks for a second click before an action that is hard to undo.
 
-**Use:** for Land, Drop and Pause, and for an answer that needs a reason.
+**Use:** for Land, Drop and Pause, and for an answer that needs a reason. **Not for:** an action that is easy to undo.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Asking button | `<label> <name>? Click again` | `--need` on `--need-bg`, border `--need` |
-| 2 | Reason box | The reason. Optional | the full width of the row |
+| Helper | Reference |
+|---|---|
+| `confirm` in the `data` of `actButton()`; `ui/router.js` | `ui/views/issues.js` |
 
-- Add `confirm` to the `data` of the button. The first click changes the label for 5 seconds (`ui/router.js`).
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Asking button | `<label> <name>? Click again` | | `--need` on `--need-bg`, border `--need` |
+| 2 | Reason box | The reason | yes | the full width of the row |
+
+- Give `name` and `label` in `data` too. The first click changes the text to the asking label for 5 seconds.
 - For an answer that needs a reason, put the button in a `.choice` with an `input.reason`. The first click opens the box, and the label changes to `Confirm`.
+
+| Do | Don't |
+|---|---|
+| `actButton("Drop", { act: "drop", path, name: "a1700", confirm: "1", label: "Drop" })` | `confirm()` from the browser |
 
 #### Disclosure
 
 A disclosure is a fold. It hides detail until the reader opens it.
 
-**Use:** for detail that most readers do not need.
+**Use:** for detail that most readers do not need. **Not for:** a section of a detail page; use `detailPanel()`.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Fold | The detail | rule `--rule-2` above; `--sp-10` above |
-| 2 | Summary | What the fold holds | `--fs-sm`, `--ink-2` |
-| 3 | Marker | `+` when closed, `−` when open | `--mono`, `--muted` |
+| Helper | Reference |
+|---|---|
+| `<details>` with a `<summary>`; `moreFold(items, row)`; `clamp(html)`; `wireFolds()`, `restoreFolds()` | `ui/views/now.js` |
 
-- Write a `<details>` with a `<summary>` that tells what the fold holds.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Fold | The detail | | rule `--rule-2` above; `--sp-10` above |
+| 2 | Summary | What the fold holds | | `--fs-sm`, `--ink-2` |
+| 3 | Marker | `+` when closed, `−` when open | | `--mono`, `--muted` |
+
 - Keep the fold closed, unless the reader came to the page for its content.
-- To keep the state that the reader set, add `data-keep="<key>"` (`wireFolds()`, `restoreFolds()`). To keep it across a redraw, use `recordState()` and `restoreState()`.
-- For a long list, use `moreFold(items, row)`: 10 items, then a fold.
-- For long text, use `clamp(html)`: 3 lines, then Show more.
+- To keep the state that the reader set, add `data-keep="<key>"`. To keep it across a redraw, use `recordState()` and `restoreState()`.
+- For a long list, use `moreFold()`: 10 items, then a fold.
+- For long text, use `clamp()`: 3 lines, then Show more.
 - At the end of a card, put technical details in `details.more` with the summary `Technical details`.
+
+| Do | Don't |
+|---|---|
+| `<summary>12 more</summary>` | `<summary>More</summary>` |
+| a closed fold | an open fold of logs |
 
 ### Text
 
@@ -833,34 +990,50 @@ A disclosure is a fold. It hides detail until the reader opens it.
 
 Markdown shows prose. A code block shows code or output.
 
-**Use:** for prose from a file or a note.
+**Use:** for prose from a file or a note. **Not for:** a command that the reader runs; use the command.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Heading | A heading of the prose | `--sans` `--fs-lg` `--fw-strong` |
-| 2 | Inline code | A name or a value | `--mono` `--fs-xs` |
-| 3 | Code block | Code or output | `--mono` `--fs-xs` on `--sunk`, radius `--r-tag`; scrolls sideways |
-| 4 | Table | A table in the prose | `--fs-xs`, border `--rule` |
+| Helper | Reference |
+|---|---|
+| `md(src)` into `.md`; `codeText(t)` | `ui/views/jobs.js` |
 
-- Make prose with `md()` into `.md`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Heading | A heading of the prose | yes | `--sans` `--fs-lg` `--fw-strong` |
+| 2 | Inline code | A name or a value | yes | `--mono` `--fs-xs` |
+| 3 | Code block | Code or output | yes | `--mono` `--fs-xs` on `--sunk`, radius `--r-tag`; scrolls sideways |
+| 4 | Table | A table in the prose | yes | `--fs-xs`, border `--rule` |
+
+- Keep prose at 80 characters wide or less.
 - For code in a line of text, use `codeText()`.
 - Outside `.md`, a `pre` wraps.
+
+| Do | Don't |
+|---|---|
+| `md(spec)` | prose set as HTML by the view |
+| `codeText("run `bun test`")` | backticks shown as text |
 
 #### Diff
 
 A diff shows the lines that a change adds and deletes.
 
-**Use:** for the change of a job.
+**Use:** for the change of a job. **Not for:** other code; use a code block.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Panel | The diff | `--mono` `--fs-xs` on `--sunk`, border `--rule`, radius `--r-ctl`; 480px high maximum, then scrolls |
-| 2 | Added line | A line that the change adds | `--add` |
-| 3 | Deleted line | A line that the change deletes | `--del` |
-| 4 | Hunk | The place of the change | `--muted` |
+| Helper | Reference |
+|---|---|
+| `diffHtml(text)` into `.diff-panel` | `ui/views/jobs.js` |
 
-- Make the diff with `diffHtml()` into `.diff-panel`.
-- Only colour shows the difference between added and deleted lines (Accessibility).
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Panel | The diff | | `--mono` `--fs-xs` on `--sunk`, border `--rule`, radius `--r-ctl`; 480px high maximum, then scrolls |
+| 2 | Added line | A line that the change adds | | `--add` |
+| 3 | Deleted line | A line that the change deletes | | `--del` |
+| 4 | Hunk | The place of the change | | `--muted` |
+
+- Do not colour a diff line by hand. `diffHtml()` reads the first character of each line.
+
+| Do | Don't |
+|---|---|
+| `diffHtml(patch)` | `--done` and `--stuck` on diff lines |
 
 ### Controls
 
@@ -868,60 +1041,82 @@ A diff shows the lines that a change adds and deletes.
 
 A filter bar is a row of filters over a table.
 
-**Use:** for the filters of one table. Put the filters of the whole page in the page head.
+**Use:** for the filters of one table. **Not for:** the filters of the whole page; put them in the page head.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Label | The name of the filter | `--fs-xs`, `--muted` |
-| 2 | Segmented control | A fixed set of options | `--sans` `--fs-sm`, `--muted`, border `--rule`, radius `--r-ctl`; `--ctl-h` high; scrolls inside itself |
-| 3 | Pressed option | The option in use | `--fw-strong`, `--ink` on `--rule-2` |
-| 4 | Select | Options from the data | `--ctl-h` high |
-| 5 | Search | Text to search for. Optional | on `--sunk`; `--ctl-h` high |
+| Helper | Reference |
+|---|---|
+| `filterBar(groups)`; `searchBox(ui, value, placeholder)` | `ui/views/jobs.js` |
 
-- Make the bar with `filterBar(groups)`. For options from the data, set `data: true` to get a select.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Label | The name of the filter | | `--fs-xs`, `--muted` |
+| 2 | Segmented control | A fixed set of options | | `--sans` `--fs-sm`, `--muted`, border `--rule`, radius `--r-ctl`; `--ctl-h` high; scrolls inside itself |
+| 3 | Pressed option | The option in use | | `--fw-strong`, `--ink` on `--rule-2` |
+| 4 | Select | Options from the data | yes | `--ctl-h` high |
+| 5 | Search | Text to search for | yes | on `--sunk`; `--ctl-h` high |
+
+- For options from the data, set `data: true` to get a select.
 - Make the first option `All`.
 - When a filter changes the data, use `goQuery()`. When it changes only what shows, use `setQuery()`.
-- Make the search field with `searchBox()`.
+
+| Do | Don't |
+|---|---|
+| `All`, `running`, `failed` | no `All`, or `All` last |
 
 #### Pager
 
 A pager shows the rows after the first 50.
 
-**Use:** under a table of more than 50 rows.
+**Use:** under a table of more than 50 rows. **Not for:** a short list; use `moreFold()`.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Button | `Show 50 more` | the button |
-| 2 | Count | `50 of 345` | `--num` `--fs-xs` `--fw-mid` tabular, `--muted` |
+| Helper | Reference |
+|---|---|
+| `pager(shown, total)`; `limitOf()`; `pagedTable()` | `ui/views/issues.js` |
 
-- Make the pager with `pager(shown, total)`.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Button | `Show 50 more` | | the button |
+| 2 | Count | `50 of 345` | | `--num` `--fs-xs` `--fw-mid` tabular, `--muted` |
+
 - Keep the limit in the address with `limitOf()`. To show the rows in place, use `pagedTable()`.
+
+| Do | Don't |
+|---|---|
+| `Show 50 more` with `50 of 345` | page numbers |
 
 #### Empty state
 
 An empty state shows that there is nothing, that data loads, or that the data did not load.
 
-**Use:** in place of a table, a chart or a list that has nothing to show.
+**Use:** in place of a table, a chart or a list that has nothing to show. **Not for:** the result of an action; use the form message.
 
-| # | Part | Holds | Style |
-|---|---|---|---|
-| 1 | Line | What is not there, in one sentence | `--ink`; an error `--stuck` |
-| 2 | Hint | What to do | `--fs-sm`, `--muted` |
-| 3 | Loading | `Loading <title>…` | `--muted` |
+| Helper | Reference |
+|---|---|
+| `empty(line, hint)`, `loading(title)`, `error(line, hint)` | `ui/views/jobs.js` |
 
-- Make the empty state with `empty(line, hint)`. Keep the card around it.
-- Make the loading line with `loading(title)`.
-- Make a failure with `error(line, hint)`. The hint tells the reader what to do.
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Line | What is not there, in one sentence | | `--ink`; an error `--stuck` |
+| 2 | Hint | What to do | yes | `--fs-sm`, `--muted` |
+| 3 | Loading | `Loading <title>…` | | `--muted` |
+
+- `loading()` fills the page. Use it only while the page loads.
+- Give `error()` a hint that tells the reader what to do. With no hint, it tells the reader to check aleph-ui and reload.
+
+| Do | Don't |
+|---|---|
+| `empty("No job matches.", "Widen the window or clear a filter.")` | `<p class="quiet">No data</p>` |
+| `error("The agents did not load.")` | `Error: fetch failed` |
 
 ## States
 
-- **Focus:** a `2px solid var(--focus)` ring, 2px outside a control.
-- **Hover:** a border goes to `--ink-2`, or text to `--ink`; rows and nav items go to `--sunk`.
-- **Pressed:** `aria-pressed="true"`, drawn `--raised` or `--sunk`.
-- **Disabled:** 60% opacity and a wait cursor.
-- **Active:** a command box moves 1px down.
-
-### Focus offset
+| State | Rule |
+|---|---|
+| Focus | a `2px solid var(--focus)` ring, 2px outside the control, on `:focus-visible` |
+| Hover | a border goes to `--ink-2`, or text to `--ink`; rows and nav items go to `--sunk` |
+| Pressed | `aria-pressed="true"`, drawn `--raised` or `--sunk` |
+| Disabled | opacity `--dim` and a wait cursor, while a request runs |
+| Active | a command box moves 1px down |
 
 | Do | Don't |
 |---|---|
@@ -934,16 +1129,16 @@ An empty state shows that there is nothing, that data loads, or that the data di
 |---|---|
 | Sidebar | `#nav`, 48px when collapsed (`.shell.collapsed`) |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
-| Grid | `.tiles` holds metric cards; `.lanes` is 3 columns, 2 under 760px, 1 under 480px |
-| Phone | 720px; tables scroll in `.tscroll` |
+| Grid | `.tiles` holds metric cards; `.lanes` holds lanes; `.trio` holds chart panels |
 
-- **Skeleton:** `crumb()` on a detail page, `pageHead()`, then `card()` sections.
+- **List page:** page head, metric cards, then cards.
+- **Detail page:** crumb, page head, status row, KPI strip, then detail panels.
 
 ## Accessibility
 
-- Contrast: see Colour.
+- Contrast: see Colour, Contrast.
 - Bar tones and diff colours rely on colour alone.
-- `aria-sort` on sort headers, `aria-pressed` on selector cards.
+- `aria-sort` on sort headers, `aria-pressed` on selector cards and segmented options.
 
 ## Deviations
 
