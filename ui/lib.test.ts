@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -427,3 +427,12 @@ test("keep stores JSON under aleph.<key>, kept reads it back, and with no storag
   } finally { delete g.localStorage; }
 });
 
+
+test("fold() writes a details element with its class, keep key and open state", () => {
+  expect(fold("<b>S</b>", "<p>B</p>")).toBe("<details><summary><b>S</b></summary><p>B</p></details>");
+  expect(fold("Technical details", "x", { open: true, keep: "k1", cls: "more" })).toBe('<details class="more" data-keep="k1" open><summary>Technical details</summary>x</details>');
+});
+
+test("linkButton() is a link with the act class, its label and href escaped", () => {
+  expect(linkButton("A & B", "#/issues?q=1&p=2")).toBe('<a class="act" href="#/issues?q=1&amp;p=2">A &amp; B</a>');
+});

@@ -427,7 +427,7 @@ The status row shows the state of the item on a detail page.
 
 | Do | Don't |
 |---|---|
-| `badge("running")`, `priorityBadge("high")`, `chips(["ui"])` | the state as words in a sentence |
+| `statusRow(badge("running"), priorityBadge("high"), chips(["ui"]))` | the state as words in a sentence |
 
 #### Fact list
 
@@ -509,7 +509,8 @@ A table shows items that have the same columns.
 | 6 | Row | One item | | `--sunk` on hover |
 | 7 | Row actions | The buttons of the row | yes | the row actions |
 
-- Put the columns in this order: time, id or name, title, state, project, labels, numbers.
+- Put the columns in this order: id or name, title, state, priority, project, labels, then times, then numbers.
+- Put each time and each number at the right of the row. Align a number to the right.
 - Name the time column for the time it shows. Format it with `when()`.
 - Make an id with `idLink()` or `repoIdLink()`, a state with `badge()`, and labels with `chips()`.
 - Put the title in `td.wide`. Do not let other cells wrap.
@@ -879,7 +880,7 @@ A link button goes to another page. It looks like a button.
 
 | Helper | Reference |
 |---|---|
-| none yet (Deviations): `<a class="act" href="…">` | `ui/views/jobs.js` |
+| `linkButton(label, href)` | `ui/views/kit.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -889,7 +890,7 @@ A link button goes to another page. It looks like a button.
 
 | Do | Don't |
 |---|---|
-| `<a class="act" href="#/issues/1700">Issue</a>` | a `<button>` that sets `location` |
+| `linkButton("Issue", "#/issues/1700")` | a `<button>` that sets `location` |
 
 #### Link
 
@@ -1013,7 +1014,7 @@ A disclosure is a fold. It hides detail until the reader opens it.
 
 | Helper | Reference |
 |---|---|
-| `<details>` with a `<summary>`; `moreFold(items, row)`; `clamp(html)`; `wireFolds()`, `restoreFolds()` | `ui/views/now.js` |
+| `fold(summary, body, { open, keep, cls })`; `moreFold(items, row)`; `clamp(html)`; `wireFolds()`, `restoreFolds()` | `ui/views/kit.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1022,10 +1023,10 @@ A disclosure is a fold. It hides detail until the reader opens it.
 | 3 | Marker | `+` when closed, `−` when open | | `--mono`, `--muted` |
 
 - Keep the fold closed, unless the reader came to the page for its content.
-- The router keeps open folds across a refresh. To keep a fold's state across page loads too, add `data-keep="<key>"`.
+- The router keeps open folds across a refresh. To keep a fold's state across page loads too, pass `keep`.
 - For a long list, use `moreFold()`: 10 items, then a fold.
 - For long text, use `clamp()`: 3 lines, then Show more.
-- At the end of a card, put technical details in `details.more` with the summary `Technical details`.
+- At the end of a card, put technical details in `fold("Technical details", body, { cls: "more" })`.
 
 | Do | Don't |
 |---|---|
@@ -1230,7 +1231,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
 | Sections built from `sectionHead()` with no card box | `ui/views/gates.js` (7), `ui/views/memory.js` (5), `ui/views/now.js` (4) | follow-up |
 | Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
-| Folds written by hand: `details.more` 4 times, about 12 bare `<details>`; no helper | `ui/views/cards.js`, `ui/views/now.js`, `ui/views/sessions.js` | follow-up |
+| Folds written by hand: `details.more` 4 times, about 12 bare `<details>`; `fold()` not used | `ui/views/cards.js`, `ui/views/now.js`, `ui/views/sessions.js` | aleph-1857 |
 | Empty, loading and error lines written inline | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/session.js`, `ui/views/ideas.js` | follow-up |
 | Monitor findings built three ways; a feed row and a timeline event copied | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/issues.js` | follow-up |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
@@ -1243,7 +1244,8 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
-| No helper for the link button | `ui/views/jobs.js`, `ui/views/issues.js`, `ui/views/memory.js` | follow-up |
+| Link buttons written by hand; `linkButton()` not used | `ui/views/jobs.js`, `ui/views/issues.js`, `ui/views/memory.js` | aleph-1856 |
+| Tables put the time column first | Tables | aleph-1854 |
 | Two `act()` wrappers with different signatures; `shell()` has no callers | `ui/views/cards.js`, `ui/views/memory.js` | follow-up |
 | A metric card's second value hides at phone width, so `v` shows with a `q` that names two values | `ui/app.css` | review on `#/kit` |
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |

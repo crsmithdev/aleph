@@ -686,10 +686,14 @@ export const sentence = (t) => t[0] + t.slice(1).toLowerCase();
 /** Long text, clamped, with a button that opens and closes it. `html` is HTML. */
 export const clamp = (html) => `<div class="clamp">${html}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button>`;
 
+/** A fold: `summary` and `body` are HTML. `keep` keeps its open state across page loads; `cls` is the fold's class, as `more` for technical details. */
+export const fold = (summary, body, { open = false, keep = "", cls = "" } = {}) =>
+  `<details${cls ? ` class="${esc(cls)}"` : ""}${keep ? ` data-keep="${esc(keep)}"` : ""}${open ? " open" : ""}><summary>${summary}</summary>${body}</details>`;
+
 /** The first `n` rows of a list; the rest sit under a "N more" fold. `row` returns the HTML inside one `<li>`. */
 export const moreFold = (items, row, n = 10) => {
   const ul = (xs) => `<ul class="tight">${xs.map((x) => `<li>${row(x)}</li>`).join("")}</ul>`;
-  return ul(items.slice(0, n)) + (items.length > n ? `<details><summary>${items.length - n} more</summary>${ul(items.slice(n))}</details>` : "");
+  return ul(items.slice(0, n)) + (items.length > n ? fold(`${items.length - n} more`, ul(items.slice(n))) : "");
 };
 
 if (typeof document !== "undefined") {
@@ -721,6 +725,9 @@ export function say(el, text) {
 export const actButton = (label, data = {}, o = {}) =>
   `<button class="act${o.primary ? " primary" : ""}${o.cls ? ` ${o.cls}` : ""}" type="${o.type ?? "button"}"` +
   Object.entries(data).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("") + `>${esc(label)}</button>`;
+
+/** A link that looks like a button, to another page: navigation only. `label` names the page. */
+export const linkButton = (label, href) => `<a class="act" href="${esc(href)}">${esc(label)}</a>`;
 
 /** Text with its `code` spans set as code, escaped. */
 export const codeText = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
