@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -151,8 +151,8 @@ export function filterRows(rows, o = {}, skip = []) {
   });
 }
 
-// Column order: id, title, time, state badge, project, labels, numbers. [key, label, { num }]
-export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Jobs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }], ["updated", "Updated", { num: true }]];
+// Column order: id, title, state badge, priority, project, labels, numbers, then time. [key, label, { num }]
+export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["priority", "Priority"], ["project", "Project"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Jobs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }], ["updated", "Updated", { num: true }]];
 const RANK = { critical: 4, high: 3, medium: 2, low: 1 };
 const SORT = {
   project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => updatedMs(r),
@@ -188,7 +188,7 @@ export function renderRow(r, { fold, sub } = {}) {
   const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
   return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td>${idLink(shortText(`${r.repo}-${r.n}`), r.href)}</td>` +
     `<td class="wide">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
-    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${priorityBadge(r.priority)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
+    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td><td>${esc(r.project)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
     `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td><td class="time">${esc(updatedText(r))}</td></tr>`;
 }
 
@@ -341,7 +341,7 @@ const TOP_RUNS = 10;
 function renderDetail(rows, o) {
   if (o.tile === "runs") {
     const top = [...rows].filter((r) => !r.part && r.runs > 0).sort((a, b) => b.runs - a.runs).slice(0, TOP_RUNS), max = top[0]?.runs ?? 1;
-    return card("Issues by Jobs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a job."), { label: "Issues by jobs" });
+    return card("Issues by Jobs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a job.", "Jobs appear here once the factory runs an issue."), { label: "Issues by jobs" });
   }
   return "";
 }
@@ -441,15 +441,16 @@ export async function mount(root, d) {
 
 function renderForm(rows, o = {}) {
   const repos = [...new Set(rows.map((r) => r.repo))];
-  return fold("File an issue", `<form data-ui="issue-form" class="stack">` +
-    `<label>Project <select name="repo" required>${projectOptions(o.keys ?? repos, o.project)}</select></label>` +
-    `<label>Title <input name="title" required></label>` +
-    `<label>Text <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
-    `<label>Media ${mediaInput}</label>` +
-    `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
-    `<label><input type="checkbox" name="spec"> The text is a spec: build it in the factory</label>` +
-    `<label>After <input name="after" placeholder="repo-n, repo-n.k"></label>` +
-    `${actButton("File issue", {}, { primary: true, type: "submit" })} <span class="act-msg" role="status"></span></form>`, { cls: "new" });
+  const area = `<textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea>`;
+  return card("File an Issue", fold("Open the form", formOf("issue-form", [
+    field("Project", selectBox("Project", "repo", o.keys ?? repos, o.project, { attrs: " required" })),
+    field("Title", inputBox("title", "", { attrs: " required" })),
+    field("Text", area),
+    field("Media", mediaInput),
+    field("Labels", inputBox("labels", "", { attrs: ' placeholder="comma separated"' })),
+    field("The text is a spec: build it in the factory", `<input type="checkbox" name="spec">`, { check: true }),
+    field("After", inputBox("after", "", { attrs: ' placeholder="repo-n, repo-n.k"' })),
+  ], "File issue"), { cls: "new" }), { label: "File an issue" });
 }
 
 export function renderIssues(d, o = {}) {
@@ -469,17 +470,15 @@ export const description = (body) => String(body ?? "").replace(/^\s*## Request[
 const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]+\.md)/g, (m, f) => (files.includes(f) ? `<a href="#/specs/${encodeURIComponent(repo)}/${encodeURIComponent(f)}">${m}</a>` : m));
 
 const PRIORITIES = ["critical", "high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory", "agent"];
-const choose = (name, all, cur) => `<select name="${name}" ${FORM} aria-label="${name}">${(all.includes(cur) || !cur ? all : [cur, ...all]).map((o) => `<option${o === cur ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+const choose = (name, all, cur) => selectBox(name, name, !cur || all.includes(cur) ? all : [cur, ...all], cur, { attrs: ` ${FORM}` });
 
-/** One value and its editor in one place: edit mode shows the editor. The controls join the form in the head by `form=`. */
-const editable = (shown, editor) => `<span class="view-only">${shown}</span><span class="edit-only">${editor}</span>`;
 const FORM = 'form="issue-edit"';
 
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
 const issueHead = (d, ref) => pageHead(d.title, { cls: "view-only",
   after: `<input class="edit-only title-edit" name="title" ${FORM} required aria-label="Title" value="${esc(d.title)}">`,
-  aside: actButton("Edit", { edit: "start" }, { cls: "view-only" }) +
-  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="act-msg" role="status"></span> ${actButton("Cancel", { edit: "cancel" })} ${actButton("Save", {}, { primary: true, type: "submit" })}</form>` });
+  aside: actButton("Edit", { editor: "start" }, { cls: "view-only" }) +
+  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="act-msg" role="status"></span> ${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true, type: "submit" })}</form>` });
 
 /** The form that appends a note. */
 /** The file input of the media forms: paste or drop onto its form adds to it too. */
@@ -491,7 +490,7 @@ function renderMedia(d, ref) {
   const items = (d.media ?? []).map((name) => /\.pdf$/i.test(name)
     ? `<li><a class="media-doc" href="${url(name)}" target="_blank" rel="noopener">${esc(name)}</a></li>`
     : `<li><a href="${url(name)}" target="_blank" rel="noopener"><img src="${url(name)}" alt="${esc(name)}" loading="lazy"></a></li>`).join("");
-  return (items ? `<ul class="media-grid">${items}</ul>` : empty("No media.")) +
+  return (items ? `<ul class="media-grid">${items}</ul>` : "") +
     `<form data-ui="issue-media" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
     `<label>Attach images or PDFs ${mediaInput}</label>` +
     `${actButton("Attach", {}, { type: "submit" })} <span class="act-msg" role="status"></span></form>`;
@@ -621,8 +620,8 @@ export function renderIssue(d) {
   const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`)).join("");
   const pills = statusRow(d.derived ? badge(d.derived.stage) : badge(d.status), priorityBadge(priority), `${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(shortText(`${d.repo}-${ref}`))}</span>`);
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
-    `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
-    `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;
+    field("Priority", choose("priority", PRIORITIES, priority)) + field("Source", choose("source", SOURCES, source)) +
+    field("Areas", inputBox("areas", areas.join(", "), { attrs: ` ${FORM} aria-label="areas" placeholder="comma separated"` })) + `</div></section>`;
   const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
   const partList = d.goals ?? [];
   const part = (id, title, name, text) => (text || !partList.length
@@ -634,19 +633,19 @@ export function renderIssue(d) {
   };
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
   const machineNotes = folded.length ? fold(`${folded.length} machine ${folded.length === 1 ? "note" : "notes"}`, `<ul class="notes">${folded.map(noteRow).join("")}</ul>`, { cls: "notes-fold" }) : "";
-  const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + machineNotes : empty("No notes.")) + renderNoteForm(d, ref);
+  const notes = (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + machineNotes + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
     ? pagedTable(heads(["Commit", "Subject", ...(parts ? ["Sub-issue"] : []), "Committed"], ["Committed"]), d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
       return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(shortText(c.part), issueHref(c.part)) : ""}</td>` : ""}<td class="time">${esc(when(c.date))}</td></tr>`;
     }))
-    : empty("No commit on main names this issue in its trailers.");
+    : "";
   const segments = issueSegments(d);
-  return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askCard(d.ask) : "") +
+  return `<div class="page dp-page issue-page editable">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askCard(d.ask) : "") +
     issueKpis(d, segments) + renderTimeline(segments) +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
-    `<div class="dp-detail">${detailPanel("Media", esc((d.media ?? []).length), renderMedia(d, ref))}${detailPanel("Notes", esc(d.notes.length), notes)}${detailPanel("Commits", esc(d.commits.length), commits)}</div></div>`;
+    `<div class="dp-detail">${detailPanel("Media", esc((d.media ?? []).length), renderMedia(d, ref))}${detailPanel("Notes", esc(d.notes.length), notes)}${commits && detailPanel("Commits", esc(d.commits.length), commits)}</div></div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
@@ -670,15 +669,6 @@ if (typeof document !== "undefined") {
     if (e.target.matches?.('#inv-filters input[name="group"]')) { keep("issues.group", e.target.checked); return refill(); }
     const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
     if (f) { remember(f.name, f.value); setQuery({ [f.name]: f.value, limit: "" }); }
-  });
-  // Edit mode: the page shows the editors in place of the values; Cancel puts the saved values back.
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest && e.target.closest("[data-edit]");
-    if (!b) return;
-    const page = b.closest(".issue-page"), start = b.dataset.edit === "start";
-    if (!start) page.querySelector("#issue-edit").reset();
-    page.classList.toggle("editing", start);
-    if (start) page.querySelector(".title-edit").focus();
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target.closest && e.target.closest('form[data-ui="issue-edit"], form[data-ui="issue-note"]');
@@ -741,5 +731,7 @@ export const issueView = {
   group: "factory",
   api: (params) => issueApi(params.repo, params.n),
   render: renderIssue,
+  // On the page itself, not the shell's container, which outlives the page.
+  mount: (root) => root.querySelector(".issue-page") && wireEdit(root.querySelector(".issue-page")),
 };
 export const views = [view, issueView];

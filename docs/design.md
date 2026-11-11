@@ -1312,7 +1312,7 @@ An edit toggle turns a value into its editor in the same place. The reader click
 | 3 | Editor | The control for the value, in `.edit-only` | | hidden until editing |
 | 4 | Buttons | Edit (`data-editor="start"`, `.view-only`); Cancel (`data-editor="cancel"`) and Save (`primary`, a submit button), both `.edit-only` | | as a button |
 
-- `wireEdit(root)` toggles `.editing` on a click of a button with `data-editor`. Cancel resets the forms inside the container.  The Issue page still has its own handler on `data-edit`; use `data-editor` until it moves onto this.
+- `wireEdit(root)` toggles `.editing` on a click of a button with `data-editor`. Cancel resets the forms inside the container.
 - A control in `.edit-only` that sits apart from its form joins it with `form="id"`.
 - Save posts the form. Show a failure with `say()` and leave edit mode open. A success reloads the page, which drops edit mode.
 
@@ -1455,7 +1455,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |
 | A selected row is drawn three ways: `.mrow` (`--raised`, `--run` border), `tr.nrow` (inset `--run` bar), the nav (inset `--ink` bar) | `ui/app.css` | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
-| `now.js` scrolls smoothly without the reduced-motion check | `ui/views/now.js` | follow-up |
 | The Memory search field is 44px high and `--fs-lg`; every other page uses the one `searchBox()` size | `.memory .msearch` in `ui/app.css` | follow-up |
 | Settings and forms written by hand: a form in a table cell, a select in a table cell, a hand-built armed button | `ui/views/gates.js`, `ui/views/factory-agents.js`, `ui/views/memory.js` | aleph-1891 (pending) |
 

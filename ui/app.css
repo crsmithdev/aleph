@@ -937,6 +937,7 @@ table.tbl td.eff { white-space: normal; min-width: 22ch; }
 .mrow .core { color: var(--run); }
 .mrows.tl { border-left: 2px solid var(--rule); padding-left: var(--sp-12); }
 .mrows.tl .mev { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-10); }
+.mrows .mrow[hidden] { display: none; }
 .ins .mtype { margin: 0; font-size: var(--fs-xs); color: var(--muted); }
 .ins h4 { margin: var(--sp-14) 0 var(--sp-6); font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: var(--ls-caps); }
 .ins .mreach { margin-top: var(--sp-10); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-ctl); background: var(--sunk); }
@@ -960,7 +961,7 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 .dp-ph { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-6) var(--sp-12); padding: var(--sp-14) var(--sp-18) var(--sp-4); }
 .dp-ph h2 { margin: 0; font: var(--fw-strong) var(--fs-lg)/1.3 var(--sans); }
 .dp-prose { padding-bottom: var(--sp-14); }
-.dp-prose > .md, .dp-prose > textarea { padding: var(--sp-4) var(--sp-18) 0; max-width: 80ch; }
+.dp-prose > .md, .dp-prose > textarea { padding: var(--sp-4) var(--sp-18) 0; max-width: 80ch; overflow-wrap: anywhere; }
 .dp-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-12) var(--sp-18); padding: var(--sp-14) var(--sp-18) 0; }
 .dp-fields label { display: flex; flex-direction: column; gap: var(--sp-4); font-size: var(--fs-xs); color: var(--muted); }
 .dp-body ul.notes { list-style: none; margin: 0; padding: 0; }

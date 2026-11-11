@@ -169,7 +169,7 @@ describe("the timeline panel", () => {
   });
 
   test("the Issue page puts the KPIs, then the Timeline, then the Description, then Notes and Commits", () => {
-    const page = renderIssue({ ...issue({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() } }), title: "t", labels: [], priority: "low", specs: [], request: "r", derived: null });
+    const page = renderIssue({ ...issue({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() } }), title: "t", labels: [], priority: "low", specs: [], request: "r", derived: null, commits: [{ hash: "abcdef0123", subject: "s", date: "2026-11-02T09:00:00Z" }] });
     const at = (t: string) => page.indexOf(t);
     expect(at("dp-kpis")).toBeGreaterThan(-1);
     expect(at("dp-kpis")).toBeLessThan(at('id="h-timeline"'));

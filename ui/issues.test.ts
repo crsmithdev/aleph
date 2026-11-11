@@ -144,7 +144,7 @@ describe("GET /api/issues", () => {
     try {
       const h = v.renderIssue(d);
       expect(h.match(/<header class="ph">/g)).toHaveLength(1);
-      expect(h).toContain(`<!--pageHead--><header class="ph"><h1 class="view-only">${d.title}</h1><input class="edit-only title-edit" name="title" form="issue-edit" required aria-label="Title" value="${d.title}"><div class="aside"><button class="act view-only" type="button" data-edit="start">Edit</button>`);
+      expect(h).toContain(`<!--pageHead--><header class="ph"><h1 class="view-only">${d.title}</h1><input class="edit-only title-edit" name="title" form="issue-edit" required aria-label="Title" value="${d.title}"><div class="aside"><button class="act view-only" type="button" data-editor="start">Edit</button>`);
     } finally {
       mock.module("./lib.js", () => real);
     }
@@ -262,7 +262,7 @@ describe("views", () => {
     expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('key="issues/backlog"'));
     expect(h.indexOf('key="issues/backlog"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
-    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age", "updated"]);
+    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "priority", "project", "labels", "notes", "runs", "cost", "age", "updated"]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
   });
 
@@ -846,9 +846,9 @@ describe("the Issue page shows the ask row", () => {
     expect(h).toContain(`<tr><td><code>abcdef1</code></td><td class="wide" title="s">s</td><td class="time">${when(date)}</td></tr>`);
   });
 
-  test("renderIssue shows empty() for no commits and pages the Commits table at 50", async () => {
+  test("renderIssue leaves the Commits panel out for no commits and pages the Commits table at 50", async () => {
     const d = await getJson(`/api/issues/fac-1`);
-    expect(v.renderIssue({ ...d, commits: [] })).toContain("No commit on main names this issue");
+    expect(v.renderIssue({ ...d, commits: [] })).not.toContain("<span>Commits<\/span>");
     const commits = Array.from({ length: 51 }, (_, i) => ({ hash: `abcdef${i}0000`, subject: `s${i}`, date: "2026-11-02T09:00:00Z" }));
     expect(v.renderIssue({ ...d, commits })).toContain("50 of 51");
   });

@@ -131,8 +131,8 @@ describe("the Issue page", () => {
     expect(html).not.toContain(base.derived.why);
     expect(html).not.toContain("<h2>Request</h2>");
     // Edit mode: each value and its editor sit in one place, and the controls belong to the one form.
-    expect(html).toContain('data-edit="start"');
-    for (const name of ["title", "priority", "source", "areas", "request"]) expect(html).toMatch(new RegExp(`name="${name}" form="issue-edit"`));
+    expect(html).toContain('data-editor="start"');
+    for (const name of ["title", "priority", "source", "areas", "request"]) expect(html).toMatch(new RegExp(`name="${name}"[^>]* form="issue-edit"`));
     expect(html).not.toContain("<summary>Edit</summary>");
   });
 

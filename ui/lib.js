@@ -322,7 +322,7 @@ const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint pr
 export const tone = (state) => TONES[state] ?? "quiet";
 
 // The CSS for these is in app.css (.ph, table.tbl, .idl, .chips, .fbar, .seg, .pager).
-// Column order for every table: id or name, title, time, state badge, project, labels, numbers.
+// Column order for every table: id or name, title, state badge, priority, project, labels, numbers, then time.
 
 /** The page header: the serif title (none when `title` is empty), a muted count, and an optional right-hand aside (`aside` is HTML); `head` adds a class to the header. */
 export const pageHead = (title, { count, aside = "", cls = "", after = "", head = "" } = {}) =>

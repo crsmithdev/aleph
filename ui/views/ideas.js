@@ -1,6 +1,6 @@
 // The Ideas views: the list at #/ideas (/api/ideas) and one idea at #/ideas/:slug (/api/ideas/:slug) with a tab for
 // the write-up, one per lens and the log. A lens result is shown from the lens file route in a sandboxed iframe.
-import { actButton, badge, crumb, dataTable, day, empty, error, esc, filterBar, goQuery, heads, kept, keep, loadingLine, md, money, pageHead, postJson, say, seg, when } from "../lib.js";
+import { actButton, badge, card, crumb, dataTable, day, empty, error, esc, filterBar, goQuery, heads, kept, keep, loadingLine, md, money, pageHead, postJson, say, tabs, when, wireTabs } from "../lib.js";
 import { issueHref } from "../../lib/naming.ts";
 import { redraw } from "../router.js";
 
@@ -16,7 +16,7 @@ export function renderIdeas(rows, status) {
     ? dataTable(heads(["Idea", "Status", "Target", "Lenses", "Open Questions", "Spent", "Last Change"], ["Open Questions", "Spent", "Last Change"]),
       rows.map((r) => `<tr><td class="wide" title="${esc(r.title)}"><a href="${href(r.slug)}">${esc(r.title)}</a></td><td>${badge(r.status)}</td><td>${esc(target(r.target))}</td><td>${esc(r.lenses.join(", ") || "–")}</td><td class="num">${r.questions}</td><td class="num">${money(r.spent)}</td><td class="time">${esc(day(local(r.last)))}</td></tr>`).join(""))
     : empty(`No ${status} ideas.`, "Add one with <code>aleph idea add</code>.");
-  return `<div class="page">${pageHead("Ideas", { count: rows.length })}${filterBar([{ label: "Status", name: "status", options: STATUSES, value: status }])}${table}</div>`;
+  return `<div class="page">${pageHead("Ideas", { count: rows.length })}${filterBar([{ label: "Status", name: "status", options: STATUSES, value: status }])}${card("Ideas", table, { count: rows.length })}</div>`;
 }
 
 export const view = {
@@ -44,12 +44,12 @@ export function renderIdea(d) {
   for (const [n, seen] of pending) { if (running.has(n)) pending.set(n, true); else if (seen) pending.delete(n); }
   const now = new Set([...running, ...pending.keys()]);
   const tab = kept(`idea-tab:${d.slug}`, "writeup");
-  const tabs = [["writeup", "Write-up"], ...LENS_TABS, ["log", "Log"]];
+  const items = [["writeup", "Write-up"], ...LENS_TABS, ["log", "Log"]];
   const lens = ([id, label]) => {
     const all = d.lenses.filter((l) => l.lens === id);
     const url = (l) => `/api/ideas/${encodeURIComponent(d.slug)}/${l.file}`;
     const newest = all[0];
-    const body = !newest ? empty(`No ${label} result yet.`)
+    const body = !newest ? empty(`No ${label} result yet.`, "Queue a job to get one.")
       : newest.file.endsWith(".md") ? `<div class="md" data-src="${esc(url(newest))}">${loadingLine("the result")}</div>`
       : `<iframe class="lens-frame" sandbox title="${esc(label)}" src="${esc(url(newest))}"></iframe>`;
     const older = all.slice(1).map((l) => `<li><a href="${esc(url(l))}" target="_blank">${esc(when(local(l.at)))}</a></li>`).join("");
@@ -63,8 +63,7 @@ export function renderIdea(d) {
   const built = (d.built ?? []).map((r) => `<a href="${esc(issueHref(r))}">${esc(r)}</a>`).join(" ");
   return `<div class="page">${crumb("#/ideas", [["ideas", "#/ideas"], [d.slug]])}` +
     pageHead(d.title, { aside: `${esc(target(d.target))} ${badge(d.status)}${built ? ` · ${built}` : ""} ${actButton("Build", { build: "1" }, { primary: true })}` }) +
-    seg("Idea tabs", tabs.map(([id, label]) => ({ label, on: id === tab, attrs: ` data-tab="${id}"` }))) +
-    tabs.map(([id]) => `<section data-pane="${id}"${id === tab ? "" : " hidden"}>${panes[id]}</section>`).join("") + "</div>";
+    tabs("Idea tabs", items, panes, tab) + "</div>";
 }
 
 export const ideaView = {
@@ -79,9 +78,8 @@ export const ideaView = {
       fetch(el.dataset.src).then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${el.dataset.src} answered ${r.status}`))))
         .then((t) => { el.innerHTML = md(t); }, (err) => { el.innerHTML = error(err.message); });
     }
+    wireTabs(root.querySelector(".page"), (id) => keep(`idea-tab:${d.slug}`, id));
     root.onclick = async (e) => {
-      const t = e.target.closest("button[data-tab]");
-      if (t) { keep(`idea-tab:${d.slug}`, t.dataset.tab); redraw(); return; }
       const q = e.target.closest("button[data-lens]");
       if (q) {
         try {

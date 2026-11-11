@@ -248,7 +248,7 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   expect(h).not.toContain("mhist");
   expect(h).not.toContain("<i title=");
   expect(v.recallFrame(hist).rows.map((r: any) => r.recalls)).toEqual(hist);
-  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain(empty("No recall in the last 30 days."));
+  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain(empty("No recall in the last 30 days.", "A note shows here once recall returns it."));
 });
 
 test("/api/memory lint gives no stale finding to an old note that the read log shows read lately", async () => {
@@ -337,8 +337,9 @@ test("the page is the search, the freshness filter, seven type tiles, the result
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
   const none = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "x", links: [], backlinks: [] });
-  expect(none.match(/<div class="empty"><p>None\.<\/p><\/div>/g)).toHaveLength(2);
-  expect(nh).toContain('<section class="card" id="links"');
+  expect(none).not.toContain('id="links"');
+  expect(none).not.toContain('id="backlinks"');
+  expect(nh).not.toContain('id="links"');
   expect(nh).toContain('<section class="card" id="backlinks"');
   expect(nh).toMatch(/id="h-backlinks">Linked from<\/h2><span class="count">1<\/span>/);
 });

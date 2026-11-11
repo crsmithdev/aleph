@@ -4,7 +4,7 @@
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
 import { panelOf } from "../chart.js";
-import { actButton, fold, linkButton, codeText, dataTable, heads, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { actButton, fold, linkButton, codeText, facts, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -97,12 +97,12 @@ const eventRow = (it, o) => `<li class="mrow mev" ${sel(it, o)}><span class="tim
 const cardRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${titleLink(it)}${it.priority ? ` ${priorityBadge(it.priority)}` : ""}</b><span class="quiet">${esc([it.scope, it.at && ago(it.at)].filter(Boolean).join(" · "))}</span></div><p>${codeText(it.text)}</p><p class="mm eff">${esc(it.effect)}</p></li>`;
 
 /** Rows past STEP start hidden; the pager in `.mem-page` shows more. */
-const hide = (rows) => rows.map((r, i) => (i < STEP ? r : r.replace(/^<(li|tr) /, "<$1 hidden "))).join("");
+const hide = (rows) => rows.map((r, i) => (i < STEP ? r : r.replace(/^<li /, "<li hidden "))).join("");
 const list = (rows, cls = "") => `<div class="mem-page"><ul class="mrows${cls}">${hide(rows)}</ul>${pager(Math.min(STEP, rows.length), rows.length, STEP)}</div>`;
 
 const LAYOUT = {
   semantic: (xs, o) => list(xs.map((it) => noteRow(it, o))),
-  procedural: (xs, o) => `<div class="mem-page">${dataTable(heads(["Source", "What it says", "Loaded when", "Changed"]), hide(xs.map((it) => ruleRow(it, o))))}${pager(Math.min(STEP, xs.length), xs.length, STEP)}</div>`,
+  procedural: (xs, o) => pagedTable(heads(["Source", "What it says", "Loaded when", "Changed"]), xs.map((it) => ruleRow(it, o)), STEP),
   episodic: (xs, o) => list([...xs].sort((a, b) => String(b.at).localeCompare(String(a.at))).map((it) => eventRow(it, o)), " tl"),
   working: (xs, o) => list(xs.map((it) => cardRow(it, o))),
   prospective: (xs, o) => list(xs.map((it) => cardRow(it, o))),
@@ -129,7 +129,7 @@ export const recallFrame = (hist = []) => ({
 });
 
 /** The chart panel of a note's recalls (`inspect` sets its frame), or the line that there were none. */
-const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : `<h4>Recall history, 30 days</h4>${empty("No recall in the last 30 days.")}`;
+const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : `<h4>Recall history, 30 days</h4>${empty("No recall in the last 30 days.", "A note shows here once recall returns it.")}`;
 
 const why = `<input class="mwhy" name="why" placeholder="Why (optional)" aria-label="Why">`;
 // `data-mact`, not `data-act`: router.js runs its own command for every `button.act[data-act]`.
@@ -169,8 +169,8 @@ export function renderInspector(it, n = null, status = "", hist = []) {
   const [claim, ...rest] = (n?.body ?? "").trim().split(/\n\s*\n/);
   const what = n ? `<article class="note">${md(claim)}</article>${rest.length ? `${fold("The whole note", `<article class="note">${md(rest.join("\n\n"))}</article>`, { cls: "fold" })}` : ""}` : `<p>${codeText(it.text)}</p>`;
   const reach = `<div class="mreach"><h4>How it reaches the agent</h4><p>${esc(it.effect)}</p>${n ? coreForm(n) : ""}</div>`;
-  const facts = `<dl class="facts">${[["Written", it.at ? esc(shortDay(it.at)) : "–"], ...(it.source === "note" ? [["Last recalled", it.read ? esc(shortDay(it.read)) : "never"], ["Confidence", esc(fm.confidence ?? "–")]] : [["Scope", esc(it.scope || "all")]])].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
-  return `${head}${what}${reach}${facts}${it.source === "note" ? recallHistory(hist) : ""}${n ? links(n) : ""}${actions(it)}` +
+  const rows = facts([["Written", it.at && esc(shortDay(it.at))], ...(it.source === "note" ? [["Last recalled", it.read ? esc(shortDay(it.read)) : "never"], ["Confidence", esc(fm.confidence ?? "")]] : [["Scope", esc(it.scope || "all")]])]);
+  return `${head}${what}${reach}${rows}${it.source === "note" ? recallHistory(hist) : ""}${n ? links(n) : ""}${actions(it)}` +
     (n ? `<p class="hint"><code>${esc(n.path)}</code></p>` : "") + `<div class="medit" hidden></div>`;
 }
 
@@ -186,7 +186,7 @@ function renderHealth(m) {
   const med = m.misses;
   return (refuse.length ? sectionHead("Refusals", { count: refuse.length, level: 3 }) + `<ul>${refuse.map(f).join("")}</ul>` : "") +
     (warn.length ? sectionHead("Warnings", { count: warn.length, level: 3 }) + `<ul>${warn.map(f).join("")}</ul>` : "") +
-    (!refuse.length && !warn.length ? empty("Lint finds nothing.") : "") +
+    (!refuse.length && !warn.length ? empty("Lint finds nothing.", "Every note passes the vault checks.") : "") +
     (med ? `<p>${esc(`${med.recalls} recalls in ${med.days} days, ${med.empty} empty (${pct(med.empty_share * 100)}), ${med.reformulated} reformulated.`)}</p>` : "");
 }
 
@@ -209,16 +209,16 @@ function readChart(rows) {
     const w = (x) => ((x / of.length) * 100).toFixed(2);
     return barRow(esc(k), 0, `${week} · ${older} · ${never} never`, { bar: meter([{ pct: w(week), cls: "c-use" }, { pct: w(older), cls: "c-stale" }, { pct: w(never), cls: "c-never" }], `${week} in the last 7 days, ${older} earlier, ${never} never`) });
   }).join("");
-  return lines ? `${legendHtml([["Last 7 days", "c-use"], ["Earlier", "c-stale"], ["Never", "c-never"]])}${barList(lines)}` : empty("No notes yet.");
+  return lines ? `${legendHtml([["Last 7 days", "c-use"], ["Earlier", "c-stale"], ["Never", "c-never"]])}${barList(lines)}` : empty("No notes yet.", "Notes show here once the vault holds some.");
 }
 
 function renderBroad(m, rows) {
   const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
-  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.")) +
+  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.", "Every note passes the vault checks.")) +
     fold("Every finding", renderHealth(m), { cls: "fold" }), { count: `${lint.refuse.length} refusals, ${lint.warn.length} warnings` });
   const reads = card("When Recall Last Returned Each Note", readChart(rows), { label: "When recall last returned each note" });
   const start = Object.entries(m.start ?? {});
-  const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${x.bytes} / ${x.budget} bytes, ${x.core.length} core lines${x.cut ? `, ${x.cut} cut` : ""}`)).join("")) : empty("No start context."), { label: "Start context" });
+  const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${x.bytes} / ${x.budget} bytes, ${x.core.length} core lines${x.cut ? `, ${x.cut} cut` : ""}`)).join("")) : empty("No start context.", "A scope with core lines shows its budget here."), { label: "Start context" });
   const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: (m.writes ?? []).length, label: "Recent writes" });
   return `<div class="pair">${lintCard}${reads}</div><div class="pair">${budget}${writes}</div>`;
 }
@@ -322,7 +322,7 @@ async function write(btn) {
   if (!it) return;
   if (a === "edit") return edit(btn, it);
   if (a === "cancel") { const box = btn.closest(".medit"); box.hidden = true; box.innerHTML = ""; return; }
-  if (ARMED.has(a) && btn.dataset.armed !== "1") { btn.dataset.armed = "1"; btn.textContent = `Confirm ${btn.textContent.toLowerCase()}`; return; }
+  if (ARMED.has(a) && arm(btn, `Confirm ${btn.textContent.toLowerCase()}`)) return;
   const ins = btn.closest(".ins"), field = (name) => ins.querySelector(`[name="${name}"]`)?.value ?? "";
   const f = { text: field("text"), core: field("core"), target: field("target"), why: field("why") };
   const [url, body] = WRITES[a](it, f, btn);
@@ -376,18 +376,18 @@ function mount(root, m) {
   search();
 }
 
-const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <span class="hint">${esc([n.kind, n.scope].filter(Boolean).join(" · "))}</span></li>`).join("")}</ul>` : empty("None."));
+const crumbs = (t) => `<ul>${t.map((n) => `<li>${link(n.title)} <span class="hint">${esc([n.kind, n.scope].filter(Boolean).join(" · "))}</span></li>`).join("")}</ul>`;
 
-/** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. */
+/** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. A card with no links is left out. */
 export function renderNote(n) {
-  const fm = Object.entries(n.frontmatter).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.join(", ") : v)}</dd></div>`).join("");
+  const fm = Object.entries(n.frontmatter).map(([k, v]) => [k, esc(Array.isArray(v) ? v.join(", ") : v)]).filter(([, v]) => v);
+  const links = (title, t, id) => (t.length ? card(title, crumbs(t), { id, count: t.length }) : "");
   return `<div class="page">${crumb("#/memory", [["memory", "#/memory"], [n.title]])}${pageHead(n.title)}` +
     (n.archived ? `<p class="quiet">Archived.</p>` : "") +
     `<p class="hint"><code>${esc(n.path)}</code></p>` +
-    (fm ? `<dl class="facts">${fm}</dl>` : "") +
+    (fm.length ? facts(fm) : "") +
     `<article class="note">${md(n.body)}</article>` +
-    card("Links to", crumbs(n.links), { id: "links", count: n.links.length }) +
-    card("Linked from", crumbs(n.backlinks), { id: "backlinks", count: n.backlinks.length }) + `</div>`;
+    links("Links to", n.links, "links") + links("Linked from", n.backlinks, "backlinks") + `</div>`;
 }
 
 export const noteView = {

@@ -255,11 +255,7 @@ export function renderHerald(s) {
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
   const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", stuck.length || errors ? "stuck" : "need") : tag("OK", "done");
 
-  return `<section id="herald" class="card herald-card" aria-label="Herald">` +
-    `<div class="sh"><h2 id="h-herald">Herald</h2><div class="aside">${badgeHtml}</div></div>` +
-    sticky +
-    `<div class="herald-feed">${feed}</div>` +
-  `</section>`;
+  return card("Herald", `${sticky}<div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
 }
 
 function wireHeraldJump(root) {
@@ -267,7 +263,7 @@ function wireHeraldJump(root) {
     if (e.target.closest?.("a")) return;
     const herald = root.querySelector?.("#herald");
     if (herald) {
-      herald.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      herald.scrollIntoView?.({ behavior: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth", block: "center" });
       herald.classList?.add("pulsing");
       setTimeout(() => herald.classList?.remove("pulsing"), 1200);
     }

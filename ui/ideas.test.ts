@@ -86,7 +86,7 @@ test("a .md lens result loads behind loadingLine(), and a failed fetch puts erro
   const el: any = { dataset: { src: "/x.md" }, innerHTML: "" }, was = globalThis.fetch;
   globalThis.fetch = (async () => ({ ok: false, status: 404, text: async () => "nope" })) as any;
   try {
-    ideaView.mount({ querySelectorAll: () => [el] }, d);
+    ideaView.mount({ querySelectorAll: () => [el], querySelector: () => ({ addEventListener() {} }) } as any, d);
     await new Promise((r) => setTimeout(r, 0));
   } finally { globalThis.fetch = was; }
   expect(el.innerHTML).toBe(error("/x.md answered 404"));
