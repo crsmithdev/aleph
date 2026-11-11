@@ -30,7 +30,7 @@ test("an issue turned back into a plain issue while an earlier issue starts is n
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => { item.spec = ""; });
     return null;
-  }, undefined, undefined, undefined);
+  }, undefined, undefined);
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
   expect(out.skipped).toEqual([`fac-${second}: not a goal`]);

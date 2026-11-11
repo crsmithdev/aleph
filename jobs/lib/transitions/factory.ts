@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { today } from "../../../lib/day.ts";
 import { LANES, lane, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { byPriority, afterOf, buildableIssue, buildableIssues, note, partsOf, planSet, priorityOf, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
+import { afterOf, buildableIssue, buildableIssues, note, partsOf, planSet, priorityOf, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";
@@ -63,9 +63,9 @@ type Land = (name: string) => Promise<string | null>;
  * holds a lock on its issue and re-reads the jobs under it, so two dispatches at once start an issue once. `start`
  * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts issues
  * only: an issue is closed as done once its parts are all done (`closeIssues`). Intake (intake.ts) took each issue in
- * before: an issue to plan (`plan` set) goes to an intake run, started detached by `intake`; the dispatch does not wait for it.
+ * before: an issue to plan (`plan` set) goes to an intake run too, but `intakeQueued` starts it, once for each pass.
  */
-export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, intake: (repo: Repo, id: number) => void = intakeDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
+export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[] }> {
   if (gates({ only: ["pause"] })) {
     logEvent({ by: "rule", subject: "factory", action: "paused" });
     return { started: [], skipped: [], paused: true };
@@ -82,23 +82,11 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   }
   const started: string[] = [];
   const skipped: string[] = [];
-  const planned: string[] = [];
   const redOf = mainRed();
   const done = doneChecker(true, (key, id) => reader({ fetch: false }).item(key, id));
   // A parent whose parts all landed closes without a green main.
   for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
   const ready = openIssues();
-  // An issue to plan goes to intake, which splits it.
-  const planners: { repo: Repo; item: issues.Issue }[] = [];
-  for (const repo of sandboxRepos()) {
-    const doc = reader({ fetch: false }).list(repo.key);
-    for (const item of doc?.items ?? []) if (decideIntake(repo, item, { doc: doc!, done, red: redOf(repo) }).kind === "plan") planners.push({ repo, item });
-  }
-  for (const { repo, item } of byPriority(planners)) {
-    intake(repo, item.id);
-    planned.push(issueJob(repo, item.id));
-    logEvent({ by: "rule", subject: issueJob(repo, item.id), action: "started", sub: "intake", note: "planning" });
-  }
   /** Records the hold and the skip line of an issue no start reached. */
   const skip = (name: string, kind: Gate, why: string, ev: Hold) => { recordHold(name, kind, why, ev); skipped.push(`${name}: ${why}`); };
   /** Skips an issue that a gate holds; a red main's event names its commit, and the note its failed checks. */
@@ -165,7 +153,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       release();
     }
   }
-  return { started, skipped, ...(landed.length ? { landed } : {}), ...(planned.length ? { planned } : {}) };
+  return { started, skipped, ...(landed.length ? { landed } : {}) };
 }
 
 /** Whether every part is done or dropped, at least one is done, and the parent is neither asking nor to plan: then it closes. */

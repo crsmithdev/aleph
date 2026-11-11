@@ -2,10 +2,11 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { plainAsk, setAsk } from "../asks/ask.ts";
+import { readEvents } from "../../../lib/layout.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { writeBaseline } from "./factory-status.ts";
 import { decideIntake } from "./intake-decision.ts";
-import { dispatchIssues, intakeQueued, stalled } from "../transitions/factory.ts";
+import { dispatchIssues, intakeQueued, runDispatch, stalled } from "../transitions/factory.ts";
 import { change, newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
 
 beforeEach(setup);
@@ -44,21 +45,30 @@ test("decideIntake: closed and sorted items get none; a red main and an open aft
   expect(got).toEqual(rows);
 });
 
-test("stalled and the dispatch agree on an issue to plan and one to take in, on a green and a red main", async () => {
+test("stalled and the intake queue agree on an issue to plan and one to take in, on a green and a red main", async () => {
   const blocker = newIssue();
   const plan = add({ plan: true });
   const waits = add({ plan: true });
   change(waits, (i) => { i.fm.after = [`fac-${blocker}`]; });
   const fresh = add();
-  /** The issues the stall check lists for intake, the dispatch plans and the intake queue starts. */
+  /** The issues the stall check lists for intake and the intake queue starts. */
   const sides = async () => {
-    const planned: string[] = [];
-    await dispatchIssues(async () => null, undefined, undefined, (_r, id) => { planned.push(`fac-${id}`); });
+    await dispatchIssues(async () => null);
     const swept = (await stalled()).filter((k) => k.startsWith("ingest:")).map((k) => k.slice("ingest:".length));
-    return { swept, planned, queued: intakeQueued(() => {}) };
+    return { swept, queued: intakeQueued(() => {}) };
   };
   await baseline(true);
-  expect(await sides()).toEqual({ swept: [`fac-${plan}`, `fac-${fresh}`], planned: [`fac-${plan}`], queued: [`fac-${plan}`, `fac-${fresh}`] });
+  expect(await sides()).toEqual({ swept: [`fac-${plan}`, `fac-${fresh}`], queued: [`fac-${plan}`, `fac-${fresh}`] });
   await baseline(false);
-  expect(await sides()).toEqual({ swept: [`fac-${fresh}`], planned: [], queued: [`fac-${fresh}`] });
+  expect(await sides()).toEqual({ swept: [`fac-${fresh}`], queued: [`fac-${fresh}`] });
+});
+
+test("a dispatch pass leaves the intake of an issue to plan to the intake queue, so it starts once", async () => {
+  const plan = add({ plan: true });
+  await baseline(true);
+  await dispatchIssues(async () => null);
+  expect(readEvents().filter((e) => e.subject === `fac-${plan}` && e.sub === "intake")).toEqual([]);
+  const calls: string[] = [];
+  await runDispatch({ intake: (_r, id) => { calls.push(`fac-${id}`); }, director: () => {} });
+  expect(calls).toEqual([`fac-${plan}`]);
 });

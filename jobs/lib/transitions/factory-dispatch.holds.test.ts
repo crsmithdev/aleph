@@ -18,8 +18,8 @@ test("an issue that a red main holds gets one hold record; the suite runs main's
   await suiteStep(red);
   await suiteStep(red);
   expect(checksRun).toBe(1);
-  const first = await dispatchIssues(async () => null, undefined, undefined, undefined);
-  const second = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  const first = await dispatchIssues(async () => null, undefined, undefined);
+  const second = await dispatchIssues(async () => null, undefined, undefined);
   for (const out of [first, second]) {
     expect(out.started).toEqual([]);
     expect(out.skipped).toEqual([expect.stringMatching(new RegExp(`^fac-${id}: main is red at [0-9a-f]{7}: tests$`))]);
@@ -34,10 +34,10 @@ test("a red main holds issues after main moves, until a suite run on the new com
   await suiteStep(async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }));
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "a fix");
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
-  const held = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  const held = await dispatchIssues(async () => null, undefined, undefined);
   expect(held.skipped).toEqual([expect.stringMatching(/main is red at/)]);
   expect(await suiteStep(async () => null)).toEqual({ fac: "green" });
-  const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  const out = await dispatchIssues(async () => null, undefined, undefined);
   expect(out.started).toEqual([`fac-${id}`]);
 });
 
@@ -45,11 +45,11 @@ test("an open issue whose work is on main closes as done, and no later dispatch 
   const id = newIssue();
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: fac-${id}`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
-  const first = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  const first = await dispatchIssues(async () => null, undefined, undefined);
   expect(first.skipped.filter((l) => l.startsWith(`fac-${id}:`))).toEqual([]);
   expect(store.readList({ key: "fac" })!.items.find((i) => i.id === id)!.fm.closed_as).toBe("done");
   expect(notes(id)).toMatch(/its work is on origin\/main: [0-9a-f]{7}$/m);
-  const second = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  const second = await dispatchIssues(async () => null, undefined, undefined);
   expect(second.skipped.filter((l) => l.startsWith(`fac-${id}:`))).toEqual([]);
 });
 
@@ -58,14 +58,14 @@ test("a parent whose sub-issues are all done closes with a note that names them"
   const child = writeList({ key: "fac" }, "split", (doc) => issues.add(doc, "the first sub-issue", { from: `fac-${parent}`, spec: "Do it." }).id, true)!.value;
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: fac-${child}`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
-  await dispatchIssues(async () => null, undefined, undefined, undefined);
+  await dispatchIssues(async () => null, undefined, undefined);
   expect(notes(parent)).toMatch(new RegExp(`its sub-issues are done: fac-${child} \\([0-9a-f]{7}\\)$`, "m"));
 });
 
 test("a main that no suite run has checked, or whose checks gave no verdict, does not hold an issue", async () => {
   const id = newIssue();
   expect(await suiteStep(async () => ({ cause: "infra" as const, reason: "no runner" }))).toEqual({ fac: "main is unchecked: no runner" });
-  const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  const out = await dispatchIssues(async () => null, undefined, undefined);
   expect(out.started).toEqual([`fac-${id}`]);
 });
 
@@ -81,7 +81,7 @@ describe("each skip in the issue loop gets one hold record", () => {
       return item;
     });
     try {
-      const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
+      const out = await dispatchIssues(async () => null, undefined, undefined);
       expect(out.skipped).toEqual([`${name}: the item is parked`]);
     } finally {
       spy.mockRestore();
@@ -105,7 +105,7 @@ describe("the done checker's copy of the store was read before an issue existed"
     const id = newIssue();
     const spy = staleOnce(old, 1);
     try {
-      await dispatchIssues(async () => null, undefined, undefined, undefined);
+      await dispatchIssues(async () => null, undefined, undefined);
     } finally {
       spy.mockRestore();
     }
@@ -124,7 +124,7 @@ describe("the done checker's copy of the store was read before an issue existed"
     });
     const spy = staleOnce(old, 0);
     try {
-      await dispatchIssues(async () => null, undefined, undefined, undefined);
+      await dispatchIssues(async () => null, undefined, undefined);
     } finally {
       spy.mockRestore();
     }
