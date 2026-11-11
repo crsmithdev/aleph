@@ -611,6 +611,10 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     // A short page cannot scroll the last panel into the band wireToc() marks, so this checks the scroll, not aria-current.
     await page.when('document.getElementById("issue-notes").getBoundingClientRect().top < innerHeight && scrollY > 0');
     expect(await hash()).toBe("#/issues/demo/21");
+    await page.ev("scrollTo(0, document.documentElement.scrollHeight)");
+    await page.when('[...document.querySelectorAll(".toc a")].at(-1).hasAttribute("aria-current")');
+    expect(await page.ev('[...document.querySelectorAll(".toc a[aria-current]")].map((a) => a.textContent)'))
+      .toEqual([await page.ev('[...document.querySelectorAll(".toc a")].at(-1).textContent')]);
     expect(await page.ev('getComputedStyle(document.querySelector(".toc")).position')).toBe("sticky");
     expect(page.errors).toEqual([]);
   }, 30_000);

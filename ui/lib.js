@@ -484,24 +484,31 @@ export const toc = (items, body) =>
   items.map(([id, label, sub]) => `<li${sub ? ' class="sub"' : ""}><a href="#${esc(id)}">${esc(label)}</a></li>`).join("") +
   `</ol></details></nav><div class="toc-body">${body}</div></div>`;
 
-/** Marks the entry of the section at the top of the view with `aria-current`, and closes the contents under 1100px, where
- * they sit above the body. Wiring again drops the last observer. */
+/** Marks the entry of the section at the top of the view with `aria-current` (the last entry at the end of the page), and closes the contents under 1100px, where
+ * they sit above the body. Wiring again drops the last observer and scroll listener. */
 export function wireToc(root) {
   root._toc?.disconnect();
+  removeEventListener("scroll", root._tocEnd);
   const nav = root.querySelector(".toc");
   if (!nav) return;
   if (matchMedia("(max-width: 1100px)").matches) nav.querySelector("details").open = false;
   const links = new Map([...nav.querySelectorAll("a")].map((a) => [a.getAttribute("href").slice(1), a])), seen = new Set();
-  // A section counts while it crosses the band from 10% to 40% down the view, so a sliver at the top does not; the first in page order is current.
-  root._toc = new IntersectionObserver((es) => {
-    for (const e of es) e.isIntersecting ? seen.add(e.target.id) : seen.delete(e.target.id);
-    const id = [...links.keys()].find((k) => seen.has(k));
+  const mark = () => {
+    // The last sections of a page cannot reach the band, so at the end of a page that scrolls the last entry is current.
+    const end = scrollY > 0 && scrollY + innerHeight >= document.documentElement.scrollHeight - 1;
+    const id = end ? [...links.keys()].pop() : [...links.keys()].find((k) => seen.has(k));
     if (!id) return;
     for (const [k, a] of links) k === id ? a.setAttribute("aria-current", "location") : a.removeAttribute("aria-current");
     // Scroll the rail, not the page: scrollIntoView() here would stop the router's smooth scroll.
     const a = links.get(id);
     if (a.offsetTop < nav.scrollTop || a.offsetTop + a.offsetHeight > nav.scrollTop + nav.clientHeight) nav.scrollTop = a.offsetTop - nav.clientHeight / 2;
+  };
+  // A section counts while it crosses the band from 10% to 40% down the view, so a sliver at the top does not; the first in page order is current.
+  root._toc = new IntersectionObserver((es) => {
+    for (const e of es) e.isIntersecting ? seen.add(e.target.id) : seen.delete(e.target.id);
+    mark();
   }, { rootMargin: "-10% 0px -60% 0px" });
+  addEventListener("scroll", root._tocEnd = mark, { passive: true });
   for (const k of links.keys()) { const el = document.getElementById(k); if (el) root._toc.observe(el); }
 }
 
