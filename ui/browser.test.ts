@@ -304,6 +304,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       await page.when(`(window.fetched ?? 0) > ${n}`);
     };
     await page.when(buttons);
+    // The first load draws its buttons before its `more` (/api/flow) ends: wait for that count, or the wait below ends on it.
+    await page.when("(window.fetched ?? 0) > 0");
     await page.ev(mark);
     await refresh();
     expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBeUndefined(); // The refresh rendered.
