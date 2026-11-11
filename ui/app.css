@@ -1186,6 +1186,13 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .kit-spec > .kit-rules { max-width: 72rem; font-size: var(--fs-sm); color: var(--ink-2); border-top: 1px solid var(--rule); padding-top: var(--sp-12); }
 .kit-rules ul { margin: 0; padding-left: var(--indent-list); }
 .kit-rules table { width: 100%; }
+/* The contents panel stays in view beside the specimens; on a phone it is left out. */
+.kit-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 14rem; gap: var(--sp-28); align-items: start; }
+.kit-toc { position: sticky; top: var(--sp-16); max-height: calc(100vh - 2 * var(--sp-16)); overflow-y: auto; display: flex; flex-direction: column; font-size: var(--fs-xs); }
+.kit-toc a { padding: var(--sp-2) 0 var(--sp-2) var(--sp-8); color: var(--ink-2); text-decoration: none; }
+.kit-toc a:hover { color: var(--ink); }
+.kit-toc a.grp { margin-top: var(--sp-8); padding-left: 0; color: var(--ink); font-weight: var(--fw-strong); }
+@media (max-width: 720px) { .kit-wrap { grid-template-columns: minmax(0, 1fr); } .kit-toc { display: none; } }
 .kit-h { font-family: var(--display); font-size: var(--fs-xl); margin: var(--sp-28) 0 var(--sp-12); }
 .kit-row { display: flex; flex-wrap: wrap; gap: var(--sp-12); align-items: center; margin-bottom: var(--sp-12); }
 .kit-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-8); }

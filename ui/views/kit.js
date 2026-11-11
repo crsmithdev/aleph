@@ -133,6 +133,7 @@ function renderKit(d, query) {
   return `<div class="page kit">${crumb("#/", [["aleph", "#/"], ["kit"]])}` +
     pageHead("Kit", { aside: seg("Theme", THEMES.map((t) => ({ label: t[0].toUpperCase() + t.slice(1), on: t === theme, attrs: ` data-theme-pick="${t}"` }))) }) +
     `<p class="hint">Each component of <code>docs/design.md</code>, drawn by its own helper. Pin a note on a specimen with the annotate tool.</p>` +
+    `<div class="kit-wrap"><div class="kit-body">` +
     `<section class="kit-spec" data-annotate="kit/every"><h3>Every component</h3><div class="kit-rules md">${md(section(doc, "Every component"))}</div></section>` +
 
     `<h2 class="kit-h">Foundations</h2>` +
@@ -231,7 +232,7 @@ function renderKit(d, query) {
       `<button class="act" type="button" style="border-color:var(--ink-2)">Hover</button>`, seg("Pressed", [{ label: "Off", on: false, attrs: "" }, { label: "Pressed", on: true, attrs: "" }]),
       `<button class="act" type="button" disabled>Disabled</button>`) + `<div style="max-width:320px">${tiles("Pressed metric card", statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }))}</div>`,
       "Focus and hover are drawn with inline styles, so they show without a pointer or a keyboard.", "States") +
-    `</div>`;
+    `</div><nav class="kit-toc" aria-label="Contents"></nav></div></div>`;
 }
 
 /** Each `--` custom property, light and dark, read from the stylesheets: the `:root` rules for light, `:root[data-theme="dark"]` over them for dark.
@@ -297,6 +298,11 @@ export const view = {
   mount: (root, _d, query) => {
     setTheme(THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system");
     drawTokens(root);
+    // The contents panel: a link to each group and each specimen. The router scrolls an in-page `#id` link and leaves the route.
+    root.querySelector(".kit-toc").innerHTML = [...root.querySelectorAll("h2.kit-h, .kit-spec[id]")].map((el) => {
+      if (el.tagName === "H2") el.id = `kit-group-${el.textContent.toLowerCase().replace(/\W+/g, "-")}`;
+      return `<a href="#${el.id}"${el.tagName === "H2" ? ' class="grp"' : ""}>${el.tagName === "H2" ? el.textContent : el.querySelector("h3").textContent}</a>`;
+    }).join("");
     wireTabs(root);
     wireEdit(root);
     root.onclick = (e) => { const b = e.target.closest("[data-kit-confirm]"); if (b && !arm(b, "Drop a1700? Click again")) b.textContent = "Dropped"; };
