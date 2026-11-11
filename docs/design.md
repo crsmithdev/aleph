@@ -1481,7 +1481,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
 | Two `act()` wrappers with different signatures; `shell()` has no callers | `ui/views/cards.js`, `ui/views/memory.js` | follow-up |
-| A metric card's second value hides at phone width, so `v` shows with a `q` that names two values | `ui/app.css` | review on `#/kit` |
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |
 | A selected row is drawn three ways: `.mrow` (`--raised`, `--run` border), `tr.nrow` (inset `--run` bar), the nav (inset `--ink` bar) | `ui/app.css` | follow-up |

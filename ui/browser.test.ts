@@ -617,6 +617,25 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.ev('document.querySelector("#tile-probe").remove()');
   }, 30_000);
 
+  test("a metric card keeps its second value at phone width", async () => {
+    await page.width(400);
+    await page.go("#/");
+    const m = await page.ev<{ display: string; w: number; text: string; one: boolean }>(`import("/lib.js").then(({ statCard }) => {
+      const host = document.createElement("div");
+      host.id = "tile-probe";
+      document.querySelector("#view").prepend(host);
+      host.innerHTML = '<section class="tiles">' + statCard({ k: "Worker slots", v: "0", v2: "5", q: ["in use", "cap"] }) + "</section>";
+      const em = host.querySelector(".tile.sc b em"), b = host.querySelector(".tile.sc b");
+      return { display: getComputedStyle(em).display, w: em.getBoundingClientRect().width, text: b.textContent, one: em.getBoundingClientRect().height < b.getBoundingClientRect().height * 1.5 && b.scrollWidth <= b.clientWidth };
+    })`);
+    expect(m.display).not.toBe("none");
+    expect(m.w).toBeGreaterThan(0);
+    expect(m.text).toContain("/ 5");
+    expect(m.one).toBe(true);
+    await page.ev('document.querySelector("#tile-probe").remove()');
+    await page.width(1200);
+  }, 30_000);
+
   test("the font picker, the annotations and the chat mount in the dock and work", async () => {
     await page.width(1200);
     await page.go("#/");
