@@ -43,7 +43,7 @@ test("setAsk keeps situation, effects and recommend, and askOf reads them back",
 });
 
 test("a run's Ask is the run's: the issue has none, and clearing the issue's Ask leaves it", () => {
-  record.putRun("r1", { kind: "build", job: "r1", name: "fac-13", on: "fac-13", condition: "waiting", ask, told: true, started: "2026-11-04T10:00:00Z" });
+  record.putRun("r1", { n: 1, kind: "build", job: "r1", name: "fac-13", on: "fac-13", condition: "waiting", ask, told: true, started: "2026-11-04T10:00:00Z" });
   expect(record.getRun("r1")?.ask).toEqual(ask);
   expect(askOf("fac-13")).toBeNull();
   clearAsk("fac-13");

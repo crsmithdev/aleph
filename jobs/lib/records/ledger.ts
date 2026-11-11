@@ -103,7 +103,7 @@ export interface Run {
   /** Milliseconds since the epoch, set under the dispatch lock: the order runs were made in. */
   made?: number;
   /** The run's number on its subject (`subjectOf`), from 1 in start order: the `n` of its job ID. Every stored run has one; `makeRun` sets it. */
-  n?: number;
+  n: number;
 }
 
 /** `tests`: globs of the test files that `run` takes as arguments, so a land can run only the related ones. */

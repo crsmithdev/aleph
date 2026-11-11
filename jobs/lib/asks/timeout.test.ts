@@ -17,7 +17,7 @@ let n = 0;
 function waiting(ago: number, a: Ask = ask(), now = NOW): Entry {
   const on = `tmo-${++n}`, id = `run-${n}`;
   record.addEvent(on, { at: new Date(now - ago * 60_000).toISOString(), kind: "director", what: "held-path: escalated", data: { on: id, outcome: "escalated" } });
-  return { id, folder: "", run: { name: `job-${n}`, on, job: `a${n}`, condition: "waiting", ask: a } as any };
+  return { id, folder: "", run: { n, name: `job-${n}`, on, job: `a${n}`, condition: "waiting", ask: a } as any };
 }
 
 test("setTimeoutOf writes minutes for a land reason, 0 removes them, and other reasons are refused", () => {

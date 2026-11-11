@@ -103,14 +103,14 @@ test("afterLand sends a conflict back to the worker at most twice", () => {
 
 test("landTerms: which runs may land, and how", () => {
   const ask = (reason: string, kind = "review") => ({ condition: "waiting", ask: { kind, reason, question: "", options: [], why: [] } });
-  const needs = (n: Partial<Run>) => landTerms({ kind: "build", ...n } as Run);
+  const needs = (n: Partial<Run>) => landTerms({ n: 1, kind: "build", ...n } as Run);
   expect(needs({ condition: "passed" })).toEqual({ manual: false, held: false, asked: false });
   expect(needs({ condition: "passed", say: "look" })).toEqual({ manual: true, held: false, asked: false });
-  expect(landTerms({ kind: "recheck", condition: "passed" } as Run)).toEqual({ manual: false, held: false, asked: false });
+  expect(landTerms({ n: 1, kind: "recheck", condition: "passed" } as Run)).toEqual({ manual: false, held: false, asked: false });
   expect(needs(ask("held-path") as Partial<Run>)).toEqual({ manual: false, held: true, asked: true });
   expect(needs(ask("question", "input") as Partial<Run>)).toBeNull();
   expect(needs({ condition: "failed" })).toBeNull();
-  expect(landTerms({ kind: "land", condition: "passed" } as Run)).toBeNull();
+  expect(landTerms({ n: 1, kind: "land", condition: "passed" } as Run)).toBeNull();
 });
 
 test("the run after a conflicted land has a merge prompt: the paths and the last commit on main, no spec text", async () => {
@@ -124,7 +124,7 @@ test("the run after a conflicted land has a merge prompt: the paths and the last
   const id = "20261101-000009-demo-mrg-build";
   const folder = join(dir, "jobs", id);
   mkdirSync(folder);
-  putRun(basename(folder), { name: "mrg", repo: "demo", job: e.run.job, kind: "build", condition: "running", merge: true, model: MERGE_MODEL, made: 99, started: new Date(NOW).toISOString() } as Run);
+  putRun(basename(folder), { n: 1, name: "mrg", repo: "demo", job: e.run.job, kind: "build", condition: "running", merge: true, model: MERGE_MODEL, made: 99, started: new Date(NOW).toISOString() } as Run);
   const text = unitPrompt(id, folder, getRun(basename(folder))!, repo);
   expect(text).toContain("clash.txt");
   expect(text).toContain("other clash.txt");

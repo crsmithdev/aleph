@@ -94,7 +94,7 @@ beforeEach(() => {
     { id: "t2", sessionId: "s", timestamp: ago(2), input: "No, that is wrong. Do not mock the db.", output: "ok" },
   ];
   observations = [{ id: "o1", traceId: "t1", name: "verify-gate", metadata: { verdict: "deny" }, output: "deny: no run backs tests pass", startTime: ago(1) }];
-  const run = (state: string, reason: string) => ({ kind: "build", job: "aleph-9", name: "aleph-9", condition: state, reason, told: true, started: ago(1), ended: ago(1) });
+  const run = (state: string, reason: string) => ({ n: 1, kind: "build", job: "aleph-9", name: "aleph-9", condition: state, reason, told: true, started: ago(1), ended: ago(1) });
   const dir = join(base, "jobs", "20261027-aleph-9");
   mkdirSync(dir, { recursive: true });
   putRun(basename(join(dir)), run("dropped", "Drops the test it changed.") as any);
@@ -251,7 +251,7 @@ describe("noise", () => {
 
   test("a drop whose run made no commit is not a signal, whatever Jev says", async () => {
     const dir = join(base, "jobs", "20261027-aleph-9");
-    putRun(basename(join(dir)), { kind: "build", job: "aleph-9", name: "aleph-9", condition: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) } as any);
+    putRun(basename(join(dir)), { n: 1, kind: "build", job: "aleph-9", name: "aleph-9", condition: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) } as any);
     await mine(NOW, quiet);
     expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
   });

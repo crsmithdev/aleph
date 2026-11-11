@@ -69,7 +69,7 @@ describe("loadRegistry codes", () => {
 });
 
 describe("the issue of a run", () => {
-  const entry = (id: string, repo: string, on?: string): Entry => ({ id, folder: "", run: { repo, on } as Run });
+  const entry = (id: string, repo: string, on?: string): Entry => ({ id, folder: "", run: { n: 1, repo, on } as Run });
   // prettier-ignore
   const cases: [string, string, string | undefined, string | undefined, string | undefined][] = [
     // id   repo     on                 own                parent
@@ -84,8 +84,8 @@ describe("the issue of a run", () => {
   const entries = cases.map(([id, repo, on]) => entry(id, repo, on));
 
   test.each(cases)("%s: %s on %s", (_id, repo, on, own, parent) => {
-    expect(issueKeyOf({ repo, on } as Run)).toBe(own);
-    expect(issueKeyOf({ repo, on } as Run, { parent: true })).toBe(parent);
+    expect(issueKeyOf({ n: 1, repo, on } as Run)).toBe(own);
+    expect(issueKeyOf({ n: 1, repo, on } as Run, { parent: true })).toBe(parent);
   });
 
   test("runsByIssue groups by the full ID; rollUp adds an old part's runs to its parent", () => {

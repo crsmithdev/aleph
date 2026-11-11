@@ -383,7 +383,7 @@ test("an intake run whose process ended before a verdict is ended as failed by t
   reset([]);
   const folder = join(base, "jobs", `${stamp()}-intake-${repo.key}-1-intake`);
   mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { kind: "intake", job: folder.split("/").at(-1)!, name: `intake-${repo.key}-1`, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "intake", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
+  putRun(basename(folder), { n: 1, kind: "intake", job: folder.split("/").at(-1)!, name: `intake-${repo.key}-1`, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "intake", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
   await intakeIssue(repo, 1, () => true);
   expect(getRun(basename(folder))).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict" });
 });

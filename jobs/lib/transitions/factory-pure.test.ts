@@ -243,7 +243,7 @@ test("health warns when the last full suite of a repo took more than the budget"
   const suite = (id: string, ended: string, seconds: number, extra: object = {}) => {
     const dir = join(ctx.base, "jobs", id);
     mkdirSync(dir, { recursive: true });
-    putRun(basename(dir), { kind: "build", job: id, name: id, repo: "fac", condition: "done", told: true, started: ended, ended, checks: [{ name: "tests", ok: true, seconds, ...extra }, { name: "types", ok: true, seconds: 1 }] } as Run);
+    putRun(basename(dir), { n: 1, kind: "build", job: id, name: id, repo: "fac", condition: "done", told: true, started: ended, ended, checks: [{ name: "tests", ok: true, seconds, ...extra }, { name: "types", ok: true, seconds: 1 }] } as Run);
   };
   const said = () => health().filter((l) => l.text.includes("full suite"));
   suite("20261103-000001-a", "2026-11-03T00:01:00Z", 135);

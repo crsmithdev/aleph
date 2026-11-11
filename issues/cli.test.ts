@@ -165,7 +165,7 @@ test("list and lint with no repo cover the repos with a run or an item update in
   mkdirSync(join(jobs, "r1"));
   const saved = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobs;
-  putRun("r1", { kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: clock().toISOString() } as any);
+  putRun("r1", { n: 1, kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: clock().toISOString() } as any);
   // Assigning undefined would set the string "undefined", and a later test's records would land in ./undefined/.
   if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
   expect(alephWith(e, "issue", "list").out).toBe("proj\n  3  open    medium   An old item\nfresh\n  1  open    medium   A new item\n");

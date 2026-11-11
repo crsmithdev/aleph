@@ -3,7 +3,7 @@ import type { ChecksStop } from "./checks.ts";
 import type { Run } from "../records/ledger.ts";
 import { missingVerdict, workerVerdict, type Branch, type NoVerdict, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
 
-const run = (r: Partial<Run> = {}): Run => ({ kind: "build", job: "j1", name: "fac-1", condition: "failed", ...r } as Run);
+const run = (r: Partial<Run> = {}): Run => ({ n: 1, kind: "build", job: "j1", name: "fac-1", condition: "failed", ...r } as Run);
 const checked = { checkedBase: "b0", checkedTip: "t1" };
 
 /** Fake ports: each step passes unless given; `calls` names the steps that ran. */

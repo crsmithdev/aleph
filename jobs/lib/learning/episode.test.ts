@@ -76,7 +76,7 @@ const land = (id: number | string): string => {
 const run = (id: string, o: Partial<Run>): void => {
   const folder = join(base, "jobs", id);
   mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: hoursAgo(1), ended: hoursAgo(0.5), ...o });
+  putRun(basename(folder), { n: 1, kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: hoursAgo(1), ended: hoursAgo(0.5), ...o });
 };
 
 const NOW = new Date("2026-11-04T12:00:00Z").getTime();

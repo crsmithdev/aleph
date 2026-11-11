@@ -125,7 +125,7 @@ export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
  * killed worker. A run with no such file keeps its `ended`; the end never goes before `started`.
  */
 export function activeEnd(e: Entry): Run {
-  const r = e.run as Run, a = Date.parse(r.started), b = Date.parse(r.ended ?? "");
+  const r = e.run, a = Date.parse(r.started), b = Date.parse(r.ended ?? "");
   if (!(b >= a)) return r;
   // A folder that has had no writes for SETTLED_MS keeps its end; this read stats every file of it.
   const key = `${e.folder}@${r.ended}`, kept = ends.get(key);

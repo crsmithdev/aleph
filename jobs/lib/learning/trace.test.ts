@@ -13,7 +13,7 @@ const STREAM = [
   ev({ type: "result", is_error: false, total_cost_usd: 0.5, result: "Done." }),
 ].join("\n");
 
-const run: Run = { kind: "build", job: "job-1", name: "alpha", repo: "fac", condition: "passed", on: "fac-7", cost: 0.5, model: "claude-opus-5-5", told: false, started: "2026-10-27T10:00:00Z" };
+const run: Run = { n: 1, kind: "build", job: "job-1", name: "alpha", repo: "fac", condition: "passed", on: "fac-7", cost: 0.5, model: "claude-opus-5-5", told: false, started: "2026-10-27T10:00:00Z" };
 
 test("a reviewer's run is a second tree under the same trace", () => {
   const spans = spansFor({ runId: "run-1", run, repoKey: "fac", prompt: "p", stream: STREAM, reviewPrompt: "rp", reviewStream: STREAM, startMs: T0, endMs: T0 + 60_000 });

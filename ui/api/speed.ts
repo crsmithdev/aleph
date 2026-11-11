@@ -374,7 +374,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     if (!rows.has(k)) rows.set(k, { role, model, runs: 0, succeeded: 0, failed: 0, stuck: 0, rate: null, p50: null, cost: 0, baseline: null, secs: [], verdicts: 0, landed: 0 });
     return rows.get(k)!;
   };
-  const runs = entries.map((e) => e.run as Run);
+  const runs = entries.map((e) => e.run);
   // A job landed when a land run of it landed; a job had a fix round when one of its runs was sent back.
   const landedJobs = new Set(runs.filter((r) => r.kind === "land" && r.condition === "landed").map((r) => r.job));
   const roundJobs = new Set(runs.filter((r) => r.failed).map((r) => r.job));
@@ -429,7 +429,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
     const times: number[] = [], models = new Map<string, number>();
     let runs = 0;
     for (const e of entries) {
-      const r = e.run as Run;
+      const r = e.run;
       if (r.kind !== kind) continue;
       const running = r.condition === "running" && alive(e);
       if (running) live++;
@@ -455,7 +455,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
   let up = 0, peak = 0;
   for (const [, d] of edges) { up += d; if (up > peak) peak = up; }
   for (const p of points) for (const [key] of AGENT_ROLES) if (p[key] !== undefined) p[key] = round(p[key]!, 2);
-  const inWindow = entries.map((e) => e.run as Run).filter((r) => isBuild(r.kind) && Date.parse(r.started) >= since && Date.parse(r.started) < now);
+  const inWindow = entries.map((e) => e.run).filter((r) => isBuild(r.kind) && Date.parse(r.started) >= since && Date.parse(r.started) < now);
   const reviews = inWindow.reduce((n, r) => n + (r.review ? 1 : 0), 0);
   // The baseline rate of a role and model: the mean of its rate over the spans that have data, as averageFigures takes it.
   const prior = before.map(([a, b]) => outcomeRows(entries, a, b));
@@ -501,7 +501,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
 
   const { read, lists } = inp;
   const entries = allRuns(false, read).filter((e) => repoIn(e.run.repo, project));
-  const all = entries.map((x) => x.run as Run);
+  const all = entries.map((x) => x.run);
   const landed: Run[] = [];
   for (const r of all) {
     const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");

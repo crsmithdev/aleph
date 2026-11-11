@@ -22,7 +22,7 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const run = (r: Partial<Run>): Run => ({ kind: "build", job: "j1", name: "fac-1", condition: "failed", started: "2026-11-01T00:00:00Z", ...r } as Run);
+const run = (r: Partial<Run>): Run => ({ n: 1, kind: "build", job: "j1", name: "fac-1", condition: "failed", started: "2026-11-01T00:00:00Z", ...r } as Run);
 const entry = (id: string, r: Partial<Run>): Entry => ({ id, folder: join(dir, "runs", id), run: run(r) });
 const folder = (id: string, files: Record<string, string> = {}): string => {
   const f = join(dir, "runs", id);

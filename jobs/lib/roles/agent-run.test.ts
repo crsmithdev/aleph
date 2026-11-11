@@ -53,7 +53,7 @@ test("a role run that joins a job sorts after the job's earlier runs, even when 
   const later = stamp(new Date(NOW.getTime() + 60_000));
   const earlier = join(runsDir(), `${later}-step-build`);
   mkdirSync(earlier, { recursive: true });
-  putRun(basename(earlier), { kind: "build", job: "step-job", name: "step", condition: "landed", told: true, started: NOW.toISOString() });
+  putRun(basename(earlier), { n: 1, kind: "build", job: "step-job", name: "step", condition: "landed", told: true, started: NOW.toISOString() });
   const run = openRun({ ...opening, name: "step", job: "step-job" });
   const ids = allRuns().map((e) => e.folder);
   expect(ids.indexOf(run.folder)).toBeGreaterThan(ids.indexOf(earlier));

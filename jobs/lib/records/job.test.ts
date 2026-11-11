@@ -27,7 +27,7 @@ afterEach(() => {
 function run(id: string, job: string, extra: Partial<Run> = {}, files: Record<string, string> = {}): string {
   const folder = join(base, id);
   mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { kind: "build", job, name: job.replace(/^\d+-\d+-/, ""), repo: "fac", condition: "passed", told: true, started: `2026-10-28T00:00:${id.slice(-2)}Z`, ...extra } as Run);
+  putRun(basename(folder), { n: 1, kind: "build", job, name: job.replace(/^\d+-\d+-/, ""), repo: "fac", condition: "passed", told: true, started: `2026-10-28T00:00:${id.slice(-2)}Z`, ...extra } as Run);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }

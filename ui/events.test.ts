@@ -52,7 +52,7 @@ async function changeAfter(act: () => void, query = ""): Promise<string | null> 
   finally { ctl.abort(); }
 }
 
-const run = (on: string): Run => ({ kind: "build", job: on, name: on, on, condition: "running", told: false, started: "2026-11-04T10:00:00Z" });
+const run = (on: string): Run => ({ n: 1, kind: "build", job: on, name: on, on, condition: "running", told: false, started: "2026-11-04T10:00:00Z" });
 
 test("a run's write to its job record sends a change naming the kept key, and the refetch has the write", async () => {
   putRun("old", run("r-1"));

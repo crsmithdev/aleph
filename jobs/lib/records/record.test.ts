@@ -13,7 +13,7 @@ beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "aleph-record-")); process.e
 afterEach(() => { setSystemTime(); rmSync(dir, { recursive: true, force: true }); rmSync(record.archiveDir(), { recursive: true, force: true }); if (saved === undefined) delete process.env.ALEPH_RECORDS_DIR; else process.env.ALEPH_RECORDS_DIR = saved; });
 
 const AT = "2026-11-04T10:00:00.000Z";
-const run = (o: Partial<Run> = {}): Run => ({ kind: "build", job: "j1", name: "aleph-7", repo: "aleph", on: "aleph-7", condition: "running", told: false, started: AT, ...o });
+const run = (o: Partial<Run> = {}): Run => ({ n: 1, kind: "build", job: "j1", name: "aleph-7", repo: "aleph", on: "aleph-7", condition: "running", told: false, started: AT, ...o });
 
 test("update writes the whole record through a rename and leaves no temporary file", () => {
   record.update("aleph-7", (r) => { r.wait = { kind: "after", reason: "after aleph-6", since: AT }; });

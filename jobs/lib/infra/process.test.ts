@@ -24,7 +24,7 @@ afterEach(() => {
 function entry(id: string, extra: Partial<Run> = {}): Entry {
   const folder = join(base, "runs", id);
   mkdirSync(folder);
-  const run = { kind: "build", job: id, name: "x", repo: "demo", condition: "running", told: true, started: "2026-11-03T00:00:00Z", made: NOW, ...extra } as Run;
+  const run = { n: 1, kind: "build", job: id, name: "x", repo: "demo", condition: "running", told: true, started: "2026-11-03T00:00:00Z", made: NOW, ...extra } as Run;
   putRun(basename(folder), run);
   return { id, folder, run };
 }

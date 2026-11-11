@@ -131,7 +131,7 @@ describe("news", () => {
   test("a run whose process died shows as lost", async () => {
     const folder = join(jobsDir, "20200101-000000-demo-ghost-agent");
     mkdirSync(folder);
-    putRun(basename(join(folder)), { kind: "build", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", condition: "running", told: false, started: "2020-01-01T00:00:00Z" } as any);
+    putRun(basename(join(folder)), { n: 1, kind: "build", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", condition: "running", told: false, started: "2020-01-01T00:00:00Z" } as any);
     writeFileSync(join(folder, "pid"), "999999");
     expect((await jobView("ghost")).json).toMatchObject({ condition: "running", lost: true });
     expect((await drop("ghost")).code).toBe(0);

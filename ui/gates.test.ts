@@ -237,7 +237,7 @@ test("the held time sums, over the issues, the hours from a hold to the next sta
 });
 
 test("gate catches are the builds a check or the reviewer sent back in the 7 days, against those a later build of the job passed", () => {
-  const run = (job: string, min: number, condition: string, failed?: string) => ({ job, kind: "build", condition, started: ago(min), ...(failed ? { failed } : {}) });
+  const run = (job: string, min: number, condition: string, failed?: string) => ({ n: 1, job, kind: "build", condition, started: ago(min), ...(failed ? { failed } : {}) });
   const r = (runs: any[]) => ({ issue: "r-1", runs }) as any;
   const records = [
     r([run("j1", 300, "returned", "tests"), run("j1", 200, "returned", "review"), run("j1", 100, "landed")]),
@@ -418,7 +418,7 @@ test("a stored firefighter grant for held-path is dead: rules() shows no grant a
 test("rules() counts each reason's Asks in the window by who decided them and what followed; renderRules shows the counts", () => {
   const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
   const ask = (n: number, cleared = true) => ({ set: at(n * 10), ...(cleared ? { cleared: at(n * 10 + 1) } : {}), reason: "question" });
-  const build = (m: number): any => ({ kind: "build", started: at(m) });
+  const build = (m: number): any => ({ n: 1, kind: "build", started: at(m) });
   const rec = (issue: string, asks: any[], runs: any[] = []): any => ({ issue, asks, runs, events: [] });
   const records = [
     rec("x-1", [ask(1)], [build(15)]), rec("x-2", [ask(2)]), rec("x-3", [ask(3)]), rec("x-4", [ask(4), ask(5, false)]),
@@ -439,7 +439,7 @@ test("rules() takes an entry's missing reason from the run that awaited when it 
   const set = new Date(NOW).toISOString();
   const fired = (records: any[]) => Object.fromEntries(rules([], records, NOW + 3600_000).map((x) => [x.reason, x.fired]));
   const base = fired([]);
-  const awaiting: any = { id: "r1", kind: "build", condition: "waiting", started: new Date(NOW - 60_000).toISOString(), ended: set };
+  const awaiting: any = { id: "r1", n: 1, kind: "build", condition: "waiting", started: new Date(NOW - 60_000).toISOString(), ended: set };
   expect(fired([{ issue: "x-1", asks: [{ set }], ask: { reason: "held-path" }, askRun: "r1", runs: [awaiting], events: [] }])["held-path"]).toBe(base["held-path"] + 1);
   expect(fired([{ issue: "x-2", asks: [{ set }], runs: [], events: [] }])).toEqual(base);
 });

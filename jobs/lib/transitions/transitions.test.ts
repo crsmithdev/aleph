@@ -67,7 +67,7 @@ describe("startJob", () => {
     const job = "20261103-000002-fac-x-agent";
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
-    putRun(basename(folder), { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: NOW - STARTING_MS - 1000 } as Run);
+    putRun(basename(folder), { n: 1, kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: NOW - STARTING_MS - 1000 } as Run);
     expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).not.toContain("is running as");
   });
 
@@ -76,7 +76,7 @@ describe("startJob", () => {
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
     const ahead = NOW + 700;
-    putRun(basename(folder), { kind: "build", job, name: "y", repo: "fac", branch: "factory/y", condition: "failed", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: ahead } as Run);
+    putRun(basename(folder), { n: 1, kind: "build", job, name: "y", repo: "fac", branch: "factory/y", condition: "failed", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: ahead } as Run);
     await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }));
     const second = allRuns().find((e) => e.id !== job);
     expect(second?.run.made).toBeGreaterThan(ahead);
@@ -91,7 +91,7 @@ describe("recheck", () => {
     const job = "20261103-000004-fac-x-land";
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
-    putRun(basename(folder), { kind: "land", job, name: "x", repo: "fac", condition: "failed", started: "2026-11-03T00:00:00Z" } as Run);
+    putRun(basename(folder), { n: 1, kind: "land", job, name: "x", repo: "fac", condition: "failed", started: "2026-11-03T00:00:00Z" } as Run);
     const why = await refused(() => recheck("x"));
     expect(why).toContain("job");
     expect(why).not.toMatch(/\brun\b/);

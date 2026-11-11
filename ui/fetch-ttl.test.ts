@@ -45,7 +45,7 @@ beforeAll(() => {
   for (const [repo, name] of [["a", "a-1"], ["b", "b-1"]]) {
     const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    putRun(basename(join(folder)), { kind: "build", condition: "running", started: "2026-10-27T10:00:00.000Z", name, job: name, repo, on: `${repo}-1` } as any);
+    putRun(basename(join(folder)), { n: 1, kind: "build", condition: "running", started: "2026-10-27T10:00:00.000Z", name, job: name, repo, on: `${repo}-1` } as any);
   }
   restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
   skipFetches();

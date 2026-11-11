@@ -177,7 +177,7 @@ test("a snapshot dated after the clock does not skew currentFit() or fit()", asy
     const spendsAt = [2, 6, 10];
     spendsAt.forEach((h, i) => {
       mkdirSync(join(jobs, `r${i}`), { recursive: true });
-      putRun(`r${i}`, { job: "j", model: "opus", cost: 6, started: at(h), ended: at(h) } as any);
+      putRun(`r${i}`, { n: 1, job: "j", model: "opus", cost: 6, started: at(h), ended: at(h) } as any);
     });
     const write = (rows: object[]) => writeFileSync(process.env.ALEPH_USAGE_FILE!, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
     const sp = spendsAt.map((h) => ({ at: t0 + h * H, model: "opus", cost: 6 }));

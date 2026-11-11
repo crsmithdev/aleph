@@ -17,7 +17,7 @@ function run(id: string, on: string, d: number, archived: boolean) {
   const folder = join(base, "runs", id);
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "output.log"), "x");
-  putRun(basename(folder), { kind: "build", job: id, name: id, on, condition: "done", started: ago(d).toISOString(), ended: ago(d).toISOString() } as any);
+  putRun(basename(folder), { n: 1, kind: "build", job: id, name: id, on, condition: "done", started: ago(d).toISOString(), ended: ago(d).toISOString() } as any);
   if (archived) { mkdirSync(archiveDir(), { recursive: true }); renameSync(join(recordsDir(), `${on}.json`), join(archiveDir(), `${on}.json`)); }
   return folder;
 }

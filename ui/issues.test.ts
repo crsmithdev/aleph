@@ -50,10 +50,11 @@ const rowsOf = async (project?: string): Promise<any[]> => (await getJson(projec
 const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1" }, q = "") =>
   at(`/api/issues${q}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
+let seq = 0;
 function run(id: string, extra: Record<string, unknown>) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  putRun(basename(join(dir)), { kind: "build", told: true, started: new Date(NOW).toISOString(), ...extra } as any);
+  putRun(basename(join(dir)), { kind: "build", told: true, started: new Date(NOW).toISOString(), n: ++seq, ...extra } as any);
 }
 
 beforeAll(async () => {

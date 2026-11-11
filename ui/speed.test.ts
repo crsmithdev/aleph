@@ -21,7 +21,7 @@ let n = 0;
 function run(r: Record<string, unknown>) {
   const dir = join(base, "jobs", `r${String(++n).padStart(3, "0")}`);
   mkdirSync(dir, { recursive: true });
-  record.putRun(basename(join(dir)), { job: `j${n}`, name: `j${n}`, told: true, ...r } as any);
+  record.putRun(basename(join(dir)), { job: `j${n}`, name: `j${n}`, told: true, n, ...r } as any);
 }
 const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, h), ended: new Date(Date.parse(at(daysAgo, h)) + s * 1000).toISOString() });
 
@@ -90,7 +90,7 @@ test("the Status cards show the answer's figures and trend them against its base
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (job: string, kind: string, state: string, a: string, b: string) => ({ kind, job, name: job, condition: state, started: a, ended: b }) as any;
+  const r = (job: string, kind: string, state: string, a: string, b: string) => ({ n: 1, kind, job, name: job, condition: state, started: a, ended: b }) as any;
   const since = new Date(2026, 9, 28, 5).getTime(), end = new Date(2026, 9, 28, 15).getTime();
   const none = { issue: new Map(), goal: new Map() };
   const p = phases([
@@ -134,13 +134,13 @@ test("filed: an issue's file is its filing; a part's file and a bulk commit's ti
 test("classify: one run of each class, with its cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (job: string, todo: number, h: number, m: number, o: Record<string, unknown> = {}) =>
-    ({ kind: "build", job, name: job, repo: "fx", on: `fx-${todo}`, condition: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
+    ({ n: 1, kind: "build", job, name: job, repo: "fx", on: `fx-${todo}`, condition: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
   const runs = [
     // issue 1: a fix round and the landing run in job a, an earlier job z restarted, then a run after the land
     r("z", 1, 1, 0, { condition: "failed", reason: "agent run z: stalled" }),
     r("a", 1, 2, 0, { condition: "failed", failed: "tests" }),
     r("a", 1, 3, 0),
-    { kind: "land", job: "a", name: "a", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
+    { n: 1, kind: "land", job: "a", name: "a", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
     r("b", 1, 5, 0),
     // issue 2: four starts in an hour, the 4th is a loop; they have no landing, the first three are not counted
     r("l1", 2, 6, 0), r("l2", 2, 6, 10), r("l3", 2, 6, 20), r("l4", 2, 6, 30),
@@ -180,19 +180,19 @@ test("a build run counts as an agent run", () => {
   expect(d.slowest[0]).toMatchObject({ condition: "passed", took: 7000, tests: 20 });
   expect(d.models.find((m) => m.model === "claude-opus-5-5")!.count).toBe(before.models.find((m) => m.model === "claude-opus-5-5")!.count + 1);
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (o: Record<string, unknown>) => ({ job: "b", name: "b", repo: "fx", on: "fx-1", condition: "passed", ...o }) as any;
+  const r = (o: Record<string, unknown>) => ({ n: 1, job: "b", name: "b", repo: "fx", on: "fx-1", condition: "passed", ...o }) as any;
   const out = classify([
     r({ kind: "build", condition: "failed", failed: "tests", started: t(2), ended: t(2, 10) }),
     r({ kind: "build", started: t(3), ended: t(3, 10) }),
-    { kind: "land", job: "b", name: "b", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
+    { n: 1, kind: "land", job: "b", name: "b", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
   ], () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   expect(out.classes.find((c) => c.key === "landed")!.causes.map((c) => c.name)).toEqual(["After fix rounds"]);
 });
 
 test("classify: a held run that later landed is landed, its earlier held rounds are returned", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (o: Record<string, unknown>) => ({ kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", condition: "waiting", reason: "held path package.json", ...o }) as any;
-  const land = (job: string, state: string, h: number) => ({ kind: "land", job, name: job, repo: "fx", on: "fx-1", condition: state, started: t(h, 20), ended: t(h, 25) }) as any;
+  const r = (o: Record<string, unknown>) => ({ n: 1, kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", condition: "waiting", reason: "held path package.json", ...o }) as any;
+  const land = (job: string, state: string, h: number) => ({ n: 1, kind: "land", job, name: job, repo: "fx", on: "fx-1", condition: state, started: t(h, 20), ended: t(h, 25) }) as any;
   const out = classify([
     r({ started: t(2), ended: t(2, 10) }),
     land("h", "failed", 2),
@@ -208,7 +208,7 @@ test("classify: a held run that later landed is landed, its earlier held rounds 
 test("classify: a drop's fate, not its prose, sets the failed class and the Needed Chris cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (todo: number, o: Record<string, unknown>) =>
-    ({ kind: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", on: `fx-${todo}`, condition: "failed", started: t(todo), ended: t(todo, 10), ...o }) as any;
+    ({ n: 1, kind: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", on: `fx-${todo}`, condition: "failed", started: t(todo), ended: t(todo, 10), ...o }) as any;
   const runs = [
     r(1, { fate: "met", reason: "agent run j1: stopped" }),
     r(2, { fate: "duplicate" }),
@@ -231,7 +231,7 @@ test("classify: a drop's fate, not its prose, sets the failed class and the Need
 
 test("runs read their issue from on: a part counts under its own ref, an issue run under its number", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "aleph", condition: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
+  const a = (job: string, o: Record<string, unknown>) => ({ n: 1, kind: "build", job, name: job, repo: "aleph", condition: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
   const runs = [
     a("p", { on: "aleph-1430" }), a("q", { on: "aleph-1430.1" }), a("r", { on: "aleph-1359" }),
   ];
@@ -293,7 +293,7 @@ test("per-issue times carry each issue's phases and outcome, and a bucket has a 
 
 test("agents: each role's live, runs, hours and models, with a peak over all roles", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
-  const e = (kind: string, a: number, b: number | null, extra: object = {}) => ({ folder: `f${a}`, id: `f${a}`, run: { kind, condition: b === null ? "running" : "passed", started: iso(a), ...(b === null ? {} : { ended: iso(b) }), ...extra } }) as any;
+  const e = (kind: string, a: number, b: number | null, extra: object = {}) => ({ folder: `f${a}`, id: `f${a}`, run: { n: 1, kind, condition: b === null ? "running" : "passed", started: iso(a), ...(b === null ? {} : { ended: iso(b) }), ...extra } }) as any;
   const runs = [
     e("build", 1, 3, { model: "sonnet", review: { call: "passed" } }), e("build", 2, 4, { model: "sonnet" }), e("build", 3, 3.5, { model: "haiku" }),
     e("build", 7, null), e("build", 6, null), e("build", 0, 9.5), // a live run, a lost one, and a broken clock
@@ -316,7 +316,7 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
 test("agents: outcome rows per role and model, with first pass, reviewer verdicts and a baseline rate", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
-  const e = (kind: string, a: number, extra: object) => ({ folder: `o${n}`, id: `o${n++}`, run: { kind, job: `j${n}`, condition: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const e = (kind: string, a: number, extra: object) => ({ folder: `o${n}`, id: `o${n++}`, run: { n: 1, kind, job: `j${n}`, condition: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
   const runs = [
     // Window 10..20: haiku has one pass that landed first time, one run sent back by the reviewer, one timed out; gpt-oss has one failed check.
     e("build", 10, { model: "claude-haiku", cost: 1, job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
@@ -339,7 +339,7 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
 test("agents: the all-roles success rate, its baseline, the worker first pass and the local share", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
-  const e = (kind: string, a: number, extra: object) => ({ folder: `r${n}`, id: `r${n++}`, run: { kind, job: `j${n}`, condition: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const e = (kind: string, a: number, extra: object) => ({ folder: `r${n}`, id: `r${n++}`, run: { n: 1, kind, job: `j${n}`, condition: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
   const runs = [
     // Window 10..20: job a landed first time, job b landed after a fix round, a gpt-oss triage passed, a gpt-oss build failed.
     e("build", 10, { model: "claude-haiku", job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
@@ -355,7 +355,7 @@ test("agents: the all-roles success rate, its baseline, the worker first pass an
 
 test("an unlanded run of an issue that left the store is Dropped", () => {
   const t = (h: number) => new Date(2026, 9, 28, h).toISOString();
-  const r = { job: "g", name: "g", repo: "fx", on: "fx-659", condition: "failed", kind: "build", started: t(8), ended: t(9) } as any;
+  const r = { n: 1, job: "g", name: "g", repo: "fx", on: "fx-659", condition: "failed", kind: "build", started: t(8), ended: t(9) } as any;
   const since = new Date(2026, 9, 27).getTime(), at = new Date(2026, 9, 28, 15).getTime();
   expect(classify([r], () => "gone", since, at, null).classes.find((c) => c.key === "dropped")!.runs).toBe(1);
   expect(classify([r], () => undefined, since, at, null).notCounted.runs).toBe(1);
@@ -380,7 +380,7 @@ test("activeEnd pulls ended back to the last worker activity", () => {
     const folder = join(dir, name);
     mkdirSync(folder);
     for (const [f, m] of Object.entries(files)) { writeFileSync(join(folder, f), "x"); utimesSync(folder + "/" + f, (t0 + m * min) / 1000, (t0 + m * min) / 1000); }
-    return { id: name, folder, run: { kind: "build", job: name, name, told: true, started: new Date(t0).toISOString(), ended: new Date(t0 + 180 * min).toISOString() } as any };
+    return { id: name, folder, run: { n: 1, kind: "build", job: name, name, told: true, started: new Date(t0).toISOString(), ended: new Date(t0 + 180 * min).toISOString() } as any };
   };
   // killed: last output at 24 min, noticed at 180 min
   expect(Date.parse(activeEnd(mk("a", { log: 24, exit: 180 })).ended!)).toBe(t0 + 24 * min);
@@ -526,7 +526,7 @@ test("classify: the restart loop starts at the run cap setting", () => {
   const off = withEnv({ ALEPH_RUN_CAP: "5" });
   try {
     const t = (m: number) => new Date(2026, 9, 28, 8, m).toISOString();
-    const runs = [0, 1, 2, 3, 4, 5].map((i) => ({ kind: "build", job: `l${i}`, name: `l${i}`, repo: "fx", on: "fx-2", condition: "passed", started: t(i * 5), ended: t(i * 5 + 4) }) as any);
+    const runs = [0, 1, 2, 3, 4, 5].map((i) => ({ n: 1, kind: "build", job: `l${i}`, name: `l${i}`, repo: "fx", on: "fx-2", condition: "passed", started: t(i * 5), ended: t(i * 5 + 4) }) as any);
     const out = classify(runs, () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
     const reran = out.classes.find((c) => c.key === "reran")!;
     expect(reran.causes.map((c) => c.name)).toEqual(["Restart loop"]);

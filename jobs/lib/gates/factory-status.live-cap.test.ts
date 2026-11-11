@@ -14,7 +14,7 @@ afterEach(() => { setSystemTime(); delete process.env.ALEPH_JOBS_DIR; rmSync(bas
 function run(id: string, extra: Partial<Run>, files: string[] = []): void {
   const folder = join(base, id);
   mkdirSync(folder);
-  putRun(basename(folder), { kind: "build", job: id, name: id, repo: "demo", condition: "running", told: true, started: "2026-10-30T00:00:00Z", made: NOW, ...extra } as Run);
+  putRun(basename(folder), { n: 1, kind: "build", job: id, name: id, repo: "demo", condition: "running", told: true, started: "2026-10-30T00:00:00Z", made: NOW, ...extra });
   for (const f of files) writeFileSync(join(folder, f), "999999");
 }
 

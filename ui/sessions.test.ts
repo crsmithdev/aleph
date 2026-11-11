@@ -221,7 +221,7 @@ test("the chat route gives whole prompts and replies and each turn's tool calls 
 
 test("a one-turn worker session that Langfuse prices at 0 has its ledger cost on the list, the session and the chat", async () => {
   TRACES.push(trace("w1", "worker-1", "aleph", iso(5), { totalCost: 0 }));
-  putRun("20261104-115500-worker-1", { kind: "build", condition: "done", started: iso(5), name: "worker-1", job: "worker-1", repo: "aleph", cost: 2 } as any);
+  putRun("20261104-115500-worker-1", { n: 1, kind: "build", condition: "done", started: iso(5), name: "worker-1", job: "worker-1", repo: "aleph", cost: 2 } as any);
   try {
     const list: any = await listSessions(new Request("http://localhost/api/sessions"));
     expect(list.sessions.find((x: any) => x.id === "worker-1")).toMatchObject({ label: "worker-1", cost: 2 });

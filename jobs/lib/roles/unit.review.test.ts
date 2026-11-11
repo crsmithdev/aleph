@@ -15,7 +15,7 @@ import { workerVerdict } from "../gates/worker-verdict.ts";
 let root = "";
 let repo: Repo;
 let folder = "";
-const run = { kind: "build", job: "j1", name: "j1", condition: "running", checks: [{ name: "test", ok: true, seconds: 1 }] } as Run;
+const run = { n: 1, kind: "build", job: "j1", name: "j1", condition: "running", checks: [{ name: "test", ok: true, seconds: 1 }] } as Run;
 const commit = (path: string, file: string, text: string, msg: string) => {
   mkdirSync(join(path, file, ".."), { recursive: true });
   writeFileSync(join(path, file), text);

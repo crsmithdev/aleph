@@ -65,8 +65,8 @@ export function mk(name: string, kind: Run["kind"], state: Run["condition"], ext
   const folder = join(ctx.base, "jobs", id);
   mkdirSync(folder, { recursive: true });
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
-  const run = { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date(now).toISOString(), ...extra } as Run;
-  putRun(basename(folder), { n: numbered(subjectOf(run), allRuns()).length + 1, ...run });
+  const run = { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date(now).toISOString(), ...extra } as Omit<Run, "n">;
+  putRun(basename(folder), { ...run, n: extra.n ?? numbered(subjectOf(run), allRuns()).length + 1 });
   return { folder, job: extra.job ?? id };
 }
 export const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";

@@ -45,7 +45,7 @@ beforeAll(() => {
   sh(join(a, "issues"), "git", "push", "-q", "origin", "main");
   const run = join(a, "runs", "20261030-100000-aleph-j1-agent");
   mkdirSync(run, { recursive: true });
-  putRun(basename(run), { job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", condition: "failed", told: true, started: "2026-10-30T10:00:00Z" });
+  putRun(basename(run), { n: 1, job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", condition: "failed", told: true, started: "2026-10-30T10:00:00Z" });
   mkdirSync(join(a, "runs", "sandbox-run"), { recursive: true });
   mkdirSync(join(a, "factory"), { recursive: true });
   writeFileSync(join(a, "factory", "paused"), "");

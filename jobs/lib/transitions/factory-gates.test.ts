@@ -22,7 +22,7 @@ beforeEach(setup);
 afterEach(teardown);
 
 const entry = (kind: string, state: string, reason?: string): any =>
-  ({ id: `x-${kind}-${state}`, folder: join(ctx.base, "none", `${kind}-${state}`), run: { kind, job: "j1", name: "n1", repo: "fac", condition: state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
+  ({ id: `x-${kind}-${state}`, folder: join(ctx.base, "none", `${kind}-${state}`), run: { n: 1, kind, job: "j1", name: "n1", repo: "fac", condition: state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
 
 test("gates returns the first factory gate, in the order pause, live cap", () => {
   const order = () => gates({ jobs: [] })?.gate;

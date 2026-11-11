@@ -70,7 +70,7 @@ test("the next worker's fix note gives each problem", () => {
   const f = run([bash("grep -n stall docs/factory.md", "600"), edit()]);
   expect(docClaims(f, claim)).not.toBeNull();
   expect(readFileSync(join(f, "checks.log"), "utf8")).toStartWith("## doc-claims: exit 1\n");
-  const { note } = nextBrief(f, { failed: "doc-claims" } as Run);
+  const { note } = nextBrief(f, { n: 1, failed: "doc-claims" } as Run);
   expect(note).toContain("The check `doc-claims` failed");
   expect(note).toContain("no run after the last edit reads the doc and compares it with the code");
 });

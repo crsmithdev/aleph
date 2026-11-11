@@ -19,7 +19,7 @@ function run(job: string, r: Record<string, unknown>) {
   const dir = join(base, "jobs", `r${String(++n).padStart(3, "0")}`);
   mkdirSync(dir, { recursive: true });
   // Each job is its own issue: g1 is fx-1.
-  putRun(basename(join(dir)), { job, name: `${job}-${n}`, told: true, repo: "fx", on: `fx-${job.slice(1)}`, ...r } as any);
+  putRun(basename(join(dir)), { job, name: `${job}-${n}`, told: true, repo: "fx", on: `fx-${job.slice(1)}`, n, ...r } as any);
 }
 const at = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
 const span = (h: number, s: number) => ({ started: at(h), ended: new Date(Date.parse(at(h)) + s * 1000).toISOString() });

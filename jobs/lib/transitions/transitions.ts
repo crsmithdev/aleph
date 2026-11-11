@@ -77,7 +77,7 @@ export interface StartOpts { command?: string[]; output?: Output }
  * Create the run folder and start its unit, under the dispatch lock. The lock
  * is held until the unit writes `pid`, so a second dispatch counts this run.
  */
-async function dispatch(run: Omit<Run, "job"> & { job?: string }, cwd: string, command: string[], output: Output | undefined, prep: (folder: string) => void): Promise<Start> {
+async function dispatch(run: Omit<Run, "job" | "n"> & { job?: string }, cwd: string, command: string[], output: Output | undefined, prep: (folder: string) => void): Promise<Start> {
   const release = await lock("dispatch", 120_000); // a queue of starts, each holding it until its unit writes pid
   if (!release) refuse("another dispatch holds the lock");
   let child: ReturnType<typeof Bun.spawn> | undefined;
@@ -99,7 +99,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, cwd: string, c
       prep(folder);
       // `made` orders the land queue: never below an earlier run's, so a clock stepped back keeps the order.
       const made = Math.max(Date.now(), ...allRuns().map((e) => (e.run.made ?? 0) + 1));
-      putRun(basename(folder), { ...run, job: run.job ?? basename(folder), made, n } as Run);
+      putRun(basename(folder), { ...run, job: run.job ?? basename(folder), made, n });
     });
     const folder = join(runsDir(), id);
     gpu?.();

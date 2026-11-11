@@ -14,7 +14,7 @@ const note = (day: string, hh: number, text: string) => `- ${at(day, hh)}: ${tex
 let n = 0;
 function run(o: Partial<Run> & { kind: Run["kind"]; started: string }): Entry {
   const id = `r${++n}`;
-  return { id, folder: `/x/${id}`, run: { job: id, name: o.on ?? id, condition: "done", told: true, ...o } as Run };
+  return { id, folder: `/x/${id}`, run: { n, job: id, name: o.on ?? id, condition: "done", told: true, ...o } as Run };
 }
 const empty: Sources = { runs: [], holds: [], specChecks: [], items: [], storeLog: [], flakes: [], trackers: [], usage: [] };
 

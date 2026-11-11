@@ -323,12 +323,12 @@ const subOf = (run: RunRecord): Pick<Step, "sub"> => { const cause = causeOf(run
 
 /** The runs on `subject` in `runs`, oldest first, each with its number `n`. */
 export function numbered<T extends { id: string; run: Run }>(subject: string, runs: T[]): { e: T; n: number }[] {
-  return runs.filter((e) => subjectOf(e.run) === subject).map((e) => ({ e, n: e.run.n! }));
+  return runs.filter((e) => subjectOf(e.run) === subject).map((e) => ({ e, n: e.run.n }));
 }
 
 /** The job ID of a run, `a1375#6`. */
 export function jobIdOf(e: { id: string; run: Run }): string {
-  return jobId(subjectOf(e.run), e.run.n!);
+  return jobId(subjectOf(e.run), e.run.n);
 }
 
 /** A run counts unless it is a director run or a land that found the job lock busy: neither changes the job. */

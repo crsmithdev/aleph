@@ -23,7 +23,7 @@ afterEach(teardown);
 let root = "";
 let repo: Repo;
 let folder = "";
-const base_run = { kind: "build", job: "j1", name: "j1", condition: "running", checks: [{ name: "test", ok: true, seconds: 1 }] } as Run;
+const base_run = { n: 1, kind: "build", job: "j1", name: "j1", condition: "running", checks: [{ name: "test", ok: true, seconds: 1 }] } as Run;
 
 /** A repo with main, and a branch `work` that changes `file` (default a.txt). */
 function landSetup(file = "a.txt", held: string[] = []): string {

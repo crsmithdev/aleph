@@ -12,7 +12,7 @@ afterAll(() => setSystemTime());
 
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, pageDir: string, apiDir: string;
 
-const run = (o: object) => JSON.stringify({ kind: "build", condition: "running", started: new Date(NOW).toISOString(), ...o });
+const run = (o: object) => JSON.stringify({ n: 1, kind: "build", condition: "running", started: new Date(NOW).toISOString(), ...o });
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-server-"));

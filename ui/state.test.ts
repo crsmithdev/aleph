@@ -34,10 +34,11 @@ function sh(cwd: string, ...args: string[]): string {
 const now = new Date(NOW);
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
 const HELD = { kind: "approval", reason: "held-path", question: "", options: [], why: [], situation: "The run changes hooks/x.ts.", effects: [{ action: "land", text: "Merges it." }, { action: "drop", text: "Throws it away." }], recommend: { action: "drop", why: "the path is held" } };
+let seq = 0;
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  putRun(basename(join(dir)), { kind: "build", repo: "fac", told: true, started: ago(3), ...extra } as any);
+  putRun(basename(join(dir)), { kind: "build", repo: "fac", told: true, started: ago(3), n: ++seq, ...extra } as any);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(dir, f), text);
 }
 

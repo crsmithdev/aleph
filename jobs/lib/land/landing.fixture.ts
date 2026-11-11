@@ -85,11 +85,11 @@ export function job(name: string, commits: [string, string][], extra: Partial<Ru
   const base = { name, repo: "demo", job: buildId, branch: `job/${name}`, told: true, started } as const;
   mkdirSync(join(dir, "jobs", buildId));
   writeFileSync(join(dir, "jobs", buildId, "spec.md"), "");
-  putRun(buildId, { ...base, kind: "build", condition: "passed", ...agent } as Run);
+  putRun(buildId, { ...base, n: 1, kind: "build", condition: "passed", ...agent } as Run);
   const id = `20261101-000001-demo-${name}-land`;
   const folder = join(dir, "jobs", id);
   mkdirSync(folder);
-  const run = { ...base, kind: "land", condition: "running", made: made++, ...extra } as Run;
+  const run = { ...base, n: 2, kind: "land", condition: "running", made: made++, ...extra } as Run;
   putRun(basename(folder), run);
   return { id, folder, run };
 }

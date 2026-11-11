@@ -473,8 +473,8 @@ export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | 
   const id = `20261030-${String(++seeded).padStart(6, "0")}-${repoKey}-seed-${run.kind}`;
   const folder = join(jobsDir, id);
   mkdirSync(folder, { recursive: true });
-  const r = { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date(now).toISOString(), ...run } as Run;
-  putRun(basename(folder), { n: numbered(subjectOf(r), allRuns()).length + 1, ...r });
+  const r = { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date(now).toISOString(), ...run } as Omit<Run, "n">;
+  putRun(basename(folder), { ...r, n: run.n ?? numbered(subjectOf(r), allRuns()).length + 1 });
   return id;
 }
 
