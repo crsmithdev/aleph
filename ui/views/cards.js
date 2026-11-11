@@ -1,5 +1,5 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
-import { actButton, actMessages, fold, clock, codeText, denyReasons, diffHtml, dur, esc, openDiffs, priorityBadge, repoIdLink, tag, when } from "../lib.js";
+import { actButton, actMessages, fold, clock, codeText, denyReasons, diffHtml, dur, esc, openDiffs, priorityBadge, repoIdLink, span, tag, when } from "../lib.js";
 import { shortText, shortId, jobHref, parseId } from "../../lib/naming.ts";
 
 /** A job's id, linking to its page. */
@@ -10,7 +10,7 @@ export const act = (verb, name, label, primary = false) => actButton(label, { ac
 /** The checks of a run as fact rows: `Tests 71s ✓`. */
 export const checkFacts = (j) =>
   (j.checks || []).map((c) => [c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(dur(c.seconds))} ${c.ok ? "✓" : "✗"}`]);
-/** "Oct 28 04:28" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time, as `when` shows it. */
+/** "10/28 04:28" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time, as `when` shows it. */
 const idStart = (m, now) => when(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])), new Date(now));
 const KINDS = { land: "land", intake: "intake", director: "director" };
 /** One trailer as text: Item shows its value alone; a Job ID (`a1375#6`) shows as it is, and an old Job folder id is parsed into its run kind and start; both link to the job page (raw id in the title). */
@@ -45,14 +45,7 @@ const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Sub-i
 
 /** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, the hold. `chips` is HTML. */
 export function metaRow({ id, chips, part, at, since, now, end, hold }) {
-  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${hold ? `<span class="blocked" title="${esc(hold)}">${esc(hold)}</span>` : ""}</div>`;
-}
-
-/** The time from `since` to `to` as `dur` writes it; "–" when the work was never picked up. */
-function span(since, to) {
-  const ms = Date.parse(to) - Date.parse(since);
-  if (!since || !(ms >= 0)) return "–";
-  return dur(ms / 1000);
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at))}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${hold ? `<span class="blocked" title="${esc(hold)}">${esc(hold)}</span>` : ""}</div>`;
 }
 
 /** The Ask card structure: the article with `cls` and `attrs`, then the box with `meta`, the fold of `label`, `title` and `tag` over `desc`, and `rest`. */

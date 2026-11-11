@@ -194,7 +194,7 @@ Weight 700 stays a literal on `.mark`.
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
 | `--z-overlay` | 50 | kit widgets: font picker, annotations |
 
-A selected or parked item has a `box-shadow: inset` ring.
+A selected or parked item has a `box-shadow: inset` ring. A pipeline stage on the Status page is a 5px inset ring; its colour is the stage's failed share.
 
 #### Breakpoints and motion
 
@@ -1353,7 +1353,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 
 | Helper | Reference |
 |---|---|
-| `empty(line, hint)`, `loadingLine(what)`, `error(line, hint)`; `loading(title)` in the router only | `ui/views/jobs.js` |
+| `empty(line, hint)`, `loadingLine(what)`, `error(line, hint)`, `notice(line, bad)`; `loading(title)` in the router only | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1364,6 +1364,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 - The router shows `loading()` while a page loads, and `error()` when the first load fails. A view does not call them for its own data.
 - For a section that loads after the page, use `loadingLine(what)`: `Loading the diff…`.
 - Use `error(line, hint)` for a second fetch inside a card that failed. With no hint, it tells the reader to check aleph-ui and reload.
+- Use `notice(line, bad)` for a note above data that still shows: a stale reload (`bad`, `role="alert"`) or a partial count. Do not write a `<p>` for it by hand.
 - The `empty()` hint is HTML: escape data with `esc()`. The `error()` hint is text.
 
 | Do | Don't |
@@ -1478,6 +1479,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | `ui/activity.ts` (3), `ui/views/issues.js` (3) | date arithmetic, not display |
 | `ui/views/session.js` (2), `ui/timeline.js` (1), `ui/views/memory.js` (1) | percent widths for CSS |
 | `ui/api/skills.ts` | a server log line |
+| `ui/views/kit.js` (1) | a contrast ratio, `toFixed(2)` |
 
 ### Inventory
 

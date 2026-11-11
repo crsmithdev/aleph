@@ -201,22 +201,22 @@ test("a project tag with no cwd counts only when it is a registry key", async ()
 });
 
 
-test("the skill detail uses section heads and fit tables", async () => {
+test("the skill detail uses detail panels and fit tables", async () => {
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
-  expect(detail).toContain('<div class="sh"><h2>Projects</h2>');
-  for (const t of ["<h2>Uses per Day</h2>", "<th>First Prompt Line</th>", "<th>Started by</th>", '<th>Session</th><th>First Prompt Line</th><th>Project</th><th>Started by</th><th class="num">Started</th>', "<th>Started</th><th>Session</th><th>Error</th><th>Project</th>", "<h2>Tools Called After It, in the Same Turn</h2>", 'aria-label="Uses per Day"', 'aria-label="Tools called after it, in the same turn"']) expect(detail).toContain(t);
+  expect(detail).toContain("<summary><span>Projects</span>");
+  for (const t of ["<h2>Uses by Day</h2>", "<th>First Prompt</th>", "<th>Started by</th>", '<th>Session</th><th>First Prompt</th><th>Project</th><th>Started by</th><th class="num">Started</th>', "<th>Started</th><th>Session</th><th>Error</th><th>Project</th>", "<span>Tools Called After It, in the Same Turn</span>", 'aria-label="Uses by Day"']) expect(detail).toContain(t);
   // The uses chart is a panel: its title, its label and its box come from the frame.
-  expect(detail).toMatch(/<aleph-chart key="skills\/aleph:pickup"><section class="card" aria-label="Uses per Day"><div class="sh"><h2>Uses per Day<\/h2>[\s\S]*?<div class="chartbox" role="img" aria-label="Uses per Day: Uses \d+"><\/div>/);
+  expect(detail).toMatch(/<aleph-chart key="skills\/aleph:pickup"><section class="card" aria-label="Uses by Day"><div class="sh"><h2>Uses by Day<\/h2>[\s\S]*?<div class="chartbox" role="img" aria-label="Uses by Day: Uses \d+"><\/div>/);
   const f = v.usesFrame({ since: "2026-11-01", perDay: [1, 0, 2] });
   expect(f.rows.map((r: any) => [r.at, r.uses])).toEqual([[Date.parse("2026-11-01"), 1], [Date.parse("2026-11-01") + 864e5, 0], [Date.parse("2026-11-01") + 2 * 864e5, 2]]);
-  expect([f.measure, f.by.keys.map((k: any) => k.name)]).toEqual([{ name: "Uses per Day", unit: "count", agg: "sum" }, ["Uses"]]);
+  expect([f.measure, f.by.keys.map((k: any) => k.name)]).toEqual([{ name: "Uses by Day", unit: "count", agg: "sum" }, ["Uses"]]);
   expect(detail).not.toContain("<h3>");
   expect(detail).not.toContain("<style");
 });
 
-test("the skill detail shows empty() for each table with no rows and pages Sessions at 50", () => {
+test("the skill detail leaves out each panel with no rows and pages Sessions at 50", () => {
   const base = { name: "x", uses: 1, days: 7, since: "2026-11-01", perDay: [1], sessions: [], errors: [], tools: [], projects: [] };
-  expect(v.renderSkill(base).match(/class="empty"/g)).toHaveLength(4);
+  expect(v.renderSkill(base)).not.toContain("dp-panel");
   const sessions = Array.from({ length: 51 }, (_, i) => ({ id: `s${i}abcdefgh`, time: "2026-11-01T00:00:00Z", prompt: "p", project: "a", via: "slash" }));
   const h = v.renderSkill({ ...base, sessions });
   expect(h).toContain("50 of 51");

@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
-import { actButton, fold, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { fold, notice, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
 import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
 export const view = {
@@ -68,11 +68,11 @@ export function shownSessions(d, o) {
 }
 
 const rate = (r) => pct(r.rate * 100);
-const renderFails = (d, o) => tiles("Failing most", failing(d).map((r) => statCard({ k: r.name, v: rate(r), note: `${r.kind}: ${count(r.errors)} of ${count(r.n)} ${r.kind === "tool" ? "calls" : "uses"}`, key: r.pick, on: o.pick === r.pick })).join(""));
+const renderFails = (d, o) => tiles("Failing Most", failing(d).map((r) => statCard({ k: r.name, v: rate(r), note: `${r.kind}: ${count(r.errors)} of ${count(r.n)} ${r.kind === "tool" ? "calls" : "uses"}`, key: r.pick, on: o.pick === r.pick })).join(""));
 
 function ranked(kind, rows, o) {
   const top = Math.max(1, ...rows.map((r) => r.n));
-  const row = (r) => barRow(esc(r.name), 0, `${count(r.n)} · ${count(r.errors)} err`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
+  const row = (r) => barRow(esc(r.name), 0, `${count(r.n)} · ${count(r.errors)} errors`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
     bar: meter([{ pct: ((r.n - r.errors) / top) * 100 }, { pct: (r.errors / top) * 100, cls: "c-err" }]) });
   const rest = rows.slice(ROWS);
   return barList(rows.slice(0, ROWS).map(row).join("")) + (rest.length ? fold(`${rest.length} more`, barList(rest.map(row).join("")), { cls: "more", open: rest.some((r) => o.pick === `${kind}:${r.name}`) }) : "");
@@ -103,7 +103,7 @@ function hooksCard(d) {
   if (a.langfuse !== "ok") return "";
   const denials = a.denials ?? { total: 0, recent: [] };
   const hooks = (a.hooks ?? []).length
-    ? dataTable(heads(["Hook", "Calls", "Errors", "Last Call"], ["Calls", "Errors", "Last Call"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="num">${count(h.calls)}</td><td class="num${h.errors ? " bad" : ""}">${h.errors}</td><td class="time">${esc(when(h.lastAt))}</td></tr>`).join(""))
+    ? dataTable(heads(["Hook", "Calls", "Errors", "Last Call"], ["Calls", "Errors", "Last Call"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="num">${count(h.calls)}</td><td class="num${h.errors ? " bad" : ""}">${count(h.errors)}</td><td class="time">${esc(when(h.lastAt))}</td></tr>`).join(""))
     : empty("No hook calls in this period.", "Widen the window.");
   const list = denials.recent.length
     ? dataTable(heads(["Denied", "Reason"]), denials.recent.map((r) => `<tr><td class="time lead">${esc(when(r.at))}</td><td class="wide" title="${esc(r.reason)}">${esc(r.reason)}</td></tr>`).join(""))
@@ -118,7 +118,7 @@ function renderSessionsTable(d, o) {
   const shown = all.slice(0, o.limit);
   const h = (label, key, c) => sortHead(label, key, o.sort, c);
   const rows = shown.map((s) => `<tr><td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`, { title: s.id })}</td>` +
-    `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td><td title="${esc(s.taskTypes.join(", "))}">${chips(s.taskTypes.slice(0, 2))}${s.taskTypes.length > 2 ? ` <span class="quiet">+${s.taskTypes.length - 2}</span>` : ""}</td><td class="num">${s.turns}</td><td class="num">${costHtml(s.cost, s.wk)}</td><td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
+    `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td><td title="${esc(s.taskTypes.join(", "))}">${chips(s.taskTypes.slice(0, 2))}${s.taskTypes.length > 2 ? ` <span class="quiet">+${s.taskTypes.length - 2}</span>` : ""}</td><td class="num">${count(s.turns)}</td><td class="num">${costHtml(s.cost, s.wk)}</td><td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
   return dataTable(`${heads(["Session"])}${h("First Prompt", "prompt")}${h("Project", "project")}${heads(["Kinds"])}${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}${h("Started", "start", { num: true })}${h("Last Turn", "last", { num: true })}`, rows) + pager(shown.length, all.length, STEP);
 }
 
@@ -126,7 +126,7 @@ function sessionsHead(d, o) {
   const name = o.pick.slice(o.pick.indexOf(":") + 1), n = shownSessions(d, o).length;
   const title = o.pick ? `Sessions That Used ${name}` : "Sessions";
   const open = o.pick.startsWith("skill:") ? `<a href="${esc(skillHref(name))}">Open the skill</a>` : "";
-  return { count: count(n), aside: `${open}${o.pick ? actButton("Show all sessions", { tile: "" }) : ""}`, id: "ag-sess", title };
+  return { count: count(n), aside: `${open}${o.pick ? `<button class="link" type="button" data-tile="">Show all sessions</button>` : ""}`, id: "ag-sess", title };
 }
 
 const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
@@ -146,7 +146,7 @@ const renderLive = (d, o) => {
 };
 
 /** The fetch reads a bounded number of pages, so a longer window gets the counts of part of it only. */
-const partialNotice = (d) => (d?.partial ? `<p class="hint" role="status">Langfuse holds more pages than the fetch reads, so these counts cover only part of the window.</p>` : "");
+const partialNotice = (d) => (d?.partial ? notice("Langfuse holds more pages than the fetch reads, so these counts cover only part of the window.") : "");
 
 let live = null;
 const here = () => options(hashQuery());

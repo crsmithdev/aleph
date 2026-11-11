@@ -1,12 +1,14 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { clamp, fold, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, tone, when } from "../lib.js";
+import { clamp, count, fold, goQuery, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, linkButton, shortModel, tag, tone, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
+import { detailPanel } from "../timeline.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
 const langfuse = (base, traceId) => (base && traceId ? `<a href="${esc(base)}/trace/${esc(traceId)}">Open in Langfuse</a>` : "");
-const line = (s) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+/** One line of `s`, cut at 60 characters with an ellipsis. */
+const line = (s) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > 60 ? `${t.slice(0, 59)}…` : t; };
 const href = (path) => `#${path}`;
 
 /** The session's id link: the job name when it is a factory session, else the id's first 8 characters; the title is the full id. */
@@ -19,8 +21,8 @@ function turnTable(d, limit = TURN_PAGE) {
   if (!d.turns.length) return empty("No turn in this session.", "Turns appear when the hooks send traces to Langfuse.");
   // Columns: turn (id), prompt (title), output, model, numbers, time.
   const rows = d.turns.slice(0, limit).map((t) =>
-    `<tr><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
-    `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
+    `<tr><td class="num">${idLink(String(t.n), href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}</td>` +
+    `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td title="${esc(t.output)}">${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${count(t.tools)}</td>` +
     `<td class="num">${esc(sdur(t.seconds))}</td><td class="num">${costHtml(t.cost, t.wk)}</td><td class="time">${esc(when(t.start))}</td></tr>`).join("");
   return dataTable(heads(["Turn", "Prompt", "Output", "Model", "Tools", "Took", "Cost", "Started"], ["Turn", "Tools", "Took", "Cost", "Started"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
 }
@@ -135,7 +137,7 @@ function wfSummary(rows) {
   const longest = calls.filter((r) => r.kind !== "generation").sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0)).slice(0, 3).filter((r) => r.durationMs);
   const errors = calls.filter((r) => r.error).length;
   return `<p class="wf-sum">Wall time <strong>${esc(dur(Math.round(wall)) || "0ms")}</strong><span class="dot">·</span>Tool time <strong>${esc(dur(Math.round(toolMs)) || "0ms")}</strong>` +
-    `<span class="dot">·</span>Model time <strong>${esc(dur(Math.round(modelMs)) || "0ms")}</strong><span class="dot">·</span>Longest ${longest.length ? longest.map((r) => `<a href="#" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</a>`).join(", ") : "none"}` +
+    `<span class="dot">·</span>Model time <strong>${esc(dur(Math.round(modelMs)) || "0ms")}</strong><span class="dot">·</span>Longest ${longest.length ? longest.map((r) => `<button class="link" type="button" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</button>`).join(", ") : "none"}` +
     `<span class="dot">·</span>${errors ? `<strong class="terr">${errors} error${errors === 1 ? "" : "s"}</strong>` : "No errors"}</p>`;
 }
 
@@ -162,9 +164,9 @@ export function wfDetail(r) {
   if (!r) return empty("No row selected.", "Select a row to see its input and output.");
   const io = (label, text) => (text ? `<h4>${label}</h4>${clip(text, `<pre>${esc(text)}</pre>`)}` : "");
   return `<h3>${esc(r.name)}${r.args && r.kind !== "turn" ? ` <code>${esc(r.args)}</code>` : ""}</h3>` +
-    facts([["Kind", esc(r.kind)], ["Start", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`], ["Duration", esc(dur(r.durationMs))],
+    facts([["Kind", esc(r.kind)], ["Started", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`], ["Took", esc(dur(r.durationMs))],
       ["Model", r.model ? esc(shortModel(r.model)) : ""], ["Cost", r.cost ? costHtml(r.cost, r.wk) : ""],
-      ["Tokens", r.inputTokens != null || r.outputTokens != null ? `${esc(r.inputTokens ?? "–")} in, ${esc(r.outputTokens ?? "–")} out` : ""]]) +
+      ["Tokens", r.inputTokens != null || r.outputTokens != null ? `${count(r.inputTokens)} in, ${count(r.outputTokens)} out` : ""]]) +
     io("Input", r.input) + (r.error ? io("Error", r.error) : "") + io("Output", r.output);
 }
 
@@ -200,14 +202,14 @@ function mountSession(root, d, query = new URLSearchParams()) {
   };
   root.onclick = async (e) => {
     if (wf) {
-      const a = e.target.closest?.("a[data-select]");
-      if (a) { e.preventDefault(); return select(a.dataset.select); }
+      const a = e.target.closest?.("button[data-select]");
+      if (a) return select(a.dataset.select);
       const row = e.target.closest?.(".wf-row");
       if (row) return select(row.dataset.id);
     }
     const seg = e.target.closest?.(".fbar .seg button");
     if (seg) {
-      location.hash = `#/sessions/${encodeURIComponent(d.id)}${seg.dataset.value === "chat" ? "" : `?view=${seg.dataset.value}`}`;
+      goQuery({ view: seg.dataset.value === "chat" ? "" : seg.dataset.value });
       return;
     }
     const more = e.target.closest?.("#turn-table button[data-more]");
@@ -250,12 +252,12 @@ function obsRows(o, depth) {
 export function renderTurn(d) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const sid = encodeURIComponent(d.id);
-  const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
-  return `<div class="page">${crumb(`#/sessions/${sid}`, [["sessions", "#/sessions"], [d.id.slice(0, 8), `#/sessions/${sid}`], [`turn ${d.n}`]])}` +
+  const nav = (n, label) => (n >= 1 && n <= d.total ? linkButton(label, href(`/sessions/${sid}/turns/${n}`)) : "");
+  return `<div class="page dp-page">${crumb(`#/sessions/${sid}`, [["sessions", "#/sessions"], [d.id.slice(0, 8), `#/sessions/${sid}`], [`turn ${d.n}`]])}` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
-    facts([["Started", esc(when(d.start))], ["Cost", costHtml(d.cost, d.wk)], ["Duration", esc(sdur(d.seconds))]]) +
-    `${sectionHead("Prompt")}<pre>${esc(d.prompt)}</pre>${sectionHead("Output")}<pre>${esc(d.output)}</pre>${sectionHead("Observations")}` +
-    `<div id="obs-table">${obsTable(d)}</div></div>`;
+    facts([["Started", esc(when(d.start))], ["Cost", costHtml(d.cost, d.wk)], ["Took", esc(sdur(d.seconds))]]) +
+    (d.prompt ? detailPanel("Prompt", "", `<pre>${esc(d.prompt)}</pre>`) : "") + (d.output ? detailPanel("Output", "", `<pre>${esc(d.output)}</pre>`) : "") +
+    detailPanel("Observations", count(d.observations.length), `<div id="obs-table">${obsTable(d)}</div>`) + `</div>`;
 }
 
 /** The observations of a turn: `limit` top-level ones with their children, and a pager. */

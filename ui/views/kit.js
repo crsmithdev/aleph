@@ -2,7 +2,7 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, arm, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loading, mean, money, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, arm, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -147,7 +147,7 @@ function renderKit(d, query) {
       `<tr><td>${k}</td><td><code>${h}</code></td><td class="num">${xs.map((x) => f(x)).join(", ")}</td><td class="num">${none ? '<span class="quiet">none</span>' : f(null) || '<span class="quiet">empty</span>'}</td></tr>`).join(""), { fit: true }),
       "Each helper's output now, and its output for no value.") +
     spec("words", "Words", pageHead("Running", { count: 3 }) + row(badge("running"), badge("landed"), priorityBadge("critical")) +
-      empty("No job matches.", "Widen the window or clear a filter.") + error("The agents did not load.") + loading("Jobs")) +
+      empty("No job matches.", "Widen the window or clear a filter.") + error("The agents did not load.") + loadingLine("Jobs")) +
 
     `<h2 class="kit-h">Structure</h2>` +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
@@ -168,7 +168,7 @@ function renderKit(d, query) {
       statCard({ k: "Link", v: "12", note: "goes to another page", href: "#/kit" }) +
       statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }) +
       statCard({ k: "Selector", v: "3", note: "not pressed", key: "b" }))) +
-    spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: id, title, time, state, project, labels, numbers.") +
+    spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: id, title, state, project, labels, numbers, then time.") +
     spec("table-fit", "Table, fit", dataTable(heads(["Role", "Runs", "p50"], ["Runs", "p50"]), `<tr><td>Worker</td><td class="num">31</td><td class="num">6m 40s</td></tr><tr><td>Triage</td><td class="num">12</td><td class="num">38s</td></tr>`, { fit: true }), "", "") +
     spec("table-empty", "Table, empty", empty("No job ran in this window.", "Pick a longer window."), "", "") +
     spec("chart", "Chart panel", `<div class="trio">${panelOf("kit/time", FRAMES.time)}${panelOf("kit/category", FRAMES.category)}${panelOf("kit/cost", FRAMES.cost)}</div>`,
@@ -196,6 +196,17 @@ function renderKit(d, query) {
     spec("link-button", "Link button", row(linkButton("Issue", "#/kit"), linkButton("Next sub-issue: a1701", "#/kit"))) +
     spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide"><a href="#/kit">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
     spec("command", "Command", row(cmd("aleph issue list aleph"), cmd("bun test", { primary: true, hint: "in the worktree" }))) +
+    spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>`) +
+    spec("form-message", "Form message", `<div class="actions">${actButton("Retry")}<span class="act-msg" role="alert">Retry failed: the job is already running.</span></div>`) +
+    spec("confirm", "Two-click confirm", row(`<button class="act warn" type="button" data-kit-confirm>Drop</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
+      "Click Drop: arm() asks for a second click, and the button goes back after 5 seconds. Beside it, the state of an answer that needs a reason.") +
+    spec("disclosure", "Disclosure", fold("Closed by default", "<p>The body of a fold.</p>") + fold("Open by default", "<p>The body of a fold.</p>", { open: true }) +
+      fold("Technical details", `<div class="body"><p>A run id and its log path.</p></div>`, { cls: "more" }) + clamp(`<p>${"A long text that clamps. ".repeat(30)}</p>`)) +
+
+    `<h2 class="kit-h">Text</h2>` +
+    spec("markdown", "Markdown and code", `<div class="md">${md(MD)}</div>`) +
+    spec("diff", "Diff", `<div class="diff-panel">${diffHtml(DIFF)}</div>`) +
+    `<h2 class="kit-h">Controls</h2>` +
     spec("filter", "Filter bar", filterBar([
       { label: "Status", name: "status", value: "open", options: ["open", "done", "dropped"] },
       { label: "Project", name: "project", data: true, value: "", options: [{ value: "", label: "All" }, "aleph", "sidetone"] },
@@ -213,18 +224,7 @@ function renderKit(d, query) {
       setting("Land after", inputBox("minutes", "0", { id: "kit-min", type: "number", attrs: ' min="0" step="1"' }), { id: "kit-min", save: "Save", hint: "0: waits for you." })])) +
     spec("edit", "Edit toggle", `<div class="editable"><p>${editable("<b>A title</b>", inputBox("title", "A title", { attrs: ' aria-label="Title"' }))}</p><div class="actions">${actButton("Edit", { editor: "start" }, { cls: "view-only" })}` +
       `<span class="edit-only">${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true })}</span></div></div>`) +
-    spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>`) +
-    spec("form-message", "Form message", `<div class="actions">${actButton("Retry")}<span class="act-msg" role="alert">Retry failed: the job is already running.</span></div>`) +
-    spec("confirm", "Two-click confirm", row(`<button class="act warn" type="button" data-kit-confirm>Drop</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
-      "Click Drop: arm() asks for a second click, and the button goes back after 5 seconds. Beside it, the state of an answer that needs a reason.") +
-    spec("disclosure", "Disclosure", fold("Closed by default", "<p>The body of a fold.</p>") + fold("Open by default", "<p>The body of a fold.</p>", { open: true }) +
-      fold("Technical details", `<div class="body"><p>A run id and its log path.</p></div>`, { cls: "more" }) + clamp(`<p>${"A long text that clamps. ".repeat(30)}</p>`)) +
-
-    `<h2 class="kit-h">Text</h2>` +
-    spec("markdown", "Markdown and code", `<div class="md">${md(MD)}</div>`) +
-    spec("diff", "Diff", `<div class="diff-panel">${diffHtml(DIFF)}</div>`) +
-    `<h2 class="kit-h">Controls</h2>` +
-    spec("states", "Empty state", empty("Nothing waits for you.", "An Ask shows here when the factory needs you.") + loading("jobs") + error("The jobs did not load.")) +
+    spec("states", "Empty state", empty("Nothing waits for you.", "An Ask shows here when the factory needs you.") + loadingLine("jobs") + error("The jobs did not load.") + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
 
     `<h2 class="kit-h">States</h2>` +
     spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,

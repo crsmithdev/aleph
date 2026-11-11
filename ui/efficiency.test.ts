@@ -114,7 +114,7 @@ test("every table heads its job count Jobs, and no head keeps the old words", ()
 test("selecting a class shows its causes; selecting Lost time again restores the merged list", () => {
   const all = renderEfficiency(D, "all");
   const one = renderEfficiency(D, "returned");
-  expect(one).toContain("<h2>returned Causes</h2>");
+  expect(one).toContain("<h2>Returned Causes</h2>");
   expect(all).toContain('data-tile="returned"');
   for (const w of ["fixed", "Late", "Restarted"]) expect(all).not.toContain(w);
   expect(one).toContain('data-tile="returned" style="flex:4" aria-pressed="true"');

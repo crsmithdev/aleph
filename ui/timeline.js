@@ -153,7 +153,7 @@ export function renderTimeline(segments) {
   };
   const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${lane(r)}<span class="dp-res">${r.result ?? ""}</span><span class="num">${esc(r.time ?? "–")}</span><span class="num">${esc(r.cost ?? "–")}</span></div>${events(r.events)}</div>`;
   return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2>${legendHtml(key)}</div>` +
-    `<div class="dp-scroll"><div class="dp-tl dp-axis"><span>Long spans are compressed</span><div class="dp-ticks">${ticks}</div><span>Result</span><span class="num">Time</span><span class="num">Cost</span></div>` +
+    `<div class="dp-scroll"><div class="dp-tl dp-axis"><span>Long spans are compressed</span><div class="dp-ticks">${ticks}</div><span>Result</span><span class="num">Took</span><span class="num">Cost</span></div>` +
     segments.filter((s) => s.rows.length).map((s) => `<div class="dp-seg"><h3>${esc(s.title)}</h3>${s.aside ? `<span class="quiet">${esc(s.aside)}</span>` : ""}</div>${s.rows.map(row).join("")}`).join("") +
     `</div></section>`;
 }
@@ -165,11 +165,11 @@ export const renderKpis = (items) => `<section class="dp-panel dp-kpis" aria-lab
 export const detailPanel = (title, aside, body) => `<details class="dp-panel dp-fold" open><summary><span>${esc(title)}</span>${aside ? `<span class="dp-aside">${aside}</span>` : ""}</summary><div class="dp-body">${body}</div></details>`;
 
 /** A panel with a heading: the Spec, the Result, the Description. `body` is HTML; `aside` is HTML. */
-export const panel = (id, title, body, aside = "", cls = "") => `<section class="dp-panel dp-prose${cls}" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;
+export const panel = (id, title, body, aside = "", cls = "") => `<section class="dp-panel dp-prose${cls ? ` ${cls}` : ""}" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;
 
-/** "$1.11", or "–" for none. */
-export const costText = (n) => (n ? money(n) : "–");
-/** "08:11 to 08:39" for a span in one day, else with the dates. */
+/** "$1.11", or "$0.00" for none. */
+export const costText = (n) => money(n);
+/** "10/28 08:11 to 10/28 08:39". */
 export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 
 /** The event of one run: its job state as the tag, then `name` as the content and its reason as the note, or `what` in their place. */

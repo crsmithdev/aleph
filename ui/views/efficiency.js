@@ -14,7 +14,7 @@ export function selection(d, key) {
   }
   if (key === USAGE) return { title: "Usage per issue", causes: [], top: d.issues?.usage ?? [] };
   const c = key !== ALL && (d.classes ?? []).find((x) => x.key === key);
-  if (c) return { title: c.key, causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
+  if (c) return { title: c.key[0].toUpperCase() + c.key.slice(1), causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
   const causes = mergeCauses(d), lost = (d.classes ?? []).filter((x) => x.lost);
   return {
     title: "Lost Time",
@@ -37,14 +37,14 @@ function scorecard(d, key) {
 const causeBars = (s) => {
   const size = (x) => x.hours ?? x.runs, max = size(s.causes[0] ?? {}) ?? 0;
   return pagedTable(heads(["Cause", "Took", "Jobs", "Bar"], ["Took", "Jobs"]), s.causes.map((x) =>
-    `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${x.hours === undefined ? "" : esc(hours(x.hours))}</td><td class="num">${x.runs}</td><td>${meter(max > 0 ? (size(x) / max) * 100 : 0)}</td></tr>`));
+    `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${count(x.runs)}</td><td>${meter(max > 0 ? (size(x) / max) * 100 : 0)}</td></tr>`));
 };
 
 const topTable = (rows) => dataTable(heads(["Issue", "Why", "Took", "Jobs"], ["Took", "Jobs"]), rows.map((x) =>
-  `<tr><td>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="wide" title="${esc(`${x.title ? `${x.title}. ` : ""}${x.reason || "No reason recorded."}`)}">${x.title ? `${esc(x.title)}. ` : ""}${esc(x.reason || "No reason recorded.")}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${x.runs}</td></tr>`).join(""));
+  `<tr><td>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="wide" title="${esc(`${x.title ? `${x.title}. ` : ""}${x.reason || "No reason recorded."}`)}">${x.title ? `${esc(x.title)}. ` : ""}${esc(x.reason || "No reason recorded.")}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${count(x.runs)}</td></tr>`).join(""));
 
 const usageTable = (rows) => pagedTable(heads(["Issue", "Usage", "Jobs"], ["Usage", "Jobs"]), rows.map((x) =>
-  `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(pct(x.week))}</td><td class="num">${x.runs}</td></tr>`));
+  `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(pct(x.week))}</td><td class="num">${count(x.runs)}</td></tr>`));
 
 function usagePage(d, key) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);

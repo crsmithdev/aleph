@@ -26,7 +26,7 @@ export function xLabel(at, window) {
 export async function flowOf(window, q, baseline = false) {
   try {
     const res = await get(scope(q).url(`/api/flow?window=${window}${baseline ? "&baseline=1" : ""}`));
-    if (!res.ok) throw new Error(`Could not load speed (${res.status}).`);
+    if (!res.ok) throw new Error(`Could not load Flow (${res.status}).`);
     return await res.json();
   } catch (e) { return { error: e.message }; }
 }

@@ -96,10 +96,10 @@ test("a panel whose frame carries a mark says how old its data is and why, with 
   const since = "2026-01-01T00:00:00Z";
   for (const f of [time, { ...time, rows: [] }]) {
     const h = panel({ ...f, error: "build failed", since }, "area");
-    expect(h).toContain('<p class="aged" role="alert">');
+    expect(h).toContain('<p class="notice bad" role="alert">');
     expect(h).toMatch(/Agents Live by Role is \d+d \d+h old: build failed/);
   }
-  expect(panel(time, "area")).not.toContain('class="aged"');
+  expect(panel(time, "area")).not.toContain('class="notice"');
 });
 
 test("a null value is a gap that a line passes over, and a missing one is 0", () => {

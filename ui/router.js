@@ -274,7 +274,7 @@ export async function start() {
     const items = views.filter((v) => GROUPS.includes(v.group) && !v.path.includes(":") && v.nav !== false).sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
     $("nav").innerHTML = `<ul>${items.map((v, i) =>
       `${v.group !== items[i - 1]?.group && HEADERS[v.group] ? `<li class="head">${HEADERS[v.group]}</li>` : ""}<li><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span></a></li>`).join("")}</ul>`;
-    $("nav").querySelector?.('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    $("nav").querySelector?.('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "center" });
   }
 
   // Focus moves after `focusout`, so look once it has settled.

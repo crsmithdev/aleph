@@ -84,6 +84,9 @@ export const loading = (title) => `<div class="page"><p class="quiet loading" ro
 export const error = (line, hint = "Check that aleph-ui is running, then reload.") =>
   `<div class="error" role="alert"><p>${esc(line)}</p><p class="hint">${esc(hint)}</p></div>`;
 
+/** A note above data that still shows: `bad` marks that the data is stale or wrong. */
+export const notice = (line, bad = false) => `<p class="notice${bad ? " bad" : ""}" role="${bad ? "alert" : "status"}">${esc(line)}</p>`;
+
 /** A command the reader copies to run; the page's click handler does the copying. */
 export function cmd(text, { primary = false, hint = "" } = {}) {
   return `<button class="cmd${primary ? " primary" : ""}" type="button" data-cmd="${esc(text)}"><span>${esc(text)}</span>${hint ? `<span class="hint">${esc(hint)}</span>` : ""}<span class="cp">Copy</span></button>`;
