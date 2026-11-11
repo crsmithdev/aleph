@@ -384,6 +384,12 @@ describe("render", () => {
     expect(checks).toContain("Took");
     expect(checks).not.toContain("Time");
   });
+  test("the Jobs table puts Job and Title first and Started third, and each row opens with the job id link", () => {
+    const h = v.renderJobsTable([{ ...job, started: ago(5), ended: ago(4) }]);
+    expect([...h.matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g)].map((m) => m[1].trim())).toEqual(["Job", "Title", "Started", "State", "Project", "Model", "Took", "Cost"]);
+    const row = h.split('<tr class="rowlink"').slice(1)[0];
+    expect(/^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide"[^>]*><a[^>]*>[^<]*<\/a><\/td><td class="time">/.test(row)).toBe(true);
+  });
   test("the Job page of a sub-issue says sub-issue, and its work lane counts jobs", () => {
     const parent = { id: "fac-9", href: "#/issues/fac/9", n: 1, of: 2, next: { id: "fac-10", href: "#/jobs/fac-10" } };
     const h = v.renderJob({ ...job, parent, runs: [{ id: "1", kind: "intake", condition: "done", started: ago(3), ended: ago(2) }] });

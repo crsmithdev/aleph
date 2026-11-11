@@ -151,8 +151,8 @@ export function filterRows(rows, o = {}, skip = []) {
   });
 }
 
-// Column order: time, id, title, state badge, project, labels, numbers. [key, label, { num }]
-export const COLUMNS = [["updated", "Updated"], ["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Jobs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }]];
+// Column order: id, title, time, state badge, project, labels, numbers. [key, label, { num }]
+export const COLUMNS = [["id", "Id"], ["title", "Title"], ["updated", "Updated"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Jobs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }]];
 const RANK = { critical: 4, high: 3, medium: 2, low: 1 };
 const SORT = {
   project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => updatedMs(r),
@@ -186,8 +186,8 @@ export function ageText(r, now = Date.now()) {
 /** One issue row. `fold` is "open" or "closed" for a parent with parts, which gets a chevron; `sub` indents a part shown under its parent. */
 export function renderRow(r, { fold, sub } = {}) {
   const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
-  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(shortText(`${r.repo}-${r.n}`), r.href)}</td>` +
-    `<td class="wide">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
+  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td>${idLink(shortText(`${r.repo}-${r.n}`), r.href)}</td>` +
+    `<td class="wide">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td><td class="time">${esc(updatedText(r))}</td>` +
     `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${priorityBadge(r.priority)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
     `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td></tr>`;
 }
@@ -639,9 +639,9 @@ export function renderIssue(d) {
   const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + machineNotes : empty("No notes.")) + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
-    ? pagedTable(heads(["Committed", "Commit", "Subject", ...(parts ? ["Sub-issue"] : [])]), d.commits.map((c) => {
+    ? pagedTable(heads(["Commit", "Subject", "Committed", ...(parts ? ["Sub-issue"] : [])]), d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
-      return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(shortText(c.part), issueHref(c.part)) : ""}</td>` : ""}</tr>`;
+      return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td><td class="time">${esc(when(c.date))}</td>${parts ? `<td>${c.part ? idLink(shortText(c.part), issueHref(c.part)) : ""}</td>` : ""}</tr>`;
     }))
     : empty("No commit on main names this issue in its trailers.");
   const segments = issueSegments(d);

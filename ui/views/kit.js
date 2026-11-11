@@ -63,9 +63,9 @@ const ISSUES = Array.from({ length: 8 }, (_, i) => ({
   title: ["Give each component in design.md a live render", "Fail CI on a new hard-coded colour in ui/", "Show the cost of each run on its job page"][i % 3],
   state: ["open", "landed", "failed", "waiting", "parked"][i % 5], project: i % 4 ? "aleph" : "sidetone", labels: i % 2 ? ["ui"] : ["ui", "design"], cost: (i * 1.37) % 9,
 }));
-const issueRow = (x) => `<tr><td>${idLink(x.id, "#/kit")}</td><td class="wide">${x.title}</td><td>${badge(x.state)}</td>` +
-  `<td>${x.project}</td><td>${chips(x.labels)}</td><td class="time">${when(x.at)}</td><td class="num">${money(x.cost)}</td></tr>`;
-const ISSUE_HEAD = (sort) => [sortHead("Issue", "id", sort), sortHead("Title", "title", sort), "<th>State</th>", "<th>Project</th>", "<th>Labels</th>", sortHead("Updated", "at", sort), sortHead("Cost", "cost", sort, { num: true })].join("");
+const issueRow = (x) => `<tr><td>${idLink(x.id, "#/kit")}</td><td class="wide">${x.title}</td><td class="time">${when(x.at)}</td><td>${badge(x.state)}</td>` +
+  `<td>${x.project}</td><td>${chips(x.labels)}</td><td class="num">${money(x.cost)}</td></tr>`;
+const ISSUE_HEAD = (sort) => [sortHead("Issue", "id", sort), sortHead("Title", "title", sort), sortHead("Updated", "at", sort), "<th>State</th>", "<th>Project</th>", "<th>Labels</th>", sortHead("Cost", "cost", sort, { num: true })].join("");
 
 const MD = `A paragraph with \`code\`, **bold**, *em* and a [link](#/kit).
 
@@ -167,7 +167,7 @@ function renderKit(d, query) {
       statCard({ k: "Link", v: "12", note: "goes to another page", href: "#/kit" }) +
       statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }) +
       statCard({ k: "Selector", v: "3", note: "not pressed", key: "b" }))) +
-    spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: id, title, state, project, labels, times, numbers.") +
+    spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: id, title, time, state, project, labels, numbers.") +
     spec("table-fit", "Table, fit", dataTable(heads(["Role", "Runs", "p50"], ["Runs", "p50"]), `<tr><td>Worker</td><td class="num">31</td><td class="num">6m 40s</td></tr><tr><td>Triage</td><td class="num">12</td><td class="num">38s</td></tr>`, { fit: true }), "", "") +
     spec("table-empty", "Table, empty", empty("No job ran in this window.", "Pick a longer window."), "", "") +
     spec("chart", "Chart panel", `<div class="trio">${panelOf("kit/time", FRAMES.time)}${panelOf("kit/category", FRAMES.category)}${panelOf("kit/cost", FRAMES.cost)}</div>`,

@@ -248,11 +248,11 @@ describe("views", () => {
     expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('key="issues/backlog"'));
     expect(h.indexOf('key="issues/backlog"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
-    expect(ths(section(h, "issues-table"))).toEqual(["updated", "id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age"]);
+    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "updated", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age"]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
   });
 
-  test("issue rows: Updated first, then Id, Title, Stage, Project and Labels, and no X", async () => {
+  test("issue rows: Id, Title, Updated, Stage, Project and Labels, and no X", async () => {
     const d = await getJson("/api/issues");
     const h = section(v.view.render(d, {}, new URLSearchParams("status=any")), "issues-table");
     expect(h).toContain('href="#/issues/fac/1"');
@@ -261,7 +261,7 @@ describe("views", () => {
     const closed = rows.filter((r: string) => r.includes("plain task"));
     expect(closed).toHaveLength(1);
     expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(false);
-    expect(rows.every((r: string) => /^[^>]*><td class="time">/.test(r))).toBe(true);
+    expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide">.*?<\/td><td class="time">/.test(r))).toBe(true);
     expect(closed[0]).toContain(">done</span>");
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
@@ -808,12 +808,12 @@ describe("the Issue page shows the ask row", () => {
     return i.id;
   }, true)!.value;
 
-  test("renderIssue puts the Committed time first in the Commits table", async () => {
+  test("renderIssue puts the Commit and Subject first in the Commits table", async () => {
     const d = await getJson(`/api/issues/fac-1`);
     const date = "2026-11-02T09:00:00Z";
     const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date }] });
-    expect(h).toContain("<th>Committed</th><th>Commit</th><th>Subject</th>");
-    expect(h).toContain(`<tr><td class="time">${when(date)}</td><td><code>abcdef1</code></td>`);
+    expect(h).toContain("<th>Commit</th><th>Subject</th><th>Committed</th>");
+    expect(h).toContain(`<tr><td><code>abcdef1</code></td><td class="wide" title="s">s</td><td class="time">${when(date)}</td>`);
   });
 
   test("renderIssue shows empty() for no commits and pages the Commits table at 50", async () => {

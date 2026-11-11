@@ -58,13 +58,13 @@ export function renderJobsTable(jobs, f = {}) {
   if (!all.length) return empty("No job matches.", "Widen the window or clear a filter.");
   const shown = all.slice(0, limitOf(f, PAGE)), sort = sortOf(f);
   const h = (label, key, c) => sortHead(label, key, sort, c);
-  // Columns: started, id, title, state, project, model, then took and cost: the Issues table's order.
+  // Columns: id, title, started, state, project, model, then took and cost: the Issues table's order.
   const rows = shown.map((j) => {
     const url = jobHref(j.id);
-    return `<tr class="rowlink" data-annotate="${esc(j.id)}"><td class="time">${esc(when(j.started))}</td><td>${idLink(shortText(j.id), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
+    return `<tr class="rowlink" data-annotate="${esc(j.id)}"><td>${idLink(shortText(j.id), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td class="time">${esc(when(j.started))}</td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
       `<td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td><td class="num">${j.cost !== null ? esc(money(j.cost)) : ""}</td></tr>`;
   }).join("");
-  return dataTable(h("Started", "started") + h("Job", "id") + h("Title", "title") + h("State", "state") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }), rows) + pager(shown.length, all.length, PAGE);
+  return dataTable(h("Job", "id") + h("Title", "title") + h("Started", "started") + h("State", "state") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }), rows) + pager(shown.length, all.length, PAGE);
 }
 
 /** Wire the state filter (it fetches again), the search, the sort and the pager; the last three redraw the table once `jobsNow()` gives the jobs. */

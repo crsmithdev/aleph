@@ -509,8 +509,8 @@ A table shows items that have the same columns.
 | 6 | Row | One item | | `--sunk` on hover |
 | 7 | Row actions | The buttons of the row | yes | the row actions |
 
-- Put the columns in this order: id or name, title, state, priority, project, labels, then times, then numbers.
-- Put each time and each number at the right of the row. Align a number to the right.
+- Put the columns in this order: id or name, title, time, state, priority, project, labels, then numbers.
+- Put each number at the right of the row. Align a number to the right.
 - Name the time column for the time it shows. Format it with `when()`.
 - Make an id with `idLink()` or `repoIdLink()`, a state with `badge()`, and labels with `chips()`.
 - Put the title in `td.wide`. Do not let other cells wrap.
@@ -1242,7 +1242,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
-| Tables put the time column first | Tables | aleph-1854 |
 | Two `act()` wrappers with different signatures; `shell()` has no callers | `ui/views/cards.js`, `ui/views/memory.js` | follow-up |
 | A metric card's second value hides at phone width, so `v` shows with a `q` that names two values | `ui/app.css` | review on `#/kit` |
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
