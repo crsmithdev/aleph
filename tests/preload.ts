@@ -32,8 +32,12 @@ const vars: Record<string, string> = {
   ALEPH_MONITOR_CMD: "false",
   // Nor through the title writer: `false` fails, so a title that breaks the rule is cut.
   ALEPH_RULE_CMD: "false",
+  XDG_RUNTIME_DIR: join(dir, "run"),
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
+// The shell always sets XDG_RUNTIME_DIR, and lock names such as tick, admit and land-<repo> are global
+// (jobs/lib/infra/locks.ts): under the shell's folder a test would take the live factory's locks.
+process.env.XDG_RUNTIME_DIR = vars.XDG_RUNTIME_DIR;
 // A test that deletes one of these and does not put it back would send every later test in the process to the
 // live folder under ~/.aleph (records written to ~/.aleph/jobs on 2026-11-04). After each test, a deleted one is set again.
 afterEach(() => { for (const [k, v] of Object.entries(vars)) process.env[k] ??= v; });

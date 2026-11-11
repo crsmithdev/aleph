@@ -5,16 +5,17 @@ import { join } from "node:path";
 import { health, mainRed, redMains, writeBaseline } from "./factory-status.ts";
 import type { Repo } from "../records/ledger.ts";
 
-let base: string;
+const KEYS = ["ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR"];
+let base: string, saved: (string | undefined)[] = [];
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-main-health-"));
+  saved = KEYS.map((k) => process.env[k]);
   process.env.ALEPH_FACTORY_DIR = join(base, "factory");
   process.env.XDG_RUNTIME_DIR = join(base, "xdg");
   mkdirSync(join(base, "factory"));
 });
 afterEach(() => {
-  delete process.env.ALEPH_FACTORY_DIR;
-  delete process.env.XDG_RUNTIME_DIR;
+  KEYS.forEach((k, i) => { if (saved[i] === undefined) delete process.env[k]; else process.env[k] = saved[i]; });
   rmSync(base, { recursive: true, force: true });
 });
 

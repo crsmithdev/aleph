@@ -22,14 +22,20 @@ function run(id: string, on: string, d: number, archived: boolean) {
   return folder;
 }
 
+const KEYS = ["ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_REPOS", "ALEPH_USAGE_FILE", "XDG_RUNTIME_DIR"];
+let saved: (string | undefined)[] = [];
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-retention-"));
+  saved = KEYS.map((k) => process.env[k]);
   Object.assign(process.env, {
     ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_REPOS: join(base, "repos.json"),
     ALEPH_USAGE_FILE: join(base, "usage.jsonl"), XDG_RUNTIME_DIR: join(base, "run"),
   });
 });
-afterAll(() => rmSync(base, { recursive: true, force: true }));
+afterAll(() => {
+  KEYS.forEach((k, i) => { if (saved[i] === undefined) delete process.env[k]; else process.env[k] = saved[i]; });
+  rmSync(base, { recursive: true, force: true });
+});
 
 test("retain deletes old run folders only of archived records, and keeps events and records", () => {
   const old = run("r-old", "rt-1", 91, true), recent = run("r-new", "rt-2", 89, true), live = run("r-live", "rt-3", 100, false);

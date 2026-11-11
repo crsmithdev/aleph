@@ -72,6 +72,7 @@ describe("every transition dispatches at once", () => {
 
   test("a stuck run holds only its own issue: the next issue starts beside it", async () => {
     // The safe default actions would release the run; without them it stays stuck.
+    const rescue = process.env.ALEPH_RESCUE;
     process.env.ALEPH_RESCUE = "off";
     try {
       const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
@@ -81,7 +82,8 @@ describe("every transition dispatches at once", () => {
       await when(() => started().includes(`fac-${b}`));
       expect(started()).toEqual([`fac-${s}`, `fac-${b}`]);
     } finally {
-      delete process.env.ALEPH_RESCUE;
+      if (rescue === undefined) delete process.env.ALEPH_RESCUE;
+      else process.env.ALEPH_RESCUE = rescue;
     }
   }, 90_000);
 

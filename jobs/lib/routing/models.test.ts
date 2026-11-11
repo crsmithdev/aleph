@@ -37,6 +37,8 @@ test("a tier set to a model it offers reads back; a model it does not offer, an 
 });
 
 test("a Claude model adds no env; gpt-oss-20b adds the local server and takes the GPU slot; an OpenRouter model adds OpenRouter, the key and an empty API key", () => {
+  const keys = ["OPENROUTER_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_DEFAULT_HAIKU_MODEL"];
+  const saved = keys.map((k) => process.env[k]);
   process.env.OPENROUTER_API_KEY = "sk-or-test";
   try {
     process.env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api";
@@ -54,9 +56,7 @@ test("a Claude model adds no env; gpt-oss-20b adds the local server and takes th
     expect(onGpu("deepseek-v4.1-flash")).toBe(false);
     expect(viaOf("deepseek-v4.1-flash")).toBe("openrouter");
   } finally {
-    delete process.env.OPENROUTER_API_KEY;
-    delete process.env.ANTHROPIC_BASE_URL;
-    delete process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+    keys.forEach((k, i) => { if (saved[i] === undefined) delete process.env[k]; else process.env[k] = saved[i]; });
   }
 });
 

@@ -7,17 +7,18 @@ import { putRun } from "../records/record.ts";
 import { holdsWork, isRunning, markEnded, markStarted, processState, runHealth, STARTING_MS, stop, unitAlive } from "./process.ts";
 
 const NOW = Date.parse("2026-11-03T00:00:00Z");
-let base: string;
+let base: string, jobs: string | undefined;
 const kids: { kill: (s?: NodeJS.Signals) => void }[] = [];
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-process-"));
+  jobs = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = join(base, "runs");
   mkdirSync(join(base, "runs"));
 });
 afterEach(() => {
   setSystemTime();
   for (const k of kids.splice(0)) k.kill("SIGKILL");
-  delete process.env.ALEPH_JOBS_DIR;
+  process.env.ALEPH_JOBS_DIR = jobs;
   rmSync(base, { recursive: true, force: true });
 });
 
