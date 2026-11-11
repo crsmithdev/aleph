@@ -192,7 +192,7 @@ test("newCases: an added case that pairs with a removed one is a rename, not a n
  * The keep-gate with a runner that runs the command in a plain folder: `code` maps a commit to the source of
  * m.ts there, and `hidden` goes to `.hidden` as runOnCommit gives it. The test file is new on the head.
  */
-async function gate(code: Record<string, string>, testText: string, sources: Source[] = []) {
+async function gate(code: Record<string, string>, testText: string, sources: Source[] = [], names = ["new", "fixed"]) {
   const commands: string[] = [];
   const runner: Runner = async (_repo, sha, command, hidden) => {
     commands.push(`${sha}: ${command}`);
@@ -203,7 +203,7 @@ async function gate(code: Record<string, string>, testText: string, sources: Sou
     const p = Bun.spawnSync(["bash", "-c", command], { cwd: dir, stdout: "pipe", stderr: "pipe" });
     return { code: p.exitCode ?? 1, output: p.stdout.toString() + p.stderr.toString() };
   };
-  const tests = [{ path: "lib/m.test.ts", text: testText, names: ["new", "fixed"] }];
+  const tests = [{ path: "lib/m.test.ts", text: testText, names }];
   return { result: await keepGate({ key: "r" } as Repo, "base", "head", tests, sources, runner), commands };
 }
 
@@ -215,6 +215,13 @@ describe("the keep-gate", () => {
     expect(result?.reason).toBe("keep-gate: 1 new test passes on the base commit: lib/m.test.ts > fixed");
     expect(result?.log).toContain("- lib/m.test.ts > fixed\n");
     expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "base"]);
+  });
+
+  test("a case named guard: is not held for passing on the base", async () => {
+    const code = { base: "export const m = () => 1;\n", head: "export const m = () => 2;\n" };
+    const text = testText.replace('test("fixed"', 'test("guard: fixed"');
+    expect((await gate(code, text, [], ["new", "guard: fixed"])).result).toBeNull();
+    expect((await gate(code, testText, [], ["new", "fixed"])).result?.reason).toContain("lib/m.test.ts > fixed");
   });
 
   test("new cases that all fail on the base pass the gate", async () => {

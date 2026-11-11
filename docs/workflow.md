@@ -145,7 +145,7 @@ Verify runs four checks in order, each in a detached worktree at the branch's ti
 |---|---|---|
 | Repo checks | `checks.ts` `runAll`, `related.ts` `buildChecks` | The setup and the test files the change reaches pass, and every check that is not a test (such as `tsc`). "ran 0 tests" fails |
 | Doc claims | `hooks/lib/docclaims.ts` | Each claim in the final message that a doc matches the code has a run, value or `file:line` behind it in the transcript |
-| Keep-gate | `checks.ts` `keepGate`, `keep-earn.ts` | Each new test fails on the base and passes on the head; a test that cannot load on the base earns its place by coverage or a mutant |
+| Keep-gate | `checks.ts` `keepGate`, `keep-earn.ts` | Each new test fails on the base and passes on the head; a test that cannot load on the base earns its place by coverage or a mutant; a case named `guard: ...` is skipped, and the reviewer judges it |
 | Oracle | `unit.ts` `oracleFailure` | Each Oracle command that the checks did not run passes |
 
 A failing check or Oracle command runs once more on the same tree. A pass on the rerun is a flake, recorded in `~/.aleph/factory/flaky.json`.

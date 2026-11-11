@@ -385,9 +385,12 @@ export function mutants(sources: Source[], max = 10): { path: string; line: numb
  * The keep-gate: each new case of `tests` must pass on `tip` and fail on `base`. The head's text of each file
  * runs against the base code, so a file that is new on the head runs there too. A case that did not run on the
  * base (its file did not load there) must then earn its keep on `sources`, the changed source files: see earnKeep.
+ * A case named `guard: ...` is a guard test (a ratchet, a lint row over a clean codebase): it passes on the base
+ * by design, so the gate skips it and the reviewer judges that it guards something. The `tests` check still runs it.
  * Returns the reason and the lines for checks.log, or null. A fault of the set-up is not a failure.
  */
-export async function keepGate(repo: Repo, base: string, tip: string, tests: NewTests[], sources: Source[], runner: Runner = runOnCommit): Promise<{ reason: string; log: string; noVerdict?: true } | null> {
+export async function keepGate(repo: Repo, base: string, tip: string, all: NewTests[], sources: Source[], runner: Runner = runOnCommit): Promise<{ reason: string; log: string; noVerdict?: true } | null> {
+  const tests = all.map((t) => ({ ...t, names: t.names.filter((n) => !n.startsWith("guard: ")) })).filter((t) => t.names.length);
   if (!tests.length) return null;
   const test = `bun test --reporter=junit --reporter-outfile=${REPORT} ${tests.map((t) => q(`./${t.path}`)).join(" ")}; c=$?; cat ${REPORT}; exit $c`;
   let head = await runner(repo, tip, test);
@@ -403,7 +406,7 @@ export async function keepGate(repo: Repo, base: string, tip: string, tests: New
   const passed = junitPassed(onBase.output).filter((c) => fresh.has(c.name)).map((c) => `${c.file} > ${c.name}`);
   if (passed.length) return {
     reason: `keep-gate: ${passed.length} new test${passed.length > 1 ? "s pass" : " passes"} on the base commit: ${passed.join("; ")}`,
-    log: `These new tests pass on the base commit ${base.slice(0, 10)}, without the branch's change, so they do not test it:\n${passed.map((p) => `- ${p}`).join("\n")}\nMake each one fail without the change, or remove it: a committed test needs a lasting reason.`,
+    log: `These new tests pass on the base commit ${base.slice(0, 10)}, without the branch's change, so they do not test it:\n${passed.map((p) => `- ${p}`).join("\n")}\nMake each one fail without the change, or remove it: a committed test needs a lasting reason. A ratchet or a lint row that guards a clean codebase passes on the base by design: start its name with \`guard: \`.`,
   };
   const ran = junitRan(onBase.output);
   const unran = tests.flatMap((t) => t.names.filter((name) => !ran.has(`${t.path} > ${name}`)).map((name) => ({ file: t.path, name })));

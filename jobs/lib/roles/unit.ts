@@ -594,7 +594,8 @@ Check each Oracle clause of the spec and each requirement in the Goal section.
 The Oracle is a check stored on the issue, so the goal does not need a new committed test. A committed test
 needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting
 behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new
-command wiring. Hold a committed test that has none of these reasons, and one at the wrong layer or in the wrong file.
+command wiring. A case named \`guard: ...\` is a ratchet or a lint row over a clean codebase: it passes on the base by design, so the
+keep-gate skips it; hold it unless it guards something real. Hold a committed test that has none of these reasons, and one at the wrong layer or in the wrong file.
 The "summary" is the verdict in one sentence and the passes as a count, such as \`7 of 9 passed\`, in at most 80 words.
 Each failure goes in "failures": its clause, named by a few words without its reason, and what was observed. Do not
 list a pass. Say each thing once. The list of failures has no cap: list every failure, not only the first. The verdict is "pass" when nothing
