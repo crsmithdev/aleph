@@ -86,7 +86,7 @@ function toolsCard(d, o) {
   if (a.langfuse === "error") return card("Tools", error(`Langfuse failed: ${a.error}`, "Check that Langfuse is running, then reload."), opts);
   const t = toolsOf(d);
   return card("Tools", `<p>${count(sum(t, (x) => x.calls))} calls, ${count(sum(t, (x) => x.errors))} errors. The red part of a bar is errors.</p>` +
-    (t.length ? ranked("tool", t.map((x) => ({ name: x.name, n: x.calls, errors: x.errors })), o) : empty("No tool calls in this period.")), opts);
+    (t.length ? ranked("tool", t.map((x) => ({ name: x.name, n: x.calls, errors: x.errors })), o) : empty("No tool calls in this period.", "Widen the window.")), opts);
 }
 
 function skillsCard(d, o) {
@@ -104,10 +104,10 @@ function hooksCard(d) {
   const denials = a.denials ?? { total: 0, recent: [] };
   const hooks = (a.hooks ?? []).length
     ? dataTable(heads(["Hook", "Calls", "Errors", "Last Call"], ["Calls", "Errors", "Last Call"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="num">${count(h.calls)}</td><td class="num${h.errors ? " bad" : ""}">${h.errors}</td><td class="time">${esc(when(h.lastAt))}</td></tr>`).join(""))
-    : empty("No hook calls in this period.");
+    : empty("No hook calls in this period.", "Widen the window.");
   const list = denials.recent.length
     ? dataTable(heads(["Denied", "Reason"]), denials.recent.map((r) => `<tr><td class="time lead">${esc(when(r.at))}</td><td class="wide" title="${esc(r.reason)}">${esc(r.reason)}</td></tr>`).join(""))
-    : empty("The gate denied nothing in this period.");
+    : empty("The gate denied nothing in this period.", "Widen the window to see older denials.");
   return `<div class="pair">${card("Hooks", hooks)}${card("Verify-Gate Denials", list, { count: count(denials.total), label: "Verify-gate denials" })}</div>`;
 }
 
@@ -135,7 +135,7 @@ export function renderSessions(d, o = options()) {
   const projects = d?.sessions?.projects ?? d?.activity?.projects ?? [];
   const total = sum(d?.sessions?.sessions ?? [], (s) => s.cost ?? 0);
   const head = scope().bar({ project: projects.includes(o.project) ? o.project : "", value: o.days, more: projects, name: "days", options: DAYS });
-  return `<div class="page sp agents">${pageHead("Sessions", { count: `last ${o.days} days`, aside: head })}<div id="ag-live" class="sp">${renderLive(d, o)}</div>` +
+  return `<div class="page sp agents">${pageHead("Sessions", { aside: head })}<div id="ag-live" class="sp">${renderLive(d, o)}</div>` +
     `<p class="hint">${esc(money(total))} recorded across these sessions.</p></div>`;
 }
 

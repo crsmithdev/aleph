@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { clamp, fold, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, when } from "../lib.js";
+import { clamp, fold, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, tone, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -16,7 +16,7 @@ const sessionLink = (s) =>
 /** The turn table: the session page's `?view=table`. */
 const TURN_PAGE = 50;
 function turnTable(d, limit = TURN_PAGE) {
-  if (!d.turns.length) return empty("No turn in this session.");
+  if (!d.turns.length) return empty("No turn in this session.", "Turns appear when the hooks send traces to Langfuse.");
   // Columns: turn (id), prompt (title), output, model, numbers, time.
   const rows = d.turns.slice(0, limit).map((t) =>
     `<tr><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
@@ -89,7 +89,7 @@ export function chatTurn(id, t) {
     (system.length ? `<div class="sys">${system.map(sysChip).join("")}</div>` : "") +
     (text ? `<div class="msg user md">${clip(text, md(text))}</div>` : "") +
     work(t) +
-    (out ? `<div class="msg reply md">${clip(out, md(out))}</div>` : empty("No reply recorded.")) + `</section>`;
+    (out ? `<div class="msg reply md">${clip(out, md(out))}</div>` : empty("No reply recorded.", "The turn ended before the model answered.")) + `</section>`;
 }
 
 /** Under the chat: "20 of 73" and "Show 20 more", which fetches the next turns. */
@@ -159,7 +159,7 @@ export function waterfall(rows, sel = null) {
 
 /** The detail pane of one row. */
 export function wfDetail(r) {
-  if (!r) return `<p class="quiet">Select a row to see its input and output.</p>`;
+  if (!r) return empty("No row selected.", "Select a row to see its input and output.");
   const io = (label, text) => (text ? `<h4>${label}</h4>${clip(text, `<pre>${esc(text)}</pre>`)}` : "");
   return `<h3>${esc(r.name)}${r.args && r.kind !== "turn" ? ` <code>${esc(r.args)}</code>` : ""}</h3>` +
     facts([["Kind", esc(r.kind)], ["Start", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`], ["Duration", esc(dur(r.durationMs))],
@@ -242,7 +242,7 @@ function obsRows(o, depth) {
     o.error ? `Error: ${esc(o.error)}` : "",
   ].filter(Boolean).join("; ");
   const ioFold = (label, text) => (text ? fold(label, `<pre>${esc(text)}</pre>`) : "");
-  return `<tr><td>${tag(o.kind, o.error ? "stuck" : "quiet")}</td>` +
+  return `<tr><td>${tag(o.kind, tone(o.error ? "failed" : o.kind))}</td>` +
     `<td style="padding-left:${depth * INDENT_STEP}px"><strong>${esc(o.name)}</strong>${ioFold("Input", o.input)}${ioFold("Output", o.output)}</td>` +
     `<td class="wide">${detail}</td><td class="num">${esc(sdur(o.seconds))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
 }
@@ -260,7 +260,7 @@ export function renderTurn(d) {
 
 /** The observations of a turn: `limit` top-level ones with their children, and a pager. */
 function obsTable(d, limit = TURN_PAGE) {
-  if (!d.observations.length) return empty("No observation in this turn.");
+  if (!d.observations.length) return empty("No observation in this turn.", "Observations appear when the hooks send traces to Langfuse.");
   return dataTable(heads(["Kind", "Name", "Detail", "Took"], ["Took"]), d.observations.slice(0, limit).map((o) => obsRows(o, 0)).join("")) + pager(limit, d.observations.length, TURN_PAGE);
 }
 

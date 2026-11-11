@@ -70,8 +70,8 @@ test("each Jobs frame carries the stage's data, its colours and the issue link o
   expect([title(t), t.by.keys.map((k: any) => k.name)]).toEqual(["Queue by Day", ["p90", "p50"]]);
   // The p50 is not a part of the p90, so the frame opens as two lines rather than stacked areas.
   expect([t.form, option(t, t.form, T).series.map((s: any) => s.stack ?? null)]).toEqual(["lines", [null, null]]);
-  // A bucket with no time is 0, so the level still has a point.
-  expect(trendFrame(D, "lead", "Lead Time", "x").rows.map((r: any) => r.p50)).toEqual([1000, 0]);
+  // A bucket with no time is null, so the line shows a gap.
+  expect(trendFrame(D, "lead", "Lead Time", "x").rows.map((r: any) => r.p50)).toEqual([1000, null]);
   const s = stripFrame(D, "lead", "Lead Time");
   // fx-2 has no lead time and fx-3 has no filing time, so neither has a point.
   expect(s.rows.map((r: any) => [r.at, r.name, r.href, r.landed])).toEqual([[F1, "fx-1", "#/issues/fx/1", 1100]]);
@@ -116,7 +116,7 @@ test("empty phases show dashes and no error", () => {
 });
 
 test("the title is the sidebar name; models with no name say not recorded", () => {
-  expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
+  expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><div class="aside"><div class="fbar">');
   expect(renderFactoryJobs(D, null, "lead")).toContain("not recorded");
 });
 

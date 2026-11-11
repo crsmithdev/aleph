@@ -386,7 +386,6 @@ function renderLive(projects, rows, o, tests) {
     numbers: renderTiles(stats(scoped, new Date(), winOf(o.window)), o.tile, o.window),
     detail: renderCharts(o, scoped, tests) + renderDetail(scoped, o),
     count: shown,
-    window: `last ${winOf(o.window)}`,
     table: renderTable(rows, o),
   };
 }
@@ -420,7 +419,6 @@ function refill() {
   if (!root?.isConnected) return;
   const parts = renderLive(live.projects, live.rows, live.o(), live.tests);
   for (const [id, html] of [["inv-scope", parts.scope], ["inv-filters", parts.filters], ["inv-numbers", parts.numbers], ["inv-detail", parts.detail], ["issues-table", parts.table]]) root.querySelector(`#${id}`).innerHTML = html;
-  root.querySelector("header.ph .count").textContent = parts.window;
   root.querySelector('section[aria-label="Issues"] .sh .count').textContent = parts.count;
   draw(root);
 }
@@ -456,7 +454,7 @@ function renderForm(rows, o = {}) {
 
 export function renderIssues(d, o = {}) {
   const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o, d?.tests);
-  return `<div class="page sp contents">${pageHead("Issues", { count: parts.window, aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
+  return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
     `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
     renderForm(d?.issues ?? [], o) +
     `${card("Issues", `${searchBox("inv-search", o.q, "Search titles, ids, projects, labels")}` +

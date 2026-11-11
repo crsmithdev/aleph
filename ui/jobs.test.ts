@@ -402,9 +402,9 @@ describe("render", () => {
   });
   test("the Review tag is the reviewer's JSON verdict, not a line of review.md", () => {
     const h = (o: object) => v.renderJob({ ...job, review: "Text says VERDICT: hold x.", ...o });
-    expect(h({ verdict: "pass" })).toContain('class="badge done">pass<');
-    expect(h({ verdict: "hold" })).toContain('class="badge stuck">hold<');
-    expect(h({})).not.toContain(">hold<");
+    expect(h({ verdict: "pass" })).toContain('class="badge done">passed<');
+    expect(h({ verdict: "hold" })).toContain('class="badge stuck">returned<');
+    expect(h({})).not.toContain("returned<");
   });
   test("the Job page of a job with no parent issue links back to the merged Jobs page only", () => {
     const h = v.renderJob({ ...job, item: undefined });

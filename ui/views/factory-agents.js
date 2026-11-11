@@ -117,7 +117,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
   const head = scope().bar({ value: win });
-  return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: head })}${tiles("Scorecard", scorecard(s, m, win))}` +
+  return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${tiles("Scorecard", scorecard(s, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
     card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + `</div>`;
 }

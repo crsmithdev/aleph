@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { fold, pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, badge, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
+import { fold, pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
@@ -97,7 +97,7 @@ export function renderTranscript(steps) {
       ? fold(`${s.error ? "error, " : ""}result (${esc(bytes(s.output.length))})`, `<pre class="trailers">${esc(s.output)}</pre>`)
       : `<pre class="trailers">${esc(s.output)}</pre>`;
     return `<div class="step"><b>${esc(s.name)}</b><pre class="trailers">${esc(input ?? "")}</pre>${out}</div>`;
-  }).join("") || empty("Nothing to show.");
+  }).join("") || empty("This run kept no steps.", "Open its logs for the raw output.");
 }
 
 const shortSha = (j) => (j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`);
@@ -173,8 +173,8 @@ export function renderJob(j) {
       (more > 0 ? `<p class="quiet">${esc(plural(more, "more failed test"))} of ${esc(c.name)} not recorded.</p>` : "");
   }).join("");
   const checks = j.checks?.length
-    ? `<div class="dp-logs" data-logs>${pagedTable(heads(["Check", "Result", "Ran", "Passed", "Failed", "Skipped", "Took", "Log"], ["Ran", "Passed", "Failed", "Skipped", "Took"]), j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`))}${failures}<div class="logbody" hidden></div></div>`
-    : empty("No check ran.");
+    ? `<div class="dp-logs" data-logs>${pagedTable(heads(["Check", "Result", "Ran", "Passed", "Failed", "Skipped", "Took", "Log"], ["Ran", "Passed", "Failed", "Skipped", "Took"]), j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${badge(c.ok ? "passed" : "failed")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`))}${failures}<div class="logbody" hidden></div></div>`
+    : empty("No check ran.", "A job runs its checks before it lands.");
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
@@ -185,8 +185,8 @@ export function renderJob(j) {
     (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +
     (j.result ? panel("result", "Result", `<div class="md">${md(j.result)}</div>`) : "") +
     `<div class="dp-detail">${sectionHead("Detail")}` +
-    (j.review ? detailPanel("Review", verdict ? tag(verdict, verdict === "pass" ? "done" : "stuck") : "", `<div class="md">${md(j.review)}</div>`) : "") +
-    (j.checks ? detailPanel("Checks", tag(`${passed} / ${j.checks.length}`, passed === j.checks.length ? "done" : "stuck"), checks) : "") +
+    (j.review ? detailPanel("Review", verdict ? badge(verdict === "pass" ? "passed" : "returned") : "", `<div class="md">${md(j.review)}</div>`) : "") +
+    (j.checks ? detailPanel("Checks", tag(`${passed} / ${j.checks.length}`, tone(passed === j.checks.length ? "passed" : "failed")), checks) : "") +
     detailPanel("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<div class="diff-panel" id="diff" data-job="${esc(j.id)}">${loadingLine("the diff")}</div>`) +
     `</div></div>`;
 }

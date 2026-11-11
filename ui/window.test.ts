@@ -17,7 +17,6 @@ import * as now from "./views/now.js";
 import { full } from "./test-now.ts";
 
 const WINDOWS = ["hour", "day", "week", "month"] as const;
-const WORDS = { hour: "last hour", day: "last 24 hours", week: "last 7 days", month: "last 30 days" };
 
 const P = (n: number) => ({ count: n, p50: 60, p90: 120, hist: [0, 1, 0, 0, 0, 0, 0], worst: 300 });
 const speed = (window: string): any => ({
@@ -56,7 +55,7 @@ beforeEach(() => {
 });
 afterEach(() => { delete g.localStorage; delete g.location; delete g.history; });
 
-test("picking an option on each page asks for that window and the page says its period", () => {
+test("picking an option on each page asks for that window and the page marks it", () => {
   for (const [name, p] of Object.entries(PAGES)) for (const w of WINDOWS) {
     g.location.hash = p.path;
     const html = p.render("week");
@@ -69,7 +68,7 @@ test("picking an option on each page asks for that window and the page says its 
     const url = request(p, query());
     expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" || name === "status" ? "&baseline=1" : ""}`);
     const shown = p.render(w);
-    expect(shown, `${name} ${w}`).toContain(name === "status" ? `data-value="${w}" aria-pressed="true"` : WORDS[w]);
+    expect(shown, `${name} ${w}`).toContain(`data-value="${w}" aria-pressed="true"`);
     expect(html).toBeTruthy();
   }
 });

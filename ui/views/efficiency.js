@@ -1,7 +1,7 @@
 // The Flow page (was Efficiency): where agent time went, in hours. `d` is /api/flow for the window.
 import { redraw } from "../router.js";
 import { count, card, empty, hours, meter, sentence, statCard, dataTable, esc, heads, onTile, pageHead, pct, repoIdLink, setQuery, tiles, pagedTable, scope } from "../lib.js";
-import { bar, cardHours, cardPct, lastPeriod, mergeCauses, plural, windowTrend } from "./speed.js";
+import { bar, cardHours, cardPct, mergeCauses, plural, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
 const ALL = "all", FLAKES = "flakes", USAGE = "usage";
@@ -49,9 +49,9 @@ const usageTable = (rows) => pagedTable(heads(["Issue", "Usage", "Jobs"], ["Usag
 function usagePage(d, key) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
   const head = scope().bar({ value: d.window ?? "week" });
-  return `<div class="page sp" id="eff">${pageHead("Flow", { count: lastPeriod(d), aside: head })}${tiles("Quality", scorecard(d, key))}` +
+  return `<div class="page sp" id="eff">${pageHead("Flow", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "job"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
-    card("Usage per Issue, Largest First", s.top.length ? usageTable(s.top) : empty("No issue to show."), { label: "Usage per issue, largest first" }) + `</div>`;
+    card("Usage per Issue, Largest First", s.top.length ? usageTable(s.top) : empty("No issue to show.", "Widen the window or clear the project."), { label: "Usage per issue, largest first" }) + `</div>`;
 }
 
 /** The page body for a selection. `d` is /api/flow for the window, with its `baseline` when there is one. */
@@ -59,10 +59,10 @@ export function renderEfficiency(d, key = ALL) {
   if (key === USAGE) return usagePage(d, key);
   const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
   const head = scope().bar({ value: d.window ?? "week" });
-  return `<div class="page sp" id="eff">${pageHead("Flow", { count: lastPeriod(d), aside: head })}${tiles("Quality", scorecard(d, key))}` +
+  return `<div class="page sp" id="eff">${pageHead("Flow", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "job"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
-    `<div class="pair">${card(`${s.title} Causes`, s.causes.length ? causeBars(s) : empty("No cause to show."), { label: sentence(`${s.title} causes`) })}` +
-    (key === FLAKES ? "" : card(`${s.title} Issues`, s.top.length ? topTable(s.top) : empty("No issue to show."), { label: sentence(`${s.title} issues`) })) + `</div></div>`;
+    `<div class="pair">${card(`${s.title} Causes`, s.causes.length ? causeBars(s) : empty("No cause to show.", "Widen the window or clear the project."), { label: sentence(`${s.title} causes`) })}` +
+    (key === FLAKES ? "" : card(`${s.title} Issues`, s.top.length ? topTable(s.top) : empty("No issue to show.", "Widen the window or clear the project."), { label: sentence(`${s.title} issues`) })) + `</div></div>`;
 }
 
 /** The old addresses. */

@@ -126,8 +126,8 @@ test("the cost frame has one key per model with the bucket costs, and its axis g
 });
 
 test("the title is the sidebar name, whatever the data", () => {
-  expect(renderFactoryAgents(S, D)).toContain('<header class="ph"><h1>Agents</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
-  expect(renderFactoryAgents({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
+  expect(renderFactoryAgents(S, D)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
+  expect(renderFactoryAgents({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
 });
 
 const tiers = (low: string, medium: string) => ({

@@ -436,7 +436,7 @@ describe("views", () => {
     const d = await getJson("/api/issues");
     const page = v.view.render(d, {}, new URLSearchParams("window=week"));
     expect(page).toContain("<h2>Open Backlog, Filed and Closed</h2>");
-    expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><span class="count">last week<\/span>/);
+    expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><div class="aside">/);
     expect(page).toContain("<h2>Time to Close</h2>");
     // Each panel's title, aria label and empty line come from its frame.
     expect(label(v.backlogFrame(w, v.flow(rows, "week", now), "week"))).toBe("Open Backlog, Filed and Closed: medium peak 1, Filed peak 1, Closed peak 1");
@@ -530,7 +530,7 @@ describe("views", () => {
   test("the head holds the project, then the window; the form comes before the table", async () => {
     const page = v.view.render(await getJson("/api/issues"), {}, new URLSearchParams("window=day"));
     const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
-    expect(head).toContain('<span class="count">last day</span>');
+    expect(head).not.toContain("class=\"count\"");
     expect(page).not.toContain("Filed and closed per");
     expect(head).toContain('data-name="window"');
     for (const w of ["Hour", "Day", "Week", "Month"]) expect(head).toContain(`>${w}</button>`);

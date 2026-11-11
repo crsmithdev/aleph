@@ -25,12 +25,12 @@ const stageTile = ([key, name], d, day, on) => {
 /** The line a Jobs chart shows when the window holds no time for the stage. */
 const NONE = "No time to plot in this window.";
 
-/** The p50 and p90 of a stage by bucket, as two lines: a bucket with no time is 0. */
+/** The p50 and p90 of a stage by bucket, as two lines: a bucket with no time is null, a gap. */
 export const trendFrame = (d, key, name, text) => ({
   measure: { name: name, unit: "seconds", agg: "max" },
   over: { kind: "time", window: d.window },
   by: { name: bucketOf(d)[0].toUpperCase() + bucketOf(d).slice(1), keys: [{ key: "p90", name: "p90", color: "hot" }, { key: "p50", name: "p50", color: "run" }] },
-  rows: d.buckets.map((b) => ({ at: b.at, p90: b.p90?.[key] ?? 0, p50: b[key] ?? 0 })),
+  rows: d.buckets.map((b) => ({ at: b.at, p90: b.p90?.[key] ?? null, p50: b[key] ?? null })),
   // The p50 is not a part of the p90, so the panel draws two lines, not stacked areas.
   form: "lines",
   note: text,
@@ -79,13 +79,13 @@ export const FRAMES = { trend: trendFrame, strip: stripFrame, slowest: slowestFr
 /** The key of a Jobs chart panel: its frame, its kept form and its kept hidden series are its own. */
 export const chartKey = (k) => `factory/jobs/${k}`;
 
-const table = (labels, num, rows) => !rows.length ? empty("No row to show.") : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`));
+const table = (labels, num, rows) => !rows.length ? empty("No row to show.", "Pick a longer window or another stage.") : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`));
 
 /** The page body for a stage. `day` is /api/flow for the last 24h, or null. `jobs` is /api/jobs for the window, null while it loads, or the Error of a failed load; `f` is the route query. */
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   const [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
   const head = renderScope(Array.isArray(jobs) ? jobs : [], { ...f, window: f.window ?? d.window });
-  return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: head })}` +
+  return `<div class="page sp" id="perf">${pageHead("Jobs", { aside: head })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
     `<div class="trio">${panelOf(chartKey("trend"), trendFrame(d, key, name, text))}${panelOf(chartKey("strip"), stripFrame(d, key, name))}${panelOf(chartKey("slowest"), slowestFrame(d, key))}</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
