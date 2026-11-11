@@ -93,6 +93,7 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:24
+    init: true
     environment:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     healthcheck:

@@ -76,8 +76,5 @@ jobs/lib/land/review.land.test.ts > a follow-up on a stuck job starts from the j
 ## auth-password-gate
 ui/auth.test.ts > password gate: login, session across servers, logout. Fails: under load, passes on the quiet rerun. Seen: 2026-10-31. Cause: load.
 
-## browser-timed-refresh
-ui/browser.test.ts > the UI in Chrome > a timed refresh re-renders, except over an armed button. Fails: 1 of 12 runs of the 2026-11-02 load run. Seen: 2026-11-02. Cause: sleep (the page's setInterval cut to 200 ms, and the test polls for the re-render).
-
 ## fixture-factory-folder
 ui/fixtures/review/build.test.ts > the fixture environment points the factory folder under its dest, and a factory log line lands there, not in the live factory. Fails: in a full-suite run; passes alone. Seen: 2026-11-03. Cause: shared state (environment variables of the test process).
