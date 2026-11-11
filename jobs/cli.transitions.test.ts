@@ -102,4 +102,16 @@ describe("every transition dispatches at once", () => {
     expect(again.stderr).toContain("no open job");
     expect(hookLines().join("\n")).not.toContain(`fac-${x}`);
   }, 60_000);
+
+  test("parking an issue drops its open job, so it cannot land", async () => {
+    const x = track(await seed("parked with its job", open("park-with"), { kind: "goal" }));
+    await when(() => started().includes(`fac-${x}`));
+    const [run] = runs(x);
+    expect((await aleph(["issue", "edit", "fac", String(x), "--status", "parked"], on())).code).toBe(0);
+    expect(state(run).condition).toBe("dropped");
+    expect(record(run).reason).toBe(`issue fac-${x} was parked`);
+    const again = await drop(`fac-${x}`);
+    expect(again.code).not.toBe(0);
+    expect(again.stderr).toContain("no open job");
+  }, 60_000);
 });
