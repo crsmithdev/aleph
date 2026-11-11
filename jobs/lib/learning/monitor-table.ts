@@ -120,7 +120,7 @@ function unusable(e: Entry): boolean {
   return r.condition === "failed" || r.condition === "returned" || r.condition === "dropped" || causeOf(r) !== undefined;
 }
 
-/** One run of a stage in `from`..`to`: the issue it was on (or its job, for a run on no issue), whether it gave nothing usable, and its seconds. A build's reviewer is a run of `review` with no time. */
+/** One run of a stage in `from`..`to`: the issue it was on (or its job, for a run on no issue), whether it gave nothing usable, and its seconds. A build's reviewer is a run of `review`, with the seconds its record states, else none. */
 interface StageRun { stage: string; item: string; issue: boolean; unusable: boolean; secs: number | null; cost: number | null }
 
 function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun> {
@@ -131,7 +131,7 @@ function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun
     // A run on no item (a firefighter sweep) is its own item.
     yield { stage: r.kind, item: r.on ?? r.job, issue: !!r.on, unusable: unusable(e), secs: took >= 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost : null };
     // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
-    if (r.kind === "build" && r.review && r.review.call !== "running") yield { stage: "review", item: r.on ?? r.name, issue: !!r.on, unusable: r.review.call === "failed", secs: null, cost: null };
+    if (r.kind === "build" && r.review && r.review.call !== "running") yield { stage: "review", item: r.on ?? r.name, issue: !!r.on, unusable: r.review.call === "failed", secs: r.review.seconds ?? null, cost: null };
   }
 }
 

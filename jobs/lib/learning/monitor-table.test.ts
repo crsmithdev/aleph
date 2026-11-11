@@ -20,7 +20,7 @@ const empty: Sources = { runs: [], holds: [], specChecks: [], items: [], storeLo
 
 describe("stages", () => {
   const runs = [
-    run({ kind: "build", on: "p-1", started: at(DAY, 9), ended: at(DAY, 9, 10), condition: "passed", cost: 1, review: { call: "passed" } }),
+    run({ kind: "build", on: "p-1", started: at(DAY, 9), ended: at(DAY, 9, 10), condition: "passed", cost: 1, review: { call: "passed", seconds: 90 } }),
     run({ kind: "build", on: "p-1", started: at(DAY, 10), ended: at(DAY, 10, 20), condition: "failed", cause: "no-commit", cost: 2, review: { call: "failed" } }),
     run({ kind: "build", on: "p-2", started: at(DAY, 11), ended: at(DAY, 11, 30), condition: "passed", cost: 3 }),
     run({ kind: "build", on: "p-3", started: at(DAY, 12), condition: "running" }),
@@ -42,8 +42,9 @@ describe("stages", () => {
   });
 
   test("the p90 is the stage's own slowest runs, and a stage with no recorded end has none", () => {
+    // A review record with no seconds (a run from before) counts as a run with no time.
     expect(row("director")).toMatchObject({ runs: 2, p90: 120 });
-    expect(row("review")).toMatchObject({ runs: 2, p90: null });
+    expect(row("review")).toMatchObject({ runs: 2, minutes: 1.5, p90: 90 });
   });
 
   test("a role run that states a cause has no usable result; a run on no item is its own item", () => {

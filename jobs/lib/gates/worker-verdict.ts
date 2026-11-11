@@ -122,8 +122,11 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
 
   // The reviewer.
   const stat = p.stat();
+  let ms = 0;
   const call = async () => {
+    const t = Date.now();
     const rv = await p.review();
+    ms += Date.now() - t;
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
     return rv;
   };
@@ -132,7 +135,7 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   if (rv.none && !rv.credit) rv = await call();
   // A call the API refused for credit did no work: the run stops as failed with the credit cause, as a worker's does, so it waits for credit and counts no run cap.
   if (rv.credit) return { outcome: { condition: "failed", cause: "credit", reason: rv.credit, ...facts }, code: 1 };
-  const review = (call: "passed" | "returned" | "waiting" | "failed") => ({ call, ...(rv.reason && { reason: rv.reason }), ...(rv.model && { model: rv.model }) });
+  const review = (call: "passed" | "returned" | "waiting" | "failed") => ({ call, ...(rv.reason && { reason: rv.reason }), ...(rv.model && { model: rv.model }), seconds: Math.round(ms / 1000) });
   if (!rv.reason) {
     // A reviewed diff that changes a security path or a held path waits for Chris.
     const security = p.security();

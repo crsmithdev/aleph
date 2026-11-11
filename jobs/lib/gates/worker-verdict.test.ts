@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { ChecksStop } from "./checks.ts";
 import type { Run } from "../records/ledger.ts";
 import { missingVerdict, workerVerdict, type Branch, type NoVerdict, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
@@ -94,7 +94,7 @@ describe("checks", () => {
 describe("after the checks", () => {
   test("a pass states the checked base and tip and the reviewer's costs", async () => {
     const { p, calls } = ports({ reviews: [{ reason: null, cost: 0.5, model: "m1" }] });
-    expect(await workerVerdict(branch({ facts: { cost: 1 } }), p)).toEqual({ outcome: { condition: "passed", cost: 1.5, review: { call: "passed", model: "m1" }, ...checked }, code: 0 });
+    expect(await workerVerdict(branch({ facts: { cost: 1 } }), p)).toEqual({ outcome: { condition: "passed", cost: 1.5, review: { call: "passed", model: "m1", seconds: 0 }, ...checked }, code: 0 });
     expect(calls).toEqual(["checks", "docClaims", "keepGate", "oracle", "review", "security"]);
   });
 
@@ -128,7 +128,7 @@ describe("after the checks", () => {
 
   test("a held rule waits for Chris after the reviewer passes, with one held-path Ask and no next step", async () => {
     const v = await workerVerdict(branch(), ports({ rule: "held path held/x.txt" }).p);
-    expect(v).toEqual({ code: 0, outcome: { condition: "waiting", reason: "held path held/x.txt", stat: " a.ts | 1 +", review: { call: "passed" }, ...checked, ask: expect.objectContaining({ reason: "held-path", why: [" a.ts | 1 +"] }) } });
+    expect(v).toEqual({ code: 0, outcome: { condition: "waiting", reason: "held path held/x.txt", stat: " a.ts | 1 +", review: { call: "passed", seconds: 0 }, ...checked, ask: expect.objectContaining({ reason: "held-path", why: [" a.ts | 1 +"] }) } });
   });
 });
 
@@ -140,6 +140,17 @@ describe("the reviewer", () => {
     expect(calls.filter((c) => c === "review")).toHaveLength(2);
     expect(v).toMatchObject({ code: 0, outcome: { condition: "waiting", cause: "review", reason: miss.reason, cost: 2, ask: { reason: "review" }, review: { call: "failed", reason: miss.reason } } });
     expect((await workerVerdict(branch(), ports({ reviews: [miss, { reason: null }] }).p)).outcome.condition).toBe("passed");
+  });
+
+  afterEach(() => setSystemTime());
+
+  test("the review records the seconds of its calls, summed when the reviewer runs twice", async () => {
+    let at = Date.parse("2026-01-01T00:00:00Z");
+    setSystemTime(at);
+    const { p } = ports({ reviews: [{ reason: "reviewer: no verdict", none: true }, { reason: null }] });
+    const review = p.review;
+    p.review = async () => { const rv = await review(); setSystemTime(at += 2400); return rv; };
+    expect((await workerVerdict(branch(), p)).outcome.review).toEqual({ call: "passed", seconds: 5 });
   });
 
   test("a reviewer the API refused for credit stops the run with the credit cause, with no second call and no Ask", async () => {
@@ -154,13 +165,13 @@ describe("the reviewer", () => {
 
   test("a hold goes back as a fix round while rounds are left", async () => {
     const v = await workerVerdict(branch(), ports({ reviews: [{ reason: "reviewer: no test" }] }).p);
-    expect(v).toEqual({ outcome: { condition: "returned", cause: "review", reason: "reviewer: no test", stat: " a.ts | 1 +", review: { call: "returned", reason: "reviewer: no test" }, ...checked, failed: "review", round: 0 }, code: 1 });
+    expect(v).toEqual({ outcome: { condition: "returned", cause: "review", reason: "reviewer: no test", stat: " a.ts | 1 +", review: { call: "returned", reason: "reviewer: no test", seconds: 0 }, ...checked, failed: "review", round: 0 }, code: 1 });
   });
 
   test("a hold after the last round waits for Chris, and says how often it went back", async () => {
     const reason = async (earlier: Run[] | undefined) => (await workerVerdict(branch({ earlier }), ports({ reviews: [{ reason: "reviewer: still no test" }] }).p)).outcome;
     expect(await reason([run({ failed: "review" }), run({ failed: "tests" })])).toMatchObject({ condition: "waiting", reason: "the reviewer sent it back once: still no test", ask: { reason: "review" } });
-    expect((await reason(two)).review).toEqual({ call: "waiting", reason: "reviewer: still no test" });
+    expect((await reason(two)).review).toEqual({ call: "waiting", reason: "reviewer: still no test", seconds: 0 });
     expect((await reason(two)).reason).toBe("reviewer: still no test");
     expect((await reason(undefined)).reason).toBe("reviewer: still no test");
   });

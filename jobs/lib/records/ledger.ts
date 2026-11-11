@@ -34,9 +34,9 @@ export interface TestRecord { ran: number; passed: number; failed: number; skipp
 
 /**
  * The reviewer's call on the run: `passed`, `returned` (a hold sent back as a fix round), `waiting` (a hold after the
- * last round) or `failed` (no verdict); `running` is an older run's second review in progress. A call the API refused for credit records none.
+ * last round) or `failed` (no verdict); `running` is an older run's second review in progress. A call the API refused for credit records none. `seconds` is the time of the reviewer's calls, in whole seconds; a run from before it has none.
  */
-type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string; model?: string };
+type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string; model?: string; seconds?: number };
 
 export interface Run {
   kind: "build" | "plain" | "land" | "intake" | "recheck" | "director" | "monitor" | "chat" | "lens";
