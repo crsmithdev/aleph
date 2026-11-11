@@ -514,7 +514,7 @@ table.tbl th .arr { display: inline-block; width: 1em; margin-left: var(--sp-2);
 .crumb { margin: 0 0 var(--sp-8); font: var(--fs-sm) var(--mono); color: var(--muted); }
 .crumb a { color: var(--muted); text-decoration: none; }
 .crumb a:hover, .crumb a:focus-visible { color: var(--ink); text-decoration: underline; }
-.editable:not(.editing) .edit-only, .editable.editing .view-only, .issue-page:not(.editing) .edit-only, .issue-page.editing .view-only { display: none; }
+.editable:not(.editing) .edit-only, .editable.editing .view-only { display: none; }
 .issue-page .title-edit { flex: 1 1 auto; min-width: 0; font: inherit; font-size: var(--fs-lg); }
 .issue-page .body-edit { display: block; width: 100%; }
 .sub-row td:nth-child(2) { padding-left: var(--sp-24); }
@@ -1145,17 +1145,8 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .gates td.what .dp-txt { cursor: pointer; }
 /* A log row's note shows only when its button opens it. */
 .gates td.what .clamp { display: none; }
-.capform { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); margin-top: var(--sp-4); }
-.capform input { width: 5em; font: inherit; font-family: var(--mono); padding: var(--sp-2) var(--sp-6); }
-.capform .cap-env { flex-basis: 100%; }
 .timeoutform .hint { flex-basis: 100%; margin: 0; }
 .sched-on { display: inline-flex; align-items: center; gap: var(--sp-6); }
-.capform .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.caps { display: grid; gap: var(--sp-10); margin-bottom: var(--sp-12); }
-.cap-row { display: grid; grid-template-columns: 7em 5em auto; align-items: center; gap: var(--sp-6) var(--sp-10); }
-.cap-row span { font: var(--fw-mid) var(--fs-md)/1.2 var(--mono); }
-.cap-row small { grid-column: 1 / -1; grid-row: 2; font-size: var(--fs-xs); color: var(--muted); }
-.cap-row .capform { margin-top: 0; }
 
 /* Ask cards: four kinds; compact shows the title and the buttons, open adds the description, what each button does, and Technical details. */
 .issue-row[data-card] { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-6); padding: 0; border: 0; border-radius: 0; background: none; }

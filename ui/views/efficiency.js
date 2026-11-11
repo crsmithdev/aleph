@@ -31,7 +31,7 @@ function scorecard(d, key) {
     statCard({ k: "First pass", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...points, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
     statCard({ k: "Reruns", v: count(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: String }), key: FLAKES, on: key === FLAKES }) +
     statCard({ k: "Fix rounds", v: count(returned?.runs ?? 0), note: `${hours(returned?.hours ?? 0)} on ${plural(returned?.issues ?? 0, "issue")}`, key: "returned", on: key === "returned" }) +
-    statCard({ k: "Usage per issue", v: usage === null ? "–" : pct(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
+    statCard({ k: "Usage per issue", v: usage === null ? "–" : pct(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "p50 of weekly limit", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 
 const causeBars = (s) => {

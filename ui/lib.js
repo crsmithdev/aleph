@@ -16,6 +16,8 @@ export const clock = (iso) => {
 };
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 export const count = (n) => (n == null || Number.isNaN(Number(n)) ? "–" : Number(n).toLocaleString("en-US"));
+/** A number cell for a count of bad things (errors, failures): `--stuck` when above 0. */
+export const badCount = (n) => `<td class="num${n > 0 ? " bad" : ""}">${count(n)}</td>`;
 /** A mean or other average: one decimal; "–" for none. */
 export const mean = (v) => (v == null ? "–" : Number(v).toFixed(1));
 /** Hours as "3.2h": one decimal under 10, whole from 10. */

@@ -167,9 +167,9 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     const own = await startRig((env) => { const dir = join(env.ALEPH_FACTORY_DIR, "monitor"); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, "2026-11-03.json"), JSON.stringify({ day: "2026-11-03", table: { today: { stages: [], holds: [] }, trailing: { stages: [], holds: [] } }, text: "READER-TEXT", findings: ["FIRST-ONE"] })); });
     try {
       const pg = await own.open("#/automation");
-      await pg.when('document.querySelector("#monitor details") && document.querySelector("form.capform[data-cap=live]")');
+      await pg.when('document.querySelector("#monitor details") && document.querySelector("form[data-cap=live]")');
       await pg.ev(`(() => {
-        const d = document.querySelector("#monitor details"), f = document.querySelector("form.capform[data-cap=live]");
+        const d = document.querySelector("#monitor details"), f = document.querySelector("form[data-cap=live]");
         d.open = true;
         d.old = true;
         f.elements.live.value = "4";

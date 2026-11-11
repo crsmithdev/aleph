@@ -548,7 +548,7 @@ A table shows items that have the same columns.
 
 | Helper | Reference |
 |---|---|
-| `dataTable(head, rows, { fit })`; `heads(labels, num)`, `sortHead()`, `wireTable()`; `pagedTable()` | `ui/views/jobs.js` |
+| `dataTable(head, rows, { fit })`; `heads(labels, num)`, `sortHead()`, `wireTable()`; `pagedTable()`; `badCount(n)` | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -567,6 +567,7 @@ A table shows items that have the same columns.
 - Make an id with `idLink()` or `repoIdLink()`, a state with `badge()`, and labels with `chips()`.
 - Put the title in `td.wide`. Do not let other cells wrap.
 - Put each number in `td.num`. For `heads()`, list the column's label in `num`. For `sortHead()`, pass `{ num: true }`.
+- Make a count of bad things, such as errors or failures, with `badCount()`. It turns `--stuck` above 0.
 - Put the time in `td.time`. It aligns to the right. For `heads()`, list its label in `num`. For `sortHead()`, pass
   `{ num: true }`. A time that comes first goes in `td.time.lead`, which aligns to the left.
 - When a row goes to a page, make it `tr.rowlink` and put the link in `td.wide`.

@@ -2,7 +2,7 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, arm, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, arm, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -207,7 +207,8 @@ function renderKit(d, query) {
     spec("confirm", "Two-click confirm", row(`<button class="act warn" type="button" data-kit-confirm>Drop</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
       "Click Drop: arm() asks for a second click, and the button goes back after 5 seconds. Beside it, the state of an answer that needs a reason.") +
     spec("disclosure", "Disclosure", fold("Closed by default", "<p>The body of a fold.</p>") + fold("Open by default", "<p>The body of a fold.</p>", { open: true }) +
-      fold("Technical details", `<div class="body"><p>A run id and its log path.</p></div>`, { cls: "more" }) + clamp(`<p>${"A long text that clamps. ".repeat(30)}</p>`)) +
+      fold("Technical details", `<div class="body"><p>A run id and its log path.</p></div>`, { cls: "more" }) +
+      moreFold(Array.from({ length: 13 }, (_, i) => `Item ${i + 1}`), (x) => x) + clamp(`<p>${"A long text that clamps. ".repeat(30)}</p>`)) +
 
     group("Text") +
     spec("markdown", "Markdown and code", `<div class="md">${md(MD)}</div>`) +
@@ -235,8 +236,11 @@ function renderKit(d, query) {
     group("States") +
     spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,
       `<button class="act" type="button" style="border-color:var(--ink-2)">Hover</button>`, seg("Pressed", [{ label: "Off", on: false, attrs: "" }, { label: "Pressed", on: true, attrs: "" }]),
-      `<button class="act" type="button" disabled>Disabled</button>`) + `<div style="max-width:320px">${tiles("Pressed metric card", statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }))}</div>`,
-      "Focus and hover are drawn with inline styles, so they show without a pointer or a keyboard.", "States");
+      `<button class="act" type="button" disabled>Disabled</button>`, `<button class="cmd" type="button" style="transform:translateY(1px)"><span>Active</span></button>`) +
+      `<div style="max-width:320px">${barList(barRow("Pressed bar row", 60, "6.0h", { key: "kit-bar", on: true }) + barRow("Bar row", 30, "3.0h", { key: "kit-bar-off" }))}</div>` +
+      dataTable(heads(["Row", "State"]), `<tr class="mrow" aria-selected="true"><td>Selected</td><td>aria-selected="true"</td></tr><tr class="mrow" aria-selected="false"><td>Not selected</td><td>aria-selected="false"</td></tr>`) +
+      `<div style="max-width:320px">${tiles("Pressed metric card", statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }))}</div>`,
+      "Focus, hover and active are drawn with inline styles, so they show without a pointer or a keyboard.", "States");
   return `${head}${toc(items, body)}</div>`;
 }
 

@@ -340,10 +340,11 @@ test("a cap post writes the settings; fix rounds take 0 and the rest refuse it",
 test("the Caps section holds a form each for the two caps, with use against limit, then one per setting, and no day cap", () => {
   const h = gates.renderCaps({ ...data(), factory: { ...data().factory, settings: { intakeTries: 2, jobSeconds: 1800, fixRounds: 2, landBatch: 8, loadLimit: 24 } } });
   expect([...h.matchAll(/data-cap="([^"]*)"/g)].map((m) => m[1])).toEqual(["live", "run", "intakeTries", "jobSeconds", "fixRounds", "landBatch", "loadLimit"]);
-  expect(h).toContain("<b>Job time limit</b><span>1800</span>");
-  expect(h).toContain('name="fixRounds" type="number" min="0"');
-  expect(h).toContain("<span>5 / 5</span>");
-  expect(h).toContain("<span>2 / 3</span>");
+  expect(h).toContain('for="cap-jobSeconds">Job time limit</label>');
+  expect(h).toContain('name="jobSeconds" type="number" id="cap-jobSeconds" value="1800"');
+  expect(h).toMatch(/name="fixRounds"[^>]* min="0"/);
+  expect(h).toContain("Live jobs against the cap: 5 of 5 now.");
+  expect(h).toContain("in the last hour: 2 of 3.");
   expect(h).not.toContain("day");
   expect(gates.renderGates(data())).toContain(">Controls</h2>");
 });
@@ -351,9 +352,9 @@ test("the Caps section holds a form each for the two caps, with use against limi
 test("the cap row and the rule hints say job and issue, with no goal and no Run cap", () => {
   const h = gates.renderGates(data());
   const caps = h.slice(h.indexOf('<section class="card" id="gates-caps"'), h.indexOf('aria-label="Held paths"'));
-  expect(caps).toContain("<b>Job cap</b>");
-  expect(caps).toContain("live jobs against the cap");
-  expect(caps).toContain("the most starts any one issue made in the last hour");
+  expect(caps).toContain(">Job cap</label>");
+  expect(caps).toContain("Live jobs against the cap");
+  expect(caps).toContain("The most starts any one issue made in the last hour");
   const rules = h.slice(h.indexOf('<section class="card" id="rules"'));
   expect(rules).toContain("Jobs with no commit");
   expect(rules).toContain("The last 3 jobs of an issue ended with nothing committed.");

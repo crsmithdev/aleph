@@ -5,7 +5,7 @@ import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard } from "./speed.js";
 
-const share = (v) => (v == null ? "–" : pct(v * 100));
+const share = (v) => pct(v == null ? v : v * 100);
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
 const SPEND = { hour: ["day", "today"], day: ["day", "today"], week: ["week", "this week"], month: ["month", "this month"] };
 
@@ -27,7 +27,7 @@ function backendsCard(m) {
 function scorecard(s, m, win) {
   const f = s.factory;
   return usageCard(s) + spendCard(m, win) +
-    statCard({ k: "Worker slots", v: count(f.liveRuns ?? 0), v2: f.liveCap == null ? "–" : count(f.liveCap), q: ["in use", "cap"] }) +
+    statCard({ k: "Worker slots", v: count(f.liveRuns ?? 0), v2: count(f.liveCap), q: ["in use", "cap"] }) +
     backendsCard(m);
 }
 
@@ -40,7 +40,7 @@ const TIERS = Object.fromEntries(["merge", "reviewer", "intake", "director", "mo
 function roles(a, m) {
   const num = ["Jobs", "Success", "p50", "Cost"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
-  const cell = (v) => `<td class="num">${v == null ? "–" : count(v)}</td>`;
+  const cell = (v) => `<td class="num">${count(v)}</td>`;
   const outs = a.outcomes ?? [];
   // The outcome row for a config row: the one of its role and current model. A reviewer records no model, so its row is the one of its role.
   const find = (role, model) => outs.find((x) => x.role === role && (role === "reviewer" || shortModel(x.model) === shortModel(model)));

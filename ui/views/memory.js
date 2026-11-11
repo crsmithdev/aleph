@@ -162,7 +162,7 @@ const coreForm = (n) => `<label class="mform col"><span>Core line, in every ${es
 
 /** The inspector for `it`; `n` is /api/memory/notes/:title's answer when `it` is a note, `hist` its recalls per day. */
 export function renderInspector(it, n = null, status = "", hist = []) {
-  if (!it) return `<p class="quiet">Select a memory to see what it says, how it reaches the agent and what you can change.</p>`;
+  if (!it) return empty("No memory selected.", "Select a memory to see what it says, how it reaches the agent and what you can change.");
   const fm = n?.frontmatter ?? {};
   const head = `<p class="mtype">${dot(it.type)}${esc(typeName(it.type))} · ${esc(it.source === "memory-md" ? "MEMORY.md" : it.source)}${status ? ` · ${esc(STATUS[status])}` : ""}</p><h3>${esc(it.title)}</h3>`;
   // The claim first; the rest of the note folds, so how it reaches the agent stays in view.

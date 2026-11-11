@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
-import { fold, notice, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { badCount, fold, notice, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
 import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
 export const view = {
@@ -103,7 +103,7 @@ function hooksCard(d) {
   if (a.langfuse !== "ok") return "";
   const denials = a.denials ?? { total: 0, recent: [] };
   const hooks = (a.hooks ?? []).length
-    ? dataTable(heads(["Hook", "Calls", "Errors", "Last Call"], ["Calls", "Errors", "Last Call"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="num">${count(h.calls)}</td><td class="num${h.errors ? " bad" : ""}">${count(h.errors)}</td><td class="time">${esc(when(h.lastAt))}</td></tr>`).join(""))
+    ? dataTable(heads(["Hook", "Calls", "Errors", "Last Call"], ["Calls", "Errors", "Last Call"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="num">${count(h.calls)}</td>${badCount(h.errors)}<td class="time">${esc(when(h.lastAt))}</td></tr>`).join(""))
     : empty("No hook calls in this period.", "Widen the window.");
   const list = denials.recent.length
     ? dataTable(heads(["Denied", "Reason"]), denials.recent.map((r) => `<tr><td class="time lead">${esc(when(r.at))}</td><td class="wide" title="${esc(r.reason)}">${esc(r.reason)}</td></tr>`).join(""))
