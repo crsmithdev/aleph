@@ -218,7 +218,7 @@ test("cell, row, note, subHead, list and group", () => {
   expect(lib.note("a<b")).toBe('<p class="note">a&lt;b</p>');
   expect(lib.subHead("Steps")).toBe('<h3 class="sub-head">Steps</h3>');
   expect(lib.list("<p>x</p>")).toBe('<div class="list"><p>x</p></div>');
-  expect(lib.group("g&1", "<p>x</p>")).toBe('<div class="group" id="g&amp;1"><p>x</p></div>');
+  expect(lib.group("g&1", "<p>x</p>")).toBe('<div class="grp" id="g&amp;1"><p>x</p></div>');
 });
 
 test("actButton kinds, card lede and error detail", () => {

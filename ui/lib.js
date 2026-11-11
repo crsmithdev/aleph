@@ -396,7 +396,7 @@ export const row = (cells) => `<tr>${cells.join("")}</tr>`;
 /** A stack of rows or cards (HTML). */
 export const list = (html) => `<div class="list">${html}</div>`;
 /** A named part of a page or card (HTML), with an id to link to. */
-export const group = (id, html) => `<div class="group" id="${esc(id)}">${html}</div>`;
+export const group = (id, html) => `<div class="grp" id="${esc(id)}">${html}</div>`;
 
 /** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */
 export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb"><a href="${esc(safeHref(back))}" aria-label="Back">«</a> ${parts.map(([t, h]) => (h ? `<a href="${esc(safeHref(h))}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join(" / ")}</nav>`;
