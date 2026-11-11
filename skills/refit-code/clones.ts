@@ -5,9 +5,15 @@
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
-const JSCPD = join(import.meta.dir, "../../node_modules/.bin/jscpd");
+/** The jscpd of the nearest `node_modules` at or above `dir`, so a `.worktrees/<name>` checkout uses its parent's. */
+export function jscpd(dir: string): string {
+  const bin = join(dir, "node_modules/.bin/jscpd");
+  return existsSync(bin) || dirname(dir) === dir ? bin : jscpd(dirname(dir));
+}
+
+const JSCPD = jscpd(join(import.meta.dir, "../.."));
 
 type Side = { name: string; start: number; end: number };
 export type Clone = { a: Side; b: Side; lines: number; isNew: boolean };

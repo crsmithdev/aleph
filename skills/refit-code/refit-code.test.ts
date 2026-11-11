@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { session } from "../../hooks/lib/handshake.ts";
-import { scan } from "./clones.ts";
+import { jscpd, scan } from "./clones.ts";
 import { accepted, changed, history, holes, rules, wilson } from "./cochange.ts";
 
 const HOOK = join(import.meta.dir, "hook.ts");
@@ -138,4 +138,10 @@ test("scan throws with jscpd's stderr when jscpd exits non-zero with a report bu
   write("ui/pay.ts", SETTLE);
   write(".jscpd.json", JSON.stringify({ threshold: 0 }));
   expect(() => scan(root)).toThrow(/jscpd exited 1: [\s\S]*over threshold/);
+});
+
+test("a checkout with no node_modules finds the jscpd of a parent folder's node_modules", () => {
+  write("node_modules/.bin/jscpd", "");
+  mkdirSync(join(root, ".worktrees/w"), { recursive: true });
+  expect(jscpd(join(root, ".worktrees/w"))).toBe(join(root, "node_modules/.bin/jscpd"));
 });
