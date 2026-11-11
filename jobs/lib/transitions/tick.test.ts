@@ -15,7 +15,8 @@ import { git } from "../infra/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { archiveDir, putRun } from "../records/record.ts";
+import { archiveDir, getRun, putRun } from "../records/record.ts";
+import { chatLock } from "../roles/agent-run.ts";
 import { due, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 
 // The test's clock: the run that holds the live slot is `starting` against it.
@@ -231,4 +232,19 @@ test("one tick moves a finished record older than 7 days into the archive folder
   const out = await runTick(NOW, ports);
   expect(out.archived).toEqual([`${key}-1`]);
   expect(readdirSync(archiveDir())).toEqual([`${key}-1.json`]);
+});
+
+test("a tick, paused or not, ends a running chat run whose lock is free and leaves one whose lock is held", async () => {
+  seed([]);
+  const started = new Date(NOW).toISOString();
+  const chat = (n: number, job: string) => putRun(`20261110-1520${n}0-chat-${n}`, { n, kind: "chat", job, name: "chat", condition: "running", told: true, started } as any);
+  chat(1, "20261110-152010-chat-1");
+  chat(2, "20261110-152020-chat-2");
+  const release = (await lock(chatLock("20261110-152020-chat-2"), 0))!;
+  setPaused(true);
+  try {
+    await runTick(NOW, { dispatch: async () => {}, suite: () => {}, intake: () => {} });
+  } finally { release(); setPaused(false); }
+  expect(getRun("20261110-152010-chat-1")).toMatchObject({ condition: "done", reason: "failed: its process ended before a reply", cause: "unanswered" });
+  expect(getRun("20261110-152020-chat-2")?.condition).toBe("running");
 });

@@ -8,7 +8,7 @@ import { appendFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { allRuns, makeRun, runsDir, type Run } from "../records/ledger.ts";
 import { getRun, patchRun, putRun } from "../records/record.ts";
-import { lock } from "../infra/locks.ts";
+import { lock, lockSync } from "../infra/locks.ts";
 import { roleSeconds } from "../infra/settings.ts";
 import { runFile } from "../records/run-files.ts";
 import { callAgent, stallReason } from "./agent-call.ts";
@@ -36,6 +36,8 @@ export interface Opening extends Call {
   job?: string;
   repo?: string;
   on?: string;
+  /** Names a lock from the run's job: the run holds it from before it is `running` until `end`, so `endLost` leaves it alone. */
+  lock?: (job: string) => string;
 }
 
 export interface AgentRun {
@@ -52,14 +54,18 @@ export interface AgentRun {
    * reply named no session, sends the last input and `input` as a new call. prompt.md and output.log get it appended, and the run's cost is the sum.
    */
   askAgain(input: string, cwd?: string): Promise<unknown>;
-  /** The run is `done`: a role's run has no land or drop, whatever its reply was. */
+  /** The run is `done`: a role's run has no land or drop, whatever its reply was. It then frees the opening's `lock`. */
   end(reason: string, fields?: Partial<Run>): void;
 }
 
 /** Make the run's folder and state. The caller ends the run, on every path. */
 export function openRun(o: Opening): AgentRun {
+  let release: (() => void) | undefined;
   const id = makeRun({ kind: o.role, name: o.name, on: o.on, job: o.job }, (folder, n) => {
-    putRun(basename(folder), { kind: o.role, job: o.job ?? basename(folder), name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now(), n });
+    const job = o.job ?? basename(folder);
+    // No other process takes a lock named from a job with no run yet.
+    if (o.lock) release = lockSync(o.lock(job), 0)!;
+    putRun(basename(folder), { kind: o.role, job, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now(), n });
   });
   const folder = join(runsDir(), id);
   writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
@@ -89,13 +95,16 @@ export function openRun(o: Opening): AgentRun {
     ask: async (input, cwd) => (await call(input, cwd)).text,
     askData: async (input, cwd) => (await call(input, cwd)).data,
     askAgain: async (input, cwd) => (await call(input, cwd, true)).data,
-    end: (reason, fields = {}) => endAgentRun(folder, reason, credit ? { ...fields, cause: "credit" } : fields),
+    end: (reason, fields = {}) => { endAgentRun(folder, reason, credit ? { ...fields, cause: "credit" } : fields); release?.(); },
   };
 }
 
 function endAgentRun(folder: string, reason: string, fields: Partial<Run> = {}): void {
   patchRun(basename(folder), { condition: "done", reason, ...fields, phase: undefined, ended: new Date().toISOString() });
 }
+
+/** The lock the UI server holds for the whole chat turn of the run with `job`. */
+export const chatLock = (job: string) => `chat-${job}`;
 
 /**
  * End the role's runs that a dead process left `running`. A live run's process holds a lock for the

@@ -25,6 +25,7 @@ import { allJobs, loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
 import { monitorStep } from "../roles/monitor.ts";
+import { chatLock, endLost } from "../roles/agent-run.ts";
 import { timeoutStep } from "../asks/timeout.ts";
 import { land, refusal } from "./transitions.ts";
 import { editedWaits, toRescue } from "../land/rescue.ts";
@@ -108,6 +109,8 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     const s = readTick();
     const at = new Date(now).toISOString();
     const out: Record<string, unknown> = {};
+    // Paused or not: a chat turn whose server died holds no lock.
+    await endLost("chat", (run) => chatLock(run.job));
     const c = await correctionsStep(now);
     if (c) out.corrections = c;
     // Before the sweep, so the issues a lifted hold frees are keys it starts this tick.
