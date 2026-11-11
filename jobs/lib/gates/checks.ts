@@ -13,6 +13,7 @@ import { checkSeconds } from "../infra/settings.ts";
 import { git } from "../infra/git.ts";
 import { runFile } from "../records/run-files.ts";
 import type { Plan } from "./keep-earn.ts";
+import { isJsTestFile } from "./test-files.ts";
 
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
@@ -241,7 +242,6 @@ export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
 /** A test file that a branch adds or changes with new cases: its path, its text on the head and the names of its new cases. */
 export interface NewTests { path: string; text: string; names: string[] }
 
-const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 
 /** A removed or added line of a diff, not a `---` or `+++` file header. */
 const CHANGE = /^([+-])(?!\+\+|--)/;
@@ -271,7 +271,7 @@ export function newCases(diff: string): string[] {
 
 /** The test files that the diff from `base` to `tip` adds or changes with a new case. */
 export function newTests(cwd: string, base: string, tip: string): NewTests[] {
-  const files = git(cwd, "diff", "--name-only", "--diff-filter=AM", base, tip).out.split("\n").filter((f) => TEST_FILE.test(f));
+  const files = git(cwd, "diff", "--name-only", "--diff-filter=AM", base, tip).out.split("\n").filter((f) => isJsTestFile(f));
   return files.flatMap((path) => {
     const names = newCases(git(cwd, "diff", base, tip, "--", path).out);
     return names.length ? [{ path, text: git(cwd, "show", `${tip}:${path}`).out + "\n", names }] : [];
@@ -340,7 +340,7 @@ export const addedLines = (diff: string): number[] =>
 
 /** The JavaScript and TypeScript files, not test files, that the diff from `base` to `tip` adds or changes. */
 export function changedSources(cwd: string, base: string, tip: string): Source[] {
-  const files = git(cwd, "diff", "--name-only", "--diff-filter=AM", base, tip).out.split("\n").filter((f) => SOURCE.test(f) && !TEST_FILE.test(f));
+  const files = git(cwd, "diff", "--name-only", "--diff-filter=AM", base, tip).out.split("\n").filter((f) => SOURCE.test(f) && !isJsTestFile(f));
   return files.flatMap((path) => {
     const lines = addedLines(git(cwd, "diff", "-U0", base, tip, "--", path).out);
     return lines.length ? [{ path, lines, text: git(cwd, "show", `${tip}:${path}`).out }] : [];

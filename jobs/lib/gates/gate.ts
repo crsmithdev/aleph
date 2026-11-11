@@ -3,6 +3,7 @@
  * needs Chris. See docs/workflow.md.
  */
 import { git } from "../infra/git.ts";
+import { inTestDir, isJsTestFile } from "./test-files.ts";
 
 /** The reason a parser gives when the reply has no structured output. */
 export const NO_OUTPUT = "no structured output";
@@ -102,7 +103,7 @@ export function parseReview(raw: any): Review | string {
   return { pass, reason, text: `${text.trim()}\n`, json: { verdict: raw.verdict, summary, failures } };
 }
 
-const TEST = /(^|\/)(tests?|__tests__)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
+const isGateTest = (p: string): boolean => inTestDir(p) || isJsTestFile(p);
 const MARK = /\b(test|it|describe)\.(skip|only|todo)\b/;
 const CASE = /\b(test|it|describe|expect)\s*(\.\w+\s*)?\(/;
 
@@ -114,7 +115,7 @@ const CASE = /\b(test|it|describe|expect)\s*(\.\w+\s*)?\(/;
 export function heldRule(cwd: string, held: string[], base: string, tip: string): string | null {
   const isHeld = (p: string) => held.some((g) => new Bun.Glob(g).match(p));
   const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
-  for (const [, ...paths] of rows) for (const p of paths) if (isHeld(p) && !TEST.test(p)) return `held path ${p}`;
+  for (const [, ...paths] of rows) for (const p of paths) if (isHeld(p) && !isGateTest(p)) return `held path ${p}`;
   return null;
 }
 
@@ -127,7 +128,7 @@ export const SECURITY_PATHS = ["hooks/", "jobs/lib/gates/gate.ts", "package.json
 /** A security path the diff from `base` to `tip` changes that is not a test, or null. A rename counts both of its paths. */
 export function securityChange(cwd: string, base: string, tip: string): string | null {
   const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
-  for (const [, ...paths] of rows) for (const p of paths) if (!TEST.test(p) && SECURITY_PATHS.some((s) => (s.endsWith("/") ? p.startsWith(s) : p === s))) return p;
+  for (const [, ...paths] of rows) for (const p of paths) if (!isGateTest(p) && SECURITY_PATHS.some((s) => (s.endsWith("/") ? p.startsWith(s) : p === s))) return p;
   return null;
 }
 
@@ -142,7 +143,7 @@ export function testFindings(cwd: string, base: string, tip: string): string[] {
   const lines = (f: string, sign: "+" | "-") => git(cwd, "diff", base, tip, "--", f).out.split("\n").filter((l) => l.startsWith(sign) && !l.startsWith(sign.repeat(3)));
   const found: string[] = [];
   for (const [status, from, to] of rows) {
-    if (!TEST.test(from)) continue;
+    if (!isGateTest(from)) continue;
     if (status === "D") found.push(`deletes the test ${from}`);
     else if (status.startsWith("R")) found.push(`renames the test ${from} to ${to}`);
     else if (status === "M" && lines(from, "-").some((l) => CASE.test(l))) found.push(`changes the test ${from}`);
