@@ -351,6 +351,8 @@ test("each type has its own layout, filters keep by type and freshness, and the 
   expect(h).toContain('<ul class="mrows tl">');           // episodic: a timeline
   expect(h).toContain(priorityBadge("high"));             // prospective: cards with the priority
   expect(h).toContain("read never");                      // semantic: the read date
+  expect(h.match(/<li class="mrow[^>]* tabindex="0"/g)?.length).toBeGreaterThan(0);
+  expect(v.renderResults(rs.slice(2, 3), v.options(), status)).toMatch(/<tr class="mrow" tabindex="0"/);
   expect(v.renderResults([], v.options(new URLSearchParams("q=zz")), status)).toContain("No memory matches “zz”.");
   const many = v.renderResults(Array.from({ length: 51 }, (_, i) => it({ key: `n${i}`, title: `n${i}` })), v.options(), status);
   expect(many).toContain("50 of 51");

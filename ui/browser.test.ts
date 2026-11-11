@@ -97,6 +97,11 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/memory");
     await page.when('document.querySelectorAll("#mem-results .mrow").length > 0');
     const all = await page.ev<number>('document.querySelectorAll("#mem-results .mrow").length');
+    // A focused row opens on Enter, as on a click, and keeps focus.
+    await page.ev('(() => { const r = document.querySelector("#mem-results .mrow"); r.focus(); r.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); })()');
+    await page.when('document.querySelector("#mem-results .mrow[aria-selected=true]")');
+    await page.when('document.querySelector("#mem-inspector h3")');
+    expect(await page.ev('document.activeElement === document.querySelector("#mem-results .mrow[aria-selected=true]")')).toBe(true);
     await page.ev('document.querySelector("#mem-results .mrow").click()');
     await page.when('document.querySelector("#mem-results .mrow[aria-selected=true]")');
     await page.when('document.querySelector("#mem-inspector h3")');

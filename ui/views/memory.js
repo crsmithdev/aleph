@@ -79,7 +79,7 @@ export function typeCounts(results, o, status) {
 const renderTiles = (counts, o, loaded) => tiles("Memory types", TYPES.map((t) =>
   statCard({ k: t.name, v: t.id === "parametric" || !loaded ? "–" : String(counts[t.id]), note: t.holds, key: t.id, on: t.id === o.type })).join(""));
 
-const sel = (it, o) => `data-id="${esc(idOf(it))}" aria-selected="${idOf(it) === o.item}"`;
+const sel = (it, o) => `tabindex="0" data-id="${esc(idOf(it))}" aria-selected="${idOf(it) === o.item}"`;
 const titleLink = (it) => (it.href ? `<a href="${esc(it.href)}">${esc(it.title)}</a>` : esc(it.title));
 
 /** A note: its claim, its kind and scope, when it was written and last read, and how it reaches the agent. */
@@ -361,6 +361,10 @@ function mount(root, m) {
       inspect(row.dataset.id);
       if (innerWidth <= 1100) root.querySelector("#mem-inspector").scrollIntoView({ block: "start" });
     }
+  };
+  // Enter or Space on a focused row is a click on it; a key on the title's link is left to the link.
+  root.onkeydown = (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".mrow")) { e.preventDefault(); e.target.click(); }
   };
   search();
 }

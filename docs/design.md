@@ -1246,7 +1246,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |
 | A selected row is drawn three ways: `.mrow` (`--raised`, `--run` border), `tr.nrow` (inset `--run` bar), the nav (inset `--ink` bar) | `ui/app.css` | follow-up |
-| `.mrow` takes a click but has no `tabindex` or key handling | `ui/views/memory.js` | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
 | `now.js` scrolls smoothly without the reduced-motion check | `ui/views/now.js` | follow-up |
 
