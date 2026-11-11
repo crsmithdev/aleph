@@ -11,7 +11,7 @@ import { needsOf } from "../asks/ask.ts";
 import { allRuns, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, makeRun, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive, isRunning, markEnded, stop, waitForPid } from "../infra/process.ts";
-import { causeOf, failedCheckOf, type Fate } from "../records/outcome.ts";
+import { causeOf, failedCheckOf, policyOf, type Fate } from "../records/outcome.ts";
 import { addNote, issue as issueOf, latestJob, openJob } from "../records/job.ts";
 import { counting, jobIdOf, patchRun, putRun } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
@@ -22,7 +22,7 @@ import { Refusal, refuse } from "../../../lib/refusal.ts";
 import { factoryGates, liveEntries, onLocal } from "../gates/factory-status.ts";
 import { readModels } from "../routing/models.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { route, TIER_MODEL, type Tier } from "../routing/route.ts";
+import { raise, route, TIER_MODEL, type Tier } from "../routing/route.ts";
 import type { Gate, Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import { parseId, tail } from "../../../lib/naming.ts";
@@ -355,7 +355,10 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
  * `ALEPH_START_CMD` is text from another process, so it names no gate.
  */
 export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<Refused | null> {
-  const routed = tier !== undefined ? tier : await route(spec);
+  const picked = tier !== undefined ? tier : await route(spec);
+  // A rerun of an issue whose build run failed takes the next level up; a run that did no work (credit) or hit the host (infra) does not count.
+  const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.kind) && e.run.condition === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
+  const routed = picked && failed ? raise(picked) : picked;
   const model = routed ? TIER_MODEL[routed] : null;
   logEvent({ by: "rule", subject: name, action: "started", note: `model ${model ?? "default"}` });
   const start = startCmd();

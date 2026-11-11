@@ -36,3 +36,8 @@ export async function route(spec: string): Promise<Tier | null> {
   }
 }
 
+
+/** The next enabled tier above `tier`, or `tier` at the top: the tier of a rerun after a failed run. */
+export function raise(tier: Tier, models = readModels()): Tier {
+  return TIERS.slice(TIERS.indexOf(tier) + 1).find((t) => t === "opus" || models[t].enabled) ?? tier;
+}

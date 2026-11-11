@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEvents } from "../../../lib/layout.ts";
-import { route } from "./route.ts";
+import { raise, route } from "./route.ts";
 import { setModel } from "./models.ts";
 
 let dir: string;
@@ -39,4 +39,13 @@ test("a low pick at p >= 0.6 gives worker-low, worker-medium when worker-low is 
   expect(await route("x")).toBe("worker-medium");
   expect(setModel("worker-medium", { enabled: false })).toBeNull();
   expect(await route("x")).toBe("opus");
+});
+
+test("raise gives the next enabled tier up, skips a disabled one, and stays at the top", () => {
+  const on = { enabled: true, model: "m" }, off = { enabled: false, model: "m" };
+  const models: any = { "worker-low": on, "worker-medium": on, opus: on };
+  expect(raise("worker-low", models)).toBe("worker-medium");
+  expect(raise("worker-medium", models)).toBe("opus");
+  expect(raise("opus", models)).toBe("opus");
+  expect(raise("worker-low", { ...models, "worker-medium": off })).toBe("opus");
 });
