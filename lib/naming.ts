@@ -17,6 +17,8 @@ export const SUBS = [
   "local", "starts",
 ];
 export const ACTORS = ["human", "rule", "gate", "worker", "reviewer", "check", "intake", "director", "monitor", "firefighter"];
+/** The kinds of an issue. */
+export const ISSUE_KINDS = ["task", "bug", "check", "flake", "acceptance"] as const;
 export const KINDS = ["build", "recheck", "land", "intake", "director", "monitor", "chat", "lens"];
 /** One display name for each pipeline step and agent role. */
 export const NAMES: Record<string, string> = {

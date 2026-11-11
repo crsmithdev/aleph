@@ -9,7 +9,7 @@
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { today } from "../../lib/day.ts";
-import { FULL, parseId, shortText } from "../../lib/naming.ts";
+import { FULL, ISSUE_KINDS, parseId, shortText } from "../../lib/naming.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export type Status = (typeof STATUSES)[number];
@@ -173,7 +173,7 @@ const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged
 /** The four priorities, in rank order. */
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 
-export const KINDS = ["task", "bug", "check", "flake", "acceptance"] as const;
+export const KINDS = ISSUE_KINDS;
 type Kind = (typeof KINDS)[number];
 
 /** Matches `: ` anywhere in a title. */

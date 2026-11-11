@@ -4,7 +4,7 @@
 import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
-import { shortId, issueHref, jobHref } from "../../lib/naming.ts";
+import { ISSUE_KINDS as KINDS, shortId, issueHref, jobHref } from "../../lib/naming.ts";
 import { askCard } from "./cards.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
@@ -264,7 +264,6 @@ export function backlog(rows, win = "month", now = new Date()) {
   return { ats, counts: Object.fromEntries(PRIORITY_ORDER.map((p) => [p, ats.map((t) => open(p, t))])) };
 }
 
-const KINDS = ["task", "bug", "check", "flake"];
 /** For each kind, the p50 and p90 from created to closed over the rows closed inside the window; null for a kind with none. `unit` is "hours" when a row counts and every value is under 2 days; else "days". */
 export function closeTimes(rows, win = "month", now = new Date()) {
   const out = { kinds: KINDS, unit: "days", p50: [], p90: [] };

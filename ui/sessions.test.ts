@@ -78,12 +78,12 @@ const call = (key: string, path: string, params: Record<string, string> = {}) =>
 };
 
 test("the sessions list groups the window's traces by session", async () => {
-  const d: any = await (await listSessions(new Request("http://localhost/api/sessions"))).json();
+  const d: any = await listSessions(new Request("http://localhost/api/sessions"));
   expect(d.sessions.map((s: any) => [s.id, s.turns]).sort()).toEqual([["s1", 2], ["s2", 1]]);
 });
 
 test("the sessions list pages newest first by ?limit= and ?before=, and says whether Langfuse held more pages", async () => {
-  const page = async (q: string) => (await listSessions(new Request(`http://localhost/api/sessions?${q}`))).json() as Promise<any>;
+  const page = async (q: string) => listSessions(new Request(`http://localhost/api/sessions?${q}`)) as Promise<any>;
   const all = await page("");
   expect(all.next).toBeNull();
   expect(all.partial).toBe(false);
@@ -91,20 +91,18 @@ test("the sessions list pages newest first by ?limit= and ?before=, and says whe
   expect(first.sessions.map((s: any) => s.id)).toEqual([all.sessions[0].id]);
   expect(first.next).toBe(all.sessions[0].last);
   expect((await page(`limit=1&before=${encodeURIComponent(first.next)}`)).sessions.map((s: any) => s.id)).toEqual([all.sessions[1].id]);
-  for (const q of ["limit=0", "before=soon"]) expect((await listSessions(new Request(`http://localhost/api/sessions?${q}`))).status).toBe(400);
+  for (const q of ["limit=0", "before=soon"]) await expect(listSessions(new Request(`http://localhost/api/sessions?${q}`))).rejects.toThrow();
 });
 
-test("a failed Langfuse makes the sessions list answer 502 with a message that names Langfuse", async () => {
+test("a failed Langfuse makes the sessions list throw a message that names Langfuse", async () => {
   lf.down = new Error("500 on /api/public/traces");
-  const res = await listSessions(new Request("http://localhost/api/sessions"));
-  expect(res.status).toBe(502);
-  expect(((await res.json()) as any).error).toContain("Langfuse");
+  await expect(listSessions(new Request("http://localhost/api/sessions"))).rejects.toThrow("Langfuse");
 });
 
 test("a second sessions list in one build pass reads Langfuse once", async () => {
   openPass({ langfuse: 1, usage: 1 }, "sessions.test");
   try {
-    expect((await listSessions(new Request("http://localhost/api/sessions"))).status).toBe(200);
+    expect((await listSessions(new Request("http://localhost/api/sessions"))).sessions.length).toBeGreaterThan(0);
     const n = lf.asked.length;
     expect(n).toBeGreaterThan(0);
     await listSessions(new Request("http://localhost/api/sessions"));
@@ -113,7 +111,7 @@ test("a second sessions list in one build pass reads Langfuse once", async () =>
 });
 
 test("the project filter narrows every route", async () => {
-  const d: any = await (await listSessions(new Request("http://localhost"+"/api/sessions?project=sidetone"))).json();
+  const d: any = await listSessions(new Request("http://localhost"+"/api/sessions?project=sidetone"));
   expect(d.sessions.map((s: any) => s.id)).toEqual(["s2"]);
   expect((await call("GET /api/sessions/:id", "/api/sessions/s1?project=sidetone", { id: "s1" })).status).toBe(404);
   expect((await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1?project=sidetone", { id: "s1", n: "1" })).status).toBe(404);
@@ -123,7 +121,7 @@ test("the project filter narrows every route", async () => {
 test("a session's project is the registry key over its cwd, as on the Skills page, and not the trace name", async () => {
   TRACES.push(trace("t8", "s8", "other", iso(5), { metadata: { cwd: "/w/sidetone/sub" } }));
   try {
-    const d: any = await (await listSessions(new Request("http://localhost/api/sessions"))).json();
+    const d: any = await listSessions(new Request("http://localhost/api/sessions"));
     expect(d.sessions.find((s: any) => s.id === "s8").project).toBe("sidetone");
   } finally { TRACES.pop(); }
 });
@@ -131,7 +129,7 @@ test("a session's project is the registry key over its cwd, as on the Skills pag
 test("a trace whose cwd basename is a key but is not under its registry path is not in that project", async () => {
   TRACES.push(trace("t9", "s9", "x", iso(5), { metadata: { cwd: "/elsewhere/sidetone" } }));
   try {
-    const d: any = await (await listSessions(new Request("http://localhost/api/sessions?project=sidetone"))).json();
+    const d: any = await listSessions(new Request("http://localhost/api/sessions?project=sidetone"));
     expect(d.sessions.map((s: any) => s.id)).toEqual(["s2"]);
   } finally { TRACES.pop(); }
 });
@@ -225,7 +223,7 @@ test("a one-turn worker session that Langfuse prices at 0 has its ledger cost on
   TRACES.push(trace("w1", "worker-1", "aleph", iso(5), { totalCost: 0 }));
   putRun("20261104-115500-worker-1", { kind: "build", condition: "done", started: iso(5), name: "worker-1", job: "worker-1", repo: "aleph", cost: 2 } as any);
   try {
-    const list: any = await (await listSessions(new Request("http://localhost/api/sessions"))).json();
+    const list: any = await listSessions(new Request("http://localhost/api/sessions"));
     expect(list.sessions.find((x: any) => x.id === "worker-1")).toMatchObject({ label: "worker-1", cost: 2 });
     const one: any = await (await call("GET /api/sessions/:id", "/api/sessions/worker-1", { id: "worker-1" })).json();
     expect(one.turns[0].cost).toBe(2);
@@ -350,7 +348,7 @@ test("a missing token count or recall figure shows – and not ?", async () => {
 });
 
 test("?window= is week, month or quarter, and quarter reads 90 days", async () => {
-  for (const w of ["100000", "7", "day"]) expect((await listSessions(new Request(`http://localhost/api/sessions?window=${w}`))).status, w).toBe(400);
+  for (const w of ["100000", "7", "day"]) await expect(listSessions(new Request(`http://localhost/api/sessions?window=${w}`))).rejects.toThrow("window must be");
   await listSessions(new Request("http://localhost/api/sessions?window=quarter"));
   const from = lf.asked.find((a) => a.list === "traces")!.q.from!.getTime();
   expect(from).toBeGreaterThanOrEqual(Math.floor((NOW - 90 * 86400_000) / 3600_000) * 3600_000);

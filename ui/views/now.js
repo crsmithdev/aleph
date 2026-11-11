@@ -283,7 +283,7 @@ const jobDetails = (s, j) => details(s, j,
 
 /** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. An empty `problem` leaves the situation line out. */
 const alertCard = (kind, key, meta, title, problem, body = "") =>
-  askShell(kind, `data-kind="${kind}" data-card="unstick"`, key, meta, kind === "error" ? "Error" : "Stuck", title, "", problem ? `<p class="situation">${esc(problem)}</p>` : "", body);
+  askShell(kind, `data-annotate="${esc(shortId(key))}" data-kind="${kind}" data-card="unstick"`, key, meta, kind === "error" ? "Error" : "Stuck", title, "", problem ? `<p class="situation">${esc(problem)}</p>` : "", body);
 /** One plain sentence of what went wrong for a stuck job, from its cause; a time box or a stall takes its length from the reason. */
 const stuckSentence = (j) => {
   const span = /(\d+)[- ](minute|second)/.exec(j.reason ?? "");

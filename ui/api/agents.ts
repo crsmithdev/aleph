@@ -10,10 +10,8 @@ import { listSkills } from "./skills.ts";
 import { scopeOf } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
 
-const partOf = async (res: Response | Promise<Response>) => {
-  const r = await res;
-  return r.ok ? await r.json() as any : { error: ((await r.json().catch(() => ({}))) as any).error ?? `answered ${r.status}` };
-};
+/** The value of `part`, or `{ error }` when it throws, so the other parts still show. */
+const partOf = (part: Promise<any>) => part.catch((e: Error) => ({ error: e.message }));
 
 /** Each tool's sessions: its traces read through the window's trace to session map. */
 async function toolSessions(toolTraces: Record<string, string[]>, days: number, project: string | null): Promise<Record<string, string[]>> {

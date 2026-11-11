@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, listSkills, routes } from "./api/skills.ts";
@@ -84,12 +84,12 @@ afterAll(() => {
   stopApp(); lf.stop(true); use(null);
   restoreEnv();
 });
-beforeEach(() => { clearCache(); updater.reset(); rmSync(join(tmp, "store.json"), { force: true }); mem.asked.length = 0; mem.down = null; asked = []; });
+beforeEach(() => { clearCache(); updater.reset(); for (const f of readdirSync(tmp).filter((f) => f.startsWith("store."))) rmSync(join(tmp, f)); mem.asked.length = 0; mem.down = null; asked = []; });
 
 /** A skills route's answer, built in this thread from the rows of `mem`. */
 const get = async (p: string) => {
   const url = new URL(p, "http://localhost"), name = url.pathname.match(/^\/api\/skills\/(.+)$/)?.[1];
-  const r = await (name ? routes["GET /api/skills/:name"](new Request(url), { name: decodeURIComponent(name) }, url) : listSkills(new Request(url)));
+  const r = await (name ? routes["GET /api/skills/:name"](new Request(url), { name: decodeURIComponent(name) }, url) : listSkills(new Request(url)).then((d) => Response.json(d), (e: Error) => Response.json({ error: e.message }, { status: 502 })));
   return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
 
 test("?project= that is no registry key matches nothing", async () => {

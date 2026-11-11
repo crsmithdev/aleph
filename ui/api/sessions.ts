@@ -215,22 +215,20 @@ function turnOf(id: string, ts: any[], i: number, obs: any[], fit: Parameters<ty
   return { n: i + 1, ...wkOf(fit, cost, job?.cost ? job.model : model), traceId: t.id, start: t.timestamp, model, seconds: secondsOf(t), cost };
 }
 
-/** The sessions of a window, for `GET /api/sessions`: newest last turn first, `?limit=` of them before the `?before=` time, and `next`, the `before` of the next page. */
-export async function listSessions(req: Request): Promise<Response> {
+/** The sessions of a window for the Agents view: newest last turn first, `?limit=` of them before the `?before=` time, and `next`, the `before` of the next page. A bad query or a Langfuse failure throws its message. */
+export async function listSessions(req: Request) {
   const url = new URL(req.url);
   const sc = scopeOf(url, "week", SESSIONS);
-  if (sc instanceof Response) return sc;
+  if (sc instanceof Response) throw new Error(((await sc.json()) as any).error);
   const { days, project } = sc;
   const limit = Number(url.searchParams.get("limit") ?? LIMIT), before = url.searchParams.get("before");
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX) return Response.json({ error: `limit must be 1 to ${MAX}` }, { status: 400 });
-  if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
-  try {
-    const lf = need();
-    const { rows: all, partial } = await windowTraces(days, project);
-    const sessions = (await sessionRows(all)).filter((x) => before === null || ms(x.last) < Date.parse(before));
-    const page = sessions.slice(0, limit), next = sessions.length > limit ? page.at(-1)!.last : null;
-    return Response.json({ base: lf.base, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, partial });
-  } catch (e) { return fail(e); }
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX) throw new Error(`limit must be 1 to ${MAX}`);
+  if (before !== null && Number.isNaN(Date.parse(before))) throw new Error("before must be an ISO time");
+  const lf = need();
+  const { rows: all, partial } = await windowTraces(days, project);
+  const sessions = (await sessionRows(all)).filter((x) => before === null || ms(x.last) < Date.parse(before));
+  const page = sessions.slice(0, limit), next = sessions.length > limit ? page.at(-1)!.last : null;
+  return { base: lf.base, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, partial };
 }
 
 export const routes: Routes = {

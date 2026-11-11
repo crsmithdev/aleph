@@ -103,14 +103,17 @@ interface Store { base: string; from: number; through: number; built: number; ob
 let store: Store | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 
+/** One file per Langfuse base, so switching base keeps each store. */
+const storeFile = (base: string) => skillsStore().replace(/\.json$/, `.${base.replace(/\W+/g, "-")}.json`);
+
 function loadStore(base: string): Store | null {
-  const d = readJsonOr<any>(skillsStore(), null);
+  const d = readJsonOr<any>(storeFile(base), null);
   if (!d || d.v !== 1 || d.base !== base) return null;
   return { ...d, obs: new Map(d.obs.map((o: Observation) => [o.id, o])), traces: new Map(d.traces.map((t: TraceInfo) => [t.id, t])) };
 }
 function saveStore(s: Store): void {
   try {
-    const f = skillsStore();
+    const f = storeFile(s.base);
     mkdirSync(dirname(f), { recursive: true });
     writeFileSync(`${f}.tmp`, JSON.stringify({ v: 1, base: s.base, from: s.from, through: s.through, built: s.built, obs: [...s.obs.values()], traces: [...s.traces.values()] }));
     renameSync(`${f}.tmp`, f);
@@ -252,19 +255,27 @@ function detail(a: Analysis, name: string) {
   };
 }
 
+/** The analysis of the window `url` names; a Langfuse failure throws its message. */
+async function analysed(url: URL): Promise<Analysis> {
+  const sc = scopeOf(url, "month", SESSIONS);
+  if (sc instanceof Response) throw new Error(((await sc.json()) as any).error);
+  const { days, project } = sc;
+  try { return await once(`skills:${langfuse()?.base}:${days}:${project}`, ["langfuse", "registry", "skills"], () => analyse(days, project)); }
+  catch (e) { throw new Error(`Langfuse failed: ${(e as Error).message}`); }
+}
+
 async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<Response> {
   const sc = scopeOf(url, "month", SESSIONS);
   if (sc instanceof Response) return sc;
-  const { days, project } = sc;
   let a: Analysis;
-  try { a = await once(`skills:${langfuse()?.base}:${days}:${project}`, ["langfuse", "registry", "skills"], () => analyse(days, project)); }
-  catch (e) { return Response.json({ error: `Langfuse failed: ${(e as Error).message}` }, { status: 502 }); }
+  try { a = await analysed(url); }
+  catch (e) { return Response.json({ error: (e as Error).message }, { status: 502 }); }
   const value = make(a);
   return value ? Response.json(value) : new Response("no such skill", { status: 404 });
 }
 
-/** The skills of a window, for `GET /api/sessions`. */
-export const listSkills = (req: Request): Promise<Response> => cached(new URL(req.url), summary);
+/** The skills of a window, for the Agents view; a bad window or a Langfuse failure throws its message. */
+export const listSkills = async (req: Request) => summary(await analysed(new URL(req.url)));
 
 export const routes: Routes = {
   "GET /api/skills/:name": (_req, p, url) => cached(url, (a) => {
