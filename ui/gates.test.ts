@@ -617,7 +617,9 @@ test("POST /api/automation/schedules writes a drop-in that keeps the boot and st
   expect(res.status).toBe(200);
   const conf = readFileSync(join(base, "config/systemd/user/aleph-tick.timer.d/interval.conf"), "utf8");
   expect(conf).toContain("OnUnitActiveSec=\nOnBootSec=10min\nOnStartupSec=2min\nOnUnitActiveSec=5min\n");
-  expect(readFileSync(join(base, "systemctl.log"), "utf8")).toContain("--user daemon-reload\n--user restart aleph-tick.timer\n");
+  // The build Worker reads the timers on its own thread, so its `show` lines land among these at any point.
+  const wrote = readFileSync(join(base, "systemctl.log"), "utf8").split("\n").filter((l) => !l.includes("show"));
+  expect(wrote.join("\n")).toContain("--user daemon-reload\n--user restart aleph-tick.timer\n");
   expect((await send({ name: "tick", every: "5 minutes" })).status).toBe(422);
   expect((await send({ name: "monitor", every: "1h" })).status).toBe(422);
 });
