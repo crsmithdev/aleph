@@ -15,7 +15,7 @@ import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
 import { once, touch } from "../../lib/sources.ts";
 import { langfuse, type Langfuse, type ObservationQuery, type TraceQuery } from "../../lib/langfuse.ts";
-import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/infra/settings.ts";
+import { skillsDir, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 86400_000;
 const OVERLAP = 2 * 3600_000;
@@ -32,7 +32,6 @@ const day = (iso: string) => iso.slice(0, 10);
 const text = (v: unknown): string => { const x = asValue(v); return typeof x === "string" ? x : x?.prompt ?? x?.text ?? (x == null ? "" : JSON.stringify(x)); };
 const firstLine = (s: string) => s.replace(/<command-message>[\s\S]*?<\/command-message>/g, "").replace(/<[^>]+>/g, " ").split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 200) ?? "";
 
-export const skillsDir = skillsDirSetting;
 /** The skill folders: a read of the source `skills`, so a new folder rebuilds the keys that read them. */
 const folders = (): string[] => {
   touch("skills");
@@ -101,18 +100,17 @@ async function fetchRows(lf: Langfuse, from: Date, to: Date): Promise<{ obs: Obs
  * whole, to pick up rows that came later than that.
  */
 interface Store { base: string; from: number; through: number; built: number; obs: Map<string, Observation>; traces: Map<string, TraceInfo> }
-const storeFile = skillsStore;
 let store: Store | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 
 function loadStore(base: string): Store | null {
-  const d = readJsonOr<any>(storeFile(), null);
+  const d = readJsonOr<any>(skillsStore(), null);
   if (!d || d.v !== 1 || d.base !== base) return null;
   return { ...d, obs: new Map(d.obs.map((o: Observation) => [o.id, o])), traces: new Map(d.traces.map((t: TraceInfo) => [t.id, t])) };
 }
 function saveStore(s: Store): void {
   try {
-    const f = storeFile();
+    const f = skillsStore();
     mkdirSync(dirname(f), { recursive: true });
     writeFileSync(`${f}.tmp`, JSON.stringify({ v: 1, base: s.base, from: s.from, through: s.through, built: s.built, obs: [...s.obs.values()], traces: [...s.traces.values()] }));
     renameSync(`${f}.tmp`, f);

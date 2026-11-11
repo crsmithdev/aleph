@@ -1,7 +1,7 @@
 // The tick starts only periodic work: each transition that used to wait for it now starts its next step at once,
 // and the tick's sweep logs and starts what a transition missed.
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -16,7 +16,6 @@ import { specVersion } from "../roles/issue-spec.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { archiveDir, putRun } from "../records/record.ts";
-import { markFile } from "../records/migrate.ts";
 import { due, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 
 // The test's clock: the run that holds the live slot is `starting` against it.
@@ -228,13 +227,10 @@ test("a tick that finds the tick lock held runs no step, writes nothing and says
 
 test("one tick moves a finished record older than 7 days into the archive folder", async () => {
   seed([]);
-  expect(existsSync(markFile())).toBe(false);
   const started = new Date(NOW - 8 * 864e5).toISOString();
   putRun("20261020-120000-old", { kind: "build", job: "old", name: `${key}-1`, on: `${key}-1`, condition: "done", told: true, started } as any);
   const ports: TickPorts = { dispatch: async () => {}, suite: () => {}, intake: () => {} };
   const out = await runTick(NOW, ports);
   expect(out.archived).toEqual([`${key}-1`]);
   expect(readdirSync(archiveDir())).toEqual([`${key}-1.json`]);
-  // The tick also runs the word migration, which leaves its mark file.
-  expect(existsSync(markFile())).toBe(true);
 });

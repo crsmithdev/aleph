@@ -88,7 +88,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 
 ### Old words
 
-A writer writes only the new words. A one-time migration (`jobs/lib/records/migrate.ts`, run by the tick) rewrote the old words of the job records and the event log, so a reader reads the stored words as they are. `OLD` in `lib/naming.ts` keeps the ask, gate, actor and act maps that live code still uses; the migration owns the others.
+A writer writes only the new words, and a reader reads the stored words as they are. `OLD` in `lib/naming.ts` keeps the ask, gate, actor and act maps that live code still uses.
 
 | Set | Old → new |
 |---|---|

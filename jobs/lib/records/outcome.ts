@@ -1,7 +1,7 @@
 /**
  * Why a run stopped. `cause` is a closed code on the run's state; `reason` is only its sentence, and a drop
  * replaces the sentence. Logic reads `causeOf`, never `reason`. The check runners return the cause themselves
- * (`ChecksStop` in checks.ts); the word migration (migrate.ts) gave each older run the cause its sentence states.
+ * (`ChecksStop` in checks.ts).
  */
 import type { CAUSES } from "../../../lib/naming.ts";
 import type { Run } from "./ledger.ts";

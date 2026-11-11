@@ -21,7 +21,6 @@ import { git } from "../infra/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { retain } from "../infra/retention.ts";
 import { archiveOld } from "../records/record.ts";
-import { migrateWords } from "../records/migrate.ts";
 import { allJobs, loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
@@ -107,8 +106,6 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     const s = readTick();
     const at = new Date(now).toISOString();
     const out: Record<string, unknown> = {};
-    // Before any step reads a record, so each reads the new words.
-    try { migrateWords(); } catch (e: any) { logEvent({ by: "rule", subject: "migrate", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
     const c = await correctionsStep(now);
     if (c) out.corrections = c;
     // Before the sweep, so the issues a lifted hold frees are keys it starts this tick.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { serverArgs } from "./gpt-oss-start.ts";
@@ -21,15 +21,6 @@ test("a missing file gives both worker tiers enabled on haiku and sonnet, and me
     title: { enabled: true, model: "haiku" },
     judge: { enabled: true, model: "haiku" },
   });
-});
-
-test("an old-shape file reads in the new shape and is written back in it", () => {
-  writeFileSync(join(dir, "models.json"), JSON.stringify({ "worker.haiku": "local", merge: "local" }));
-  const m = readModels();
-  expect(m["worker-low"]).toEqual({ enabled: true, model: "gpt-oss-20b" });
-  expect(m.merge).toEqual({ enabled: true, model: "gpt-oss-20b" });
-  expect(m["worker-medium"]).toEqual({ enabled: true, model: "sonnet" });
-  expect(JSON.parse(readFileSync(join(dir, "models.json"), "utf8"))).toEqual(m);
 });
 
 test("a tier set to a model it offers reads back; a model it does not offer, an unknown tier or a disable of a non-worker tier is an error text", () => {

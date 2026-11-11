@@ -3,7 +3,8 @@ import { noteOf } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
 import { axisTimes, barsOf, compactScale, gaps, fromTo, laneRow, noteEvent, renderTimeline, runEvent, spans, waitEvent } from "./timeline.js";
 // @ts-ignore
-import { dur, setCodes } from "./lib.js";
+import { dur } from "./lib.js";
+import { setCodes } from "../lib/naming.ts";
 // @ts-ignore
 import { issueSegments, renderIssue } from "./views/issues.js";
 

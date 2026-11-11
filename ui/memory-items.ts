@@ -12,7 +12,7 @@ import { readStore } from "../jobs/lib/learning/corrections.ts";
 import { episodesDir, KEEP_DAYS } from "../jobs/lib/learning/episode.ts";
 import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
 import type { Note } from "../vault/lib/vault.ts";
-import { skillsDir } from "./api/skills.ts";
+import { skillsDir } from "../jobs/lib/infra/settings.ts";
 import { claudeSettings } from "../hooks/lib/context.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { afterOf, priorityOf, readLists } from "../issues/lib/store.ts";

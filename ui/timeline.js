@@ -1,8 +1,8 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { clamp, codeText, contentText, legendHtml, dur, esc, money, shortModel, tag, tone, when } from "./lib.js";
-import { word } from "../lib/naming.ts";
+import { clamp, codeText, legendHtml, dur, esc, money, shortModel, tag, tone, when } from "./lib.js";
+import { word, contentText } from "../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;

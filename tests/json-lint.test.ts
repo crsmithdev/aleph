@@ -11,7 +11,7 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const OWNER = "lib/json.ts";
 /** Reads of a file that must be there: a missing one throws too. */
-const READS = ["jobs/lib/gates/keep-earn.ts", "jobs/lib/records/migrate.ts"];
+const READS = ["jobs/lib/gates/keep-earn.ts"];
 const SKIPPED = /\.test\.ts$|\.fixture\.ts$|\.testkit\.ts$|\.helpers\.ts$/;
 
 test("no source file in jobs/, ui/, vault/ or hooks/ parses a JSON file but the owner", () => {

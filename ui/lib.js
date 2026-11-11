@@ -307,8 +307,6 @@ export async function loadDiff(el, url) {
   } catch (err) { return msg(`The diff failed to load: ${err.message}`); }
 }
 
-/** The job states (lib/naming.ts), in the order the filters list them. */
-export { STATES } from "../lib/naming.ts";
 const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "stuck", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "stuck", failed: "stuck", dropped: "quiet", parked: "parked" };
 /** The badge tone of a state (a job's, land's or issue's): run, done, need, stuck, or quiet for any other. */
 export const tone = (state) => TONES[state] ?? "quiet";
@@ -728,6 +726,3 @@ import { FACTORY } from "../lib/windows.ts";
 
 /** The API path of issue `<repo>-<ref>`: `/api/issues/a1430`. */
 export const issueApi = (repo, ref) => `/api/issues/${encodeURIComponent(shortId(`${repo}-${ref}`))}`;
-
-// The names and IDs of docs/naming.md, for the views.
-export { contentText, issueHref, jobHref, parseId, parseJob, setCodes, shownId } from "../lib/naming.ts";

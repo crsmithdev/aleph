@@ -148,22 +148,17 @@ export type Setting = { enabled: boolean; model: string };
 const WORKERS = ["worker-low", "worker-medium"] as const;
 /** The worker tier of a run's Claude model. */
 export const WORKER_TIER: Record<string, Tier | undefined> = { haiku: "worker-low", sonnet: "worker-medium" };
-/** The old slot names, read once and converted. */
-const OLD: Record<string, Tier> = { "worker.haiku": "worker-low", "worker.sonnet": "worker-medium", merge: "merge", title: "title", judge: "judge" };
 
 const file = (): string => join(layout().factory, "models.json");
 const write = (m: Record<Tier, Setting>): void => writeJson(file(), m);
 
-/** Every tier with its setting. A file in the old slot shape (slot -> claude|local) is converted and written back. */
+/** Every tier with its setting. */
 export function readModels(): Record<Tier, Setting> {
-  let m: any = readJsonOr(file(), {});
-  const old = Object.values(m).some((v) => typeof v === "string");
-  if (old) m = Object.fromEntries(Object.entries(OLD).map(([slot, t]) => [t, { model: m[slot] === "local" ? "gpt-oss-20b" : undefined }]));
+  const m: any = readJsonOr(file(), {});
   const all = Object.fromEntries((Object.keys(OFFERS) as Tier[]).map((t) => [t, {
     enabled: !(WORKERS as readonly string[]).includes(t) || m[t]?.enabled !== false,
     model: OFFERS[t].includes(m[t]?.model) ? m[t].model : OFFERS[t][0],
   }])) as Record<Tier, Setting>;
-  if (old) write(all);
   return all;
 }
 
