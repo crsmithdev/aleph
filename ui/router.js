@@ -11,7 +11,7 @@
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
 import { setCodes } from "../lib/naming.ts";
-import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
+import { arm, postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
@@ -394,13 +394,7 @@ async function dispatch(e) {
     box.focus();
     return;
   }
-  if (b.dataset.confirm && !b.classList.contains("ask")) {
-    b.classList.add("ask");
-    b.textContent = name ? `${label} ${name}? Click again` : `${label}? Click again`;
-    clearTimeout(b._t);
-    b._t = setTimeout(() => { b.classList.remove("ask"); b.textContent = label; }, 5000);
-    return;
-  }
+  if (b.dataset.confirm && arm(b, name ? `${label} ${name}? Click again` : `${label}? Click again`)) return;
   clearTimeout(b._t);
   if (act === "always") {
     // Grant the standing permission, then click the row's first action (its second-click confirm applies).

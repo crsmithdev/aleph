@@ -2,7 +2,7 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loading, mean, money, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, arm, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loading, mean, money, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -155,6 +155,7 @@ function renderKit(d, query) {
     spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +
     spec("status-row", "Status row", statusRow(badge("running"), priorityBadge("high"), chips(["ui", "design"])), "Built by statusRow().") +
     spec("card", "Card", card("Section", "<p>The body of a card.</p>", { count: 3, aside: actButton("Action") })) +
+    spec("pair", "Pair", `<div class="pair">${card("First", "<p>Two cards side by side.</p>")}${card("Second", "<p>Each is at least 320px wide, so they stack on a phone.</p>")}</div>`) +
     spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/kit-page</code>"]])) +
 
     `<h2 class="kit-h">Data</h2>` +
@@ -188,6 +189,7 @@ function renderKit(d, query) {
     `<h2 class="kit-h">Labels</h2>` +
     spec("badge", "Badge", row(...["open", "running", "landed", "waiting", "failed", "parked", "dropped"].map(badge)) + row(...["critical", "high", "medium", "low"].map(priorityBadge)) + row(tag("any text"), tag("with a title", "need", "the title"))) +
     spec("chip", "Chip", chips(["ui", "design", "a-long-label-name"])) +
+    spec("status-light", "Status light", row(statusLight("fine", "Local server: up"), statusLight("alert", "OpenRouter: down"), statusLight("unknown", "Monitor: –"))) +
 
     `<h2 class="kit-h">Actions</h2>` +
     spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`)) +
@@ -199,10 +201,22 @@ function renderKit(d, query) {
       { label: "Project", name: "project", data: true, value: "", options: [{ value: "", label: "All" }, "aleph", "sidetone"] },
     ])) +
     spec("pager", "Pager", pager(50, 345) + pager(345, 345)) +
+    spec("search", "Search box", searchBox("kit-search", "", "Search ids and titles")) +
+    spec("tabs", "Tabs", tabs("Kit tabs", [["one", "Write-up"], ["two", "Log"], ["three", "Lens"]], { one: "<p>The first pane.</p>", two: "<p>The second pane.</p>", three: "<p>The third pane.</p>" })) +
+    spec("select", "Select", row(selectBox("Model", "model", ["opus", "sonnet", { value: "haiku", disabled: true }], "sonnet"))) +
+    spec("field", "Field and form", form("kit-form", [
+      field("Project", selectBox("Project", "repo", ["aleph", "tools"], "aleph")), field("Title", inputBox("title", "", { attrs: " required" })),
+      field("Labels", inputBox("labels", "", { attrs: ' placeholder="comma separated"' }), { hint: "Separate the labels with commas." }), field("The text is a spec", `<input type="checkbox" name="spec">`, { check: true })], "File issue")) +
+    spec("settings", "Settings list", settings("Kit settings", [
+      setting("Suite every", inputBox("every", "30min", { id: "kit-every", attrs: ' pattern="[1-9][0-9]*(s|min|h)" required' }), { id: "kit-every", save: "Save", hint: "A number and s, min or h." }),
+      setting("Worker model", selectBox("Worker model", "model", ["opus", "sonnet"], "sonnet", { id: "kit-model" }), { id: "kit-model" }),
+      setting("Land after", inputBox("minutes", "0", { id: "kit-min", type: "number", attrs: ' min="0" step="1"' }), { id: "kit-min", save: "Save", hint: "0: waits for you." })])) +
+    spec("edit", "Edit toggle", `<div class="editable"><p>${editable("<b>A title</b>", inputBox("title", "A title", { attrs: ' aria-label="Title"' }))}</p><div class="actions">${actButton("Edit", { editor: "start" }, { cls: "view-only" })}` +
+      `<span class="edit-only">${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true })}</span></div></div>`) +
     spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>`) +
     spec("form-message", "Form message", `<div class="actions">${actButton("Retry")}<span class="act-msg" role="alert">Retry failed: the job is already running.</span></div>`) +
-    spec("confirm", "Two-click confirm", row(`<button class="act ask" type="button">Drop a1700? Click again</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
-      "The second state of each: the first click shows it, and it goes back after 5 seconds.") +
+    spec("confirm", "Two-click confirm", row(`<button class="act warn" type="button" data-kit-confirm>Drop</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
+      "Click Drop: arm() asks for a second click, and the button goes back after 5 seconds. Beside it, the state of an answer that needs a reason.") +
     spec("disclosure", "Disclosure", fold("Closed by default", "<p>The body of a fold.</p>") + fold("Open by default", "<p>The body of a fold.</p>", { open: true }) +
       fold("Technical details", `<div class="body"><p>A run id and its log path.</p></div>`, { cls: "more" }) + clamp(`<p>${"A long text that clamps. ".repeat(30)}</p>`)) +
 
@@ -283,6 +297,9 @@ export const view = {
   mount: (root, _d, query) => {
     setTheme(THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system");
     drawTokens(root);
+    wireTabs(root);
+    wireEdit(root);
+    root.addEventListener("click", (e) => { const b = e.target.closest("[data-kit-confirm]"); if (b && !arm(b, "Drop a1700? Click again")) b.textContent = "Dropped"; });
     for (const [k, f] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="kit/${k}"]`).frame = f;
     root.querySelector("[data-theme-pick]")?.parentElement.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-theme-pick]");

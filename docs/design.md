@@ -52,6 +52,7 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 | `--card-lift` | `0 1px 2px`, `0 6px 20px -8px` | heavier | the only edge of a card, a metric card and a detail panel |
 | `--float` | `0 6px 24px rgb(0 0 0 / .25)` | the same | kit widgets: the font picker, the annotations |
 | `--on-fill` | #fff | #fff | text on a coloured bar |
+| `--sel` | `--focus` at 35% | the same | the `::selection` fill |
 
 #### Tones
 
@@ -135,10 +136,10 @@ Weight 700 stays a literal on `.mark`.
 
 #### Tracking and line height
 
-| Proposed token | Value | Uses | Where |
+| Token | Value | Role | Where |
 |---|---|---|---|
-| `--ls-display` | `-0.02em`; `.mark` keeps `-0.01em` | 4 | `.mark`, `.shead .say`, `.shead .asof`, `.ph h1` |
-| `--ls-caps` | one tracking for uppercase keys | 4 (`.05em`, `.06em`, `.08em`); `.tile .k` is `.05em` | `#nav li.head`, `.tile .k`, `.herald-sticky-head`, `.ins h4` |
+| `--ls-display` | `-0.02em` | tracking of display and brand type | `.mark`, `.shead .say`, `.shead .asof`, `.sh h2`, `.ph h1`, `.tile b` |
+| `--ls-caps` | `.06em` | tracking of uppercase keys | `#nav li.head`, `.tile .k`, `.herald-sticky-head`, `.ins h4` |
 
 | Do | Don't |
 |---|---|
@@ -451,6 +452,28 @@ A fact list shows the keys and values of one item.
 |---|---|
 | `facts([["Started", when(t)], ["Took", dur(s)]])` | a two-column table of keys and values |
 | `["Model", esc(name)]` | `["Model", name]` with text that is not escaped |
+
+#### Pair
+
+A pair puts two cards side by side.
+
+**Use:** for two cards that a reader compares or reads together. **Not for:** three charts; use `.trio`. Metric cards go in `.tiles`.
+
+| Helper | Reference |
+|---|---|
+| `.pair` around two `card()` calls | `ui/views/efficiency.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Pair | Two cards | | a grid of `auto-fit` columns, each at least 320px (or the width, if less), `--gap-in` apart |
+
+- Put exactly two cards in a pair. The columns stack when the width is under two cards.
+- Give each card its own title and count. Do not share a title.
+- Do not set a width on a card in a pair.
+
+| Do | Don't |
+|---|---|
+| `<div class="pair">${card(a)}${card(b)}</div>` | two cards with a width of 50% each |
 
 ### Data
 
@@ -846,6 +869,30 @@ A chip shows a label. It has round ends.
 | `chips(["ui", "css"])` | a badge for a label |
 | nothing for no labels | `–` for no labels |
 
+#### Status light
+
+A status light shows whether one thing is up: a dot and a word.
+
+**Use:** for the state of a service or a backend, inside a metric card or a row. **Not for:** the state of a job or an issue; use a badge. **Not for:** a log row; use a feed row.
+
+| Helper | Reference |
+|---|---|
+| `statusLight(state, label)` | `ui/views/factory-agents.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Dot | The state: `fine` is `--done`, `alert` is `--stuck`, anything else is unknown and `--muted` | | 6px round |
+| 2 | Label | The name and the state in words: `Local server: up` | | the text of the parent |
+
+- Give the state in words too. A colour alone is not enough.
+- When the state is not known, pass `unknown` and write `–` in the label: `OpenRouter: –`. Do not show it as `down`.
+- Put several lights in `.lights`, one under the other.
+
+| Do | Don't |
+|---|---|
+| `statusLight("alert", "OpenRouter: down")` | `<span class="event-dot alert">` written by hand |
+| `statusLight("unknown", "Monitor: –")` | a green dot for a state that nobody read |
+
 ### Actions
 
 #### Button
@@ -959,7 +1006,7 @@ Row actions are the buttons of one row or one card.
 |---|---|---|---|---|
 | 1 | Row | The buttons and the form message | | `--sp-8` apart, `--sp-14` above; wraps |
 
-- Do not put a button in a table cell.
+- Do not put a button in a table cell. A setting that has a Save button goes in a settings list.
 - Show the result with `say()`.
 
 | Do | Don't |
@@ -996,7 +1043,7 @@ The two-click confirm asks for a second click before an action that is hard to u
 
 | Helper | Reference |
 |---|---|
-| `confirm` in the `data` of `actButton()`; `ui/router.js` | `ui/views/issues.js` |
+| `confirm` in the `data` of `actButton()`; `ui/router.js`. For a handler of your own, `arm(btn, text)` | `ui/views/issues.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1006,9 +1053,12 @@ The two-click confirm asks for a second click before an action that is hard to u
 - Give `label` in `data` too, and `name` when the action has an object. The first click changes the text to `<label> <name>? Click again`, or `<label>? Click again` with no `name`, for 5 seconds.
 - For an answer that needs a reason, put the button in a `.choice` with an `input.reason`. The first click opens the box, and the label changes to `Confirm`.
 
+- In a handler of your own, call `arm(btn, text)` on each click. It returns `true` when it armed the button, so stop; it returns `false` on the second click, so go on. Do not keep the armed state in a `data-` attribute or a timer of your own.
+
 | Do | Don't |
 |---|---|
 | `actButton("Drop", { act: "drop", path, name: "a1700", confirm: "1", label: "Drop" })` | `confirm()` from the browser |
+| `if (arm(btn, "Drop a1700? Click again")) return;` | a second hand-written armed state |
 
 #### Disclosure
 
@@ -1116,6 +1166,161 @@ A filter bar is a row of filters over a table.
 |---|---|
 | `{ value: "", label: "All" }` first | `"All"` as a value, which puts `?state=All` in the address |
 
+#### Search box
+
+A search box is one text field over a table. It filters the rows by the text.
+
+**Use:** over a table that has more rows than a reader scans. **Not for:** a choice from a fixed set; use a filter in the filter bar.
+
+| Helper | Reference |
+|---|---|
+| `searchBox(ui, value, placeholder)` | `ui/views/factory-jobs.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Field | The text to search for | | `input[type="search"]` on `--sunk`; `--ctl-h` high; at least 240px wide, fills the row |
+
+- Name what it searches in the placeholder: `Search ids and titles`. The placeholder is the accessible name too.
+- Put it above the filter bar, outside the part that redraws, so it keeps the focus. Give its `ui` key to `wireTable({ search })`.
+- Send the text to the address with `setQuery({ q })` and draw the table again. Wait about 200 ms after a key. Do not fetch on each key.
+- Use one size on every page. The wide field of the Memory page is a deviation.
+
+| Do | Don't |
+|---|---|
+| `searchBox("jobs-search", f.q, "Search ids and titles")` | `<input type="search">` written by hand |
+| a placeholder that names the columns | `Search` |
+
+#### Tabs
+
+Tabs show one pane of a page at a time. A segmented control picks the pane.
+
+**Use:** for two to five panes of one item, where the reader needs one at a time. **Not for:** a filter of a table; use the filter bar. **Not for:** detail that you can fold; use a disclosure.
+
+| Helper | Reference |
+|---|---|
+| `tabs(label, items, panes, on)`; `wireTabs(root, onTab)` | `ui/views/ideas.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Tab bar | One button per pane, from `seg()` | | as the segmented control; `--sp-12` above the pane |
+| 2 | Pane | The HTML of one tab, in a `section[data-pane]` | | the open pane shows, the others have `hidden` |
+
+- `items` is `[[id, label]]`; `panes` maps each id to its HTML. The first item is open unless `on` names another.
+- `wireTabs()` switches the panes without a redraw. A view that keeps the pick in `keep()` or in the address gives `onTab` and keeps it there.
+- Name each tab in one or two words, as the title of its pane.
+- Put all the panes in the page, hidden. Do not fetch a pane on a click.
+
+| Do | Don't |
+|---|---|
+| `tabs("Idea tabs", [["writeup", "Write-up"], ["log", "Log"]], panes, tab)` | `seg()` plus `section` tags written by hand |
+| three tabs | a tab bar of nine tabs that scrolls |
+
+#### Select
+
+A select is an inline choice from a list that the data gives.
+
+**Use:** for one choice from many options, inside a field, a setting or a filter bar. **Not for:** a fixed set of two to five options; use a segmented control.
+
+| Helper | Reference |
+|---|---|
+| `selectBox(label, name, options, value, { id, attrs })` | `ui/views/factory-agents.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Select | The options, with the value selected | | `--sans` `--fs-sm` on `--surface`, border `--rule`, radius `--r-ctl`; `--ctl-h` high |
+| 2 | Option | A value and its label; `disabled` for one that cannot be chosen | | |
+
+- `label` is the accessible name. Always give it, even when a visible label stands beside the select.
+- `options` are strings, or `{ value, label, disabled }`. Disable an option that is down. Do not leave it out, so the reader sees why.
+- Wire the change in the view: a select with no Save button applies on `change`.
+
+| Do | Don't |
+|---|---|
+| `selectBox("Reviewer model", "model", offers, current)` | a `<select>` written by hand in a table cell |
+| a disabled option for a backend that is down | no option for a backend that is down |
+
+#### Field and form
+
+A field is a label over a control. A form stacks fields under one submit button.
+
+**Use:** to file or create something with many values. **Not for:** one setting on a settings page; use a settings list.
+
+| Helper | Reference |
+|---|---|
+| `field(label, control, { hint, check })`; `inputBox(name, value, { id, type, attrs })`; `form(ui, fields, submit)` | `ui/views/issues.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Label | The name of the value | | `--fs-xs`, `--muted`, over the control |
+| 2 | Control | An input, a select, a textarea, a file input | | `--sans` `--fs-sm`, border `--rule`; the full width, to 640px |
+| 3 | Hint | The format or the effect, in one line | yes | `--fs-xs`, `--muted` |
+| 4 | Submit | The button, `primary`, and the form message beside it | | as a button |
+
+- `field(label, control)` wraps the control in its label, so the label names it. A checkbox goes first: `field(text, input, { check: true })`.
+- Name the submit button with the verb and the object: `File issue`, not `Submit`.
+- Wire `submit` on the `data-ui` key of the form. Show a failure in the `.act-msg` with `say()`. A success reloads or redraws.
+- Put a fold around a form that is not the point of the page.
+
+| Do | Don't |
+|---|---|
+| `form("issue-form", [field("Title", inputBox("title"))], "File issue")` | a form built from `div` and `label` tags by hand |
+| `File issue` | `Submit` |
+
+#### Settings list
+
+A settings list is a group of rows. Each row holds one setting: its label, its control and, when it needs one, a Save button.
+
+**Use:** for the settings of a page, such as the interval of a schedule or the model of a role. **Not for:** the fields of a new item; use a form. **Not for:** values to read; use a fact list or a table.
+
+| Helper | Reference |
+|---|---|
+| `settings(label, rows)`; `setting(label, control, { id, hint, save, attrs })` | `ui/views/gates.js` and `ui/views/factory-agents.js`, which still build it by hand |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | List | The rows, in one group with a name | | at most 720px wide; rows split by a `--rule-2` line |
+| 2 | Label | The name of the setting, in a `<label for>` | | `--fs-sm`, `--ink`; 8 to 14rem wide |
+| 3 | Control | An `inputBox()` or a `selectBox()`, and the Save button | | `--sp-6` apart; `--ctl-h` high |
+| 4 | Hint | The format or the effect | yes | `--fs-xs`, `--muted`, under the control |
+
+- Give the setting that needs a Save button `save: "Save"`. The row is then a form of its own, and the view wires `submit` on the attributes it gives in `attrs`, for example `' data-schedule="suite"'`. A row with no `save` is a `div`: the control applies on `change`.
+- Pass the same `id` to `setting()` and to the control, so the label names the control.
+- Put the settings of one page in one list, or one list per card. Do not put a control or a Save button in a table cell.
+- Show a setting that is read-only as text in the control place. Do not show a disabled control.
+- Under 720px the label goes over the control, and the hint under it.
+- Show a failure in the row with `say()`, from the Save button.
+
+| Do | Don't |
+|---|---|
+| `setting("Suite every", inputBox("every", v, { id }), { id, save: "Save" })` | an input and a Save button in a table cell |
+| one row per setting, the hint under the control | one Save button for many settings that each apply at once |
+
+#### Edit toggle
+
+An edit toggle turns a value into its editor in the same place. The reader clicks Edit, then Save or Cancel.
+
+**Use:** on a detail page, when most visits only read. **Not for:** a new item; use a form. **Not for:** a setting; use a settings list.
+
+| Helper | Reference |
+|---|---|
+| `editable(shown, editor)`; `wireEdit(root)`; `.editable` | `ui/views/issues.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Container | `.editable`; it gets `.editing` while the reader edits | | |
+| 2 | Value | What the value shows, in `.view-only` | | hidden while editing |
+| 3 | Editor | The control for the value, in `.edit-only` | | hidden until editing |
+| 4 | Buttons | Edit (`data-editor="start"`, `.view-only`); Cancel (`data-editor="cancel"`) and Save (`primary`, a submit button), both `.edit-only` | | as a button |
+
+- `wireEdit(root)` toggles `.editing` on a click of a button with `data-editor`. Cancel resets the forms inside the container.  The Issue page still has its own handler on `data-edit`; use `data-editor` until it moves onto this.
+- A control in `.edit-only` that sits apart from its form joins it with `form="id"`.
+- Save posts the form. Show a failure with `say()` and leave edit mode open. A success reloads the page, which drops edit mode.
+
+| Do | Don't |
+|---|---|
+| `editable(esc(title), inputBox("title", title))` | the value and the editor as two blocks that the view hides |
+| Cancel puts back the old value | Cancel that keeps the typed text |
+
 #### Pager
 
 A pager shows the rows after the first 50.
@@ -1190,8 +1395,8 @@ An empty state shows that there is nothing, that data loads, or that the data di
 |---|---|
 | Sidebar | `#nav`, 208px open, 48px when collapsed (`.shell.collapsed`); at 720px and narrower, a sticky bar at the top: one row, the links scroll sideways, and the current link scrolls into view |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
-| Browser | `::selection` is `--focus` at 35%; scrollbars are thin, `--rule` on transparent |
-| Grid | `.tiles` holds metric cards; `.lanes` holds lanes; `.trio` holds chart panels; `.browse` is a list with its detail beside it, one column under 1100px |
+| Browser | `::selection` is `--sel`; scrollbars are thin, `--rule` on transparent |
+| Grid | `.tiles` holds metric cards; `.pair` holds two cards side by side, stacked under two cards of width; `.lanes` holds lanes; `.trio` holds chart panels; `.browse` is a list with its detail beside it, one column under 1100px |
 
 - **List page:** page head, metric cards, then cards.
 - **Detail page:** crumb, page head, status row, KPI strip, then detail panels.
@@ -1251,6 +1456,8 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | A selected row is drawn three ways: `.mrow` (`--raised`, `--run` border), `tr.nrow` (inset `--run` bar), the nav (inset `--ink` bar) | `ui/app.css` | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
 | `now.js` scrolls smoothly without the reduced-motion check | `ui/views/now.js` | follow-up |
+| The Memory search field is 44px high and `--fs-lg`; every other page uses the one `searchBox()` size | `.memory .msearch` in `ui/app.css` | follow-up |
+| Settings and forms written by hand: a form in a table cell, a select in a table cell, a hand-built armed button | `ui/views/gates.js`, `ui/views/factory-agents.js`, `ui/views/memory.js` | aleph-1891 (pending) |
 
 ## Appendix
 

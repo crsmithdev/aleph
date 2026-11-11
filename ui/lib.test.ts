@@ -465,3 +465,25 @@ test("linkButton() is a link with the act class, its label and href escaped, and
   expect(linkButton("Q&A", "#/issues/1?x=1&y=2")).toBe('<a class="act" href="#/issues/1?x=1&amp;y=2">Q&amp;A</a>');
   expect(linkButton("x", "javascript:alert(1)")).toBe('<a class="act" href="#">x</a>');
 });
+
+test("arm() arms on the first click, lets the second through, and restores the text after the delay", async () => {
+  const cls = new Set<string>(), btn: any = { textContent: "Drop", classList: { contains: (c: string) => cls.has(c), add: (c: string) => cls.add(c), remove: (c: string) => cls.delete(c) } };
+  expect(lib.arm(btn, "Drop a1? Click again", 5)).toBe(true);
+  expect([btn.textContent, cls.has("ask")]).toEqual(["Drop a1? Click again", true]);
+  expect(lib.arm(btn, "x", 5)).toBe(false);
+  const b2: any = { textContent: "Drop", classList: { contains: () => false, add() {}, remove() {} } };
+  lib.arm(b2, "Sure?", 5);
+  await Bun.sleep(20);
+  expect(b2.textContent).toBe("Drop");
+});
+
+test("tabs() opens one pane, setting() is a form only with a Save, statusLight() maps unknown to a muted dot", () => {
+  const t = lib.tabs("T", [["a", "A"], ["b", "B"]], { a: "<p>1</p>", b: "<p>2</p>" }, "b");
+  expect(t).toContain('data-tab="a"');
+  expect(t).toContain('<section data-pane="a" hidden>');
+  expect(t).toContain('<section data-pane="b">');
+  expect(lib.setting("Every", "<input id=e>", { id: "e", save: "Save" })).toStartWith('<form class="srow"');
+  expect(lib.setting("Model", "<select id=m></select>", { id: "m" })).toStartWith('<div class="srow"');
+  expect(lib.statusLight("fine", "A: up")).toContain('class="event-dot fine"');
+  expect(lib.statusLight("unknown", "A: –")).toContain('class="event-dot "');
+});

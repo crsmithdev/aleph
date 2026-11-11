@@ -426,6 +426,84 @@ export function filterBar(groups) {
 export const searchBox = (ui, value, placeholder) =>
   `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}"></div>`;
 
+/** The tabs of a page that shows one pane at a time: a segmented control over the panes. `items` is `[[id, label]]`; `panes` maps an id to its HTML; `on` is the open id. A button carries `data-tab`; `wireTabs()` switches the panes. */
+export const tabs = (label, items, panes, on = items[0]?.[0]) =>
+  `<div class="tabs">${seg(label, items.map(([id, l]) => ({ label: l, on: id === on, attrs: ` data-tab="${esc(id)}"` })))}` +
+  items.map(([id]) => `<section data-pane="${esc(id)}"${id === on ? "" : " hidden"}>${panes[id] ?? ""}</section>`).join("") + `</div>`;
+
+/** Switch the panes of each `tabs()` under `root` on a click; `onTab(id, el)` (optional) hears it, to keep the pick. */
+export function wireTabs(root, onTab) {
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tab]"), box = b?.closest(".tabs");
+    if (!box) return;
+    box.querySelectorAll("button[data-tab]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    box.querySelectorAll(":scope > section[data-pane]").forEach((x) => { x.hidden = x.dataset.pane !== b.dataset.tab; });
+    onTab?.(b.dataset.tab, box);
+  });
+}
+
+/** A dot and a word for whether something is up: `state` is "fine", "alert" or anything else for unknown (a muted dot). `label` is the whole text. */
+export const statusLight = (state, label) =>
+  `<span class="light"><span class="event-dot ${state === "fine" || state === "alert" ? state : ""}" aria-hidden="true"></span>${esc(label)}</span>`;
+
+/**
+ * The second click of an action that is hard to undo. Call it on the click: it returns true when it armed the button
+ * (the text becomes `text`, in the `.ask` look, for `ms`) and false when the button was already armed, so the action goes on.
+ */
+export function arm(btn, text, ms = 5000) {
+  if (btn.classList.contains("ask")) { clearTimeout(btn._t); return false; }
+  const was = btn.textContent;
+  btn.classList.add("ask");
+  btn.textContent = text;
+  btn._t = setTimeout(() => { btn.classList.remove("ask"); btn.textContent = was; }, ms);
+  return true;
+}
+
+/** A `<select>`: `label` is its accessible name; `options` are strings or `{value, label, disabled}`; `o` has `id` and `attrs` (raw attributes). */
+export const selectBox = (label, name, options, value, o = {}) =>
+  `<select name="${esc(name)}"${o.id ? ` id="${esc(o.id)}"` : ""} aria-label="${esc(label)}"${o.attrs ?? ""}>${options.map((x) => {
+    const v = typeof x === "object" ? x : { value: x };
+    return `<option value="${esc(v.value)}"${String(v.value) === String(value) ? " selected" : ""}${v.disabled ? " disabled" : ""}>${esc(v.label ?? v.value)}</option>`;
+  }).join("")}</select>`;
+
+/** A text, number or search `<input>`; `o` has `id`, `type` (default text) and `attrs` (raw attributes, such as `required` or `pattern`). */
+export const inputBox = (name, value, o = {}) =>
+  `<input name="${esc(name)}" type="${o.type ?? "text"}"${o.id ? ` id="${esc(o.id)}"` : ""} value="${esc(value ?? "")}"${o.attrs ?? ""}>`;
+
+/** One field of a form: its label over its control; `hint` is a line under it; `check` puts a checkbox control before the label text. */
+export const field = (label, control, { hint = "", check = false } = {}) =>
+  `<label class="field">${check ? `${control} ${esc(label)}` : `${esc(label)} ${control}`}${hint ? `<small class="hint">${esc(hint)}</small>` : ""}</label>`;
+
+/** A form of fields, stacked, with its submit button and the message beside it; `ui` is the `data-ui` key the view wires. */
+export const form = (ui, fields, submit, attrs = "") =>
+  `<form class="stack" data-ui="${esc(ui)}"${attrs}>${fields.join("")}${actButton(submit, {}, { primary: true, type: "submit" })} <span class="act-msg" role="status"></span></form>`;
+
+/**
+ * One setting: a label, its control and, with `save`, a Save button that submits it alone (a form of its own; the view wires `submit` on `attrs`' data key).
+ * `id` is the control's id, so the label names it. Without `save` the control applies on change and the row is a `<div>`. `hint` is a line under the control.
+ */
+export const setting = (label, control, { id, hint = "", save = "", attrs = "" } = {}) => {
+  const body = `<label class="sl"${id ? ` for="${esc(id)}"` : ""}>${esc(label)}</label><span class="sctl">${control}${save ? actButton(save, {}, { type: "submit" }) : ""}</span>` +
+    `${hint ? `<small class="hint">${esc(hint)}</small>` : ""}`;
+  return save ? `<form class="srow"${attrs}>${body}</form>` : `<div class="srow"${attrs}>${body}</div>`;
+};
+
+/** The rows of `setting()`, one group under a name. The settings of a page live here, not in table cells. */
+export const settings = (label, rows) => `<div class="settings" role="group" aria-label="${esc(label)}">${rows.join("")}</div>`;
+
+/** A value and its editor in one place: the container's `.editing` class shows the editor and hides the value. */
+export const editable = (shown, editor) => `<span class="view-only">${shown}</span><span class="edit-only">${editor}</span>`;
+
+/** Toggle `.editing` on the `.editable` that holds a `data-editor` button: `start` turns it on, anything else (`cancel`) off and resets its forms. */
+export function wireEdit(root) {
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-editor]"), box = b?.closest(".editable");
+    if (!box) return;
+    box.classList.toggle("editing", b.dataset.editor === "start");
+    if (b.dataset.editor !== "start") box.querySelectorAll("form").forEach((f) => f.reset());
+  });
+}
+
 // The address holds what changes the data or what a link shares (the window, the project, a filter); keep() holds
 // how a component shows it (a chart's form, its hidden series). One key per component, never per row or item.
 
