@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -180,7 +180,7 @@ export const updatedText = (r) => (updatedMs(r) ? when(new Date(updatedMs(r))) :
 export function ageText(r, now = Date.now()) {
   const from = isoMs(r.createdTime);
   if (!from) return "";
-  return `${Math.max(0, Math.floor(((r.status === "open" ? now : isoMs(r.closedTime) || now) - from) / DAY))}d`;
+  return days(Math.max(0, Math.floor(((r.status === "open" ? now : isoMs(r.closedTime) || now) - from) / DAY)));
 }
 
 /** One issue row. `fold` is "open" or "closed" for a parent with parts, which gets a chevron; `sub` indents a part shown under its parent. */
@@ -188,8 +188,8 @@ export function renderRow(r, { fold, sub } = {}) {
   const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
   return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td>${idLink(shortText(`${r.repo}-${r.n}`), r.href)}</td>` +
     `<td class="wide">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
-    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td><td>${esc(r.project)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
-    `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td><td class="time">${esc(updatedText(r))}</td></tr>`;
+    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
+    `<td class="num">${esc(count(r.notes))}</td><td class="num">${esc(count(r.runs))}</td><td class="num">${esc(money(r.cost))}</td><td class="num">${esc(ageText(r))}</td><td class="time">${esc(updatedText(r))}</td></tr>`;
 }
 
 export function renderTable(rows, o = {}) {
@@ -228,14 +228,14 @@ export function stats(rows, now = new Date(), window = "week") {
 }
 
 /** The change from the period before: more closed is good, more filed is warn. */
-const change = (now, before, w, lowerIsGood) => cardTrend(now, before, before, { kind: "relative", lowerIsGood, tip: `${before} the ${w} before` });
+const change = (now, before, w, lowerIsGood) => cardTrend(now, before, before, { kind: "relative", lowerIsGood, tip: `${count(before)} the ${w} before` });
 
 export function renderTiles(s, key = "open", win = "week") {
   const w = winOf(win);
   const on = (k) => ({ key: k, on: key === k });
   return tiles("Issue numbers",
     statCard({ k: "Open", v: count(s.open), v2: count(s.total), q: ["open", "in store"], ...on("open") }) +
-    statCard({ k: "Filed", v: count(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${s.filedBefore} the ${w} before`, ...on("filed") }) +
+    statCard({ k: "Filed", v: count(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${count(s.filedBefore)} the ${w} before`, ...on("filed") }) +
     statCard({ k: "Closed", v: count(s.closed), v2: count(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w, false), ...on("closed") }) +
     statCard({ k: "Open Age", v: days(s.medianAge), ...(s.oldest == null ? {} : { v2: days(s.oldest), q: ["open age", "oldest"] }), ...on("age") }) +
     statCard({ k: "Jobs", v: count(s.runs), v2: money(s.cost), q: ["jobs", "recorded cost"], ...on("runs") }));
@@ -283,7 +283,7 @@ export function closeTimes(rows, win = "month", now = new Date()) {
 export const backlogFrame = (b, f, win) => ({
   measure: { name: "Open Backlog, Filed and Closed", unit: "count", agg: "max" },
   over: { kind: "time", window: win },
-  by: { keys: [...PRIORITY_ORDER.map((p) => ({ key: p, name: p })), { key: "filed", name: "Filed" }, { key: "closed", name: "Closed" }] },
+  by: { keys: [...PRIORITY_ORDER.map((p) => ({ key: p, name: p })), { key: "filed", name: "filed" }, { key: "closed", name: "closed" }] },
   rows: b.ats.map((at, i) => ({ at, ...Object.fromEntries(PRIORITY_ORDER.map((p) => [p, b.counts[p][i]])), filed: f.filed[i], closed: f.closed[i] })),
   form: "area",
   note: "Open issues over time, by priority, with the filed and closed counts of each bucket.",
@@ -316,7 +316,7 @@ export const closeFrame = (c) => {
     measure: { name: "Time to Close", unit: "seconds", agg: "max" },
     over: { kind: "category" },
     by: { keys: [{ key: "p50", name: "p50" }, { key: "p90", name: "p90", color: "muted" }] },
-    rows: c.kinds.map((k, i) => ({ name: k, p50: (c.p50[i] ?? 0) * scale, p90: (c.p90[i] ?? 0) * scale })),
+    rows: c.kinds.map((k, i) => ({ name: k, p50: c.p50[i] == null ? null : c.p50[i] * scale, p90: c.p90[i] == null ? null : c.p90[i] * scale })),
     form: "grouped",
     note: `${c.unit === "hours" ? "Hours" : "Days"} from filed to closed: the p50 and the p90 of each kind.`,
   };
@@ -341,7 +341,7 @@ const TOP_RUNS = 10;
 function renderDetail(rows, o) {
   if (o.tile === "runs") {
     const top = [...rows].filter((r) => !r.part && r.runs > 0).sort((a, b) => b.runs - a.runs).slice(0, TOP_RUNS), max = top[0]?.runs ?? 1;
-    return card("Issues by Jobs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a job.", "Jobs appear here once the factory runs an issue."), { label: "Issues by jobs" });
+    return card("Issues by Jobs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${esc(count(r.runs))} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a job.", "Jobs appear here once the factory runs an issue."), { label: "Issues by jobs" });
   }
   return "";
 }
@@ -356,11 +356,9 @@ const renderCharts = (o, rows, tests) => {
 
 const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medium", "low"];
 
-/** The project filter scopes the tiles too: a select in the page head, each option with the count the other filters leave. */
-export function renderProjects(projects, rows, o = {}) {
-  const left = filterRows(rows, o, ["project"]);
-  const n = (p) => left.filter((r) => !p || r.project === p).length;
-  return scope().bar({ project: o.project ?? "", value: o.window ?? "week", more: projects, label: (p) => `${p || "All"} (${n(p)})` });
+/** The project filter scopes the tiles too: a select in the page head. */
+export function renderProjects(projects, _rows, o = {}) {
+  return scope().bar({ project: o.project ?? "", value: o.window ?? "week", more: projects, label: (p) => p || "All" });
 }
 
 export function renderFilters(rows, o = {}) {
@@ -475,8 +473,8 @@ const choose = (name, all, cur) => selectBox(name, name, !cur || all.includes(cu
 const FORM = 'form="issue-edit"';
 
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
-const issueHead = (d, ref) => pageHead(d.title, { cls: "view-only",
-  after: `<input class="edit-only title-edit" name="title" ${FORM} required aria-label="Title" value="${esc(d.title)}">`,
+const issueHead = (d, ref) => pageHead("", {
+  after: `<h1>${editable(esc(d.title), inputBox("title", d.title, { attrs: ` class="title-edit" ${FORM} required aria-label="Title"` }))}</h1>`,
   aside: actButton("Edit", { editor: "start" }, { cls: "view-only" }) +
   `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="act-msg" role="status"></span> ${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true, type: "submit" })}</form>` });
 
@@ -491,9 +489,7 @@ function renderMedia(d, ref) {
     ? `<li><a class="media-doc" href="${url(name)}" target="_blank" rel="noopener">${esc(name)}</a></li>`
     : `<li><a href="${url(name)}" target="_blank" rel="noopener"><img src="${url(name)}" alt="${esc(name)}" loading="lazy"></a></li>`).join("");
   return (items ? `<ul class="media-grid">${items}</ul>` : "") +
-    `<form data-ui="issue-media" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
-    `<label>Attach images or PDFs ${mediaInput}</label>` +
-    `${actButton("Attach", {}, { type: "submit" })} <span class="act-msg" role="status"></span></form>`;
+    formOf("issue-media", [field("Attach images or PDFs", mediaInput)], "Attach", ` data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"`);
 }
 
 /** The files of a form's media input as `{ name, data }`, `data` in base64. */
@@ -517,9 +513,7 @@ function addMedia(form, files) {
   return true;
 }
 
-const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
-  `<label>Add a note <textarea name="text" rows="3" required></textarea></label>` +
-  `${actButton("Add note", {}, { type: "submit" })} <span class="act-msg" role="status"></span></form>`;
+const renderNoteForm = (d, ref) => formOf("issue-note", [field("Add a note", `<textarea name="text" rows="3" required></textarea>`)], "Add note", ` data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"`);
 
 /** Machine note prefixes, matched after the `- ` and the stamp are removed. */
 const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
@@ -583,8 +577,6 @@ export function issueSegments(d, now = Date.now()) {
   return segments;
 }
 
-const title = (s) => String(s).replace(/^./, (c) => c.toUpperCase());
-
 /** The KPI strip of an issue: sub-issues or stage, elapsed, waiting, cost and commits. */
 function issueKpis(d, segments, now = Date.now()) {
   const parts = d.goals ?? [], open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
@@ -597,8 +589,8 @@ function issueKpis(d, segments, now = Date.now()) {
   const commits = d.commits ?? [];
   const sha = (c) => (c.commitUrl ? idLink(c.hash.slice(0, 7), c.commitUrl) : `<code>${esc(c.hash.slice(0, 7))}</code>`);
   return renderKpis([
-    parts.length ? { k: "Sub-issues done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${shortText(g.id)} ${title(g.stage)}`).join(", ")) }
-      : { k: "Stage", v: esc(d.derived?.stage ?? d.status), sub: "" },
+    parts.length ? { k: "Sub-issues done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${shortText(g.id)} ${g.stage}`).join(", ")) }
+      : { k: "Stage", v: esc(d.derived?.stage ?? d.status), text: true, sub: "" },
     { k: open ? "Open for" : "Elapsed", v: esc(times.length ? dur((hi - lo) / 1000) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
     { k: "Waiting", v: esc(times.length ? dur(waited / 1000) : "–"), sub: chris ? esc(`${dur(chris / 1000)} for your answer`) : "" },
     { k: "Cost", v: esc(costText(cost)), sub: esc(runs === 1 ? "1 job" : `${runs} jobs`) },
@@ -645,7 +637,7 @@ export function renderIssue(d) {
   return `<div class="page dp-page issue-page editable">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askCard(d.ask) : "") +
     issueKpis(d, segments) + renderTimeline(segments) +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
-    `<div class="dp-detail">${detailPanel("Media", esc((d.media ?? []).length), renderMedia(d, ref))}${detailPanel("Notes", esc(d.notes.length), notes)}${commits && detailPanel("Commits", esc(d.commits.length), commits)}</div></div>`;
+    `<div class="dp-detail">${detailPanel("Media", esc(count((d.media ?? []).length)), renderMedia(d, ref))}${detailPanel("Notes", esc(count(d.notes.length)), notes)}${commits && detailPanel("Commits", esc(count(d.commits.length)), commits)}</div></div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view

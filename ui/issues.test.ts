@@ -127,24 +127,24 @@ describe("GET /api/issues", () => {
     expect(r.updated).toBeTruthy();
   });
 
-  test("a row and the issue page carry the kind, and the views show it as a chip", async () => {
+  test("a row and the issue page carry the kind; the issue page shows it as a chip, the table row does not", async () => {
     const n = 2;
     const row = (await rowsOf("fac")).find((r: any) => r.id === n);
     expect(row.kind).toBe("bug");
     const d = await getJson(`/api/issues/fac-${n}`);
     expect(d.kind).toBe("bug");
     expect(v.renderIssue(d)).toContain('<span class="chip kind">kind: bug</span>');
-    expect(v.renderRow(v.issueRows({ issues: [row] })[0])).toContain('<span class="chip kind">bug</span>');
+    expect(v.renderRow(v.issueRows({ issues: [row] })[0])).not.toContain("chip kind");
   });
 
-  test("the issue page's head is pageHead: the view-only title, the title input and the Edit button", async () => {
+  test("the issue page's head is pageHead: the title as editable() writes it and the Edit button", async () => {
     const d = await getJson("/api/issues/fac-2");
     const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
     mock.module("./lib.js", () => ({ ...real, pageHead: tagged }));
     try {
       const h = v.renderIssue(d);
       expect(h.match(/<header class="ph">/g)).toHaveLength(1);
-      expect(h).toContain(`<!--pageHead--><header class="ph"><h1 class="view-only">${d.title}</h1><input class="edit-only title-edit" name="title" form="issue-edit" required aria-label="Title" value="${d.title}"><div class="aside"><button class="act view-only" type="button" data-editor="start">Edit</button>`);
+      expect(h).toContain(`<!--pageHead--><header class="ph"><h1><span class="view-only">${d.title}</span><span class="edit-only"><input name="title" type="text" value="${d.title}" class="title-edit" form="issue-edit" required aria-label="Title"></span></h1><div class="aside"><button class="act view-only" type="button" data-editor="start">Edit</button>`);
     } finally {
       mock.module("./lib.js", () => real);
     }
@@ -306,14 +306,13 @@ describe("views", () => {
   test("the project filter is a select with what the other filters leave", async () => {
     const d = await getJson("/api/issues");
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
-    expect(h).toMatch(/<option value="oth" selected>oth \(\d+\)<\/option>/);
-    expect(h).toMatch(/<option value="fac">fac \(\d+\)<\/option>/);
-    expect(h).toMatch(/<option value="">All \(\d+\)<\/option>/);
-    expect(h).not.toMatch(/oth \d+<\/option>/);
+    expect(h).toContain('<option value="oth" selected>oth</option>');
+    expect(h).toContain('<option value="fac">fac</option>');
+    expect(h).toContain('<option value="">All</option>');
+    expect(h).not.toMatch(/<option[^>]*>[^<]*\(\d+\)<\/option>/);
     const rows = v.issueRows(d);
     const counts = (o: object) => v.renderProjects(d.projects, rows, o);
-    const n = rows.filter((r: any) => r.project === "oth" && r.status === "open").length;
-    expect(counts({ status: "open" })).toContain(`<option value="oth">oth (${n})</option>`);
+    expect(counts({ status: "open" })).toContain('<option value="oth">oth</option>');
     expect(counts({})).toContain('aria-label="Window" data-name="window"');
     expect(counts({})).not.toContain('class="fl">Window');
     expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
@@ -437,11 +436,11 @@ describe("views", () => {
     // The frame carries every bucket: the four priorities, then the filed and closed counts of the same buckets.
     const fr = v.backlogFrame(b, f, "month");
     expect(fr.over).toEqual({ kind: "time", window: "month" });
-    expect(fr.by.keys.map((k: any) => k.name)).toEqual(["low", "medium", "high", "critical", "Filed", "Closed"]);
+    expect(fr.by.keys.map((k: any) => k.name)).toEqual(["low", "medium", "high", "critical", "filed", "closed"]);
     expect(fr.rows.map((r: any) => [r.at, r.medium, r.filed, r.closed])).toEqual(b.ats.map((at: number, i: number) => [at, b.counts.medium[i], f.filed[i], f.closed[i]]));
     // The option draws the keys with a value: the priorities with none are left out.
     const o = option(fr, "area", {});
-    expect(o.series.map((s: any) => s.name)).toEqual(["medium", "Filed", "Closed"]);
+    expect(o.series.map((s: any) => s.name)).toEqual(["medium", "filed", "closed"]);
     expect([o.yAxis.minInterval, o.yAxis.axisLabel.formatter(3)]).toEqual([1, "3"]);
     expect(v.renderTiles(v.stats(rows, now))).toContain('<b>1<em> / 0</em></b><span class="q"><span>closed</span><span class="m"> / dropped</span></span>');
   });
@@ -476,7 +475,7 @@ describe("views", () => {
     expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><div class="aside">/);
     expect(page).toContain("<h2>Time to Close</h2>");
     // Each panel's title, aria label and empty line come from its frame.
-    expect(label(v.backlogFrame(w, v.flow(rows, "week", now), "week"))).toBe("Open Backlog, Filed and Closed: medium peak 1, Filed peak 1, Closed peak 1");
+    expect(label(v.backlogFrame(w, v.flow(rows, "week", now), "week"))).toBe("Open Backlog, Filed and Closed: medium peak 1, filed peak 1, closed peak 1");
     expect(page).toContain('aria-label="Open Backlog, Filed and Closed"');
     expect(page).toContain('aria-label="Time to Close"');
     for (const k of ["backlog", "close", "tests"]) expect(page).toMatch(new RegExp(`<aleph-chart key="issues/${k}"[^>]*><section class="card" aria-label="[^"]+">`));
@@ -1048,4 +1047,17 @@ test("an issue row carries its short id for a pin to anchor on", () => {
   try {
     expect(v.renderRow({ repo: "aleph", n: 1430, id: "aleph-1430", href: "#/issues/aleph/1430", title: "t", stage: "new", project: "aleph", priority: "medium", labels: [] })).toContain('data-annotate="a1430"');
   } finally { setCodes({}); }
+});
+
+test("the kit's values: a zero cost shows $0.00, a kind with no closed rows has no p50 or p90, the Stage KPI is words, a part's stage is lower case, the title is editable()", () => {
+  const row = { repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [], notes: 0, runs: 0, cost: 0 };
+  expect(v.renderRow(row)).toContain('<td class="num">$0.00</td>');
+  const frame = v.closeFrame({ kinds: ["bug", "task"], unit: "days", p50: [null, 2], p90: [null, 3] });
+  expect(frame.rows.map((r: any) => [r.p50, r.p90])).toEqual([[null, null], [172800, 259200]]);
+  const d = { repo: "fac", id: 1, ref: "1", title: "A title", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { runs: [] } };
+  const h = v.renderIssue(d);
+  expect(h).toContain('<span class="dp-v text">open</span>');
+  expect(h).toMatch(/<h1><span class="view-only">A title<\/span><span class="edit-only"><input [^>]*name="title"/);
+  const parts = v.renderIssue({ ...d, goals: [{ id: "1.1", stage: "review", status: "open", title: "p", href: "#/issues/fac/1.1" }] });
+  expect(parts).toContain('<span class="dp-sub">1.1 review</span>');
 });

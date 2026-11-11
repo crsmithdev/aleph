@@ -1487,6 +1487,10 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
 | The Memory search field is 44px high and `--fs-lg`; every other page uses the one `searchBox()` size | `.memory .msearch` in `ui/app.css` | follow-up |
 | Settings and forms written by hand: a form in a table cell, a select in a table cell, a hand-built armed button | `ui/views/gates.js`, `ui/views/factory-agents.js`, `ui/views/memory.js` | aleph-1891 (pending) |
+| A table row's fold chevron is a hand `<button class="fold">`: no helper for a row toggle | `renderRow()` in `ui/views/issues.js` | follow-up |
+| The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |
+| A textarea, a checkbox, the id span `idp`, the plural of "job" and the `<code>` of a commit with no URL are written by hand: no helper | `ui/views/issues.js` | follow-up |
+| The File an Issue Project select takes its options from the registry after the page is drawn, written as hand `<option>` tags | `projectOptions()` in `ui/views/issues.js` | follow-up |
 
 ## Appendix
 

@@ -223,7 +223,7 @@ describe("waitEvent", () => {
 describe("the issue page's tidy-up", () => {
   const html = renderIssue(issue({ derived: { stage: "done" }, timeline: { filed: 0, runs: [run("build", "2026-11-01T10:30:00Z", "2026-11-01T14:40:00Z", { model: "claude-sonnet-5-5" }), run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed" })] }, notes: ["- 2026-11-01T10:00:00.000Z: a note"].map(noteOf) }));
   test("the Stage is lower case, no bar or tip names a model, and there is no Detail h2", () => {
-    expect(html).toContain('<span class="dp-v">done</span>');
+    expect(html).toContain('<span class="dp-v text">done</span>');
     expect(html).not.toMatch(/sonnet|opus/i);
     expect(html).not.toContain("<h2>Detail</h2>");
   });

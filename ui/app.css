@@ -515,7 +515,7 @@ table.tbl th .arr { display: inline-block; width: 1em; margin-left: var(--sp-2);
 .crumb a { color: var(--muted); text-decoration: none; }
 .crumb a:hover, .crumb a:focus-visible { color: var(--ink); text-decoration: underline; }
 .editable:not(.editing) .edit-only, .editable.editing .view-only { display: none; }
-.issue-page .title-edit { flex: 1 1 auto; min-width: 0; font: inherit; font-size: var(--fs-lg); }
+.issue-page .title-edit { width: 100%; font: inherit; font-size: var(--fs-lg); }
 .issue-page .body-edit { display: block; width: 100%; }
 .sub-row td:nth-child(2) { padding-left: var(--sp-24); }
 .status-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); margin: 0 0 var(--sp-12); }

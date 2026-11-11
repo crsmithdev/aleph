@@ -822,6 +822,13 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.when(`document.querySelectorAll(".media-grid img").length === 2`);
     expect(await page.ev<string[]>(`[...document.querySelectorAll(".media-grid img")].map((i) => i.alt)`)).toEqual(["shot.png", "pasted.png"]);
   }, 60_000);
+
+  test("Issue: in edit mode the title input fills the width of its heading", async () => {
+    await page.ev(`document.querySelector(".issue-page [data-editor=start]").click()`);
+    await page.when(`document.querySelector(".issue-page.editing .title-edit")?.offsetWidth > 0`);
+    const [input, h1] = await page.ev<number[]>(`[document.querySelector(".issue-page .title-edit").offsetWidth, document.querySelector(".issue-page .ph h1").clientWidth]`);
+    expect(input).toBe(h1);
+  });
 });
 
 describe.skipIf(!chromeUsable)("Ideas", () => {
