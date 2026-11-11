@@ -45,15 +45,18 @@ const CSS = `
 summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }
 .fab { font: 600 18px Georgia, serif; }
-.pop { width: min(460px, calc(100vw - 32px)); display: grid; gap: 4px; padding: 10px; }
+.pop { width: max-content; max-width: calc(100vw - 32px); overflow-x: auto; padding: 10px; }
 .head { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
 .head b { flex: 1; }
-.row { display: grid; grid-template-columns: 3.6em 20px minmax(0, 1fr) 20px 58px 58px 66px; gap: 3px; align-items: center; height: 26px; }
-.row > span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cols { height: auto; color: var(--muted); font-size: 11px; }
+/* One grid for every row, its columns as wide as their widest entry, so no label or value is cut and the rows align. */
+.grid { display: grid; grid-template-columns: max-content 20px max-content 20px repeat(3, max-content); gap: 4px 3px; align-items: center; }
+.row { display: contents; }
+.row > * { height: 26px; }
+.row > span { color: var(--muted); white-space: nowrap; line-height: 26px; padding-right: 4px; }
+.cols > span { height: auto; line-height: 1.4; font-size: 11px; }
 .cols span:first-child { grid-column: 2 / 5; }
-select { width: 100%; height: 100%; min-width: 0; padding: 0 4px; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.row button { height: 100%; padding: 0; font-size: 15px; line-height: 1; }
+select { width: 100%; padding: 0 4px; font-variant-numeric: tabular-nums; }
+.row button { padding: 0; font-size: 15px; line-height: 1; }
 `;
 
 /**
@@ -90,8 +93,8 @@ export function fontPicker({ roles = ROLES, base = "sans", key = "font-picker", 
 
   const el = host("kit-fonts", CSS + (hideBelow ? `@media (max-width: ${hideBelow}px) { :host { display: none; } }` : ""), `<details><summary class="fab" title="Fonts" aria-label="Fonts">Aa</summary>
     <div class="card pop"><div class="head"><b>Fonts</b><button type="button" class="copy">Copy</button><button type="button" class="reset">Reset</button></div>` +
-    `<div class="row cols">${["Family", ...Object.values(STEPS).map(([n]) => n)].map((n) => `<span>${n}</span>`).join("")}</div>` +
-    `${roles.map((r) => roleHtml(r, chosen, step, unset(r, roles, base))).join("")}</div></details>`);
+    `<div class="grid"><div class="row cols">${["Family", ...Object.values(STEPS).map(([n]) => n)].map((n) => `<span>${n}</span>`).join("")}</div>` +
+    `${roles.map((r) => roleHtml(r, chosen, step, unset(r, roles, base))).join("")}</div></div></details>`);
   const shadow = el.shadowRoot;
   shadow.addEventListener("change", (e) => {
     const { role, prop } = e.target.dataset;
