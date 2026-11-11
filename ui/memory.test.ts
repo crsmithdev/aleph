@@ -10,7 +10,7 @@ import { items } from "./memory-items.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
-import { priorityBadge } from "./lib.js";
+import { dataTable, heads, priorityBadge } from "./lib.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
@@ -357,6 +357,26 @@ test("each type has its own layout, filters keep by type and freshness, and the 
   const many = v.renderResults(Array.from({ length: 51 }, (_, i) => it({ key: `n${i}`, title: `n${i}` })), v.options(), status);
   expect(many).toContain("50 of 51");
   expect(many.match(/<li hidden /g)).toHaveLength(1);
+});
+
+test("the procedural table is dataTable's, so it has the tscroll wrapper, the tbl class and the heads", () => {
+  const o = v.options();
+  const proc = it({ type: "procedural", source: "skill", key: "vault", title: "skill vault", text: "the vault", at: "2026-01-01" });
+  const h = v.renderResults([proc], o, new Map());
+  expect(h).toContain(dataTable(heads(["Source", "What it says", "Loaded when", "Changed"]), v.ruleRow(proc, o)));
+});
+
+test("the procedural table hides its 51st row and its pager says 50 of 51", () => {
+  const o = v.options();
+  const procs = Array.from({ length: 51 }, (_, i) => it({ type: "procedural", source: "skill", key: `s${i}`, title: `s${i}` }));
+  const rows = procs.map((x, i) => v.ruleRow(x, o).replace("<tr ", i < 50 ? "<tr " : "<tr hidden ")).join("");
+  const h = v.renderResults(procs, o, new Map());
+  expect(h).toContain(dataTable(heads(["Source", "What it says", "Loaded when", "Changed"]), rows));
+  expect(h).toContain("50 of 51");
+  const trs = h.slice(h.indexOf("<tbody>") + 7, h.indexOf("</tbody>")).split("<tr ").slice(1);
+  expect(trs).toHaveLength(51);
+  expect(trs[50].startsWith("hidden ")).toBe(true);
+  expect(trs.filter((r: string) => r.startsWith("hidden "))).toHaveLength(1);
 });
 
 test("the inspector says how a memory reaches the agent, shows its recall history and offers the writes its source takes", () => {

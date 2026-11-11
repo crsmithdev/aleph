@@ -3,7 +3,7 @@
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
-import { actButton, codeText, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { actButton, codeText, dataTable, heads, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -87,7 +87,7 @@ const noteRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${
   `<p>${codeText(it.text)}</p><p class="mm">${it.at ? `written ${esc(shortDay(it.at))}` : ""}${it.source === "note" ? ` · read ${it.read ? esc(shortDay(it.read)) : "never"}` : ""}${it.core ? ` · <span class="core">core line</span>` : ""}</p></li>`;
 
 /** A rule, a skill, a hook or a lesson: what it says and when it is loaded. */
-const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide">${codeText(it.text)}</td><td class="eff">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
+export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide">${codeText(it.text)}</td><td class="eff">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
 
 /** An event in time: when first, then what. */
 const eventRow = (it, o) => `<li class="mrow mev" ${sel(it, o)}><span class="time">${esc(shortDay(it.at) || "–")}</span><div><b>${titleLink(it)}</b>${it.scope ? ` ${q(esc(it.scope))}` : ""}<p>${codeText(it.text)}</p></div></li>`;
@@ -101,7 +101,7 @@ const list = (rows, cls = "") => `<div class="mem-page"><ul class="mrows${cls}">
 
 const LAYOUT = {
   semantic: (xs, o) => list(xs.map((it) => noteRow(it, o))),
-  procedural: (xs, o) => `<div class="mem-page"><div class="tscroll"><table class="tbl"><thead><tr><th>Source</th><th>What it says</th><th>Loaded when</th><th>Changed</th></tr></thead><tbody>${hide(xs.map((it) => ruleRow(it, o)))}</tbody></table></div>${pager(Math.min(STEP, xs.length), xs.length, STEP)}</div>`,
+  procedural: (xs, o) => `<div class="mem-page">${dataTable(heads(["Source", "What it says", "Loaded when", "Changed"]), hide(xs.map((it) => ruleRow(it, o))))}${pager(Math.min(STEP, xs.length), xs.length, STEP)}</div>`,
   episodic: (xs, o) => list([...xs].sort((a, b) => String(b.at).localeCompare(String(a.at))).map((it) => eventRow(it, o)), " tl"),
   working: (xs, o) => list(xs.map((it) => cardRow(it, o))),
   prospective: (xs, o) => list(xs.map((it) => cardRow(it, o))),
