@@ -11,12 +11,17 @@ import { trailerOf } from "../records/ledger.ts";
 
 useLandingFixture();
 
-test("the check issue filed after a land takes the priority of the landed issue", async () => {
+// Points ALEPH_ISSUES at a fresh items clone with one commit on main, so a land can write the store.
+function itemsRepo() {
   sh(dir, "git", "init", "-q", "--bare", "-b", "main", "items.git");
   sh(dir, "git", "clone", "-q", "items.git", "items");
   sh(join(dir, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(dir, "items"), "git", "push", "-q", "origin", "main");
   process.env.ALEPH_ISSUES = join(dir, "items");
+}
+
+test("the check issue filed after a land takes the priority of the landed issue", async () => {
+  itemsRepo();
   store.writeList(repo, "start", (doc) => { issues.add(doc, "landed one", { priority: "critical" }); return true; }, true);
   const a = job("t1", [["t1.txt", "1\n"]], { on: "demo-1", check: "open" });
   expect(await land(a, repo, ports())).toMatchObject({ code: 0, outcome: { condition: "landed" } });
@@ -26,11 +31,7 @@ test("the check issue filed after a land takes the priority of the landed issue"
 });
 
 test("a land of an issue a red CI started leaves it open and keeps the land's commit in its job record", async () => {
-  sh(dir, "git", "init", "-q", "--bare", "-b", "main", "items.git");
-  sh(dir, "git", "clone", "-q", "items.git", "items");
-  sh(join(dir, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(dir, "items"), "git", "push", "-q", "origin", "main");
-  process.env.ALEPH_ISSUES = join(dir, "items");
+  itemsRepo();
   store.writeList(repo, "start", (doc) => { issues.add(doc, "fix the red CI", { labels: ["red-main"] }); return true; }, true);
   record.update("demo-1", (r) => { r.ci = { url: "https://github.com/x/y/actions/runs/7", commit: "c1", failure: "(fail) a test" }; });
   const a = job("t1", [["t1.txt", "1\n"]], { on: "demo-1" });

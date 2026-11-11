@@ -3,7 +3,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { judge } from "./judge.ts";
-import { setModel } from "../../jobs/lib/routing/models.ts";
 import { judgeChoice, setJudgeChoice } from "../../lib/jev.ts";
 
 let dir: string;
@@ -75,27 +74,6 @@ test("aleph judge's file toggles the screen, and ALEPH_JUDGE overrides it", asyn
   delete process.env.ALEPH_JUDGE;
   setJudgeChoice("jev");
   expect(judgeChoice()).toBe("jev");
-});
-
-test("a judge slot set to local runs claude on gpt-oss-20b at the local base URL, and a claude slot on haiku", async () => {
-  const saved = { cmd: process.env.ALEPH_JUDGE_CMD, factory: process.env.ALEPH_FACTORY_DIR };
-  process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
-  process.env.ALEPH_JUDGE = "haiku";
-  writeFileSync(join(dir, "record"), `#!/bin/sh\necho "$@" > ${join(dir, "args")}\nenv > ${join(dir, "env")}\necho '{"type":"result","is_error":false,"result":"{\\"verdict\\":\\"pass\\",\\"reason\\":\\"ok\\"}"}'\n`, { mode: 0o755 });
-  process.env.ALEPH_JUDGE_CMD = join(dir, "record");
-  try {
-    expect(setModel("judge", { model: "gpt-oss-20b" })).toBeNull();
-    await judge("TURN: x", "x");
-    expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model gpt-oss-20b");
-    expect(readFileSync(join(dir, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8012");
-    expect(setModel("judge", { model: "haiku" })).toBeNull();
-    await judge("TURN: x", "x");
-    expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model haiku");
-    expect(readFileSync(join(dir, "env"), "utf8")).not.toContain("ANTHROPIC_BASE_URL");
-  } finally {
-    process.env.ALEPH_JUDGE_CMD = saved.cmd;
-    if (saved.factory === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = saved.factory;
-  }
 });
 
 test("a judge that outlasts its budget returns no verdict and tries claude once", async () => {

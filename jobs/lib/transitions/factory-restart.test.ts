@@ -30,42 +30,26 @@ test("a run killed by a host restart is dropped, its issue starts at once, and n
   expect(rescuedOf(r)).toBe("");
 });
 
-test("a build a host restart killed, with a commit ahead of main, starts a recheck of its branch and no new run", async () => {
-  const id = newIssue();
-  const repo = join(ctx.base, "repo");
-  sh(repo, "git", "checkout", "-q", "-b", "work");
-  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "the worker's work");
-  sh(repo, "git", "checkout", "-q", "main");
-  const r = killedRun(`fac-${id}`, "build", {});
-  // The run's branch is `work`: its commit is ahead of main.
-  putRun(basename(r.folder), { ...getRun(basename(r.folder))!, branch: "work" });
-  const f = fakes();
-  await dispatch(f);
-  expect(f.calls).toEqual([`recheck fac-${id}`]);
-  expect(f.specs).toEqual([]);
-  expect(notes(id)).toContain("its branch has the worker's commits");
-  expect(getRun(basename(r.folder))).toMatchObject({ condition: "failed", reason: "host restart" });
-  expect(ask(id)).toBeNull();
-  expect(rescuedOf(r)).toBe("");
-});
-
-test("a recheck a host restart killed, with a commit ahead of main, starts a new recheck of its branch and no new issue run, and uses no rerun", async () => {
-  const id = newIssue();
-  const repo = join(ctx.base, "repo");
-  sh(repo, "git", "checkout", "-q", "-b", "work");
-  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "the worker's work");
-  sh(repo, "git", "checkout", "-q", "main");
-  const r = killedRun(`fac-${id}`, "recheck", {});
-  putRun(basename(r.folder), { ...getRun(basename(r.folder))!, branch: "work" });
-  const f = fakes();
-  await dispatch(f);
-  expect(f.calls).toEqual([`recheck fac-${id}`]);
-  expect(f.specs).toEqual([]);
-  expect(notes(id)).toContain("its branch has the worker's commits");
-  expect(getRun(basename(r.folder))).toMatchObject({ condition: "failed", reason: "host restart" });
-  expect(ask(id)).toBeNull();
-  expect(rescuedOf(r)).toBe("");
-});
+for (const [kind, what] of [["build", "a recheck of its branch and no new run"], ["recheck", "a new recheck of its branch and no new issue run, and uses no rerun"]] as const) {
+  test(`a ${kind} a host restart killed, with a commit ahead of main, starts ${what}`, async () => {
+    const id = newIssue();
+    const repo = join(ctx.base, "repo");
+    sh(repo, "git", "checkout", "-q", "-b", "work");
+    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "the worker's work");
+    sh(repo, "git", "checkout", "-q", "main");
+    const r = killedRun(`fac-${id}`, kind, {});
+    // The run's branch is `work`: its commit is ahead of main.
+    putRun(basename(r.folder), { ...getRun(basename(r.folder))!, branch: "work" });
+    const f = fakes();
+    await dispatch(f);
+    expect(f.calls).toEqual([`recheck fac-${id}`]);
+    expect(f.specs).toEqual([]);
+    expect(notes(id)).toContain("its branch has the worker's commits");
+    expect(getRun(basename(r.folder))).toMatchObject({ condition: "failed", reason: "host restart" });
+    expect(ask(id)).toBeNull();
+    expect(rescuedOf(r)).toBe("");
+  });
+}
 
 test("an issue whose run a host restart killed keeps its rerun: the next no commit reruns it with no Ask", async () => {
   const id = newIssue();

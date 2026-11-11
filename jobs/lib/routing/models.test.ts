@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { serverArgs } from "./gpt-oss-start.ts";
+import { judge } from "../../../hooks/lib/judge.ts";
+import { writeTitle } from "../roles/title.ts";
 import { AGENT_SETTINGS, MODELS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf } from "./models.ts";
 
 let dir: string;
@@ -94,3 +96,30 @@ test("the compact window fits the server's context and leaves a usable threshold
   expect(window).toBeLessThanOrEqual(ctx);
   expect(window - Math.min(maxOut, 20000) - 13000).toBeGreaterThanOrEqual(20000);
 });
+
+// Each slot that calls `claude -p` itself: its command's env var, the result its stand-in prints, and one call.
+const SLOTS = [
+  { slot: "judge", cmd: "ALEPH_JUDGE_CMD", result: JSON.stringify({ verdict: "pass", reason: "ok" }), call: () => judge("TURN: x", "x") },
+  { slot: "title", cmd: "ALEPH_RULE_CMD", result: "A title", call: () => writeTitle(`Check run-42: ${"the gate drops a test that the worker changed and nobody sees it ".repeat(3).trim()}.`) },
+] as const;
+for (const { slot, cmd, result, call } of SLOTS) {
+  test(`a ${slot} slot set to local runs claude on gpt-oss-20b at the local base URL, and a claude slot on haiku`, async () => {
+    // The GPU slot of a local call reads the live runs and a lock: both stay in the temp folder.
+    const env = { [cmd]: join(dir, "record"), ALEPH_JUDGE: "haiku", ALEPH_JOBS_DIR: join(dir, "jobs"), XDG_RUNTIME_DIR: join(dir, "run") };
+    const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+    Object.assign(process.env, env);
+    writeFileSync(join(dir, "record"), `#!/bin/sh\necho "$@" > ${join(dir, "args")}\nenv > ${join(dir, "env")}\nprintf '%s' ${JSON.stringify(JSON.stringify({ type: "result", is_error: false, result }))}\n`, { mode: 0o755 });
+    try {
+      expect(setModel(slot, { model: "gpt-oss-20b" })).toBeNull();
+      await call();
+      expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model gpt-oss-20b");
+      expect(readFileSync(join(dir, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8012");
+      expect(setModel(slot, { model: "haiku" })).toBeNull();
+      await call();
+      expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model haiku");
+      expect(readFileSync(join(dir, "env"), "utf8")).not.toContain("ANTHROPIC_BASE_URL");
+    } finally {
+      for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  });
+}

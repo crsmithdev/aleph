@@ -206,6 +206,17 @@ describe("a chat run", () => {
   });
 });
 
+// Returns a function that puts the repo's main back where it is now and drops origin/main, which a test moves.
+function keepMain(repo: string) {
+  const head = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", "HEAD"], { cwd: repo, stdout: "pipe", stderr: "ignore" });
+  const before = head.exitCode === 0 ? head.stdout.toString().trim() : null;
+  return () => {
+    Bun.spawnSync(["git", "update-ref", "-d", "refs/remotes/origin/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
+    if (before) sh(repo, "git", "update-ref", "refs/heads/main", before);
+    else Bun.spawnSync(["git", "update-ref", "-d", "refs/heads/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
+  };
+}
+
 describe("an issue that acceptance failed twice", () => {
   test("a held run from before v6 phase 6 still reads: its old phase, and its stored second review as the Ask's review", () => {
     run("20261027-000060-a", { job: "fac-60", name: "fac-60", condition: "waiting", ask: HELD, reason: "held path held/x.ts", stat: " held/x.ts | 1 +", phase: "check oracle", review: { call: "passed" } },
@@ -223,9 +234,8 @@ describe("an issue that acceptance failed twice", () => {
   });
 
   test("a trailer commit from before the item's since does not make it done, and the build loads the list once", () => {
+    const restore = keepMain(join(base, "repo"));
     const repo = join(base, "repo");
-    const headBefore = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", "HEAD"], { cwd: repo, stdout: "pipe", stderr: "ignore" });
-    const before = headBefore.exitCode === 0 ? headBefore.stdout.toString().trim() : null;
     let id = 0;
     try {
       writeList({ key: "fac" }, "reopened item", (doc) => { id = add(doc, "reopened item").id; return true; });
@@ -241,16 +251,13 @@ describe("an issue that acceptance failed twice", () => {
         expect(loads.flatMap((l) => l.mock.calls).filter(([r]) => r.key === "fac")).toHaveLength(1);
       } finally { for (const l of loads) l.mockRestore(); }
     } finally {
-      Bun.spawnSync(["git", "update-ref", "-d", "refs/remotes/origin/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
-      if (before) sh(repo, "git", "update-ref", "refs/heads/main", before);
-      else Bun.spawnSync(["git", "update-ref", "-d", "refs/heads/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
+      restore();
     }
   });
 
   test("lists under Needs you, and not under Queued or Done, though a trailer commit on main names it", () => {
+    const restore = keepMain(join(base, "repo"));
     const repo = join(base, "repo");
-    const headBefore = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", "HEAD"], { cwd: repo, stdout: "pipe", stderr: "ignore" });
-    const before = headBefore.exitCode === 0 ? headBefore.stdout.toString().trim() : null;
     let partId = 0;
     writeList({ key: "fac" }, "goal that failed acceptance twice", (doc) => {
       const it = add(doc, "acceptance it");
@@ -269,9 +276,7 @@ describe("an issue that acceptance failed twice", () => {
       expect(s.queued.some((q) => q.id === partId)).toBe(false);
       expect(s.done.some((d) => d.id === `fac-${partId}`)).toBe(false);
     } finally {
-      Bun.spawnSync(["git", "update-ref", "-d", "refs/remotes/origin/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
-      if (before) sh(repo, "git", "update-ref", "refs/heads/main", before);
-      else Bun.spawnSync(["git", "update-ref", "-d", "refs/heads/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
+      restore();
     }
   });
 });

@@ -157,13 +157,18 @@ describe("GET /api/issues", () => {
   });
 });
 
+// Runs fn with ALEPH_CLI pointed at the real CLI, so a route's command writes the store.
+async function withRealCli(fn: () => Promise<void>) {
+  const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
+  writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
+  chmodSync(wrap, 0o755);
+  process.env.ALEPH_CLI = wrap;
+  try { await fn(); } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
+}
+
 describe("POST /api/issues/:id/drop", () => {
   test("drops the issue through the real CLI and returns its status; an unknown id is 404", async () => {
-    const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
-    writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
-    chmodSync(wrap, 0o755);
-    process.env.ALEPH_CLI = wrap;
-    try {
+    await withRealCli(async () => {
       const h = { "x-aleph-ui": "1", "content-type": "application/json" };
       expect((await at("/api/issues/fac-99/drop", { method: "POST", headers: h })).status).toBe(404);
       expect((await at("/api/issues/nope-1/drop", { method: "POST", headers: h })).status).toBe(404);
@@ -172,7 +177,7 @@ describe("POST /api/issues/:id/drop", () => {
       expect(r.status).toBe(200);
       expect(await r.json()).toMatchObject({ repo: "fac", id: 3, status: "dropped" });
       expect((await getJson("/api/issues/fac-3")).status).toBe("dropped");
-    } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
+    });
   });
 });
 
@@ -641,13 +646,6 @@ describe("POST /api/issues", () => {
 describe("POST /api/issues/:id/decide and deny", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
   const item = (n: number) => readList({ key: "fac" })!.items.find((i) => i.id === n)!;
-  async function withRealCli(fn: () => Promise<void>) {
-    const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
-    writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
-    chmodSync(wrap, 0o755);
-    process.env.ALEPH_CLI = wrap;
-    try { await fn(); } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
-  }
   const ask = (decision: boolean, wait?: string) => writeList({ key: "fac" }, "seed", (doc) => {
     const i = add(doc, "which way", { request: "x" });
     if (wait && !doc.items.some((x) => x.id === 1 && x.sub === 1)) addPart(doc, doc.items.find((x) => x.id === 1 && x.sub === undefined)!, { title: "g", spec: "x" });

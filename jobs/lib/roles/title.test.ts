@@ -38,26 +38,6 @@ test("writeTitle gives a title that titleProblem accepts, whatever the model say
   expect(await writeTitle(SOURCE)).toBe("the gate drops a test that the worker changed and nobody");
 });
 
-test("a title slot set to local runs claude on gpt-oss-20b at the local base URL, and a claude slot on haiku", async () => {
-  const saved = process.env.ALEPH_FACTORY_DIR;
-  process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
-  const f = join(dir, "record");
-  writeFileSync(f, `#!/bin/sh\necho "$@" > ${join(dir, "args")}\nenv > ${join(dir, "env")}\nprintf '%s' '{"type":"result","is_error":false,"result":"A title"}'\n`, { mode: 0o755 });
-  process.env.ALEPH_RULE_CMD = f;
-  try {
-    expect(setModel("title", { model: "gpt-oss-20b" })).toBeNull();
-    await writeTitle(SOURCE);
-    expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model gpt-oss-20b");
-    expect(readFileSync(join(dir, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8012");
-    expect(setModel("title", { model: "haiku" })).toBeNull();
-    await writeTitle(SOURCE);
-    expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model haiku");
-    expect(readFileSync(join(dir, "env"), "utf8")).not.toContain("ANTHROPIC_BASE_URL");
-  } finally {
-    if (saved === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = saved;
-  }
-});
-
 test("when the GPU slot stays taken past the title call's time box, the title comes from Claude and an event records the fallback", async () => {
   const saved = process.env.ALEPH_FACTORY_DIR;
   process.env.ALEPH_FACTORY_DIR = join(dir, "factory-busy");
