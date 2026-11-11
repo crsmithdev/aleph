@@ -12,7 +12,7 @@ describe("a factory run", () => {
   const fjob = (name: string, action: string, extra: Record<string, string> = {}, o: { land?: boolean } = {}) => job("fac", name, `Goal: ${name}\nACTION: ${action}\n`, o, extra);
 
   // `aleph pause` and `resume` keep their CLI test here: each is composed in jobs/cli.ts. The rest is in-process.
-  // `aleph tick` keeps its CLI test in jobs/cli.reviewer-sweep.test.ts.
+  // `aleph tick` keeps its CLI test in jobs/cli.periodic.test.ts.
   test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     expect((await cli(["pause"])).json).toEqual({ paused: true });
