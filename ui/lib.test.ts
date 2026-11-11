@@ -167,6 +167,11 @@ test("repoIdLink shows the short id", () => {
   setCodes({});
 });
 
+test("tone maps the feed's actions to the badge tones, and any other action to quiet", () => {
+  expect(["reran", "escalated", "red", "filed", "answered"].map(tone)).toEqual(["run", "need", "stuck", "done", "done"]);
+  expect(tone("no-such-action")).toBe("quiet");
+});
+
 test("idLink and pageHead", () => {
   expect(idLink("aleph-1", "#/jobs/aleph-1")).toBe('<a class="idl" href="#/jobs/aleph-1">aleph-1</a>');
   expect(idLink("x", "javascript:alert(1)")).toContain('href="#"');

@@ -804,8 +804,8 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-8) var(--sp-10); margin-bottom: var(--sp-6); }
 .event-time { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .event-tone { display: inline-flex; align-items: center; gap: var(--sp-4); font-weight: var(--fw-mid); }
-.event-tone.alert, .event-tone.error { color: var(--stuck); }
-.event-tone.warning, .event-tone.ask { color: var(--need); }
+.event-tone.alert, .event-tone.error, .event-tone.stuck { color: var(--stuck); }
+.event-tone.warning, .event-tone.ask, .event-tone.need { color: var(--need); }
 .event-tone.fine, .event-tone.done { color: var(--done); }
 .event-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: none; }
 .event-dot.alert, .event-dot.error { background: var(--stuck); }
@@ -818,8 +818,8 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .event-id { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .event-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-what { color: var(--muted); }
-.event-body.alert, .event-body.error, .event-row.alert .event-body, .event-row.error .event-body { color: var(--stuck); }
-.event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body { color: var(--need); }
+.event-body.alert, .event-body.error, .event-row.alert .event-body, .event-row.error .event-body, .event-row.stuck .event-body { color: var(--stuck); }
+.event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body, .event-row.need .event-body { color: var(--need); }
 .event-body.fine, .event-row.fine .event-body { color: var(--ink); }
 .event-body .reason { color: var(--muted); margin-left: var(--sp-6); font-family: var(--mono); font-size: var(--fs-2xs); }
 .shead .say[data-jump="herald"] { cursor: pointer; }

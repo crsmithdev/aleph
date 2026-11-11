@@ -90,7 +90,7 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   // The fixture's status now (12:00) is newest, then the event at 11:30, then the status at 11:00.
   expect(order).toEqual(["alert", "run", "fine"]);
   const row = view.eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
-  expect(row).toContain('<span class="event-tone warning">failed</span>');
+  expect(row).toContain('<span class="event-tone stuck">failed</span>');
   expect(row).not.toContain("event-dot");
   expect(row).toContain('<span class="event-id"><a class="idl" title="Fix the flaky land test" href="#/issues/aleph/5">');
   expect(row).toContain('<span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span>');
