@@ -1,7 +1,8 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { clip } from "../../lib/naming.ts";
+import { once } from "../../lib/sources.ts";
 import { LangfuseError, need, type Langfuse } from "../../lib/langfuse.ts";
-import { list } from "../langfuse.ts";
+import { list, recent } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { projectOf as projectOfUrl, scopeOf, traceIn, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
@@ -176,7 +177,9 @@ function textBlocks(obs: any[], output: string) {
 export async function windowTraces(days: number, project: string | null): Promise<{ rows: any[]; partial: boolean }> {
   const hour = 3600_000; // whole hours, so the cache key holds
   const from = new Date(Math.floor((Date.now() - Math.min(days > 0 ? days : 7, 90) * 86400_000) / hour) * hour);
-  const { rows, partial } = await list(need(), "traces", { from });
+  const lf = need();
+  const { rows, partial } = await once(`${lf.base}|traces|${from.getTime()}`, ["langfuse"], () => recent(lf, from.getTime(), Date.now(), (t) => t, "traces"))
+    .catch((e) => { throw new LangfuseError(`Langfuse at ${lf.base} failed on traces: ${(e as Error).message}`); });
   return { rows: rows.filter((t) => t.sessionId && traceIn(t, project)), partial };
 }
 
