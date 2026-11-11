@@ -181,6 +181,24 @@ describe("POST /api/issues/:id/drop", () => {
   });
 });
 
+describe("POST /api/issues/:id/media and GET /api/issues/:id/media/:name", () => {
+  test("an upload attaches the file through the real CLI and the GET serves it with its type; no files is 400, an unknown name 404", async () => {
+    const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "with a screenshot").id)!.value;
+    const h = { "x-aleph-ui": "1", "content-type": "application/json" };
+    await withRealCli(async () => {
+      const none = await at(`/api/issues/fac-${n}/media`, { method: "POST", headers: h, body: JSON.stringify({ media: [] }) });
+      expect([none.status, (await none.json()).error]).toEqual([400, "send the files as media"]);
+      const r = await at(`/api/issues/fac-${n}/media`, { method: "POST", headers: h, body: JSON.stringify({ media: [{ name: "shot.png", data: Buffer.from("png bytes").toString("base64") }] }) });
+      expect(r.status).toBe(200);
+      expect(await r.json()).toMatchObject({ repo: "fac", id: n, media: ["shot.png"] });
+    });
+    const f = await at(`/api/issues/fac-${n}/media/shot.png`);
+    expect([f.status, f.headers.get("content-type"), await f.text()]).toEqual([200, "image/png", "png bytes"]);
+    expect((await at(`/api/issues/fac-${n}/media/other.png`)).status).toBe(404);
+    expect((await at("/api/issues/fac-999/media/shot.png")).status).toBe(404);
+  });
+});
+
 describe("GET /api/issues/:id", () => {
   test("lists runs by on, parts included, and by todo for old runs", async () => {
     run("20261027-000010-a", { job: "on-4", name: "on-4", repo: "fac", condition: "running", on: "fac-4" });

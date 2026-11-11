@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { env, fx, remoteItem, seed, sh, tasks, useFixture } from "./fixture.ts";
 import { clock, renderItem, titleProblem } from "./lib/todo.ts";
 import { putRun } from "../jobs/lib/records/record.ts";
+import { askOf, clearAsk, setAsk } from "../jobs/lib/asks/ask.ts";
 
 // Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
 setDefaultTimeout(30000);
@@ -207,4 +208,32 @@ test("retitle prints the ids it retitled", () => {
   expect(titleProblem(title)).toBeNull();
   expect(r.out).toBe(`proj-9: ${title}\n`);
   expect(item).toContain("retitled from: Check foo: bar");
+});
+
+test("attach puts a file on an issue in one store commit; a type it does not take exits 1", () => {
+  const png = join(fx.base, "shot one.png");
+  writeFileSync(png, "png bytes");
+  const a = aleph("issue", "attach", "proj", "3", png);
+  expect(a.code).toBe(0);
+  expect(JSON.parse(a.out)).toMatchObject({ repo: "proj", id: 3, media: ["shot_one.png"], commit: sh(fx.base, "git", "--git-dir", fx.remote, "rev-parse", "main") });
+  expect(remoteItem(3)).toContain("shot_one.png");
+  const txt = join(fx.base, "notes.txt");
+  writeFileSync(txt, "x");
+  const bad = aleph("issue", "attach", "proj", "3", txt);
+  expect(bad.code).toBe(1);
+  expect(bad.err).toContain(`media must be `);
+});
+
+test("decide notes the answer and clears the Ask; an issue with no Ask exits 1", () => {
+  setAsk("proj-3", { kind: "input", reason: "question", question: "A or B?", options: [], why: [] });
+  try {
+    const d = aleph("issue", "decide", "proj", "3", "Take B.");
+    expect(d.code).toBe(0);
+    expect(JSON.parse(d.out)).toMatchObject({ repo: "proj", id: 3 });
+    expect(remoteItem(3)).toContain("Take B.");
+    expect(askOf("proj-3")).toBeNull();
+    const again = aleph("issue", "decide", "proj", "3", "Take A.");
+    expect(again.code).toBe(1);
+    expect(again.err).toContain("proj-3 is not waiting for a decision");
+  } finally { clearAsk("proj-3"); }
 });
