@@ -32,7 +32,7 @@ The routes are renamed to the terms in `docs/naming.md`, with one name for the d
 
 1. As Chris, I want a page to show new data within about 2 s of a change, so that the UI tracks the factory without a reload.
 2. As Chris, I want the server to stay responsive while it rebuilds, so that other pages and the stream never stall.
-3. As Chris, I want a tab I return to after an hour to show current data at once, so that I never act on old numbers.
+3. As Chris, I want a tab I return to after an hour to show current data at once, so that I never act on old numbers. The exception is Sessions and Skills, whose Langfuse rebuild can take minutes: a return tab shows their last data at once with a note of its age, and the page updates in place when the rebuild ends.
 4. As Chris, I want a page to refetch only when data it shows has changed, so that a Langfuse update does not reload Status.
 5. As Chris, I want Sessions, Agents and Memory to update live like Status, so that every page behaves the same.
 6. As Chris, I want a chart or table whose data failed to rebuild to say how old it is and why, so that a stale number is never silent.
@@ -58,7 +58,7 @@ The routes are renamed to the terms in `docs/naming.md`, with one name for the d
 1. WHEN a job record is written while Status is open THE system SHALL send `change` naming the affected keys within 3 s of the write, and the refetch SHALL return data that includes the write.
 2. WHILE the updater rebuilds any key THE server SHALL answer `GET /api/projects` within 50 ms.
 2a. THE day baseline built in one pass SHALL equal the baseline built by the old 7-call method on the same records (a test compares the two).
-3. WHEN a page requests a key that was rebuilt after a change, with no stream open at the time THE system SHALL return the rebuilt value, never a value from before that change.
+3. WHEN a page requests a key that was rebuilt after a change, with no stream open at the time THE system SHALL return the rebuilt value, never a value from before that change. The exception is a Sessions or Skills key (`/api/sessions…`, `/api/skills/…`) that has an answer but is due for a rebuild: its request SHALL return that answer at once with `{ error, since }` (`since` the time that answer was built, the error saying a rebuild runs) and start the rebuild, and `change` SHALL name the key when it ends. A key with no answer still waits for its first build.
 4. WHEN `change` names only keys that a view does not read THE view SHALL send no request.
 5. WHEN a Langfuse poll for a kept key returns an answer whose hash differs from the kept one THE system SHALL send `change` naming that key. WHEN a vault note file changes THE system SHALL send `change` naming the memory keys.
 6. IF a rebuild of a key fails THEN THE system SHALL keep the last value, add `{ error, since }` to that key's answer, show "`<name>` is `<age>` old: `<error>`" on every chart and table that reads the key, and send `change` when the key enters and when it leaves the error state.
@@ -87,6 +87,7 @@ The routes are renamed to the terms in `docs/naming.md`, with one name for the d
 - **Key:** a kind plus its parameters, for example `flow:week:aleph` or `sessions:7`. A route asks the updater for a key and returns its value and mark.
 - **Contract of `change`: rebuild, then signal.** When a source changes, the updater rebuilds the kept keys that read it, stores the new values (the old ones are served until then), and then sends `change` with `{ keys: [...] }`. Rejected: clear-then-signal (today, which stalls) and mark-stale-and-wait (every view waits).
 - **Kept keys:** keys asked for in the last 10 min are rebuilt on change. Keys not asked for in 1 h are dropped. This is the only size limit, and it applies to Langfuse answers too. Rejected: all 40+ keys (15-30 s of build per change) and fixed defaults (filtered views would always wait).
+- **Sessions and Skills keys are served old while due:** a Langfuse cold read can take up to 2 min, so a request for one of these keys that has an answer but is due for a rebuild gets that answer at once with the `{ error, since }` mark, and the page updates in place on `change` when the rebuild ends. Every other key still waits for a build. Chris chose this over keeping the keys warm longer or only speeding the rebuild.
 - **First request for a cold key:** it waits for one build, shared by concurrent requests. That build runs in the Worker, so the server does not stall.
 - **Restart:** the kept-key set is saved to `~/.aleph/ui/keys.json` when it changes. On start, the updater rebuilds those keys.
 - **Builds run in the existing state Worker,** behind one seam. Today the seam has one implementation. Moving flow to its own Worker must be a change to that seam only. Nothing builds on the main thread. Rejected: a second Worker now (rule 5), and a faster main-thread build.

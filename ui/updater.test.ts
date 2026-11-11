@@ -77,6 +77,49 @@ test("a key not asked for in 10 min is not built on a change, but its next reque
   expect(JSON.parse(readFileSync(join(dir, "drop.json"), "utf8"))).toEqual({});
 });
 
+test("a Sessions key not asked for in 10 min answers at once with its last answer and an age note, and signals when the rebuild ends", async () => {
+  const f = fake(), u = createUpdater(f);
+  f.world["/api/sessions"] = { body: 1, sources: ["langfuse"] };
+  await u.get("/api/sessions");
+  const built = new Date(f.now()).toISOString();
+  f.tick(KEEP_MS);
+  f.world["/api/sessions"].body = 2;
+  const heard: string[][] = [];
+  u.onChange((keys) => heard.push(keys));
+  const release = f.hold();
+  await u.poll();
+  const got = await u.get("/api/sessions"); // the rebuild is held: this must not wait for it
+  expect(got.answer.body).toBe(1);
+  expect(got.error).toContain("rebuild");
+  expect(got.since).toBe(built);
+  expect(heard).toEqual([]);
+  release();
+  expect((await u.get("/api/sessions")).answer.body).toBe(1); // a second request does not start a second rebuild
+  await new Promise((r) => setTimeout(r, 0));
+  expect(heard).toEqual([["/api/sessions"]]);
+  const next = await u.get("/api/sessions");
+  expect(next.answer.body).toBe(2);
+  expect(next.error).toBeUndefined();
+  expect(f.log).toEqual(["/api/sessions", "/api/sessions"]);
+});
+
+test("a Skills rebuild served over its last answer signals when it ends, even when it fails", async () => {
+  const f = fake(), u = createUpdater(f);
+  f.world["/api/skills/x"] = { body: 1, sources: ["langfuse"] };
+  await u.get("/api/skills/x");
+  f.tick(KEEP_MS);
+  u.changed("langfuse");
+  f.world["/api/skills/x"].fails = "Langfuse down";
+  const heard: string[][] = [];
+  u.onChange((keys) => heard.push(keys));
+  expect((await u.get("/api/skills/x")).error).toContain("rebuild");
+  await new Promise((r) => setTimeout(r, 0));
+  expect(heard).toEqual([["/api/skills/x"]]); // the note went: the page refetches to show the failure in its place
+  const next = await u.get("/api/skills/x");
+  expect(next.answer.body).toBe(1);
+  expect(next.error).toBe("Langfuse down");
+});
+
 test("concurrent requests for a cold key share one build", async () => {
   const f = fake(), u = createUpdater(f);
   f.world["/a"] = { body: 1, sources: [] };

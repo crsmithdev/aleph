@@ -7,7 +7,8 @@
  * are served until then), and only then sends `change` with the keys whose answer or mark changed.
  *
  * - Kept: a key asked for in the last 10 min is built again on each change and poll. An older one is only marked
- *   dirty, and its next request waits for a build. A key not asked for in 1 h is dropped.
+ *   dirty, and its next request waits for a build; for a Sessions or Skills key that has an answer, the request gets
+ *   that answer with a mark `{ error, since }` while a rebuild runs, and `change` names the key when it ends. A key not asked for in 1 h is dropped.
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
  * - The annotations file is watched: a note written by the page or by `aleph annotation` sends `change` for
@@ -53,7 +54,7 @@ export function keyOf(url: URL): string {
 export interface Got { answer: Answer; error?: string; since?: string }
 type Mark = { error: string; since: string };
 
-interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked?: number; built?: number; again?: boolean; building?: Promise<void> }
+interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked?: number; built?: number; again?: boolean; building?: Promise<void> }
 
 export interface Deps {
   build: (key: string, gens: Record<string, number>) => Promise<Built>;
@@ -65,6 +66,8 @@ export interface Deps {
 }
 
 const isSkills = (key: string) => key.startsWith("/api/skills/");
+/** The keys that read Langfuse: a rebuild can take minutes, so a due key serves its last answer meanwhile. */
+const readsLangfuse = (key: string) => key.startsWith("/api/sessions") || isSkills(key);
 /** Why a 5xx answer failed: its `error`, else its text, else its status. */
 const errorOf = (a: Answer) => {
   const b = a.body as { error?: unknown } | string | null;
@@ -81,7 +84,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
 
   const iso = () => new Date(now()).toISOString();
   const kept = (s: Slot) => now() - s.asked < KEEP_MS;
-  const markOf = (s: Slot): Mark | null => (s.error ? { error: s.error, since: s.since! } : fetchError && s.sources.has("store") ? fetchError : null);
+  const markOf = (s: Slot): Mark | null => (s.error ? { error: s.error, since: s.since! } : s.note ? { error: s.note, since: s.at! } : fetchError && s.sources.has("store") ? fetchError : null);
   const sig = (s: Slot) => `${s.hash}|${markOf(s) ? 1 : 0}`;
   const keysWith = (pick: (key: string, s: Slot) => boolean) => [...slots].filter(([k, s]) => pick(k, s)).map(([k]) => k);
   const bump = (source: string) => { gens[source] = (gens[source] ?? 0) + 1; };
@@ -116,12 +119,13 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
           const { answer, sources } = await build(key, { ...gens });
           s.sources = new Set([...sources, "action"]);
           if (answer.status >= 500) fail(s, errorOf(answer));
-          else Object.assign(s, { answer, hash: Bun.hash(JSON.stringify(answer)), error: undefined, since: undefined });
+          else Object.assign(s, { answer, hash: Bun.hash(JSON.stringify(answer)), error: undefined, since: undefined, at: iso() });
         } catch (e) {
           fail(s, e instanceof Error ? e.message : String(e));
         }
         s.built = marks;
       } while (s.again);
+      s.note = undefined;
       s.building = undefined;
     })();
     return s.building;
@@ -160,7 +164,13 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       let s = slots.get(key);
       if (!s) { slots.set(key, (s = { asked: now(), sources: new Set() })); save(); }
       s.asked = now();
-      if (!s.answer || dirty(s)) await (s.building ?? run(key, s));
+      if (s.answer && dirty(s) && readsLangfuse(key)) {
+        if (!s.note) {
+          s.note = "a rebuild runs; this is the last answer";
+          // The note goes when the rebuild ends, so `change` goes out then even when the answer and mark look the same.
+          void run(key, s).then(() => { if (slots.has(key)) signal([key]); });
+        }
+      } else if (!s.answer || dirty(s)) await (s.building ?? run(key, s));
       if (!s.answer) return { answer: { status: 502, body: { error: s.error } } };
       const m = markOf(s);
       return m ? { answer: s.answer, ...m } : { answer: s.answer };
