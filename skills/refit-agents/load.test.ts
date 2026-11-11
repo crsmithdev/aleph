@@ -37,6 +37,13 @@ test("counts what loads on every turn and what loads on demand", () => {
   expect(r.hooks).toEqual(["hooks/hooks.json: SessionStart"]);
 });
 
+test("a memory file in a sibling directory whose name starts with the root's is not inside the repo", () => {
+  const root = mkdtempSync(join(tmpdir(), "load-"));
+  write(`${root}-tools`, "rules.md", "r".repeat(40));
+  write(root, "CLAUDE.md", `Read @../${root.split("/").pop()}-tools/rules.md first.\n`);
+  expect(load(root, mkdtempSync(join(tmpdir(), "home-"))).always.map((i) => i.file)).toEqual(["CLAUDE.md", `${root}-tools/rules.md`]);
+});
+
 // Raise this only with the reason in the commit. Memory files above the repo (absolute) and the user's own (`~`) are not counted.
 const ALWAYS_TOTAL = 1810;
 

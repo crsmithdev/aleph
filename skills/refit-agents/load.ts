@@ -55,7 +55,7 @@ function chain(root: string, home: string): string[] {
 }
 
 export function load(root: string, home = homedir()): Load {
-  const at = (f: string) => (f.startsWith(root) ? relative(root, f) : f.replace(home, "~"));
+  const at = (f: string) => (f.startsWith(join(root, "/")) ? relative(root, f) : f.replace(home, "~"));
   const always: Item[] = chain(root, home).map((f) => ({ file: at(f), kind: "memory", tokens: tokens(readFileSync(f, "utf8")) }));
   const skills: Skill[] = glob(root, "skills/*/SKILL.md", ".claude/skills/*/SKILL.md").map((f) => {
     const text = readFileSync(join(root, f), "utf8");
