@@ -1,6 +1,6 @@
 # Starting metric sets
 
-Each set is a start, not a checklist. Keep the metrics that answer the page's decision (SKILL.md, step 1), and check each with step 2. A page about two situations takes from two sets.
+Each set is a start, not a checklist. Take the candidates that answer the view's decision (SKILL.md, step 1), and check each with step 3. A view about two situations takes from two sets.
 
 ## A service (requests in, responses out)
 
@@ -10,7 +10,7 @@ Each set is a start, not a checklist. Keep the metrics that answer the page's de
 |---|---|---|
 | Rate | requests per second | flow |
 | Errors | failed requests / all requests | rate |
-| Duration | latency at p50, p95 and p99; never the mean alone | distribution |
+| Duration | latency at p50, p95 and p99 | distribution |
 
 These are symptoms: alert on them. Google's four golden signals add **saturation** (how full the service is) to the same three. With an SLO, add the **error budget left** and its **burn rate**, so the reader sees the trend to the limit, not only the limit.
 
@@ -59,8 +59,6 @@ Item age is leading: an old item is stuck before cycle time shows it. Do not com
 | Failure rate | runs that end failed or dropped / all runs | time to land |
 | Human interventions | asks, denials and manual fixes per landed change | |
 | Stuck work | runs with no progress past a threshold; the oldest first | |
-
-Spend per run is a trap: a cheap run that fails and reruns costs more per change. Divide by the outcome, not by the attempt.
 
 ## A product
 
