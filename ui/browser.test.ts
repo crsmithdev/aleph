@@ -588,6 +588,31 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     for (const n of await page.ev<{ id: string }[]>('fetch("/api/annotations").then((r) => r.json())')) expect(cli(["drop", n.id]).exitCode).toBe(0);
   }, 30_000);
 
+  test("the chat keeps a session per idea page and returns to the general one", async () => {
+    await page.width(1200);
+    await page.go("#/");
+    const chat = 'document.getElementById("kit-chat").shadowRoot';
+    await page.ev(`(() => { window.sent = []; window.realFetch = fetch; window.fetch = (u, o) => u === "/api/chat"
+      ? (sent.push(JSON.parse(o.body)), Promise.resolve(new Response('data: {"session_id":"s-' + (JSON.parse(o.body).idea ?? "general") + '"}\\n\\nevent: end\\ndata: {}\\n\\n', { headers: { "content-type": "text/event-stream" } })))
+      : realFetch(u, o); })()`);
+    const say = async (text: string) => {
+      const n = await page.ev<number>("sent.length");
+      await page.ev(`(() => { const ui = ${chat}; ui.querySelector("textarea").value = ${JSON.stringify(text)}; ui.querySelector("form").requestSubmit(); })()`);
+      await page.when(`sent.length === ${n + 1} && !${chat}.querySelector(".busy")`);
+      return page.ev<{ idea?: string; session?: string }>("sent.at(-1)");
+    };
+    expect((await say("zero")).idea).toBeUndefined();
+    await page.go("#/ideas/issue-history");
+    const mine = await say("one");
+    expect([mine.idea, mine.session]).toEqual(["issue-history", undefined]);
+    expect(await page.ev('JSON.parse(localStorage.getItem("chat:idea:issue-history")).session')).toBe("s-issue-history");
+    await page.go("#/");
+    const general = await say("two");
+    expect(general.idea).toBeUndefined();
+    expect(general.session).toBe("s-general");
+    await page.ev(`window.fetch = realFetch; ${chat}.querySelector(".new").click(); localStorage.removeItem("chat:idea:issue-history")`);
+  }, 30_000);
+
   test("every indented list takes its left padding from --indent-list", async () => {
     await page.width(1200);
     await page.go("#/");

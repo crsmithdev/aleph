@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer } from "./test-server.ts";
@@ -21,7 +21,9 @@ beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-chat-"));
   writeFileSync(join(base, "claude"), FAKE);
   chmodSync(join(base, "claude"), 0o755);
-  restoreEnv = withEnv({ ALEPH_CHAT_CMD: join(base, "claude"), ALEPH_ANNOTATIONS: join(base, "annotations.json"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "issues") });
+  restoreEnv = withEnv({ ALEPH_CHAT_CMD: join(base, "claude"), ALEPH_ANNOTATIONS: join(base, "annotations.json"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "issues"), ALEPH_IDEAS: join(base, "ideas") });
+  mkdirSync(join(base, "ideas", "issue-history"), { recursive: true });
+  writeFileSync(join(base, "ideas", "issue-history", "idea.md"), "---\ntitle: Issue history\nstatus: exploring\n---\nx\n");
   ({ at, stop } = await withServer({ warm: false }));
 });
 
@@ -70,4 +72,16 @@ test("a session resumes the conversation", async () => {
 
 test("an empty text is refused", async () => {
   expect((await turn({ text: " " })).status).toBe(400);
+});
+
+test("a turn on an idea gets its path, the idea commands and the build steps; an unknown idea is refused", async () => {
+  const argv = (t: Awaited<ReturnType<typeof turn>>) => t.data[1].message.content[1].input.command as string;
+  const on = argv(await turn({ text: "build it", idea: "issue-history" }));
+  expect(on).toContain(join(base, "ideas", "issue-history", "idea.md"));
+  expect(on).toContain("aleph idea built issue-history");
+  expect(on).toMatch(/aleph issue add.*--after/);
+  expect(on).toContain("File nothing before Chris says yes");
+  const off = argv(await turn({ text: "hi" }));
+  for (const s of ["idea.md", "aleph idea built", "--after", "File nothing"]) expect(off).not.toContain(s);
+  expect((await turn({ text: "hi", idea: "no-such-idea" })).status).toBe(400);
 });

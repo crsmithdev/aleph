@@ -83,7 +83,13 @@
   }) });
   // The chat agent (ui/api/chat.ts) gets the open notes of the page in view, named as annotate.js names a page, and
   // the notes its @ button points at.
-  chat({ headers: { "X-Aleph-UI": "1" }, context: () => ({ page: location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : "") }) });
+  // On an idea page it keeps a session of its own under chat:idea:<slug> and sends the slug as `idea`.
+  const idea = () => /^#\/ideas\/([^/?]+)/.exec(location.hash)?.[1];
+  chat({
+    headers: { "X-Aleph-UI": "1" },
+    key: () => idea() ? `chat:idea:${idea()}` : "kit-chat",
+    context: () => ({ page: location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : ""), ...(idea() ? { idea: idea() } : {}) }),
+  });
 </script>
 </body>
 </html>

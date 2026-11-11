@@ -9,7 +9,8 @@
  * `{ error? }` closes the turn. The panel shows the agent's text, a line per tool call, and the cost of the turn. The
  * `session_id` of the stream goes with the next message, so the server can `--resume` the conversation.
  *
- * The transcript and the session live in localStorage under `key`, so a reload keeps them; New starts over.
+ * The transcript and the session live in localStorage under `key`, so a reload keeps them; New starts over. `key` may
+ * be a function: the panel follows its value on each hash change, so a page can have a transcript of its own.
  *
  * When the page has the annotate tool (annotate.js), the @ button points the next message at annotations: one of the
  * page's notes, or a new one picked there and then. Their ids go with the message as `annotations`. Without the tool,
@@ -55,8 +56,10 @@ const call = (b) => {
 
 export function chat({ url = "/api/chat", headers = {}, context = () => ({}), key = "kit-chat", title = "Agent" } = {}) {
   if (document.getElementById("kit-chat")) return;
-  const load = () => { try { return JSON.parse(localStorage.getItem(key)) ?? { items: [] }; } catch { return { items: [] }; } };
-  const save = () => { try { localStorage.setItem(key, JSON.stringify(state)); } catch {} };
+  const keyOf = () => typeof key === "function" ? key() : key;
+  let at = keyOf();
+  const load = () => { try { return JSON.parse(localStorage.getItem(at)) ?? { items: [] }; } catch { return { items: [] }; } };
+  const save = () => { try { localStorage.setItem(at, JSON.stringify(state)); } catch {} };
   let state = load(), busy = false;
 
   const el = host("kit-chat", CSS, `<button type="button" class="fab" title="${esc(title)}" aria-expanded="false">&#10022;</button>` +
@@ -81,6 +84,10 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   const add = (by, text, refs) => { state.items.push({ by, text, ...(refs?.length ? { points: refs } : {}) }); save(); draw(); };
   /** Points the next message at annotation `a`, the `no`th note of the page. */
   const attach = (a, no) => { points = [...points.filter((p) => p.id !== a.id), { id: a.id, label: `#${no} ${a.note.split("\n")[0].slice(0, 40)}` }]; draw(); };
+
+  /** Moves to the transcript of the current `key`; a turn in flight finishes first. */
+  const sync = () => { if (busy || keyOf() === at) return; at = keyOf(); state = load(); points = []; draw(); };
+  addEventListener("hashchange", sync);
 
   /** One stream-json event of the agent. */
   function take(ev) {
@@ -127,6 +134,7 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
     }
     busy = false;
     save();
+    sync();
     draw();
   }
 

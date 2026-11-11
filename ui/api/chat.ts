@@ -1,6 +1,6 @@
 /**
  * `POST /api/chat`: one turn of the chat agent that ui/vendor/kit/chat.js talks to. The body is
- * `{ text, session?, page?, annotations? }`.
+ * `{ text, session?, page?, annotations?, idea? }`.
  * The turn is a `chat` run in the ledger, so it has a folder, a log and a cost. The agent is `claude -p` in this checkout
  * with Chris's own setup, so it files issues with `aleph issue` and answers notes with `aleph annotation`; `session`
  * resumes the last turn's conversation. The annotations Chris points at (`annotations`, ids) go with the text first, then
@@ -9,12 +9,13 @@
  * The answer is a server-sent stream: each line of the run's stream-json output as it comes, then `end` with `{ error? }`.
  * A comment line every 20 s keeps the stream open under the server's idle timeout while a tool runs.
  */
-import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { OPUS_MODEL } from "../../jobs/lib/routing/models.ts";
 import { openRun } from "../../jobs/lib/roles/agent-run.ts";
 import { runFile } from "../../jobs/lib/records/run-files.ts";
 import { read, type Note } from "../../lib/annotations.ts";
+import { file as ideaFile } from "../../ideas/ideas.ts";
 import { sameSite } from "../http.ts";
 import type { Routes } from "../server.ts";
 
@@ -37,16 +38,25 @@ function notesOn(page: string | undefined, ids: string[]): string {
     (open.length ? `\n\nOpen annotations on this page (${page}):\n${open.map(line).join("\n")}` : "");
 }
 
+/** The part of the system prompt for the idea `slug`: its file, the idea commands and the steps to build it. */
+const building = (slug: string) => `
+
+Chris is on the idea \`${slug}\`; its write-up is ${ideaFile(slug)}, and the lens results are in the same folder.
+- \`aleph idea show ${slug}\` prints it with its lens results; \`aleph idea note ${slug} <text>\` adds a line to its log; \`aleph idea edit ${slug} --writeup <text>\` replaces the write-up; \`aleph idea lens ${slug} <name>\` runs a lens.
+- To build the idea (Chris presses Build or says "build it"): read the write-up and the lens results, and ask Chris about each gap you find. Then show the drafted issues as a list with the title, kind, priority and order of each.
+- File nothing before Chris says yes to that list. When he says yes, file each issue open in the target repo with \`aleph issue add <repo> ...\`, each \`--after\` the one before, and then run \`aleph idea built ${slug} <ref>...\` with the filed refs.`;
+
 const enc = new TextEncoder();
 
 export const routes: Routes = {
   "POST /api/chat": async (req) => {
     if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
-    const { text, session, page, annotations } = await req.json().catch(() => ({}));
+    const { text, session, page, annotations, idea } = await req.json().catch(() => ({}));
     if (typeof text !== "string" || !text.trim()) return Response.json({ error: "text must be a non-empty string" }, { status: 400 });
+    if (idea !== undefined && (typeof idea !== "string" || !existsSync(ideaFile(idea)))) return Response.json({ error: `no idea named ${idea}` }, { status: 400 });
     const run = openRun({
       role: "chat", who: "the chat agent", model: OPUS_MODEL, seconds: 3600, cwd: ROOT, name: "chat", command: `chat: ${text.slice(0, 120)}`, shown: true,
-      flags: ["--permission-mode", "bypassPermissions", "--append-system-prompt", SYSTEM, ...(typeof session === "string" && session ? ["--resume", session] : [])],
+      flags: ["--permission-mode", "bypassPermissions", "--append-system-prompt", SYSTEM + (idea ? building(idea) : ""), ...(typeof session === "string" && session ? ["--resume", session] : [])],
     });
     const ids = Array.isArray(annotations) ? annotations.filter((x): x is string => typeof x === "string") : [];
     const prompt = text + notesOn(typeof page === "string" ? page : undefined, ids);
