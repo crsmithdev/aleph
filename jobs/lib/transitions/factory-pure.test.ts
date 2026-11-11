@@ -50,8 +50,9 @@ test("the report groups each unshown run under its report lane, in the order of 
 
 test("a peek lists the unshown runs and leaves them unshown", () => {
   mk("fac-14", "build", "landed", { shown: false });
-  expect(report(Date.now(), true)).toContain("fac-14 landed");
-  expect(report(Date.now(), true)).toContain("fac-14 landed");
+  const now = 1_800_000_000_000;
+  expect(report(now, true)).toContain("fac-14 landed");
+  expect(report(now, true)).toContain("fac-14 landed");
   expect(report()).toContain("fac-14 landed");
   expect(report()).not.toContain("fac-14 landed");
 });
