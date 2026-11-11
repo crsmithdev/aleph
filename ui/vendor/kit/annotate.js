@@ -4,10 +4,11 @@
  *   import { annotate } from "./annotate.js";
  *   annotate();
  *
- * The dock button turns pick mode on and off; the count next to it opens the list. In pick mode a click on the page
+ * The dock button turns pick mode on and off; the count badge on it opens the list and hides while the page has none. In pick mode a click on the page
  * opens a note for the element under the pointer instead of acting on it. Escape leaves pick mode. Each note keeps a
  * numbered pin on its element; a click on a pin edits the note. An element with a `data-annotate` attribute keeps its
- * pin when the page re-renders around it.
+ * pin when the page re-renders around it. The note editor moves when you drag it by any part but its fields and
+ * buttons. Its unsaved text stays in localStorage under "annotate-draft", so a reload opens it again.
  *
  * `store` holds the annotations: `load()` resolves to all of them, `put(a)` adds or replaces one, `drop(id)` deletes one,
  * and `watch(fn)`, when given, calls `fn` when someone else changed them. `local()` keeps them in localStorage;
@@ -24,7 +25,7 @@
  * this page in pin order, and `pick()` turns pick mode on for one element and resolves with the saved note, or with
  * null when the pick or the note is cancelled.
  */
-import { dock, host } from "./dock.js";
+import { copy, dock, flash, host } from "./dock.js";
 
 /** A store in localStorage under `key`; another tab's write reaches this one through the storage event. */
 export function local(key = "annotations") {
@@ -56,11 +57,15 @@ export function remote(base, { headers = {}, watch } = {}) {
 const upsert = (all, a) => (all.some((x) => x.id === a.id) ? all.map((x) => (x.id === a.id ? a : x)) : [...all, a]);
 
 const BAR = `
-.bar { display: flex; border-radius: 20px; box-shadow: var(--shadow); }
-.bar button { height: 40px; border-radius: 0; box-shadow: none; }
-.bar .pick { width: 44px; border-radius: 20px 0 0 20px; font-size: 18px; }
-.bar .count { min-width: 40px; border-left: 0; border-radius: 0 20px 20px 0; font-variant-numeric: tabular-nums; }
+.bar { position: relative; width: 40px; }
+.bar .pick { font-size: 18px; }
+.bar .count { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border: 2px solid var(--bg); border-radius: 9px;
+  background: var(--accent); color: var(--bg); font: 600 10px/14px var(--font); font-variant-numeric: tabular-nums; }
+.bar .count::before { content: ""; position: absolute; inset: -6px; }
+.bar .count:hover { background: var(--ink); border-color: var(--bg); }
+.bar .count[hidden] { display: none; }
 .on .pick { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.on .count, .count[aria-expanded="true"] { background: var(--ink); }
 .pop { display: grid; gap: 8px; }
 .pop[hidden] { display: none; }
 .head { display: flex; gap: 6px; align-items: center; }
@@ -87,13 +92,18 @@ const LAYER = `
 .edit .replies b { color: var(--muted); font-weight: 600; }
 .pin { position: fixed; pointer-events: auto; width: 22px; height: 22px; padding: 0; border-radius: 11px; border: 2px solid var(--bg);
   background: var(--accent); color: var(--bg); font: 600 11px/18px var(--font); text-align: center; transform: translate(-50%, -50%); box-shadow: var(--shadow); }
-.edit { position: fixed; pointer-events: auto; width: 300px; display: grid; gap: 8px; }
+.edit { position: fixed; pointer-events: auto; width: 300px; display: grid; gap: 8px; cursor: move; touch-action: none; }
+.edit textarea, .edit button { cursor: auto; }
 .edit textarea { width: 100%; min-height: 70px; resize: vertical; padding: 6px; }
 .edit code { color: var(--muted); font: 11px var(--code); overflow-wrap: anywhere; }
 .edit .acts { display: flex; gap: 6px; }
 .edit .acts .del { margin-right: auto; }
 .edit .acts .save { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 `;
+
+const DRAFT = "annotate-draft";
+const draft = { read: () => { try { return JSON.parse(localStorage.getItem(DRAFT)); } catch { return null; } },
+  write: (d) => { try { d ? localStorage.setItem(DRAFT, JSON.stringify(d)) : localStorage.removeItem(DRAFT); } catch {} } };
 
 /** Mounts the dock button, the list and the pin layer. */
 export function annotate({ store = local() } = {}) {
@@ -105,7 +115,7 @@ export function annotate({ store = local() } = {}) {
   const page = () => location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : "");
   const here = () => all.filter((a) => a.url === page() || (!a.url && find(a)));
 
-  const bar = host("kit-annotate", BAR, `<div class="bar"><button type="button" class="pick" title="Annotate: pick an element" aria-pressed="false">&#9998;</button>` +
+  const bar = host("kit-annotate", BAR, `<div class="bar"><button type="button" class="fab pick" title="Annotate: pick an element" aria-pressed="false">&#9998;</button>` +
     `<button type="button" class="count" title="Annotations on this page" aria-expanded="false">0</button></div>` +
     `<div class="card pop" hidden><div class="head"><b>Annotations</b><button type="button" class="copy">Copy</button><button type="button" class="clear">Clear</button></div><ol></ol></div>`);
   const ui = bar.shadowRoot;
@@ -120,6 +130,7 @@ export function annotate({ store = local() } = {}) {
   function draw() {
     const notes = here();
     countBtn.textContent = notes.length;
+    countBtn.hidden = !notes.length;
     pins.innerHTML = notes.map((a, i) => `<button type="button" class="pin${a.by === "agent" ? " agent" : ""}${a.status === "resolved" ? " resolved" : ""}" data-id="${a.id}" title="${esc(a.note)}">${i + 1}</button>`).join("");
     place();
     ui.querySelector("ol").innerHTML = notes.map((a, i) => `<li data-id="${a.id}"${a.status === "resolved" ? ` class="resolved"` : ""}><span class="no">${i + 1}</span>` +
@@ -153,7 +164,7 @@ export function annotate({ store = local() } = {}) {
   const put = (a) => write(() => { all = upsert(all, a); }, () => store.put(a));
   const drop = (id) => write(() => { all = all.filter((x) => x.id !== id); }, () => store.drop(id));
 
-  /** Opens the note editor next to `el` for annotation `a`, new or saved. */
+  /** Opens the note editor next to `el` for annotation `a`, new or saved, and gives its note and reply fields. */
   function edit(a, el) {
     shut();
     editing = a;
@@ -171,6 +182,15 @@ export function annotate({ store = local() } = {}) {
     const below = r.bottom + 8 + 200 < innerHeight;
     Object.assign(box.style, { left: `${Math.max(8, Math.min(r.left, innerWidth - 308))}px`, top: `${below ? r.bottom + 8 : Math.max(8, r.top - 208)}px` });
     const text = box.querySelector(".note"), answer = box.querySelector(".answer");
+    box.oninput = () => draft.write({ a, note: text.value, reply: answer?.value ?? "" });
+    box.onpointerdown = (e) => {
+      if (e.target.closest("textarea, button")) return;
+      e.preventDefault();
+      const r = box.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+      const move = (m) => Object.assign(box.style, { left: `${m.clientX - dx}px`, top: `${m.clientY - dy}px` });
+      addEventListener("pointermove", move);
+      addEventListener("pointerup", () => removeEventListener("pointermove", move), { once: true });
+    };
     text.focus();
     // Save keeps the note's text and adds the reply, if any; an empty note deletes a saved note and drops a new one.
     const done = (status = a.status ?? "open") => {
@@ -193,12 +213,14 @@ export function annotate({ store = local() } = {}) {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) done();
       if (e.key === "Escape") { e.stopPropagation(); shut(); }
     };
+    return { text, answer };
   }
 
   /** Closes the note editor; a pick() that waits for its note gets null. */
   function shut() {
     const open = editing;
     editing = null;
+    draft.write(null);
     layer.querySelector(".edit")?.remove();
     if (open) give(null);
   }
@@ -278,7 +300,17 @@ export function annotate({ store = local() } = {}) {
   document.body.append(top);
   store.watch?.(sync);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
-  sync();
+  // A draft of this page opens again on its saved note, or as a new note when it has none.
+  sync().then(() => {
+    const d = draft.read();
+    if (!d || (d.a.url !== page() && !(d.a.url === "" && find(d.a)))) return;
+    const a = all.find((x) => x.id === d.a.id) ?? d.a, el = find(a);
+    el?.scrollIntoView({ block: "center" });
+    const f = edit(a, el);
+    f.text.value = d.note;
+    if (f.answer) f.answer.value = d.reply;
+    draft.write(d);
+  });
 }
 
 /** The element an annotation names, or null when the page no longer has it. */
@@ -322,21 +354,3 @@ const snippet = (el) => { const h = el.outerHTML.replace(/\s+/g, " "); return h.
 // crypto.randomUUID needs a secure context, and a page on a plain http name is not one.
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-
-/** Copies `text`; navigator.clipboard needs a secure context, so a plain http page falls back to execCommand. */
-async function copy(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch {}
-  const area = Object.assign(document.createElement("textarea"), { value: text });
-  area.style.cssText = "position: fixed; opacity: 0;";
-  document.body.append(area);
-  area.select();
-  const ok = document.execCommand("copy");
-  area.remove();
-  return ok;
-}
-
-function flash(btn, text) {
-  const was = btn.dataset.label ??= btn.textContent;
-  btn.textContent = text;
-  setTimeout(() => { btn.textContent = was; }, 1500);
-}

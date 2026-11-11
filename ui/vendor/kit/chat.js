@@ -18,6 +18,9 @@
  *
  * An image pasted or dropped on the panel goes with the next message as `images`, each `{ name, data }` with `data` in
  * base64. The transcript keeps only the count of the images.
+ *
+ * A message sent while the agent works waits in a queue and goes when the turn ends, one per turn. The queue lives only
+ * in the page, so a reload drops it.
  */
 import { dock, host } from "./dock.js";
 
@@ -35,6 +38,8 @@ const CSS = `
 .error { color: #d33; }
 .busy { color: var(--muted); font-style: italic; }
 .empty { color: var(--muted); }
+.queued { opacity: .6; }
+.queued button { border: 0; padding: 0 0 0 6px; background: none; color: var(--muted); }
 form { display: flex; gap: 6px; align-items: end; }
 textarea { flex: 1; resize: none; min-height: 36px; max-height: 160px; padding: 6px 8px; }
 .you .ref { display: block; color: var(--muted); font-size: 12px; }
@@ -69,7 +74,7 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   const el = host("kit-chat", CSS, `<button type="button" class="fab" title="${esc(title)}" aria-expanded="false">&#10022;</button>` +
     `<div class="card pop" hidden><div class="head"><b>${esc(title)}</b><button type="button" class="new">New</button></div>` +
     `<div class="log" aria-live="polite"></div><div class="menu" hidden></div><div class="points"></div>` +
-    `<form><textarea rows="1" placeholder="Ask, or tell it to do something. Paste a screenshot to send it."></textarea><button type="button" class="point" title="Point at an annotation" hidden>@</button><button type="submit">Send</button></form></div>`);
+    `<form><textarea rows="1" placeholder="Ask, or paste a screenshot."></textarea><button type="button" class="point" title="Point at an annotation" hidden>@</button><button type="submit">Send</button></form></div>`);
   const ui = el.shadowRoot;
   const [fab, pop, log, menu, chips, form, box, point] = [".fab", ".pop", ".log", ".menu", ".points", "form", "textarea", ".point"].map((s) => ui.querySelector(s));
   /** The annotate tool's API when the page has the tool, else undefined. */
@@ -78,12 +83,15 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   let points = [];
   /** The images the next message takes, as { name, data, src }. */
   let shots = [];
+  /** The messages that wait for the turn in flight to end, each as `message()` made it. */
+  let queue = [];
 
   function draw() {
     log.innerHTML = state.items.map((m) => `<p class="${m.by}">${esc(m.text)}${(m.points ?? []).map((l) => `<span class="ref">@ ${esc(l)}</span>`).join("")}${m.shots ? `<span class="ref">${m.shots} image${m.shots > 1 ? "s" : ""}</span>` : ""}</p>`).join("") +
-      (busy ? `<p class="busy">Working…</p>` : "") || `<p class="empty">No messages yet.</p>`;
+      (busy ? `<p class="busy">Working…</p>` : "") +
+      queue.map((m, i) => `<p class="you queued">${esc(m.text)}<span class="ref">Queued${m.labels.length || m.images.length ? ` with ${[...m.labels.map((l) => `@ ${esc(l)}`), ...(m.images.length ? [`${m.images.length} image${m.images.length > 1 ? "s" : ""}`] : [])].join(", ")}` : ""}<button type="button" data-q="${i}" aria-label="Drop queued message">&times;</button></span></p>`).join("") || `<p class="empty">No messages yet.</p>`;
     log.scrollTop = log.scrollHeight;
-    form.querySelector("button[type=submit]").disabled = busy;
+    form.querySelector("button[type=submit]").textContent = busy ? "Queue" : "Send";
     point.hidden = !notes();
     chips.innerHTML = points.map((p, i) => `<span class="chip">@ ${esc(p.label)}<button type="button" data-i="${i}" aria-label="Remove">&times;</button></span>`).join("") +
       shots.map((m, i) => `<span class="chip"><img src="${m.src}" alt="${esc(m.name)}"><button type="button" data-shot="${i}" aria-label="Remove">&times;</button></span>`).join("");
@@ -117,11 +125,17 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
     }
   }
 
-  async function send(text) {
-    const ids = points.map((p) => p.id), images = shots.map(({ name, data }) => ({ name, data }));
-    add("you", text, points.map((p) => p.label), images.length);
+  /** The next message: `text` with the annotations and images it takes, which it clears from the form. */
+  function message(text) {
+    const m = { text, ids: points.map((p) => p.id), labels: points.map((p) => p.label), images: shots.map(({ name, data }) => ({ name, data })) };
     points = [];
     shots = [];
+    return m;
+  }
+
+  /** Runs the turn of message `m`, then the turn of the next queued message, if any. */
+  async function send({ text, ids, labels, images }) {
+    add("you", text, labels, images.length);
     busy = true;
     draw();
     try {
@@ -148,6 +162,7 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
     } catch (e) {
       add("error", `The message failed: ${e.message}`);
     }
+    if (queue.length) return send(queue.shift());
     busy = false;
     save();
     sync();
@@ -181,6 +196,12 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
     const all = api.notes(), i = all.findIndex((x) => x.id === b.dataset.id);
     if (i >= 0) attach(all[i], i + 1);
   });
+  log.addEventListener("click", (e) => {
+    const q = e.target.closest("[data-q]")?.dataset.q;
+    if (q === undefined) return;
+    queue.splice(Number(q), 1);
+    draw();
+  });
   chips.addEventListener("click", (e) => {
     const b = e.target.closest("button");
     if (b?.dataset.shot !== undefined) shots.splice(Number(b.dataset.shot), 1);
@@ -192,9 +213,9 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const text = box.value.trim();
-    if (!text || busy) return;
+    if (!text) return;
     box.value = "";
-    send(text);
+    if (busy) { queue.push(message(text)); draw(); } else send(message(text));
   });
   box.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
   box.addEventListener("input", () => { box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`; });

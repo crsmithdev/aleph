@@ -23,6 +23,25 @@ export function host(id, css, html) {
   return el;
 }
 
+/** Copies `text`; navigator.clipboard needs a secure context, so a plain http page falls back to execCommand. */
+export async function copy(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const area = Object.assign(document.createElement("textarea"), { value: text });
+  area.style.cssText = "position: fixed; opacity: 0;";
+  document.body.append(area);
+  area.select();
+  const ok = document.execCommand("copy");
+  area.remove();
+  return ok;
+}
+
+/** Shows `text` on `btn` for 1.5 s. */
+export function flash(btn, text) {
+  const was = btn.dataset.label ??= btn.textContent;
+  btn.textContent = text;
+  setTimeout(() => { btn.textContent = was; }, 1500);
+}
+
 export const BASE = `
 :host {
   --bg: var(--kit-bg, #fff); --field: var(--kit-field, #f6f6f9); --sunk: var(--kit-sunk, #f1f1f4); --ink: var(--kit-ink, #1d1e24); --muted: var(--kit-muted, #6a6d7c);

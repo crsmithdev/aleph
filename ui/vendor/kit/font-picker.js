@@ -10,7 +10,7 @@
  * The steps rewrite each rule of the page's same-origin stylesheets that sets a font. A rule's role is the `var(--r)` it
  * names, or `base` when it names none. Choices persist in localStorage under `key`.
  */
-import { dock, host } from "./dock.js";
+import { copy, dock, flash, host } from "./dock.js";
 
 const byName = (a) => a.sort((x, y) => x.localeCompare(y));
 export const SANS = byName(["Work Sans", "Inter", "Roboto", "Open Sans", "Montserrat", "Lato", "Poppins", "Nunito Sans", "Source Sans 3", "Raleway",
@@ -29,11 +29,13 @@ export const ROLES = [
   { name: "mono", label: "Code", fonts: MONO, default: "", fallback: "ui-monospace, monospace" },
 ];
 
-// Relative steps, not sizes. The first entry of each is the label of its unset state; spacing is letter spacing in em.
+// Relative steps, not sizes: size scales, weight adds, spacing adds em of letter spacing. Each list is in order, and its
+// unset value (1 or 0) is the empty option. `show` is the label of a value.
+const sign = (v) => (v > 0 ? `+${v}` : v < 0 ? `\u2212${-v}` : "\u00b10");
 const STEPS = {
-  size: ["Size", [["Smaller", 0.85], ["Small", 0.92], ["Large", 1.08], ["Larger", 1.18]]],
-  weight: ["Weight", [["Lighter", -200], ["Light", -100], ["Heavy", 100], ["Heavier", 200]]],
-  spacing: ["Spacing", [["Tighter", -0.02], ["Tight", -0.01], ["Wide", 0.02], ["Wider", 0.05]]],
+  size: ["Size", [0.85, 0.92, 1, 1.08, 1.18], (v) => `${Math.round(v * 100)}%`],
+  weight: ["Weight", [-200, -100, 0, 100, 200], sign],
+  spacing: ["Spacing", [-0.02, -0.01, 0, 0.02, 0.05], (v) => (v ? `${sign(v).replace("0.", ".")}em` : sign(v))],
 };
 
 // A size the steps can scale: a length, or a var(), calc(), clamp(), min() or max(). A keyword such as `small` is not one.
@@ -43,13 +45,15 @@ const CSS = `
 summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }
 .fab { font: 600 18px Georgia, serif; }
-.pop { display: grid; gap: 10px; }
-.role { display: grid; gap: 4px; color: var(--muted); }
-.row { display: flex; gap: 4px; height: 30px; }
-select { flex: 1; min-width: 0; padding: 4px 6px; text-overflow: ellipsis; }
-.row button { flex: none; width: 30px; padding: 0; font-size: 16px; line-height: 1; }
-pre { height: 6em; overflow: auto; margin: 0; padding: 8px; font: 11px/1.4 var(--code); white-space: pre-wrap; background: var(--sunk); border-radius: 6px; }
-.reset { justify-self: start; }
+.pop { width: min(460px, calc(100vw - 32px)); display: grid; gap: 4px; padding: 10px; }
+.head { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.head b { flex: 1; }
+.row { display: grid; grid-template-columns: 3.6em 20px minmax(0, 1fr) 20px 58px 58px 66px; gap: 3px; align-items: center; height: 26px; }
+.row > span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cols { height: auto; color: var(--muted); font-size: 11px; }
+.cols span:first-child { grid-column: 2 / 5; }
+select { width: 100%; height: 100%; min-width: 0; padding: 0 4px; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.row button { height: 100%; padding: 0; font-size: 15px; line-height: 1; }
 `;
 
 /**
@@ -76,17 +80,19 @@ export function fontPicker({ roles = ROLES, base = "sans", key = "font-picker", 
       root.setProperty(`--${r.name}-weight`, 400 + step(r.name, "weight"));
     }
     adjusted.textContent = rules.map((r) => adjust(r, step)).filter(Boolean).join("\n");
-    out.textContent = roles.flatMap((r) => [
-      ...(chosen[r.name] ? [`--${r.name}: '${chosen[r.name]}', ${r.fallback};`] : []),
-      ...Object.keys(STEPS).filter((p) => chosen[`${r.name}:${p}`] !== undefined)
-        .map((p) => `${r.label} ${p}: ${STEPS[p][1].find(([, v]) => v === step(r.name, p))[0]}`),
-    ]).join("\n") || "(the defaults)";
   }
 
+  /** The choices as JSON for an agent: per role variable, the family (null: the page's own) and the three steps. */
+  const exported = () => JSON.stringify(Object.fromEntries(roles.map((r) => [`--${r.name}`, {
+    family: chosen[r.name] ?? null, fallback: r.fallback,
+    sizeScale: step(r.name, "size"), weightDelta: step(r.name, "weight"), letterSpacingEm: step(r.name, "spacing"),
+  }])), null, 2);
+
   const el = host("kit-fonts", CSS + (hideBelow ? `@media (max-width: ${hideBelow}px) { :host { display: none; } }` : ""), `<details><summary class="fab" title="Fonts" aria-label="Fonts">Aa</summary>
-    <div class="card pop">${roles.map((r) => roleHtml(r, chosen, step, unset(r, roles, base))).join("")}<pre></pre><button type="button" class="reset">Reset</button></div></details>`);
+    <div class="card pop"><div class="head"><b>Fonts</b><button type="button" class="copy">Copy</button><button type="button" class="reset">Reset</button></div>` +
+    `<div class="row cols">${["Family", ...Object.values(STEPS).map(([n]) => n)].map((n) => `<span>${n}</span>`).join("")}</div>` +
+    `${roles.map((r) => roleHtml(r, chosen, step, unset(r, roles, base))).join("")}</div></details>`);
   const shadow = el.shadowRoot;
-  const out = shadow.querySelector("pre");
   shadow.addEventListener("change", (e) => {
     const { role, prop } = e.target.dataset;
     if (!role) return;
@@ -105,6 +111,7 @@ export function fontPicker({ roles = ROLES, base = "sans", key = "font-picker", 
     sel.selectedIndex = (sel.selectedIndex + by + n) % n;
     sel.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  shadow.querySelector(".copy").addEventListener("click", (e) => copy(exported()).then((ok) => flash(e.target, ok ? "Copied" : "Copy failed")));
   shadow.querySelector(".reset").addEventListener("click", () => {
     for (const k of Object.keys(chosen)) delete chosen[k];
     for (const s of shadow.querySelectorAll("select")) s.value = "";
@@ -125,19 +132,18 @@ function unset(r, roles, base) {
   return r.name === base || !from ? "Default" : `Same as ${from.label.toLowerCase()}`;
 }
 
-/** The select rows of one role: the family with its arrows, then one select per step kind. */
+/** The row of one role: its label, the family with its arrows, then a select per step kind, or a gap where it has none. */
 function roleHtml(r, chosen, step, none) {
   const groups = [...TYPES, ["Other", r.fonts.filter((f) => !TYPES.some(([, fs]) => fs.includes(f)))]]
     .map(([type, fonts]) => [type, fonts.filter((f) => r.fonts.includes(f))]).filter(([, fonts]) => fonts.length);
   const lower = r.label.toLowerCase();
   const family = `<select data-role="${r.name}" aria-label="${r.label} font"><option value="">${none}</option>` +
     groups.map(([type, fonts]) => `<optgroup label="${type}">${fonts.map((f) => `<option${chosen[r.name] === f ? " selected" : ""}>${f}</option>`).join("")}</optgroup>`).join("") + `</select>`;
-  const steps = Object.entries(STEPS).filter(([prop]) => (r.steps ?? Object.keys(STEPS)).includes(prop)).map(([prop, [name, list]]) =>
-    `<select data-role="${r.name}" data-prop="${prop}" aria-label="${r.label} ${prop}"><option value="">${name}</option>` +
-    list.map(([n, v]) => `<option value="${v}"${step(r.name, prop) === v ? " selected" : ""}>${n}</option>`).join("") + `</select>`).join("");
-  return `<div class="role"><span>${r.label}</span>` +
-    `<div class="row"><button type="button" data-step="-1" aria-label="Previous ${lower} font">&lsaquo;</button>${family}` +
-    `<button type="button" data-step="1" aria-label="Next ${lower} font">&rsaquo;</button></div><div class="row">${steps}</div></div>`;
+  const steps = Object.entries(STEPS).map(([prop, [, list, show]]) => !(r.steps ?? Object.keys(STEPS)).includes(prop) ? "<span></span>" :
+    `<select data-role="${r.name}" data-prop="${prop}" aria-label="${r.label} ${prop}" title="${r.label} ${prop}">` +
+    list.map((v) => `<option value="${v === (prop === "size" ? 1 : 0) ? "" : v}"${step(r.name, prop) === v ? " selected" : ""}>${show(v)}</option>`).join("") + `</select>`).join("");
+  return `<div class="row"><span title="${r.label}">${r.label}</span><button type="button" data-step="-1" aria-label="Previous ${lower} font">&lsaquo;</button>${family}` +
+    `<button type="button" data-step="1" aria-label="Next ${lower} font">&rsaquo;</button>${steps}</div>`;
 }
 
 /** The source text of the page's same-origin stylesheets and style elements. */
