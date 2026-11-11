@@ -11,7 +11,8 @@ import * as locks from "../infra/locks.ts";
 import { held } from "../infra/locks.ts";
 import { startJob } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
-import { ctx, newIssue, mk, setup, teardown } from "./factory.helpers.ts";
+import * as issues from "../../../issues/lib/todo.ts";
+import { change, ctx, dispatch, fakes, newIssue, mk, setup, teardown } from "./factory.helpers.ts";
 
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */
 let afterHeld: ((name: string) => void) | undefined;
@@ -63,6 +64,21 @@ test("waitingToLand lists the job whose first run has the lower ID first, though
   const low = job("20261028-000001-fac-a", "a", "2026-10-28T02:00:00Z");
   const high = job("20261028-000002-fac-b", "b", "2026-10-28T01:00:00Z");
   expect(waitingToLand([high, low])).toEqual(["a", "b"]);
+});
+
+test("a passed run on a parked issue is not waiting to land, and waits again once the issue is open", async () => {
+  const id = newIssue();
+  const name = `p-${id}`;
+  mk(name, "build", "passed", { next: "land", land: true });
+  change(id, (i) => issues.setStatus(i, "parked"));
+  const f = fakes();
+  expect(waitingToLand()).not.toContain(name);
+  await dispatch(f);
+  expect(f.calls).not.toContain(`land ${name}`);
+  change(id, (i) => issues.setStatus(i, "open"));
+  expect(waitingToLand()).toContain(name);
+  await dispatch(f);
+  expect(f.calls).toContain(`land ${name}`);
 });
 
 test("the first dispatch after the resume starts a next step the pause kept, once", async () => {

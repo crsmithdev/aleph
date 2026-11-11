@@ -7,7 +7,8 @@
  */
 import { basename } from "node:path";
 import { appendFileSync } from "node:fs";
-import { closeAndFile, note } from "../../../issues/lib/store.ts";
+import { closeAndFile, note, reader } from "../../../issues/lib/store.ts";
+import * as issues from "../../../issues/lib/todo.ts";
 import { filing } from "../transitions/filing.ts";
 import { fetchOrigin, followMain, git } from "../infra/git.ts";
 import { needsOf } from "../asks/ask.ts";
@@ -58,12 +59,18 @@ export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: 
 
 /**
  * Passed agent runs waiting to land by themselves, oldest first: the job's next step is a land (nextStep set `next`
- * for `--land` or an autoland repo). A land that lands again is the unit's own step, so it is not here.
+ * for `--land` or an autoland repo). A land that lands again is the unit's own step, so it is not here. A job whose
+ * issue is parked in the work store waits until Chris reopens it.
  */
 export function waitingToLand(jobs = allJobs()): string[] {
+  const lists = reader({ fetch: false });
   return jobs.filter((j) => {
     const last = record.counting(j);
-    return isOpen(j) && isAgentRun(last.run.kind) && !isLive(last.folder) && record.stepOf(j).step === "land";
+    if (!isOpen(j) || !isAgentRun(last.run.kind) || isLive(last.folder) || record.stepOf(j).step !== "land") return false;
+    const repo = last.run.repo;
+    const on = onOf(last.run);
+    const item = repo === undefined || on === undefined ? undefined : lists.item(repo, on);
+    return item === undefined || issues.status(item) !== "parked";
   }).sort((a, b) => (a[0].id < b[0].id ? -1 : 1)).map((j) => j.at(-1)!.run.name);
 }
 
