@@ -472,8 +472,8 @@ test("arm() arms on the first click, lets the second through, and restores the t
   expect([btn.textContent, cls.has("ask")]).toEqual(["Drop a1? Click again", true]);
   expect(lib.arm(btn, "x", 5)).toBe(false);
   const b2: any = { textContent: "Drop", classList: { contains: () => false, add() {}, remove() {} } };
-  lib.arm(b2, "Sure?", 5);
-  await Bun.sleep(20);
+  lib.arm(b2, "Sure?", 0);
+  await new Promise((r) => setTimeout(r, 0));
   expect(b2.textContent).toBe("Drop");
 });
 
