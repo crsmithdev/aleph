@@ -13,7 +13,7 @@ import { fetchOrigin, followMain, git } from "../infra/git.ts";
 import { needsOf } from "../asks/ask.ts";
 import { allRuns, isWaiting, isAgentRun, onOf, trailerOf, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { readJsonOr, writeJson } from "../infra/json.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { isLive } from "../infra/process.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";

@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { loadavg } from "node:os";
 import { join } from "node:path";
-import { readJsonOr } from "../infra/json.ts";
+import { readJsonOr } from "../../../lib/json.ts";
 import { needsOf, type Ask } from "../asks/ask.ts";
 import { layout } from "../../../lib/layout.ts";
 import * as record from "./record.ts";

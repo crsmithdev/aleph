@@ -2,6 +2,7 @@
  * The ops of the `vault` command: vault/cli.ts passes its argv to `run`. Each op prints JSON on stdout and findings
  * on stderr, and ends with `Exit` for a refusal, which the CLI turns into its exit code.
  */
+import { readJsonOr } from "../../lib/json.ts";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
@@ -96,7 +97,7 @@ function rollback(paths: string[]): void {
  */
 const READ_LOG = () => join(root, ".recall.json");
 function readLog(): Record<string, string> {
-  try { return JSON.parse(readFileSync(READ_LOG(), "utf8")); } catch { return {}; }
+  return readJsonOr(READ_LOG(), {});
 }
 /** Every logged return, one JSON line of date, title and query, for 30 days. Also outside git. */
 const RECALL_LOG = () => join(root, ".recall-log.jsonl");

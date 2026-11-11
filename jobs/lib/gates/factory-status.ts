@@ -17,7 +17,7 @@ import { layout, logEvent, readEvents } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
 import { allRuns, isWaiting, isBuild, loadRegistry, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { held, lock } from "../infra/locks.ts";
-import { readJsonOr, writeJson } from "../infra/json.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { isLive, isRunning } from "../infra/process.ts";
 import { causeOf, policyOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";

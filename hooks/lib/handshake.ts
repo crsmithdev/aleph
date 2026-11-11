@@ -4,7 +4,8 @@
  * its parent. Files live in ~/.aleph/spool (ALEPH_SPOOL overrides, for tests).
  * Each kind of record has its own typed slot below; the key prefix is the kind.
  */
-import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { readJsonOr } from "../../lib/json.ts";
+import { mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { alephPath } from "../../lib/paths.ts";
 import type { Snapshot } from "./snapshot.ts";
@@ -19,7 +20,7 @@ function pathFor(key: string): string {
 
 function slot<T>(key: string) {
   const get = (): T | null => {
-    try { return JSON.parse(readFileSync(pathFor(key), "utf8")) as T; } catch { return null; }
+    return readJsonOr<T | null>(pathFor(key), null);
   };
   return {
     get,

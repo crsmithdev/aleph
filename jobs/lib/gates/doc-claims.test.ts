@@ -93,10 +93,10 @@ describe("a doc that does not match fails, quoting the claim", () => {
   });
 
   test("a claim that a file imports only some modules", () => {
-    expect(one("`jobs/lib/infra/settings.ts` imports only `node:os`, `node:path`, `../../../lib/paths.ts`, `./json.ts` and `../../../lib/layout.ts`.")).toEqual([]);
+    expect(one("`jobs/lib/infra/settings.ts` imports only `node:os`, `node:path`, `../../../lib/paths.ts`, `../../../lib/json.ts` and `../../../lib/layout.ts`.")).toEqual([]);
     const p = one("`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`.");
     expect(p).toHaveLength(1);
-    expect(p[0]).toStartWith('docs/x.md:1: "`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`": jobs/lib/infra/settings.ts imports node:os, node:path, ../../../lib/paths.ts, ./json.ts, ../../../lib/layout.ts; not ./sandbox.ts, ./gate.ts');
+    expect(p[0]).toStartWith('docs/x.md:1: "`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`": jobs/lib/infra/settings.ts imports node:os, node:path, ../../../lib/paths.ts, ../../../lib/json.ts, ../../../lib/layout.ts; not ./sandbox.ts, ./gate.ts');
   });
 });
 

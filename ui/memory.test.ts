@@ -215,6 +215,16 @@ test("/api/memory lists the notes with their read date, and a page search logs n
   expect(JSON.parse(readFileSync(log, "utf8"))).toEqual({ "Use Bun": "2026-10-30" });
 });
 
+test("/api/memory reports an error, not unread notes, when the recall log does not parse", async () => {
+  const log = join(base, "vault", ".recall.json");
+  writeFileSync(log, "{");
+  await fresh();
+  try {
+    const m = await (await at("/api/memory")).json() as any;
+    expect(m.error).toContain("JSON");
+  } finally { rmSync(log, { force: true }); await fresh(); }
+});
+
 test("/api/memory gives each note its recall count per day over 30 days, and the inspector draws them", async () => {
   const log = join(base, "vault", ".recall-log.jsonl");
   const day = (n: number) => new Date(NOW - n * 86400_000).toISOString().slice(0, 10);

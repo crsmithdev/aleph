@@ -5,7 +5,8 @@
  * A reload fetches only the rows that are new since the last one (see `sync`). When it fails, the
  * last good rows are analysed and the answer says so: `asOf` is when they were fetched, `failed` why the reload failed.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { readJsonOr } from "../../lib/json.ts";
+import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
@@ -105,11 +106,9 @@ let store: Store | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 
 function loadStore(base: string): Store | null {
-  try {
-    const d = JSON.parse(readFileSync(storeFile(), "utf8"));
-    if (d.v !== 1 || d.base !== base) return null;
-    return { ...d, obs: new Map(d.obs.map((o: Observation) => [o.id, o])), traces: new Map(d.traces.map((t: TraceInfo) => [t.id, t])) };
-  } catch { return null; }
+  const d = readJsonOr<any>(storeFile(), null);
+  if (!d || d.v !== 1 || d.base !== base) return null;
+  return { ...d, obs: new Map(d.obs.map((o: Observation) => [o.id, o])), traces: new Map(d.traces.map((t: TraceInfo) => [t.id, t])) };
 }
 function saveStore(s: Store): void {
   try {

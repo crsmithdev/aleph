@@ -11,7 +11,7 @@ import { langfuse, type Langfuse } from "../../../lib/langfuse.ts";
 import { decide, nouls } from "../../../lib/jev.ts";
 import type { Observation } from "../../../lib/otlp.ts";
 import { factoryDir } from "../gates/factory-status.ts";
-import { readJsonOr, writeJson } from "../infra/json.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { logEvent } from "../../../lib/layout.ts";
 
 const fail = (subject: string, note: string) => logEvent({ by: "rule", subject, action: "failed", note });

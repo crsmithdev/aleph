@@ -5,6 +5,7 @@
  * rows and the dollars aleph saw spent it estimates each job's and session's
  * share of the week. The token is read per call and never logged or returned.
  */
+import { readJsonOr } from "../lib/json.ts";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
@@ -45,7 +46,7 @@ const errName = (e: unknown) => (e instanceof Error ? e.name : "error");
 async function fetchUsage(now = new Date()): Promise<Snapshot | null> {
   let token: unknown;
   try {
-    token = JSON.parse(readFileSync(credentialsFile(), "utf8"))?.claudeAiOauth?.accessToken;
+    token = readJsonOr<any>(credentialsFile(), null)?.claudeAiOauth?.accessToken;
   } catch {
     return failed("credentials file cannot be read or parsed");
   }

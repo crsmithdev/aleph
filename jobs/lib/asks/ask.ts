@@ -12,7 +12,7 @@
  */
 import { join } from "node:path";
 import { layout, logEvent } from "../../../lib/layout.ts";
-import { readJsonOr, writeJson } from "../infra/json.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { FULL, SUBS, word, type Event } from "../../../lib/naming.ts";
 import { INTAKE_TRIES, RUN_CAP } from "../infra/settings.ts";
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";

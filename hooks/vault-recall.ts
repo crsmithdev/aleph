@@ -4,7 +4,8 @@
  * prompt and they are injected as additionalContext. Silent when the prompt is
  * short, nothing matches, no note reaches 0.7, Jev fails, or `aleph judge haiku`.
  */
-import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { readJsonOr } from "../lib/json.ts";
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../lib/jev.ts";
 import { truncate } from "../lib/otlp.ts";
@@ -25,7 +26,7 @@ const seenFile = (root: string, session: string) => join(root, ".index", "seen",
 
 function readSeen(root: string, session: string | undefined): Set<string> {
   if (!session) return new Set();
-  try { return new Set(JSON.parse(readFileSync(seenFile(root, session), "utf8"))); } catch { return new Set(); }
+  return new Set(readJsonOr<string[]>(seenFile(root, session), []));
 }
 
 /** Add `rels` to the session's list, and delete the lists older than SEEN_DAYS. */

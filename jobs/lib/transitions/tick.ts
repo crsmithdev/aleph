@@ -7,7 +7,7 @@
  * only local files: no agent run and no fetch.
  */
 import { join } from "node:path";
-import { readJsonOr } from "../infra/json.ts";
+import { readJsonOr } from "../../../lib/json.ts";
 import { holdsWork } from "../infra/process.ts";
 import { reader } from "../../../issues/lib/store.ts";
 import { ciStep } from "../gates/ci.ts";

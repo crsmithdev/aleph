@@ -11,7 +11,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readJsonOr } from "../infra/json.ts";
+import { readJsonOr } from "../../../lib/json.ts";
 import type { Ask } from "../asks/ask.ts";
 import type { Entry, Run } from "./ledger.ts";
 import { causeOf, policyOf } from "./outcome.ts";

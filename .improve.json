@@ -14,6 +14,14 @@
       "concept": "junit entity decode",
       "copies": ["jobs/lib/gates/checks.ts:282", "jobs/lib/gates/keep-earn.ts:49"],
       "reason": "keep-earn.ts runs in the target repo and imports nothing from aleph, so it keeps its own copy of unxml from checks.ts."
+    },
+    {
+      "copies": ["jobs/lib/roles/monitor.ts:7-12", "jobs/lib/roles/intake.ts:24-29"],
+      "reason": "Both are import lines, not logic. The job only repointed writeJson/readJsonOr to lib/json.ts, so each file keeps its own import list."
+    },
+    {
+      "copies": ["ui/usage.ts:9-15", "jobs/lib/transitions/tick.ts:9-15"],
+      "reason": "Both are import lines, not logic. ui/usage.ts adds the lib/json.ts import; tick.ts only repoints readJsonOr to lib/json.ts, so each file keeps its own import list."
     }
   ]
 }

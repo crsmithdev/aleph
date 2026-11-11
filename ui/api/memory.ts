@@ -6,6 +6,7 @@
  * The POST routes are its writes: a note goes through `vault write`, `archive` or `delete`, so each is validated,
  * committed and pushed; a handoff or an episode is a file. A write clears nothing: the updater's watchers see it.
  */
+import { readJsonOr } from "../../lib/json.ts";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -85,7 +86,7 @@ async function runMisses(): Promise<unknown | null> {
 
 /** When `vault recall` last returned each note, by title; empty when the log is absent. */
 function readLog(root: string): Record<string, string> {
-  try { return JSON.parse(readFileSync(join(root, ".recall.json"), "utf8")); } catch { return {}; }
+  return readJsonOr(join(root, ".recall.json"), {});
 }
 
 /** Each note's recall count per day for the last 30 days, oldest first, from the recall log. */

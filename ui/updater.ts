@@ -19,7 +19,8 @@
  * - Every POST that succeeds counts as a change of the source `action`, which every key reads: an action can write
  *   what no watcher sees (a systemd timer).
  */
-import { existsSync, mkdirSync, readFileSync, watch, writeFileSync, type FSWatcher } from "node:fs";
+import { readJsonOr } from "../lib/json.ts";
+import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { factoryDir } from "../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../lib/layout.ts";
@@ -201,8 +202,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
     restore(): void {
       const f = file();
       if (!f || !existsSync(f)) return;
-      let saved: Record<string, number> = {};
-      try { saved = JSON.parse(readFileSync(f, "utf8")); } catch { return; }
+      const saved = readJsonOr<Record<string, number>>(f, {});
       for (const [k, asked] of Object.entries(saved)) {
         if (now() - asked >= DROP_MS || slots.has(k)) continue;
         const s: Slot = { asked, sources: new Set() };

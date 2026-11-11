@@ -2,6 +2,7 @@
  * Every memory as one row, for the Memory page's search: its type, where it lives, what it says, how it reaches
  * the agent, and when it was last written and read. A source that is absent gives no rows, never an error.
  */
+import { readJsonOr } from "../lib/json.ts";
 import { logOnce } from "./state.ts";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -62,7 +63,7 @@ const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vaul
 async function hooks() {
   const file = claudeSettings();
   let cfg: any = {};
-  try { cfg = JSON.parse(readFileSync(file, "utf8")); } catch {}
+  cfg = readJsonOr(file, {});
   // activity() reads Langfuse for about 100 s cold: a build answers without the counts until the read ends.
   const counts = await later("memory:calls", ["usage"], async () => {
     try {

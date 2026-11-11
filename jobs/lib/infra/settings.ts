@@ -9,7 +9,7 @@
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { alephPath, expand, home, vaultDir } from "../../../lib/paths.ts";
-import { readJsonOr, writeJson } from "./json.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { layout } from "../../../lib/layout.ts";
 
 /** A numeric setting: an empty or missing variable is unset and gives the default. */

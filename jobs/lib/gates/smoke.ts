@@ -3,7 +3,7 @@
  * data. One failure can be a restart in progress, so the health line needs two ticks in a row.
  */
 import { join } from "node:path";
-import { readJsonOr, writeJson } from "../infra/json.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { layout } from "../../../lib/layout.ts";
 import { uiPort } from "../infra/settings.ts";
 import { factoryCookie } from "../infra/ui-token.ts";

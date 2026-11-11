@@ -5,6 +5,7 @@
  * `POST /api/automation/rules/:reason/revoke`: `aleph always revoke <reason>`, the Ask-me side of a rule.
  * `POST /api/automation/rules/:reason/grant` (`{ "action": "<action>" }`): `aleph always grant`, the Always side.
  */
+import { readJsonOr } from "../../lib/json.ts";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
@@ -205,7 +206,7 @@ export function setTimerInterval(name: string, every: string): string | null {
 export function schedules(): { name: string; last: string | null; result: string | null; every: string | null }[] {
   // tick.ts is not read here: it loads the factory's actions, which the server must not.
   let t: { last?: Record<string, string>; missed?: string[]; ran?: Record<string, { at: string; result: string }> } = {};
-  try { t = JSON.parse(readFileSync(join(layout().factory, "tick.json"), "utf8")); } catch {}
+  t = readJsonOr(join(layout().factory, "tick.json"), t);
   const missed = t.missed ?? [];
   const times = Object.values(t.last ?? {}).map((x) => Date.parse(x!)).filter((x) => !Number.isNaN(x));
   const suite: Record<string, { at: string; result: string }> = {};

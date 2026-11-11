@@ -7,7 +7,7 @@
  * Each run is a job in the ledger, kind `intake`, with its cost in its state.
  */
 import { join } from "node:path";
-import { readJsonOr, writeJson } from "../infra/json.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { FULL } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { areasOf, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";

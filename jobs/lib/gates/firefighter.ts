@@ -23,7 +23,7 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
 import { baselines, factoryDir, factoryRepos, gates, redLine } from "./factory-status.ts";
 import { git } from "../infra/git.ts";
-import { readJsonOr, writeJson } from "../infra/json.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
 import { askSlowLands } from "../land/rescue.ts";
