@@ -1,28 +1,30 @@
 ---
 name: friction
 description: >
-  Friction: find errors that repeat across sessions and are never fixed (a hook
-  that fails, a gate that blocks good turns, a skill listed twice), and work
-  done by hand again and again that a script, skill, hook or rule could do. Use
-  when asked what keeps breaking, what to automate, or to scan sessions,
-  Langfuse, git or the factory for recurring problems. NOT for: one bug (use
-  /aleph:diagnosing-bugs), code quality (use /aleph:refit-code), one repo's
-  agent files or one session's lessons (use /aleph:refit-agents).
+  Friction: search sessions for work to automate: errors that repeat and are
+  never fixed (a hook that fails, a gate that blocks good turns, a skill listed
+  twice), work done by hand again and again, and the turns one session lost.
+  Use when asked what keeps breaking, what to automate, what a session learned,
+  or to scan sessions, Langfuse, git or the factory for recurring problems. It
+  finds; /aleph:refit-agents act fixes. NOT for: one bug (use
+  /aleph:diagnosing-bugs), code quality (use /aleph:refit-code).
 disable-model-invocation: true
 ---
 
 # Friction
 
-Find what keeps going wrong and what keeps being done by hand, and say what fix stops each one. Code counts;
-you judge. A **finding** is one cause seen in two or more sessions (three for work done by hand).
+Search what happened at run time for work an agent or a tool could take over: what keeps going wrong, what
+keeps being done by hand, and where a session lost turns. Friction finds and names the cause. It does not
+choose or make the fix: `/aleph:refit-agents act` does that with the findings Chris picks. refit-agents reads
+one repo's agent files; friction reads what happened, in every repo on the machine.
 
-The input is what happened at run time, in every repo on the machine. refit-agents reads one repo's agent
-files and asks whether they are good; its `learn` mode reflects on one session. Friction counts across all
-sessions, and most of its fixes land in code, hooks and config, not in agent files. A fix that adds a line to
-an agent file goes through `/aleph:refit-agents check` before it lands.
+The argument sets the scope:
 
-The argument is a window: `3d`, `30d`. With no argument, the window is 14 days. Claude Code deletes
-transcripts after 30 days by default, so a longer window sees less than it says.
+- A window (`3d`, `30d`), or none for 14 days: steps 1 to 5. A **finding** is one cause seen in two or more
+  sessions (three for work done by hand). Claude Code deletes transcripts after 30 days by default, so a
+  longer window sees less than it says.
+- `session [<id>]`, or none at the end of a session: the [Session](#session) steps, for this session or a past
+  one.
 
 ## Steps
 
@@ -76,19 +78,22 @@ transcripts after 30 days by default, so a longer window sees less than it says.
 4. **Judge each repeated-work finding** (`command`, `prompt`). A command that only reads (`sed -n`, `cat`,
    `git diff`) is normal work, not friction. A finding is friction when the same steps produce the same
    kind of result each time, or when Chris has to type the same thing to keep the agent moving
-   (`continue`, `go`). For a prompt, read the turn before it. Name the cheapest fix that removes it:
-   - **Script or CLI subcommand**: a fixed sequence of commands.
-   - **Hook**: a step that must happen every time.
-   - **Permission rule**: a command that Chris approves each time.
-   - **Skill**: a workflow that needs judgement.
-   - **Rule** in a CLAUDE.md: an agent behaviour, such as stopping early.
+   (`continue`, `go`). For a prompt, read the turn before it, and name why the agent stopped.
 
 5. **Report** in the terminal, in two lists: findings in Chris's sessions (`cli` above 0), then findings
-   only in headless workers, whose fix is usually in a worker prompt or schema. Rank each list by sessions ×
+   only in headless workers. Rank each list by sessions ×
    the cost of one occurrence (a lost turn, a retry, a nudge from Chris). For each
    finding, give the kind, the key, the count and the sessions, one cited occurrence (a session id and its
-   timestamp), the cause, and the fix with the file it changes. After that, list the covered findings with
+   timestamp), and the cause. After that, list the covered findings with
    their issues. Then list the dropped findings as counts per reason, counted with `jq`, not by eye. End with what was not read.
 
-File nothing and change nothing until Chris picks findings. Then file each pick with `aleph issue add`
-(`--kind bug` for an error).
+File nothing and change nothing. Chris picks findings and passes them to `/aleph:refit-agents act`.
+
+## Session
+
+1. **Reflect.** List each place the session lost a turn: a lookup, a guess that failed, a correction from
+   Chris, a command found by trial, a gotcha. For a past session, read its transcript
+   (`~/.claude/projects/*/<id>.jsonl`), its Langfuse traces, or `vault compile`. Done when each item names the
+   turn it cost.
+2. **Report** each item in the terminal with the turn it cost and its cause, as in step 5. File and change
+   nothing.

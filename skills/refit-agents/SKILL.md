@@ -9,7 +9,7 @@ description: >
   they will be followed, cut context load, run agnix, make a repo
   agent-ready, before you add a skill, a CLAUDE.md line or a CLI command
   (check), when an agent had to guess or look up how to use the repo, or to
-  record what a session learned in CLAUDE.md (learn).
+  fix what /aleph:friction found (act).
 ---
 
 # Refit agents
@@ -51,10 +51,9 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 | Mode | Runs | Reach for it |
 |---|---|---|
 | `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and hold, report | Find what to improve |
-| `act` | The fix of each finding the user picks | After a retro |
+| `act` | The fix of each finding the user picks | After a retro, or with findings from `/aleph:friction` |
 | `lint` | agnix, `load.ts` and `content.ts` only, no model judgment, report in the terminal | A quick pass, or before a commit that touches agent files |
 | `check` | Each new agent file, line, skill, hook or CLI command in a plan, spec or diff, under every lens | Before or during a build |
-| `learn` | What a session learned, routed to the code, an agent file or the vault, each line gated by `check` | At the end of a session, or when the user asks to update CLAUDE.md |
 
 ## Retro
 
@@ -82,6 +81,24 @@ cut moves material down the ladder of [writing-for-agents](../writing-for-agents
 After each finding, run agnix, `load.ts` and `content.ts` with the baseline: a new agnix error is red, and the commit records
 the always-loaded total before and after.
 
+A finding from `/aleph:friction` (a recurring error, work done by hand, a turn a session lost) has no lens yet.
+Before the order above, give it one place:
+
+1. **Route.** Each finding goes to one place. Pick the cheapest that removes it:
+   - **Code**, when it can carry it (an **interface** finding): a script or CLI subcommand for a fixed
+     sequence of commands, a hook for a step that must happen every time, a usage line or an error message.
+   - **Permission rule**: a command that Chris approves each time.
+   - **Vault** (`aleph:vault`): a fact about the user, or one that holds across repos.
+   - **Agent file**: the root memory file when every task needs it, a nested `CLAUDE.md` or a skill when only
+     some do. A worker's prompt or schema when only headless workers hit it.
+
+   Done when each finding has one place.
+2. **Gate.** Run `check` on each proposed agent-file line: cut it when the agent can find it by looking, write
+   it as a plain imperative with its reason, and make sure it contradicts no line in context.
+3. **Propose.** Show each change as a diff with a one-line why. Apply only what the user approves; code
+   changes go on a branch as usual. Done when each finding is applied, declined, or filed with
+   `aleph issue add` (`--kind bug` for an error).
+
 ## Lint
 
 1. Run agnix, `load.ts` and `content.ts` as in Inventory.
@@ -101,20 +118,6 @@ the always-loaded total before and after.
 3. **Judge.** Each item gets one verdict: **keep**, **move** (name where on the ladder), **merge** (name the
    file that already says it), **cut** (no branch needs it), or **fix** (name the lens and the change). Done
    when every item has a verdict.
-
-## Learn
-
-1. **Reflect.** List each place the session lost a turn: a lookup, a guess that failed, a correction from the
-   user, a command found by trial, a gotcha. For a past session, read its traces (Langfuse in aleph) or
-   `vault compile`. Done when each item names the turn it cost.
-2. **Route.** Each item goes to one place: the **code** when it can carry it (a usage line, an error message, a
-   script, a hook: an **interface** finding); the **vault** (`aleph:vault`) when it is about the user or holds
-   across repos; else an **agent file**: the root memory file when every task needs it, a nested `CLAUDE.md` or a
-   skill when only some do. Done when each item has one place.
-3. **Gate.** Run `check` on each proposed line: cut it when the agent can find it by looking, write it as a plain
-   imperative with its reason, and make sure it contradicts no line in context.
-4. **Propose.** Show each change as a diff with a one-line why. Apply only what the user approves; code changes go
-   on a branch as usual. Done when each item is applied, declined, or filed as an issue.
 
 ## Holds
 
