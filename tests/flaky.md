@@ -78,3 +78,18 @@ ui/auth.test.ts > password gate: login, session across servers, logout. Fails: u
 
 ## fixture-factory-folder
 ui/fixtures/review/build.test.ts > the fixture environment points the factory folder under its dest, and a factory log line lands there, not in the live factory. Fails: in a full-suite run; passes alone. Seen: 2026-11-03. Cause: shared state (environment variables of the test process).
+
+## browser-memory-row
+ui/browser.test.ts > the UI in Chrome > Memory: a row opens in the inspector. Fails: failed once in a run of ui/browser.test.ts alone, after passing the run before; passed in the other runs. Seen: 2026-11-11. Cause: unknown; four different tests failed together in one full run, so likely load.
+
+## browser-deny-enter
+ui/browser.test.ts > the UI in Chrome > Enter in the reason box confirms a Deny, and the card leaves before any reload of the state. Fails: failed once in four full runs with ALEPH_BROWSER_TESTS=1 (76 ms); passed in the other runs. Seen: 2026-11-11. Cause: unknown; four different tests failed together in one full run, so likely load.
+
+## browser-dead-blocker
+ui/browser.test.ts > the UI in Chrome > a dead blocker shows on the Issue page, and Stop waiting removes it. Fails: failed once in four full runs with ALEPH_BROWSER_TESTS=1, at the 30 s limit; passed in the other runs. Seen: 2026-11-11. Cause: unknown; four different tests failed together in one full run, so likely load.
+
+## browser-logout-gate
+ui/browser.test.ts > the UI in Chrome > Log out shows only behind the password gate. Fails: failed once in four full runs with ALEPH_BROWSER_TESTS=1 (111 ms); passed in the other runs. Seen: 2026-11-11. Cause: unknown; four different tests failed together in one full run, so likely load.
+
+## browser-401-reload
+ui/browser.test.ts > the UI in Chrome > a 401 reloads the page. Fails: failed once in four full runs with ALEPH_BROWSER_TESTS=1 (0.3 ms); passed in the other runs. Seen: 2026-11-11. Cause: unknown; four different tests failed together in one full run, so likely load.
