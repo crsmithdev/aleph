@@ -22,6 +22,14 @@
     {
       "copies": ["ui/usage.ts:9-15", "jobs/lib/transitions/tick.ts:9-15"],
       "reason": "Both are import lines, not logic. ui/usage.ts adds the lib/json.ts import; tick.ts only repoints readJsonOr to lib/json.ts, so each file keeps its own import list."
+    },
+    {
+      "copies": ["jobs/lib/transitions/tick.ts:18-25", "jobs/lib/records/record.ts:16-23"],
+      "reason": "Both are import lines, not logic. tick.ts adds the land and Ask imports for the waited land Ask; each file keeps its own import list."
+    },
+    {
+      "copies": ["jobs/lib/transitions/tick.ts:19-26", "jobs/lib/roles/intake.ts:21-28"],
+      "reason": "Both are import lines, not logic. tick.ts adds the land and Ask imports for the waited land Ask; each file keeps its own import list."
     }
   ]
 }

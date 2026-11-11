@@ -23,7 +23,7 @@ import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import * as notes from "../lib/annotations.ts";
 import * as ideas from "../ideas/ideas.ts";
-import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
+import { askOf, refIn, grant, readAlways, revoke, setWait, landWait } from "./lib/asks/ask.ts";
 import { behind, directorStep, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { dispatchAfterIssue, filing } from "./lib/transitions/filing.ts";
 import { runTick } from "./lib/transitions/tick.ts";
@@ -581,7 +581,8 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       if (sub === "list" || sub === undefined) ctx.out(rules());
       else if (sub === "grant") { const bad = grant(reason ?? refuse("usage: aleph always grant <reason> <action>"), action ?? refuse("usage: aleph always grant <reason> <action>")); if (bad) refuse(bad); ctx.out(rules()); }
       else if (sub === "revoke") { revoke(reason ?? refuse("usage: aleph always revoke <reason>")); ctx.out(rules()); }
-      else refuse("usage: aleph always <list|grant <reason> <action>|revoke <reason>>");
+      else if (sub === "wait") { const bad = setWait(reason ?? refuse("usage: aleph always wait <reason> <minutes|off>"), action === "off" ? null : Number(action ?? refuse("usage: aleph always wait <reason> <minutes|off>"))); if (bad) refuse(bad); ctx.out({ [reason]: landWait(reason) }); }
+      else refuse("usage: aleph always <list|grant <reason> <action>|revoke <reason>|wait <reason> <minutes|off>>");
       break;
     }
     case "models": {

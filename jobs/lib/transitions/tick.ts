@@ -11,17 +11,19 @@ import { readJsonOr } from "../../../lib/json.ts";
 import { holdsWork } from "../infra/process.ts";
 import { reader } from "../../../issues/lib/store.ts";
 import { ciStep } from "../gates/ci.ts";
-import { pendingCases, subjectOfCase } from "../roles/director.ts";
+import { escalatedAt, pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsStep, directIfNew, episodeStep, runDispatch, stalled } from "./factory.ts";
 import { editTick } from "../gates/factory-status.ts";
 import { doneChecker } from "./filing.ts";
 import { baselines, factoryDir, factoryRepos, gates, probeHold, readStalls, writeStalls } from "../gates/factory-status.ts";
+import { logAlways, landWait } from "../asks/ask.ts";
+import { land } from "./transitions.ts";
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
-import { logEvent } from "../../../lib/layout.ts";
+import { logEvent, readEvents } from "../../../lib/layout.ts";
 import { retain } from "../infra/retention.ts";
 import { archiveOld } from "../records/record.ts";
-import { allJobs, loadRegistry, type Repo } from "../records/ledger.ts";
+import { allJobs, allRuns, isWaiting, loadRegistry, type Entry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
 import { monitorStep } from "../roles/monitor.ts";
@@ -91,8 +93,8 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
 }
 
 /** What the tick starts besides the sweep's ports: the intake of an issue the firefighter filed. */
-export interface TickPorts extends SweepPorts { intake(repo: Repo, id: number): void }
-const tickPorts: TickPorts = { ...sweepPorts, intake: intakeDetached };
+export interface TickPorts extends SweepPorts { intake(repo: Repo, id: number): void; land(name: string): Promise<unknown> }
+const tickPorts: TickPorts = { ...sweepPorts, intake: intakeDetached, land: (name) => land(name) };
 
 /**
  * `aleph tick`: each step that is due at `now`. Returns what it did, for the tick's JSON. One tick holds the `tick`
@@ -130,6 +132,18 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
       // A filed red starts its own intake (its filing's effects); a slow land's rescue Ask is the director's.
       if (f?.asked.length) directIfNew();
       if (f && (f.filed.length || f.asked.length)) out.firefighter = f;
+    }
+    for (const { id, run } of allRuns()) {
+      const wait = isWaiting(run.condition) && run.ask ? landWait(run.ask.reason) : null;
+      const since = wait && run.ask ? escalatedAt({ id, run } as Entry) : null;
+      if (!wait || since === null || now - since < wait * 60_000) continue;
+      // One land per escalation: a land that is still running, or that failed, leaves the run waiting.
+      const ref = run.on ?? run.name, said = `after waiting ${wait} min on Chris: ${run.ask!.reason}`;
+      if (readEvents(since).some((e) => e.by === "rule" && e.subject === ref && e.note?.includes(" min on Chris: "))) continue;
+      try {
+        await p.land(run.name);
+        logAlways(run.ask!.reason, ref, "started", { note: `landed ${said}` });
+      } catch (e: any) { logAlways(run.ask!.reason, ref, "failed", { note: `land failed ${said}: ${String(e?.message ?? e)}` }); }
     }
     const m = await monitorStep(new Date(now));
     if (m) out.monitor = m.day;

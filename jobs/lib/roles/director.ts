@@ -153,6 +153,13 @@ const escalatedBefore = (c: Case, rec: Decision[]): boolean => {
   return last?.outcome === "escalated" && last.question === questionOf(c);
 };
 
+/** When the director escalated this waiting run's Ask to Chris, as a time in ms, or null when it did not. */
+export function escalatedAt(e: Entry): number | null {
+  const a = e.run.ask;
+  const last = readRecord().findLast((d) => d.on === e.id && d.reason === a?.reason);
+  return a && last?.outcome === "escalated" && last.question === a.question ? Date.parse(last.at) : null;
+}
+
 /** A held path the branch changes (a security path or bun.lock), or null; "unknown" when there is no branch to read. */
 function heldChange(repo: Repo, branch: string | undefined): string | null | "unknown" {
   if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return "unknown";

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, landWait, setWait, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
 
@@ -107,6 +107,16 @@ test("grant then always round-trips; revoke removes it", () => {
   revoke("held-path");
   expect(always("held-path")).toBeNull();
   expect(readAlways()).toEqual({});
+});
+
+test("a land wait reads back, clears to none, and a reason with no land action refuses one", () => {
+  expect(landWait("held-path")).toBeNull();
+  expect(setWait("held-path", 30)).toBeNull();
+  expect(landWait("held-path")).toBe(30);
+  expect(setWait("held-path", null)).toBeNull();
+  expect(landWait("held-path")).toBeNull();
+  expect(setWait("question", 30)).toContain("no land action");
+  expect(landWait("question")).toBeNull();
 });
 
 const CLI = join(import.meta.dir, "..", "..", "cli.ts");
