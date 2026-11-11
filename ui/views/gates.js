@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, setting, settings, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, setting, settings, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
@@ -32,8 +32,8 @@ export const redirect = (hash) => {
 export const MODES = { recommended: "Recommended", retry: "Retry", start: "Start", land: "Land", approve: "Approve" };
 const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 
-/** The log's actors, in filter order, with the badge tone of each. */
-export const BY = { human: "need", rule: "done", director: "parked", firefighter: "stuck", gate: "run" };
+/** The log's actors, in filter order, with the badge tone of each from `tone()`. */
+export const BY = Object.fromEntries(["human", "rule", "director", "firefighter", "gate"].map((a) => [a, tone(a)]));
 
 const PAGE = 50;
 
@@ -42,8 +42,8 @@ const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"], ["ga
 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { aside: scope(q).bar() })}` + toc(CONTENTS,
-    renderNow(d) + (d.backend ? `<p class="quiet" id="gates-backend">Waiting for ${esc(d.backend.via)}: ${esc(d.backend.why)}</p>` : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
-    `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE))) + `</div>`;
+    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
+    `<div class="pair">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE))) + `</div>`;
 }
 
 /** The environment variable that overrides each key of caps.json, as jobs/lib/infra/settings.ts names it. */
@@ -91,7 +91,7 @@ export function renderMonitor(d) {
   const m = d.monitor;
   if (!m) return card("Monitor", empty("The monitor has not run.", "It reads once a day, in the tick."), { id: "monitor" });
   const n = m.findings.length, first = n ? ` First: ${findingHtml(m.findings[0])}` : "";
-  const summary = `${esc(m.day)}: ${n} ${n === 1 ? "finding" : "findings"}.${first}`;
+  const summary = `${esc(day(localMs(m.day)))}: ${plural(n, "finding")}.${first}`;
   const body = (n ? findingsList(m.findings) : "") +
     (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? error(`No reading: ${m.error}`, "The monitor reads again at its next run.") : "");
   return card("Monitor", fold(summary, body), { id: "monitor" });
@@ -99,7 +99,7 @@ export function renderMonitor(d) {
 
 /** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran. The monitor runs in the tick, once a day, so only the other two have an interval to edit. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(s.every)}</td><td>${s.result ? esc(s.result) : ""}</td><td class="time">${s.last ? when(s.last) : "has not run"}</td></tr>`).join("");
+  const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${esc(s.every)}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
   const edit = d.schedules.filter((s) => s.name !== "monitor").map((s) => {
     const id = `every-${s.name}`;
     return setting(`${s.name} every`, inputBox("every", s.every ?? "", { id, attrs: ' pattern="[1-9][0-9]*(s|min|h)" required' }), { id, save: "Save", hint: "A number and s, min or h, such as 30s.", attrs: ` data-schedule="${esc(s.name)}"` });
@@ -131,8 +131,9 @@ const timeoutRow = (r) => {
 /** One row per Ask reason: how often it fired and who decided, then a settings list of who decides it. Ask me, or the reason's one automatic mode. */
 export function renderRules(d) {
   const rows = d.rules.map((r) => {
-    const num = (n) => `<td class="num">${n}</td>`, dec = r.decided, out = r.outcome;
-    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? `<p class="quiet">${esc(r.line)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
+    const dec = r.decided, out = r.outcome;
+    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="wide"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? note(r.line) : ""}</td>` +
+      [r.fired, dec.rule, dec.director, dec.chris, out.fixed, out.none].map((n) => cell(count(n), { num: true })).join("") + `</tr>`;
   }).join("");
   const decide = d.rules.flatMap((r) => {
     const g = r.granted;
@@ -148,17 +149,16 @@ export function renderRules(d) {
     }
     return [setting(r.name, control, { hint }), ...(r.timeout !== undefined ? [timeoutRow(r)] : [])];
   });
-  return card("Rules", !rows ? empty("No rule.", "A rule shows here for each kind of Ask.") : dataTable(heads(["Rule", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"], ["Fired"]), rows, { id: "rules-table" }) + settings("Who decides", decide), { id: "rules" });
+  return card("Rules", !rows ? empty("No rule.", "A rule shows here for each kind of Ask.") : dataTable(heads(["Ask", "Fired", "Rule", "Director", "Chris", "Fixed", "No Change"], ["Fired", "Rule", "Director", "Chris", "Fixed", "No Change"]), rows, { id: "rules-table" }) + settings("Who decides", decide), { id: "rules" });
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
 export function renderHeld(d) {
   const repos = d.repoHeld ?? [];
-  const rows = repos.length
-    ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${r.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>`).join("")
-    : empty("No repo names held paths.", "Add held globs to a repo in the registry.");
-  return card("Held Paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the job. A test is never held.</p>` +
-    `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`, { id: "gates-held", label: "Held paths" });
+  const paths = (list) => `<div class="held">${list.map((p) => chip(p, { el: "code" })).join("")}</div>`;
+  return card("Held Paths", note("The security paths and a repo's held paths wait for Chris after the reviewer passes the job. A test is never held.") +
+    facts([["Every repo", paths(d.held)], ...repos.map((r) => [r.repo, paths(r.held)])]) +
+    (repos.length ? "" : empty("No repo names held paths.", "Add held globs to a repo in the registry.")), { id: "gates-held", label: "Held paths" });
 }
 
 /** An ID of the log in its short form, as a link to its issue page: a job ID links to its subject's. Other text stays text. */
@@ -181,46 +181,33 @@ export function renderLog(d, by, limit = PAGE) {
   const entries = d.log.entries.filter((e) => !pick || e.by === pick);
   const rows = entries.slice(0, limit).map((e) => {
     const subject = e.action === "changed" && !parseId(e.subject) ? `<a href="#rules">${esc(e.subject)}</a>` : idHtml(e.subject);
-    return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${subject}</td><td>${tag(e.by, BY[e.by])}</td><td>${esc(e.action || "–")}</td><td>${esc(e.sub ?? "")}</td>` +
-      `<td class="what">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
+    return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${subject}</td><td>${tag(e.by, tone(e.by))}</td><td>${e.action ? esc(e.action) : miss("no action")}</td><td>${e.sub ? esc(e.sub) : miss("no sub")}</td>` +
+      `<td class="wide">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return card("Log", filter +
     (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.", "Pick a longer window or clear the By filter.")), { id: "gates-log" });
 }
+
+/** What each settings form posts, by its `data-` key: the URL, the body and the word for an error line. */
+const SAVES = {
+  schedule: (f) => ["/api/automation/schedules", { name: f.dataset.schedule, every: f.elements.every.value.trim() }, "interval"],
+  timeout: (f) => [`/api/automation/rules/${encodeURIComponent(f.dataset.timeout)}/timeout`, { minutes: Number(f.elements.minutes.value) }, "timeout"],
+  cap: (f) => ["/api/automation/caps", { [f.dataset.cap]: Number(f.elements[f.dataset.cap].value) }, "cap"],
+};
 
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
 export function mount(root) {
   scope().wire(root);
   wireToc(root);
   root.onsubmit = async (e) => {
-    const sched = e.target.closest?.("form[data-schedule]");
-    if (sched) {
-      e.preventDefault();
-      const btn = sched.querySelector("button");
-      btn.disabled = true;
-      try {
-        await postJson("/api/automation/schedules", { name: sched.dataset.schedule, every: sched.elements.every.value.trim() });
-      } catch (err) { btn.disabled = false; say(btn, `Could not save the interval: ${err.message}`); return; }
-      return redraw(true);
-    }
-    const timed = e.target.closest?.("form[data-timeout]");
-    if (timed) {
-      e.preventDefault();
-      const btn = timed.querySelector("button");
-      btn.disabled = true;
-      try {
-        await postJson(`/api/automation/rules/${encodeURIComponent(timed.dataset.timeout)}/timeout`, { minutes: Number(timed.elements.minutes.value) });
-      } catch (err) { btn.disabled = false; say(btn, `Could not save the timeout: ${err.message}`); return; }
-      return redraw(true);
-    }
-    const form = e.target.closest?.("form[data-cap]");
+    const form = e.target.closest?.("form[data-schedule], form[data-timeout], form[data-cap]");
     if (!form) return;
     e.preventDefault();
-    const key = form.dataset.cap, btn = form.querySelector("button");
+    const [url, body, what] = SAVES[Object.keys(SAVES).find((k) => k in form.dataset)](form), btn = form.querySelector("button");
     btn.disabled = true;
     try {
-      await postJson("/api/automation/caps", { [key]: Number(form.elements[key].value) });
-    } catch (err) { btn.disabled = false; say(btn, `Could not save the cap: ${err.message}`); return; }
+      await postJson(url, body);
+    } catch (err) { btn.disabled = false; say(btn, `Could not save the ${what}: ${err.message}`); return; }
     await redraw(true);
   };
   root.onclick = async (e) => {

@@ -8,7 +8,7 @@ import { LOG_MAX, gatesBody, log, metrics, repeats, rules, securityFacts } from 
 import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { pct, when } from "./lib.js";
+import { day, pct, tone, when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
 import * as record from "../jobs/lib/records/record.ts";
@@ -135,7 +135,7 @@ test("a hold writes its event, and the log shows it as busy with the job and the
     const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
     expect(h).toContain('</td><td><a class="idl" title="aleph-1420" href="#/issues/aleph/1420">a1420</a></td><td>');
     expect(h).toContain('<tr><td class="time lead">');
-    expect(h).toContain('</td><td>busy</td><td></td><td class="what"><a class="idl" title="aleph-1372" href="#/issues/aleph/1372">a1372</a> → <code title="ui/views/issues.js">issues.js</code></td>');
+    expect(h).toContain('</td><td>busy</td><td><span title="no sub">–</span></td><td class="wide"><a class="idl" title="aleph-1372" href="#/issues/aleph/1372">a1372</a> → <code title="ui/views/issues.js">issues.js</code></td>');
   } finally { setHolds(was); }
 });
 
@@ -146,7 +146,7 @@ test("a director decision shows its action and sub, and its long note only behin
     const e = log().find((x) => x.subject === "r-12")!;
     expect(line(e)).toBe(`director | r-12 | landed | override | - | ${note}`);
     const h = gates.renderLog({ log: { entries: [e] } });
-    expect(h).toContain(`<td>landed</td><td>override</td><td class="what"><div class="clamp">${note}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
+    expect(h).toContain(`<td>landed</td><td>override</td><td class="wide"><div class="clamp">${note}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
   } finally { rmSync(eventsDir(), { recursive: true, force: true }); }
 });
 
@@ -208,7 +208,7 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(h.match(/<tr class="rule" data-reason=/g)).toHaveLength(Object.keys(ASK_REASONS).length);
   for (const p of SECURITY_PATHS) expect(h).toContain(`<code class="chip">${p}</code>`);
   const card = gates.renderHeld(data());
-  expect(card).toContain("<b>r</b>");
+  expect(card).toContain("<dt>r</dt>");
   expect(card).toContain('<code class="chip">src/auth/**</code>');
   for (const p of SECURITY_PATHS) expect(card).toContain(`<code class="chip">${p}</code>`);
   expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No repo names held paths.</p><p class="hint">');
@@ -259,8 +259,17 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).toContain("</td><td>changed</td><td>rescue</td>");
   expect(h).not.toContain("r-5");
   expect(h).toContain('<tr><th>Logged</th><th>Subject</th><th>By</th><th>Action</th><th>Sub</th><th>Content</th><th class="num">Times</th></tr>');
-  expect(h).toContain(`<td class="what"><div class="clamp">set to recommended</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
+  expect(h).toContain(`<td class="wide"><div class="clamp">set to recommended</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
   expect(gates.renderLog(data(), "rule")).not.toContain("clamp");
+});
+
+test("renderLog shows a missing action and sub the same way, and each By badge takes its tone from tone()", () => {
+  const at = new Date(NOW).toISOString();
+  const h = gates.renderLog({ log: { entries: [{ at, by: "rule", subject: "x-1" }] } } as any);
+  expect(h.match(/<td><span title="no (action|sub)">–<\/span><\/td>/g)).toHaveLength(2);
+  expect(Object.keys(gates.BY)).toEqual(["human", "rule", "director", "firefighter", "gate"]);
+  for (const by of Object.keys(gates.BY)) expect(gates.renderLog({ log: { entries: [{ at, by, subject: "x-1", action: "a" }] } } as any)).toContain(`<span class="badge ${tone(by)}">${by}</span>`);
+  expect(new Set(Object.keys(gates.BY).map(tone)).size).toBe(5);
 });
 
 test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times", () => {
@@ -390,7 +399,8 @@ test("the Automation page has no explaining aside; the controls panel holds the 
     const panel = h.slice(h.indexOf('<section class="card" id="gates-caps"'), h.indexOf('aria-label="Held paths"'));
     expect(panel).toContain('data-cap="live"');
     expect(panel).toContain('data-cap="run"');
-    const row = h.slice(h.indexOf('<div class="gates-two">'));
+    expect(h).not.toContain("gates-two");
+    const row = h.slice(h.indexOf('<div class="pair">'));
     expect(row.indexOf('id="gates-caps"')).toBeGreaterThan(0);
     expect(row.indexOf('id="gates-caps"')).toBeLessThan(row.indexOf('aria-label="Held paths"'));
   }
@@ -437,7 +447,9 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
   const h = gates.renderRules({ rules: [row] });
-  for (const t of ["Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)", "<td class=\"num\">5</td>", "2 / 1 / 1", "1 / 3"]) expect(h).toContain(t);
+  expect(h).toContain('<th>Ask</th><th class="num">Fired</th><th class="num">Rule</th><th class="num">Director</th><th class="num">Chris</th><th class="num">Fixed</th><th class="num">No Change</th>');
+  expect(h).not.toMatch(/Manual|<th>[^<]*[()/]/);
+  expect(h).toContain([5, 2, 1, 1, 1, 3].map((n) => `<td class="num">${n}</td>`).join(""));
   expect(h).not.toContain("2 rule, 1 director, 1 Chris");
 });
 
@@ -460,11 +472,24 @@ test("the Monitor panel says the monitor has not run with no report, and holds t
     const d: any = await body();
     expect(d.monitor).toMatchObject({ day: "2026-11-03", findings: ["FIRST-ONE", "SECOND-ONE"], text: "READER-TEXT" });
     const [sum, rest] = gates.renderMonitor(d).split("</summary>");
-    for (const x of ["2026-11-03", "2 findings", "FIRST-ONE"]) expect(sum).toContain(x);
+    for (const x of [day("2026-11-03T00:00"), "2 findings", "FIRST-ONE"]) expect(sum).toContain(x);
     expect(sum).not.toContain("SECOND-ONE");
     for (const x of ["FIRST-ONE", "SECOND-ONE", "READER-TEXT"]) expect(rest).toContain(x);
   } finally {
     rmSync(dir, { recursive: true });
+  }
+});
+
+test("the Monitor summary shows the report's day as a local day, and 1 finding for one finding", () => {
+  const tz = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    const h = gates.renderMonitor({ monitor: { day: "2026-11-03", findings: ["ONLY"], text: "", error: null } });
+    expect(h).toContain(`${day("2026-11-03T00:00")}: 1 finding.`);
+  } finally {
+    // Bun reads a new TZ when it is set, not when it is deleted: set UTC back first.
+    process.env.TZ = tz ?? "UTC";
+    if (tz === undefined) delete process.env.TZ;
   }
 });
 
@@ -492,16 +517,16 @@ test("the body has the tick, the suite and the monitor with their last run from 
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
   expect(h).toContain(">Schedules</h2>");
   expect(h).toContain(`<th>Schedule</th><th>Every</th><th>Result</th><th class="num">Last Run</th>`);
+  expect(h).toContain('<td class="wide" title="tick">tick</td>');
   expect(h).not.toContain("<td><input");
   expect(h).toContain('<form class="srow" data-schedule="tick"><label class="sl" for="every-tick">tick every</label>');
   expect(h).not.toContain('data-schedule="monitor"');
   expect(h).toContain('value="1min"');
-  expect(h.match(/has not run/g)).toHaveLength(3);
+  expect(h).not.toContain("has not run");
   expect(h.indexOf("Last Run")).toBeLessThan(h.indexOf("<tbody>"));
   const tbody = h.split("<tbody>")[1].split("</tbody>")[0];
   expect(tbody.match(/<tr>/g)).toHaveLength(3);
-  expect(tbody).toContain(`<td class="time">has not run</td></tr>`);
-  expect(h).not.toContain("tick,has not run");
+  expect(tbody).toContain(`<td class="time"></td></tr>`);
   const ran = { "suite plain": { at: ago(11), result: "green" }, "suite held": { at: ago(10), result: "green" }, monitor: { at: ago(50), result: "7 findings" } };
   writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {}, ran }));
   try {

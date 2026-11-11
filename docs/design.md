@@ -1468,7 +1468,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 
 | Helper | Reference |
 |---|---|
-| `empty(line, hint)`, `loadingLine(what)`, `error(line, hint)`, `notice(line, bad)`; `loading(title)` in the router only | `ui/views/jobs.js` |
+| `empty(line, hint)`, `loadingLine(what)`, `error(line, hint)`, `notice(line, bad, id)`; `loading(title)` in the router only | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1585,6 +1585,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Job page's Waits-on block is a hand `dp-blocked`, as on the Issue page: `blockersHtml()` writes only the items | `renderJob()` in `ui/views/jobs.js` | follow-up |
 | Quiet labels inside a line are hand `span.quiet`: the Next line, the check name after a failed test, the `logs:` label of a run's log buttons, a run's job ID in its event, the Work lane's head. `note()` makes a whole line, not a label | `renderJob()`, `logButtons()`, `jobEvent()`, `jobSegments()` in `ui/views/jobs.js` | follow-up |
 | A transcript's steps are hand `div.step`: no helper for a tool call with its input and result | `renderTranscript()` in `ui/views/jobs.js` | follow-up |
+| Parts of the Automation page written by hand, with no helper: the Rules row (`tr.rule`, and its name cell of a bold name, a `code` reason and a note), the `div.held` that wraps the held-path chips, and the log content cell with its clamp button | `renderRules()`, `renderHeld()`, `renderLog()` in `ui/views/gates.js` | follow-up |
 | The File an Issue Project select takes its options from the registry after the page is drawn, written as hand `<option>` tags | `projectOptions()` in `ui/views/issues.js` | follow-up |
 
 ## Appendix

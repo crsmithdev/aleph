@@ -87,7 +87,7 @@ export const error = (line, hint = "Check that aleph-ui is running, then reload.
   `<div class="error" role="alert"><p>${esc(line)}</p><p class="hint">${esc(hint)}</p>${detail ? fold("Technical details", `<pre>${esc(detail)}</pre>`) : ""}</div>`;
 
 /** A note above data that still shows: `bad` marks that the data is stale or wrong. */
-export const notice = (line, bad = false) => `<p class="notice${bad ? " bad" : ""}" role="${bad ? "alert" : "status"}">${esc(line)}</p>`;
+export const notice = (line, bad = false, id = "") => `<p class="notice${bad ? " bad" : ""}" role="${bad ? "alert" : "status"}"${id ? ` id="${esc(id)}"` : ""}>${esc(line)}</p>`;
 
 /** A command the reader copies to run; the page's click handler does the copying. */
 export function cmd(text, { primary = false, hint = "" } = {}) {
@@ -322,7 +322,7 @@ export async function loadDiff(el, url) {
   } catch (err) { return msg(`The diff failed to load: ${err.message}`); }
 }
 
-const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "stuck", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "stuck", failed: "stuck", dropped: "quiet", parked: "parked", exploring: "run", built: "done", reran: "run", escalated: "need", red: "stuck", filed: "done", answered: "done" };
+const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "stuck", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "stuck", failed: "stuck", dropped: "quiet", parked: "parked", exploring: "run", built: "done", reran: "run", escalated: "need", red: "stuck", filed: "done", answered: "done", human: "need", rule: "done", director: "parked", firefighter: "stuck", gate: "run" };
 /** The badge tone of a state (a job's, land's or issue's): run, done, need, stuck, or quiet for any other. */
 export const tone = (state) => TONES[state] ?? "quiet";
 
