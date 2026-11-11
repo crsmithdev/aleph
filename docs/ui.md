@@ -31,6 +31,15 @@ With the gate on, `/` shows a login form. The right password sets the `aleph_ses
 | Log out every device | Delete `~/.aleph/factory/ui-sessions.json` |
 | Change the password | Edit `~/.aleph/.env`, then `systemctl --user restart aleph-ui` |
 
+## Usage and skills
+
+| Variable | Default | Does |
+|---|---|---|
+| `ALEPH_USAGE_URL` | `https://api.anthropic.com/api/oauth/usage` | The address that the UI polls for the Claude plan usage |
+| `ALEPH_CLAUDE_CREDENTIALS` | `~/.claude/.credentials.json` | The file with the OAuth token for that poll |
+| `ALEPH_USAGE_FILE` | `~/.aleph/usage.jsonl` | The file that gets one row per poll |
+| `ALEPH_SKILLS_DIR` | the `skills` directory of the repo | The directory of the skills that the Skills and Memory pages list |
+
 ## Routes
 
 `GET /` is `ui/index.html`, with its styles in `ui/app.css`. Pages use hash routes, such as `#/jobs/a1430%231`. The pages send no project in the hash; each `/api` route takes `?project=<key>` as its own filter. `?window=` is a window name of `lib/windows.ts` (`hour`, `day`, `week`, `month`, `quarter`); `scopeOf` in `ui/api/scope.ts` reads both, and a window the route does not take is a 400.

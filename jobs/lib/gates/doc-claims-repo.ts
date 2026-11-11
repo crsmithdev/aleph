@@ -70,6 +70,18 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_SPOOL: () => bare("ALEPH_SPOOL", spoolDir).replace(homedir(), "~"),
   ALEPH_ENV: () => bare("ALEPH_ENV", () => classifyEnvironment([])),
   ALEPH_DISPATCH: () => bare("ALEPH_DISPATCH", s.dispatchOn) ? "on" : "off",
+  ALEPH_MONITOR: () => bare("ALEPH_MONITOR", s.monitorOn) ? "on" : "off",
+  ALEPH_RESCUE: () => bare("ALEPH_RESCUE", s.rescueOn) ? "on" : "off",
+  ALEPH_NEEDS_YOU_LOG: () => bare("ALEPH_NEEDS_YOU_LOG", s.needsYouLog, { ALEPH_VAULT: "/x/vault" }) === "/x/needs-you-log.md" ? "`needs-you-log.md` next to the vault directory" : "other",
+  ALEPH_RUN_ENV: () => bare("ALEPH_RUN_ENV", s.runEnvFile) ?? "none",
+  ALEPH_HOME_URL: plain("ALEPH_HOME_URL", s.homeUrl),
+  ALEPH_UNIT_DIR: () => bare("ALEPH_UNIT_DIR", s.unitDir).replace(homedir(), "~"),
+  ALEPH_SYSTEMCTL: plain("ALEPH_SYSTEMCTL", s.systemctlBin),
+  ALEPH_WINDOWS_TIME_CMD: () => bare("ALEPH_WINDOWS_TIME_CMD", s.windowsTimeCmd) ?? "none",
+  ALEPH_USAGE_URL: plain("ALEPH_USAGE_URL", s.usageUrl),
+  ALEPH_CLAUDE_CREDENTIALS: () => bare("ALEPH_CLAUDE_CREDENTIALS", s.credentialsFile).replace(homedir(), "~"),
+  ALEPH_USAGE_FILE: () => bare("ALEPH_USAGE_FILE", s.usageFile).replace(homedir(), "~"),
+  ALEPH_SKILLS_DIR: () => bare("ALEPH_SKILLS_DIR", s.skillsDir) === join(ROOT, "skills") ? "the `skills` directory of the repo" : "other",
 };
 
 /** What the docs of `root` are compared with: its source, its CLI source, its files and DEFAULTS. */

@@ -124,6 +124,7 @@ The design is in [the context gate decision](context-gate.md).
 | The Langfuse server | `LANGFUSE_BASE_URL` | `http://127.0.0.1:3010` |
 | The environment label: `headless` or `interactive` | `ALEPH_ENV` | `ALEPH_ENV`, else `interactive`; `headless` when an ancestor process is `claude -p` |
 | Hand-off files between hooks; pruned after 1 day | `ALEPH_SPOOL` | `ALEPH_SPOOL`, else `~/.aleph/spool` |
+| Claude Code's settings file, which the context gate and the Memory page read | `ALEPH_CLAUDE_SETTINGS` | `~/.claude/settings.json` |
 
 Setup and the trace contents are in [Langfuse](langfuse.md).
 

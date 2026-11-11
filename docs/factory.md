@@ -74,5 +74,30 @@ The live cap, the run cap, the intake tries, the job time limit, the fix rounds,
 | `ALEPH_DIRECTOR_CAP` | 3 | Director runs per `aleph director`, one per Ask |
 | `ALEPH_WORKER_CMD` | `claude` | The worker command |
 | `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
+| `ALEPH_MONITOR` | on | `off` turns off the tick's daily monitor step |
+| `ALEPH_RESCUE` | on | `off` leaves a returned or failed run as it is, so its open job keeps its issue not ready |
+| `ALEPH_NEEDS_YOU_LOG` | `needs-you-log.md` next to the vault directory | The file of what reached Chris and why |
+| `ALEPH_RUN_ENV` | none | An env file that a worker, a check or a command run loads. A repo's own `env` in `repos.json` wins |
+| `ALEPH_HOME_URL` | `http://aleph.home/` | The address that `aleph doctor` checks |
+| `ALEPH_UNIT_DIR` | `~/.config/systemd/user` | The directory of the systemd user units |
+| `ALEPH_SYSTEMCTL` | `systemctl` | The command that runs `systemctl --user` |
+| `ALEPH_WINDOWS_TIME_CMD` | none | A shell command that prints the Windows time in milliseconds (`powershell.exe` reads it when unset); `aleph doctor` compares it with the WSL clock |
+| `SIDETONE_TELL_URL` | `https://127.0.0.1:3100/tell` | Where the factory posts a line when a run ends |
 
 For each agent role (`INTAKE`, `DIRECTOR`, `MONITOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.
+
+### Internal variables
+
+A user does not set these. Tests, the factory's own child processes, WSL, bun or Claude Code set them.
+
+- `ALEPH_AGENT`: the factory sets it to `1` in every agent role's settings, so the aleph hooks know that no person is there.
+- `ALEPH_BROWSER_TESTS`: `bun run test:all` and the factory's checks set it to `1` to run the tests that start Chrome.
+- `ALEPH_CLI`: the UI tests set it to put in a fake CLI.
+- `ALEPH_NOW`: tests set it to fix the clock.
+- `ALEPH_START_CMD`: tests set it to start a run as a fake process.
+- `START_LOG`: the fake CLI of the tests reads it to log its calls.
+- `TZ`: the checks and the tests set it to `UTC`, so a result does not depend on the host zone.
+- `TMPDIR`: the browser tests set it for Chrome's profile; `lib/git.ts` reads it only to report a git start failure.
+- `NODE_ENV`: bun sets it to `test` under `bun test`, and the UI then writes no usage row.
+- `WSL_DISTRO_NAME`: WSL sets it, and `aleph doctor` uses it to find that the host is WSL.
+- `CLAUDE_CODE_SESSION_ID`: Claude Code sets it, and the vault stamps it on a note as its source.
