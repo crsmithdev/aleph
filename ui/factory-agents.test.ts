@@ -65,6 +65,8 @@ test("the tiles are usage, OpenRouter spend for the window's UTC period, worker 
   const none = renderFactoryAgents(S, D);
   expect(none).toContain("OpenRouter spend unknown");
   expect(none).toContain("Local server: –");
+  expect(none).toContain('<b>–</b><span class="lights">');
+  expect(none).toContain("backend state unknown");
 });
 
 test("no usage data says usage unknown; while the speed data loads the page says so", () => {
@@ -167,6 +169,15 @@ test("the Backends tile says the local server is up or down and the Roles table 
   expect(up).toContain("Local server: up");
   expect(up).not.toContain("disabled");
   expect(renderFactoryAgents(S, null, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server: down");
+});
+
+test("the Backends tile counts the backends up out of 2", () => {
+  const m = (down: string[], local = "up") => ({ tiers: tiers("haiku", "sonnet"), local, offers: OFFERS, down });
+  const up = renderFactoryAgents(S, D, "live", "week", m(["gpt-oss-20b"]));
+  expect(up).toContain("<b>2<em> / 2</em></b>");
+  expect(up).toContain('<span class="q"><span>up</span><span class="m"> / backends</span></span>');
+  expect(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"]))).toContain("<b>1<em> / 2</em></b>");
+  expect(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"], "down"))).toContain("<b>0<em> / 2</em></b>");
 });
 
 test("the Backends tile says OpenRouter is down when the flash model is down, and the Roles card has no status line", () => {

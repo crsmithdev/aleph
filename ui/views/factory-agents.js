@@ -15,11 +15,13 @@ function spendCard(m, win) {
   return statCard({ k: "Spend", v: v == null ? "–" : money(v), note: v == null ? "OpenRouter spend unknown" : `OpenRouter, ${said} (UTC)` });
 }
 
-/** The Backends tile: a light for the local server and one for OpenRouter. */
+/** The Backends tile: how many backends are up, with a light for the local server and one for OpenRouter. */
 function backendsCard(m) {
   const light = (name, up) => `<span class="light"><span class="event-dot ${up == null ? "" : up ? "fine" : "alert"}"></span>${esc(name)}: ${up == null ? "–" : up ? "up" : "down"}</span>`;
   const local = m ? m.local === "up" : null, router = m ? !m.down.includes("deepseek-v4.1-flash") : null;
-  return `<div class="tile sc"><span class="r1"><span class="k">Backends</span></span><span class="lights">${light("Local server", local)}${light("OpenRouter", router)}</span></div>`;
+  const extra = `<span class="lights">${light("Local server", local)}${light("OpenRouter", router)}</span>`;
+  if (!m) return statCard({ k: "Backends", v: "–", note: "backend state unknown", extra });
+  return statCard({ k: "Backends", v: count(Number(local) + Number(router)), v2: count(2), q: ["up", "backends"], extra });
 }
 
 function scorecard(s, m, win) {

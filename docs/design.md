@@ -479,7 +479,7 @@ A metric card shows one headline number of a list page, with its key.
 - With `v2`, give `q` as `[first, second]`: one name for each value, in lower case, in one word or a few words.
 - With no `v2`, give a `note` in place of `q`. The tooltip shows all of the note.
 - Make the trend only with `cardTrend(value, base, prev, { kind, lowerIsGood, format, basis })`. Set `kind` to `points` for a share, and to `relative` for a time or a count. Set `lowerIsGood` to `null` when no direction is good. With no baseline, `cardTrend()` shows nothing.
-- Put only a `meter()` in `extra`.
+- Put only a `meter()` or a column of status lights in `extra`.
 - For a link to another page, give `href`. For a card that selects the view under it, give `key`, set `on` on the selected card, and connect the cards with `onTile()`.
 
 | Do | Don't |
@@ -1237,7 +1237,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | Charts outside the chart panel: the Agent Time bar, the recall histogram, the session waterfall | `ui/views/speed.js`, `ui/views/memory.js`, `ui/views/session.js` | follow-up |
-| One metric card written by hand (Backends) | `ui/views/factory-agents.js` | follow-up |
 | A table written by hand | `ui/views/memory.js` | follow-up |
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
