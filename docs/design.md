@@ -1,6 +1,6 @@
 # UI design language
 
-The design language of `ui/`, read from the code by the design-language skill (`skills/design-language/SKILL.md`). It goes from principles to foundations to components. Each component has what it is, when to use it, and Do and Don't pairs. A value the rules do not allow is a deviation, listed at the end.
+The design language of `ui/`, read from the code by the design-language skill (`skills/design-language/SKILL.md`). It goes from principles to foundations to components. Each component has what it is, its rules, a Style table of the tokens each part takes, and Do and Don't pairs. A value the rules do not allow is a deviation, listed at the end.
 
 The renders are on the Kit page, `#/kit` (`ui/views/kit.js`): each component and token, drawn by its own helper from fixture data, in light and dark. A new component gets a specimen there.
 
@@ -275,23 +275,36 @@ Each component, its helper and the view that follows the rules best.
 | Meter | `meter()`, `barList()` | `ui/views/memory.js` |
 | Badge | `badge()` | `ui/views/jobs.js` |
 | Chip | `chips()` | `ui/views/issues.js` |
-| Button | `actButton()`, `cmd()` | `ui/views/issues.js` |
+| Button | `actButton()` | `ui/views/issues.js` |
+| Command | `cmd()` | `ui/views/issues.js` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
 | Pager | `pager()` | `ui/views/issues.js` |
-| Empty state | `empty()` | `ui/views/jobs.js` |
+| Empty state | `empty()`, `loading()`, `error()` | `ui/views/jobs.js` |
+| Detail panel | `panel()`, `detailPanel()` in `ui/timeline.js` | `ui/views/jobs.js` |
+| KPI strip | `renderKpis()` in `ui/timeline.js` | `ui/views/jobs.js` |
+| Timeline | `renderTimeline()` in `ui/timeline.js` | `ui/views/jobs.js` |
+| Legend | `legendHtml()` | `ui/timeline.js` |
+| Item card | `laneCard()` in `ui/views/now.js`, `metaRow()` in `ui/views/cards.js` | `ui/views/now.js` |
+| Ask card | `askCard()` in `ui/views/cards.js` | `ui/views/now.js` |
+| Lane | `lane()` in `ui/views/now.js` | `ui/views/now.js` |
+| Feed row | `eventRow()` in `ui/views/now.js` | `ui/views/now.js` |
+| Findings list | `findingHtml()` in `ui/views/now.js` | `ui/views/gates.js` |
+| Status row, link button | none yet | `ui/views/jobs.js` |
 
 ### Every component
 
 These rules hold for each component below; its own list adds to them.
 
-- Build it with its helper. Never write its markup by hand.
+- Build it with its helper. Never write its markup by hand. A part with no helper yet is listed under Deviations until it has one.
 - Colours, sizes, spacing and radii from tokens only (Principles, Rules).
 - Every value through its format helper (Content, Values); a missing value as that table says.
 - A state's colour from `tone()`; never pick a tone by hand.
 - Headers and titles in Title Case with short words lower (`Jobs per Item`); states lower case.
 - A count is a bare muted number after its title, never in brackets.
 - Interaction states as States says: `:focus-visible`, `aria-pressed`, disabled while a request runs.
-- A new component, or a new state of one, gets a specimen on `#/kit`.
+- A new component, or a new state of one, gets a specimen on `#/kit` and a section here.
+
+Each Style table gives a component's parts and the tokens they take, from `ui/app.css`. The helper applies them; a builder never sets them.
 
 ### Structure
 
@@ -305,26 +318,89 @@ The page's serif title, a muted count, and the page's controls at the right.
 - `aside`: the page's controls only. Project, then the window (Hour, Day, Week, Month), from `scope().bar()`; then the page's own control in `after`.
 - Project and window live in the address; `scope().wire(root)` in `mount`.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Crumb | `--mono` `--fs-sm` | `--muted`; link hover `--ink` | `--sp-8` below |
+| Title | `--display` `--fs-xl` | `--ink` | |
+| Count | `--num` `--fs-sm` `--fw-mid` | `--muted` | |
+| Aside | `--fs-xs` | `--muted` | right; wraps; gap `--sp-8` `--sp-12` |
+| Head | | | `--sp-16` below; wraps at narrow width |
+
 #### Card
 
-A block of a page: a section head with an optional count and aside, then a body.
+A block of a list page: a section head with an optional count and aside, then a body.
 
 - `card(title, body, { count, aside, id })`.
-- One card per section of a page. Never a card in a card.
+- One card per section of a list page. A detail page uses the detail panel. Never a card in a card.
 - `title`: what the section holds, in Title Case.
 - `aside`: the section's controls, or one muted note.
 - `id` when another part of the page links to the section.
 - A card with no content shows `empty()` in its body; the card stays.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Box | `--fs-sm` | `--surface`, border `--rule` | padding `--gap-in`, radius `--r-card`, gap `--sp-12` |
+| Title | `--sans` `--fs-lg` `--fw-strong` | `--ink` | |
+| Count | `--num` `--fs-sm` `--fw-mid` | `--muted` | |
+| Aside | `--fs-xs` | `--muted` | right |
+| Body text | | `--ink-2` | |
+
+#### Detail panel
+
+A block of a detail page (an issue or a job): a head, then a body.
+
+- `panel(id, title, body, aside)` for prose (Spec, Result, Description); `detailPanel(title, aside, body)` for a fold that opens; both in `ui/timeline.js`.
+- On a detail page only. A list page uses the card.
+- `title` in Title Case; `aside`: a muted note or a control.
+- Prose in the body: `md()`, at most 80 characters wide.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Box | | `--surface`, border `--rule` | radius `--r-card` |
+| Head | `--sans` `--fs-lg` `--fw-strong` | `--ink` | padding `--sp-14` `--sp-18` |
+| Aside | `--fs-sm` | `--muted` | |
+| Body | | | padding `--sp-10` `--sp-18` `--sp-14` |
+| Code block | `--mono` `--fs-xs` | `--ink-2` on `--sunk` | radius `--r-tag`; scrolls at 70% of the screen |
+
+#### KPI strip
+
+The headline facts of a detail page, in one row of cells.
+
+- `renderKpis([{ k, v, sub, text }])` in `ui/timeline.js`, first in a detail page, under the status row.
+- `v`: a format helper's output; `text: true` for words, which set smaller than a figure.
+- `sub`: one muted line under the value.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Strip | | detail panel box | cells at 150px minimum, auto-fit |
+| Cell | | border-left `--rule-2` | padding `--sp-14` `--sp-18`; on a phone, cells stack with border-top |
+
+#### Status row
+
+The state of a detail page's item, under its page head.
+
+- `badge()` for the state, then `priorityBadge()`, then chips for the part and labels.
+- On a detail page only, after the page head.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Row | | | gap `--sp-6`, `--sp-12` below; wraps |
 
 #### Fact list
 
 Keys and values for one thing.
 
 - `facts([[key, html]])`.
-- For the properties of one item, on a detail page.
+- For the properties of one item on a detail page, or the meta line of a list row.
 - Keys: one or two words, sentence case (`Started`, `Took`).
 - Values: from their format helpers; HTML, so escape text with `esc()`.
 - An empty value drops its row; never a placeholder.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| List | `--fs-sm` | `--ink-2` | wraps; gap `--sp-4` 22px |
+| Key | | `--muted` | `--sp-6` before the value |
+| Value | `--num` tabular | `--ink-2` | |
 
 | Do | Don't |
 |---|---|
@@ -346,7 +422,7 @@ One number with its key, at the top of a page.
 | 6 Qualifier | what the numbers are, such as `in use / cap`, or a note |
 
 - `statCard({ k, v, v2, q, note, trend, extra, href, key, on })`, in `tiles(label, html)`.
-- For the headline numbers of a list page. A detail page uses facts instead.
+- For the headline numbers of a list page. A detail page uses the KPI strip instead.
 - `k`: the measure, two or three words; CSS sets it in capitals.
 - `v`: a format helper's output. Unknown is `–` with a `note` that says why.
 - `v2` only with `q`, which names both values.
@@ -356,12 +432,24 @@ One number with its key, at the top of a page.
 - `href` goes to another page. `key` selects the view below it, with `on` for the pressed card, wired by `onTile()`.
 - A number that needs more than three rows goes in a table below the cards.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Grid | | | 150px minimum, auto-fit, gap `--gap-in`; 2 columns on a phone |
+| Card | `--fs-sm` | `--surface`, border `--rule` | padding `--sp-12` `--sp-14`, radius `--r-card`, gap `--sp-4` |
+| Key | `--sans` `--fs-xs` `--fw-strong`, capitals, tracking .08em | `--muted` | |
+| Trend | `--fs-sm` `--fw-strong` | `--good` when good, `--need` when bad, else `--muted` | right of the key |
+| Value | `--metric` 700, up to `--fs-metric`, tabular | `--ink` | one line, ends in an ellipsis |
+| Second value | `--metric` at .62em | `--muted` | hidden on a phone |
+| Qualifier | `--fs-xs` | `--ink`, its second part `--muted` | one line, ends in an ellipsis |
+| Link or selector | | hover border `--run` | |
+| Pressed | | `--raised`, border `--run` | |
+
 | Do | Don't |
 |---|---|
 | `statCard({ k: "Worker slots", v: "2", v2: "5", q: ["in use", "cap"] })` | a `v2` with no `q` to name the two values |
 | `v: "–"` with a note that says why | `v: "0"` for an unknown value |
 | `statCard()` | card markup written by hand |
-| facts for the KPI strip of a detail page (`renderKpis()` in `ui/timeline.js`) | a metric card on a detail page |
+| the KPI strip on a detail page (`renderKpis()` in `ui/timeline.js`) | a metric card on a detail page |
 
 #### Table
 
@@ -380,6 +468,17 @@ Rows of items with the same columns.
 - No rows: `empty()` in place of the table.
 - Row actions sit under the row's text in `.actions`, never in a cell of their own.
 - On a phone the table scrolls sideways in `.tscroll`.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Table | `--fs-sm` | `--ink` | full width; `fit`: its content's width |
+| Header | `--sans` `--fs-xs` `--fw-strong` | `--muted`; sorted `--ink` | |
+| Cell | `--fw-text`, line height 1.45 | | padding `--sp-6` `--sp-12` `--sp-6` 0, rule `--rule-2` below, one line |
+| Number | `--num` `--fw-mid` tabular | | right |
+| Title | | | the spare width, 16ch minimum, ellipsis |
+| Chip in a cell | | | 16ch maximum, ellipsis |
+| Row hover | | `--sunk` | |
+| Sort arrow | `--fs-xs` | | 1em wide |
 
 | Do | Don't |
 |---|---|
@@ -411,14 +510,34 @@ A titled chart drawn from a frame (`ui/chart.js`).
 - Data that failed to rebuild: pass `error` and `since`; the panel says how old it is.
 - Two or three panels side by side go in `.trio`.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Panel | | card box | fills its grid cell |
+| Form control | | segmented control | in the card's aside |
+| Plot | axis labels `--chart`, 12px times `--chart-scale`, `--chart-weight` | `--ink` labels, `--rule` lines; series tokens through `readTokens()` | 200px minimum high |
+| Grid lines | | at half opacity | |
+| Row of panels | | | `.trio`: 3 columns, gap `--gap-in`; 1 column under 1100px |
+
 | Do | Don't |
 |---|---|
 | `color: "done"` in a frame's `by` | a hex colour in a series |
 | a legend on a stacked chart | a stacked chart with no legend |
 
+#### Legend
+
+The key of a chart that is not a chart panel.
+
+- `legendHtml([[label, cls]])`; `cls` gives the swatch its colour token.
+- A chart panel draws its own legend; never add one.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| List | `--fs-xs` | `--muted` | one row, wraps; gap `--sp-4` `--sp-14` |
+| Swatch | | its token | 10px square, radius `--r-hair` |
+
 #### Meter
 
-A 10px bar for one share or for segments.
+A bar for one share or for segments.
 
 - `meter(parts, label, { mark })`: one percent, or segments `{ pct, cls }`.
 - For a share of a known whole. A trend over time is a chart panel.
@@ -427,14 +546,135 @@ A 10px bar for one share or for segments.
 - Rows of label, bar and value: `barRow()` in `barList()`; `top` marks the largest.
 - The container gives the meter its width.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Track | | `--sunk` | `--bar-h` high, radius `--r-hair` |
+| Fill | | `--muted`; the top row `--hot`; a segment its class | |
+| Mark | | `--ink` | 2px wide, 16px high |
+| Bar list | `--fs-sm` | label `--ink`, value `--ink-2` | label 80–200px, value right and tabular; rule `--rule-2` between rows |
+| Pressed row | | `--sunk`, label `--fw-strong` | |
+
 #### Outcome bar
 
-A bar of whole-window shares in `--seg-*` colours, with a legend such as `landed 40h 57%`.
+A bar of whole-window shares, with a legend such as `landed 40h 57%`.
 
 - `bar(d, key)` in `ui/views/speed.js`, from `/api/flow`.
 - Classes that reached main sit left of the separator, the rest right.
 - Each segment selects the detail below it, with `aria-pressed`.
 - No hours: `empty()`.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Segment | | `--seg-*` of its class | 28px high; ends rounded `--r-ctl`; gap `--sp-2` |
+| Separator | | `--ink-2` | 2px; margin `--sp-8` |
+| Legend | `--fs-xs` tabular | `--ink-2`, figures `--muted` | gap `--sp-4` `--sp-16` |
+| Pressed | | outline 2px `--ink` | |
+| Phone | | | groups stack; the separator turns flat |
+
+#### Timeline
+
+The runs of an issue or a job over time, with their events.
+
+- `renderTimeline(segments)` in `ui/timeline.js`, in a detail panel.
+- One row per run: head, lane of bars and waits, result, time, cost.
+- A bar's tone: build, bad, land or aux. A wait for Chris is striped in the need colours.
+- Each row's events under it; a long event is clamped.
+- A legend from `legendHtml()` in the panel head.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Grid | | | head 160–220px, lane 300px minimum, result, time, cost; scrolls under 740px |
+| Axis | `--fs-xs` tabular | `--muted` | |
+| Lane | | `--bg` | 22px high, radius `--r-tag` |
+| Bar | `--fs-2xs` `--fw-mid` | `--on-fill` on `--fill-*` | 18px high, radius `--r-hair` |
+| Wait | | stripes of `--rule`; for Chris `--need` on `--need-bg` | |
+| Mark | | made `--muted`, done `--ink` | 2px wide |
+| Event | `--fs-sm`; time `--fs-xs` tabular | time `--muted` | time, tag, text; padding `--sp-4` |
+| Segment head | `--fs-sm` `--fw-strong` | | rule `--rule` above |
+
+### Lists of items
+
+#### Item card
+
+One issue or job in a lane: a meta row, then its title on one line.
+
+- `laneCard()` in `ui/views/now.js`; the meta row from `metaRow()` in `ui/views/cards.js`.
+- Meta row: id, state badge, kind, part, then numbers, all on one line.
+- Title: one line, a link to the item.
+- A card that waits on Chris takes the need border.
+- `data-annotate` with the item's short id, so a note stays on the item.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Box | | `--surface`, border `--rule`; waiting on Chris `--need` | padding `--sp-10` `--sp-12`, radius `--r-ctl` |
+| Kind edge | | land `--done`, worker `--run`, else `--rule` | 4px on the left |
+| Meta row | `--fs-2xs`; badge `--fs-2xs` | | 22px high, one line, gap `--sp-4` |
+| Title | `--sans` `--fw-strong`, line height 1.35 | inherits | one line, ellipsis; `--sp-4` above |
+
+#### Ask card
+
+A question for Chris: what it is, its options, and the buttons that answer it.
+
+- `askCard(i)` in `ui/views/cards.js`.
+- Head: a dot, the kind in bold, the title. The fold opens to the question, the options and the reasons.
+- One button per choice, from `actButton()`; the recommended choice says so.
+- Choices that need a reason use the two-click confirm's reason box.
+- Technical details sit in a closed fold at the end.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Kind | | approve, decide or unstick: each sets the card's colour, its `-bg` and its `-ring` (`--approve`, `--decide`, `--unstick`) | |
+| Box | | `--surface`, border the kind's ring, shadow `--lift` | radius `--r-card` |
+| Meta row, head | head `--fs-lg`, line height 1.35 | on the kind's `-bg` | padding `--sp-12` `--sp-18` |
+| Dot | | the kind's colour | 10px round |
+| Kind label | `--fw-strong` | the kind's colour | |
+| Title | `--fw-mid` | `--ink` | wraps |
+| Question | `--fs-lg` `--fw-strong` | | 80ch maximum |
+| Choice text | `--fs-md`, line height 1.5 | `--ink-2` | |
+| Recommended | `--fs-xs` `--fw-strong` | the card's kind colour | |
+| Choices | | | wrap, gap `--sp-8`; open: 200px button column, then the text |
+
+#### Lane
+
+A column of item cards under a section head with a count.
+
+- `lane()` in `ui/views/now.js`: the head, then the cards, or one quiet line.
+- Three lanes side by side in `.lanes`.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Lanes | | | 3 columns, gap `--sp-20` |
+| Cards | | | one column, gap `--sp-12` |
+| Empty line | `--fs-sm` | `--muted` | |
+
+#### Feed row
+
+One event in a feed, newest first: time, action, id, then what happened.
+
+- `eventRow(ev, titles)` in `ui/views/now.js`.
+- Time from `clock()`, else `when()`. Action lower case. Id from `idLink()`.
+- The row's colour from its action's tone; the live row stands out at the top.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Row | `--fs-xs` | | columns 55px, 70px, 64px, then the rest; padding `--sp-6`; rule `--rule-2` below |
+| Time | `--mono` tabular | `--muted` | |
+| Action | `--fw-mid` | its tone | |
+| Id | `--mono` tabular | | one line |
+| Title | | `--ink` | one line, ellipsis |
+| What | | `--muted` | |
+| Live row | | `--unstick-bg`, border `--unstick-ring` | radius `--r-card`, padding `--sp-8` `--sp-10` |
+
+#### Findings list
+
+The numbered findings of a Monitor report.
+
+- `findingHtml(text)` in `ui/views/now.js`, one per `<li>` of an `<ol class="findings">`.
+- In a closed fold whose summary gives the day and the count.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| List | line height 1.35 | `--ink-2` | indent 1.2em; `--sp-4` between items |
 
 ### Labels
 
@@ -448,6 +688,11 @@ A state, squared.
 - A new state goes in the tone map of `tone()`, never as a class by hand.
 - Never for a label.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Badge | `--fs-xs` `--fw-strong` | tone on its `-bg`: run, done, need, stuck; quiet `--muted` on `--sunk`; parked `--muted` outline | padding 1px `--sp-8`, radius `--r-tag`, one line |
+| In an item card | `--fs-2xs` | | padding 1px 5px |
+
 #### Chip
 
 A label, a pill.
@@ -455,6 +700,10 @@ A label, a pill.
 - `chips(labels)` for an item's labels.
 - No labels: nothing, never a placeholder.
 - Never for a state.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Chip | `--fs-xs`, line height 1.5 | `--ink-2` on `--sunk` | padding 0 7px, radius `--r-pill`, one line |
 
 | Do | Don't |
 |---|---|
@@ -474,6 +723,25 @@ An action on the server.
 - `cls: "warn"` for an action that stops or drops work.
 - Land, Drop and Pause also take `confirm` (Two-click confirm).
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Button | `--sans` `--fs-sm` `--fw-mid` | `--ink` on `--surface`, border `--rule`; hover border `--ink-2` | `--ctl-h` high, padding `--sp-2` `--sp-12`, radius `--r-ctl` |
+| Primary | | `--surface` on `--ink` | |
+| Warn | | `--need` on `--need-bg`, border `--need`; only in the Status page head (Deviations) | |
+| Asking | | `--need` on `--need-bg`, border `--need` | |
+| Disabled | | opacity `--dim`, wait cursor | |
+
+#### Link button
+
+A link to another page, set as a button.
+
+- For navigation only: Issue, Next sub-issue, Trace. An action on the server is a button.
+- `<a class="act">` until a helper exists (Deviations).
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Link | as the button | as the button | no underline |
+
 #### Command
 
 A command for the reader to run.
@@ -482,12 +750,24 @@ A command for the reader to run.
 - A click copies the text and says so.
 - `primary` for the command the page asks for; at most one.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Box | `--mono` `--fs-sm` `--fw-mid` | `--ink` on `--sunk`, border `--rule`; hover border `--ink-2` | padding 7px `--sp-10`, radius `--r-ctl`; wraps anywhere |
+| Primary | | `--surface` on `--ink` | |
+| Hint | `--sans` `--fs-xs` | at .8 opacity | |
+| Copy | `--sans` `--fs-xs` `--fw-mid` | at .7 opacity; 1 once copied | rule before it |
+| Pressed | | | moves 1px down |
+
 #### Row actions
 
 A row's buttons.
 
 - `.actions` after the row's text, never in a table cell.
 - Buttons from `actButton()`; the result from `say()`.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Row | | | gap `--sp-8`, `--sp-14` above; wraps |
 
 #### Form message
 
@@ -496,12 +776,21 @@ The result of an action, beside its button.
 - `say(el, text)`; it writes `.act-msg` with `role="alert"`.
 - One line: what failed and why.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Message | `--fs-sm` | `--stuck` | centred on the button |
+
 #### Two-click confirm
 
 A second click for an action that is hard to undo.
 
 - `confirm` in the button's `data`. The first click shows `<label> <name>? Click again` for 5 seconds (`ui/router.js`).
 - An answer that needs a reason: a `.choice` with `input.reason`. The first click opens the box, and the button reads `Confirm`.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Asking button | | `--need` on `--need-bg`, border `--need` | |
+| Reason box | | | the full row |
 
 #### Disclosure
 
@@ -511,6 +800,14 @@ A fold that hides detail.
 - Closed by default, unless the reader came for what it holds.
 - `data-keep="<key>"` keeps the reader's open state (`wireFolds()`, `restoreFolds()`); `recordState()` and `restoreState()` keep it across a redraw.
 - A long list: `moreFold(items, row)`, 10 items, then a fold. Long text: `clamp(html)`, 3 lines, then Show more.
+- Technical details at the end of a card: `details.more`, summary `Technical details`.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Fold | | rule `--rule-2` above | `--sp-10` above, `--sp-8` padding |
+| Summary | `--fs-sm` | `--ink-2` | |
+| Marker | `--mono` | `--muted` | `+` closed, `−` open, 14px |
+| Clamp | | | 3 lines; Show more at `--fs-xs` |
 
 ### Text
 
@@ -520,10 +817,24 @@ A fold that hides detail.
 - Code in text: `codeText()`.
 - A code block scrolls sideways in `.md`; elsewhere `pre` wraps.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Heading | `--sans` `--fs-lg` `--fw-strong` | | `--sp-14` above, `--sp-6` below |
+| Inline code | `--mono` `--fs-xs` | | |
+| Code block | `--mono` `--fs-xs`, line height 1.55 | on `--sunk` | padding `--sp-8` `--sp-10`, radius `--r-tag` |
+| Table | `--fs-xs` | border `--rule` | padding `--sp-4` `--sp-8` |
+
 #### Diff
 
 - `diffHtml()` into `.diff-panel`; the panel scrolls.
 - Added and deleted lines differ by colour alone (Accessibility).
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Panel | `--mono` `--fs-xs`, line height 1.5 | `--sunk`, border `--rule` | radius `--r-ctl`; 480px high at most, then scrolls |
+| Added | | `--add` | |
+| Deleted | | `--del` | |
+| Hunk, meta | | `--muted` | |
 
 ### Controls
 
@@ -537,12 +848,25 @@ A row of filters over a table.
 - Search: `searchBox()`.
 - Filters for the whole page go in the page head, from `scope().bar()`.
 
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Bar | | | wraps; gap `--sp-8` `--sp-18`; `--sp-12` below |
+| Label | `--fs-xs` | `--muted` | `--sp-6` before its control |
+| Segmented control | `--sans` `--fs-sm` | `--muted`, border `--rule`; hover `--ink` | `--ctl-h` high, radius `--r-ctl`; scrolls inside itself |
+| Pressed segment | `--fw-strong` | `--ink` on `--rule-2` | |
+| Select, search | | search on `--sunk` | `--ctl-h` high |
+
 #### Pager
 
 Rows past the first 50.
 
 - `pager(shown, total)`: `Show 50 more`, then `50 of 345`.
 - The limit lives in the address (`limitOf()`); `pagedTable()` reveals in place.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Pager | | | gap `--sp-12`, `--sp-10` above |
+| Of | `--num` `--fs-xs` `--fw-mid` tabular | `--muted` | |
 
 #### Empty state
 
@@ -552,6 +876,12 @@ What shows when there is nothing, while it loads, or when it failed.
 - It takes the place of the table, chart or list; the card stays.
 - Loading: `loading(title)` reads `Loading <title>…`.
 - Failure: `error(line, hint)`; the hint says what to do.
+
+| Part | Type | Colour | Space and shape |
+|---|---|---|---|
+| Line | | `--ink`; an error `--stuck` | `--sp-4` above |
+| Hint | `--fs-sm` | `--muted` | `--sp-2` above |
+| Loading | | `--muted` | |
 
 ## States
 
@@ -595,7 +925,21 @@ What shows when there is nothing, while it loads, or when it failed.
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
 | A missing cell is empty in some tables and `–` in others | Tables | follow-up |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `costFrame()` in `ui/views/factory-agents.js` | allowed |
-| `.act.warn` has no style, so a warn button looks like any other | `ui/app.css` | review on `#/kit` |
+| `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
+| Sections built from `sectionHead()` with no card box | `ui/views/gates.js` (7), `ui/views/memory.js` (5), `ui/views/now.js` (4) | follow-up |
+| Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
+| Folds written by hand: `details.more` 4 times, about 12 bare `<details>`; no helper | `ui/views/cards.js`, `ui/views/now.js`, `ui/views/sessions.js` | follow-up |
+| Empty, loading and error lines written inline | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/session.js`, `ui/views/ideas.js` | follow-up |
+| Monitor findings built three ways; a feed row and a timeline event copied | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/issues.js` | follow-up |
+| The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
+| Charts outside the chart panel: the Agent Time bar, the recall histogram, the session waterfall | `ui/views/speed.js`, `ui/views/memory.js`, `ui/views/session.js` | follow-up |
+| One metric card written by hand (Backends) | `ui/views/factory-agents.js` | follow-up |
+| A table written by hand | `ui/views/memory.js` | follow-up |
+| The Status page head written by hand | `ui/views/now.js` | follow-up |
+| An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
+| Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
+| No helper for the status row or the link button | `ui/views/jobs.js`, `ui/views/issues.js`, `ui/views/memory.js` | follow-up |
+| Two `act()` wrappers with different signatures; `shell()` has no callers | `ui/views/cards.js`, `ui/views/memory.js` | follow-up |
 | A metric card's second value hides at phone width, so `v` shows with a `q` that names two values | `ui/app.css` | review on `#/kit` |
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
 

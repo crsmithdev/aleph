@@ -2,8 +2,11 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, badge, dur, error, loading, money, when, barList, barRow, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, badge, dur, error, loading, money, when, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
+import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
+import { askCard } from "./cards.js";
+import { eventRow, findingHtml, renderLanes } from "./now.js";
 import { bar } from "./speed.js";
 
 const THEMES = ["system", "light", "dark"];
@@ -20,7 +23,8 @@ export function section(doc, name) {
 let doc = "";
 /** One specimen: its name, a line on what it shows, its HTML, and the rules under the doc's heading `rules` (none for ""). Not a card, so a card in it is not nested. */
 const spec = (id, title, body, note = "", rules = title) => {
-  const text = rules ? section(doc, rules) : "";
+  const names = [rules].flat().filter(Boolean);
+  const text = names.length > 1 ? names.map((n) => `#### ${n}\n\n${section(doc, n)}`).join("\n\n") : names.length ? section(doc, names[0]) : "";
   return `<section class="kit-spec" id="kit-${id}" data-annotate="kit/${id}"><h3>${title}</h3>` +
     `<div class="kit-specimen">${note ? `<p class="hint">${note}</p>` : ""}${body}</div>${text ? `<div class="kit-rules md">${md(text)}</div>` : ""}</section>`;
 };
@@ -82,6 +86,28 @@ const DIFF = `diff --git a/ui/app.css b/ui/app.css
 -.chip { border-radius: 9px; }
 +.chip { border-radius: var(--r-pill); }`;
 
+const H = (h, m = 0) => new Date(2026, 10, 10, h, m).getTime();
+const TIMELINE = [{ title: "Runs", rows: [
+  { head: "<span class=\"t\">build 1</span>", bars: [{ start: H(8, 10), end: H(8, 30), tone: "build", label: "build" }, { start: H(8, 30), end: H(8, 34), tone: "bad", label: "checks" }], waits: [{ start: H(8, 34), end: H(9, 2), chris: true }], marks: [], result: badge("returned"), time: dur(1440), cost: money(2.3), events: [{ at: H(8, 34), tag: "returned", tone: "stuck", html: "Checks failed: <code>ui/page.test.ts</code>." }] },
+  { head: "<span class=\"t\">build 2</span>", bars: [{ start: H(9, 2), end: H(9, 20), tone: "build", label: "build" }, { start: H(9, 20), end: H(9, 24), tone: "land", label: "land" }], waits: [], marks: [{ at: H(9, 24), tone: "done", tip: "landed" }], result: badge("landed"), time: dur(1320), cost: money(1.82), events: [{ at: H(9, 24), tag: "landed", tone: "done", html: "Landed on main." }] },
+] }];
+const NOW = "2026-11-10T17:00:00Z";
+const STATUS = {
+  now: NOW, factory: { liveRuns: 1, liveCap: 5 }, doneCount: 1,
+  running: [{ name: "aleph-1700", repo: "aleph", item: { id: 1700, title: "Give each component in design.md a live render", priority: "high" }, run: { kind: "agent", started: "2026-11-10T16:40:00Z" }, model: "claude-sonnet-5-5", started: "2026-11-10T16:40:00Z" }],
+  queued: [{ repo: "aleph", id: 1701, title: "Fail CI on a new hard-coded colour in ui/", priority: "medium", stage: "queued", at: "2026-11-10T16:00:00Z" }],
+  done: [{ id: "aleph-1702", href: "#/kit", title: "Show the cost of each run on its job page", priority: "low", finished: "2026-11-10T15:30:00Z" }],
+};
+const ASK = {
+  id: "aleph-41", href: "#/kit", repo: "aleph", key: "issue:aleph-41", kind: "input", card: "decide", reason: "question", label: "Decide", tag: "question",
+  title: "Pick the time format for a day with no time", headline: "Pick the time format for a day with no time", priority: "high", at: "2026-11-10T16:00:00Z",
+  situation: "Two tables show a day with no time two ways: Oct 28 and 10/28.",
+  actions: [{ label: "Oct 28", act: "kit", path: "/api/kit", primary: true }, { label: "10/28", act: "kit", path: "/api/kit" }, { label: "Deny", act: "kit", path: "/api/kit", input: { name: "reason" } }],
+};
+const FEED = [
+  { at: "2026-11-10T16:58:00Z", subject: "aleph-1700", action: "landed", by: "agent", sub: "build 2" },
+  { at: "2026-11-10T16:40:00Z", subject: "aleph-1701", action: "returned", by: "agent", sub: "build 1", note: "checks failed" },
+];
 const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }] };
 
 function renderKit(d, query) {
@@ -100,6 +126,9 @@ function renderKit(d, query) {
 
     `<h2 class="kit-h">Structure</h2>` +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: filterBar([{ label: "Window", bare: true, name: "w", value: "week", options: ["Hour", "Day", "Week", "Month"].map((l) => ({ value: l.toLowerCase(), label: l })) }]) })) +
+    spec("detail-panel", "Detail panel", panel("kit-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 80 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>")) +
+    spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +
+    spec("status-row", "Status row", `<div class="status-row">${badge("running")}${priorityBadge("high")}${chips(["ui", "design"])}</div>`, "Written by hand: the status row has no helper yet.") +
     spec("card", "Card", card("Section", "<p>The body of a card.</p>", { count: 3, aside: actButton("Action") })) +
     spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/kit-page</code>"]])) +
 
@@ -122,6 +151,14 @@ function renderKit(d, query) {
     spec("meter", "Meter", row(meter(64, "64%"), meter([{ pct: 50, cls: "c-use" }, { pct: 20 }], "50% and 20%"), meter(30, "30% with a mark at 70%", { mark: 70 })) +
       barList(barRow("Worker", 80, money(31.2), { top: true }) + barRow("Triage", 35, money(13.65)) + barRow("Reviewer", 12, money(4.7)))) +
     spec("outcome", "Outcome bar", bar(FLOW, "landed")) +
+    spec("legend", "Legend", legendHtml([["build", "t-build"], ["bad", "t-bad"], ["land", "t-land"], ["wait", "t-wait"], ["awaiting you", "t-chris"]])) +
+    spec("timeline", "Timeline", renderTimeline(TIMELINE)) +
+
+    `<h2 class="kit-h">Lists of items</h2>` +
+    spec("lanes", "Item card and lane", renderLanes(STATUS), "", ["Item card", "Lane"]) +
+    spec("ask", "Ask card", askCard(ASK, STATUS.now)) +
+    spec("feed", "Feed row", FEED.map((e) => eventRow(e)).join("")) +
+    spec("findings", "Findings list", `<ol class="findings">${["Two jobs ran over the cap at `09:12`.", "No check failed."].map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`) +
 
     `<h2 class="kit-h">Labels</h2>` +
     spec("badge", "Badge", row(...["open", "running", "landed", "waiting", "failed", "parked", "dropped"].map(badge)) + row(...["critical", "high", "medium", "low"].map(priorityBadge)) + row(tag("any text"), tag("with a title", "need", "the title"))) +
@@ -129,6 +166,7 @@ function renderKit(d, query) {
 
     `<h2 class="kit-h">Actions</h2>` +
     spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`)) +
+    spec("link-button", "Link button", row(`<a class="act" href="#/kit">Issue</a>`, `<a class="act" href="#/kit">Next sub-issue: a1701</a>`), "Written by hand: the link button has no helper yet.") +
     spec("command", "Command", row(cmd("aleph issue list aleph"), cmd("bun test", { primary: true, hint: "in the worktree" }))) +
     spec("filter", "Filter bar", filterBar([
       { label: "Status", name: "status", value: "open", options: ["open", "done", "dropped"] },
