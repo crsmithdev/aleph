@@ -46,7 +46,7 @@ export function renderSkill(d, limits = {}) {
     card("Projects", table("projects", heads(["Project", "Uses"], ["Uses"]), projects, lim("projects"), "No project used this skill.")) +
     card("Sessions", table("sessions", heads(["Started", "Session", "First Prompt Line", "Project", "Started by"]), sessions, lim("sessions"), "No session used this skill.")) +
     card("Tools Called After It, in the Same Turn", table("tools", heads(["Tool", "Calls"], ["Calls"]), tools, lim("tools"), "No tool ran after this skill in the same turn."), { label: "Tools called after it, in the same turn" }) +
-    card("Turns With Errors", table("errors", heads(["Started", "Session", "Error", "Project"]), errors, lim("errors"), "No turn with this skill had an error."), { count: d.errors.length, label: "Turns with errors" }) +
+    card("Turns with Errors", table("errors", heads(["Started", "Session", "Error", "Project"]), errors, lim("errors"), "No turn with this skill had an error."), { count: d.errors.length, label: "Turns with errors" }) +
     `</div>`;
 }
 

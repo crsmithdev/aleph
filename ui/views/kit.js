@@ -2,7 +2,7 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, badge, dur, error, loading, money, scope, when, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, idLink, badge, dur, error, loading, money, scope, when, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -167,13 +167,14 @@ function renderKit(d, query) {
     `<h2 class="kit-h">Actions</h2>` +
     spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`)) +
     spec("link-button", "Link button", row(`<a class="act" href="#/kit">Issue</a>`, `<a class="act" href="#/kit">Next sub-issue: a1701</a>`), "Written by hand: the link button has no helper yet.") +
+    spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Started", "Title"]), `<tr class="rowlink"><td class="time">11/10 14:05</td><td class="wide"><a href="#/kit">A row that goes to its item</a></td></tr>`)) +
     spec("command", "Command", row(cmd("aleph issue list aleph"), cmd("bun test", { primary: true, hint: "in the worktree" }))) +
     spec("filter", "Filter bar", filterBar([
       { label: "Status", name: "status", value: "open", options: ["open", "done", "dropped"] },
       { label: "Project", name: "project", data: true, value: "", options: [{ value: "", label: "All" }, "aleph", "sidetone"] },
     ])) +
     spec("pager", "Pager", pager(50, 345) + pager(345, 345)) +
-    spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">Dropped.</span></div></div>`) +
+    spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>`) +
     spec("form-message", "Form message", `<div class="actions">${actButton("Retry")}<span class="act-msg" role="alert">Retry failed: the job is already running.</span></div>`) +
     spec("confirm", "Two-click confirm", row(`<button class="act ask" type="button">Drop a1700? Click again</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
       "The second state of each: the first click shows it, and it goes back after 5 seconds.") +

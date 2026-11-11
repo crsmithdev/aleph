@@ -168,12 +168,12 @@ export function mountView(view, root, data, query) {
 
 /**
  * The ECharts theme for a token map ({bg, surface, ink, rule, run, done, need, stuck, sans}).
- * Series colours run, done, need, stuck, then `chart-6` and `chart-7`.
+ * Series colours `series-1` to `series-5`, then `chart-6` and `chart-7`; a series that is a state sets its tone as `color`.
  */
 export function chartTheme(t) {
   const axis = { axisLine: { lineStyle: { color: t.rule } }, axisTick: { lineStyle: { color: t.rule } }, axisLabel: { color: t.ink, fontSize: 12 * (Number(t["chart-scale"]) || 1), fontWeight: Number(t["chart-weight"]) || 400 }, splitLine: { lineStyle: { color: t.rule } }, nameTextStyle: { color: t.ink } };
   return {
-    color: [t.run, t.done, t.need, t.stuck, t["chart-6"], t["chart-7"]],
+    color: [t["series-1"], t["series-2"], t["series-3"], t["series-4"], t["series-5"], t["chart-6"], t["chart-7"]],
     backgroundColor: "transparent",
     textStyle: { color: t.ink, fontFamily: t.chart || t.sans },
     title: { textStyle: { color: t.ink }, subtextStyle: { color: t.ink } },

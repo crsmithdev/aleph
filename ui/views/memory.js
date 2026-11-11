@@ -322,7 +322,6 @@ async function write(btn) {
   btn.disabled = true;
   try {
     await postJson(url, body);
-    say(btn, "Saved.");
     if (a === "delete" || a === "file-delete" || a === "drop" || a === "approve" || a === "decline" || a === "archive") setQuery({ item: "" });
     await refresh();
   } catch (e) { say(btn, e.message); btn.disabled = false; }
@@ -377,7 +376,7 @@ export function renderNote(n) {
     (fm ? `<dl class="facts">${fm}</dl>` : "") +
     `<article class="note">${md(n.body)}</article>` +
     `<section id="links">${sectionHead("Links to", { id: "links", count: n.links.length })}${crumbs(n.links)}</section>` +
-    `<section id="backlinks">${sectionHead("Linked From", { id: "backlinks", count: n.backlinks.length })}${crumbs(n.backlinks)}</section></div>`;
+    `<section id="backlinks">${sectionHead("Linked from", { id: "backlinks", count: n.backlinks.length })}${crumbs(n.backlinks)}</section></div>`;
 }
 
 export const noteView = {
