@@ -45,6 +45,12 @@ delete process.env.ALEPH_RECORDS_DIR;
 // A shell with ALEPH_UI_PASSWORD turns on the UI's login gate, and every UI test would get a 401. A test of the
 // gate sets the password itself.
 delete process.env.ALEPH_UI_PASSWORD;
+// git sets these for a hook run from a linked worktree; a fixture's git would then write the enclosing repo and push to its origin (aleph-1733).
+for (const k of [
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT", "GIT_OBJECT_DIRECTORY", "GIT_DIR",
+  "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE", "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE",
+  "GIT_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR",
+]) delete process.env[k];
 // Pin the test runner to UTC so timezone-independent dates and timestamps agree across environments.
 process.env.TZ = "UTC";
 // No test starts a detached dispatch or intake as a systemd unit: each new issue's filing would start one. A test
