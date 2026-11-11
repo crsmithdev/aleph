@@ -280,26 +280,51 @@ Each component, its helper and the view that follows the rules best.
 | Pager | `pager()` | `ui/views/issues.js` |
 | Empty state | `empty()` | `ui/views/jobs.js` |
 
+### Every component
+
+These rules hold for each component below; its own list adds to them.
+
+- Build it with its helper. Never write its markup by hand.
+- Colours, sizes, spacing and radii from tokens only (Principles, Rules).
+- Every value through its format helper (Content, Values); a missing value as that table says.
+- A state's colour from `tone()`; never pick a tone by hand.
+- Headers and titles in Title Case with short words lower (`Jobs per Item`); states lower case.
+- A count is a bare muted number after its title, never in brackets.
+- Interaction states as States says: `:focus-visible`, `aria-pressed`, disabled while a request runs.
+- A new component, or a new state of one, gets a specimen on `#/kit`.
+
 ### Structure
 
 #### Page head
 
-The serif title of a page, a muted count, and the page's controls at the right.
+The page's serif title, a muted count, and the page's controls at the right.
 
-- **Use:** once per page, first, under the crumb of a detail page.
-- **Page-head controls:** Project, then Hour / Day / Week / Month (`scope()` in `ui/lib.js`). Both stay in the address.
+- `pageHead(title, { count, aside })`.
+- One per page, first; under `crumb()` on a detail page.
+- `count`: the number of items the page lists, or none.
+- `aside`: the page's controls only. Project, then the window (Hour, Day, Week, Month), from `scope().bar()`; then the page's own control in `after`.
+- Project and window live in the address; `scope().wire(root)` in `mount`.
 
 #### Card
 
 A block of a page: a section head with an optional count and aside, then a body.
 
-- **Use:** for each section of a page. Don't nest a card in a card.
+- `card(title, body, { count, aside, id })`.
+- One card per section of a page. Never a card in a card.
+- `title`: what the section holds, in Title Case.
+- `aside`: the section's controls, or one muted note.
+- `id` when another part of the page links to the section.
+- A card with no content shows `empty()` in its body; the card stays.
 
 #### Fact list
 
-Keys and values for one thing: `<dl class="facts">`, the key muted.
+Keys and values for one thing.
 
-- **Use:** for the properties of one item, on a detail page.
+- `facts([[key, html]])`.
+- For the properties of one item, on a detail page.
+- Keys: one or two words, sentence case (`Started`, `Took`).
+- Values: from their format helpers; HTML, so escape text with `esc()`.
+- An empty value drops its row; never a placeholder.
 
 | Do | Don't |
 |---|---|
@@ -309,7 +334,7 @@ Keys and values for one thing: `<dl class="facts">`, the key muted.
 
 #### Metric card
 
-One number with its key, at the top of a page. `tiles()` lays the cards out at 150px minimum, auto-fit.
+One number with its key, at the top of a page.
 
 | Part | Holds |
 |---|---|
@@ -320,10 +345,16 @@ One number with its key, at the top of a page. `tiles()` lays the cards out at 1
 | 5 Bar | an optional meter |
 | 6 Qualifier | what the numbers are, such as `in use / cap`, or a note |
 
-- **Use:** for the headline numbers of a page. A number that needs more than three rows goes in a table below the cards.
-- **Trend:** `▲`, `▼` or `▬ 0%`. Green when the change is good, from `lowerIsGood`; neutral when it is `null`; no trend without a baseline.
-- **Link or selector:** `href` makes the card a link; `key` makes it select a view below, with `aria-pressed`.
-- **More than 3 rows:** row 3 is one line; the full note is in the tooltip.
+- `statCard({ k, v, v2, q, note, trend, extra, href, key, on })`, in `tiles(label, html)`.
+- For the headline numbers of a list page. A detail page uses facts instead.
+- `k`: the measure, two or three words; CSS sets it in capitals.
+- `v`: a format helper's output. Unknown is `–` with a `note` that says why.
+- `v2` only with `q`, which names both values.
+- Row 3: `q` or `note`, one line. A long note is cut; its full text is the tooltip.
+- `trend`: only from `cardTrend(value, base, prev, { kind, lowerIsGood, format, basis })`. `kind` is `points` for a share and `relative` for a time or a count. `lowerIsGood` is `null` when neither way is good. No baseline gives no trend.
+- `extra`: a `meter()` only.
+- `href` goes to another page. `key` selects the view below it, with `on` for the pressed card, wired by `onTile()`.
+- A number that needs more than three rows goes in a table below the cards.
 
 | Do | Don't |
 |---|---|
@@ -334,15 +365,21 @@ One number with its key, at the top of a page. `tiles()` lays the cards out at 1
 
 #### Table
 
-Rows of items with the same columns: `dataTable()` with `heads()` or `sortHead()`. Over 50 rows: `pagedTable()`.
+Rows of items with the same columns.
 
-- **Column order:** time, id or name, title, state, project, labels, numbers.
-- **Spare width:** the title is `td.wide`; it takes the spare width and ends in an ellipsis.
-- **Sort:** `sortHead()` sets `aria-sort` and shows `▲` or `▼`.
-- **Pager:** `pager()`: 50 rows, then "Show 50 more".
-- **Long text:** `clamp()` with a Show more button; long lists with `moreFold()`.
-- **Wide tables:** `.tscroll` scrolls sideways on a phone.
-- **Empty table:** `empty()` in place of the table.
+- `dataTable(head, rows, { fit })`; the head from `heads(labels, num)` or `sortHead()`.
+- Columns in this order: time, id or name, title, state, project, labels, numbers.
+- Time: `when()`, under a header that says which time.
+- Id: `idLink()` or `repoIdLink()`.
+- Title: `td.wide`. It takes the spare width and ends in an ellipsis. No other cell wraps.
+- State: `badge()`. Labels: `chips()`.
+- Numbers: `td.num`, and the header in `num`, so both are right-aligned in tabular figures.
+- Sort: `sortHead()` with `wireTable()`; the sort lives in the address as `sort` and `dir`.
+- Over 50 rows: `pagedTable()`, or `pager()` with `limitOf()`.
+- `fit: true` for a short table of names and numbers.
+- No rows: `empty()` in place of the table.
+- Row actions sit under the row's text in `.actions`, never in a cell of their own.
+- On a phone the table scrolls sideways in `.tscroll`.
 
 | Do | Don't |
 |---|---|
@@ -354,7 +391,7 @@ Rows of items with the same columns: `dataTable()` with `heads()` or `sortHead()
 
 #### Chart panel
 
-A titled chart drawn from a frame: `<aleph-chart key="<view>/<chart>">` (`ui/chart.js`).
+A titled chart drawn from a frame (`ui/chart.js`).
 
 | Frame part | Gives |
 |---|---|
@@ -363,11 +400,16 @@ A titled chart drawn from a frame: `<aleph-chart key="<view>/<chart>">` (`ui/cha
 | by | a colour token for each series |
 | rows | the points; a row with `href` links |
 
-- **Use:** a flow opens as Columns, a level as Area.
-- **Series colours:** tones for states; `--series-1` to `--series-5` for roles.
-- **Axes:** value axis from 0 in whole steps; labels from `day()` or `hourLabel()`.
-- **No data:** the title and "Nothing to plot in this window."; a card with only a chart shows `empty()` instead.
-- **Sticky state:** `keep()` and `kept()` in `ui/lib.js` keep how a chart shows; the address keeps what data it shows.
+- `panelOf(key, frame)` in `render`; set the element's `frame` in `mount`.
+- `key`: `<view>/<chart>`, one per chart.
+- `measure.unit`: `count`, `usd` or `seconds`; it picks the axis and tooltip format. `agg`: `sum` for a flow, `max` for a level.
+- A flow opens as Columns, a level as Area. Never write the title; the frame gives it.
+- Each key in `by` names a colour token: tones for states, `series-1` to `series-5` for roles. A key keeps its colour in every window.
+- A legend, unless the frame has one key that the title names (`legend: false`).
+- The value axis starts at 0; a count axis steps in whole numbers.
+- No data: the frame's `empty` line. A card that holds only a chart shows `empty()` instead.
+- Data that failed to rebuild: pass `error` and `since`; the panel says how old it is.
+- Two or three panels side by side go in `.trio`.
 
 | Do | Don't |
 |---|---|
@@ -376,19 +418,43 @@ A titled chart drawn from a frame: `<aleph-chart key="<view>/<chart>">` (`ui/cha
 
 #### Meter
 
-A 10px bar for one share or segments: `meter()`, with an optional mark. `barRow()` and `barList()` put a label, a meter and a value on one grid.
+A 10px bar for one share or for segments.
 
-- **Use:** for a share of a known whole. For a trend over time, use a chart panel.
+- `meter(parts, label, { mark })`: one percent, or segments `{ pct, cls }`.
+- For a share of a known whole. A trend over time is a chart panel.
+- `label`: the text alternative. Leave it out only when the value shows beside the bar.
+- `mark`: a target or the time gone.
+- Rows of label, bar and value: `barRow()` in `barList()`; `top` marks the largest.
+- The container gives the meter its width.
 
 #### Outcome bar
 
-A 28px bar of whole-window shares in `--seg-*` colours, with a legend such as `landed 40h 57%`: `bar()` in `ui/views/speed.js`.
+A bar of whole-window shares in `--seg-*` colours, with a legend such as `landed 40h 57%`.
+
+- `bar(d, key)` in `ui/views/speed.js`, from `/api/flow`.
+- Classes that reached main sit left of the separator, the rest right.
+- Each segment selects the detail below it, with `aria-pressed`.
+- No hours: `empty()`.
 
 ### Labels
 
-#### Badge and chip
+#### Badge
 
-A badge is a state, squared (`--r-tag`): `badge()`, `priorityBadge()`. A chip is a label, a pill: `chips()`.
+A state, squared.
+
+- `badge(state)` for a state; `priorityBadge(p)` for a priority.
+- `tag(text, tone, title)` for other short status text.
+- Text lower case, from Naming.
+- A new state goes in the tone map of `tone()`, never as a class by hand.
+- Never for a label.
+
+#### Chip
+
+A label, a pill.
+
+- `chips(labels)` for an item's labels.
+- No labels: nothing, never a placeholder.
+- Never for a state.
 
 | Do | Don't |
 |---|---|
@@ -397,38 +463,95 @@ A badge is a state, squared (`--r-tag`): `badge()`, `priorityBadge()`. A chip is
 
 ### Actions
 
-#### Button and command
+#### Button
 
-`.act` is a button, from `actButton()`. A command box shows a command in mono and copies it on click: `cmd()`; `primary` inverts it.
+An action on the server.
 
-- **Use:** a short verb for the label. `act warn` for an action that stops or drops work.
+- `actButton(label, data, { primary, cls })`.
+- `label`: a short verb in sentence case (`Retry`, `Land`).
+- `data`: `act` and `path` for the dispatch in `ui/router.js`.
+- At most one `primary` in a group.
+- `cls: "warn"` for an action that stops or drops work.
+- Land, Drop and Pause also take `confirm` (Two-click confirm).
+
+#### Command
+
+A command for the reader to run.
+
+- `cmd(text, { primary, hint })`.
+- A click copies the text and says so.
+- `primary` for the command the page asks for; at most one.
 
 #### Row actions
 
-A row's buttons sit in `.actions` under its text.
+A row's buttons.
+
+- `.actions` after the row's text, never in a table cell.
+- Buttons from `actButton()`; the result from `say()`.
 
 #### Form message
 
-The result of an action, beside its button: `say()` in `ui/lib.js` writes a `<span class="act-msg">` with `role="alert"`.
+The result of an action, beside its button.
+
+- `say(el, text)`; it writes `.act-msg` with `role="alert"`.
+- One line: what failed and why.
 
 #### Two-click confirm
 
-Land, Drop and Pause ask once more: the first click shows `<label> <name>? Click again` for 5 seconds (`ui/index.html`). An answer that needs a reason opens a reason box first; its button reads `Confirm`.
+A second click for an action that is hard to undo.
+
+- `confirm` in the button's `data`. The first click shows `<label> <name>? Click again` for 5 seconds (`ui/router.js`).
+- An answer that needs a reason: a `.choice` with `input.reason`. The first click opens the box, and the button reads `Confirm`.
 
 #### Disclosure
 
-A `<details>` fold. `recordState()` and `restoreState()` in `ui/lib.js` keep it open across a redraw.
+A fold that hides detail.
+
+- `<details>` with a `<summary>` that says what is inside.
+- Closed by default, unless the reader came for what it holds.
+- `data-keep="<key>"` keeps the reader's open state (`wireFolds()`, `restoreFolds()`); `recordState()` and `restoreState()` keep it across a redraw.
+- A long list: `moreFold(items, row)`, 10 items, then a fold. Long text: `clamp(html)`, 3 lines, then Show more.
 
 ### Text
 
 #### Markdown and code
 
-- **Markdown:** `md()` in `ui/lib.js` into `.md`.
-- **Code:** `--mono` at `--fs-xs` on `--sunk`; `pre` wraps, `.md pre` scrolls.
+- Markdown: `md()` into `.md`.
+- Code in text: `codeText()`.
+- A code block scrolls sideways in `.md`; elsewhere `pre` wraps.
 
 #### Diff
 
-`diffHtml()` in `ui/lib.js` into `.diff-panel`: added lines `--add`, deleted lines `--del`, hunks `--muted`.
+- `diffHtml()` into `.diff-panel`; the panel scrolls.
+- Added and deleted lines differ by colour alone (Accessibility).
+
+### Controls
+
+#### Filter bar
+
+A row of filters over a table.
+
+- `filterBar(groups)`. A fixed set of options is a segmented control; options from the data (`data: true`) are a select.
+- The first option says All.
+- A filter that changes the data: `goQuery()`. A filter that changes only what shows: `setQuery()`.
+- Search: `searchBox()`.
+- Filters for the whole page go in the page head, from `scope().bar()`.
+
+#### Pager
+
+Rows past the first 50.
+
+- `pager(shown, total)`: `Show 50 more`, then `50 of 345`.
+- The limit lives in the address (`limitOf()`); `pagedTable()` reveals in place.
+
+#### Empty state
+
+What shows when there is nothing, while it loads, or when it failed.
+
+- `empty(line, hint)`: one sentence on what is not there, then a hint on what to do.
+- It takes the place of the table, chart or list; the card stays.
+- Loading: `loading(title)` reads `Loading <title>…`.
+- Failure: `error(line, hint)`; the hint says what to do.
 
 ## States
 
@@ -472,6 +595,9 @@ A `<details>` fold. `recordState()` and `restoreState()` in `ui/lib.js` keep it 
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
 | A missing cell is empty in some tables and `–` in others | Tables | follow-up |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `costFrame()` in `ui/views/factory-agents.js` | allowed |
+| `.act.warn` has no style, so a warn button looks like any other | `ui/app.css` | review on `#/kit` |
+| A metric card's second value hides at phone width, so `v` shows with a `q` that names two values | `ui/app.css` | review on `#/kit` |
+| A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
 
 ## Appendix
 

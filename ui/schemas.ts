@@ -67,6 +67,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     prompt: "string", output: "string", cost: "number", seconds: "number?", observations: "array",
   },
   "/api/skills/:name": { name: "string", days: "number", since: "string", asOf: "time", "failed?": "string", uses: "number", perDay: "array", projects: "array", sessions: "array", tools: "array", errors: "array" },
+  "/api/design": { body: "string" },
   "/api/specs/:project/:file": { project: "string", file: "string", date: "string", title: "string", body: "string" },
   "/api/ideas": [{ slug: "string", title: "string", "target?": "string", status: "string", lenses: ["string"], last: "string", questions: "number", spent: "number" }],
   "/api/ideas/:slug": { slug: "string", title: "string", "target?": "string", status: "string", built: "array", writeup: "string", log: ["string"], lenses: [{ lens: "string", at: "string", file: "string" }], running: ["string"] },
