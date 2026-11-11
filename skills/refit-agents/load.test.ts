@@ -36,3 +36,12 @@ test("counts what loads on every turn and what loads on demand", () => {
   expect(r.skills.map((s) => [s.name, s.invoked])).toEqual([["two", "user"], ["one", "model"]]);
   expect(r.hooks).toEqual(["hooks/hooks.json: SessionStart"]);
 });
+
+// Raise this only with the reason in the commit. Memory files above the repo (absolute) and the user's own (`~`) are not counted.
+const ALWAYS_TOTAL = 1810;
+
+test("the always-loaded tokens inside the repo stay at or under the recorded total", () => {
+  const r = load(join(import.meta.dir, "..", ".."), mkdtempSync(join(tmpdir(), "home-")));
+  const sum = r.always.filter((i) => !i.file.startsWith("/") && !i.file.startsWith("~")).reduce((n, i) => n + i.tokens, 0);
+  expect(sum).toBeLessThanOrEqual(ALWAYS_TOTAL);
+});
