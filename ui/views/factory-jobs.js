@@ -1,6 +1,6 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { card, pagedTable, dur, count, empty, error, esc, failMessage, heads, loadingLine, onTile, pageHead, searchBox, setQuery, shortModel, statCard, cardTrend, tiles, scope } from "../lib.js";
+import { card, cell, pagedTable, row, dur, count, empty, error, failMessage, heads, loadingLine, onTile, pageHead, searchBox, setQuery, shortModel, statCard, cardTrend, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./jobs.js";
@@ -83,7 +83,7 @@ export const FRAMES = { trend: trendFrame, strip: stripFrame, slowest: slowestFr
 /** The key of a Jobs chart panel: its frame, its kept form and its kept hidden series are its own. */
 export const chartKey = (k) => `factory/jobs/${k}`;
 
-const table = (labels, num, rows) => !rows.length ? empty("No row to show.", "Pick a longer window or another stage.") : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`));
+const table = (labels, num, rows) => !rows.length ? empty("No row to show.", "Pick a longer window or another stage.") : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => row([cell(h, { wide: true }), ...cells.map((c) => cell(c, { num: true }))])));
 
 /** The page body for a stage. `day` is /api/flow for the last 24h, or null. `jobs` is /api/jobs for the window, null while it loads, or the Error of a failed load; `f` is the route query. */
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {

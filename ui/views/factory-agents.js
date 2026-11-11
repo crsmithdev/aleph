@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, heads, loadingLine, money, pageHead, pct, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, tone, scope } from "../lib.js";
+import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, pageHead, pct, row, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, tone, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard } from "./speed.js";
@@ -40,15 +40,15 @@ const TIERS = Object.fromEntries(["merge", "reviewer", "intake", "director", "mo
 function roles(a, m) {
   const num = ["Jobs", "Success", "p50", "Cost"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
-  const cell = (v) => `<td class="num">${count(v)}</td>`;
+  const gone = `<td class="num">${miss("no runs in this window")}</td>`;
   const outs = a.outcomes ?? [];
   // The outcome row for a config row: the one of its role and current model. A reviewer records no model, so its row is the one of its role.
   const find = (role, model) => outs.find((x) => x.role === role && (role === "reviewer" || shortModel(x.model) === shortModel(model)));
   const stats = (o) => {
-    if (!o) return `${cell(null).repeat(num.length)}<td>${count(null)}</td>`;
+    if (!o) return `${gone.repeat(num.length)}<td>${miss("no runs in this window")}</td>`;
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td><td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
+    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td>${cell(dur(o.p50), { num: true })}${cell(money(o.cost), { num: true })}<td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
   };
   /** The worker outcome rows as one, for the one Worker row: the counts add, and the rate is its succeeded over its ended runs. */
   const allWorkers = () => {
@@ -57,11 +57,11 @@ function roles(a, m) {
     return rs.length ? { role: "worker", runs: n("runs"), succeeded: n("succeeded"), failed: n("failed"), stuck: n("stuck"), rate: ended ? n("succeeded") / ended : null, cost: n("cost") } : null;
   };
   const model = (t) => shortModel(t?.model);
-  const workerRow = () => `<tr><td class="wide">Worker</td><td>${model(m.tiers["worker-low"])}, ${model(m.tiers["worker-medium"])}</td>${stats(allWorkers())}</tr>`;
-  const pick = ([tier, name]) => `<tr><td class="wide">${esc(name)}</td><td>${model(m.tiers[tier])}</td>${stats(find(tier, m.tiers[tier]?.model))}</tr>`;
+  const workerRow = () => row([cell("Worker", { wide: true }), cell(`${model(m.tiers["worker-low"])}, ${model(m.tiers["worker-medium"])}`), stats(allWorkers())]);
+  const pick = ([tier, name]) => row([cell(name, { wide: true }), cell(model(m.tiers[tier])), stats(find(tier, m.tiers[tier]?.model))]);
   const tierRoles = new Set(["worker", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
   const config = m ? workerRow() + Object.entries(TIERS).map(pick).join("") : "";
-  const rows = config + (m ? outs.filter((o) => !tierRoles.has(o.role)) : outs).map((o) => `<tr><td class="wide">${esc(names[o.role] ?? o.role)}</td><td>${esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
+  const rows = config + (m ? outs.filter((o) => !tierRoles.has(o.role)) : outs).map((o) => row([cell(names[o.role] ?? o.role, { wide: true }), cell(shortModel(o.model)), stats(o)])).join("");
   return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty("No agent ran in this window.", "Pick a longer window.");
 }
 

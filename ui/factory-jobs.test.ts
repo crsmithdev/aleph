@@ -122,8 +122,9 @@ test("the title is the sidebar name", () => {
 test("the Checks table groups a job count and the Models table names a model by shortModel()", () => {
   const h = renderFactoryJobs({ ...D, checks: [{ name: "tests", count: 1234, p50: 51, p90: 171 }], models: [{ model: "claude-opus-5-5", count: 3, p50: 700 }, { model: "unset", count: 2, p50: 480 }] }, null, "lead");
   expect(h).toContain('<td class="num">1,234</td>');
-  expect(h).toContain('<td class="wide">opus</td>');
-  expect(h).toContain('<td class="wide">unset</td>');
+  expect(h).toContain('<td class="wide" title="tests">tests</td>');
+  expect(h).toContain('<td class="wide" title="opus">opus</td>');
+  expect(h).toContain('<td class="wide" title="unset">unset</td>');
   expect(h).not.toContain("not recorded");
 });
 
