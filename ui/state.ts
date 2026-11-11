@@ -356,7 +356,8 @@ export function state(now = new Date()): State {
     if (isOpen(runs)) {
       const real = counting(runs).run;
       if (isWaiting(real.condition)) needs.push(toJob(runs));
-      else if (real.condition === "returned" || real.condition === "failed") stuck.push(toJob(runs));
+      // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not stuck.
+      else if ((real.condition === "returned" || real.condition === "failed") && !real.next) stuck.push(toJob(runs));
       else {
         liveJobs.add(real.job);
         const k = issueKeyOf(real);

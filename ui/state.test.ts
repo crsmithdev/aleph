@@ -293,3 +293,14 @@ describe("a stuck job whose last run failed a check", () => {
     }
   });
 });
+
+describe("a returned run whose rework is queued", () => {
+  test("is not stuck, so the status does not flash an alert before the rework starts", () => {
+    run("20261027-000071-a", { job: "fac-71", name: "fac-71", condition: "returned", cause: "check", next: "worker", started: ago(2) });
+    try {
+      expect(state(now).stuck.some((x) => x.name === "fac-71")).toBe(false);
+    } finally {
+      (rmSync(join(jobsDir, "20261027-000071-a"), { recursive: true }), removeRun("20261027-000071-a"));
+    }
+  });
+});
