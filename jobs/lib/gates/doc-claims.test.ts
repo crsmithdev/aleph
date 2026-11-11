@@ -93,10 +93,16 @@ describe("a doc that does not match fails, quoting the claim", () => {
   });
 
   test("a claim that a file imports only some modules", () => {
-    expect(one("`jobs/lib/infra/settings.ts` imports only `node:os`, `node:path`, `../../../lib/paths.ts`, `../../../lib/json.ts` and `../../../lib/layout.ts`.")).toEqual([]);
-    const p = one("`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`.");
-    expect(p).toHaveLength(1);
-    expect(p[0]).toStartWith('docs/x.md:1: "`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`": jobs/lib/infra/settings.ts imports node:os, node:path, ../../../lib/paths.ts, ../../../lib/json.ts, ../../../lib/layout.ts; not ./sandbox.ts, ./gate.ts');
+    const dir = mkdtempSync(join(tmpdir(), "doc-claims-imports-"));
+    try {
+      mkdirSync(join(dir, "jobs"));
+      writeFileSync(join(dir, "jobs", "a.ts"), 'import { os } from "node:os";\nimport { b } from "./b.ts";\n');
+      const at = (text: string) => docProblems([{ file: "docs/x.md", text }], { ...t(), root: dir });
+      expect(at("`jobs/a.ts` imports only `node:os` and `./b.ts`.")).toEqual([]);
+      expect(at("`jobs/a.ts` imports only `./c.ts` and `node:fs`.")).toEqual([
+        'docs/x.md:1: "`jobs/a.ts` imports only `./c.ts` and `node:fs`": jobs/a.ts imports node:os, ./b.ts; not ./c.ts, node:fs',
+      ]);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });
 
