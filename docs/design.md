@@ -567,6 +567,8 @@ A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 | a legend on a stacked chart | a stacked chart with no legend |
 | `panelOf("agents/cost", frame)` | an ECharts instance made by the view |
 
+Two charts are allowed outside the chart panel: the Agent Time bar (`ui/views/speed.js`) and the session waterfall (`ui/views/session.js`).
+
 #### Legend
 
 A legend gives the colour of each series in a chart that is not a chart panel.
@@ -1236,7 +1238,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
-| Charts outside the chart panel: the Agent Time bar, the recall histogram, the session waterfall | `ui/views/speed.js`, `ui/views/memory.js`, `ui/views/session.js` | follow-up |
+| Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/speed.js`, `ui/views/session.js` | allowed |
 | A table written by hand | `ui/views/memory.js` | follow-up |
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |

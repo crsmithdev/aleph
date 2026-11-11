@@ -243,9 +243,11 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   const hist = Array(30).fill(0); hist[29] = 2; hist[26] = 1;
   const note = { type: "semantic", source: "note", key: "N", title: "N", text: "", scope: "", at: "", read: null, effect: "" };
   const h = v.renderInspector(note, n, "use", hist);
-  expect(h.match(/<i title=/g)).toHaveLength(30);
-  expect(h).toContain('data-n="2"');
-  expect(h).toContain('aria-label="3 recalls in 30 days"');
+  expect(h).toContain('<aleph-chart key="memory/recall"');
+  expect(h).toContain('aria-label="Recalls per Day: Recalls 3"');
+  expect(h).not.toContain("mhist");
+  expect(h).not.toContain("<i title=");
+  expect(v.recallFrame(hist).rows.map((r: any) => r.recalls)).toEqual(hist);
   expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain(empty("No recall in the last 30 days."));
 });
 
@@ -391,6 +393,7 @@ test("the inspector says how a memory reaches the agent, shows its recall histor
   const hand = v.renderInspector(it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }));
   for (const t of ['data-mact="edit"', 'data-mact="file-delete"']) expect(hand).toContain(t);
   expect(hand).not.toContain("Recall history");
+  expect(v.renderInspector(it({ type: "working", source: "handoff", key: "current.md" }), null, "", [1])).not.toContain("aleph-chart");
   expect(v.renderInspector(it({ type: "procedural", source: "skill", key: "vault", href: "#/skills/vault" }))).toContain("change it on a branch");
   expect(v.renderInspector(it({ type: "retrieval", source: "miss" }))).toContain('data-mact="alias"');
   expect(v.renderInspector(it({ type: "procedural", source: "proposal", key: "p1" }))).toContain('data-mact="approve"');

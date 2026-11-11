@@ -899,7 +899,6 @@ table.tbl td.eff { white-space: normal; min-width: 22ch; }
 .ins .macts { display: flex; gap: var(--sp-6); flex-wrap: wrap; align-items: center; margin-top: var(--sp-14); padding-top: var(--sp-12); border-top: 1px solid var(--rule-2); }
 .ins .act.danger { color: var(--stuck); }
 .ins .act.small { padding: 0 var(--sp-6); font-size: var(--fs-2xs); }
-.ins .mhist i { background: var(--run); }
 tr.nrow { cursor: pointer; }
 tr.nrow[aria-selected="true"] { background: var(--sunk); box-shadow: inset 3px 0 0 var(--run); }
 tr.nrow td.wide a { color: inherit; text-decoration: none; }
@@ -988,8 +987,6 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
   .dp-ev > :nth-child(2) { grid-column: 2; }
   .dp-ev > .dp-evt { grid-column: 1 / -1; }
 }
-.spark { display: flex; align-items: flex-end; gap: var(--sp-2); height: 32px; }
-.spark i { flex: 1; background: var(--muted); border-radius: var(--r-tag) var(--r-tag) 0 0; }
 .obar { display: flex; }
 .osegs { display: flex; gap: var(--sp-2); }
 .osegs > * { min-width: 4px; height: calc(2 * var(--sp-14)); padding: 0; border: 0; }

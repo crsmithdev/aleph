@@ -3,6 +3,7 @@
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
+import { panelOf } from "../chart.js";
 import { actButton, fold, linkButton, codeText, dataTable, heads, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
 
 export const view = {
@@ -118,13 +119,17 @@ export function renderResults(results, o, status) {
   }).join("");
 }
 
-/** Recalls per day over 30 days, oldest first, from the recall log. */
-function recallHistory(hist = []) {
-  const total = hist.reduce((a, b) => a + b, 0), top = Math.max(...hist, 1);
-  return `<h4>Recall history, 30 days</h4>` + (total
-    ? `<div class="spark mhist" role="img" aria-label="${total} recalls in 30 days">${hist.map((c) => `<i title="${c}" data-n="${c}" style="height:${c ? Math.max(12, (c / top) * 100) : 4}%"></i>`).join("")}</div>`
-    : empty("No recall in the last 30 days."));
-}
+/** The frame of a note's recalls per day over 30 days, oldest first, from the recall log. The frame's window only names the x label format: one row per day. */
+export const recallFrame = (hist = []) => ({
+  measure: { name: "Recalls per Day", unit: "count", agg: "sum" },
+  over: { kind: "time", window: "week" },
+  by: { keys: [{ key: "recalls", name: "Recalls" }] },
+  rows: hist.map((n, i) => ({ at: Date.now() - (hist.length - 1 - i) * DAY, recalls: n })),
+  legend: false,
+});
+
+/** The chart panel of a note's recalls (`inspect` sets its frame), or the line that there were none. */
+const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : `<h4>Recall history, 30 days</h4>${empty("No recall in the last 30 days.")}`;
 
 const why = `<input class="mwhy" name="why" placeholder="Why (optional)" aria-label="Why">`;
 // `data-mact`, not `data-act`: router.js runs its own command for every `button.act[data-act]`.
@@ -276,6 +281,8 @@ async function inspect(id) {
     live.note = res.ok ? n : null;
     const row = live.m.notes?.find((x) => x.title === it.key);
     box.innerHTML = res.ok ? renderInspector(it, n, live.status.get(it.key), row?.history) : error(n.error ?? `answered ${res.status}`, "The note may have left the vault.");
+    const chart = box.querySelector("aleph-chart");
+    if (chart) chart.frame = recallFrame(row?.history);
   } catch (e) { box.innerHTML = error(`Could not load the note: ${e.message}`); }
 }
 
