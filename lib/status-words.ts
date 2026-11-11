@@ -100,7 +100,9 @@ export function verdict(s: Facts, stale = false): Verdict {
   if (week >= WEEKLY_WARN) said.push({ text: weekly(week), href: "" });
   for (const l of f.health ?? []) if (l.kind === "warn") said.push({ text: shortText(l.text.replace(/^health:\s*/, "")), href: "" });
   const parts = said.slice(0, MAX_SAID), more = parts.length ? "; " : "";
-  const [tone, head]: [Verdict["tone"], string] = stale ? ["alert", `${ALERT}this status is out of date${more}`]
+  // The first part after "Alert: " starts a sentence.
+  if (alerts.size && !stale) parts[0] = { ...parts[0], text: lead(parts[0].text) };
+  const [tone, head]: [Verdict["tone"], string] = stale ? ["alert", `${ALERT}This status is out of date${more}`]
     : alerts.size ? ["alert", ALERT]
     : asks.length && !f.paused ? ["ask", ""]
     : [parts.length || f.paused ? "warning" : "fine", `${f.paused ? lead(PAUSED) : FINE}${more}`];

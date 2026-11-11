@@ -427,6 +427,9 @@ function reportCmd(ctx: Ctx): void {
   ctx.log(text || "nothing new");
 }
 
+/** One line of `aleph status`: the id and the stage, then the reason's sentence. */
+const stageLine = (s: Stage) => `${s.id} ${s.stage}${s.why ? `: ${s.why}` : ""}`;
+
 /** `aleph status <repo>-<n>[.<k>]`: the item's stage, from the store and the ledger; with no issue, see statusRecent. */
 function statusCmd(ctx: Ctx): void {
   if (!ctx.positional[0]) return statusRecent(ctx);
@@ -438,7 +441,7 @@ function statusCmd(ctx: Ctx): void {
   try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (ctx.rest.includes("--json")) return ctx.out(s);
-  ctx.log(issues.localRefs(key, [s.id, s.stage, s.why].filter(Boolean).join(" ")));
+  ctx.log(issues.localRefs(key, stageLine(s)));
 }
 
 /** `aleph status` with no issue: the stage of each open issue in each recent repo. */
@@ -459,7 +462,7 @@ function statusRecent(ctx: Ctx): void {
   }
   if (ctx.rest.includes("--json")) return ctx.out(states);
   if (!states.length) { ctx.log("no open items"); return; }
-  for (const { key, rows } of ofRepo) { ctx.log(key); for (const s of rows) ctx.log(issues.localRefs(key, `  ${[s.id, s.stage, s.why].filter(Boolean).join(" ")}`)); }
+  for (const { key, rows } of ofRepo) { ctx.log(key); for (const s of rows) ctx.log(issues.localRefs(key, `  ${stageLine(s)}`)); }
 }
 
 const ready = (i: issues.Issue, key: string) => (store.afterOf(i).length ? `after ${issues.localRefs(key, store.afterOf(i).join(","))}` : "");

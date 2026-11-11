@@ -43,9 +43,9 @@ const ISSUES_NEW: Row[] = [
 ];
 
 const PARTS_NEW: Row[] = [
-  { name: "new issue: working", stage: "working", action: "running", on: /^fac-\d+#1$/, why: /^running fac-\d+#1$/, build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
+  { name: "new issue: working", stage: "working", action: "running", on: /^fac-\d+#1$/, why: /^fac-\d+#1 started$/, build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
   // PARTS_NEW[1] is the held issue that the `aleph status` test below reads.
-  { name: "new issue: held", stage: "held", action: "after", why: /^after fac-\d/, build: async () => newIssue({ after: [ref(newIssue())] }) },
+  { name: "new issue: held", stage: "held", action: "after", why: /^fac-\d+ waits for fac-\d/, build: async () => newIssue({ after: [ref(newIssue())] }) },
   { name: "new issue: working while intake splits it", stage: "working", build: async () => newIssue({ plan: "true" }) },
   { name: "new issue: an intake run sorts it, not works it", stage: "queued", action: "starting", build: async () => newRun(newIssue(), { kind: "intake", condition: "running" }) },
 ];
@@ -59,11 +59,11 @@ const landPart = (_n: number, partRef: string): string => {
 
 // Dotted issues: the part `.k` of an issue, seeded through seedPart.
 const PARTS_DOTTED: Row[] = [
-  { name: "dotted issue: done by its trailer commit while the store holds it open", stage: "done", action: "landed", on: /^[0-9a-f]{7}$/, why: /^landed [0-9a-f]{7}$/, build: async () => {
+  { name: "dotted issue: done by its trailer commit while the store holds it open", stage: "done", action: "landed", on: /^[0-9a-f]{7}$/, why: /^fac-\d+\.\d+ landed$/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); landPart(n, `${n}.1`); return a;
   } },
-  { name: "dotted issue: waiting on its Ask while a trailer commit on main names it", stage: "waiting", why: /^waiting → human$/, build: async () => {
+  { name: "dotted issue: waiting on its Ask while a trailer commit on main names it", stage: "waiting", why: /^fac-\d+\.\d+ waits for you$/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landPart(n, `${n}.1`); return a;
   } },
@@ -95,8 +95,6 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["parts, new sha
         if (!row.of) expect(s.of).toBeUndefined();
         if (row.on) expect(s.on?.join(" ")).toMatch(row.on);
         expect(s.why).toMatch(row.why ?? /./);
-        // The reason is event words, never a sentence: no `is`, `has`, `says` or `of`, and no `:`.
-        expect(s.why).not.toMatch(/\b(is|has|says|of)\b|:/);
       });
     }
   });
@@ -107,9 +105,9 @@ test("aleph status prints the same stage as JSON and as one line, with the short
   const r = await aleph(["status", ref(id), "--json"]);
   expect(r.code, r.stderr).toBe(0);
   expect(r.json).toEqual(JSON.parse(JSON.stringify(await statusOf(PARTS_NEW[1]))));
-  expect(r.json.why).toMatch(/after fac-\d/);
+  expect(r.json.why).toMatch(/waits for fac-\d/);
   const text = await aleph(["status", ref(id)]);
-  expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage} ${r.json.why}`);
+  expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage}: ${r.json.why}`);
   expect((await aleph(["status", "fac-999"])).stderr).toContain("fac has no issue 999");
 }, 90_000);
 

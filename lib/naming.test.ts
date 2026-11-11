@@ -137,3 +137,15 @@ test("no file outside lib/naming.ts reads an issue ID with its own regex", () =>
   });
   expect(hits).toEqual([]);
 });
+
+test("sayText says an event in the active voice, its job or issue first, the sub's cause after a colon", () => {
+  const cases: [Record<string, unknown>, string][] = [
+    [{ subject: "aleph-1868", action: "landed", on: ["a1868#2"] }, "a1868#2 landed"],
+    [{ subject: "aleph-1749", action: "failed", sub: "conflict", on: ["a1749#6"] }, "a1749#6 failed: merge conflict"],
+    [{ subject: "aleph-3", action: "returned", sub: "review", on: ["a3#1"] }, "a3#1 returned by review"],
+    [{ subject: "aleph-3", action: "waiting", to: "human" }, "a3 waits for you"],
+    [{ subject: "aleph-3", action: "after", on: ["aleph-2"] }, "a3 waits for a2"],
+    [{ subject: "aleph-3", action: "filed", by: "human" }, "a3 filed by you"],
+  ];
+  for (const [ev, text] of cases) expect(n.sayText(ev)).toBe(text);
+});

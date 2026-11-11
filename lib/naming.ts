@@ -137,6 +137,49 @@ export function contentText(e: Partial<Event>): string {
     .filter(Boolean).join(" ");
 }
 
+/**
+ * The sentence of each event, by `action` or `action.sub`. `{id}` is the job when the event names one, else the
+ * subject; `{issue}` the subject; `{on}` the first ID it is on; `{by}` and `{to}` the actor in words.
+ */
+const SAY: Record<string, string> = {
+  running: "{id} started", waiting: "{id} waits", "waiting.review": "{id} waits for review", "waiting.rescue": "{id} waits for {to}", "waiting.to": "{id} waits for {to}",
+  passed: "{id} passed its checks", returned: "{id} returned", "returned.review": "{id} returned by review", failed: "{id} failed",
+  landed: "{id} landed", "landed.override": "{id} landed over review", dropped: "{id} dropped", done: "{issue} done",
+  paused: "{issue} waits: the factory is paused", red: "{issue} waits: main is red at {on}", after: "{issue} waits for {on}",
+  full: "{issue} waits: run slots are full", gpu: "{issue} waits for the GPU", busy: "{issue} waits: {on} holds {file}",
+  looping: "{issue} stopped: it restarts in a loop", starting: "{issue} is starting", parent: "{issue} waits for its parts",
+  parked: "{issue} parked", credit: "{issue} waits: out of credit",
+  protected: "{issue} asks to change a protected file", question: "{issue} asks a question", incomplete: "{issue} has a dropped part",
+  capped: "{issue} hit its run cap", proposal: "{issue} proposes a change",
+  reran: "{id} reran", started: "{issue} picked up", missed: "{issue} missed", skipped: "{issue} skipped", filed: "{issue} filed by {by}",
+  escalated: "{issue} escalated to you", changed: "{issue} changed", answered: "{issue} answered by {by}", routed: "Routing chose a model",
+};
+/** What a `sub` adds after a colon when no `action.sub` sentence exists; "" adds nothing. */
+const BECAUSE: Record<string, string> = {
+  "no-commit": "no commit", timeout: "past its time box", stalled: "no output", infra: "a factory step failed", locked: "lock held",
+  credit: "out of credit", check: "a check failed", conflict: "merge conflict", moved: "main moved", review: "review held it",
+  unanswered: "no answer", other: "", duplicate: "a duplicate", met: "goal met", manual: "by hand", protected: "a protected file",
+  question: "a question", intake: "intake", capped: "run cap", override: "override", error: "an error", rescue: "rescue", local: "", starts: "",
+};
+const WHO: Record<string, string> = { human: "you", rule: "a rule", gate: "the gate", worker: "a worker", reviewer: "review", director: "the director", firefighter: "the firefighter" };
+
+/** A piece of a sentence: text, or an ID the page links. */
+export type Said = string | { id: string };
+/** The sentence of an event in pieces, as `[{id: "a1868#2"}, " landed"]`. */
+export function say(e: Partial<Event>): Said[] {
+  const on = [e.on ?? []].flat(), job = on.find((x) => x.includes("#"));
+  const key = e.sub && `${e.action}.${e.sub}` in SAY ? `${e.action}.${e.sub}` : e.to && `${e.action}.to` in SAY ? `${e.action}.to` : String(e.action);
+  const why = e.sub && key !== `${e.action}.${e.sub}` ? BECAUSE[e.sub] ?? e.sub : "";
+  const fill: Record<string, Said> = {
+    id: { id: job ?? e.subject ?? "" }, issue: { id: e.subject ?? "" }, on: { id: on[0] ?? "" },
+    by: String(WHO[e.by ?? ""] ?? e.by ?? ""), to: String(WHO[e.to ?? ""] ?? e.to ?? ""), file: base(e.file ?? "") ?? "",
+  };
+  const out = (SAY[key] ?? `{id} ${e.action}`).split(/(\{\w+\})/).filter(Boolean).map((p) => fill[p.slice(1, -1)] ?? p);
+  return why ? [...out, `: ${why}`] : out;
+}
+/** The sentence of an event as plain text, each ID in its short form. */
+export const sayText = (e: Partial<Event>): string => say(e).map((p) => (typeof p === "string" ? p : shownId(p.id))).join("");
+
 /** The report lane of a job state. */
 export const lane = (state: string): string => ({ landed: "landed", waiting: "waiting", failed: "failed", returned: "failed" } as Record<string, string>)[state] ?? "other";
 

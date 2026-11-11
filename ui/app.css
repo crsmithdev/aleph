@@ -200,8 +200,14 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
 /* ---------- Now: lanes ---------- */
-.lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-20); align-items: start; }
+.lanes { display: flex; flex-direction: column; gap: var(--sp-16); }
 .lane { min-width: 0; }
+/* Running and Queued share a row; an empty lane shrinks to a dashed box of 220px. */
+.lanes-top { display: flex; gap: var(--sp-12); align-items: stretch; }
+.lanes-top > .lane { flex: 1 1 0; }
+.lanes-top > .lane.none { flex: 0 0 220px; padding: var(--sp-8) var(--sp-10); border: 1px dashed var(--rule); border-radius: var(--r-ctl); background: var(--sunk); }
+.lanes-top > .lane.none .sh { margin: 0; }
+#lane-done .cards { grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
 /* Each lane head carries its state's dot: running, done, queued. */
 .lane .sh h2::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: var(--r-pill); margin-right: var(--sp-8); vertical-align: middle; background: var(--run); }
 #lane-done .sh h2::before { background: var(--done); }
@@ -292,7 +298,7 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .job-card.small .actions { margin-top: var(--sp-6); }
 .job-card.small details.more { margin-top: var(--sp-4); font-size: var(--fs-sm); }
 .job-card.small .ih h3, .job-card.small .ih .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.cards > .job-card.small { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); padding: var(--sp-10) var(--sp-12); }
+.cards > .job-card.small { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); padding: var(--sp-8) var(--sp-10); }
 .cards > .job-card.small.need-card { border-color: var(--need); }
 
 section { margin: 0 0 var(--sp-28); }
@@ -498,7 +504,7 @@ a.failed-jobs { text-decoration: none; }
 a.failed-jobs:hover, a.failed-jobs:focus-visible { text-decoration: underline; }
 .chips { display: inline; white-space: normal; }
 table.tbl .chips { white-space: nowrap; }
-.chip { display: inline-block; margin: 0 var(--sp-4) var(--sp-2) 0; font-size: var(--fs-xs); line-height: 1.5; padding: 0 var(--sp-8); border-radius: var(--r-pill); background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
+.chip { display: inline-block; margin: 0 var(--sp-4) var(--sp-2) 0; font-size: var(--fs-xs); line-height: 1.5; padding: 0 var(--sp-8); border-radius: var(--r-tag); background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
 
 /* ---------- page header (pageHead) ---------- */
 .ph { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-6) var(--sp-12); margin: 0 0 var(--sp-16); }
@@ -731,24 +737,28 @@ p.aged { margin: 0 0 var(--sp-6); color: var(--stuck); font-size: var(--fs-sm); 
 /* Status: the main column, and the Herald as a rail at the right that stays in view, the viewport tall. */
 .rail { display: grid; grid-template-columns: minmax(0, 1fr) clamp(480px, 38%, 600px); gap: var(--gap); align-items: start; }
 .rail-main { container: rail-main / inline-size; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
-/* Under 760px three lanes cut their cards' chips, so the lanes take 2 columns; under 480px, 1. */
-@container rail-main (max-width: 760px) { .rail-main .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container rail-main (max-width: 480px) { .rail-main .lanes { grid-template-columns: minmax(0, 1fr); } }
+/* Done takes as many 300px columns as fit, so its chips are not cut; under 480px Queued goes under Running. */
+@container rail-main (max-width: 480px) { .rail-main .lanes-top { flex-direction: column; } .rail-main .lanes-top > .lane.none { flex-basis: auto; } }
 .rail > .herald-card { position: sticky; top: var(--sp-16); height: calc(100vh - 2 * var(--sp-16)); }
 @media (max-width: 1100px) { .rail { grid-template-columns: minmax(0, 1fr); } .rail > .herald-card { position: static; height: auto; } .rail .herald-feed { max-height: 380px; } }
-/* Pipeline: one box per stage in order, 2 rows of 4 when the card is narrow, then the slowest work. */
+/* Pipeline: each stage a ring on one track, a bold arrow between; the ring's colour is the stage's failed share. */
 #pipeline { container: pipeline / inline-size; }
-.pflow { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: var(--sp-12); }
-@container pipeline (max-width: 760px) { .pflow { grid-template-columns: repeat(4, minmax(0, 1fr)); } .pflow .pnode:nth-child(4n + 1)::before { content: none; } }
-.pnode { container-type: inline-size; position: relative; display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; padding: var(--sp-8) var(--sp-10); border: 1px solid var(--rule); border-radius: var(--r-ctl); background: var(--surface); }
-.pnode + .pnode::before { content: "›"; position: absolute; left: calc(-1 * var(--sp-10)); top: 50%; transform: translateY(-50%); color: var(--muted); }
-.pnode.idle { background: var(--sunk); border-style: dashed; }
-.pn { font-size: var(--fs-2xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pv { font: var(--fw-strong) var(--fs-2xl)/1.1 var(--num); font-variant-numeric: tabular-nums; color: var(--ink); }
-.pnode.idle .pv { font-weight: var(--fw-text); color: var(--muted); }
-.pu { display: none; font-size: var(--fs-2xs); font-weight: var(--fw-text); color: var(--muted); }
-@container (min-width: 96px) { .pu { display: inline; } }
-.pt { font-size: var(--fs-2xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pflow { display: flex; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-4) 0; }
+.pnode { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); width: 84px; text-align: center; }
+.ring { display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 5px var(--rule); color: var(--ink-2); font: var(--fw-strong) var(--fs-lg)/1 var(--num); font-variant-numeric: tabular-nums; }
+.pnode.fine .ring { box-shadow: inset 0 0 0 5px var(--done); color: var(--done); }
+.pnode.warning .ring { box-shadow: inset 0 0 0 5px var(--need); color: var(--need); }
+.pnode.alert .ring { box-shadow: inset 0 0 0 5px var(--stuck); color: var(--stuck); }
+.pnode.wait .ring { font-size: var(--fs-xs); font-weight: var(--fw-text); color: var(--muted); }
+.pnode.idle .ring { background: var(--sunk); box-shadow: none; border: 2px dashed var(--rule); color: var(--muted); }
+.pn { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--ink); }
+.pt, .pf { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pnode.warning .pf { color: var(--need); font-weight: var(--fw-strong); }
+.pnode.alert .pf { color: var(--stuck); font-weight: var(--fw-strong); }
+.parrow { flex: 1 1 0; min-width: 16px; height: 4px; margin-top: var(--sp-28); background: var(--rule); position: relative; }
+.parrow::after { content: ""; position: absolute; right: -2px; top: -8px; border-left: 14px solid var(--rule); border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
+/* Under 560px the track wraps 3 stages a row. */
+@container pipeline (max-width: 560px) { .pflow { flex-wrap: wrap; justify-content: center; row-gap: var(--sp-12); } .parrow { flex: 0 0 16px; } }
 input:where(:not([type="checkbox"], [type="radio"])), select, textarea { font: var(--fs-sm) var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); padding: var(--sp-4) var(--sp-8); }
 input[type="search"] { background: var(--sunk); }
 form.stack { display: grid; gap: var(--sp-8); max-width: 640px; margin-top: var(--sp-8); }
@@ -774,7 +784,7 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
 .tile b em { font: var(--fw-text) .62em/1 var(--metric); font-style: normal; color: var(--muted); }
 .tile .q { font-size: var(--fs-xs); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .q .m, .tile .q.m { color: var(--muted); }
-.tile .tr { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; padding: 1px var(--sp-6); border-radius: var(--r-pill); background: var(--sunk); }
+.tile .tr { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; padding: 1px var(--sp-6); border-radius: var(--r-tag); background: var(--sunk); }
 .tile .tr.good { color: var(--good); background: var(--done-bg); }
 .tile .tr.warn { color: var(--need); background: var(--need-bg); }
 table.tbl .tr { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
@@ -795,18 +805,19 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .herald-sticky { position: sticky; top: 0; background: var(--surface); z-index: var(--z-sticky); border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-10); margin-bottom: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-8); }
 .herald-sticky-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-4); padding-right: var(--sp-4); }
-.event-row { display: grid; grid-template-columns: 55px 70px 64px 1fr; align-items: baseline; gap: var(--sp-8); padding: var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-xs); }
+.event-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: baseline; gap: var(--sp-10); padding: var(--sp-8) var(--sp-10) var(--sp-8) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-sm); }
 .event-row:last-child { border-bottom: none; }
-.herald-chat { margin: 0; padding: 0; border: 0; }
-.herald-chat > summary { display: flex; align-items: baseline; padding: 0; }
-.herald-chat > summary .event-row { flex: 1; min-width: 0; }
+/* A group's +N chip is its expand control, so its row lines up with the plain rows: no fold marker. */
+details.herald-group { margin: 0; padding: 0; border: 0; }
+details.herald-group > summary { display: flex; align-items: baseline; padding: 0; cursor: pointer; }
+details.herald-group > summary::before { content: none; }
+details.herald-group[open] .event-more { color: var(--ink); background: var(--rule); }
+.herald-group > summary .event-row { flex: 1; min-width: 0; }
+.herald-older { padding-left: var(--sp-16); border-left: 2px solid var(--rule-2); margin-left: var(--sp-4); }
+.event-more { margin-left: var(--sp-8); font-size: var(--fs-2xs); font-weight: var(--fw-strong); color: var(--muted); padding: 0 var(--sp-6); border-radius: var(--r-tag); background: var(--sunk); }
 /* The event of an alert that still holds: tinted and ringed like an Ask card, as the Herald pins no copy of it. */
 .event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-8) var(--sp-10); margin-bottom: var(--sp-6); }
-.event-time { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.event-tone { display: inline-flex; align-items: center; gap: var(--sp-4); font-weight: var(--fw-mid); }
-.event-tone.alert, .event-tone.error, .event-tone.stuck { color: var(--stuck); }
-.event-tone.warning, .event-tone.ask, .event-tone.need { color: var(--need); }
-.event-tone.fine, .event-tone.done { color: var(--done); }
+.event-time { font-family: var(--mono); font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .event-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: none; }
 .event-dot.alert, .event-dot.error { background: var(--stuck); }
 .event-dot.warning, .event-dot.ask { background: var(--need); }
@@ -816,8 +827,8 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .tile .light { display: flex; align-items: center; gap: var(--sp-6); white-space: nowrap; }
 .event-body { color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
 .event-id { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.event-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.event-what { color: var(--muted); }
+.event-say { display: block; }
+.event-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 .event-body.alert, .event-body.error, .event-row.alert .event-body, .event-row.error .event-body, .event-row.stuck .event-body { color: var(--stuck); }
 .event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body, .event-row.need .event-body { color: var(--need); }
 .event-body.fine, .event-row.fine .event-body { color: var(--ink); }

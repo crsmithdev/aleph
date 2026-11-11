@@ -2,7 +2,7 @@
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { actButton, fold, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
-import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
+import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say } from "../../lib/naming.ts";
 import { bar, flowOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, shell as jobCard, statLines, trailerLine } from "./cards.js";
 import { verdict } from "../../lib/status-words.ts";
@@ -50,20 +50,32 @@ function renderOutcome(d) {
   return outcome(bar(d));
 }
 
-/** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. */
-const PIPE = Object.fromEntries(["intake", "spec-check", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
-/** The Pipeline card for the window: each stage with its runs per issue and p90 runtime. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
+/** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. Queue is the wait before the first build, not a run. */
+const PIPE = Object.fromEntries(["intake", "queue", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
+/** The health of a stage by its failed share: under 10% fine, to 25% warning, above that alert. */
+const health = (share) => (share < 0.1 ? "fine" : share <= 0.25 ? "warning" : "alert");
+/** The Pipeline card for the window: each stage a ring with its runs per issue, coloured by its failed share, and its p90 time under it. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
 export function renderPipeline(d) {
   const box = (body, aside = "") => card("Pipeline", body, { id: "pipeline", aside });
   if (!d) return box(loadingLine("the pipeline"));
   if (d.error) return box(error(d.error));
   const by = new Map((d.stages?.rows ?? []).map((r) => [r.stage, r]));
+  const queue = d.phases?.queue;
   const node = ([k, name]) => {
-    const r = by.get(k), n = r?.items ? r.runs / r.items : null, tip = r ? `${name}: ${r.runs} runs on ${r.items} issues${r.unusable ? `, ${r.unusable} failed` : ""}` : `${name}: no run`;
-    return `<div class="pnode${n === null ? " idle" : ""}" title="${esc(tip)}"><span class="pn">${esc(k)}</span>` +
-      `<span class="pv">${n === null ? "–" : `${mean(n)}<span class="pu"> / issue</span>`}</span><span class="pt">${n === null ? "idle" : esc(dur(r.p90))}</span></div>`;
+    if (k === "queue") {
+      const has = queue?.count > 0;
+      return `<div class="pnode wait${has ? "" : " idle"}" title="${esc(has ? `Queue: ${queue.count} waits` : "Queue: no wait")}"><span class="ring">wait</span>` +
+        `<span class="pn">${esc(name)}</span><span class="pt">${has ? esc(dur(queue.p90)) : "no wait"}</span></div>`;
+    }
+    const r = by.get(k), n = r?.items ? r.runs / r.items : null;
+    if (n === null) return `<div class="pnode idle" title="${esc(`${name}: no run`)}"><span class="ring">–</span><span class="pn">${esc(name)}</span><span class="pt">no run</span></div>`;
+    const share = r.runs ? (r.unusable ?? 0) / r.runs : 0, tone = health(share);
+    const tip = `${name}: ${r.runs} runs on ${r.items} issues${r.unusable ? `, ${r.unusable} failed` : ""}`;
+    return `<div class="pnode ${tone}" title="${esc(tip)}"><span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span>` +
+      `<span class="pt">${esc(dur(r.p90))}</span><span class="pf">${Math.round(share * 100)}% failed</span></div>`;
   };
-  return box(`<div class="pflow" role="group" aria-label="Stages">${Object.entries(PIPE).map(node).join("")}</div>`, `<span class="asof">runs / issue · p90 runtime</span>`);
+  const nodes = Object.entries(PIPE).map(node).join(`<span class="parrow" aria-hidden="true"></span>`);
+  return box(`<div class="pflow" role="group" aria-label="Stages">${nodes}</div>`, `<span class="asof">runs / issue in the ring · p90 time under it</span>`);
 }
 
 /** A finding as HTML: **text** and each number or percentage in bold; all other text escaped. */
@@ -75,12 +87,10 @@ export function findingHtml(text) {
 /** The findings of a Monitor report as a numbered list, each through findingHtml(). */
 export const findingsList = (findings) => `<ol class="findings">${findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`;
 
-/** A feed row: the time (the clock, or the day), the label in the tone, the ID's HTML and the body's HTML. `cls` is added to the row's class, `bodyCls` to the body's, `by` is the actor. */
-function feedRow({ tone, at, label, id = "", body, by, cls = "", bodyCls = "" }) {
+/** A feed row in two columns: the time (the clock, or the day), then the body's HTML. `cls` is added to the row's class, `bodyCls` to the body's, `by` is the actor. */
+function feedRow({ tone, at, body, by, cls = "", bodyCls = "" }) {
   return `<div class="event-row ${tone}${cls}"${by === undefined ? "" : ` data-by="${esc(by)}"`}>` +
     `<span class="event-time">${esc(at ? (clock(at) || when(at)) : "")}</span>` +
-    `<span class="event-tone ${tone}">${esc(label)}</span>` +
-    `<span class="event-id">${id}</span>` +
     `<span class="event-body${bodyCls}">${body}</span></div>`;
 }
 
@@ -95,13 +105,33 @@ export function heraldEvents(s, more = streamed) {
   return [...all.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, HERALD_KEEP);
 }
 
-/** An event's row: the time, the action in its tone, the subject's ID, then the issue's title, the sub and the content, and the note quiet after them. A chat turn has no ID and no content: its title is its message. */
-export function eventRow(ev, titles = {}, chats = {}) {
-  const chat = ev.subject === "chat", to = issueHref(ev.subject), title = chat ? chats[ev.on?.[0]]?.title ?? "" : titles[ev.subject] ?? "";
-  const id = chat ? "" : to ? idLink(shownId(ev.subject), to, { title: title || undefined }) : esc(shownId(ev.subject));
-  const what = chat ? "" : [ev.sub, contentText(ev)].filter(Boolean).join(" ");
-  return feedRow({ tone: tone(ev.action), at: ev.at, label: ev.action, id, by: ev.by,
-    body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}${what ? `<span class="event-what">${esc(what)}</span>` : ""}${ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
+/** A piece of `say`: text escaped, a job ID linked to its job page, an issue ID to its issue page, any other ID as text. */
+const saidHtml = (p) => {
+  if (typeof p === "string") return esc(p);
+  const to = p.id.includes("#") ? jobHref(shownId(p.id)) : issueHref(p.id);
+  return to ? idLink(shownId(p.id), to) : `<span class="event-id">${esc(shownId(p.id))}</span>`;
+};
+
+/** An event's row: the time, then its sentence, the issue's title quiet under it and the note after. A chat turn's sentence is its message. `more` is the count of older events folded behind it. */
+export function eventRow(ev, titles = {}, chats = {}, more = 0) {
+  const chat = ev.subject === "chat";
+  const title = chat ? "" : titles[ev.subject] ?? "";
+  const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "") : say(ev).map(saidHtml).join("");
+  return feedRow({ tone: tone(ev.action), at: ev.at, by: ev.by,
+    body: `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>` +
+      `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}${!chat && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
+}
+
+/** Rows of `lists`, each newest first: the newest event's row, with the older ones folded behind it; `row(ev, more, older)` draws one. */
+const grouped = (lists, row) => lists.map(([latest, ...earlier]) => ({ at: latest.at,
+  html: earlier.length ? fold(row(latest, earlier.length), `<div class="herald-older">${earlier.map((ev) => row(ev, 0, true)).join("")}</div>`, { cls: "herald-group" }) : row(latest) }));
+
+/** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */
+function issueRows(events, titles = {}) {
+  const by = new Map();
+  for (const ev of events) if (ev.subject !== "chat") by.set(ev.subject, [...(by.get(ev.subject) ?? []), ev]);
+  // An older row is under its group's title, so it does not repeat it.
+  return grouped([...by.values()], (ev, more, older) => eventRow(ev, older ? {} : titles, {}, more));
 }
 
 /** The rows of the chat events, newest first: one per session, its latest turn's newest event, with the earlier turns' behind an expand control. */
@@ -114,10 +144,11 @@ function chatRows(events, chats = {}) {
     const key = chats[turn]?.session ?? turn;
     sessions.set(key, [...(sessions.get(key) ?? []), ev]);
   }
-  const row = (ev) => eventRow(ev, {}, chats);
-  return [...sessions.values()].map(([latest, ...earlier]) => ({ at: latest.at,
-    html: earlier.length ? fold(row(latest), earlier.map(row).join(""), { cls: "herald-chat" }) : row(latest) }));
+  return grouped([...sessions.values()], (ev, more) => eventRow(ev, {}, chats, more));
 }
+
+/** A status text without the "health: " of each health line, which older history entries carry. */
+const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
 /** The Herald panel: sticky alerts on top, rolling event history stream below. */
 export function renderHerald(s) {
@@ -126,7 +157,6 @@ export function renderHerald(s) {
   const asks = (s.asks ?? []).map((i) => askCard(i, s.now));
   const stuck = (s.stuck ?? []).map(stuckRow(s));
   const errs = cur.errors, errors = errs.length;
-  const pinnedCount = asks.length + stuck.length + errors;
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
 
   const sticky = asks.length + stuck.length > 0
@@ -140,35 +170,24 @@ export function renderHerald(s) {
   const history = [...(s.herald?.history ?? [])];
   if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
 
-  const status = history.map((ev, i) => ({ at: ev.at ?? "", html: feedRow({ tone: esc(ev.tone), at: ev.at, label: ev.label || ev.tone, cls: i === 0 && errors ? " live" : "", bodyCls: ` ${esc(ev.tone)}`,
-    body: `${esc(eventText(ev))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}` }) }));
+  // A status row is the status sentence in its tone, with no label; the live row adds each error line the sentence lacks.
+  const status = history.map((ev, i) => ({ at: ev.at ?? "", html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : "", bodyCls: ` ${esc(ev.tone)}`,
+    body: `${esc(statusText(ev.text))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).map(statusText).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}` }) }));
   // The status changes and the events in one feed, newest first; the live status row stays on top.
   const live = errors ? status.shift() : null;
   const events = heraldEvents(s);
-  const rows = [...status, ...events.filter((ev) => ev.subject !== "chat").map((ev) => ({ at: ev.at, html: eventRow(ev, s.herald?.titles) })), ...chatRows(events, s.herald?.chats)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const rows = [...status, ...issueRows(events, s.herald?.titles), ...chatRows(events, s.herald?.chats)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = (live ? [live, ...rows] : rows).map((r) => r.html).join("");
 
-  const m = s.factory?.monitor;
-  const monitorFindings = m?.findings?.length
-    ? fold(`Daily Monitor (${esc(m.day)})`, findingsList(m.findings), { cls: "more herald-findings", keep: "herald:findings" })
-    : "";
-
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
-  const badgeHtml = pinnedCount > 0 ? tag(`${pinnedCount} active`, stuck.length || errors ? "stuck" : "need") : tag("Calm", "done");
+  const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", stuck.length || errors ? "stuck" : "need") : tag("OK", "done");
 
   return `<section id="herald" class="card herald-card" aria-label="Herald">` +
     `<div class="sh"><h2 id="h-herald">Herald</h2><div class="aside">${badgeHtml}</div></div>` +
     sticky +
     `<div class="herald-feed">${feed}</div>` +
-    monitorFindings +
   `</section>`;
 }
-
-/** An event's text without what the row already shows: the tone label before it, and the "health: " of each health line. */
-const eventText = (ev) => {
-  const head = `${ev.label || ev.tone}: `;
-  return (ev.text.startsWith(head) ? ev.text.slice(head.length) : ev.text).replace(/(^|; )health: /g, "$1");
-};
 
 function wireHeraldJump(root) {
   root.querySelector?.(".shead .say")?.addEventListener?.("click", (e) => {
@@ -232,9 +251,9 @@ function laneCard(id, cls, row, title, href, below = "") {
   return `<article class="job-card small lane-card ${cls}" data-annotate="${esc(shortId(id))}">${row}${titleOf(title, href)}${below}</article>`;
 }
 
-/** A lane: header with the count, its cards or one quiet line. */
+/** A lane: header with the count, its cards or one quiet line; an empty lane is marked `none`. */
 const lane = (id, title, n, rows, none, cap = 0) =>
-  `<section id="lane-${id}" class="lane" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
+  `<section id="lane-${id}" class="lane${rows ? "" : " none"}" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
 
 /** Done: the done parts and issues /api/factory sends, newest first, each its own card. */
 function doneLane(s) {
@@ -275,9 +294,9 @@ function runningLane(s) {
   return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }
 
-/** The three lanes: Running, Queued, Done. */
+/** The three lanes: Running and Queued in one row, Done the full width under them. */
 export function renderLanes(s) {
-  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s)}</div>`;
+  return `<div class="lanes"><div class="lanes-top">${runningLane(s)}${queuedLane(s)}</div>${doneLane(s)}</div>`;
 }
 
 

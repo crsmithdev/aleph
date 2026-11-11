@@ -36,7 +36,7 @@ test("each error line says its alert, in red", () => {
     [{ health: [alert("health: something new broke.")] }, "something new broke"],
   ];
   for (const [o, text] of cases) {
-    expect(said(o)).toBe(`Alert: ${text}.`);
+    expect(said(o)).toBe(`Alert: ${text[0].toUpperCase()}${text.slice(1)}.`);
     expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, ...o } })).toContain('class="say error"');
   }
 });
@@ -56,7 +56,7 @@ test("the page and the status sentence show a health line's issue id in its shor
 test("stuck and failed jobs are one alert that links to their cards", () => {
   const stuck = [job({ name: "aleph-1", condition: "failed" }), job({ name: "aleph-2", condition: "failed" })];
   const h = view.renderLede({ ...calmState, stuck });
-  expect(h).toBe('<span class="say error">Alert: <a href="#jobs-stuck">jobs are unhealthy</a>.</span>');
+  expect(h).toBe('<span class="say error">Alert: <a href="#jobs-stuck">Jobs are unhealthy</a>.</span>');
 });
 
 test("a red main or CI of a repo other than aleph is a warning, not an alert", () => {
@@ -65,11 +65,11 @@ test("a red main or CI of a repo other than aleph is a warning, not an alert", (
   expect(said({ health: [koans] })).toBe("Everything is fine; koans main is red at def5678: lint.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, health: [koans] } })).toContain('class="say warning"');
   expect(said({ health: [koansCi] })).toStartWith("Everything is fine; koans CI on main has failed");
-  expect(said({ health: [mainRed, koans] })).toBe("Alert: the build is failing on main; koans main is red at def5678: lint.");
+  expect(said({ health: [mainRed, koans] })).toBe("Alert: The build is failing on main; koans main is red at def5678: lint.");
 });
 
 test("a red-main alert is ranked by its key, not by its text", () => {
-  expect(said({ health: [alert("health: tsc failed at abc1234", "red-main")] })).toBe("Alert: the build is failing on main.");
+  expect(said({ health: [alert("health: tsc failed at abc1234", "red-main")] })).toBe("Alert: The build is failing on main.");
 });
 
 test("the sentence says at most three parts, the most serious first", () => {
@@ -85,20 +85,20 @@ test("what asks for you leads the status sentence, in the warning colour", () =>
   expect(raw(asks("input", "input"))).toBe(raw(asks("approval")));
   expect(raw(asks("input", "approval"))).toBe(raw(asks("approval")));
   expect(raw({}, { runsToday: 12 })).toBe('<span class="say fine">Everything is fine.</span>');
-  expect(raw(asks("approval"), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">the build is failing on main</a>; <a href="#awaiting">your attention is needed</a>.');
+  expect(raw(asks("approval"), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">The build is failing on main</a>; <a href="#awaiting">your attention is needed</a>.');
 });
 
 test("a paused factory does not say everything is fine", () => {
   expect(said({ paused: true })).toBe("The factory is paused.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, paused: true } })).toContain('class="say warning"');
   expect(said({ paused: true, runsToday: 12 })).toBe("The factory is paused.");
-  expect(said({ paused: true, health: [mainRed] })).toBe("Alert: the build is failing on main; the factory is paused.");
+  expect(said({ paused: true, health: [mainRed] })).toBe("Alert: The build is failing on main; the factory is paused.");
 });
 
 const weekAt = (seven_day: number) => ({ usage: { now: { seven_day } } });
 
 test("an alert keeps its red sentence and holds the weekly usage part; three alerts cut it", () => {
-  expect(said({ health: [mainRed] }, weekAt(90))).toBe("Alert: the build is failing on main; weekly usage is at 90%.");
+  expect(said({ health: [mainRed] }, weekAt(90))).toBe("Alert: The build is failing on main; weekly usage is at 90%.");
   expect(view.renderLede({ ...calmState, ...weekAt(90), factory: { ...calmState.factory, health: [mainRed] } })).toContain('class="say error"');
   const three = { health: [ciRed, mainRed, alert("health: something new broke.")] };
   expect(said(three, weekAt(90))).toBe("Alert: GitHub CI is broken; the build is failing on main; something new broke.");
@@ -108,14 +108,14 @@ test("a full suite over its budget is a warning part, not an alert and not a car
   const slow = warn("health: aleph full suite took 135 s; the budget is 120 s");
   expect(said({ health: [slow] })).toBe("Everything is fine; aleph full suite took 135 s; the budget is 120 s.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, health: [slow] } })).toContain('class="say warning"');
-  expect(said({ health: [mainRed, slow] })).toBe("Alert: the build is failing on main; aleph full suite took 135 s; the budget is 120 s.");
+  expect(said({ health: [mainRed, slow] })).toBe("Alert: The build is failing on main; aleph full suite took 135 s; the budget is 120 s.");
   expect(view.view.render(withFactory({ health: [slow] }))).not.toContain('data-kind="error"');
 });
 
 test("the page has no banner and the status line holds the alert", () => {
   const page = view.view.render(withFactory({ health: [mainRed] }));
   expect(page).not.toContain('class="banner"');
-  expect(page).toMatch(/<header class="ph shead">[^]*the build is failing on main/);
+  expect(page).toMatch(/<header class="ph shead">[^]*The build is failing on main/);
 });
 
 test("the page has one head, built by pageHead: the time, the status sentence, then the window control with Pause; outOfDate redraws its sentence", () => {
@@ -163,7 +163,7 @@ test("the status sentence wraps instead of clipping: .shead .say has no ellipsis
   expect(say).toContain("white-space: normal");
 });
 
-const OOD = "Alert: this status is out of date.";
+const OOD = "Alert: This status is out of date.";
 
 const strip = (h: string) => h.replace(/<[^>]*>/g, "");
 
@@ -176,14 +176,14 @@ test("the out-of-date part comes first and survives MAX_SAID", () => {
 });
 
 test("a dead factory tick says the alert, in red", () => {
-  const dead = "Alert: the factory tick has stopped.";
+  const dead = "Alert: The factory tick has stopped.";
   for (const o of [{ nextTick: null }, { nextTick: "2026-10-27T16:54:59Z" }]) {
     expect(said(o)).toBe(dead);
     expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, ...o } })).toContain('class="say error"');
   }
   const fine = "Everything is fine.";
   for (const o of [{ nextTick: "2026-10-27T17:12:00Z" }, { nextTick: "2026-10-27T16:56:00Z" }, { nextTick: null, tickInProgress: true }, { nextTick: "2026-10-27T16:00:00Z", tickInProgress: true }]) expect(said(o)).toBe(fine);
-  expect(said({ paused: true, nextTick: null })).toBe("Alert: the factory tick has stopped; the factory is paused.");
+  expect(said({ paused: true, nextTick: null })).toBe("Alert: The factory tick has stopped; the factory is paused.");
 });
 
 test("the status-line links point at anchors in the rendered Alerts section", () => {
@@ -199,7 +199,7 @@ test("the status-line links point at anchors in the rendered Alerts section", ()
 test("one mapping gives each status sentence its Herald label, on the page too", () => {
   expect(labelOf("warning", "The factory is paused")).toBe("Wait");
   expect(labelOf("warning", "Your attention is needed")).toBe("Ask");
-  expect(labelOf("alert", "Alert: the build is failing on main")).toBe("Alert");
+  expect(labelOf("alert", "Alert: The build is failing on main")).toBe("Alert");
   expect(labelOf("fine", "Everything is fine")).toBe("Fine");
   expect(verdict({ ...calmState, factory: { ...calmState.factory, paused: true } }).label).toBe("Wait");
 });

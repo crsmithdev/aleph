@@ -13,7 +13,7 @@ import { isOpen } from "./job.ts";
 import { counting, jobIdOf } from "./record.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { contentText, parseId, tail } from "../../../lib/naming.ts";
+import { contentText, parseId, sayText, tail } from "../../../lib/naming.ts";
 
 /** The stages of docs/naming.md. */
 type StageName = "new" | "queued" | "held" | "working" | "waiting" | "failed" | "landing" | "done" | "dropped" | "parked";
@@ -95,9 +95,9 @@ function doneWhy(item: Subject, ctx: Ctx): Reason | null {
 
 export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new Set()): Stage {
   const id = item.id;
-  /** The stage with its reason: `why` is the fields as text, the action and sub first. */
+  /** The stage with its reason: `why` is the reason's sentence, as the Herald says it; a reason with no action is its fields as text. */
   const out = (s: StageName, r: Reason = {}, of?: Stage["of"]): Stage =>
-    ({ id, stage: s, ...r, why: [r.action, r.sub, contentText(r)].filter(Boolean).join(" "), ...(of ? { of } : {}) });
+    ({ id, stage: s, ...r, why: r.action ? sayText({ subject: id, ...r }) : [r.sub, contentText(r)].filter(Boolean).join(" "), ...(of ? { of } : {}) });
   if (item.status === "dropped") return out("dropped", { action: "dropped" });
   // An open item that asks is waiting, even when a trailer commit on main names it (a reopened issue can have one).
   if (item.status === "open" && item.ask) return out("waiting", { action: "waiting", to: "human" });
