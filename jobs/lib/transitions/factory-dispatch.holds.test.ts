@@ -6,7 +6,7 @@ import * as store from "../../../issues/lib/store.ts";
 import { join } from "node:path";
 import { dispatchIssues, suiteStep } from "./factory.ts";
 import { readHolds } from "../gates/factory-status.ts";
-import { ctx, newIssue, notes, setup, sh, teardown } from "./factory.helpers.ts";
+import { change, ctx, newIssue, notes, setup, sh, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -130,4 +130,16 @@ describe("the done checker's copy of the store was read before an issue existed"
     }
     expect(notes(parent)).not.toMatch(/its sub-issues are done/);
   });
+});
+
+test("a sub-issue waits on its parent's after, and starts once those refs are done", async () => {
+  const x = newIssue();
+  const parent = writeList({ key: "fac" }, "add", (doc) => issues.add(doc, "the parent", { spec: "Do it.", after: [`fac-${x}`] }).id, true)!.value;
+  const child = writeList({ key: "fac" }, "split", (doc) => issues.add(doc, "the child", { from: `fac-${parent}`, spec: "Do it." }).id, true)!.value;
+  const held = await dispatchIssues(async () => null, undefined, undefined);
+  expect(held.started).not.toContain(`fac-${child}`);
+  expect(held.skipped).toContain(`fac-${child}: after fac-${x}`);
+  change(x, (i) => { i.fm.closed_as = "done"; });
+  const out = await dispatchIssues(async () => null, undefined, undefined);
+  expect(out.started).toContain(`fac-${child}`);
 });

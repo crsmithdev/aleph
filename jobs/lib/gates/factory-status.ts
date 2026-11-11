@@ -6,7 +6,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { areasOf, reader } from "../../../issues/lib/store.ts";
+import { areasOf, parentIn, reader, type Reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
@@ -441,12 +441,12 @@ export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null 
 }
 
 /** The facts of an issue that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
-export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
+export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now(), lists: Reader = reader()) {
   const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat();
   // A job whose last run ended with the API credit error is not open work: the credit-wait gate holds the issue for its wait, then it starts again.
   const found = openJob(name, null, jobs), open = found && policyOf(causeOf(record.counting(found).run)).waitMs > 0 ? null : found;
   return {
-    name, item,
+    name, item, parent: parentIn(repo.key, item, lists),
     open: open ? record.counting(open).run.condition : null,
     job: open ? record.jobIdOf(open[0]) : null,
     busy: busyWait(repo, item, jobs, now),

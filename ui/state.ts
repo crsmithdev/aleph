@@ -8,14 +8,14 @@ import { issueHref, parseId, type Event } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
-import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
+import { issueDecision, pendingWaits, waitsOf, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, runOfJob, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, readFile, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting, jobIdOf } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
-import { afterOf, byPriority, partsOf, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
+import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
 import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
@@ -326,7 +326,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
   /** What an open issue waits on now: nothing once it is closed. */
   const blockers = (key: string, ref: number | string): Wait[] => {
     const item = lists.item(key, ref);
-    return item && status(item) === "open" ? pendingWaits(afterOf(item), isDone).map(blocker) : [];
+    return item && status(item) === "open" ? pendingWaits(waitsOf(item, parentIn(key, item, lists)), isDone).map(blocker) : [];
   };
   return { lists, toJob, stagesOf, isDone, blocker, blockers };
 }
@@ -490,7 +490,7 @@ export function state(now = new Date()): State {
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
       const red = redOf(repo);
       // The stage already says when an issue is to plan.
-      const w = issueDecision({ ...issueFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
+      const w = issueDecision({ ...issueFacts(repo, item, jobs, now.getTime(), lists), done: isDone, red, ...gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), kind: w.kind,
         ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}),
       };

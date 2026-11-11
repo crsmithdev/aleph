@@ -31,6 +31,8 @@ export interface Bound { why: string; text: string; ev?: Hold }
 export interface IssueFacts {
   name: string;
   item: issues.Issue;
+  /** The parent of a sub-issue: its `after` holds the sub-issue as its own does. */
+  parent?: issues.Issue;
   done: (ref: string) => boolean;
   pause?: Bound | null;
   /** The backend hold, when the run the issue would start is on the backend the factory holds. */
@@ -64,6 +66,9 @@ export type IssueDecision = Bound & (
   | { kind: "loop-guard"; ask: "no-commit" | "run-cap"; starts?: number }
 );
 
+/** The refs an issue waits for: its own `after` and its parent's. */
+export const waitsOf = (item: issues.Issue, parent?: issues.Issue): string[] => [...new Set([...afterOf(item), ...(parent ? afterOf(parent) : [])])];
+
 /** The issues of `after` (a list of ids) that are not done. */
 export function pendingWaits(after: string[], done: (ref: string) => boolean): string[] {
   return after.filter((w) => !done(w));
@@ -76,11 +81,11 @@ export function pendingWaits(after: string[], done: (ref: string) => boolean): s
 export const refDone = (item: issues.Issue | undefined, listRead: boolean, stage: string | undefined): boolean =>
   (item !== undefined && issues.status(item) === "done") || stage === "done" || (listRead && item === undefined);
 
-/** Why the issue is not ready: it is done, waits on an `after` ref, or has an open job; else null. */
+/** Why the issue is not ready: it is done, waits on an `after` ref of its own or its parent, or has an open job; else null. */
 function notReady(f: IssueFacts): Extract<IssueDecision, { kind: "not-ready" }> | null {
   const not = (why: string, text: string, ev: Hold) => ({ kind: "not-ready" as const, why, text, ev });
   if (f.done(f.name)) return not("the item is already done", "The item is already done", { action: "done" });
-  const ids = pendingWaits(afterOf(f.item), f.done);
+  const ids = pendingWaits(waitsOf(f.item, f.parent), f.done);
   if (ids.length) return { ...not(`after ${ids.join(",")}`, `Waits on ${ids.join(", ")}`, { action: "after", on: ids }), ids };
   if (f.open) return not(`its job is ${f.open}`, `Its job is ${f.open}`, { action: f.open, on: f.job ? [f.job] : undefined });
   return null;

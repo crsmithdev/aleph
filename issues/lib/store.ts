@@ -218,6 +218,8 @@ export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" | 
 export const partsOf = (doc: Doc, item: Issue): Issue[] => doc.items.filter((i) => issues.parentRef(i) === issues.refOf(item));
 /** The parent of a child or an old part; undefined for a top-level issue. */
 export const parentOf = (doc: Doc, item: Issue): Issue | undefined => { const up = issues.parentRef(item); return up === undefined ? undefined : issues.find(doc, up); };
+/** The parent of a child or an old part, read from `lists`; undefined for a top-level issue. */
+export const parentIn = (key: string, item: Issue, lists: Reader = reader()): Issue | undefined => { const up = issues.parentRef(item); return up === undefined ? undefined : lists.item(key, up); };
 /** Whether the issue needs a plan run, or "plan the rest" on a parent. */
 export const planSet = (item: Issue): boolean => item.fm.plan === "true";
 /** The flake tracker: a note log, never built. */

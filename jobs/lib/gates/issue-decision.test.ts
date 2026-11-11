@@ -55,6 +55,11 @@ test("Not ready covers a done issue, an after ref and an open job, in that order
   expect(issueDecision(facts({ ...all, done: () => false, item: item() })).why).toBe("its job is running");
 });
 
+test("Not ready names the pending after refs of the parent when only the parent has an after", () => {
+  const d = issueDecision(facts({ item: item(), parent: item({ after: ["fac-1", "fac-2"] }), done: (r) => r === "fac-1" }));
+  expect(d).toMatchObject({ kind: "not-ready", ids: ["fac-2"], why: "after fac-2" });
+});
+
 test("the Queued lane reads the stops it once left out", () => {
   expect(issueDecision(facts({ busy: { why: "waits for fac-1: both change the busy file a.ts", on: "fac-1", file: "a.ts" } })).text).toBe("Waits for fac-1: both change the busy file a.ts");
   expect(issueDecision(facts({ busy: { why: "waits for fac-1: both change the busy file a.ts", on: "fac-1", file: "a.ts" } }))).toMatchObject({ kind: "busy-file", on: "fac-1" });
