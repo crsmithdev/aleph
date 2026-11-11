@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, issueRuns, jobsDir, now, startScript, stateNow as state, setup, teardown, idle, when, addOld, seedItem } from "./cli.helpers";
+import { aleph, base, issueRuns, jobsDir, now, startScript, stateNow as state, state as record, setup, teardown, idle, when, addOld, seedItem } from "./cli.helpers";
 import { dispatch, drop, issueClose } from "./flow.testkit.ts";
+import { hookLines } from "./lib/transitions/factory.ts";
+import { patchRun } from "./lib/records/record.ts";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -82,4 +84,20 @@ describe("every transition dispatches at once", () => {
       delete process.env.ALEPH_RESCUE;
     }
   }, 90_000);
+
+  test("dropping an issue drops its open job, so its Ask stops waiting for Chris", async () => {
+    const x = track(await seed("dropped with its job", open("drop-with"), { kind: "goal" }));
+    await when(() => started().includes(`fac-${x}`));
+    // The held run waits on an Ask, as a job that needs Chris does.
+    const [run] = runs(x);
+    patchRun(run, { condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a" }], recommended: "A", why: ["w"] } });
+    expect(hookLines().join("\n")).toContain(`fac-${x}`);
+    expect((await issueClose("fac", x, "drop", "not needed")).code).toBe(0);
+    expect(state(run).condition).toBe("dropped");
+    expect(record(run).reason).toBe(`issue fac-${x} was dropped`);
+    const again = await drop(`fac-${x}`);
+    expect(again.code).not.toBe(0);
+    expect(again.stderr).toContain("no open job");
+    expect(hookLines().join("\n")).not.toContain(`fac-${x}`);
+  }, 60_000);
 });

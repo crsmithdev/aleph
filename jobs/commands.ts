@@ -332,6 +332,9 @@ async function todoCmd(ctx: Ctx): Promise<void> {
       const c = verbs.close(repo, id, sub, text);
       warn(c.follow);
       ctx.out(c.result);
+      // The dropped issue's open job goes with it, or its Ask outlives the issue. The close note is the issue's record.
+      const open = sub === "drop" ? allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === id)?.[0].run.name : undefined;
+      if (open) await drop(open, { reason: `issue ${repo.key}-${id} was dropped`, quiet: true });
       // An issue that waited on this issue can start, and a dropped part can set its parent's Ask: the dispatch takes both.
       if (repo.sandbox) dispatchDetached();
       return;
