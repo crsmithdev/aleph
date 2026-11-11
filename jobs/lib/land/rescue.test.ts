@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { readList, writeList } from "../../../issues/lib/store.ts";
+import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "../transitions/factory.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
 import { readEvents } from "../../../lib/layout.ts";
