@@ -5,8 +5,8 @@ description: >
   never fixed (a hook that fails, a gate that blocks good turns, a skill listed
   twice), work done by hand again and again, and the turns one session lost.
   Use when asked what keeps breaking, what to automate, what a session learned,
-  or to scan sessions, Langfuse, git or the factory for recurring problems. It
-  finds; /aleph:refit-agents act fixes. NOT for: one bug (use
+  or to scan sessions, Langfuse, git or the factory for recurring problems, and
+  to fix the findings picked (act). NOT for: one bug (use
   /aleph:diagnosing-bugs), code quality (use /aleph:refit-code).
 disable-model-invocation: true
 ---
@@ -14,8 +14,7 @@ disable-model-invocation: true
 # Friction
 
 Search what happened at run time for work an agent or a tool could take over: what keeps going wrong, what
-keeps being done by hand, and where a session lost turns. Friction finds and names the cause. It does not
-choose or make the fix: `/aleph:refit-agents act` does that with the findings Chris picks. refit-agents reads
+keeps being done by hand, and where a session lost turns. Then fix the findings Chris picks. refit-agents reads
 one repo's agent files; friction reads what happened, in every repo on the machine.
 
 The argument sets the scope:
@@ -25,6 +24,7 @@ The argument sets the scope:
   longer window sees less than it says.
 - `session [<id>]`, or none at the end of a session: the [Session](#session) steps, for this session or a past
   one.
+- `act`, with the findings Chris picks from a report: the [Act](#act) steps.
 
 ## Steps
 
@@ -87,7 +87,7 @@ The argument sets the scope:
    timestamp), and the cause. After that, list the covered findings with
    their issues. Then list the dropped findings as counts per reason, counted with `jq`, not by eye. End with what was not read.
 
-File nothing and change nothing. Chris picks findings and passes them to `/aleph:refit-agents act`.
+File nothing and change nothing until Chris picks findings for `act`.
 
 ## Session
 
@@ -97,3 +97,21 @@ File nothing and change nothing. Chris picks findings and passes them to `/aleph
    turn it cost.
 2. **Report** each item in the terminal with the turn it cost and its cause, as in step 5. File and change
    nothing.
+
+## Act
+
+1. **Route.** Each finding goes to one place. Pick the cheapest that removes it:
+   - **Code**, when it can carry it (an **interface** finding): a script or CLI subcommand for a fixed
+     sequence of commands, a hook for a step that must happen every time, a usage line or an error message.
+   - **Permission rule**: a command that Chris approves each time.
+   - **Vault** (`aleph:vault`): a fact about the user, or one that holds across repos.
+   - **Agent file**: the root memory file when every task needs it, a nested `CLAUDE.md` or a skill when only
+     some do. A worker's prompt or schema when only headless workers hit it.
+
+   Done when each finding has one place.
+2. **Gate.** Run `/aleph:refit-agents check` on each proposed agent-file line: cut it when the agent can find
+   it by looking, write it as a plain imperative with its reason, and make sure it contradicts no line in
+   context.
+3. **Propose.** Show each change as a diff with a one-line why. Apply only what the user approves; code
+   changes go on a branch as usual. Done when each finding is applied, declined, or filed with
+   `aleph issue add` (`--kind bug` for an error).

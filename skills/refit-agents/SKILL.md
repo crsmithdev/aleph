@@ -8,8 +8,7 @@ description: >
   to improve, lint, audit, optimize or clean up agent files or skills, check
   they will be followed, cut context load, run agnix, make a repo
   agent-ready, before you add a skill, a CLAUDE.md line or a CLI command
-  (check), when an agent had to guess or look up how to use the repo, or to
-  fix what /aleph:friction found (act).
+  (check), or when an agent had to guess or look up how to use the repo.
 ---
 
 # Refit agents
@@ -51,7 +50,7 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 | Mode | Runs | Reach for it |
 |---|---|---|
 | `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and hold, report | Find what to improve |
-| `act` | The fix of each finding the user picks | After a retro, or with findings from `/aleph:friction` |
+| `act` | The fix of each finding the user picks | After a retro |
 | `lint` | agnix, `load.ts` and `content.ts` only, no model judgment, report in the terminal | A quick pass, or before a commit that touches agent files |
 | `check` | Each new agent file, line, skill, hook or CLI command in a plan, spec or diff, under every lens | Before or during a build |
 
@@ -80,24 +79,6 @@ interface, so that text is right before it is cut and cut before it is reworded,
 cut moves material down the ladder of [writing-for-agents](../writing-for-agents/SKILL.md) before it deletes it.
 After each finding, run agnix, `load.ts` and `content.ts` with the baseline: a new agnix error is red, and the commit records
 the always-loaded total before and after.
-
-A finding from `/aleph:friction` (a recurring error, work done by hand, a turn a session lost) has no lens yet.
-Before the order above, give it one place:
-
-1. **Route.** Each finding goes to one place. Pick the cheapest that removes it:
-   - **Code**, when it can carry it (an **interface** finding): a script or CLI subcommand for a fixed
-     sequence of commands, a hook for a step that must happen every time, a usage line or an error message.
-   - **Permission rule**: a command that Chris approves each time.
-   - **Vault** (`aleph:vault`): a fact about the user, or one that holds across repos.
-   - **Agent file**: the root memory file when every task needs it, a nested `CLAUDE.md` or a skill when only
-     some do. A worker's prompt or schema when only headless workers hit it.
-
-   Done when each finding has one place.
-2. **Gate.** Run `check` on each proposed agent-file line: cut it when the agent can find it by looking, write
-   it as a plain imperative with its reason, and make sure it contradicts no line in context.
-3. **Propose.** Show each change as a diff with a one-line why. Apply only what the user approves; code
-   changes go on a branch as usual. Done when each finding is applied, declined, or filed with
-   `aleph issue add` (`--kind bug` for an error).
 
 ## Lint
 
