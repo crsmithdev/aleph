@@ -1,6 +1,6 @@
 # UI design language
 
-The design language of `ui/`, read from the code by the design-language skill (`skills/design-language/SKILL.md`). It goes from principles to foundations to components. Each component has what it is, a render, when to use it, and Do and Don't pairs. A value the rules do not allow is a deviation, listed at the end.
+The design language of `ui/`, read from the code by the design-language skill (`skills/design-language/SKILL.md`). It goes from principles to foundations to components. Each component has what it is, when to use it, and Do and Don't pairs. A value the rules do not allow is a deviation, listed at the end.
 
 ## Principles
 
