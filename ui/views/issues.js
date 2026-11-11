@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -622,7 +622,7 @@ export function renderIssue(d) {
   const place = d.issue ? [project, ["issues", inventory], [shortText(d.issue.id), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   // Front matter the page shows nowhere else: a chip each.
   const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`)).join("");
-  const pills = `<div class="status-row">${d.derived ? badge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(shortText(`${d.repo}-${ref}`))}</span></div>`;
+  const pills = statusRow(d.derived ? badge(d.derived.stage) : badge(d.status), priorityBadge(priority), `${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(shortText(`${d.repo}-${ref}`))}</span>`);
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
     `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;

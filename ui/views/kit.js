@@ -2,7 +2,7 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loading, mean, money, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { actButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loading, mean, money, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -153,7 +153,7 @@ function renderKit(d, query) {
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
     spec("detail-panel", "Detail panel", panel("kit-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 80 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>")) +
     spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +
-    spec("status-row", "Status row", `<div class="status-row">${badge("running")}${priorityBadge("high")}${chips(["ui", "design"])}</div>`, "Written by hand: the status row has no helper yet.") +
+    spec("status-row", "Status row", statusRow(badge("running"), priorityBadge("high"), chips(["ui", "design"])), "Built by statusRow().") +
     spec("card", "Card", card("Section", "<p>The body of a card.</p>", { count: 3, aside: actButton("Action") })) +
     spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/kit-page</code>"]])) +
 

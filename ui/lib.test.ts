@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -176,6 +176,10 @@ test("idLink and pageHead", () => {
   expect(pageHead("Jobs")).toBe('<header class="ph"><h1>Jobs</h1></header>');
   expect(pageHead("T", { cls: "view-only", after: "<i></i>", aside: "a" })).toBe('<header class="ph"><h1 class="view-only">T</h1><i></i><div class="aside">a</div></header>');
   expect(pageHead("Jobs", { count: 0 })).toContain('<span class="count">0</span>');
+});
+
+test("statusRow puts the state, the priority, then the labels in a status row", () => {
+  expect(statusRow(badge("running"), priorityBadge("high"), chips(["ui"]))).toBe(`<div class="status-row">${badge("running")}${priorityBadge("high")}${chips(["ui"])}</div>`);
 });
 
 test("when gives mm/dd hh:mm this year, YYYY-MM-DD another year, and '' for a bad date", () => {

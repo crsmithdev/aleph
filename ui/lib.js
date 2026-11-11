@@ -387,6 +387,9 @@ export function priorityBadge(p) {
   return tag(k, PRIORITY_TONES[k]);
 }
 
+/** The status row of a detail page around its built parts: the state, the priority, then the labels. */
+export const statusRow = (state, priority, labels) => `<div class="status-row">${state}${priority}${labels}</div>`;
+
 /** One chip: `text` escaped, or `html` as given; `el` is the tag, `cls` extra classes, `attrs` extra attributes (with a leading space, already escaped). */
 export const chip = (text, { el = "span", cls = "", attrs = "", html } = {}) => `<${el} class="chip${cls ? ` ${cls}` : ""}"${attrs}>${html ?? esc(text)}</${el}>`;
 
