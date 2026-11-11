@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, heads, loadingLine, money, pageHead, pct, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, scope } from "../lib.js";
+import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, heads, loadingLine, money, pageHead, pct, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, tone, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard } from "./speed.js";
@@ -57,16 +57,16 @@ function roles(a, m) {
     return rs.length ? { role: "worker", runs: n("runs"), succeeded: n("succeeded"), failed: n("failed"), stuck: n("stuck"), rate: ended ? n("succeeded") / ended : null, cost: n("cost") } : null;
   };
   const model = (t) => shortModel(t?.model);
-  const workerRow = () => `<tr><td>Worker</td><td>${model(m.tiers["worker-low"])}, ${model(m.tiers["worker-medium"])}</td>${stats(allWorkers())}</tr>`;
-  const pick = ([tier, name]) => `<tr><td>${esc(name)}</td><td>${model(m.tiers[tier])}</td>${stats(find(tier, m.tiers[tier]?.model))}</tr>`;
+  const workerRow = () => `<tr><td class="wide">Worker</td><td>${model(m.tiers["worker-low"])}, ${model(m.tiers["worker-medium"])}</td>${stats(allWorkers())}</tr>`;
+  const pick = ([tier, name]) => `<tr><td class="wide">${esc(name)}</td><td>${model(m.tiers[tier])}</td>${stats(find(tier, m.tiers[tier]?.model))}</tr>`;
   const tierRoles = new Set(["worker", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
   const config = m ? workerRow() + Object.entries(TIERS).map(pick).join("") : "";
-  const rows = config + (m ? outs.filter((o) => !tierRoles.has(o.role)) : outs).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${o.model === "unset" ? "not recorded" : esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
+  const rows = config + (m ? outs.filter((o) => !tierRoles.has(o.role)) : outs).map((o) => `<tr><td class="wide">${esc(names[o.role] ?? o.role)}</td><td>${esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
   return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty("No agent ran in this window.", "Pick a longer window.");
 }
 
 const timed = (a) => a.roles.filter((r) => r.hours != null);
-/** The colour of the role at index `i` of the fixed role list, so a role keeps its colour in every window. */
+/** The colour of the role at index `i` of the fixed role list, so a role keeps its colour in every window; the cost chart's keys take them in order. */
 const ROLE_COLORS = ["series-1", "series-2", "series-3", "series-4", "series-5", "chart-6", "chart-7"];
 
 /** The model of each tier, and whether each worker tier is on. A row applies on change. */
@@ -90,19 +90,27 @@ export function outcomesFrame(d) {
   return {
     measure: { name: "Outcomes", unit: "count", agg: "sum" },
     over: { kind: "category", name: "Role" },
-    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: "need" }, { key: "stuck", name: "Stuck", color: "stuck" }] },
+    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: tone("failed") }, { key: "stuck", name: "Stuck", color: "need" }] },
     rows: d.agents.roles.filter((r) => rows.some((o) => o.role === r.key)).map((r) => ({ name: r.name, succeeded: sum(r, "succeeded"), failed: sum(r, "failed"), stuck: sum(r, "stuck") })),
   };
 }
 
 /** The cost frame: cost per bucket, by model. */
 export function costFrame(d) {
-  const models = [...new Set((d.buckets ?? []).flatMap((b) => Object.keys(b.cost ?? {})))].sort();
+  const all = [...new Set((d.buckets ?? []).flatMap((b) => Object.keys(b.cost ?? {})))].sort();
+  // At most seven keys: past that, the models after the sixth fold into Other.
+  const rest = all.length > ROLE_COLORS.length ? all.slice(ROLE_COLORS.length - 1) : [];
+  const keys = all.slice(0, all.length - rest.length).map((m) => ({ key: m, name: shortModel(m) }));
+  if (rest.length) keys.push({ key: "Other", name: "Other" });
   return {
     measure: { name: "Cost", unit: "usd", agg: "sum" },
     over: { kind: "time", window: d.window },
-    by: { name: "Model", keys: models.map((m) => ({ key: m, name: m })) },
-    rows: (d.buckets ?? []).map((b) => ({ at: b.at, ...b.cost })),
+    by: { name: "Model", keys: keys.map((k, i) => ({ ...k, color: ROLE_COLORS[i] })) },
+    rows: (d.buckets ?? []).map((b) => {
+      const row = { at: b.at, ...b.cost };
+      if (rest.length) { row.Other = rest.reduce((n, m) => n + (row[m] ?? 0), 0); for (const m of rest) delete row[m]; }
+      return row;
+    }),
   };
 }
 
