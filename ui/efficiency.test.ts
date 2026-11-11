@@ -67,7 +67,7 @@ const WITH: any = { ...D, baseline: BASE };
 
 test("the tiles and the head come from the data", () => {
   const h = renderEfficiency(WITH, "all");
-  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "First pass", "Reruns", "Fix rounds", "Usage per issue"]);
+  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "Landed", "Reruns", "Returned", "Usage per issue"]);
   expect(h).toContain('<b>30%<em> / 6.0h</em></b>');
   expect(h).toContain('<header class="ph"><h1>Flow</h1><div class="aside"><div class="fbar">');
   expect(h).not.toContain("vs 30-day average");
@@ -91,7 +91,8 @@ test("the causes card is a table beside the issues card, with no intro and no Fi
   const causes = h.slice(h.indexOf('aria-label="Lost time causes"'), h.indexOf('aria-label="Lost time issues"'));
   expect([...causes.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1])).toEqual(["Cause", "Took", "Jobs", "Bar"]);
   expect([...causes.matchAll(/<tr><td[^>]*>([^<]+)<\/td><td class="num">([^<]+)<\/td><td class="num">(\d+)</g)].map((m) => m.slice(1))).toEqual([["Issue had landed", "3.0h", "7"], ["No commit", "3.0h", "2"]]);
-  expect(causes).toMatch(/<td><span class="meter" aria-hidden="true"><i style="width:[\d.]+%"><\/i>/);
+  expect([...causes.matchAll(/<td class="wide"[^>]*>([^<]+)<\/td>/g)].map((m) => m[1])).toEqual(["Issue had landed", "No commit"]);
+  expect(causes).toMatch(/<td><span class="meter" role="img" aria-label="[^"]+"[^>]*><i style="width:[\d.]+%"><\/i>/);
   expect(h).toMatch(/<div class="pair"><section class="card"[^>]*aria-label="Lost time causes"/);
   for (const gone of ["together.", "File an issue", "data-file", 'id="filed"']) expect(h).not.toContain(gone);
 });
@@ -123,7 +124,7 @@ test("selecting a class shows its causes; selecting Lost time again restores the
   expect(all).toContain('data-tile="all" aria-pressed="true"');
 });
 
-test("the First pass tile and the Landed segment select the landed class, and a class with no hours has no segment", () => {
+test("the Landed tile and the Landed segment select the landed class, and a class with no hours has no segment", () => {
   const h = renderEfficiency(D, "all");
   expect(h.match(/data-tile="landed"/g)).toHaveLength(2);
   expect(h).not.toContain('class="seg-dropped"');
@@ -139,7 +140,7 @@ test("an issue with no link shows its id as text, and a run with no reason says 
 test("a click on a card selects its class", () => {
   const h = renderEfficiency(D, "all");
   expect(h).toMatch(/<button type="button" class="tile sc" data-tile="all" aria-pressed="true"><span class="r1"><span class="k">Lost time/);
-  expect(h).toMatch(/data-tile="landed" aria-pressed="false"><span class="r1"><span class="k">First pass/);
+  expect(h).toMatch(/data-tile="landed" aria-pressed="false"><span class="r1"><span class="k">Landed/);
   let handler: any;
   const picked: string[] = [];
   onTile({ addEventListener: (_: string, f: any) => { handler = f; } }, (k: string) => picked.push(k));
@@ -147,7 +148,7 @@ test("a click on a card selects its class", () => {
     const m = h.match(new RegExp(`data-tile="([a-z]+)"[^>]*><span class="r1"><span class="k">${label}`));
     handler({ target: { closest: () => ({ dataset: { tile: m![1] } }) } });
   };
-  press("First pass");
+  press("Landed");
   press("Lost time");
   expect(picked).toEqual(["landed", "all"]);
 });

@@ -152,7 +152,7 @@ test("the outcome bar sits between the scorecard and the panels and fills once m
   const sep = h.indexOf('class="osep"');
   expect(h).not.toContain("Reached main");
   expect(sep).toBeGreaterThan(h.indexOf("seg-landed"));
-  expect(h).toMatch(/<div class="olegend"><span><i class="seg-landed"><\/i>[^<]+ <em>\([^)]+h \d+%\)<\/em><\/span>/);
+  expect(h).toMatch(/<div class="olegend"><span><i class="seg-landed"><\/i>[^<]+ <em>[^<]+h \d+%<\/em><\/span>/);
   expect(h.slice(0, h.indexOf("olegend")).lastIndexOf("seg-returned")).toBeLessThan(sep);
   expect(h.indexOf("seg-failed")).toBeGreaterThan(sep);
   const needs = view.renderNeeds({ ...state, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });

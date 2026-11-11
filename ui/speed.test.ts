@@ -96,6 +96,12 @@ test("the Status cards show the answer's figures and trend them against its base
   expect(h).toContain("<b>3<em> / 0</em></b>");
 });
 
+test("the Status Usage meter fill takes the default fill", () => {
+  const h = statusCards({ now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } }, null, {});
+  expect(h).toContain('<span class="meter" role="img"');
+  expect(h).not.toContain("c-use");
+});
+
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (job: string, kind: string, state: string, a: string, b: string) => ({ n: 1, kind, job, name: job, condition: state, started: a, ended: b }) as any;
@@ -378,6 +384,13 @@ test("the outcome bar with no hours names a job, not a run", () => {
   const h = bar({ window: "week", classes: [] }, "all");
   expect(h).toContain("No agent job on an issue ended in the last 7 days.");
   expect(h).not.toMatch(/\bruns?\b/i);
+  expect(h).toContain('<div class="empty"><p>No agent job on an issue ended in the last 7 days.</p><p class="hint">');
+});
+
+test("the outcome bar's legend share has no brackets", () => {
+  const h = bar({ window: "week", classes: [{ key: "landed", hours: 3, text: "t" }] }, "all");
+  expect(h).toContain("landed <em>3.0h 100%</em>");
+  expect(h).not.toContain("(");
 });
 
 test("activeEnd pulls ended back to the last worker activity", () => {

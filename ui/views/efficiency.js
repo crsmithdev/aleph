@@ -28,16 +28,16 @@ function scorecard(d, key) {
   const points = { kind: "points", format: cardPct }, flaky = d.baseline?.base?.flaky;
   const usage = d.issues.week;
   return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: windowTrend(d, "lost", f.lost, { ...points, lowerIsGood: true }), key: ALL, on: key === ALL }) +
-    statCard({ k: "First pass", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...points, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
-    statCard({ k: "Reruns", v: count(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: String }), key: FLAKES, on: key === FLAKES }) +
-    statCard({ k: "Fix rounds", v: count(returned?.runs ?? 0), note: `${hours(returned?.hours ?? 0)} on ${plural(returned?.issues ?? 0, "issue")}`, key: "returned", on: key === "returned" }) +
+    statCard({ k: "Landed", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...points, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
+    statCard({ k: "Reruns", v: count(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: count }), key: FLAKES, on: key === FLAKES }) +
+    statCard({ k: "Returned", v: count(returned?.runs ?? 0), note: `${hours(returned?.hours ?? 0)} on ${plural(returned?.issues ?? 0, "issue")}`, key: "returned", on: key === "returned" }) +
     statCard({ k: "Usage per issue", v: usage === null ? "–" : pct(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "p50 of weekly limit", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 
 const causeBars = (s) => {
-  const size = (x) => x.hours ?? x.runs, max = size(s.causes[0] ?? {}) ?? 0;
+  const size = (x) => x.hours ?? x.runs, max = size(s.causes[0] ?? {}) ?? 0, share = (x) => (max > 0 ? (size(x) / max) * 100 : 0);
   return pagedTable(heads(["Cause", "Took", "Jobs", "Bar"], ["Took", "Jobs"]), s.causes.map((x) =>
-    `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${count(x.runs)}</td><td>${meter(max > 0 ? (size(x) / max) * 100 : 0)}</td></tr>`));
+    `<tr><td class="wide" title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${count(x.runs)}</td><td>${meter(share(x), `${x.name}, ${pct(share(x))} of the largest`)}</td></tr>`));
 };
 
 const topTable = (rows) => dataTable(heads(["Issue", "Why", "Took", "Jobs"], ["Took", "Jobs"]), rows.map((x) =>

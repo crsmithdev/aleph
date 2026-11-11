@@ -81,7 +81,7 @@ export function statusCards(s, d, { efficiency, performance }) {
   const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
   const lead = statCard({ k: "Completion", v: dur(f?.leadP50), v2: dur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance });
   const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
-  const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : count(f.asks), ...(f ? { v2: count(d.asks?.manual ?? 0) } : {}), q: ["all", "manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: String }), href: performance });
+  const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : count(f.asks), ...(f ? { v2: count(d.asks?.manual ?? 0) } : {}), q: ["all", "manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: count }), href: performance });
   return lost + lead + landed + asks + usageCard(s);
 }
 
@@ -91,19 +91,19 @@ export function usageCard(s, link = { href: "#/factory/agents" }) {
   if (!cur) return statCard({ k: "Usage", v: "–", note: "usage unknown", ...link });
   const gone = weekGone(cur.seven_day_resets_at, s.now);
   const tip = gone === null ? "" : `${pct(gone)} of the week gone`;
-  const bar = meter([{ pct: Math.min(100, cur.seven_day), cls: "c-use" }], `${pct(cur.seven_day)} used${tip && `, ${tip}`}`, { mark: gone });
+  const bar = meter([{ pct: Math.min(100, cur.seven_day) }], `${pct(cur.seven_day)} used${tip && `, ${tip}`}`, { mark: gone });
   return statCard({ k: "Usage", v: pct(cur.seven_day), extra: bar, note, ...link });
 }
 
 /** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/flow for the window. */
 export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`);
+  if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`, "Widen the window or clear the project.");
   const said = (c) => `${hours(c.hours)} ${pct((c.hours / total) * 100)}`;
   const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" aria-label="${esc(`${c.key} ${said(c)}`)}" title="${esc(c.text)}"></button>`;
   const group = (xs) => (xs.length ? `<div class="osegs" style="flex:${xs.reduce((a, c) => a + c.hours, 0)}">${xs.map(seg).join("")}</div>` : "");
   const good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost);
   const sep = good.length && lost.length ? `<i class="osep" role="separator" title="Left of the line reached main; right of it did not"></i>` : "";
-  const legend = [...good, ...lost].map((c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)} <em>(${esc(said(c))})</em></span>`).join("");
+  const legend = [...good, ...lost].map((c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)} <em>${esc(said(c))}</em></span>`).join("");
   return `<div class="obar" role="group" aria-label="Agent time">${group(good)}${sep}${group(lost)}</div><div class="olegend">${legend}</div>`;
 }
