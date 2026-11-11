@@ -338,6 +338,9 @@ test("the page is the search, the freshness filter, seven type tiles, the result
   expect(nh).toContain('href="#/memory/U"');
   const none = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "x", links: [], backlinks: [] });
   expect(none.match(/<div class="empty"><p>None\.<\/p><\/div>/g)).toHaveLength(2);
+  expect(nh).toContain('<section class="card" id="links"');
+  expect(nh).toContain('<section class="card" id="backlinks"');
+  expect(nh).toMatch(/id="h-backlinks">Linked from<\/h2><span class="count">1<\/span>/);
 });
 
 test("each type has its own layout, filters keep by type and freshness, and the tiles count before the type filter", () => {

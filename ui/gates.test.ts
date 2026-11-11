@@ -351,7 +351,7 @@ test("the cap row and the rule hints say job and issue, with no goal and no Run 
   expect(caps).toContain("<b>Job cap</b>");
   expect(caps).toContain("live jobs against the cap");
   expect(caps).toContain("the most starts any one issue made in the last hour");
-  const rules = h.slice(h.indexOf('<section id="rules"'));
+  const rules = h.slice(h.indexOf('<section class="card" id="rules"'));
   expect(rules).toContain("Jobs with no commit");
   expect(rules).toContain("The last 3 jobs of an issue ended with nothing committed.");
   expect(rules).toContain("An issue started 3 times in one hour.");
@@ -486,7 +486,7 @@ test("the body has the tick, the suite and the monitor with their last run from 
   const none: any = (await body()).schedules;
   expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d" }]);
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
-  expect(h).toContain("<h2>Schedules</h2>");
+  expect(h).toContain(">Schedules</h2>");
   expect(h).toContain("<th>Schedule</th><th>Every</th><th>Last Run</th><th>Result</th>");
   expect(h).toContain('<input type="checkbox" checked disabled aria-label="tick on"> tick');
   expect(h).toContain('value="1min"');
@@ -524,7 +524,7 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   expect(repeats(approved as any, rescue, NOW + 3600_000)).toEqual([{ reason: "rescue", answer: "recommended", count: 3, name: "Rescue of a stuck job", mode: "recommended" }]);
   const d = { ...data(), repeats: r };
   const h = gates.renderRepeats(d);
-  expect(h).toContain("<h2>Rule Candidates");
+  expect(h).toContain(">Rule Candidates</h2>");
   expect(h).toMatch(/<button[^>]*data-rule="intake-failed"[^>]*data-mode="retry"/);
   const bare = gates.renderNow({ ...d, metrics: { ...d.metrics, rate: null, held: undefined } });
   expect(bare).not.toMatch(/undefined|NaN/);
@@ -576,6 +576,23 @@ test("the Held time card reads hours() and the Automation rate reads pct()", () 
   const h = gates.renderGates({ ...d, metrics: { ...d.metrics, held: { goals: 2, hours: 3513.1 }, rate: { auto: 1, total: 8, percent: 12.5 } } });
   expect(h).toContain("<b>3513h<em>");
   expect(h).toContain(`<b>${pct(12.5)}<em>`);
+});
+
+test("Monitor, Schedules, Rule Candidates, Rules and Log are each a card that keeps its id", async () => {
+  const d = { ...(await body()), repeats: [], rules: [], log: { entries: [] } } as any;
+  const h = { monitor: gates.renderMonitor(d), "gates-schedules": gates.renderSchedules(d), "gates-repeats": gates.renderRepeats(d), rules: gates.renderRules(d), "gates-log": gates.renderLog(d) };
+  for (const [id, html] of Object.entries(h)) {
+    expect(html).toStartWith('<section class="card"');
+    expect(html).toContain(`id="${id}"`);
+  }
+  const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(file, JSON.stringify({ day: "2026-11-03", table: {}, text: "T", findings: ["F"] }));
+  try {
+    expect(gates.renderMonitor(await body())).toStartWith('<section class="card" id="monitor"');
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
 });
 
 test("Schedules, Repeat Answers, Rules and Log show empty() with no rows; Repeat Answers and Log page at 50", () => {

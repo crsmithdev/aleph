@@ -87,13 +87,13 @@ export function renderCaps(d) {
 
 /** The newest monitor report: a summary that expands to every finding and the reader's reply, or why there is no reading. */
 export function renderMonitor(d) {
-  const m = d.monitor, head = sectionHead("Monitor");
-  if (!m) return `<section id="monitor" aria-label="Monitor">${head}<p>The monitor has not run.</p></section>`;
+  const m = d.monitor;
+  if (!m) return card("Monitor", "<p>The monitor has not run.</p>", { id: "monitor" });
   const n = m.findings.length, first = n ? ` First: ${findingHtml(m.findings[0])}` : "";
   const summary = `${esc(m.day)}: ${n} ${n === 1 ? "finding" : "findings"}.${first}`;
   const body = (n ? findingsList(m.findings) : "") +
     (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? error(`No reading: ${m.error}`, "The monitor reads again at its next run.") : "");
-  return `<section id="monitor" aria-label="Monitor">${head}${fold(summary, body)}</section>`;
+  return card("Monitor", fold(summary, body), { id: "monitor" });
 }
 
 /** The interval of a schedule on a timer of its own, with a form to change it; the monitor runs in the tick, once a day. */
@@ -108,7 +108,7 @@ function intervalCell(s) {
 export function renderSchedules(d) {
   const rows = d.schedules.map((s) => `<tr><td><label class="sched-on"><input type="checkbox" checked disabled aria-label="${esc(s.name)} on"> ${esc(s.name)}</label></td>` +
     `${intervalCell(s)}<td>${s.last ? when(s.last) : "has not run"}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
-  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${rows ? dataTable(heads(["Schedule", "Every", "Last Run", "Result"]), rows) : empty("No schedule.")}</section>`;
+  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Last Run", "Result"]), rows) : empty("No schedule."), { id: "gates-schedules" });
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */
@@ -122,8 +122,8 @@ function renderWaiting(d) {
 export function renderRepeats(d) {
   const rows = d.repeats.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
     (r.mode ? actButton("Make it a rule", { rule: r.reason, mode: r.mode, label: "Make it a rule" }) : "") + `</td></tr>`);
-  return `<section id="gates-repeats" aria-label="Rule candidates">${sectionHead("Rule Candidates", { count: d.repeats.length })}` +
-    (rows.length ? pagedTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
+  return card("Rule Candidates", rows.length ? pagedTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats."),
+    { id: "gates-repeats", count: d.repeats.length, label: "Rule candidates" });
 }
 
 /** The minutes after which the factory lands an escalated Ask of a land reason that the director recommends landing; 0 waits for Chris. */
@@ -154,7 +154,7 @@ export function renderRules(d) {
     const dec = r.decided, out = r.outcome;
     return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? `<p class="quiet">${esc(r.line)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
   }).join("");
-  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${!rows ? empty("No rule.") : dataTable(heads(["Rule", "Who Decides", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"]), rows, { id: "rules-table" })}</section>`;
+  return card("Rules", !rows ? empty("No rule.") : dataTable(heads(["Rule", "Who Decides", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"]), rows, { id: "rules-table" }), { id: "rules" });
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
@@ -190,8 +190,8 @@ export function renderLog(d, by, limit = PAGE) {
     return `<tr><td>${subject}</td><td class="time">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${esc(e.action || "–")}</td><td>${esc(e.sub ?? "")}</td>` +
       `<td class="what">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
-  return `<section id="gates-log" aria-label="Log">${sectionHead("Log")}${filter}` +
-    (rows ? dataTable(heads(["Subject", "Logged", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
+  return card("Log", filter +
+    (rows ? dataTable(heads(["Subject", "Logged", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")), { id: "gates-log" });
 }
 
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */

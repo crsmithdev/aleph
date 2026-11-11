@@ -1231,7 +1231,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | A missing cell is empty in some tables and `–` in others | Tables | follow-up |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `costFrame()` in `ui/views/factory-agents.js` | allowed |
 | `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
-| Sections built from `sectionHead()` with no card box | `ui/views/gates.js` (7), `ui/views/memory.js` (5), `ui/views/now.js` (4) | follow-up |
+| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Waiting for You in `ui/views/gates.js`; Memory Health in `ui/views/memory.js`; the Status Alerts and lanes in `ui/views/now.js` | allowed |
 | Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
 | Empty, loading and error lines written inline | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/session.js`, `ui/views/ideas.js` | follow-up |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |

@@ -386,8 +386,8 @@ export function renderNote(n) {
     `<p class="hint"><code>${esc(n.path)}</code></p>` +
     (fm ? `<dl class="facts">${fm}</dl>` : "") +
     `<article class="note">${md(n.body)}</article>` +
-    `<section id="links">${sectionHead("Links to", { id: "links", count: n.links.length })}${crumbs(n.links)}</section>` +
-    `<section id="backlinks">${sectionHead("Linked from", { id: "backlinks", count: n.backlinks.length })}${crumbs(n.backlinks)}</section></div>`;
+    card("Links to", crumbs(n.links), { id: "links", count: n.links.length }) +
+    card("Linked from", crumbs(n.backlinks), { id: "backlinks", count: n.backlinks.length }) + `</div>`;
 }
 
 export const noteView = {
