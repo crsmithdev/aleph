@@ -46,6 +46,8 @@ Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, an
 | `--muted` | #62688A | #8E96BA | headers, meta |
 | `--rule`, `--rule-2` | #DCD9EC, #E8E6F3 | #3A3F58, #2E3245 | borders, row lines |
 | `--lift` | `0 1px 3px`, `0 2px 8px` | heavier | the top Status card |
+| `--float` | `0 6px 24px rgb(0 0 0 / .25)` | the same | kit widgets: the font picker, the annotations |
+| `--on-fill` | #fff | #fff | text on a coloured bar |
 
 #### Tones
 
@@ -59,6 +61,8 @@ Allowed literals: the `#000` masks of `.chat .clamp` and `.wf-detail .clamp`, an
 | `--add`, `--del` | #437018, #C0304C | #A9C77D, #F07178 | diff lines |
 | `--focus` | #7E57C2 | #C792EA | focus ring |
 | `--approve`, `--decide`, `--unstick` | see `--approve` in `ui/app.css` | dark block | Ask cards, each with `-bg` and `-ring` |
+| `--kind` / `--kind-bg` | `--stuck` / `--stuck-bg` | the same | an issue row's kind: `approval` uses `--run`, `input` uses `--need` |
+| `--k` / `--k-bg` / `--k-ring` | `--approve` / `--approve-bg` / `--approve-ring` | the same | an Ask card: `decide` and `unstick` set their own |
 
 #### Data colours
 
@@ -117,6 +121,7 @@ The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` te
 | `--fw-mid` | 500 | ids, numbers |
 | `--fw-strong` | 600 | headings, table headers |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather | body, code, numbers, titles |
+| `--chart-scale`, `--chart-weight` | 1, 400 | text in the ECharts canvas: its relative size and weight |
 
 Weight 700 stays a literal on `.mark` and `.tile b`.
 
@@ -188,6 +193,24 @@ Shadows: `--lift`, `--float` for the kit widgets, and `box-shadow: inset` rings 
 |---|---|
 | Breakpoints | 720px and 1100px, literal, as `@media` takes no tokens |
 | Motion | `.15s ease-out` on borders and backgrounds; no animation; ECharts `animation: false` |
+
+### The kit bridge
+
+The kit widgets in `ui/vendor/kit` read these. Each points at a base token, so one block serves both themes.
+
+| Token | Value | Role |
+|---|---|---|
+| `--kit-bg` | `--surface` | a kit panel |
+| `--kit-field` | `--bg` | a kit field |
+| `--kit-sunk` | `--sunk` | a sunken area in a kit widget |
+| `--kit-ink` | `--ink` | text in a kit widget |
+| `--kit-muted` | `--muted` | secondary text in a kit widget |
+| `--kit-rule` | `--rule` | a kit widget's borders |
+| `--kit-accent` | `--focus` | a kit widget's accent |
+| `--kit-shadow` | `--float` | a kit widget's shadow |
+| `--kit-font` | `--sans` | a kit widget's text font |
+| `--kit-code` | `--mono` | a kit widget's code font |
+| `--kit-z` | `--z-overlay` | a kit widget's stacking order |
 
 ## Content
 
