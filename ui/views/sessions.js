@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
-import { actButton, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { actButton, fold, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
 import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
 export const view = {
@@ -75,7 +75,7 @@ function ranked(kind, rows, o) {
   const row = (r) => barRow(esc(r.name), 0, `${count(r.n)} · ${count(r.errors)} err`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
     bar: meter([{ pct: ((r.n - r.errors) / top) * 100 }, { pct: (r.errors / top) * 100, cls: "c-err" }]) });
   const rest = rows.slice(ROWS);
-  return barList(rows.slice(0, ROWS).map(row).join("")) + (rest.length ? `<details class="more"${rest.some((r) => o.pick === `${kind}:${r.name}`) ? " open" : ""}><summary>${rest.length} more</summary>${barList(rest.map(row).join(""))}</details>` : "");
+  return barList(rows.slice(0, ROWS).map(row).join("")) + (rest.length ? fold(`${rest.length} more`, barList(rest.map(row).join("")), { cls: "more", open: rest.some((r) => o.pick === `${kind}:${r.name}`) }) : "");
 }
 
 const sum = (rows, f) => rows.reduce((n, r) => n + f(r), 0);

@@ -1014,7 +1014,7 @@ A disclosure is a fold. It hides detail until the reader opens it.
 
 | Helper | Reference |
 |---|---|
-| `fold(summary, body, { open, keep, cls })`; `moreFold(items, row)`; `clamp(html)`; `wireFolds()`, `restoreFolds()` | `ui/views/kit.js` |
+| `fold(summary, body, { open, keep, cls, head })`; `moreFold(items, row)`; `clamp(html)`; `wireFolds()`, `restoreFolds()` | `ui/views/kit.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1231,7 +1231,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
 | Sections built from `sectionHead()` with no card box | `ui/views/gates.js` (7), `ui/views/memory.js` (5), `ui/views/now.js` (4) | follow-up |
 | Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
-| Folds written by hand: `details.more` 4 times, about 12 bare `<details>`; `fold()` not used | `ui/views/cards.js`, `ui/views/now.js`, `ui/views/sessions.js` | aleph-1857 |
 | Empty, loading and error lines written inline | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/session.js`, `ui/views/ideas.js` | follow-up |
 | Monitor findings built three ways; a feed row and a timeline event copied | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/issues.js` | follow-up |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |

@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, badge, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
+import { fold, pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, badge, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
@@ -94,7 +94,7 @@ export function renderTranscript(steps) {
     if (s.kind === "text") return `<div class="md">${md(s.text)}</div>`;
     const input = typeof s.input === "string" ? s.input : JSON.stringify(s.input, null, 2);
     const out = s.output === undefined ? "" : s.output.length > CUT || s.output.split("\n").length > 12
-      ? `<details><summary>${s.error ? "error, " : ""}result (${esc(bytes(s.output.length))})</summary><pre class="trailers">${esc(s.output)}</pre></details>`
+      ? fold(`${s.error ? "error, " : ""}result (${esc(bytes(s.output.length))})`, `<pre class="trailers">${esc(s.output)}</pre>`)
       : `<pre class="trailers">${esc(s.output)}</pre>`;
     return `<div class="step"><b>${esc(s.name)}</b><pre class="trailers">${esc(input ?? "")}</pre>${out}</div>`;
   }).join("") || empty("Nothing to show.");

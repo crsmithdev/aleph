@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -443,8 +443,7 @@ export async function mount(root, d) {
 
 function renderForm(rows, o = {}) {
   const repos = [...new Set(rows.map((r) => r.repo))];
-  return `<details class="new"><summary>File an issue</summary>` +
-    `<form data-ui="issue-form" class="stack">` +
+  return fold("File an issue", `<form data-ui="issue-form" class="stack">` +
     `<label>Project <select name="repo" required>${projectOptions(o.keys ?? repos, o.project)}</select></label>` +
     `<label>Title <input name="title" required></label>` +
     `<label>Text <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
@@ -452,7 +451,7 @@ function renderForm(rows, o = {}) {
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
     `<label><input type="checkbox" name="spec"> The text is a spec: build it in the factory</label>` +
     `<label>After <input name="after" placeholder="repo-n, repo-n.k"></label>` +
-    `${actButton("File issue", {}, { primary: true, type: "submit" })} <span class="act-msg" role="status"></span></form></details>`;
+    `${actButton("File issue", {}, { primary: true, type: "submit" })} <span class="act-msg" role="status"></span></form>`, { cls: "new" });
 }
 
 export function renderIssues(d, o = {}) {
@@ -636,7 +635,7 @@ export function renderIssue(d) {
     return `<li class="dp-ev"><span class="dp-at">${esc(e ? when(new Date(e.at)) : "")}</span><span>${tag(it.tag, it.tone)}</span><div class="dp-evt">${it.html}</div></li>`;
   };
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
-  const machineNotes = folded.length ? `<details class="notes-fold"><summary>${folded.length} machine ${folded.length === 1 ? "note" : "notes"}</summary><ul class="notes">${folded.map(noteRow).join("")}</ul></details>` : "";
+  const machineNotes = folded.length ? fold(`${folded.length} machine ${folded.length === 1 ? "note" : "notes"}`, `<ul class="notes">${folded.map(noteRow).join("")}</ul>`, { cls: "notes-fold" }) : "";
   const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + machineNotes : empty("No notes.")) + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length

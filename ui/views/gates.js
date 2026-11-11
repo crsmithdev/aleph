@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
 import { findingHtml } from "./now.js";
 import { askCard } from "./cards.js";
@@ -93,7 +93,7 @@ export function renderMonitor(d) {
   const summary = `${esc(m.day)}: ${n} ${n === 1 ? "finding" : "findings"}.${first}`;
   const body = (n ? `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>` : "") +
     (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? error(`No reading: ${m.error}`, "The monitor reads again at its next run.") : "");
-  return `<section id="monitor" aria-label="Monitor">${head}<details><summary>${summary}</summary>${body}</details></section>`;
+  return `<section id="monitor" aria-label="Monitor">${head}${fold(summary, body)}</section>`;
 }
 
 /** The interval of a schedule on a timer of its own, with a form to change it; the monitor runs in the tick, once a day. */

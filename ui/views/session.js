@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { clamp, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, when } from "../lib.js";
+import { clamp, fold, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -35,7 +35,7 @@ const clip = (text, html) => (text.length > CLIP_CHARS || text.split("\n").lengt
 /** A system part as a one-line chip: the tag, and its summary or first line; it opens to the whole text. */
 function sysChip({ tag, body }) {
   const peek = (body.match(/<summary>([\s\S]*?)<\/summary>/)?.[1] ?? body.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 100);
-  return `<details class="sysc"><summary>${chip(tag)}<span class="peek">${esc(peek)}</span></summary><pre>${esc(body)}</pre></details>`;
+  return fold(`${chip(tag)}<span class="peek">${esc(peek)}</span>`, `<pre>${esc(body)}</pre>`, { cls: "sysc" });
 }
 
 /** Ms from the seconds of an answer, and that as a duration. */
@@ -44,11 +44,11 @@ const msOf = (s) => (s == null ? null : s * 1000), sdur = (s) => dur(msOf(s));
 /** A tool call on one line: name, key argument, error mark, duration; it opens to input and output. */
 function toolLine(c) {
   const io = (label, text) => (text ? `<h4>${label}</h4><pre>${esc(text)}</pre>` : "");
-  return `<details class="tool${c.error ? " err" : ""}"><summary><span class="tn">${esc(c.name)}</span>` +
+  return fold(`<span class="tn">${esc(c.name)}</span>` +
     `${c.args ? `<code class="ta">${esc(c.args)}</code>` : ""}${c.error ? `<span class="terr">Error</span>` : ""}` +
-    `<span class="td">${esc(sdur(c.seconds))}</span></summary>` +
+    `<span class="td">${esc(sdur(c.seconds))}</span>`,
     `<div class="tio">${io("Input", c.input)}${c.error ? io("Error", c.error) : ""}${io("Output", c.output)}</div>` +
-    `${c.children?.length ? `<div class="tools sub">${c.children.map(toolLine).join("")}</div>` : ""}</details>`;
+    `${c.children?.length ? `<div class="tools sub">${c.children.map(toolLine).join("")}</div>` : ""}`, { cls: `tool${c.error ? " err" : ""}` });
 }
 
 function toolList(tools) {
@@ -57,7 +57,7 @@ function toolList(tools) {
   const late = tools.slice(early.length);
   const errs = early.filter((c) => c.error).length;
   const earlyTools = early.length
-    ? `<details class="tools-early"><summary>${early.length} earlier tool calls${errs ? ` <span class="terr">${errs} failed</span>` : ""}</summary>${early.map(toolLine).join("")}</details>`
+    ? fold(`${early.length} earlier tool calls${errs ? ` <span class="terr">${errs} failed</span>` : ""}`, early.map(toolLine).join(""), { cls: "tools-early" })
     : "";
   return `<div class="tools">${earlyTools}${late.map(toolLine).join("")}</div>`;
 }
@@ -241,7 +241,7 @@ function obsRows(o, depth) {
     o.model ? esc(shortModel(o.model)) : "",
     o.error ? `Error: ${esc(o.error)}` : "",
   ].filter(Boolean).join("; ");
-  const ioFold = (label, text) => (text ? `<details><summary>${label}</summary><pre>${esc(text)}</pre></details>` : "");
+  const ioFold = (label, text) => (text ? fold(label, `<pre>${esc(text)}</pre>`) : "");
   return `<tr><td>${tag(o.kind, o.error ? "stuck" : "quiet")}</td>` +
     `<td style="padding-left:${depth * INDENT_STEP}px"><strong>${esc(o.name)}</strong>${ioFold("Input", o.input)}${ioFold("Output", o.output)}</td>` +
     `<td class="wide">${detail}</td><td class="num">${esc(sdur(o.seconds))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");

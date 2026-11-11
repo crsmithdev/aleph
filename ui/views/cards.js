@@ -1,5 +1,5 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
-import { actButton, actMessages, clock, codeText, denyReasons, diffHtml, dur, esc, openDiffs, priorityBadge, repoIdLink, tag, when } from "../lib.js";
+import { actButton, actMessages, fold, clock, codeText, denyReasons, diffHtml, dur, esc, openDiffs, priorityBadge, repoIdLink, tag, when } from "../lib.js";
 import { shortText, shortId, jobHref, parseId } from "../../lib/naming.ts";
 
 /** A job's id, linking to its page. */
@@ -58,7 +58,7 @@ function span(since, to) {
 /** The Ask card structure: the article with `cls` and `attrs`, then the box with `meta`, the fold of `label`, `title` and `tag` over `desc`, and `rest`. */
 export const askShell = (cls, attrs, key, meta, label, title, tag, desc, rest) =>
   `<article class="job-card small issue-row ${cls}" ${attrs}>` +
-  `<div class="ask-box">${meta}<details class="ask-fold" data-keep="ask:${esc(key)}"><summary class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${esc(label)}:</b> <span class="ask-title">${esc(title)}</span></span>${tag ? `<span class="ask-tag">${esc(tag)}</span>` : ""}</summary>${desc}</details>${rest}</div></article>`;
+  `<div class="ask-box">${meta}${fold(`<span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${esc(label)}:</b> <span class="ask-title">${esc(title)}</span></span>${tag ? `<span class="ask-tag">${esc(tag)}</span>` : ""}`, desc, { cls: "ask-fold", keep: `ask:${key}`, head: "ask-head" })}${rest}</div></article>`;
 
 /** The options, recommended mark and context of a decision with fields. */
 function decisionBody(d) {
@@ -86,7 +86,7 @@ function askDetails(i) {
     (d.review ? `<p class="quiet q">Reviewer: ${esc(d.review.call)}${d.review.reason ? `: ${esc(d.review.reason)}` : ""}</p>` : "") +
     (d.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(d.stat)}</pre></div></div>` : "") +
     (isRun ? `<div class="actions">${act("diff", i.id, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(i.id)}"${openDiffs.has(i.id) ? `>${diffHtml(openDiffs.get(i.id))}` : " hidden>"}</div>` : "");
-  return body ? `<details class="more" data-keep="more:${esc(i.key ?? i.id)}"><summary>Technical details</summary><div class="body">${body}</div></details>` : "";
+  return body ? fold("Technical details", `<div class="body">${body}</div>`, { cls: "more", keep: `more:${i.key ?? i.id}` }) : "";
 }
 
 

@@ -431,6 +431,7 @@ test("keep stores JSON under aleph.<key>, kept reads it back, and with no storag
 test("fold() writes a details element with its class, keep key and open state", () => {
   expect(fold("<b>S</b>", "<p>B</p>")).toBe("<details><summary><b>S</b></summary><p>B</p></details>");
   expect(fold("Technical details", "x", { open: true, keep: "k1", cls: "more" })).toBe('<details class="more" data-keep="k1" open><summary>Technical details</summary>x</details>');
+  expect(fold("S", "B", { head: "ask-head" })).toBe('<details><summary class="ask-head">S</summary>B</details>');
 });
 
 test("linkButton() is a link with the act class, its label and href escaped, and an unsafe href inert", () => {

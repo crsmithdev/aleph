@@ -3,7 +3,7 @@
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
-import { actButton, linkButton, codeText, dataTable, heads, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { actButton, fold, linkButton, codeText, dataTable, heads, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -162,7 +162,7 @@ export function renderInspector(it, n = null, status = "", hist = []) {
   const head = `<p class="mtype">${dot(it.type)}${esc(typeName(it.type))} · ${esc(it.source === "memory-md" ? "MEMORY.md" : it.source)}${status ? ` · ${esc(STATUS[status])}` : ""}</p><h3>${esc(it.title)}</h3>`;
   // The claim first; the rest of the note folds, so how it reaches the agent stays in view.
   const [claim, ...rest] = (n?.body ?? "").trim().split(/\n\s*\n/);
-  const what = n ? `<article class="note">${md(claim)}</article>${rest.length ? `<details class="fold"><summary>The whole note</summary><article class="note">${md(rest.join("\n\n"))}</article></details>` : ""}` : `<p>${codeText(it.text)}</p>`;
+  const what = n ? `<article class="note">${md(claim)}</article>${rest.length ? `${fold("The whole note", `<article class="note">${md(rest.join("\n\n"))}</article>`, { cls: "fold" })}` : ""}` : `<p>${codeText(it.text)}</p>`;
   const reach = `<div class="mreach"><h4>How it reaches the agent</h4><p>${esc(it.effect)}</p>${n ? coreForm(n) : ""}</div>`;
   const facts = `<dl class="facts">${[["Written", it.at ? esc(shortDay(it.at)) : "–"], ...(it.source === "note" ? [["Last recalled", it.read ? esc(shortDay(it.read)) : "never"], ["Confidence", esc(fm.confidence ?? "–")]] : [["Scope", esc(it.scope || "all")]])].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
   return `${head}${what}${reach}${facts}${it.source === "note" ? recallHistory(hist) : ""}${n ? links(n) : ""}${actions(it)}` +
@@ -210,7 +210,7 @@ function readChart(rows) {
 function renderBroad(m, rows) {
   const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
   const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.")) +
-    `<details class="fold"><summary>Every finding</summary>${renderHealth(m)}</details>`, { count: `${lint.refuse.length} refusals, ${lint.warn.length} warnings` });
+    fold("Every finding", renderHealth(m), { cls: "fold" }), { count: `${lint.refuse.length} refusals, ${lint.warn.length} warnings` });
   const reads = card("When Recall Last Returned Each Note", readChart(rows), { label: "When recall last returned each note" });
   const start = Object.entries(m.start ?? {});
   const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${x.bytes} / ${x.budget} bytes, ${x.core.length} core lines${x.cut ? `, ${x.cut} cut` : ""}`)).join("")) : empty("No start context."), { label: "Start context" });

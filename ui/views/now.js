@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when, scope } from "../lib.js";
+import { actButton, fold, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when, scope } from "../lib.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { bar, flowOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, shell as jobCard, statLines, trailerLine } from "./cards.js";
@@ -111,7 +111,7 @@ function chatRows(events, chats = {}) {
   }
   const row = (ev) => eventRow(ev, {}, chats);
   return [...sessions.values()].map(([latest, ...earlier]) => ({ at: latest.at,
-    html: earlier.length ? `<details class="herald-chat"><summary>${row(latest)}</summary>${earlier.map(row).join("")}</details>` : row(latest) }));
+    html: earlier.length ? fold(row(latest), earlier.map(row).join(""), { cls: "herald-chat" }) : row(latest) }));
 }
 
 /** The Herald panel: sticky alerts on top, rolling event history stream below. */
@@ -149,7 +149,7 @@ export function renderHerald(s) {
 
   const m = s.factory?.monitor;
   const monitorFindings = m?.findings?.length
-    ? `<details class="more herald-findings" data-keep="herald:findings"><summary>Daily Monitor (${esc(m.day)})</summary><ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol></details>`
+    ? fold(`Daily Monitor (${esc(m.day)})`, `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`, { cls: "more herald-findings", keep: "herald:findings" })
     : "";
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
@@ -197,7 +197,7 @@ export function renderLede(s, stale = false) {
 const list = (html) => `<div class="list">${html}</div>`;
 
 /** The one folded "Details" of an Issues row; `key` keeps it open across refreshes. */
-const more = (key, body) => `<details class="more" data-keep="more:${esc(key)}"><summary>Details</summary><div class="body">${body}</div></details>`;
+const more = (key, body) => fold("Details", `<div class="body">${body}</div>`, { cls: "more", keep: `more:${key}` });
 
 /** The details of a held or stuck job: everything the row's one sentence leaves out. */
 function details(s, j, extra = "") {
