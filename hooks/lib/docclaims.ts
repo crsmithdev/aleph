@@ -8,6 +8,7 @@
  * - a code file that a claim, or a line "as the code on main has them" that the turn wrote (by an edit tool or a Bash heredoc or redirect), names
  *   and that no tool call other than an edit touches.
  */
+import { resultEntries } from "../../lib/toolresult.ts";
 import { bashResult, resultText } from "./digest.ts";
 
 type Entry = Record<string, any>;
@@ -43,11 +44,7 @@ export function claimSentences(message: string): string[] {
 interface Call { index: number; name: string; input: Entry; out: string; visible: string }
 
 function calls(entries: Entry[]): Call[] {
-  const results = new Map<string, Entry>();
-  for (const e of entries) {
-    if (e.type !== "user" || !Array.isArray(e.message?.content)) continue;
-    for (const b of e.message.content) if (b.type === "tool_result") results.set(b.tool_use_id, e);
-  }
+  const results = resultEntries(entries);
   const out: Call[] = [];
   for (const e of entries) {
     if (e.type !== "assistant" || !Array.isArray(e.message?.content)) continue;

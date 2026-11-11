@@ -5,7 +5,7 @@ import { basename, join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
-import { routes } from "./api/jobs.ts";
+import { routes, transcript } from "./api/jobs.ts";
 import { withEnv } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
@@ -223,6 +223,14 @@ describe("run logs", () => {
     JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "looking" }, { type: "tool_use", id: "t1", name: "Bash", input: { command: "ls" } }] } }),
     JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "a\nb" }] } }),
   ].join("\n");
+  test("transcript joins the text parts of a tool_result with a newline", () => {
+    const parts = [{ type: "text", text: "a" }, { type: "text", text: "b" }];
+    const s = [
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }] } }),
+      JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: parts }] } }),
+    ].join("\n");
+    expect((transcript(s)[0] as any).output).toBe("a\nb");
+  });
   async function logs(file: string, q = "") {
     const url = new URL(`http://x/api/jobs/oth-90%231/logs/${encodeURIComponent(file)}${q}`);
     return routes["GET /api/jobs/:id/logs/:file"](new Request(url), { id: "oth-90#1", file }, url);

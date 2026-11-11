@@ -3,6 +3,7 @@
  * and the reviewer's stream-json. episode.ts reads it back by that id.
  */
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { resultContent } from "../../../lib/toolresult.ts";
 import { langfuseConfig } from "../../../lib/env.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from "../../../lib/otlp.ts";
 import { onOf, type Run } from "../records/ledger.ts";
@@ -45,7 +46,7 @@ function parseStream(stream: string): Parsed {
       for (const b of ev.message.content) {
         const c = b?.type === "tool_result" ? calls.get(b.tool_use_id) : undefined;
         if (!c) continue;
-        c.output = Array.isArray(b.content) ? b.content.map((p: any) => p?.text ?? "").join("") : b.content ?? "";
+        c.output = resultContent(b.content);
         c.endMs = when(ev);
         c.error = b.is_error === true;
       }

@@ -12,6 +12,7 @@ import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
+import { resultContent } from "../../lib/toolresult.ts";
 import { contentText, issueHref, parseId, subjectOf, tail } from "../../lib/naming.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
@@ -51,7 +52,7 @@ export function transcript(stream: string): Step[] {
       for (const b of content) {
         const t = b?.type === "tool_result" ? calls.get(b.tool_use_id) : undefined;
         if (!t) continue;
-        t.output = Array.isArray(b.content) ? b.content.map((p: any) => p?.text ?? "").join("") : String(b.content ?? "");
+        t.output = resultContent(b.content);
         if (b.is_error === true) t.error = true;
       }
     }

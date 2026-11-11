@@ -3,6 +3,7 @@
  * their output, other tool calls, the last user text, the final message.
  */
 import { readFileSync } from "node:fs";
+import { resultContent, resultEntries } from "../../lib/toolresult.ts";
 
 type Entry = Record<string, any>;
 
@@ -45,10 +46,7 @@ export function resultText(entry: Entry): string {
     return [tur.stdout, tur.stderr ? `stderr: ${tur.stderr}` : ""].filter(Boolean).join("\n");
   }
   const block = Array.isArray(entry.message?.content) ? entry.message.content.find((c: Entry) => c.type === "tool_result") : null;
-  const content = block?.content;
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) return content.map((c: Entry) => c.text ?? "").join("\n");
-  return "";
+  return resultContent(block?.content);
 }
 
 /**
@@ -81,11 +79,7 @@ export function readEntries(transcriptPath: string, promptId: string): Entry[] {
  */
 export function digest(transcriptPath: string, promptId: string, stopFinal = ""): Digest {
   const entries = readEntries(transcriptPath, promptId);
-  const results = new Map<string, Entry>();
-  for (const e of entries) {
-    if (e.type !== "user" || !Array.isArray(e.message?.content)) continue;
-    for (const block of e.message.content) if (block.type === "tool_result") results.set(block.tool_use_id, e);
-  }
+  const results = resultEntries(entries);
 
   let prompt = "";
   const edits: string[] = [];

@@ -23,3 +23,12 @@ test("a reviewer's run is a second tree under the same trace", () => {
   expect(reviewer.parentSpanId).toBe(spans[0].spanId);
   expect(spans[4].parentSpanId).toBe(reviewer.spanId);
 });
+
+test("a tool_result's text parts join with a newline in the tool span", () => {
+  const stream = [
+    ev({ type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }] } }),
+    ev({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: [{ type: "text", text: "a" }, { type: "text", text: "b" }] }] } }),
+  ].join("\n");
+  const spans = spansFor({ runId: "run-1", run, repoKey: "fac", prompt: "p", stream, startMs: T0, endMs: T0 + 60_000 });
+  expect(spans[1].attributes.find((a) => a.key === "langfuse.observation.output")?.value).toEqual({ stringValue: "a\nb" });
+});
