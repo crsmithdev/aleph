@@ -2,11 +2,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, setSystemTime, test
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mkdirSync } from "node:fs";
-import { currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, spends, summary, type Snapshot } from "./usage.ts";
+import { currentFit, fit, gainSince, pollOnce, pollOpenRouter, readSnapshots, runShare, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
-import { putRun } from "../jobs/lib/records/record.ts";
+import { openRouterFactor } from "../jobs/lib/routing/models.ts";
 import { memory, use } from "../lib/langfuse.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
@@ -53,24 +52,58 @@ test("the window starts at the last reset", () => {
   expect(w.map((s) => s.seven_day)).toEqual([1, 2]);
 });
 
+/** Snapshots on each hour 0..n, the weekly % rising by `rise(h)` over hour h. */
+const hourly = (n: number, rise: (h: number) => number) => {
+  const out = [snap(0, 0)];
+  for (let h = 0; h < n; h++) out.push(snap(h + 1, out[h].seven_day + rise(h)));
+  return out;
+};
+/** Hour h's dollars: Fable and Opus in turn, so the two columns are not proportional. */
+const fable = (h: number) => (h % 2 ? 3 : 1), opus = (h: number) => (h % 3 ? 2 : 5);
+const spendOf = (n: number) => Array.from({ length: n }, (_, h) => [
+  { at: T0 + h * H, model: "claude-fable-5-1", cost: fable(h) }, { at: T0 + h * H, model: "claude-opus-5-5", cost: opus(h) },
+  { at: T0 + h * H, model: "deepseek/deepseek-v4.1-flash", cost: 50 },
+]).flat();
+
 test("under 6 hours of snapshots there is no share", () => {
-  expect(fit([snap(0, 0), snap(5, 5)], [{ at: T0 + 2 * H, model: "m", cost: 10 }])).toBeNull();
+  expect(fit(hourly(5, () => 1), spendOf(5))).toBeNull();
 });
 
-test("r is the rise per dollar, per model when it has $5, pooled otherwise", () => {
-  const snaps = [snap(0, 0), snap(4, 4), snap(8, 6), snap(12, 8)];
-  // a: 10 $ → 4 %; 5 $ → 1 %... fable burns 2x per dollar
-  const spends = [
-    { at: T0 + 2 * H, model: "fable", cost: 4 }, { at: T0 + 3 * H, model: "opus", cost: 4 },
-    { at: T0 + 6 * H, model: "opus", cost: 4 }, { at: T0 + 10 * H, model: "opus", cost: 4 }, { at: T0 + 11 * H, model: "tiny", cost: 1 },
-  ];
-  const f = fit(snaps, spends)!;
-  expect(f.hours).toBe(12);
-  expect(f.byModel.opus).toBeGreaterThan(0);
-  expect(f.byModel.fable).toBeUndefined();
-  expect(share(f, 2, "opus")).toEqual({ pct: 2 * f.byModel.opus, pooled: false });
-  expect(share(f, 2, "fable")).toEqual({ pct: 2 * f.pooled, pooled: true });
+test("the fit finds one rate for Fable and one for the other Claude models, and OpenRouter dollars move neither", () => {
+  const f = fit(hourly(24, (h) => 0.2 * fable(h) + 0.05 * opus(h)), spendOf(24))!;
+  expect(f.pooled).toBe(false);
+  expect(f.hours).toBe(24);
+  expect(f.fable).toBeCloseTo(0.2, 9);
+  expect(f.rest).toBeCloseTo(0.05, 9);
+  expect(share(f, 2, "claude-fable-5-1")!.pct).toBeCloseTo(0.4, 9);
+  expect(share(f, 2, "sonnet")!.pct).toBeCloseTo(0.1, 9);
+  expect(share(f, 2, "unknown")!.pct).toBeCloseTo(0.1, 9);
+  expect(share(f, 2, "deepseek-v4.1-flash")).toEqual({ pct: 0, pooled: false });
+  expect(share(f, 2, "gpt-oss-20b")).toEqual({ pct: 0, pooled: false });
   expect(share(null, 2, "opus")).toBeUndefined();
+});
+
+test("with under $20 of Fable one pooled rate prices every Claude model", () => {
+  const f = fit(hourly(6, () => 1), spendOf(6))!;
+  expect(f.pooled).toBe(true);
+  expect(f.fable).toBe(f.rest);
+  expect(share(f, 1, "claude-fable-5-1")).toEqual({ pct: f.rest, pooled: true });
+});
+
+test("an hour that holds a reset, or with no snapshot near one end, is not a row", () => {
+  const snaps = hourly(12, () => 1);
+  snaps[4] = snap(4, 0, "2026-11-09T00:00:00Z");
+  snaps[6] = { ...snaps[6], at: new Date(T0 + 6 * H + 20 * 60_000).toISOString() };
+  // Hours 3, 4 hold a reset and hours 5, 6 lack the snapshot at 6: 8 of 12 hours are rows.
+  expect(fit(snaps, spendOf(12))!.hours).toBe(8);
+});
+
+test("a run's share puts its reviewer's dollars on the review's model", () => {
+  const f = { fable: 0.2, rest: 0.05, pooled: false, hours: 24 };
+  const w = runShare(f, { model: "deepseek-v4.1-flash", cost: 5, review: { model: "claude-fable-5-1", cost: 3 } })!;
+  expect(w.pct).toBeCloseTo(0.6, 9);
+  expect(runShare(f, { model: "sonnet", cost: 4 })!.pct).toBeCloseTo(0.2, 9);
+  expect(runShare(f, { model: "sonnet" })).toBeUndefined();
 });
 
 test("gainSince: the latest weekly percent minus the snapshot nearest to 5 hours before, in the reset window", () => {
@@ -166,69 +199,49 @@ test("under bun test a poll without ALEPH_USAGE_FILE writes no file, so a test c
   }
 });
 
-test("a snapshot dated after the clock does not skew currentFit() or fit()", async () => {
-  const jobs = join(dir, "runs");
-  const keep = process.env.ALEPH_JOBS_DIR;
-  process.env.ALEPH_JOBS_DIR = jobs;
+test("currentFit reads Langfuse's hourly spend, and a snapshot dated after the clock does not skew it", async () => {
+  const t0 = Math.floor((NOW - 10 * H) / H) * H;
+  const reset = new Date(NOW + 5 * 24 * H).toISOString();
+  const good = Array.from({ length: 9 }, (_, h) => ({ at: new Date(t0 + h * H + 60_000).toISOString(), five_hour: 0, seven_day: 10 + h, seven_day_resets_at: reset }));
+  const observations = Array.from({ length: 8 }, (_, h) => ({ id: `o${h}`, startTime: new Date(t0 + h * H + 5 * 60_000).toISOString(), providedModelName: "claude-opus-5-5", calculatedTotalCost: 4 }));
+  const write = (rows: object[]) => writeFileSync(process.env.ALEPH_USAGE_FILE!, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  use(memory({ traces: [], observations }));
   try {
-    const t0 = NOW - 12 * H;
-    const at = (h: number) => new Date(t0 + h * H).toISOString();
-    const reset = new Date(NOW + 5 * 24 * H).toISOString();
-    const good = [0, 4, 8, 12].map((h, i) => ({ at: at(h), five_hour: 0, seven_day: 10 + 4 * i, seven_day_resets_at: reset }));
-    const spendsAt = [2, 6, 10];
-    spendsAt.forEach((h, i) => {
-      mkdirSync(join(jobs, `r${i}`), { recursive: true });
-      putRun(`r${i}`, { n: 1, job: "j", model: "opus", cost: 6, started: at(h), ended: at(h) } as any);
-    });
-    const write = (rows: object[]) => writeFileSync(process.env.ALEPH_USAGE_FILE!, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
-    const sp = spendsAt.map((h) => ({ at: t0 + h * H, model: "opus", cost: 6 }));
-
     write(good);
     const base = await currentFit();
-    expect(base).not.toBeNull();
-    const baseDirect = fit(good, sp);
-    expect(baseDirect).not.toBeNull();
-
+    expect(base).toEqual({ fable: 0.25, rest: 0.25, pooled: true, hours: 8 });
     const future = { at: new Date(NOW + 30 * H).toISOString(), five_hour: 0, seven_day: 1, seven_day_resets_at: new Date(NOW + 12 * 24 * H).toISOString() };
     write([...good, future]);
     expect(await currentFit()).toEqual(base);
-    expect(readSnapshots().some((s) => s.at === future.at)).toBe(false);
   } finally {
-    if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
+    use(null);
   }
 });
 
-test("a Langfuse trace on the session of a ledger run is not counted twice", async () => {
-  const keep = process.env.ALEPH_JOBS_DIR;
-  process.env.ALEPH_JOBS_DIR = join(dir, "runs");
-  const at = new Date(NOW - 2 * H).toISOString();
-  mkdirSync(join(dir, "runs", "r0"), { recursive: true });
-  putRun("r0", { n: 1, job: "j", session: "s1", model: "opus", cost: 6, started: at, ended: at } as any);
-  const trace = (session: string) => ({ id: `t-${session}`, sessionId: session, timestamp: at, totalCost: 6, metadata: { model: "opus" } });
-  use(memory({ traces: [trace("s1")], observations: [] }));
+test("the OpenRouter rate is the bill's rise less Jev over the list price Langfuse saw, and a new key starts over", async () => {
+  const fetch = globalThis.fetch, keep = { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY, ALEPH_OPENROUTER_FILE: process.env.ALEPH_OPENROUTER_FILE, ALEPH_JEV_FILE: process.env.ALEPH_JEV_FILE };
+  process.env.ALEPH_OPENROUTER_FILE = join(dir, "openrouter.jsonl");
+  process.env.ALEPH_JEV_FILE = join(dir, "jev.jsonl");
+  process.env.OPENROUTER_API_KEY = "or-test";
+  let usage = 10;
+  globalThis.fetch = (async () => Response.json({ data: { usage, usage_daily: 0, usage_weekly: 0, usage_monthly: 0 } })) as any;
+  const obs = (h: number, cost: number) => ({ id: `o${h}`, startTime: new Date(NOW - h * H).toISOString(), providedModelName: "deepseek/deepseek-v4.1-flash", calculatedTotalCost: cost });
+  use(memory({ traces: [], observations: [obs(2, 1), obs(1, 1), obs(1.5, 99)].map((o, i) => i === 2 ? { ...o, providedModelName: "claude-opus-5-5" } : o) }));
   try {
-    expect((await spends(NOW - 6 * H)).reduce((n, s) => n + s.cost, 0)).toBe(6);
-    use(memory({ traces: [trace("s1"), trace("s2")], observations: [] }));
-    expect((await spends(NOW - 6 * H)).reduce((n, s) => n + s.cost, 0)).toBe(12);
+    expect(openRouterFactor()).toBe(1);
+    await pollOpenRouter(NOW - 3 * H);
+    writeFileSync(process.env.ALEPH_JEV_FILE, JSON.stringify({ at: new Date(NOW - H).toISOString(), cost: 0.2 }) + "\n");
+    usage = 12.8;
+    await pollOpenRouter(NOW);
+    // (12.8 - 10 - 0.2) / 2 list dollars
+    expect(openRouterFactor()).toBeCloseTo(1.3, 9);
+    usage = 0.5;
+    await pollOpenRouter(NOW);
+    const rows = require("node:fs").readFileSync(process.env.ALEPH_OPENROUTER_FILE, "utf8").trim().split("\n").map(JSON.parse);
+    expect(rows.at(-1)).toEqual({ at: new Date(NOW).toISOString(), usage: 0.5 });
   } finally {
+    globalThis.fetch = fetch;
+    for (const [k, v] of Object.entries(keep)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
     use(null);
-    if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
-  }
-});
-
-test("a build run's reviewer cost is spent on the review's model, and each reviewer session's Langfuse trace is skipped", async () => {
-  const keep = process.env.ALEPH_JOBS_DIR;
-  process.env.ALEPH_JOBS_DIR = join(dir, "runs");
-  const at = new Date(NOW - 2 * H).toISOString();
-  mkdirSync(join(dir, "runs", "r1"), { recursive: true });
-  putRun("r1", { n: 1, job: "j", session: "s1", model: "claude-sonnet-5-5", cost: 5, review: { call: "passed", model: "claude-opus-5-5", cost: 3, sessions: ["rs1", "rs2"] }, started: at, ended: at } as any);
-  use(memory({ traces: [{ id: "t-rs1", sessionId: "rs1", timestamp: at, totalCost: 1, metadata: { model: "claude-opus-5-5" } }, { id: "t-rs2", sessionId: "rs2", timestamp: at, totalCost: 2, metadata: { model: "claude-opus-5-5" } }], observations: [] }));
-  try {
-    const by: Record<string, number> = {};
-    for (const s of await spends(NOW - 6 * H)) by[s.model] = (by[s.model] ?? 0) + s.cost;
-    expect(by).toEqual({ "claude-sonnet-5-5": 2, "claude-opus-5-5": 3 });
-  } finally {
-    use(null);
-    if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
   }
 });

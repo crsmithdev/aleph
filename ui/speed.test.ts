@@ -256,7 +256,7 @@ test("runs read their issue from on: a part counts under its own ref, an issue r
 
   const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), kind: "land", condition: "landed" });
   for (const r of [a("p", { on: "aleph-1430" }), a("q", { on: "aleph-1430.1" }), land("p", { on: "aleph-1430" }), land("q", { on: "aleph-1430.1" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
-  const fit = { pooled: 0.1, byModel: {} } as any;
+  const fit = { fable: 0.1, rest: 0.1, pooled: true, hours: 24 };
   const w = speed("week", now, fit);
   expect(w.issues.week).toBe(0.2); // both runs under the one key aleph-1430
   expect(w.issues.usage).toEqual([{ goal: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }]);
@@ -531,7 +531,7 @@ test("speed: a build on an unchanged store spawns one git process and reads the 
   for (const a of [["init", "-q"], ["add", "."], ["commit", "-qm", "tt: add"], ["update-ref", "refs/remotes/origin/main", "HEAD"]]) Bun.spawnSync(["git", "-C", store, ...a], { env: { ...process.env, ...who } });
   run({ kind: "build", condition: "passed", repo: "tt", on: "tt-7", cost: 1, ...secs(0, 9, 600) });
   run({ kind: "land", condition: "landed", repo: "tt", on: "tt-7", ...secs(0, 9, 40) });
-  const read = () => { const d = speed("week", now, { pooled: 0.1, byModel: {} } as any); return [d.times.map((x) => x.filed), d.issues.usage.map((u) => u.title)]; };
+  const read = () => { const d = speed("week", now, { fable: 0.1, rest: 0.1, pooled: true, hours: 24 }); return [d.times.map((x) => x.filed), d.issues.usage.map((u) => u.title)]; };
   const first = read();
   expect(first[1]).toContain("Seven");
   const spawn = Bun.spawnSync, calls: string[][] = [];

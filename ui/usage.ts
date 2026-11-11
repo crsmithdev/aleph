@@ -2,28 +2,35 @@
  * The account's weekly plan usage. The UI server polls Anthropic's OAuth usage
  * endpoint (the one Claude Code's `/usage` reads; undocumented, so it can
  * change) every 10 minutes and appends a row to ~/.aleph/usage.jsonl. From the
- * rows and the dollars aleph saw spent it estimates each job's and session's
- * share of the week. The token is read per call and never logged or returned.
+ * rows and the hourly Claude dollars in Langfuse it estimates each job's and
+ * session's share of the week. The token is read per call and never logged or
+ * returned. The same poll records what OpenRouter bills per list dollar.
  */
 import { readJsonOr } from "../lib/json.ts";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { allRuns } from "../jobs/lib/records/ledger.ts";
-import { need } from "../lib/langfuse.ts";
-import { list } from "./langfuse.ts";
+import { need, type Hourly } from "../lib/langfuse.ts";
+import { jevFile } from "../lib/jev.ts";
+import { openRouterFile, openRouterSpend, viaOf } from "../jobs/lib/routing/models.ts";
 import { once, touch } from "../lib/sources.ts";
 import { credentialsFile, usageFile, usageFileSet, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
 
 export interface Snapshot { at: string; five_hour: number | null; seven_day: number; seven_day_resets_at: string | null }
-export interface Spend { at: number; model: string; cost: number }
 /** A job's or session's estimated share of the week: percent of the weekly limit, and whether the pooled rate priced it. */
 export interface Wk { pct: number; pooled: boolean }
-export interface Fit { pooled: number; byModel: Record<string, number>; hours: number }
+/** Percent of the week per Claude dollar, on Fable and on the other models; `pooled`: one rate for both. `hours`: the rows of the fit. */
+export interface Fit { fable: number; rest: number; pooled: boolean; hours: number }
 
 const POLL_MS = 10 * 60_000;
 const MIN_HOURS = 6;
-const MIN_DOLLARS = 5;
+/** Below this many Fable dollars in the window its rate is noise. */
+const MIN_FABLE = 20;
+/** Below this many list dollars on OpenRouter the bill's rounding swamps the rate. */
+const MIN_LIST = 0.25;
 const HOUR = 3600_000;
+const WEEK = 7 * 24 * HOUR;
+const WINDOW = 4 * WEEK;
+const NEAR_HOUR = 15 * 60_000;
 const STALE_MS = 25 * 60_000;
 
 const usageUrl = usageUrlSetting;
@@ -94,7 +101,7 @@ export async function pollOnce(): Promise<Snapshot | null> {
 
 /** Polls now and every `ms`, and calls `polled` after each snapshot it keeps. Returns a stop function. */
 export function startPoller(ms = POLL_MS, polled = () => {}): () => void {
-  const poll = () => void pollOnce().then((s) => { if (s) polled(); });
+  const poll = () => { void pollOnce().then((s) => { if (s) polled(); }); void pollOpenRouter().catch(() => {}); };
   poll();
   const timer = setInterval(poll, ms);
   timer.unref?.();
@@ -128,106 +135,112 @@ export function sinceReset(snaps: Snapshot[]): Snapshot[] {
   return snaps.slice(i);
 }
 
-/** Solves A x = b by Gauss elimination; null when singular. */
-function solve(A: number[][], b: number[]): number[] | null {
-  const n = b.length;
-  const M = A.map((row, i) => [...row, b[i]]);
-  for (let c = 0; c < n; c++) {
-    let p = c;
-    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
-    if (Math.abs(M[p][c]) < 1e-12) return null;
-    [M[c], M[p]] = [M[p], M[c]];
-    for (let r = 0; r < n; r++) {
-      if (r === c) continue;
-      const f = M[r][c] / M[c][c];
-      for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
-    }
+/** The snapshot nearest each hour boundary, within NEAR_HOUR of it. */
+function byHour(snaps: Snapshot[]): Map<number, Snapshot> {
+  const out = new Map<number, Snapshot>();
+  for (const s of snaps) {
+    const t = Date.parse(s.at), h = Math.round(t / HOUR) * HOUR, b = out.get(h);
+    if (Math.abs(t - h) <= NEAR_HOUR && (!b || Math.abs(t - h) < Math.abs(Date.parse(b.at) - h))) out.set(h, s);
   }
-  return M.map((row, i) => row[n] / row[i]);
-}
-
-/**
- * Percent of the week per dollar. Over the intervals between snapshots since the last reset, the rise
- * in weekly percent is regressed on each model's dollars (least squares, no intercept). A model with
- * under MIN_DOLLARS in the window gets the pooled rate (all rises over all dollars). Null with under
- * MIN_HOURS of snapshots, or with no dollars.
- */
-export function fit(snaps: Snapshot[], spends: Spend[]): Fit | null {
-  const w = sinceReset(snaps);
-  if (w.length < 2) return null;
-  const t = w.map((s) => Date.parse(s.at));
-  const hours = (t.at(-1)! - t[0]) / HOUR;
-  if (hours < MIN_HOURS) return null;
-  const rows: { dy: number; x: Map<string, number> }[] = [];
-  const total = new Map<string, number>();
-  for (let i = 0; i + 1 < w.length; i++) {
-    const x = new Map<string, number>();
-    for (const s of spends) if (s.at > t[i] && s.at <= t[i + 1] && s.cost > 0) {
-      x.set(s.model, (x.get(s.model) ?? 0) + s.cost);
-      total.set(s.model, (total.get(s.model) ?? 0) + s.cost);
-    }
-    rows.push({ dy: w[i + 1].seven_day - w[i].seven_day, x });
-  }
-  const dollars = [...total.values()].reduce((a, b) => a + b, 0);
-  if (dollars <= 0) return null;
-  const pooled = rows.reduce((a, r) => a + r.dy, 0) / dollars;
-  const byModel: Record<string, number> = {};
-  const big = [...total].filter(([, d]) => d >= MIN_DOLLARS).map(([m]) => m);
-  if (big.length) {
-    const A = big.map(() => big.map(() => 0)), b = big.map(() => 0);
-    for (const r of rows) {
-      const rest = [...r.x].filter(([m]) => !big.includes(m)).reduce((a, [, d]) => a + d, 0);
-      const y = r.dy - pooled * rest;
-      big.forEach((m, i) => {
-        const xi = r.x.get(m) ?? 0;
-        b[i] += xi * y;
-        big.forEach((n, j) => { A[i][j] += xi * (r.x.get(n) ?? 0); });
-      });
-    }
-    const sol = solve(A, b);
-    big.forEach((m, i) => { const v = sol?.[i]; if (v !== undefined && Number.isFinite(v) && v > 0) byModel[m] = v; });
-  }
-  return { pooled: Math.max(0, pooled), byModel, hours };
-}
-
-/** The share of `cost` on `model`; none without a fit or a cost. */
-export function share(f: Fit | null, cost: number | undefined, model?: string): Wk | undefined {
-  if (!f || cost === undefined || !(cost > 0) || !(f.pooled > 0 || Object.keys(f.byModel).length)) return undefined;
-  const own = model ? f.byModel[model] : undefined;
-  return { pct: cost * (own ?? f.pooled), pooled: own === undefined };
-}
-
-/** The dollars aleph saw spent since `from`: the ledger's runs (a build run's reviewer cost under the review's model), and Langfuse sessions the ledger does not price. */
-export async function spends(from: number): Promise<Spend[]> {
-  const out: Spend[] = [];
-  const sessions = new Set<string>();
-  for (const { run } of allRuns()) {
-    if (run.session) sessions.add(run.session);
-    for (const s of run.review?.sessions ?? []) sessions.add(s);
-    const at = Date.parse(run.ended ?? run.started);
-    const rv = run.review?.cost ?? 0;
-    if (run.cost && run.cost - rv > 0 && at >= from) out.push({ at, model: run.model ?? "unknown", cost: run.cost - rv });
-    if (rv > 0 && at >= from) out.push({ at, model: run.review!.model ?? "unknown", cost: rv });
-  }
-  try {
-    const floor = Math.floor(from / HOUR) * HOUR;
-    for (const t of (await list(need(), "traces", { from: new Date(floor) }, "usage")).rows) {
-      if (!t.sessionId || sessions.has(t.sessionId) || !(t.totalCost > 0)) continue;
-      const at = Date.parse(t.timestamp);
-      if (at >= from) out.push({ at, model: typeof t.metadata?.model === "string" ? t.metadata.model : "unknown", cost: t.totalCost });
-    }
-  } catch { /* Langfuse is optional here */ }
   return out;
 }
 
-/** The current fit, read once per pass of the UI's builds (sources.ts). */
+const isFable = (model: string) => model.includes("fable");
+
+/**
+ * Percent of the week per dollar of Claude spend. Each hour with a snapshot at both ends, in one reset window, is a
+ * row: the rise of the weekly percent against that hour's Fable and other Claude dollars. Two rates come from least
+ * squares with no intercept: Fable draws about twice the rest per dollar (fit of 2026-10-28..11-11). With under
+ * MIN_FABLE Fable dollars, or a rate that is not positive, one pooled rate prices all. Null under MIN_HOURS rows or no dollars.
+ * The account is used off this machine too, so a week's estimate missed by about ±25% in holdout.
+ */
+export function fit(snaps: Snapshot[], spend: Hourly[]): Fit | null {
+  const cost = new Map<number, [number, number]>();
+  for (const x of spend) {
+    if (viaOf(x.model) !== "claude" || !x.model.startsWith("claude-")) continue;
+    const c = cost.get(x.at) ?? [0, 0];
+    c[isFable(x.model) ? 0 : 1] += x.cost;
+    cost.set(x.at, c);
+  }
+  const near = byHour(snaps);
+  let ff = 0, fr = 0, rr = 0, fy = 0, ry = 0, n = 0, fable = 0;
+  for (const [h, a] of near) {
+    const b = near.get(h + HOUR);
+    if (!b || sinceReset([a, b]).length < 2) continue;
+    const [f, r] = cost.get(h) ?? [0, 0], y = b.seven_day - a.seven_day;
+    ff += f * f; fr += f * r; rr += r * r; fy += f * y; ry += r * y; n++; fable += f;
+  }
+  const xx = ff + 2 * fr + rr;
+  if (n < MIN_HOURS || !(xx > 0)) return null;
+  const det = ff * rr - fr * fr;
+  const f = (fy * rr - ry * fr) / det, r = (ry * ff - fy * fr) / det;
+  if (fable >= MIN_FABLE && f > 0 && r > 0 && Number.isFinite(f) && Number.isFinite(r)) return { fable: f, rest: r, pooled: false, hours: n };
+  const p = Math.max(0, (fy + ry) / xx);
+  return { fable: p, rest: p, pooled: true, hours: n };
+}
+
+/** The share of `cost` on `model`: a model off Claude's subscription uses none of it. None without a fit or a cost. */
+export function share(f: Fit | null, cost: number | undefined, model?: string): Wk | undefined {
+  if (!f || cost === undefined || !(cost > 0)) return undefined;
+  const rate = viaOf(model) !== "claude" ? 0 : model && isFable(model) ? f.fable : f.rest;
+  return { pct: cost * rate, pooled: f.pooled };
+}
+
+/** A run's share: its own cost on its model and its reviewer's cost on the review's model. */
+export function runShare(f: Fit | null, run: { cost?: number; model?: string; review?: { cost?: number; model?: string } }): Wk | undefined {
+  const rv = run.review?.cost ?? 0;
+  const own = share(f, (run.cost ?? 0) - rv, run.model), review = share(f, rv, run.review?.model);
+  return own || review ? { pct: (own?.pct ?? 0) + (review?.pct ?? 0), pooled: f!.pooled } : undefined;
+}
+
+/** The current fit over the last WINDOW, read once per pass of the UI's builds (sources.ts); null when Langfuse does not answer. */
 export function currentFit(): Promise<Fit | null> {
-  return once("fit", ["usage", "records"], async () => {
-    const w = sinceReset(readSnapshots());
-    if (w.length < 2) return null;
-    return fit(w, await spends(Date.parse(w[0].at)));
+  return once("fit", ["usage"], async () => {
+    const to = Date.now(), from = to - WINDOW;
+    const snaps = readSnapshots(to).filter((s) => Date.parse(s.at) >= from);
+    try { return fit(snaps, await need().hourly({ from: new Date(from), to: new Date(to) }, "usage")); }
+    catch { return null; }
   });
 }
+
+/**
+ * Appends the OpenRouter key's lifetime USD and, with MIN_LIST of list-price spend since the key's first line in the
+ * last week, what it bills per list dollar: the rise of the bill less Jev's calls (no transcript has them), over the
+ * list price of the OpenRouter calls Langfuse saw. A fall of the lifetime USD is a new key and starts over.
+ */
+export async function pollOpenRouter(now = Date.now()): Promise<void> {
+  if (process.env.NODE_ENV === "test" && !process.env.ALEPH_OPENROUTER_FILE) return;
+  const spent = await openRouterSpend();
+  if (!spent || typeof spent.total !== "number") return;
+  const key: { at: string; usage: number }[] = [];
+  for (const r of lines(openRouterFile())) {
+    if (typeof r?.usage !== "number") continue;
+    if (key.length && r.usage < key.at(-1)!.usage) key.length = 0;
+    key.push(r);
+  }
+  if (key.length && spent.total < key.at(-1)!.usage) key.length = 0;
+  const base = key.find((r) => Date.parse(r.at) >= now - WEEK);
+  const row: { at: string; usage: number; factor?: number } = { at: new Date(now).toISOString(), usage: spent.total };
+  if (base) {
+    const from = Date.parse(base.at);
+    const list = (await need().hourly({ from: new Date(from), to: new Date(now) }, "usage").catch(() => []))
+      .filter((h) => viaOf(h.model) === "openrouter").reduce((a, h) => a + h.cost, 0);
+    const jev = lines(jevFile()).filter((j) => Date.parse(j?.at) > from && Date.parse(j.at) <= now).reduce((a, j) => a + (j.cost ?? 0), 0);
+    const factor = (spent.total - base.usage - jev) / list;
+    if (list >= MIN_LIST && factor > 0) row.factor = factor;
+  }
+  try {
+    mkdirSync(dirname(openRouterFile()), { recursive: true });
+    appendFileSync(openRouterFile(), JSON.stringify(row) + "\n");
+  } catch (e) {
+    console.error(`ui/usage: cannot write ${openRouterFile()}: ${e instanceof Error ? e.message : "error"}`);
+  }
+}
+
+/** The JSON lines of a file; a torn line is skipped. */
+const lines = (file: string): any[] => existsSync(file)
+  ? readFileSync(file, "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } })
+  : [];
 
 interface UsageSummary {
   /** The last snapshot of the reset window, or null with none or when its week has ended. */

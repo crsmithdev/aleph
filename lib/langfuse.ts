@@ -14,6 +14,8 @@ export interface Span { from?: Date; to?: Date }
 /** `core` leaves out each trace's input and output. */
 export interface TraceQuery extends Span { session?: string; core?: boolean }
 export interface ObservationQuery extends Span { trace?: string; type?: string }
+/** One model's cost in one UTC hour: `at` is the hour's start in ms, `cost` is USD. */
+export interface Hourly { at: number; model: string; cost: number }
 /** Every row of a list; `partial` says the list held more pages than a read takes, `pages` is how many were read. */
 export interface Rows { rows: any[]; partial: boolean; pages: number }
 
@@ -26,6 +28,8 @@ export interface Langfuse {
   trace(id: string): Promise<any | null>;
   /** True when Langfuse knows the session; false when it does not or does not answer. */
   session(id: string): Promise<boolean>;
+  /** The cost of the observations that start in [from, to), by hour and model. One request: a week of observations is 1,218 pages. */
+  hourly(q: Required<Span>, source?: string): Promise<Hourly[]>;
 }
 
 const TIMEOUT = 30_000;
@@ -50,6 +54,18 @@ export function http(cfg: LangfuseConfig): Langfuse {
       return res.json();
     },
     session: (id) => fetch(`${cfg.baseUrl}/api/public/sessions/${encodeURIComponent(id)}`, { headers, signal: AbortSignal.timeout(1500) }).then((r) => r.ok, () => false),
+    hourly: async (q, source = "langfuse") => {
+      touch(source);
+      const query = {
+        view: "observations", dimensions: [{ field: "providedModelName" }], metrics: [{ measure: "totalCost", aggregation: "sum" }],
+        filters: [], timeDimension: { granularity: "hour" }, fromTimestamp: iso(q.from), toTimestamp: iso(q.to),
+      };
+      const res = await fetch(`${cfg.baseUrl}/api/public/metrics?query=${encodeURIComponent(JSON.stringify(query))}`, { headers, signal: AbortSignal.timeout(TIMEOUT) });
+      if (!res.ok) throw new Error(`${res.status} on /api/public/metrics`);
+      const rows: any[] = ((await res.json()) as any).data ?? [];
+      return rows.filter((r) => r.providedModelName && r.sum_totalCost > 0)
+        .map((r) => ({ at: Date.parse(r.time_dimension), model: r.providedModelName, cost: r.sum_totalCost }));
+    },
   };
 }
 
@@ -71,6 +87,20 @@ export function memory(rows: { traces: any[]; observations: any[] }) {
       return t ? { ...t, observations: rows.observations.filter((o) => o.traceId === id) } : null;
     },
     session: async (id: string) => rows.traces.some((t) => t.sessionId === id),
+    hourly: async (q: Required<Span>): Promise<Hourly[]> => {
+      asked.push({ list: "hourly", q });
+      if (lf.down) throw lf.down;
+      const sum = new Map<string, Hourly>();
+      for (const o of rows.observations) {
+        const cost = o.calculatedTotalCost ?? o.totalCost, model = o.providedModelName ?? o.model;
+        if (!within(o.startTime, q) || !model || !(cost > 0)) continue;
+        const at = Math.floor(Date.parse(o.startTime) / 3600_000) * 3600_000, k = `${at} ${model}`;
+        const h = sum.get(k) ?? { at, model, cost: 0 };
+        h.cost += cost;
+        sum.set(k, h);
+      }
+      return [...sum.values()];
+    },
   };
   return lf;
 }

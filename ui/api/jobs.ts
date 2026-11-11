@@ -10,7 +10,7 @@ import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, readFile, view } 
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
-import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
+import { currentFit, runShare, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
 import { resultContent } from "../../lib/toolresult.ts";
 import { contentText, issueHref, parseId, subjectOf, tail } from "../../lib/naming.ts";
@@ -109,7 +109,7 @@ function runInfos(runs: Entry[], fit: Fit | null): RunInfo[] {
     if (r.ended) info.ended = r.ended;
     if (r.cost !== undefined) info.cost = r.cost;
     if (r.model) info.model = r.model;
-    const wk = share(fit, r.cost, r.model);
+    const wk = runShare(fit, r);
     if (wk) info.wk = wk;
     if (r.reason) info.reason = r.reason;
     const logs = logsOf(e.folder);
@@ -176,7 +176,9 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
     const step = nextStep(rec);
     Object.assign(detail, { next: { ...step, text: [step.action, step.sub, contentText(step)].filter(Boolean).join(" ") }, rounds: rec.rounds, events: rec.events });
   }
-  annotate([detail], fit);
+  // The job's share is its runs' shares: a run's reviewer is on another model than the job's.
+  const wks = detail.runs.flatMap((r) => (r.wk ? [r.wk] : []));
+  if (wks.length) detail.wk = { pct: wks.reduce((a, w) => a + w.pct, 0), pooled: wks[0].pooled };
   const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
   const review = latestFile(runs, "review.md");
   if (result !== undefined) detail.result = result;

@@ -16,7 +16,7 @@ import { specChecksOf, stageRows, type StageRow } from "../../jobs/lib/learning/
 import type { Routes } from "../server.ts";
 import { reader, storeDir } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
-import { currentFit, share, type Fit } from "../usage.ts";
+import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP, RUN_CAP } from "../../jobs/lib/infra/settings.ts";
 import { clip, issueHref, NAMES, parseId, SPEEDS, tail } from "../../lib/naming.ts";
 import { inProject, repoIn, scopeOf } from "./scope.ts";
@@ -196,7 +196,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     const a = t0(r), b = Date.parse(r.ended ?? "");
     if (!(a >= since) || a > now || !(b >= a) || b - a > MAX_RUN) continue;
     const reason = r.reason ?? "";
-    const row: Row = { run: r, issue: g, hours: (b - a) / 1000 / 3600, week: share(fit, r.cost, r.model)?.pct ?? 0, cause: "" };
+    const row: Row = { run: r, issue: g, hours: (b - a) / 1000 / 3600, week: runShare(fit, r)?.pct ?? 0, cause: "" };
     const lands = landing.get(g) ?? new Set<Run>();
     const mine = (agentsOf.get(g) ?? []);
     const startsBefore = mine.filter((o) => a - HOUR_MS <= t0(o) && t0(o) < a).length;
@@ -544,7 +544,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   if (fit) {
     const weekOf = new Map<string, number>();
     const keyOf = (r: Run) => issueKeyOf(r, { parent: true });
-    for (const r of all) if (isAgentRun(r.kind) && keyOf(r)) weekOf.set(keyOf(r)!, (weekOf.get(keyOf(r)!) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
+    for (const r of all) if (isAgentRun(r.kind) && keyOf(r)) weekOf.set(keyOf(r)!, (weekOf.get(keyOf(r)!) ?? 0) + (runShare(fit, r)?.pct ?? 0));
     const keys = [...new Set(landed.map(keyOf).filter((k) => k !== undefined))];
     const per = keys.map((g) => weekOf.get(g) ?? 0);
     const nRuns = new Map<string, number>();

@@ -41,6 +41,20 @@ test("a call on a model Claude does not serve is priced from its tokens, not fro
   expect(r.cost).toBeCloseTo(0.545);
 });
 
+test("a call on OpenRouter is priced at what OpenRouter bills per list dollar, and a local call at 0", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "or-")), keep = process.env.ALEPH_OPENROUTER_FILE;
+  process.env.ALEPH_OPENROUTER_FILE = join(dir, "openrouter.jsonl");
+  writeFileSync(process.env.ALEPH_OPENROUTER_FILE, [{ at: "2026-11-11T00:00:00Z", usage: 1 }, { at: "2026-11-11T00:10:00Z", usage: 2, factor: 1.3 }, "torn"].map((r) => JSON.stringify(r)).join("\n") + "\n");
+  try {
+    const ev = { type: "result", is_error: false, result: "ok", total_cost_usd: 9, usage: { input_tokens: 1_000_000, output_tokens: 1_000_000 } };
+    expect((await callAgent("monitor", "x", ask(fake(`echo '${JSON.stringify(ev)}'`), "deepseek-v4.1-flash"))).cost).toBeCloseTo(0.545 * 1.3);
+    expect((await callAgent("monitor", "x", ask(fake(`echo '${JSON.stringify(ev)}'`), "gpt-oss-20b"))).cost).toBe(0);
+  } finally {
+    if (keep === undefined) delete process.env.ALEPH_OPENROUTER_FILE; else process.env.ALEPH_OPENROUTER_FILE = keep;
+    rmSync(dir, { recursive: true });
+  }
+});
+
 test("a call the API refused for credit states the credit cause and holds its model's backend", async () => {
   const line = "API Error: 402 This request would exceed your available credits";
   const r = await callAgent("reviewer", "x", ask(fake(`echo '${JSON.stringify({ type: "result", is_error: true, result: line })}'; exit 1`)));

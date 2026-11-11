@@ -6,7 +6,7 @@
  * top-level `oneOf`, `anyOf` or `allOf`: the API refuses those.
  */
 import { closeSync, openSync, readFileSync, statSync } from "node:fs";
-import { BACKENDS, modelArgv, modelEnv, onGpu, viaOf } from "../routing/models.ts";
+import { BACKENDS, modelArgv, modelEnv, onGpu, openRouterFactor, viaOf } from "../routing/models.ts";
 import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
 import { policyOf } from "../records/outcome.ts";
 import { roleCmd, stallSeconds } from "../infra/settings.ts";
@@ -101,9 +101,13 @@ export function resultOf(stdout: string): Outcome {
   return { found: false, ok: false, line: (last ?? "").slice(0, 300) || "no output", result: "" };
 }
 
-/** Claude Code knows Claude's prices only: a call on another model is priced from its tokens. */
-const costOf = (model: string | undefined, o: Outcome): number | undefined =>
-  viaOf(model) === "claude" ? o.cost : costDetails(model!, o.usage ?? { input: 0, output: 0 })?.total;
+/** Claude Code knows Claude's prices only: a call on another model is priced from its tokens, and OpenRouter's at what it bills. */
+function costOf(model: string | undefined, o: Outcome): number | undefined {
+  const via = viaOf(model);
+  if (via === "claude") return o.cost;
+  const list = costDetails(model!, o.usage ?? { input: 0, output: 0 })?.total;
+  return list === undefined || via !== "openrouter" ? list : list * openRouterFactor();
+}
 
 /**
  * Call `role` with `prompt` on stdin. A call that the API refused for credit holds its model's backend.

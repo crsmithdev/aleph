@@ -3,12 +3,13 @@
  * does not serve differs only in the env the call adds, which `modelEnv` gives from MODELS. The tier map lives in
  * models.json in the factory folder as tier -> {enabled, model}; a missing file or tier means enabled on its Claude model.
  */
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { layout } from "../../../lib/layout.ts";
 import { openRouterKey } from "../../../lib/env.ts";
+import { alephPath } from "../../../lib/paths.ts";
 import { NO_SKILLS } from "../roles/role-skill.ts";
 
 /** USD per million tokens. */
@@ -40,8 +41,9 @@ export const MODELS: Record<string, Model> = {
   "mimo-v2.6-flash": routed("xiaomi/mimo-v2.6-flash", 0.14, 0.28, 0.0028),
 };
 
-/** Who serves a model; a name not in MODELS (a full Claude id such as the reviewer's) is Claude's. */
-export const viaOf = (model: string | undefined): Via => (model && MODELS[model]?.via) || "claude";
+/** Who serves a model, by its name or its id (Langfuse has the id); a model not in MODELS (a full Claude id such as the reviewer's) is Claude's. */
+export const viaOf = (model: string | undefined): Via =>
+  (model && (MODELS[model] ?? Object.values(MODELS).find((m) => m.id === model))?.via) || "claude";
 /** Whether a model's calls take the GPU slot. */
 export const onGpu = (model: string | undefined): boolean => viaOf(model) === "local";
 
@@ -95,17 +97,32 @@ export async function backendUp(model: string): Promise<boolean> {
   try { return (await fetch(`${LOCAL_URL}/health`, { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
 }
 
-/** What OpenRouter charged this key in USD for the current UTC day, week and month; null with no key or no answer. */
-export async function openRouterSpend(): Promise<{ day: number; week: number; month: number } | null> {
+/** What OpenRouter charged this key in USD for the current UTC day, week and month, and in all; null with no key or no answer. */
+export async function openRouterSpend(): Promise<{ day: number; week: number; month: number; total: number } | null> {
   const key = openRouterKey();
   if (!key) return null;
   try {
     const r = await fetch(`${OPENROUTER_URL}/v1/key`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(5000) });
     const d = ((await r.json()) as any)?.data;
-    return typeof d?.usage_daily === "number" ? { day: d.usage_daily, week: d.usage_weekly, month: d.usage_monthly } : null;
+    return typeof d?.usage_daily === "number" ? { day: d.usage_daily, week: d.usage_weekly, month: d.usage_monthly, total: d.usage } : null;
   } catch {
     return null;
   }
+}
+
+/** One line per poll of the UI (ui/usage.ts), `{at, usage, factor?}`: the key's lifetime USD and the rate below. */
+export const openRouterFile = () => alephPath("ALEPH_OPENROUTER_FILE", "openrouter.jsonl");
+
+/**
+ * What OpenRouter bills per dollar of its list price, from the last line of openRouterFile that has one; 1 with none.
+ * The bill ran 1.26x to 1.42x the list price of the transcripts (2026-11-11): providers add fees the list leaves out.
+ */
+export function openRouterFactor(): number {
+  // Under `bun test` only a file the test names counts: the real one changes every 10 minutes.
+  if ((process.env.NODE_ENV === "test" && !process.env.ALEPH_OPENROUTER_FILE) || !existsSync(openRouterFile())) return 1;
+  const rows = readFileSync(openRouterFile(), "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
+  const f = rows.findLast((r) => typeof r?.factor === "number")?.factor;
+  return Number.isFinite(f) && f > 0 ? f : 1;
 }
 
 /**

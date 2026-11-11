@@ -29,12 +29,12 @@ export const bytes = (n) => (n < 1024 ? `${n}B` : n < 1048576 ? `${(n / 1024).to
 /** A percent (0 to 100) as text: whole from 1%, one decimal from 0.05 to 1%, "<0.1%" above 0 and below 0.05, "–" for none. */
 export const pct = (v) => (v == null || Number.isNaN(v) ? "–" : v > 0 && v < 0.05 ? "<0.1%" : `${v < 1 ? v.toFixed(1) : Math.round(v)}%`);
 export const wkText = (wk) => (wk ? `\u2248${pct(wk.pct)} wk` : "");
-const WK_TIP = "An estimate of the share of the weekly plan limit: the cost times the rise in weekly % per dollar aleph saw spent since the last reset. Spend outside aleph (claude.ai chat) is not in the dollars, so it reads high.";
+const WK_TIP = "An estimate of the share of the weekly plan limit: the cost times the rise in weekly % per Claude dollar this machine spent, fit hour by hour over 28 days, one rate for Fable and one for the other Claude models. A week's estimate missed by about ±25% in holdout, because use off this machine (claude.ai chat, other devices) is not in the dollars. OpenRouter and local models use none of the plan.";
 /** The cost cell content (HTML): the weekly share first, with its tooltip, then the dollars. */
 export const costHtml = (cost, wk) => {
   const dollars = cost === undefined || cost === null ? "" : esc(money(cost));
   if (!wk) return dollars;
-  const tip = WK_TIP + (wk.pooled ? " The rate is the pooled one: this model has under $5 in the window." : "");
+  const tip = WK_TIP + (wk.pooled ? " One rate prices all models: the window has too little Fable spend for its own rate." : "");
   return `<span class="wk" title="${esc(tip)}">${esc(wkText(wk))}</span>${dollars ? ` <span class="quiet">${dollars}</span>` : ""}`;
 };
 
