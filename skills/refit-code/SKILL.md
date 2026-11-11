@@ -4,10 +4,10 @@ description: >
   Refit a codebase: find where it does one thing more than one way, where a
   module is shallow or leaks, where code is bigger than its job, dead or does
   work it does not need, where
-  files and directories are not where a reader looks, and sweep or polish the
-  repo. Use when asked to improve, review, clean up, simplify, deslop or tidy code,
+  files and directories are not where a reader looks, and sweep junk files. Use
+  when asked to improve, review, clean up, simplify, deslop or tidy code,
   find duplication, drift, dead code or architecture problems, reorganize or
-  restructure files and directories, get a repo ready to show, before you add a function, module,
+  restructure files and directories, before you add a function, module,
   parser, constant, route or doc section (check), or when the refit-code Stop
   hook blocks.
 ---
@@ -46,38 +46,27 @@ convention is right is **layout**. Report a candidate under one lens only.
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, scope, hunt, prove, owner, hold, report | Find what to improve |
+| `retro [lens ...]` (default: all) | Baseline, sweep, scope, hunt, prove, owner, hold, report | Find what to improve |
 | `act` | The fix of each finding the user picks | After a retro |
-| `deepen <finding>` | [DEEPEN.md](DEEPEN.md): grill the design, design it twice, glossary and ADRs | A depth, seams or one-way finding that needs a new interface |
 | `check` | Each new thing in a plan, spec or diff, under every lens | Before or during a build |
-| `sweep` | [SWEEP.md](SWEEP.md): junk files, build output, orphaned fixtures, misplaced files | Before a commit, or first in any retro |
-| `polish` | `sweep`, then [POLISH.md](POLISH.md): the ready-to-show gate | Someone is about to look at the repo |
-| hook | Every tool hold, at each Stop, with no model | Automatic |
 
 ## Retro
 
 1. **Baseline.** Run the repo's own build, test and lint commands from its manifest; a red baseline ends the
    run. Record the commit, `git status --porcelain`, and the file and line count. Done when the baseline is
    green and recorded.
-2. **Scope.** Take the scope the user named. Else run `bun <skill dir>/cochange.ts seed --since 90.days` (files
+2. **Sweep.** Follow [SWEEP.md](SWEEP.md): remove junk files, build output and orphaned fixtures, and move
+   misplaced files, each where a yes-or-no check passes. Done when SWEEP.md's own bar is met.
+3. **Scope.** Take the scope the user named. Else run `bun <skill dir>/cochange.ts seed --since 90.days` (files
    fixed most, pairs that change together, jscpd's copies of code) and take its directories, the files changed
    most in the last 30 days, and `docs/`. Done when you have a list of directories and the seed output.
-3. **Hunt.** Spawn one Explore subagent per lens per two or three directories, in one message. Give each its
+4. **Hunt.** Spawn one Explore subagent per lens per two or three directories, in one message. Give each its
    lens file's Signals section verbatim, the scope, and the seed lines for its directories. The layout lens gets
 one subagent over the whole repo, with the full seed. Each returns
    candidates as: lens, concept or module, every location with `file:line`, the signal that found it. Done when
    each subagent has returned.
-4. **Prove.** Open every location of every candidate and apply its lens's proof bar. Read
-   [EXAMPLES.md](EXAMPLES.md) first to calibrate. A candidate that meets the bar is a finding; one that does not
-   is dropped with the reason; one `.refit.json` accepts is marked accepted. Where a lens has no hard proof,
-   rate 1-5: 4-5 is a finding, 3 is a finding with the doubt stated, 1-2 is dropped. Done when each candidate
-   has a verdict.
-5. **Owner and hold.** For each finding, its lens's Fix section names what changes, and its Hold section names
-   what keeps it from coming back. Done when every finding has both.
-6. **Report.** Write the HTML report of [REPORT.md](REPORT.md), strongest first, then accepted and dropped.
-   Give the user its absolute path. Then ask which findings to act on, in an `AskUserQuestion`. In a headless
-   run, `AskUserQuestion` is not available: end the reply with the findings as a numbered list instead. File
-   issues only when the user asks. Done when the report is written and the question asked.
+5. **Prove, hold and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files. Done when its report
+   is written and the question asked.
 
 ## Act
 
@@ -90,7 +79,8 @@ their contents are final.
 3. Run the baseline commands. Green: commit, naming the lens and the finding. Red: revert that finding and
    record which proof step missed; never carry a red build into the next finding.
 
-A finding that needs a new interface goes to `deepen` instead.
+For a finding that needs a new interface, follow [DEEPEN.md](DEEPEN.md) before step 1. It designs the interface
+with the user, then hands the design back here.
 
 ## Check
 
@@ -135,6 +125,6 @@ the pair to `.refit.json` `accepted` with its reason. [ONE-WAY.md](ONE-WAY.md) h
 
 ## Red flags
 
-- **You are writing more lines than you delete, outside `deepen`.** Stop: the work is a design question.
+- **You are writing more lines than you delete, outside [DEEPEN.md](DEEPEN.md).** Stop: the work is a design question.
 - **You loosened a proof bar to keep a finding.** The finding goes; the bar stays.
 - **A change "should be safe".** It is proven by a green baseline, or it is not done.

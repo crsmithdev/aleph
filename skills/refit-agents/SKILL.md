@@ -74,10 +74,10 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
    JSON yourself. Give each its lens file's Signals section verbatim, the inventory, and the agent files or CLIs
    in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done when each
    subagent has returned.
-4. **Prove, fix and hold, report.** Run steps 4 to 6 of refit-code's [Retro](../refit-code/SKILL.md#retro) with
+4. **Prove, fix and hold, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with
    this skill's lens files and `.refit.json`. The report goes to `<tmpdir>/refit-agents-retro-<timestamp>.html`;
    its header adds the always-loaded token total and the agnix counts, and a card with no diagram shows the text
-   before and after. Done when refit-code's step 6 is done.
+   before and after. Done when PROVE.md's step 3 is done.
 
 ## Act
 

@@ -1,8 +1,8 @@
 # Retro report
 
 One self-contained HTML file at `<tmpdir>/refit-code-retro-<timestamp>.html`, with `<tmpdir>` from `$TMPDIR`, else
-`/tmp`. [HTML.md](HTML.md) has the scaffold, the diagram patterns, the style and the tone. Sweep and polish
-report in the terminal instead.
+`/tmp`. [HTML.md](HTML.md) has the scaffold, the diagram patterns, the style and the tone. The sweep
+reports in the terminal instead.
 
 ## Header
 
@@ -24,7 +24,7 @@ One `<article>` per finding, strongest first:
   finding shows the before and after file tree.
 - **Proof**: one sentence from the lens's proof bar: the input with two results, the deletion test result, the
   crossing reads, the removal gate clause, the escape hatches ruled out, or the look-first test.
-- **Fix**: one sentence from the lens's Fix section. Mark a finding that needs `deepen`.
+- **Fix**: one sentence from the lens's Fix section. Mark a finding that needs [DEEPEN.md](DEEPEN.md).
 - **Hold**: the boundary rule as JSON in `<pre>`, or the lint pattern or tool rule in `<code>`, or "model:
   check" where no tool holds it.
 - **History**: the commits that already fixed drift here, when the git log shows them.

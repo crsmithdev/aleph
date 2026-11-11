@@ -25,7 +25,7 @@ or rebuild the logic, with `file:line`. With no clear result, rate it 1-5.
 ## Fix
 
 Inline a pass-through into its caller. Deepen a shallow cluster: one module with a small interface that hides
-what the callers assembled by hand. A fix that needs a new interface goes to `deepen`, which designs it with
+what the callers assembled by hand. A fix that needs a new interface follows [DEEPEN.md](DEEPEN.md), which designs it with
 the user before code.
 
 ## Hold
