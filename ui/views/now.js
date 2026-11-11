@@ -112,14 +112,14 @@ const saidHtml = (p) => {
   return to ? idLink(shownId(p.id), to) : `<span class="event-id">${esc(shownId(p.id))}</span>`;
 };
 
-/** An event's row: the time, then its sentence, the issue's title quiet under it and the note after. A chat turn's sentence is its message. `more` is the count of older events folded behind it. */
+/** An event's row: the time, then the issue's title, the sentence under it and the note after. A chat turn's sentence is its message. `more` is the count of older events folded behind it. */
 export function eventRow(ev, titles = {}, chats = {}, more = 0) {
   const chat = ev.subject === "chat";
   const title = chat ? "" : titles[ev.subject] ?? "";
   const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "") : say(ev).map(saidHtml).join("");
   return feedRow({ tone: tone(ev.action), at: ev.at, by: ev.by,
-    body: `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>` +
-      `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}${!chat && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
+    body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
+      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
 }
 
 /** Rows of `lists`, each newest first: the newest event's row, with the older ones folded behind it; `row(ev, more, older)` draws one. */

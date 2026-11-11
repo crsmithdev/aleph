@@ -93,10 +93,16 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   // The fixture's status now (12:00) is newest, then the event at 11:30, then the status at 11:00.
   expect(order).toEqual(["alert", "run", "fine"]);
   const row = view.eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
-  // Two columns: the time, then the sentence with its job linked, the title and the note.
+  // Two columns: the time, then the title, the sentence with its job linked, and the note.
   expect(row).toContain('<div class="event-row stuck" data-by="gate"><span class="event-time">');
   expect(row).toContain('<span class="event-say"><a class="idl" href="#/jobs/aleph-5%231">aleph-5#1</a> failed: past its time box</span>');
-  expect(row).toContain('<span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span><span class="reason">timed out</span>');
+  expect(row).toContain('<span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span><span class="event-say">');
+  expect(row).toContain("</span><span class=\"reason\">timed out</span>");
+  expect(row.indexOf("event-title")).toBeLessThan(row.indexOf("event-say"));
+  // A row with no title keeps the sentence as its only line.
+  const bare = view.eventRow(merged[0], {});
+  expect(bare).not.toContain("event-title");
+  expect(bare).toContain('<span class="event-say">');
   expect(row).not.toContain("event-tone");
 });
 
