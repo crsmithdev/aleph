@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -188,8 +188,8 @@ export function renderRow(r, { fold, sub } = {}) {
   const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
   return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td>${idLink(shortText(`${r.repo}-${r.n}`), r.href)}</td>` +
     `<td class="wide">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
-    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
-    `<td class="num">${esc(count(r.notes))}</td><td class="num">${esc(count(r.runs))}</td><td class="num">${esc(money(r.cost))}</td><td class="num">${esc(ageText(r))}</td><td class="time">${esc(updatedText(r))}</td></tr>`;
+    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td>${cell(r.project)}<td>${chips(r.labels)}</td>` +
+    `${cell(count(r.notes), { num: true })}${cell(count(r.runs), { num: true })}${cell(money(r.cost), { num: true })}${cell(ageText(r), { num: true })}<td class="time">${esc(updatedText(r))}</td></tr>`;
 }
 
 export function renderTable(rows, o = {}) {
@@ -552,7 +552,7 @@ export function issueSegments(d, now = Date.now()) {
   const marks = [...(Number.isFinite(filed) ? [{ at: filed, tone: "made", tip: "filed" }] : []), ...(Number.isFinite(closed) ? [{ at: closed, tone: "done", tip: d.status }] : [])];
   // The issue's own job, when one has its name, is where its id links.
   const job = (d.jobs ?? []).find((j) => j.name === id);
-  const headOf = (text) => `${job ? idLink(shortText(id), jobHref(job.id)) : `<span class="idp">${esc(shortText(id))}</span>`}<span class="quiet t">${esc(text)}</span>`;
+  const headOf = (text) => `${job ? idLink(shortText(id), jobHref(job.id)) : idLink(shortText(id))}<span class="quiet t">${esc(text)}</span>`;
   const state = d.derived?.stage ?? d.status;
   // The hold records of a job name: why its waits waited.
   const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);
@@ -587,14 +587,13 @@ function issueKpis(d, segments, now = Date.now()) {
   const waited = waits.reduce((n, w) => n + w.end - w.start, 0), chris = waits.filter((w) => w.chris).reduce((n, w) => n + w.end - w.start, 0);
   const runs = all.length, cost = all.reduce((n, x) => n + (x.r.cost ?? 0), 0), done = parts.filter((g) => g.stage === "done").length;
   const commits = d.commits ?? [];
-  const sha = (c) => (c.commitUrl ? idLink(c.hash.slice(0, 7), c.commitUrl) : `<code>${esc(c.hash.slice(0, 7))}</code>`);
   return renderKpis([
     parts.length ? { k: "Sub-issues done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${shortText(g.id)} ${g.stage}`).join(", ")) }
       : { k: "Stage", v: esc(d.derived?.stage ?? d.status), text: true, sub: "" },
-    { k: open ? "Open for" : "Elapsed", v: esc(times.length ? dur((hi - lo) / 1000) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
-    { k: "Waiting", v: esc(times.length ? dur(waited / 1000) : "–"), sub: chris ? esc(`${dur(chris / 1000)} for your answer`) : "" },
-    { k: "Cost", v: esc(costText(cost)), sub: esc(runs === 1 ? "1 job" : `${runs} jobs`) },
-    { k: "Commits", v: commits.length ? commits.slice(0, 3).map(sha).join(" ") : "–", text: commits.length > 0, sub: commits.length > 3 ? esc(`${commits.length} on main`) : commits.length ? "on main" : "" },
+    { k: open ? "Open for" : "Elapsed", v: times.length ? esc(dur((hi - lo) / 1000)) : miss("No job or note gave a time"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
+    { k: "Waiting", v: times.length ? esc(dur(waited / 1000)) : miss("No job or note gave a time"), sub: chris ? esc(`${dur(chris / 1000)} for your answer`) : "" },
+    { k: "Cost", v: esc(costText(cost)), sub: esc(plural(runs, "job")) },
+    { k: "Commits", v: commits.length ? commits.slice(0, 3).map((c) => shaLink(c.hash, c.commitUrl)).join(" ") : miss("No commit on main yet"), text: commits.length > 0, sub: commits.length > 3 ? esc(`${commits.length} on main`) : commits.length ? "on main" : "" },
   ]);
 }
 
@@ -610,7 +609,7 @@ export function renderIssue(d) {
   const place = d.issue ? [project, ["issues", inventory], [shortText(d.issue.id), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   // Front matter the page shows nowhere else: a chip each.
   const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`)).join("");
-  const pills = statusRow(d.derived ? badge(d.derived.stage) : badge(d.status), priorityBadge(priority), `${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(shortText(`${d.repo}-${ref}`))}</span>`);
+  const pills = statusRow(d.derived ? badge(d.derived.stage) : badge(d.status), priorityBadge(priority), `${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}${idLink(shortText(`${d.repo}-${ref}`))}`);
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     field("Priority", choose("priority", PRIORITIES, priority)) + field("Source", choose("source", SOURCES, source)) +
     field("Areas", inputBox("areas", areas.join(", "), { attrs: ` ${FORM} aria-label="areas" placeholder="comma separated"` })) + `</div></section>`;
@@ -624,13 +623,12 @@ export function renderIssue(d) {
     return eventHtml({ at: e?.at, ...it }, { el: "li", clamped: false });
   };
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
-  const machineNotes = folded.length ? fold(`${folded.length} machine ${folded.length === 1 ? "note" : "notes"}`, `<ul class="notes">${folded.map(noteRow).join("")}</ul>`, { cls: "notes-fold" }) : "";
+  const machineNotes = folded.length ? fold(plural(folded.length, "machine note"), `<ul class="notes">${folded.map(noteRow).join("")}</ul>`, { cls: "notes-fold" }) : "";
   const notes = (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + machineNotes + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
     ? pagedTable(heads(["Commit", "Subject", ...(parts ? ["Sub-issue"] : []), "Committed"], ["Committed"]), d.commits.map((c) => {
-      const sha = c.hash.slice(0, 7);
-      return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(shortText(c.part), issueHref(c.part)) : ""}</td>` : ""}<td class="time">${esc(when(c.date))}</td></tr>`;
+      return row([`<td>${shaLink(c.hash, c.commitUrl)}</td>`, cell(c.subject, { wide: true }), ...(parts ? [`<td>${c.part ? idLink(shortText(c.part), issueHref(c.part)) : ""}</td>`] : []), `<td class="time">${esc(when(c.date))}</td>`]);
     }))
     : "";
   const segments = issueSegments(d);

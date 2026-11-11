@@ -858,7 +858,15 @@ describe("the Issue page shows the ask row", () => {
     const date = "2026-11-02T09:00:00Z";
     const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date }] });
     expect(h).toContain('<th>Commit</th><th>Subject</th><th class="num">Committed</th>');
-    expect(h).toContain(`<tr><td><code>abcdef1</code></td><td class="wide" title="s">s</td><td class="time">${when(date)}</td></tr>`);
+    expect(h).toContain(`<tr><td><span class="idp" title="abcdef1234567">abcdef1</span></td><td class="wide" title="s">s</td><td class="time">${when(date)}</td></tr>`);
+  });
+
+  test("renderIssue shows a commit without a URL as a span.idp titled with the hash, and no commits as the missing form", async () => {
+    const d = await getJson(`/api/issues/fac-1`);
+    const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date: "2026-11-02T09:00:00Z" }] });
+    expect(h).toContain('<span class="idp" title="abcdef1234567">abcdef1</span>');
+    expect(h).not.toContain("<code");
+    expect(v.renderIssue({ ...d, commits: [] })).toContain('<span class="dp-k">Commits</span><span class="dp-v"><span title="No commit on main yet">–</span></span>');
   });
 
   test("renderIssue leaves the Commits panel out for no commits and pages the Commits table at 50", async () => {
