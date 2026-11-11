@@ -71,3 +71,17 @@ describe("light theme series on --surface", () => {
     });
   }
 });
+
+describe("dark theme --chart-6 and --chart-7 stay inside the --series-1 to --series-5 band", () => {
+  for (const block of darkBlocks()) {
+    const surface = token(block.body, "surface");
+    const band = [1, 2, 3, 4, 5].map((n) => contrast(token(block.body, `series-${n}`), surface));
+    for (const name of ["chart-6", "chart-7"]) {
+      test(`${block.name} block --${name}`, () => {
+        const ratio = contrast(token(block.body, name), surface);
+        expect(ratio).toBeGreaterThanOrEqual(Math.min(...band));
+        expect(ratio).toBeLessThanOrEqual(Math.max(...band));
+      });
+    }
+  }
+});
