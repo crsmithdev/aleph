@@ -66,6 +66,7 @@ test("the argv passes the model's id, and no --model when there is none", () => 
   expect(modelArgv("claude", "deepseek-v4.1-flash", ["--x"])).toEqual(["claude", "-p", "--strict-mcp-config", "--disable-slash-commands", "--settings", AGENT_SETTINGS, "--model", "deepseek/deepseek-v4.1-flash", "--x"]);
   expect(modelArgv("claude", "claude-opus-5-5", [])).toContain("claude-opus-5-5");
   expect(modelArgv("claude", undefined, ["--x"])).toEqual(["claude", "-p", "--strict-mcp-config", "--disable-slash-commands", "--settings", AGENT_SETTINGS, "--x"]);
+  expect(modelArgv("claude", "opus", ["--x"], true)).toEqual(["claude", "-p", "--strict-mcp-config", "--model", "claude-opus-5-5", "--x"]);
 });
 
 test("an agent role leaves out Chris's CLAUDE.md, runs at high effort and says it is an agent", () => {

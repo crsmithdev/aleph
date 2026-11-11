@@ -83,6 +83,13 @@ test("the turns of one session carry the same session key in the ledger", async 
   expect(keys).toEqual([session, session]);
 });
 
+test("the chat agent runs like a terminal session: no agent settings and skills on, but its prompt and permission mode", async () => {
+  const a = (await turn({ text: "hi" })).data[1].message.content[1].input.command as string;
+  for (const s of ["--disable-slash-commands", "ALEPH_AGENT", "claudeMdExcludes"]) expect(a).not.toContain(s);
+  expect(a).toContain("--append-system-prompt");
+  expect(a).toContain("--permission-mode bypassPermissions");
+});
+
 test("an empty text is refused", async () => {
   expect((await turn({ text: " " })).status).toBe(400);
 });

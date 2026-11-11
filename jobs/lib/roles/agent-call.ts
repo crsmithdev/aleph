@@ -114,7 +114,7 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   const release = gpu ? await gpuSlot(o.limit * 1000) : null;
   const model = gpu && !release && o.fallback ? o.fallback : o.model;
   if (model !== o.model) logEvent({ by: "rule", subject: role, action: "gpu", note: `the GPU slot stayed taken for ${o.limit} s; the call falls back to ${BACKENDS[viaOf(model)]}` });
-  const argv = modelArgv(o.cmd ?? roleCmd(role.toUpperCase()), model, ["--output-format", "stream-json", "--verbose", ...o.flags, ...(o.schema ? ["--json-schema", JSON.stringify(o.schema)] : [])]);
+  const argv = modelArgv(o.cmd ?? roleCmd(role.toUpperCase()), model, ["--output-format", "stream-json", "--verbose", ...o.flags, ...(o.schema ? ["--json-schema", JSON.stringify(o.schema)] : [])], role === "chat");
   const env = { ...(o.env ?? { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }), ...modelEnv(model) };
   const seen = statSync(o.stdout, { throwIfNoEntry: false })?.size ?? 0;
   let step: Step;

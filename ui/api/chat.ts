@@ -3,7 +3,7 @@
  * `{ text, session?, page?, annotations?, idea?, images? }`. `images` are `{ name, data }`, `data` in base64: the server saves
  * each in the run's folder and the prompt names its path, so the agent reads it.
  * The turn is a `chat` run in the ledger, so it has a folder, a log and a cost. The agent is `claude -p` in this checkout
- * with Chris's own setup, so it files issues with `aleph issue` and answers notes with `aleph annotation`; `session`
+ * like a terminal session of Chris: his own ~/.claude/CLAUDE.md with its Git rules, his skills, and no `ALEPH_AGENT`, so it files issues with `aleph issue` and answers notes with `aleph annotation`; `session`
  * resumes the last turn's conversation. The annotations Chris points at (`annotations`, ids) go with the text first, then
  * the other open annotations of `page` and those with no page.
  *

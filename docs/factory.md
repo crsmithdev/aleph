@@ -90,7 +90,7 @@ For each agent role (`INTAKE`, `DIRECTOR`, `MONITOR`), `ALEPH_<ROLE>_CMD` replac
 
 A user does not set these. Tests, the factory's own child processes, WSL, bun or Claude Code set them.
 
-- `ALEPH_AGENT`: the factory sets it to `1` in every agent role's settings, so the aleph hooks know that no person is there.
+- `ALEPH_AGENT`: the factory sets it to `1` in the settings of every agent role but the chat agent, which runs like a terminal session of Chris, so the aleph hooks know that no person is there.
 - `ALEPH_BROWSER_TESTS`: `bun run test:all` and the factory's checks set it to `1` to run the tests that start Chrome.
 - `ALEPH_CLI`: the UI tests set it to put in a fake CLI.
 - `ALEPH_NOW`: tests set it to fix the clock.
