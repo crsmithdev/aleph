@@ -161,7 +161,7 @@ async function analyse(days: number, project: string | null): Promise<Analysis> 
   const to = new Date();
   const since = new Date(Math.floor(to.getTime() / DAY) * DAY - (days - 1) * DAY);
   let s: Store, failed: string | undefined;
-  try { s = await once(`skills-rows:${since.getTime()}`, ["langfuse"], () => sync(lf, since.getTime())); }
+  try { s = await once(`skills-rows:${lf.base}:${since.getTime()}`, ["langfuse"], () => sync(lf, since.getTime())); }
   catch (e) {
     // The last good rows, with their age, beat an empty page.
     const last = store?.base === lf.base ? store : loadStore(lf.base);
@@ -257,7 +257,7 @@ async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<
   if (sc instanceof Response) return sc;
   const { days, project } = sc;
   let a: Analysis;
-  try { a = await once(`skills:${process.env.LANGFUSE_BASE_URL}:${days}:${project}`, ["langfuse", "registry", "skills"], () => analyse(days, project)); }
+  try { a = await once(`skills:${langfuse()?.base}:${days}:${project}`, ["langfuse", "registry", "skills"], () => analyse(days, project)); }
   catch (e) { return Response.json({ error: `Langfuse failed: ${(e as Error).message}` }, { status: 502 }); }
   const value = make(a);
   return value ? Response.json(value) : new Response("no such skill", { status: 404 });

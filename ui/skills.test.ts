@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache, listSkills, routes } from "./api/skills.ts";
-import { memory, use } from "../lib/langfuse.ts";
+import { http, memory, use } from "../lib/langfuse.ts";
+import { closePass, openPass } from "../lib/sources.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { updater } from "./updater.ts";
 // @ts-ignore plain JS, shared with the page
@@ -118,6 +119,33 @@ test("after a restart, a reload fetches only the rows of the last two hours and 
   expect(NOW - from).toBeLessThan(2 * 3600_000 + 60_000);
   expect(NOW - from).toBeGreaterThan(2 * 3600_000 - 60_000);
   expect(body.skills.find((s: any) => s.name === "aleph:pickup")).toMatchObject({ uses: 2, errors: 1 }); // t2 is two days old
+});
+
+test("a change of the Langfuse port's base reads the new server, not the kept answer of the old one", async () => {
+  // The second Langfuse: one turn of its own, so its answer is not the first server's.
+  const other = ob({ id: "20", traceId: "u1", name: "turn", input: "/aleph:other", startTime: daysAgo(0, "08:00:00") });
+  const otherTrace = { id: "u1", sessionId: "s7", metadata: { cwd: "/work/aleph" }, timestamp: other.startTime };
+  const seen: URL[] = [];
+  const second = Bun.serve({ port: 0, fetch(req) {
+    const u = new URL(req.url);
+    seen.push(u);
+    const from = Date.parse(u.searchParams.get("fromStartTime") ?? u.searchParams.get("fromTimestamp") ?? "0");
+    if (u.pathname === "/api/public/observations") return Response.json({ data: u.searchParams.get("type") === "AGENT" && Date.parse(other.startTime) >= from ? [other] : [], meta: { totalPages: 1 } });
+    if (u.pathname === "/api/public/traces") return Response.json({ data: [otherTrace], meta: { totalPages: 1 } });
+    return new Response("not found", { status: 404 });
+  } });
+  // LANGFUSE_BASE_URL names the second server; the port itself reads the first one first.
+  const restore = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${second.port}` });
+  openPass({ langfuse: 1, registry: 1, skills: 1 }, "skills.test");
+  try {
+    use(http({ baseUrl: `http://127.0.0.1:${lf.port}`, publicKey: "pk", secretKey: "sk" }));
+    expect((await get("/api/skills")).body.skills.map((s: any) => s.name)).toContain("aleph:pickup");
+    // The port is the configured Langfuse again: its answer comes back, not the kept one.
+    use(null);
+    const { body } = await get("/api/skills");
+    expect(seen.length).toBeGreaterThan(0);
+    expect(body.skills.map((s: any) => s.name)).toEqual(["aleph:other"]);
+  } finally { closePass(); use(mem); restore(); second.stop(true); }
 });
 
 test("a restart builds the saved keys at once: a request shares that build, and the next one hits Langfuse zero times", async () => {
