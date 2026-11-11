@@ -1550,21 +1550,17 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Deviation | Where | Fix |
 |---|---|---|
 | Time column names differ | Tables | aleph-1360 (pending) |
-| Login sizes are literals | `ui/auth.ts` | follow-up |
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
-| Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `costFrame()` in `ui/views/factory-agents.js` | allowed |
+| Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
 | `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
-| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Waiting for You in `ui/views/gates.js`; Memory Health in `ui/views/memory.js`; the Status Alerts and lanes in `ui/views/now.js` | allowed |
+| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Health in `ui/views/memory.js`; the Status Alerts and lanes in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
 | Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
-| Empty, loading and error lines written inline | `ui/views/gates.js`, `ui/views/memory.js` | follow-up |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
 | Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`), the feed's rows (`div.event-row`, `div.event-brief`) and the lane card's face (`article.lane-card`) | `renderPipeline()`, `feedRow()`, `briefRow()`, `laneCard()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
 | Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/speed.js`, `ui/views/session.js` | allowed |
-| A table written by hand | `ui/views/memory.js` | follow-up |
-| An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
 | A lens result is a hand `iframe.lens-frame`, sandboxed: no helper for a result page; the Log pane's lines are a hand `ul` | `renderIdea()` in `ui/views/ideas.js` | follow-up |
@@ -1580,7 +1576,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |
 | The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/chart.js` | follow-up |
 | The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/kit.js` | allowed |
-| Settings and forms written by hand: the worker tier checkbox in the Agents Models settings; the Memory alias, link, core line and edit forms, hand `label.mform` and `div.mform` | `models()` in `ui/views/factory-agents.js`; `actions()`, `links()`, `coreForm()` and `edit()` in `ui/views/memory.js` | follow-up |
+| Forms written by hand: the Memory alias, link, core line and edit forms, hand `label.mform` and `div.mform` | `actions()`, `links()`, `coreForm()` and `edit()` in `ui/views/memory.js` | follow-up |
 | A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | The Roles table's rows are hand `<tr>`s and its Failed Jobs link a hand `a.failed-jobs` | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | A Jobs trend chart's p90 line takes the `hot` tone | `trendFrame()` in `ui/views/factory-jobs.js` | allowed |
@@ -1625,13 +1621,13 @@ From `bun skills/design-language/scripts/inventory.ts ui --summary`.
 | group | kind | count |
 |---|---|---|
 | colour | literal | 6 |
-| colour | token-def | 98 |
-| effect | literal | 36 |
-| effect | token-use | 10 |
-| format | helper-bypass | 42 |
-| size | literal | 131 |
-| size | token-def | 18 |
-| size | token-use | 563 |
-| type | literal | 34 |
+| colour | token-def | 99 |
+| effect | literal | 50 |
+| effect | token-use | 13 |
+| format | helper-bypass | 43 |
+| size | literal | 127 |
+| size | token-def | 21 |
+| size | token-use | 622 |
+| type | literal | 25 |
 | type | token-def | 42 |
-| type | token-use | 52 |
+| type | token-use | 68 |
