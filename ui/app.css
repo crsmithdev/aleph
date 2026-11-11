@@ -1045,7 +1045,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .lane-card > .ih { box-sizing: border-box; height: 22px; min-height: 22px; max-height: 22px; flex-wrap: nowrap; align-items: center; overflow: hidden; white-space: nowrap; }
 .lane-card > .ih > * { line-height: 1; align-self: center; }
 .lane-card .blockers { margin-top: var(--sp-6); font-size: var(--fs-sm); }
-.job-card.small .ih > .blocked { flex: none; margin-left: auto; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
+.job-card.small .ih > .blocked { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 @container (max-width: 420px) {
   .job-card.small .ih { gap: var(--sp-4); }
   .job-card.small .ih > .badge, .job-card.small .ih > .kind-tag { padding: 1px var(--sp-6); font-size: var(--fs-2xs); }

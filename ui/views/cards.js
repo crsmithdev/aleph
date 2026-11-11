@@ -45,7 +45,7 @@ const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Sub-i
 
 /** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, the hold. `chips` is HTML. */
 export function metaRow({ id, chips, part, at, since, now, end, hold }) {
-  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${hold ? `<span class="blocked">${esc(hold)}</span>` : ""}</div>`;
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${hold ? `<span class="blocked" title="${esc(hold)}">${esc(hold)}</span>` : ""}</div>`;
 }
 
 /** The time from `since` to `to` as `dur` writes it; "–" when the work was never picked up. */

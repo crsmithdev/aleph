@@ -184,8 +184,8 @@ test("a held Queued card ends its meta row with its hold event: the action word 
     { ...w, id: 1, kind: "not-ready", ev: { action: "after", on: ["r-9"] }, waits: [{ id: "r-9", href: "#/issues/r/9", state: "working", dead: null }] },
     { ...w, id: 2, kind: "busy-file", ev: { action: "busy", on: ["r-7"], file: "a.ts" } },
   ] });
-  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">after r9<\/span><\/div>/);
-  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">busy r7 → a\.ts<\/span><\/div>/);
+  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked" title="after r9">after r9<\/span><\/div>/);
+  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked" title="busy r7 → a\.ts">busy r7 → a\.ts<\/span><\/div>/);
   expect(html).not.toContain("blocked: ");
   expect(html).not.toContain("Waits on");
   expect(html).not.toContain("waits for");

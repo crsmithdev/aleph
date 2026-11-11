@@ -283,6 +283,26 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.width(1200);
   }, 60_000);
 
+  test("at 390 px a queued card's hold text truncates inside the card, and the priority badge, the date and the duration keep their width", async () => {
+    await page.go("#/");
+    await page.width(390);
+    const r = await page.ev<any>(`import("/views/cards.js").then(({ metaRow }) => {
+      const card = document.createElement("article");
+      card.className = "job-card small lane-card";
+      card.innerHTML = metaRow({ id: '<a class="id">a1234</a>', chips: '<span class="badge high">critical</span>', at: "2026-11-02T11:00:00Z", since: "2026-11-02T11:00:00Z", now: "2026-11-02T13:00:00Z", hold: "busy r7 → a-very-long-directory-name/another-long-directory/a-long-file-name.ts" });
+      document.body.append(card);
+      const q = (s) => card.querySelector(s), b = q(".blocked");
+      const r = { over: b.getBoundingClientRect().right - card.getBoundingClientRect().right, cut: b.scrollWidth > b.clientWidth, title: b.title, badge: q(".badge").scrollWidth - q(".badge").clientWidth, date: q(".num.date").scrollWidth - q(".num.date").clientWidth, dur: q(".num.dur").scrollWidth - q(".num.dur").clientWidth };
+      card.remove();
+      return r;
+    })`);
+    await page.width(1200);
+    expect(r.over).toBeLessThanOrEqual(0);
+    expect(r.cut).toBe(true);
+    expect(r.title).toContain("a-long-file-name.ts");
+    expect([r.badge, r.date, r.dur]).toEqual([0, 0, 0]);
+  }, 30_000);
+
   test("a timed refresh re-renders, except over an armed button", async () => {
     // The shell reads the global setInterval when the route starts: keep the route's refresh as window.tick, and run it here.
     // The refresh loads only after a quiet minute: window.later() moves the page's clock past it.
