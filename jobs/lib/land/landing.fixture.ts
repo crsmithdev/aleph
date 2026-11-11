@@ -96,7 +96,8 @@ export function job(name: string, commits: [string, string][], extra: Partial<Ru
 
 /** A land run that counts as live, queued behind a leader. */
 export function queued(e: Entry): Entry {
-  const s = Bun.spawn(["bash", "-c", "tail -f /dev/null; :", e.folder], { stdout: "ignore", stderr: "ignore" });
+  // bash blocks on its own stdin: no child to orphan, and it exits when the test process dies.
+  const s = Bun.spawn(["bash", "-c", "read", e.folder], { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
   sleepers.push(s);
   writeFileSync(join(e.folder, "pid"), String(s.pid));
   return e;
