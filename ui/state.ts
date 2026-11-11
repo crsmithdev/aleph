@@ -3,7 +3,7 @@
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
-import { readEvents } from "../lib/layout.ts";
+import { logEvent, readEvents } from "../lib/layout.ts";
 import { issueHref, parseId, type Event } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
@@ -23,6 +23,16 @@ import { summary, type Wk } from "./usage.ts";
 import { card, stageOf } from "./issue.ts";
 import { verdict } from "../lib/status-words.ts";
 import { timer } from "../jobs/lib/infra/systemd.ts";
+
+const logged = new Set<string>();
+
+/** Logs a failed UI read once per process and message: the write touches the events source, so a build that logs each time would rebuild and log again. */
+export function logOnce(subject: string, e: any) {
+  const note = String(e?.message ?? e), key = `${subject} ${note}`;
+  if (logged.has(key)) return;
+  logged.add(key);
+  logEvent({ by: "rule", subject, action: "failed", sub: "error", note });
+}
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
 export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }
@@ -261,7 +271,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
         try {
           const f = facts(repo, doc, jobs), main = `refs/remotes/origin/${f.main}`;
           for (const st of stages(repo.path, main, f, Object.keys(f.items), landedIndex(repo.path, main, repo.key, (n) => f.items[n]?.since))) m.set(st.id.slice(repo.key.length + 1), st);
-        } catch {}
+        } catch (e: any) { logOnce("stages", e); }
       }
       staged.set(repo.key, m);
     }

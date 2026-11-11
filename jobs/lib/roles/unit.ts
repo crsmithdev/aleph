@@ -3,6 +3,7 @@
  * An agent run is setup, the worker, then the state rule; a plain run is one
  * command. Both end with the job record, then `exit`, then the news.
  */
+import { logEvent } from "../../../lib/layout.ts";
 import * as jobRecord from "../records/record.ts";
 import { skillSection } from "./role-skill.ts";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -97,7 +98,7 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
   // Their own units: a child of this land's unit would die with its cgroup when the leader exits.
   for (const n of names) {
     const unit = `aleph-pull-${repo.key}-${n}-${Date.now()}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
-    try { startUnit(["land", n], { unit, cwd: repo.path }); } catch {}
+    try { startUnit(["land", n], { unit, cwd: repo.path }); } catch (e: any) { logEvent({ by: "rule", subject: "land", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
   }
   const deadline = Date.now() + 10_000;
   // The land must be live, as queuedLands takes only a live land: one still starting would miss the batch.

@@ -2,6 +2,7 @@ import { expect, spyOn, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { readEvents } from "../../../lib/layout.ts";
 import { CLI, detached } from "./launch.ts";
 
 async function withFakeSystemdRun(exit: number, body: (dir: string, argvLog: string) => void | Promise<void>) {
@@ -46,4 +47,21 @@ test.skip("detached starts its verb in a unit of its own, a different one per ca
       expect(l.endsWith(` ${process.execPath} ${CLI} plan aleph-1`)).toBe(true);
     }
   });
+});
+
+test("detached logs a failed systemd-run with its stderr", async () => {
+  const savedDir = process.env.ALEPH_FACTORY_DIR;
+  const fac = mkdtempSync(join(tmpdir(), "aleph-fac-"));
+  process.env.ALEPH_FACTORY_DIR = fac;
+  try {
+    await withFakeSystemdRun(1, (dir) => {
+      writeFileSync(join(dir, "systemd-run"), `#!/bin/sh\necho "no bus for you" >&2\nexit 1\n`);
+      detached(["plan", "aleph-1"], join(dir, "logs", "plan.log"));
+    });
+    const ev = readEvents().find((e) => e.action === "failed" && e.note?.includes("systemd-run failed"));
+    expect(ev?.note).toContain("no bus for you");
+  } finally {
+    if (savedDir === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = savedDir;
+    rmSync(fac, { recursive: true, force: true });
+  }
 });

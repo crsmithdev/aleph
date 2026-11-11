@@ -4,6 +4,7 @@
  * systemd unit (or, with `ALEPH_JOB_FOREGROUND=1`, a plain child); a dispatch
  * or intake after a transition is a unit of its own too. The transitions themselves run in-process: see transitions.ts.
  */
+import { logEvent } from "../../../lib/layout.ts";
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { home } from "../../../lib/paths.ts";
 import { dirname, join } from "node:path";
@@ -85,7 +86,7 @@ export function detached(args: string[], log: string): void {
     const unit = `aleph-${args.join("-")}-${Date.now()}-${process.pid}-${++detachedCount}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
     startUnit(args, { unit, cwd: dirname(log), output: { file: log },
       props: [`--property=StandardOutput=append:${log}`, `--property=StandardError=append:${log}`] });
-  } catch {}
+  } catch (e: any) { logEvent({ by: "rule", subject: "detached", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
 }
 
 /** Run `aleph <args>` and wait for it, its output appended to `log`. Returns its exit code. */

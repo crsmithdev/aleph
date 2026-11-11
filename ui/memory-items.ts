@@ -2,6 +2,7 @@
  * Every memory as one row, for the Memory page's search: its type, where it lives, what it says, how it reaches
  * the agent, and when it was last written and read. A source that is absent gives no rows, never an error.
  */
+import { logOnce } from "./state.ts";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { clip, issueHref } from "../lib/naming.ts";
@@ -85,7 +86,7 @@ async function hooks() {
 function prospectiveIssues() {
   const registry = Object.values(loadRegistry());
   let docs: (todos.Doc | null)[] = [];
-  try { docs = readLists(registry); } catch {}
+  try { docs = readLists(registry); } catch (e: any) { logOnce("memory-items", e); }
   const open: { repo: string; id: number; title: string; after: string[]; priority: string }[] = [];
   registry.forEach((r, n) => {
     for (const i of docs[n]?.items ?? []) {

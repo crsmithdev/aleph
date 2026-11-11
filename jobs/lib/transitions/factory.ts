@@ -500,7 +500,7 @@ function cameDue(): string[] {
   const ids: string[] = [];
   const repos = Object.values(loadRegistry());
   let docs: (issues.Doc | null)[] = [];
-  try { docs = readLists(repos); } catch {}
+  try { docs = readLists(repos); } catch (e: any) { logEvent({ by: "rule", subject: "came-due", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
   for (const [n, repo] of docs.map((_, n) => [n, repos[n]] as const)) {
     for (const item of docs[n]?.items ?? []) {
       const id = `${repo.key}-${item.id}`;

@@ -2,6 +2,7 @@
  * The production effects of a filing (store.ts `writeFiling`): a new issue starts a dispatch or intake, detached.
  * Roles and lands that file issues take them from here, not from the orchestrator (factory.ts).
  */
+import { logEvent } from "../../../lib/layout.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { buildableIssue, readFetched, readList, reader, type Effects, type Place } from "../../../issues/lib/store.ts";
 import { repoStages } from "../records/status.ts";
@@ -25,7 +26,7 @@ export function afterFiling(place: Place, item: issues.Issue): void {
     dispatchAfterIssue(repo, item);
     const doc = reader().list(repo.key);
     if (doc && decideIntake(repo, item, { doc, done: doneChecker(false), red: mainRed()(repo) }).kind !== "none") intakeDetached(repo, item.id);
-  } catch {}
+  } catch (e: any) { logEvent({ by: "rule", subject: "filing", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
 }
 
 /** The production effects of a filing (store.ts `writeFiling`). */

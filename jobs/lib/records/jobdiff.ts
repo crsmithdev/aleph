@@ -3,6 +3,7 @@
  * `run.commit` once the branch is gone; else the `diff.patch` and `diff.stat` that a run folder kept when aleph
  * deleted the branch (`keepDiff`). Null when none of them is there: no diff was recorded.
  */
+import { logEvent } from "../../../lib/layout.ts";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../infra/git.ts";
@@ -43,7 +44,7 @@ export function keepDiff(repo: Repo, branch: string | undefined, folder: string)
     if (!j) return;
     writeFileSync(join(folder, DIFF_FILE), j.diff);
     writeFileSync(join(folder, STAT_FILE), j.stat);
-  } catch {}
+  } catch (e: any) { logEvent({ by: "rule", subject: "jobdiff", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
 }
 
 function kept(runs: Entry[]): JobDiff | null {

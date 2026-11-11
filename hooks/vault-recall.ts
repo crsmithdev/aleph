@@ -37,7 +37,7 @@ function writeSeen(root: string, session: string | undefined, seen: Set<string>,
 }
 
 /** One `vault-recall` span on the turn's trace. A failed post changes nothing. */
-async function postSpan(input: any, start: number, meta: { candidates: number; asked: number; kept: number; capped: boolean }, offered: string[], context: string) {
+async function postSpan(input: any, start: number, meta: { candidates: number; asked: number; kept: number; capped: boolean; error?: string }, offered: string[], context: string) {
   await postTurnSpan(input, "vault-recall", start, {
     "langfuse.observation.type": "span",
     "langfuse.observation.output": context ? truncate(context) : undefined,
@@ -45,6 +45,7 @@ async function postSpan(input: any, start: number, meta: { candidates: number; a
     "langfuse.observation.metadata.asked": meta.asked,
     "langfuse.observation.metadata.kept": meta.kept,
     "langfuse.observation.metadata.capped": meta.capped,
+    "langfuse.observation.metadata.error": meta.error,
     "langfuse.observation.metadata.offered": offered.length ? offered.join("\n") : undefined,
   });
 }
@@ -63,7 +64,7 @@ async function main() {
   const skip = new Set([...seen, ...coreNotes(notes, scope).map((n) => n.rel)]);
   const all = rankNotes(openIndex(root, notes), notes, prompt, scope).map((r) => r.note).filter((n) => !skip.has(n.rel));
   const candidates = all.slice(0, MAX_ASKED);
-  const meta = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length > MAX_ASKED };
+  const meta: Parameters<typeof postSpan>[2] = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length > MAX_ASKED };
   if (!candidates.length) { await postSpan(input, start, meta, [], ""); return; }
   const questions: Record<string, Noul> = {};
   const criteria = { true: "The note's subject is something the prompt asks about or depends on.", false: "The note is about something else." };
@@ -78,7 +79,7 @@ async function main() {
       .filter((x) => x.p >= CUT)
       .sort((a, b) => b.p - a.p)
       .slice(0, MAX_INJECTED);
-  } catch {}
+  } catch (e: any) { meta.error = e?.message ?? String(e); }
   meta.kept = picked.length;
   const lines = picked.map(({ n }) => `- ${n.title} (${join(root, n.rel)}): ${claimLine(n)}`);
   const additionalContext = picked.length ? ["Vault notes that may bear on this prompt (Jev):", ...lines].join("\n") : "";

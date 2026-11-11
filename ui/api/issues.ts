@@ -22,7 +22,7 @@ import { basename, dirname, join } from "node:path";
 import * as todos from "../../issues/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
-import { githubBase, jobProjector } from "../state.ts";
+import { githubBase, jobProjector, logOnce } from "../state.ts";
 import { card, row, stageOf, type Row } from "../issue.ts";
 import { issueHref, jobHref, parseId } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
@@ -45,7 +45,7 @@ function issueOf(id: string): { repo: Repo; ref: string } | null {
 
 /** Each item's stage by ref, from the list already read and one pass over main's trailers; empty when the trailers cannot be read. */
 function stagesBy(repo: Repo, doc: todos.Doc, items?: string[]): Map<string, Stage> {
-  try { return new Map(repoStages(repo, { fetch: false, doc, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch { return new Map(); }
+  try { return new Map(repoStages(repo, { fetch: false, doc, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch (e: any) { logOnce("stages", e); return new Map(); }
 }
 
 function list(url: URL): Response {
