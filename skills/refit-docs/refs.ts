@@ -15,13 +15,15 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 import { git } from "../../lib/git.ts";
+import { isTestFile } from "../../jobs/lib/gates/test-files.ts";
 
 export type Ref = { doc: string; line: number; kind: "link" | "anchor" | "path" | "env" | "flag"; ref: string };
 
 const SKIP = /(^|\/)(node_modules|\.git|\.worktrees|dist|build|vendor)\//;
 const AGENT = /(^|\/)(CLAUDE\.md|CLAUDE\.local\.md|AGENTS\.md|SKILL\.md)$|(^|\/)(skills|\.claude|identity)\//;
 const RECORD = /(^|\/)(specs|findings|archive|adr|decisions|rfcs|history)\//;
-const TEST = /(\.test\.|_test\.|\.spec\.|(^|\/)tests?\/|fixture)/;
+/** A test file, or a fixture: neither is a page or a live reference. */
+const isTest = (f: string): boolean => isTestFile(f) || f.includes("fixture");
 /** Pages people land on: nothing has to link to them. */
 const ROOTS = /(^|\/)(README|CHANGELOG|CONTRIBUTING|LICENSE|SECURITY|CODE_OF_CONDUCT)\.md$|^llms\.txt$/i;
 const READS = [
@@ -99,7 +101,7 @@ function named(text: string, clis: Set<string> = new Set()): { line: number; kin
 
 export function refs(root: string) {
   const all = files(root);
-  const md = all.filter((f) => /\.md$/.test(f) && !TEST.test(f));
+  const md = all.filter((f) => /\.md$/.test(f) && !isTest(f));
   const docs = md.filter((f) => !AGENT.test(f) && !RECORD.test(f));
   const clis = new Set([...all.filter((f) => /^bin\/[^/]+$/.test(f)).map((f) => f.slice(4)), ...all, ...Object.keys(manifest(root))]);
   const top = new Set(all.map((f) => f.split("/")[0]));
@@ -127,7 +129,7 @@ export function refs(root: string) {
   }
 
   const allDocs = [...docText.values()].join("\n");
-  const live = code.filter((c) => !TEST.test(c.f));
+  const live = code.filter((c) => !isTest(c.f));
   const env = [...new Set(live.flatMap((c) => READS.flatMap((re) => [...c.text.matchAll(re)].map((m) => m[1]))))];
   return {
     docs,

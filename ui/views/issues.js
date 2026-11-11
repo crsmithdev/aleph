@@ -1,10 +1,10 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
-import { ISSUE_KINDS as KINDS, shortId, issueHref, jobHref } from "../../lib/naming.ts";
+import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
 import { askCard } from "./cards.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
@@ -186,7 +186,7 @@ export function ageText(r, now = Date.now()) {
 /** One issue row. `fold` is "open" or "closed" for a parent with parts, which gets a chevron; `sub` indents a part shown under its parent. */
 export function renderRow(r, { fold, sub } = {}) {
   const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
-  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(localId(`${r.repo}-${r.n}`, r.repo), r.href)}</td>` +
+  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(shortText(`${r.repo}-${r.n}`), r.href)}</td>` +
     `<td class="wide">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
     `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${priorityBadge(r.priority)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
     `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td></tr>`;
@@ -370,7 +370,7 @@ export function renderFilters(rows, o = {}) {
     { label: "Status", name: "status", value: o.status || "any", options: [{ value: "any", label: "All" }, "open", "parked", "done", "dropped"] },
     { label: "Stage", name: "stage", data: true, value: o.stage ?? "", options: [{ value: "", label: "All" }, ...stages] },
     { label: "Priority", name: "priority", value: o.priority ?? "", options: PRIORITY_OPTIONS },
-    { label: "Label", name: "label", data: true, value: o.label ?? "", options: [{ value: "", label: "All" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
+    { label: "Label", name: "label", data: true, value: o.label ?? "", options: [{ value: "", label: "All" }, ...labels.map((l) => ({ value: l, label: l }))] },
     { html: `<label><input type="checkbox" name="group"${kept("issues.group", false) ? " checked" : ""}> Group sub-issues</label>` },
   ]);
 }
@@ -535,7 +535,7 @@ const isMachineNote = (n) => MACHINE.test(n.text) && !READ.test(n.text);
 /** A note as an event: a machine note's prefix is its tag, any other note is tagged "note". */
 function noteItem(e) {
   const m = /^([a-z ]+): (.*)$/s.exec(e.text);
-  return m && isMachineNote(e) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(localId(m[2])) } : { at: e.at, tag: "note", tone: "quiet", html: esc(localId(e.text)) };
+  return m && isMachineNote(e) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(shortText(m[2])) } : { at: e.at, tag: "note", tone: "quiet", html: esc(shortText(e.text)) };
 }
 
 /** The filing time: the store's, else the created date unless a job that day starts the issue (midnight would draw a false wait). */
@@ -562,7 +562,7 @@ export function issueSegments(d, now = Date.now()) {
   const marks = [...(Number.isFinite(filed) ? [{ at: filed, tone: "made", tip: "filed" }] : []), ...(Number.isFinite(closed) ? [{ at: closed, tone: "done", tip: d.status }] : [])];
   // The issue's own job, when one has its name, is where its id links.
   const job = (d.jobs ?? []).find((j) => j.name === id);
-  const headOf = (text) => `${job ? idLink(localId(id, d.repo), jobHref(job.id)) : `<span class="idp">${esc(localId(id, d.repo))}</span>`}<span class="quiet t">${esc(text)}</span>`;
+  const headOf = (text) => `${job ? idLink(shortText(id), jobHref(job.id)) : `<span class="idp">${esc(shortText(id))}</span>`}<span class="quiet t">${esc(text)}</span>`;
   const state = d.derived?.stage ?? d.status;
   // The hold records of a job name: why its waits waited.
   const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);
@@ -579,7 +579,7 @@ export function issueSegments(d, now = Date.now()) {
     { title: "Sub-issues", aside: `${done} of ${parts.length} done`, rows: parts.map((g) => {
       const runs = ofPart(g);
       const job = g.jobs?.at(-1), p = g.priority && g.priority !== "medium" ? ` ${priorityBadge(g.priority)}` : "";
-      return laneRow({ head: `<span>${idLink(localId(g.id, d.repo), job ? jobHref(job.id) : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage), holds: holdsOf(job?.name) });
+      return laneRow({ head: `<span>${idLink(shortText(g.id), job ? jobHref(job.id) : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage), holds: holdsOf(job?.name) });
     }) },
   ];
   const later = notes.filter((n) => n.at >= first);
@@ -601,7 +601,7 @@ function issueKpis(d, segments, now = Date.now()) {
   const commits = d.commits ?? [];
   const sha = (c) => (c.commitUrl ? idLink(c.hash.slice(0, 7), c.commitUrl) : `<code>${esc(c.hash.slice(0, 7))}</code>`);
   return renderKpis([
-    parts.length ? { k: "Sub-issues done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${title(g.stage)}`).join(", ")) }
+    parts.length ? { k: "Sub-issues done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${shortText(g.id)} ${title(g.stage)}`).join(", ")) }
       : { k: "Stage", v: esc(d.derived?.stage ?? d.status), sub: "" },
     { k: open ? "Open for" : "Elapsed", v: esc(times.length ? dur((hi - lo) / 1000) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
     { k: "Waiting", v: esc(times.length ? dur(waited / 1000) : "–"), sub: chris ? esc(`${dur(chris / 1000)} for your answer`) : "" },
@@ -619,10 +619,10 @@ export function renderIssue(d) {
   const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? (d.issue ? "agent" : "chris");
   const tracker = fm.tracker === "true";
   const ref = String(d.ref ?? d.id), inventory = "#/issues", project = [d.repo, `#/issues?project=${encodeURIComponent(d.repo)}`];
-  const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
+  const place = d.issue ? [project, ["issues", inventory], [shortText(d.issue.id), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   // Front matter the page shows nowhere else: a chip each.
-  const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.map(labelName).join(", ") : v}`)).join("");
-  const pills = `<div class="status-row">${d.derived ? badge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(localId(`${d.repo}-${ref}`, d.repo))}</span></div>`;
+  const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`)).join("");
+  const pills = `<div class="status-row">${d.derived ? badge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(shortText(`${d.repo}-${ref}`))}</span></div>`;
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
     `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;
@@ -632,7 +632,7 @@ export function renderIssue(d) {
     ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
     : "");
   const noteRow = (n) => {
-    const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(localId(n.text)) };
+    const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(shortText(n.text)) };
     return `<li class="dp-ev"><span class="dp-at">${esc(e ? when(new Date(e.at)) : "")}</span><span>${tag(it.tag, it.tone)}</span><div class="dp-evt">${it.html}</div></li>`;
   };
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
@@ -642,7 +642,7 @@ export function renderIssue(d) {
   const commits = d.commits.length
     ? pagedTable(heads(["Committed", "Commit", "Subject", ...(parts ? ["Sub-issue"] : [])]), d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
-      return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), issueHref(c.part)) : ""}</td>` : ""}</tr>`;
+      return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(shortText(c.part), issueHref(c.part)) : ""}</td>` : ""}</tr>`;
     }))
     : empty("No commit on main names this issue in its trailers.");
   const segments = issueSegments(d);

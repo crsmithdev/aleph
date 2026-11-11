@@ -1,8 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, localId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when, scope } from "../lib.js";
-import { NAMES, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
+import { actButton, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when, scope } from "../lib.js";
+import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { bar, flowOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, shell as jobCard, statLines, trailerLine } from "./cards.js";
 import { verdict } from "../../lib/status-words.ts";
@@ -304,7 +304,7 @@ const stuckSentence = (j) => {
 };
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
-  const blocker = b && localId(b.id, j.repo);
+  const blocker = b && shortText(b.id);
   const hold = b ? holdLine({ action: "after", on: [b.id] }) : stuckSentence(j);
   const job = (verb) => `/api/jobs/${encodeURIComponent(j.id)}/${verb}`;
   const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, path: job("wait"), body: JSON.stringify({ on: b.id }), label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, path: job("recheck"), label: "Re-check" });

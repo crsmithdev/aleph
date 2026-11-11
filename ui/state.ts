@@ -11,7 +11,7 @@ import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
-import { counting as lastReal, jobIdOf } from "../jobs/lib/records/record.ts";
+import { counting, jobIdOf } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
@@ -227,7 +227,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     const todo = v.item;
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
-      id: jobIdOf(runs.find((e) => e.id === v.run.id) ?? lastReal(runs)), name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
+      id: jobIdOf(runs.find((e) => e.id === v.run.id) ?? counting(runs)), name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
       condition: v.condition, started: v.started, run: { id: v.run.id, kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
@@ -241,15 +241,15 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     if (v.condition === "waiting" && v.stat) job.stat = v.stat;
     // A stuck or failed job's card shows the word of what stopped its last run, and the failed check's name.
     if (v.condition === "returned" || v.condition === "failed") {
-      const run = lastReal(runs).run;
+      const run = counting(runs).run;
       job.cause = causeOf(run);
       job.checkName = failedCheckOf(run);
     }
     // A waiting run with no ask of its own asks a question, as stage() reads it.
-    const stored = isWaiting(lastReal(runs).run.condition) ? lastReal(runs).run.ask : undefined;
-    const asked = isWaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
+    const stored = isWaiting(counting(runs).run.condition) ? counting(runs).run.ask : undefined;
+    const asked = isWaiting(counting(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
     if (asked) job.ask = asked;
-    const due = asked ? dueAt(lastReal(runs)) : null;
+    const due = asked ? dueAt(counting(runs)) : null;
     if (due !== null) job.due = new Date(due).toISOString();
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
@@ -312,7 +312,7 @@ export function state(now = new Date()): State {
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   for (const runs of jobs) {
-    const last = lastReal(runs).run;
+    const last = counting(runs).run;
     // A running intake (or planner) counts as running; it is not a live agent.
     if (last.kind === "intake" && last.condition === "running") {
       running.push(toJob(runs));
@@ -320,11 +320,11 @@ export function state(now = new Date()): State {
     }
     // An intake run sorts an issue and never lands; it shows only when it awaits you.
     if (last.kind === "intake") {
-      if (isOpen(runs) && isWaiting(lastReal(runs).run.condition)) needs.push(toJob(runs));
+      if (isOpen(runs) && isWaiting(counting(runs).run.condition)) needs.push(toJob(runs));
       continue;
     }
     if (isOpen(runs)) {
-      const real = lastReal(runs).run;
+      const real = counting(runs).run;
       if (isWaiting(real.condition)) needs.push(toJob(runs));
       else if (real.condition === "returned" || real.condition === "failed") stuck.push(toJob(runs));
       else {
@@ -363,7 +363,7 @@ export function state(now = new Date()): State {
   // The jobs of each issue, by `repo-id`: the open ones give its status, all of them its Done package.
   const ofItem = new Map<string, Runs[]>();
   for (const runs of jobs) {
-    const k = issueKeyOf(lastReal(runs).run);
+    const k = issueKeyOf(counting(runs).run);
     if (k === undefined) continue;
     ofItem.set(k, [...(ofItem.get(k) ?? []), runs]);
   }

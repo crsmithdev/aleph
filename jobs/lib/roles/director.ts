@@ -20,9 +20,10 @@ import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { ASK_REASONS, askSub, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
-import { allRuns, isAgentRun, loadRegistry, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, isAgentRun, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
+import { sandboxRepos } from "../gates/factory-status.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, openJob, readFile } from "../records/job.ts";
 import { isRunning } from "../infra/process.ts";
@@ -69,11 +70,10 @@ type Text = Pick<Ask, "headline" | "situation" | "details" | "effects" | "recomm
 
 /** An item's number as the store and the ledger give it: a whole `n` as a number, a part as `"<n>.<k>"`. */
 const idOf = (i: issues.Issue): number | string => (i.sub === undefined ? i.id : issues.refOf(i));
-const factoryRepos = (): Repo[] => Object.values(loadRegistry()).filter((r) => r.sandbox);
 const empty = (ask: Ask | null | undefined): ask is Ask => !!ask && !ask.situation?.trim();
 
 /** Every Ask that has no case text: open items that await Chris, then waiting runs, oldest run first, then proposed lessons. */
-export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = allRuns(), lists: store.Reader = store.reader()): Case[] {
+export function pendingCases(repos: Repo[] = sandboxRepos(), runs: Entry[] = allRuns(), lists: store.Reader = store.reader()): Case[] {
   const out: Case[] = [];
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
@@ -694,7 +694,7 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
  * The director's sweep: one run for each Ask with no case text, at most `ALEPH_DIRECTOR_CAP` a tick, all at once.
  * An error is logged, never thrown.
  */
-export async function directAll(repos: Repo[] = factoryRepos(), ports: Ports = defaultPorts): Promise<Decision[]> {
+export async function directAll(repos: Repo[] = sandboxRepos(), ports: Ports = defaultPorts): Promise<Decision[]> {
   try {
     await endLost("director", lockOf, "its decision");
     const todo = pendingCases(repos).slice(0, Math.max(0, DIRECTOR_CAP()));

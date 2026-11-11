@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, legendHtml, meter, localId, repoIdLink, repoOf, badge, priorityBadge, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -158,11 +158,8 @@ test("chips gives labels as chips, nothing for none", () => {
   expect(chips(["<b>"])).toContain("&lt;b&gt;");
 });
 
-test("localId and repoIdLink show the short id", () => {
+test("repoIdLink shows the short id", () => {
   setCodes({ aleph: "a" });
-  expect(localId("aleph-578.1", "aleph")).toBe("a578.1");
-  expect(localId("Waits on aleph-12 and sidetone-5", "sidetone")).toBe("Waits on a12 and sidetone-5");
-  expect(localId("triage-aleph-3", "aleph")).toBe("triage-aleph-3");
   expect(repoOf("my-repo-5.1")).toBe("my-repo");
   expect(repoOf("wt")).toBe("");
   expect(repoIdLink("aleph-5", "#/x")).toBe('<a class="idl" href="#/x">a5</a>');

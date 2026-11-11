@@ -1,9 +1,9 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
+import { pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
-import { ACTORS, issueHref, jobHref, STATES } from "../../lib/naming.ts";
+import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
 /** The most rows the list asks for: one page of the API holds the whole window. */
 const ALL = 2000;
@@ -61,7 +61,7 @@ export function renderJobsTable(jobs, f = {}) {
   // Columns: started, id, title, state, project, model, then took and cost: the Issues table's order.
   const rows = shown.map((j) => {
     const url = jobHref(j.id);
-    return `<tr class="rowlink" data-annotate="${esc(j.id)}"><td class="time">${esc(when(j.started))}</td><td>${idLink(localId(j.id, j.repo), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
+    return `<tr class="rowlink" data-annotate="${esc(j.id)}"><td class="time">${esc(when(j.started))}</td><td>${idLink(shortText(j.id), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
       `<td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td><td class="num">${j.cost !== null ? esc(money(j.cost)) : ""}</td></tr>`;
   }).join("");
   return dataTable(h("Started", "started") + h("Job", "id") + h("Title", "title") + h("State", "state") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }), rows) + pager(shown.length, all.length, PAGE);
@@ -156,12 +156,12 @@ function jobKpis(j, now = Date.now()) {
 
 /** The Job page: the header and its pills, the KPI strip, the Timeline, the Spec and the Result, then the Detail panels. */
 export function renderJob(j) {
-  const id = localId(j.name, j.repo), p = j.parent;
+  const id = shortText(j.name), p = j.parent;
   // The issue the job works on: a part's parent, else the job's own item.
   const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: issueHref(`${j.repo}-${j.item.id}`) });
-  const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(iss.id, j.repo)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
-  const nav = [iss ? `<a class="act" href="${esc(iss.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next sub-issue: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
-  const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}` }) : ""}<span class="idp">${esc(localId(j.name, j.repo))}</span></div>`;
+  const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${shortText(iss.id)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
+  const nav = [iss ? `<a class="act" href="${esc(iss.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next sub-issue: ${esc(shortText(p.next.id))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
+  const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(shortText(p.id), p.href)}` }) : ""}<span class="idp">${esc(shortText(j.name))}</span></div>`;
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
   const checkLog = checkRun ? `<button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(checkRun.job)}" data-file="checks.log">checks.log</button>` : "";

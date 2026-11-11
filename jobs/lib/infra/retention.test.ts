@@ -2,7 +2,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { archiveDir, putRun, recordsDir } from "../records/record.ts";
+import { archiveDir, putRun } from "../records/record.ts";
+import { recordsDir } from "../../../lib/layout.ts";
 import { today } from "../../../lib/day.ts";
 import { birthDay, retain } from "./retention.ts";
 

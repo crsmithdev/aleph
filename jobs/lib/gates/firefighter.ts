@@ -21,7 +21,7 @@ import * as store from "../../../issues/lib/store.ts";
 import { failedTests } from "./checks.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
-import { baselines, factoryDir, factoryRepos, gates, redLine } from "./factory-status.ts";
+import { baselines, factoryDir, sandboxRepos, gates, redLine } from "./factory-status.ts";
 import { git } from "../infra/git.ts";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { logEvent } from "../../../lib/layout.ts";
@@ -99,7 +99,7 @@ const oneLine = (text: string): string => {
 /** Every red of the factory repos now: the failed baselines and the red CIs. */
 export function reds(ports: Ports = defaultPorts): Red[] {
   const reg = loadRegistry();
-  const keys = new Set(factoryRepos().map((r) => r.key));
+  const keys = new Set(sandboxRepos().map((r) => r.key));
   const out: Red[] = [];
   for (const b of Object.values(baselines())) {
     if (b.ok || !keys.has(b.repo)) continue;
@@ -165,7 +165,7 @@ function fileRed(r: Red, effects: store.Effects = defaultPorts): Filed | null {
 export function settleCi(ports: Ports = defaultPorts): string[] {
   const reg = loadRegistry();
   const out: string[] = [];
-  for (const { key } of factoryRepos()) {
+  for (const { key } of sandboxRepos()) {
     const c = ciOf(key), repo = reg[key];
     if (!c || !repo) continue;
     for (const i of store.reader().list(key)?.items ?? []) {

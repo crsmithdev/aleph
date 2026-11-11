@@ -15,7 +15,7 @@ import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsStep, directIfNew, episodeStep, runDispatch, stalled } from "./factory.ts";
 import { editTick } from "../gates/factory-status.ts";
 import { doneChecker } from "./filing.ts";
-import { baselines, factoryDir, factoryRepos, gates, probeHold, readStalls, writeStalls } from "../gates/factory-status.ts";
+import { baselines, factoryDir, sandboxRepos, gates, probeHold, readStalls, writeStalls } from "../gates/factory-status.ts";
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
@@ -69,7 +69,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   if (gates({ only: ["pause"] })) { writeStalls({}); s.missed = []; return []; }
   const jobs = allJobs(), runs = jobs.flat(), lists = reader({ fetch: false });
   const keys = await stalled(jobs, lists, doneChecker(false));
-  for (const c of pendingCases(factoryRepos(), runs, lists)) if (!holdsWork(runs, "director", subjectOfCase(c))) keys.push(`ask:${c.on}`);
+  for (const c of pendingCases(sandboxRepos(), runs, lists)) if (!holdsWork(runs, "director", subjectOfCase(c))) keys.push(`ask:${c.on}`);
   for (const j of toRescue(jobs)) keys.push(`rescue:${j[0].run.name}`);
   for (const j of editedWaits(jobs)) keys.push(`edited:${j[0].run.name}`);
   const seen = readStalls();
@@ -120,7 +120,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     if (due(s, "episodes", now)) { s.last.episodes = at; out.episodes = await episodeStep(); }
     if (due(s, "ci", now)) {
       s.last.ci = at;
-      try { ciStep(factoryRepos()); } catch (e: any) { logEvent({ by: "rule", subject: "ci", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+      try { ciStep(sandboxRepos()); } catch (e: any) { logEvent({ by: "rule", subject: "ci", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
     }
     await smokeStep(undefined, undefined, now);
     const old = archiveOld(now);

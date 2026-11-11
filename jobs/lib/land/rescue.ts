@@ -17,7 +17,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { isVersion } from "../roles/issue-spec.ts";
 import { note, partsOf, reader, writeList } from "../../../issues/lib/store.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
-import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "../gates/factory-status.ts";
+import { LAND_STUCK_MS, sandboxRepos } from "../gates/factory-status.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allJobs, isOpen, issue as issueOf, type Job } from "../records/job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";

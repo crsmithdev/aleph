@@ -13,8 +13,6 @@ export const clock = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-/** A label as the page shows it. */
-export const labelName = (l) => l;
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 export const count = (n) => (n == null || Number.isNaN(Number(n)) ? "–" : Number(n).toLocaleString("en-US"));
 /** A mean or other average: one decimal; "–" for none. */
@@ -358,10 +356,10 @@ export const shortModel = (m) => String(m ?? "").replace(/^claude-/, "").replace
 /** An id as a link: mono, small, muted, underlined on hover. */
 /** What an issue waits on, one row each; a wait that never ends says so and offers to remove it. */
 export function blockersHtml(waits, repo, id) {
-  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(localId(b.id, repo))}</a>` : esc(localId(b.id, repo))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` ${tag(b.dead, "stuck")}` : b.state ? ` ${tag(b.state)}` : ""}</div>`).join("");
+  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(shortText(b.id))}</a>` : esc(shortText(b.id))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` ${tag(b.dead, "stuck")}` : b.state ? ` ${tag(b.state)}` : ""}</div>`).join("");
   const dead = waits.filter((b) => b.dead);
   if (!dead.length) return rows;
-  const label = `Stop waiting on ${dead.map((b) => localId(b.id, repo)).join(", ")}`;
+  const label = `Stop waiting on ${dead.map((b) => shortText(b.id)).join(", ")}`;
   return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> ${actButton(label, { act: "unblock", path: `${issueApi(repo, id)}/unblock`, label })}</div>`;
 }
 
@@ -370,8 +368,6 @@ export const idLink = (id, href, { title } = {}) => `<a class="idl"${title === u
 /** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */
 export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb"><a href="${esc(safeHref(back))}" aria-label="Back">«</a> ${parts.map(([t, h]) => (h ? `<a href="${esc(safeHref(h))}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join(" / ")}</nav>`;
 
-/** The text with each full issue ID as its short ID. `repo` stays for the callers. */
-export const localId = (text, repo) => shortText(text);
 /** The repo of an id `<repo>-<n>[.<k>]`, or "" for any other name. */
 export const repoOf = (id) => parseId(id)?.repo ?? "";
 /** An id as a link with its short id. */
@@ -397,7 +393,7 @@ export const chip = (text, { el = "span", cls = "", attrs = "", html } = {}) => 
 export const chipRow = (html, el = "span") => `<${el} class="chips">${html}</${el}>`;
 
 /** Labels as small rounded chips; "" for none. */
-export const chips = (labels) => (labels?.length ? chipRow(labels.map((l) => chip(labelName(l))).join("")) : "");
+export const chips = (labels) => (labels?.length ? chipRow(labels.map((l) => chip(l)).join("")) : "");
 
 /** A segmented control. `label` names the group for assistive tech; `items` are `{label, on, attrs, icon?}`, `attrs` the button's own attributes. An `icon` button shows the icon, and its label is the name and the tooltip. */
 export const seg = (label, items, attrs = "") =>

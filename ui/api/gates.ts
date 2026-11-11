@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
 import { readTimeouts, TIMED } from "../../jobs/lib/asks/timeout.ts";
-import { allHolds, backendHold, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
+import { allHolds, backendHold, baselines, sandboxRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
@@ -115,7 +115,7 @@ function tickEntries(since: number): LogEntry[] {
 function noteEntries(): LogEntry[] {
   const lists = reader({ fetch: false });
   const out: LogEntry[] = [];
-  for (const repo of factoryRepos()) {
+  for (const repo of sandboxRepos()) {
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) {
       const ref = `${repo.key}-${item.sub === undefined ? item.id : `${item.id}.${item.sub}`}`;
@@ -163,7 +163,7 @@ const baselineGate = () => Object.values(baselines()).map((b) => ({ repo: b.repo
 
 /** The held globs each factory repo names in the registry (`repo.held`), repos with at least one, sorted by repo key. */
 export function repoHeld(): { repo: string; held: string[] }[] {
-  return factoryRepos().filter((r) => r.held.length > 0).map((r) => ({ repo: r.key, held: [...r.held] })).sort((a, b) => (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0));
+  return sandboxRepos().filter((r) => r.held.length > 0).map((r) => ({ repo: r.key, held: [...r.held] })).sort((a, b) => (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0));
 }
 
 /**

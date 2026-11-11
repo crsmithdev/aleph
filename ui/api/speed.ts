@@ -563,20 +563,14 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     return repo && lists.list(repo) ? GONE : undefined;
   };
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
-  for (const c of cls.classes) for (const t of c.top) {
+  const records = read.filter((r) => inProject(r.issue, project));
+  const stages = { rows: stageRows({ runs: entries, specChecks: specChecksOf(records) }, since.getTime(), now.getTime()) };
+  for (const t of [...cls.classes.flatMap((c) => c.top), ...issues.usage]) {
     const [repo, n] = splitId(t.goal);
     const item = lists.item(repo, n);
     t.title = item?.title;
     // The link would be a 404 for an issue that left the store.
     if (!item && lists.list(repo)) delete t.href;
-  }
-  const records = read.filter((r) => inProject(r.issue, project));
-  const stages = { rows: stageRows({ runs: entries, specChecks: specChecksOf(records) }, since.getTime(), now.getTime()) };
-  for (const u of issues.usage) {
-    const [repo, n] = splitId(u.goal);
-    const item = lists.item(repo, Number(n));
-    if (item) u.title = item.title;
-    else if (lists.list(repo)) delete u.href;
   }
   const ended = phaseTimes(all, inp.filed, since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number, q = 0.5) => {

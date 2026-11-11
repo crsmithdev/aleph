@@ -12,14 +12,13 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { isTestFile } from "../../jobs/lib/gates/test-files.ts";
 import { scan } from "./clones.ts";
 
 const WIDE = 30;
 const SUPPORT = 10;
 const FLOOR = 0.6;
 const BLOCK = 0.7;
-/** A test changes with its code by design; it is not a second copy of a concept. */
-const TEST = /(\.test\.|_test\.|(^|\/)tests?\/)/;
 const FIX = /\b(fix|fixes|fixed|stale|mismatch|wrong|again|drift)\b/i;
 
 export type Commit = { sha: string; subject: string; files: string[] };
@@ -56,7 +55,8 @@ export function rules(commits: Commit[]): Map<string, Rule[]> {
   const co = new Map<string, { k: number; shas: string[] }>();
   for (const c of commits) {
     if (c.files.length > WIDE) continue;
-    const files = c.files.filter((f) => !TEST.test(f));
+    // A test changes with its code by design; it is not a second copy of a concept.
+    const files = c.files.filter((f) => !isTestFile(f));
     for (const a of files) {
       n.set(a, (n.get(a) ?? 0) + 1);
       for (const b of files) {

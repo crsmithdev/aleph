@@ -6,7 +6,7 @@
  */
 import { allRuns, isWaiting, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { latestJob } from "../../jobs/lib/records/job.ts";
-import { counting as lastReal, jobIdOf } from "../../jobs/lib/records/record.ts";
+import { counting, jobIdOf } from "../../jobs/lib/records/record.ts";
 import { may } from "../../jobs/lib/asks/ask.ts";
 import * as issues from "../../issues/lib/issues.ts";
 import { afterOf } from "../../issues/lib/store.ts";
@@ -18,7 +18,7 @@ import type { Routes } from "../server.ts";
 function find(id: string): Entry {
   loadRegistry();
   const all = allRuns(), e = runOfJob(id, all) ?? fail(404, `no job ${id}`);
-  const now = lastReal(latestJob(e.run.name)!);
+  const now = counting(latestJob(e.run.name)!);
   if (now.id !== e.id) fail(409, `${id} is no longer the job of ${e.run.name}: ${jobIdOf(now)} is`);
   return e;
 }

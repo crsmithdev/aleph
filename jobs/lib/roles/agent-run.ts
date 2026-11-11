@@ -89,11 +89,11 @@ export function openRun(o: Opening): AgentRun {
     ask: async (input, cwd) => (await call(input, cwd)).text,
     askData: async (input, cwd) => (await call(input, cwd)).data,
     askAgain: async (input, cwd) => (await call(input, cwd, true)).data,
-    end: (reason, fields = {}) => endRun(folder, reason, credit ? { ...fields, cause: "credit" } : fields),
+    end: (reason, fields = {}) => endAgentRun(folder, reason, credit ? { ...fields, cause: "credit" } : fields),
   };
 }
 
-function endRun(folder: string, reason: string, fields: Partial<Run> = {}): void {
+function endAgentRun(folder: string, reason: string, fields: Partial<Run> = {}): void {
   patchRun(basename(folder), { condition: "done", reason, ...fields, phase: undefined, ended: new Date().toISOString() });
 }
 
@@ -110,7 +110,7 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
     if (!release) continue;
     try {
       // Read again under the lock: the run may have ended since the list was read.
-      if (getRun(basename(folder))?.condition === "running") endRun(folder, `failed: its process ended before ${before}`, { cause: "unanswered" });
+      if (getRun(basename(folder))?.condition === "running") endAgentRun(folder, `failed: its process ended before ${before}`, { cause: "unanswered" });
     } finally {
       release();
     }

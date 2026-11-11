@@ -9,9 +9,8 @@
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { today } from "../../lib/day.ts";
-import { FULL, ISSUE_KINDS, parseId, shortText } from "../../lib/naming.ts";
+import { FULL, ISSUE_KINDS, parseId, shortText, STATUSES } from "../../lib/naming.ts";
 
-export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["id", "created_time", "updated_time"] as const;
 

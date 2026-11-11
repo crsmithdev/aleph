@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
-import { FULL } from "../../lib/naming.ts";
+import { FULL, STATUSES } from "../../lib/naming.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";
 import { logEvent } from "../../lib/layout.ts";
 import { git } from "../../lib/git.ts";
@@ -41,7 +41,7 @@ export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, ...(i.su
 export function checkFields(f: Fields): void {
   if (f.priority !== undefined && !(issues.PRIORITIES as readonly string[]).includes(f.priority)) refuse(`--priority takes ${issues.PRIORITIES.join(", ")}`);
   if (f.kind !== undefined) { const bad = issues.kindProblem(f.kind); if (bad) refuse(`--kind: ${bad}`); }
-  if (f.status !== undefined && !(issues.STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${issues.STATUSES.join(", ")}`);
+  if (f.status !== undefined && !(STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${STATUSES.join(", ")}`);
 }
 
 /** Set what an issue waits for (`after`), checked for form and, in this repo, for existence. */
@@ -161,7 +161,7 @@ export function list(repo: store.Place, o: { status?: string; label?: string; ki
 }
 
 function filterRows(doc: issues.Doc, o: { status?: string; label?: string; kind?: string }): issues.Issue[] {
-  if (o.status && !issues.STATUSES.includes(o.status as issues.Status)) refuse(`status must be one of ${issues.STATUSES.join(", ")}`);
+  if (o.status && !STATUSES.includes(o.status as issues.Status)) refuse(`status must be one of ${STATUSES.join(", ")}`);
   return doc.items
     .filter((i) => (o.status ? issues.status(i) === o.status : ["open", "parked"].includes(issues.status(i))))
     .filter((i) => (o.kind ? (i.fm.kind ?? "task") === o.kind : true))

@@ -16,10 +16,9 @@ import type { Ask } from "../asks/ask.ts";
 import type { Entry, Run } from "./ledger.ts";
 import { causeOf, policyOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
-import { logEvent } from "../../../lib/layout.ts";
+import { logEvent, recordsDir } from "../../../lib/layout.ts";
 import { lockSync } from "../infra/locks.ts";
-import { once, touch } from "../../../lib/sources.ts";
-import { alephPath } from "../../../lib/paths.ts";
+import { once } from "../../../lib/sources.ts";
 import { jobId, subjectOf } from "../../../lib/naming.ts";
 
 /** A run in a record: the run and its id, the name of its run folder. */
@@ -52,14 +51,6 @@ export interface JobRecord {
    * quote. `landed` is the commit the job landed as: the issue closes when a CI run at or after it is green.
    */
   ci?: { url: string; commit: string; failure: string; landed?: string };
-}
-
-/** The folder of the records: `ALEPH_RECORDS_DIR`, else beside a ledger the environment names, else ~/.aleph/jobs. */
-export function recordsDir(): string {
-  touch("records");
-  const e = process.env;
-  if (!e.ALEPH_RECORDS_DIR && e.ALEPH_JOBS_DIR) return join(e.ALEPH_JOBS_DIR, ".records");
-  return alephPath("ALEPH_RECORDS_DIR", "jobs");
 }
 
 /** The archive: finished records older than `ARCHIVE_DAYS` move here, beside the records folder. */

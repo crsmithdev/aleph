@@ -9,7 +9,7 @@ import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import { allRuns, issueKeyOf, loadRegistry, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
-import { counting as lastReal, jobIdOf } from "../../jobs/lib/records/record.ts";
+import { counting, jobIdOf } from "../../jobs/lib/records/record.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
@@ -70,7 +70,7 @@ function list(url: URL): Response {
 
 /** A job as the Issue page lists it: the job ID of its run that counts, its name, state, times, cost and how many runs it holds. */
 function jobRow(runs: ReturnType<typeof allJobs>[number]) {
-  const last = lastReal(runs), r = last.run;
+  const last = counting(runs), r = last.run;
   const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
   return { id: jobIdOf(last), name: r.name, condition: r.condition, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
 }

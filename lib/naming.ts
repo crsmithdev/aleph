@@ -4,7 +4,7 @@
 // Throughout: a full ID is `aleph-1430`, a short ID `a1430`; a code is a project's 1–2 letters; a job ID is
 // `<subject>#<n>`.
 
-export const STATUSES = ["open", "parked", "done", "dropped"];
+export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"];
 const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"];
 const ASKS = ["protected", "question", "incomplete", "capped", "proposal"];

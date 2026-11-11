@@ -130,10 +130,8 @@ export async function probeHold(up: (via: Via) => Promise<boolean> = probeBacken
   return line;
 }
 
-const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
-
 /** The registry's factory repos: those whose runs are sandboxed. */
-export const factoryRepos = sandboxRepos;
+export const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
 
 /** Factory agent and intake runs (triage and planner runs before them) started in the last 24 hours. */
 /** `runs` is every run, when the caller has read them already. */

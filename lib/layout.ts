@@ -22,6 +22,14 @@ export function layout(): Layout {
   };
 }
 
+/** The folder of the job records: `ALEPH_RECORDS_DIR`, else beside a ledger the environment names, else ~/.aleph/jobs. */
+export function recordsDir(): string {
+  touch("records");
+  const e = process.env;
+  if (!e.ALEPH_RECORDS_DIR && e.ALEPH_JOBS_DIR) return join(e.ALEPH_JOBS_DIR, ".records");
+  return alephPath("ALEPH_RECORDS_DIR", "jobs");
+}
+
 /** The event log: one file per UTC day, `<day>.jsonl`, one event as JSON per line. A day before today never changes. */
 export const eventsDir = (): string => { touch("events"); return join(factory(), "events"); };
 
