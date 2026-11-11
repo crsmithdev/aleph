@@ -3,7 +3,7 @@
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
-import { actButton, codeText, dataTable, heads, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { actButton, linkButton, codeText, dataTable, heads, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -143,7 +143,7 @@ function actions(it) {
     miss: `<label class="mform"><span>Add as an alias of</span><input name="target" list="mem-titles" placeholder="Note title"></label>${act("Add alias", "alias", { primary: true })}`,
   }[it.source];
   const ro = ["rules", "skill", "hook"].includes(it.source) ? `<p class="hint">A file in the repo: change it on a branch.</p>` : "";
-  return `<div class="macts" data-file="${file}">${rows ?? ""}${it.href && it.source !== "note" ? `<a class="act" href="${esc(it.href)}">Open</a>` : ""}</div>${ro}`;
+  return `<div class="macts" data-file="${file}">${rows ?? ""}${it.href && it.source !== "note" ? linkButton("Open", it.href) : ""}</div>${ro}`;
 }
 
 /** The note's links out, each with Unlink, the notes that link to it, and a field to add a link. */

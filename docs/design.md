@@ -1244,7 +1244,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
-| Link buttons written by hand; `linkButton()` not used | `ui/views/jobs.js`, `ui/views/issues.js`, `ui/views/memory.js` | aleph-1856 |
 | Tables put the time column first | Tables | aleph-1854 |
 | Two `act()` wrappers with different signatures; `shell()` has no callers | `ui/views/cards.js`, `ui/views/memory.js` | follow-up |
 | A metric card's second value hides at phone width, so `v` shows with a `q` that names two values | `ui/app.css` | review on `#/kit` |

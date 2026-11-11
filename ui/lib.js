@@ -726,8 +726,8 @@ export const actButton = (label, data = {}, o = {}) =>
   `<button class="act${o.primary ? " primary" : ""}${o.cls ? ` ${o.cls}` : ""}" type="${o.type ?? "button"}"` +
   Object.entries(data).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("") + `>${esc(label)}</button>`;
 
-/** A link that looks like a button, to another page: navigation only. `label` names the page. */
-export const linkButton = (label, href) => `<a class="act" href="${esc(href)}">${esc(label)}</a>`;
+/** A link that looks like a button, to another page: navigation only. `label` names the page; `href` goes through `safeHref`. */
+export const linkButton = (label, href) => `<a class="act" href="${esc(safeHref(href))}">${esc(label)}</a>`;
 
 /** Text with its `code` spans set as code, escaped. */
 export const codeText = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");

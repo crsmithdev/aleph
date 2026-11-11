@@ -433,6 +433,7 @@ test("fold() writes a details element with its class, keep key and open state", 
   expect(fold("Technical details", "x", { open: true, keep: "k1", cls: "more" })).toBe('<details class="more" data-keep="k1" open><summary>Technical details</summary>x</details>');
 });
 
-test("linkButton() is a link with the act class, its label and href escaped", () => {
-  expect(linkButton("A & B", "#/issues?q=1&p=2")).toBe('<a class="act" href="#/issues?q=1&amp;p=2">A &amp; B</a>');
+test("linkButton() is a link with the act class, its label and href escaped, and an unsafe href inert", () => {
+  expect(linkButton("Q&A", "#/issues/1?x=1&y=2")).toBe('<a class="act" href="#/issues/1?x=1&amp;y=2">Q&amp;A</a>');
+  expect(linkButton("x", "javascript:alert(1)")).toBe('<a class="act" href="#">x</a>');
 });

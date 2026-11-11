@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, badge, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
+import { pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, badge, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
@@ -160,7 +160,7 @@ export function renderJob(j) {
   // The issue the job works on: a part's parent, else the job's own item.
   const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: issueHref(`${j.repo}-${j.item.id}`) });
   const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${shortText(iss.id)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
-  const nav = [iss ? `<a class="act" href="${esc(iss.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next sub-issue: ${esc(shortText(p.next.id))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
+  const nav = [iss ? linkButton("Issue", iss.href) : "", p?.next ? linkButton(`Next sub-issue: ${shortText(p.next.id)}`, p.next.href) : "", j.trace ? linkButton("Trace", j.trace) : ""].join("");
   const pills = statusRow(badge(j.condition), j.item ? priorityBadge(j.item.priority) : "", `${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(shortText(p.id), p.href)}` }) : ""}<span class="idp">${esc(shortText(j.name))}</span>`);
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
