@@ -1,7 +1,7 @@
 ---
-name: friction
+name: automate
 description: >
-  Friction: search sessions for work to automate: errors that repeat and are
+  Automate: search sessions for work to automate: errors that repeat and are
   never fixed (a hook that fails, a gate that blocks good turns, a skill listed
   twice), work done by hand again and again, and the turns one session lost.
   Use when asked what keeps breaking, what to automate, what a session learned,
@@ -11,11 +11,11 @@ description: >
 disable-model-invocation: true
 ---
 
-# Friction
+# Automate
 
 Search what happened at run time for work an agent or a tool could take over: what keeps going wrong, what
 keeps being done by hand, and where a session lost turns. Then fix the findings Chris picks. refit-agents reads
-one repo's agent files; friction reads what happened, in every repo on the machine.
+one repo's agent files; automate reads what happened, in every repo on the machine.
 
 The argument sets the scope:
 
@@ -76,7 +76,7 @@ The argument sets the scope:
    verified or was not a claim (the gate was too strict).
 
 4. **Judge each repeated-work finding** (`command`, `prompt`). A command that only reads (`sed -n`, `cat`,
-   `git diff`) is normal work, not friction. A finding is friction when the same steps produce the same
+   `git diff`) is normal work, not a finding. A command or prompt is a finding when the same steps produce the same
    kind of result each time, or when Chris has to type the same thing to keep the agent moving
    (`continue`, `go`). For a prompt, read the turn before it, and name why the agent stopped.
 

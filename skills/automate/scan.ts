@@ -1,5 +1,5 @@
 /**
- * Friction in Claude Code transcripts: errors that repeat across sessions,
+ * Work to automate in Claude Code transcripts: errors that repeat across sessions,
  * and work done by hand in many sessions. Prints JSON; code counts, the model judges.
  *
  *   bun scan.ts [--days 14] [--root ~/.claude/projects] [--top 25]
@@ -24,7 +24,7 @@ const MIN: Record<Kind, number> = { hook: 2, tool: 2, gate: 2, loop: 2, reload: 
 const LOOP = 3; // gate denials in a row, with no prompt from Chris between them
 const HOME = homedir();
 const PATH = /\/(?:[\w.@+-]+\/)+[\w.@+-]+\.\w+/g;
-const READS = /^(sed -n|cat|head|tail|ls|grep|rg|find|wc|jq|echo|git (diff|log|status|show))\b/; // reading is work, not friction
+const READS = /^(sed -n|cat|head|tail|ls|grep|rg|find|wc|jq|echo|git (diff|log|status|show))\b/; // reading is work, not a finding
 const CAUSE = /[a-z]{3}/i; // a key with no word in it names no cause
 
 /** The text with the parts that differ between occurrences replaced, so one cause gives one key. */

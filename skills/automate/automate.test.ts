@@ -68,7 +68,7 @@ test("findings keeps errors from two sessions and repeated work from three", () 
 });
 
 test("a finding is fixed when a commit touched its path after the last hit", () => {
-  dir = mkdtempSync(join(tmpdir(), "friction-"));
+  dir = mkdtempSync(join(tmpdir(), "automate-"));
   const git = (...args: string[]) => Bun.spawnSync(["git", "-C", dir, ...args], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_COMMITTER_DATE: "2026-11-10T12:00:00Z" } });
   git("init", "-q");
   writeFileSync(join(dir, "hook.ts"), "");
