@@ -1,5 +1,5 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
-import { actButton, actMessages, codeText, denyReasons, diffHtml, dur, esc, localId, openDiffs, priorityBadge, repoIdLink, tag, when } from "../lib.js";
+import { actButton, actMessages, clock, codeText, denyReasons, diffHtml, dur, esc, localId, openDiffs, priorityBadge, repoIdLink, tag, when } from "../lib.js";
 import { shortId, jobHref, parseId } from "../../lib/naming.ts";
 
 /** A job's id, linking to its page. */
@@ -115,7 +115,7 @@ export function askCard(i, now = new Date().toISOString()) {
   const key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
-  const desc = `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}</p>`;
+  const desc = `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}${i.due ? ` <span class="muted">Lands at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
   return askShell(esc(i.reason), `data-annotate="${esc(shortId(i.id))}" data-kind="${esc(i.kind)}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, localId(i.headline || i.title, i.repo), i.tag, desc,
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
 }

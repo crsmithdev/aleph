@@ -113,7 +113,7 @@ The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYE
 - **The record is on `origin/main`.** The work store reads and writes `origin/main`. An issue is done when a commit on main names it in an `Issue:` trailer.
 - **Transitions start the next step.** No step waits for the tick. The tick's sweep reports a missed transition as a bug.
 - **A check with no verdict is not a failure.** A time-out or a kill is `infra`, and the rescue checks again.
-- **Agents cannot widen their own power.** Code checks each director action. Security paths and `bun.lock` always wait for Chris.
+- **Agents cannot widen their own power.** Code checks each director action. Security paths and `bun.lock` wait for Chris, unless he sets a land timeout for the reason.
 
 ## Cross-cutting concerns
 

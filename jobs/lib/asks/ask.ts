@@ -8,8 +8,7 @@
  * The issue store keeps no Ask. A run that set an Ask on its issue has an `asked` event in the record, with the
  * spec's version when it asked about the spec.
  *
- * `always.json` in the factory dir maps a reason to `{ action, at }`. `waits.json` maps a reason that offers a land to
- * the minutes after which the tick lands an Ask of that reason that waits on Chris with no answer; no entry is no wait.
+ * `always.json` in the factory dir maps a reason to `{ action, at }`.
  */
 import { join } from "node:path";
 import { layout, logEvent } from "../../../lib/layout.ts";
@@ -218,22 +217,6 @@ export function grant(reason: string, action: string): string | null {
   if (!r) return `unknown reason ${reason}; known: ${Object.keys(ASK_REASONS).join(", ")}`;
   if (!allows(r, action)) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
   write({ ...readAlways(), [reason]: { action, at: new Date().toISOString() } });
-  return null;
-}
-
-const waitsFile = () => join(layout().factory, "waits.json");
-
-/** The wait in minutes for `reason`, or null. */
-export const landWait = (reason: string): number | null => readJsonOr<Record<string, number>>(waitsFile(), {})[reason] ?? null;
-
-/** Land an Ask of `reason` after `minutes` on Chris (null clears it). Returns why it could not, or null. */
-export function setWait(reason: string, minutes: number | null): string | null {
-  const r = reasonFor(reason);
-  if (!r) return `unknown reason ${reason}; known: ${Object.keys(ASK_REASONS).join(", ")}`;
-  if (!r.actions.includes("land")) return `${reason} has no land action, so it has no wait`;
-  if (minutes !== null && !(minutes > 0)) return `the wait must be a number of minutes above 0`;
-  const { [reason]: _, ...rest } = readJsonOr<Record<string, number>>(waitsFile(), {});
-  writeJson(waitsFile(), minutes === null ? rest : { ...rest, [reason]: minutes });
   return null;
 }
 

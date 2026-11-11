@@ -32,6 +32,7 @@ export interface AskItem {
   /** A waiting run: the issue it is on. */ on?: string;
   /** The date shown on the card, and when the work was first picked up (ISO, "" for never); a part of an issue as "n/m" of its parent. */
   at?: string; since?: string; part?: { n: number; m: number; parent: string; href: string };
+  /** A waiting run: when the Ask timeout lands it with no answer (ISO). */ due?: string;
   agent?: boolean; trailers?: { key: string; value: string }[]; defaults?: string[]; followups?: string[];
 }
 interface Details {

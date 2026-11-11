@@ -97,7 +97,7 @@ export interface Run {
   /** A land of a held run: the commit gets `Held-by: <lander>`. */
   held?: boolean;
   /** Who landed a held run: absent (a run from before this field) means Chris; `firefighter` is from before the director. */
-  lander?: "Chris" | "firefighter" | "director";
+  lander?: "Chris" | "firefighter" | "director" | "timeout";
   /** Sidetone's flag: the news line went out. `shown` is the report's. */
   told: boolean; shown?: boolean; started: string; ended?: string;
   /** Milliseconds since the epoch, set under the dispatch lock: the order runs were made in. */

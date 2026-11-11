@@ -221,7 +221,7 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
  * `aleph checked`. With `checked`, Chris has done the check already.
  * The land unit takes the job lock.
  */
-export async function land(name: string, a: { checked?: boolean; lander?: "Chris" | "director" } = {}, o: StartOpts = {}): Promise<Start> {
+export async function land(name: string, a: { checked?: boolean; lander?: "Chris" | "director" | "timeout" } = {}, o: StartOpts = {}): Promise<Start> {
   checkName(name);
   // Two lands of one job at once (the dispatch's batch pull and the leader's) each pass the live check below: it and the start share a lock.
   const repoKey = openJob(name)?.at(-1)!.run.repo;

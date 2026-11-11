@@ -7,7 +7,7 @@ import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
-import { markAsked, plainAsk, setAsk, askOf, setWait } from "../asks/ask.ts";
+import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { setPaused, writeBaseline, writeStalls } from "../gates/factory-status.ts";
@@ -15,7 +15,6 @@ import { git } from "../infra/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import * as jobRecord from "../records/record.ts";
 import { archiveDir, putRun } from "../records/record.ts";
 import { due, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 
@@ -212,7 +211,7 @@ test("a tick that finds the tick lock held runs no step, writes nothing and says
     const before = JSON.stringify({ last: {}, missed: [], suite: {} });
     writeFileSync(file, before);
     const calls: string[] = [];
-    const ports: TickPorts = { dispatch: async () => { calls.push("dispatch"); }, suite: () => { calls.push("suite"); }, intake: () => { calls.push("intake"); }, land: async () => {} };
+    const ports: TickPorts = { dispatch: async () => { calls.push("dispatch"); }, suite: () => { calls.push("suite"); }, intake: () => { calls.push("intake"); } };
     const release = (await lock("tick", 0))!;
     try {
       expect(await runTick(NOW, ports)).toEqual({ tick: "lock busy" });
@@ -230,30 +229,8 @@ test("one tick moves a finished record older than 7 days into the archive folder
   seed([]);
   const started = new Date(NOW - 8 * 864e5).toISOString();
   putRun("20261020-120000-old", { kind: "build", job: "old", name: `${key}-1`, on: `${key}-1`, condition: "done", told: true, started } as any);
-  const ports: TickPorts = { dispatch: async () => {}, suite: () => {}, intake: () => {}, land: async () => {} };
+  const ports: TickPorts = { dispatch: async () => {}, suite: () => {}, intake: () => {} };
   const out = await runTick(NOW, ports);
   expect(out.archived).toEqual([`${key}-1`]);
   expect(readdirSync(archiveDir())).toEqual([`${key}-1.json`]);
-});
-
-test("a tick lands an escalated Ask that waited past its set wait, once, and not a younger one or one with no wait", async () => {
-  seed([]);
-  let k = 0;
-  const mk = (job: string, reason: "held-path" | "review", mins: number) => {
-    const on = `${key}-${++k}`;
-    const ask = plainAsk(reason, "ok?");
-    putRun(`20261104-110000-${job}`, { kind: "build", job, name: job, on, repo: key, condition: "waiting", told: true, started: new Date(NOW - 99 * MIN).toISOString(), ask } as any);
-    jobRecord.addEvent(on, { at: new Date(NOW - mins * MIN).toISOString(), kind: "director", what: `${reason}: escalated`, data: { at: new Date(NOW - mins * MIN).toISOString(), ref: job, on: `20261104-110000-${job}`, reason, question: ask.question, outcome: "escalated", applied: [], refused: [] } });
-  };
-  mk("old", "held-path", 40);
-  mk("young", "held-path", 10);
-  mk("nowait", "review", 90);
-  expect(setWait("held-path", 30)).toBeNull();
-  const landed: string[] = [];
-  const ports: TickPorts = { dispatch: async () => {}, suite: () => {}, intake: () => {}, land: async (name) => { landed.push(name); } };
-  await runTick(NOW, ports);
-  // The fake land leaves the run waiting, as a land that still runs does: the next tick does not land it again.
-  await runTick(NOW + 10 * MIN, ports);
-  expect(landed).toEqual(["old"]);
-  expect(readEvents().filter((e) => e.by === "rule" && e.subject === `${key}-1`).map((e) => e.note)).toEqual(["landed after waiting 30 min on Chris: held-path"]);
 });

@@ -419,7 +419,7 @@ test("a stored firefighter grant for held-path is dead: rules() shows no grant a
     expect(row.granted).toBeNull();
     const h = gates.renderRules({ rules: [row] });
     expect(h).not.toContain("always.json grants");
-    expect(h.match(/<button/g)!.length).toBe(1);
+    expect(h.match(/<button[^>]*data-rule=/g)!.length).toBe(1);
     expect(h).toContain(">Ask me</button>");
   } finally { writeFileSync(f, saved); }
 });

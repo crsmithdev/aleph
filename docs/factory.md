@@ -31,6 +31,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 | `aleph recheck <name>` | Merges main into a returned or failed run's branch and checks it again, without a worker |
 | `aleph pause` / `aleph resume` | Stops and restarts new runs |
 | `aleph always <list\|grant <reason> <action>\|revoke <reason>>` | Lists or changes the Always rules |
+| `aleph always timeout [<reason> <minutes>]` | Lists or sets the land timeouts; 0 removes one |
 | `aleph doctor [--fix] [--json]` | After an outage: clocks, git objects, units, `aleph.home` and lost runs |
 | `aleph judge [jev\|haiku]` | Shows or sets the model that judges for the hooks |
 | `aleph models [set <tier> <model>\|enable <tier>\|disable <tier>]` | Shows or sets the model of each tier |

@@ -4,11 +4,13 @@
  * owns it; this file only gathers them.
  * `POST /api/automation/rules/:reason/revoke`: `aleph always revoke <reason>`, the Ask-me side of a rule.
  * `POST /api/automation/rules/:reason/grant` (`{ "action": "<action>" }`): `aleph always grant`, the Always side.
+ * `POST /api/automation/rules/:reason/timeout` (`{ "minutes": <n> }`): `aleph always timeout`; 0 waits for Chris.
  */
 import { readJsonOr } from "../../lib/json.ts";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
+import { readTimeouts, TIMED } from "../../jobs/lib/asks/timeout.ts";
 import { allHolds, backendHold, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
@@ -43,7 +45,7 @@ const answer = (e: LogEntry) => e.by === "human" && e.action !== "changed";
  * A `proposal-<kind>` reason is granted per place (`proposal-<kind>:<place>`); its row lists those keys.
  */
 export function rules(entries: LogEntry[] = [], records = record.all(), now = Date.now(), ms = LOG_DAYS * DAY) {
-  const granted = readAlways();
+  const granted = readAlways(), timeouts = readTimeouts();
   const from = now - ms, SLACK = 60_000;
   // An entry from before record.asks kept the reason takes the reason of the run's Ask: the record keeps it in rec.ask while rec.askRun waits.
   const runReason = (rec: record.JobRecord, set: string) => rec.runs.some((x) => x.id === rec.askRun && x.condition === "waiting" && Date.parse(x.started) <= Date.parse(set)) ? rec.ask?.reason : undefined;
@@ -64,6 +66,7 @@ export function rules(entries: LogEntry[] = [], records = record.all(), now = Da
     return {
       reason, ...reasonText(reason), kind: r.kind, mode: r.always, fired: mine.length, decided, outcome,
       granted: g ? { action: g.action, at: g.at } : null,
+      ...(TIMED.includes(reason) ? { timeout: timeouts[reason] ?? 0 } : {}),
       ...(perPlace ? { places: Object.keys(granted).filter((k) => k.startsWith(`${reason}:`)) } : {}),
     };
   });
@@ -304,6 +307,10 @@ export const routes: Routes = {
   "POST /api/automation/rules/:reason/grant": post((body, { reason }) => {
     if (typeof body.action !== "string" || !body.action) fail(400, "send an action");
     return aleph(["always", "grant", "--", reason, body.action]);
+  }),
+  "POST /api/automation/rules/:reason/timeout": post((body, { reason }) => {
+    if (!Number.isInteger(body.minutes) || body.minutes < 0) fail(400, "send minutes, a whole number of at least 0");
+    return aleph(["always", "timeout", "--", reason, String(body.minutes)]);
   }),
   "POST /api/automation/rules/:reason/revoke": post((_body, { reason }) => aleph(["always", "revoke", "--", reason])),
 };

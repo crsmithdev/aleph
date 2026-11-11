@@ -254,6 +254,8 @@ An Ask that the actions leave open, a failed director run or a malformed reply a
 
 **Always rules.** The Always button and `aleph always grant` write a rule to `~/.aleph/factory/always.json` that maps a reason to an action. Only the reasons with an Always action in the table above use it. The next Ask with that reason takes the action without Chris.
 
+**Land timeouts.** `aleph always timeout <reason> <minutes>` and the Gates page set minutes for `held-path` and `review` in `~/.aleph/factory/timeouts.json`; 0 removes them. When Chris does not answer an escalated Ask of that reason in time and the director's case text recommends `land`, the tick lands the run once, with `Held-by: timeout`. This includes the escalation list. The Ask card shows the time of the land.
+
 ## 9. Human controls
 
 | To | CLI | UI |
@@ -265,6 +267,7 @@ An Ask that the actions leave open, a failed director run or a malformed reply a
 | Answer an issue that waits | `aleph issue decide <repo> <id> "<text>"` or `note` | Decide, Note |
 | Change an issue's spec | `aleph issue edit <repo> <id> --spec -` | Edit |
 | Grant or revoke a standing rule | `aleph always grant\|revoke` | Always, Gates page |
+| Set a land timeout | `aleph always timeout <reason> <minutes>` | Gates page |
 | Set caps and models | `aleph models`, `~/.aleph/factory/caps.json` | Gates page, Agents page |
 
 A write to an issue starts intake or a dispatch at once. A land by hand writes `Held-by:` with the lander's name.

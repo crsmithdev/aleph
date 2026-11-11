@@ -126,6 +126,15 @@ export function renderRepeats(d) {
     (rows.length ? pagedTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
 }
 
+/** The minutes after which the factory lands an escalated Ask of a land reason that the director recommends landing; 0 waits for Chris. */
+function timeoutForm(r) {
+  const id = `timeout-${esc(r.reason)}`;
+  return `<form class="capform timeoutform" data-timeout="${esc(r.reason)}"><label for="${id}">Land after</label>` +
+    `<input id="${id}" name="minutes" type="number" min="0" step="1" inputmode="numeric" value="${esc(r.timeout)}" required> min with no answer` +
+    actButton("Save", { label: "Save" }, { type: "submit" }) +
+    `<small class="hint">${r.timeout ? "Only when the director recommends the land." : "0: waits for you."}</small></form>`;
+}
+
 /** One row per Ask reason: who decides it. Ask me, or the reason's one automatic mode. */
 export function renderRules(d) {
   const rows = d.rules.map((r) => {
@@ -140,6 +149,7 @@ export function renderRules(d) {
       if (!r.mode) hint = "The director decides first and sends the rest to you.";
       if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
     }
+    if (r.timeout !== undefined) control += timeoutForm(r);
     const num = (n) => `<td class="num">${n}</td>`;
     const dec = r.decided, out = r.outcome;
     return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? `<p class="quiet">${esc(r.line)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
@@ -196,6 +206,16 @@ export function mount(root) {
       try {
         await postJson("/api/automation/schedules", { name: sched.dataset.schedule, every: sched.elements.every.value.trim() });
       } catch (err) { btn.disabled = false; say(btn, `Could not save the interval: ${err.message}`); return; }
+      return redraw(true);
+    }
+    const timed = e.target.closest?.("form.timeoutform");
+    if (timed) {
+      e.preventDefault();
+      const btn = timed.querySelector("button");
+      btn.disabled = true;
+      try {
+        await postJson(`/api/automation/rules/${encodeURIComponent(timed.dataset.timeout)}/timeout`, { minutes: Number(timed.elements.minutes.value) });
+      } catch (err) { btn.disabled = false; say(btn, `Could not save the timeout: ${err.message}`); return; }
       return redraw(true);
     }
     const form = e.target.closest?.("form.capform");
