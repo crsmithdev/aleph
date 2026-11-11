@@ -16,6 +16,7 @@ test("the Pipeline card shows the 6 stages in order, each a ring of runs per iss
     { stage: "monitor", runs: 1, items: 1, unusable: 0, p90: 10 },
     { stage: "build", runs: 9, items: 5, unusable: 2, p90: 804 },
     { stage: "intake", runs: 3, items: 3, unusable: 0, p90: null },
+    { stage: "land", runs: 400, items: 100, unusable: 1, p90: 5 },
   ];
   const h = view.renderPipeline({ window: "week", stages: { rows }, phases: { queue: { count: 4, p90: 79 } } });
   const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
@@ -24,7 +25,13 @@ test("the Pipeline card shows the 6 stages in order, each a ring of runs per iss
   expect(h).toContain('<div class="pnode warning" title="Build: 9 runs on 5 issues, 2 failed"><span class="ring">1.8</span><span class="pn">Build</span><span class="pt">13m 24s</span><span class="pf">22% failed</span>');
   expect(h).toContain('<div class="pnode fine" title="Intake: 3 runs on 3 issues"><span class="ring">1.0</span>');
   expect(h).toContain('<span class="pn">Queue</span><span class="pt">1m 19s</span>');
-  expect(h.match(/class="pnode idle"/g)).toHaveLength(3);
+  // The failed share is pct()'s text: 1 of 400 is 0.3%, not a rounded 0%.
+  expect(h).toContain('<span class="pf">0.3% failed</span>');
+  expect(h.match(/class="pnode idle"/g)).toHaveLength(2);
+  // A stage with no run shows a "–" with its reason, not words; so does an empty queue.
+  expect(h).toContain('<span class="pt"><span title="Nothing ran in this window">–</span></span>');
+  expect(view.renderPipeline({ window: "week", stages: { rows }, phases: {} })).toContain('<span class="pt"><span title="Nothing waited in this window">–</span></span>');
+  expect(h).not.toMatch(/no run|no wait/);
   // "p90" is said once, in the aside, not under each stage.
   expect(h.match(/p90/g)).toHaveLength(1);
   expect(h).not.toContain(">monitor<");
@@ -95,7 +102,7 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   const row = view.eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
   // Two columns: the time, then the title, the sentence with its job linked, and the note.
   expect(row).toContain('<div class="event-row stuck" data-by="gate"><span class="event-time">');
-  expect(row).toContain('<span class="event-say"><span class="event-state">failed</span><a class="idl" href="#/jobs/aleph-5%231">aleph-5#1</a> · past its time box</span>');
+  expect(row).toContain('<span class="event-say"><span class="badge stuck">failed</span> <a class="idl" href="#/jobs/aleph-5%231">aleph-5#1</a> · past its time box</span>');
   expect(row).toContain('<span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span><span class="event-say">');
   expect(row).toContain("</span><span class=\"reason\">timed out</span>");
   expect(row.indexOf("event-title")).toBeLessThan(row.indexOf("event-say"));
@@ -117,7 +124,7 @@ test("an event from the stream goes into the Herald at once", async () => {
   let html = "";
   const herald = { querySelectorAll: () => [], set outerHTML(v: string) { html = v; } };
   view.view.event({ querySelector: (q: string) => (q === "#herald" ? herald : null) }, { at: "2026-11-09T11:59:00Z", by: "gate", subject: "aleph-6", action: "landed", on: ["aleph-6#2"] });
-  expect(html).toContain('<span class="event-say"><span class="event-state">landed</span><a class="idl" href="#/jobs/aleph-6%232">aleph-6#2</a></span>');
+  expect(html).toContain('<span class="event-say"><span class="badge done">landed</span> <a class="idl" href="#/jobs/aleph-6%232">aleph-6#2</a></span>');
 });
 
 test("a Herald group keeps its open or closed state when a newer event arrives and the rows move, through the stream path", async () => {
@@ -185,7 +192,7 @@ test("the Herald's older rows under an issue are labelled by their run's kind wi
     const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the footer" }, chats: {}, runs } });
     const [top, older] = h.split('<div class="herald-older">');
     expect(top).toContain('<span class="event-title" title="Fix the footer">Fix the footer</span>');
-    expect(top).toContain('<span class="event-state">done</span>');
+    expect(top).toContain('<span class="badge done">done</span>');
     const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
     expect(rows).toHaveLength(3);
     // Newest first: the build run, the intake run, then the "picked up" event, which has no run.
@@ -206,7 +213,7 @@ test("the Herald hides an older start of a run with a newer event, joins a run o
   ];
   const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: { "aleph-9#2": "build" } } });
   const [top, older] = h.split('<div class="herald-older">');
-  expect(top).toContain('<span class="event-state">build passed</span>');
+  expect(top).toContain('<span class="badge done">build passed</span>');
   expect(top).toContain('<span class="event-more">+1</span>');
   const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
   expect(rows).toHaveLength(1);

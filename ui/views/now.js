@@ -1,10 +1,10 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
-import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say } from "../../lib/naming.ts";
+import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, count, empty, error, esc, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
+import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say as sayParts } from "../../lib/naming.ts";
 import { bar, flowOf, statusCards, usable } from "./speed.js";
-import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, shell as jobCard, statLines, trailerLine } from "./cards.js";
+import { act, actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
 import { verdict } from "../../lib/status-words.ts";
 
 export const view = {
@@ -67,15 +67,15 @@ export function renderPipeline(d) {
   const node = ([k, name]) => {
     if (k === "queue") {
       const has = queue?.count > 0;
-      return `<div class="pnode wait${has ? "" : " idle"}" title="${esc(has ? `Queue: ${queue.count} waits` : "Queue: no wait")}"><span class="ring">wait</span>` +
-        `<span class="pn">${esc(name)}</span><span class="pt">${has ? esc(dur(queue.p90)) : "no wait"}</span></div>`;
+      return `<div class="pnode wait${has ? "" : " idle"}"${has ? ` title="${esc(`Queue: ${plural(queue.count, "wait")}`)}"` : ""}><span class="ring">wait</span>` +
+        `<span class="pn">${esc(name)}</span><span class="pt">${has ? esc(dur(queue.p90)) : miss("Nothing waited in this window")}</span></div>`;
     }
     const r = by.get(k), n = r?.items ? r.runs / r.items : null;
-    if (n === null) return `<div class="pnode idle" title="${esc(`${name}: no run`)}"><span class="ring">–</span><span class="pn">${esc(name)}</span><span class="pt">no run</span></div>`;
+    if (n === null) return `<div class="pnode idle"><span class="ring">–</span><span class="pn">${esc(name)}</span><span class="pt">${miss("Nothing ran in this window")}</span></div>`;
     const share = r.runs ? (r.unusable ?? 0) / r.runs : 0, tone = health(share);
-    const tip = `${name}: ${r.runs} runs on ${r.items} issues${r.unusable ? `, ${r.unusable} failed` : ""}`;
+    const tip = `${name}: ${plural(r.runs, "run")} on ${plural(r.items, "issue")}${r.unusable ? `, ${count(r.unusable)} failed` : ""}`;
     return `<div class="pnode ${tone}" title="${esc(tip)}"><span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span>` +
-      `<span class="pt">${esc(dur(r.p90))}</span><span class="pf">${Math.round(share * 100)}% failed</span></div>`;
+      `<span class="pt">${esc(dur(r.p90))}</span><span class="pf">${pct(share * 100)} failed</span></div>`;
   };
   const nodes = Object.entries(PIPE).map(node).join(`<span class="parrow" aria-hidden="true"></span>`);
   return box(`<div class="pflow" role="group" aria-label="Stages">${nodes}</div>`, `<span class="asof">runs / issue in the ring · p90 time under it</span>`);
@@ -112,7 +112,7 @@ export function heraldEvents(s, more = streamed) {
 const saidHtml = (p) => {
   if (typeof p === "string") return esc(p);
   const to = p.id.includes("#") ? jobHref(shownId(p.id)) : issueHref(p.id);
-  return to ? idLink(shownId(p.id), to) : `<span class="event-id">${esc(shownId(p.id))}</span>`;
+  return idLink(shownId(p.id), to);
 };
 
 /** The actions that say an issue waits: the ledger calls each one "waiting". */
@@ -131,7 +131,7 @@ const routeText = (note = "") => {
 /** An event's sentence in two parts of HTML: its leading ID, and what follows the verb ("the factory is paused", "past its time box"). */
 function parts(ev) {
   // Adjacent text pieces as one, so the verb's colon and the reason after it ("failed", ": past its time box") read as one.
-  const said = say(ev).reduce((out, p) => (typeof p === "string" && typeof out.at(-1) === "string" ? [...out.slice(0, -1), out.at(-1) + p] : [...out, p]), []);
+  const said = sayParts(ev).reduce((out, p) => (typeof p === "string" && typeof out.at(-1) === "string" ? [...out.slice(0, -1), out.at(-1) + p] : [...out, p]), []);
   const lead = typeof said[0] === "string" ? "" : saidHtml(said.shift());
   if (typeof said[0] === "string") said[0] = said[0].replace(VERB, "");
   return { lead, rest: said.map(saidHtml).join("").trim() };
@@ -156,7 +156,7 @@ export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
   const word = stateWord(ev, run);
   const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "")
     : route ? esc(routeText(ev.note))
-    : `<span class="event-state">${esc(word)}</span>${[lead, rest !== word && rest].filter(Boolean).join(" · ")}`;
+    : `${tag(word, tone(ev.action))} ${[lead, rest !== word && rest].filter(Boolean).join(" · ")}`;
   return feedRow({ tone: tone(ev.action), at: ev.at, by: ev.by, cls: route ? " sys" : "",
     body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
       `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
@@ -270,10 +270,10 @@ function wireHeraldJump(root) {
   });
 }
 
-/** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */
+/** The page head: the title, the time and the status sentence, then the window control with Pause or Resume next to it. */
 function renderStatusLine(s, stale = false, w = "day") {
   const bar = scope().bar({ value: w, after: renderControls(s) });
-  return pageHead("", { head: "shead", after: `<span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}`, aside: bar });
+  return pageHead("Status", { head: "shead", after: `<span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}`, aside: bar });
 }
 
 /** The status sentence of `verdict`, each part a link to its card but the plain ones. */
@@ -285,8 +285,8 @@ export function renderLede(s, stale = false) {
 
 const list = (html) => `<div class="list">${html}</div>`;
 
-/** The one folded "Details" of an Issues row; `key` keeps it open across refreshes. */
-const more = (key, body) => fold("Details", `<div class="body">${body}</div>`, { cls: "more", keep: `more:${key}` });
+/** The one folded "Technical details" of an Issues row; `key` keeps it open across refreshes. */
+const more = (key, body) => fold("Technical details", `<div class="body">${body}</div>`, { cls: "more", keep: `more:${key}` });
 
 /** The details of a held or stuck job: everything the row's one sentence leaves out. */
 function details(s, j, extra = "") {
@@ -322,13 +322,13 @@ function laneCard(id, cls, row, title, href, below = "") {
 
 /** A lane: header with the count, its cards or one quiet line; an empty lane is marked `none`. */
 const lane = (id, title, n, rows, none, cap = 0) =>
-  `<section id="lane-${id}" class="lane${rows ? "" : " none"}" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
+  `<section id="lane-${id}" class="lane${rows ? "" : " none"}" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : none, cap)}</section>`;
 
 /** Done: the done parts and issues /api/factory sends, newest first, each its own card. */
 function doneLane(s) {
   const rows = (s.done ?? []).map((i) =>
     laneCard(i.id, "done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: badge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
-  return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.", s.doneCount ?? 0);
+  return lane("done", "Done", (s.done ?? []).length, rows, empty("Nothing is done yet.", "Landed work shows here."), s.doneCount ?? 0);
 }
 
 function queuedLane(s) {
@@ -339,7 +339,7 @@ function queuedLane(s) {
     return laneCard(`${w.repo}-${w.id}`, "queued-row", metaRow({ id, chips: (hold ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
   }).join("");
-  return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
+  return lane("queued", "Queued", (s.queued ?? []).length, rows, empty("Nothing is queued.", "Issues wait here for a worker."));
 }
 
 /** A parent that waits to close: all its parts are done. */
@@ -360,7 +360,7 @@ function runningLane(s) {
     const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
     return laneCard(j.name, `run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));
   }).join("");
-  return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, "Nothing is running.", s.factory.liveCap ?? 0);
+  return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, empty("Nothing is running.", "Started work shows here."), s.factory.liveCap ?? 0);
 }
 
 /** The three lanes: Running and Queued in one row, Done the full width under them. */
@@ -380,10 +380,10 @@ export function renderNeeds(s) {
 
 /** The agent line of a held or stuck job: a live run exists for it. */
 const agentLine = (j) => (j?.agent ? `<span class="agent">Agent working</span>` : "");
-/** One Jobs card in the compact size: the id, the title, one sentence of why, the buttons; `jobDetails` is the one Details behind it. */
-/** The one Details behind a stuck row: the blocker, the whole reason, then the job's details. */
+/** One Jobs card in the compact size: the id, the title, one sentence of why, the buttons; `jobDetails` is the one Technical details behind it. */
+/** The one Technical details behind a stuck row: the blocker, the whole reason, then the job's details. */
 const jobDetails = (s, j) => details(s, j,
-  (j.blocker ? `<p class="quiet q">Blocker <a href="${esc(j.blocker.href)}">${esc(j.blocker.id)}</a>: ${esc(j.blocker.title)}</p>` : "") +
+  (j.blocker ? `<p class="quiet q">Blocker ${idLink(j.blocker.id, j.blocker.href)}: ${esc(j.blocker.title)}</p>` : "") +
   (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : ""));
 
 /** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. An empty `problem` leaves the situation line out. */

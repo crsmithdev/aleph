@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 // @ts-ignore plain JS, shared with the page
-import { error } from "./lib.js";
+import { empty, error } from "./lib.js";
 import { setCodes } from "../lib/naming.ts";
 import { job, state } from "./fixtures/status-state.ts";
 import { full, section } from "./test-now.ts";
@@ -213,4 +213,19 @@ test("a failed flow load shows error() in the Agent Time card", () => {
   const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams()), bad = view.view.render({ ...state, usage: USAGE, flow: { error: "x" } }, {}, new URLSearchParams());
   expect(page).not.toContain('role="alert"');
   expect(bad.slice(bad.indexOf('id="outcome"'), bad.indexOf('id="pipeline"'))).toContain(error("x"));
+});
+
+test("an empty Done, Queued or Running lane draws empty() with a hint", () => {
+  const h = view.renderLanes({ ...state, done: [], queued: [], running: [], runningIssues: [] });
+  expect(h).toContain(empty("Nothing is done yet.", "Landed work shows here."));
+  expect(h).toContain(empty("Nothing is queued.", "Issues wait here for a worker."));
+  expect(h).toContain(empty("Nothing is running.", "Started work shows here."));
+  expect(h.match(/<p class="hint">/g)).toHaveLength(3);
+});
+
+test("a stuck job's fold reads Technical details, and its blocker is an idLink", () => {
+  const h = view.renderHerald({ ...full, asks: [], stuck: [job({ name: "aleph-30", condition: "failed", blocker: { id: "aleph-7", href: "#/issues/aleph/7", title: "Open work" } })] });
+  expect(h).toContain("<summary>Technical details</summary>");
+  expect(h).not.toContain("<summary>Details</summary>");
+  expect(h).toContain('Blocker <a class="idl" href="#/issues/aleph/7">aleph-7</a>: Open work');
 });

@@ -124,9 +124,9 @@ test("the page has one head, built by pageHead: the time, the status sentence, t
   const head = page.match(/<header class="ph[^]*?<\/header>/)![0];
   expect(head.indexOf('class="asof"')).toBeLessThan(head.indexOf('class="say'));
   expect(head.indexOf('class="say')).toBeLessThan(head.indexOf('data-act="pause"'));
-  expect(head).not.toContain("<h1");
+  expect(head).toContain("<h1>Status</h1>");
   const bar = head.match(/<div class="aside">([^]*)<\/div><\/header>/)![1];
-  expect(head).toBe(pageHead("", { head: "shead", after: head.match(/<span class="asof">[^]*?<\/span>/)![0] + view.renderLede(state), aside: bar }));
+  expect(head).toBe(pageHead("Status", { head: "shead", after: head.match(/<span class="asof">[^]*?<\/span>/)![0] + view.renderLede(state), aside: bar }));
   // A root that holds the page: the selector finds the sentence in the head, and setting its outerHTML rewrites the page.
   const say = view.renderLede(state);
   const root = { querySelector: (q: string) => (q === ".shead .say" && /<header class="ph shead">/.test(page) ? { set outerHTML(h: string) { page = page.replace(say, h); } } : null) };
