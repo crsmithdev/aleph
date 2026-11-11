@@ -115,26 +115,96 @@ const saidHtml = (p) => {
   return to ? idLink(shownId(p.id), to) : `<span class="event-id">${esc(shownId(p.id))}</span>`;
 };
 
-/** An event's row: the time, then the issue's title, the sentence under it and the note after. A chat turn's sentence is its message. `more` is the count of older events folded behind it; `run` is the title of the event's run, which follows the sentence on its line. */
-export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
-  const chat = ev.subject === "chat";
-  const title = chat ? "" : titles[ev.subject] ?? "";
-  const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "") : say(ev).map(saidHtml).join("");
-  return feedRow({ tone: tone(ev.action), at: ev.at, by: ev.by,
-    body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
-      `<span class="event-say">${line}${run ? ` <span class="event-run" title="${esc(run)}">${esc(run)}</span>` : ""}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
+/** The actions that say an issue waits: the ledger calls each one "waiting". */
+const WAITS = new Set(["waiting", "paused", "red", "after", "full", "gpu", "busy", "parent", "credit"]);
+/** The mark of a run's result in an older row. */
+const MARK = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returned: "✗", dropped: "✗" };
+/** The leading verb of a sentence after its ID, with the words that only join it to the rest. */
+const VERB = /^ ?(?:(?:is|has|asks|proposes|hit) |\S+(?: up| its checks)?(?: by| for| to)?(?::|$| ))\s*/;
+
+/** A routing note, "cost … model M tier T p P", as "T · M · p P"; any other note as it is. */
+const routeText = (note = "") => {
+  const m = Object.fromEntries([...note.matchAll(/(\w+) (\S+)/g)].map(([, k, v]) => [k, v]));
+  return m.tier ? `${m.tier} · ${shortModel(m.model?.split("/").pop())} · p ${m.p}` : note;
+};
+
+/** An event's sentence in two parts of HTML: its leading ID, and what follows the verb ("the factory is paused", "past its time box"). */
+function parts(ev) {
+  // Adjacent text pieces as one, so the verb's colon and the reason after it ("failed", ": past its time box") read as one.
+  const said = say(ev).reduce((out, p) => (typeof p === "string" && typeof out.at(-1) === "string" ? [...out.slice(0, -1), out.at(-1) + p] : [...out, p]), []);
+  const lead = typeof said[0] === "string" ? "" : saidHtml(said.shift());
+  if (typeof said[0] === "string") said[0] = said[0].replace(VERB, "");
+  return { lead, rest: said.map(saidHtml).join("").trim() };
 }
 
-/** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones folded behind it; `row(ev, more, older)` draws one. The fold is named by `id`, so it keeps its state when its text or place changes. */
-const grouped = (groups, row) => groups.map(([id, [latest, ...earlier]]) => ({ at: latest.at,
-  html: earlier.length ? fold(row(latest, earlier.length), `<div class="herald-older">${earlier.map((ev) => row(ev, 0, true)).join("")}</div>`, { cls: "herald-group", id }) : row(latest) }));
+/** The job of an event, `a1878#2`, if it names one. */
+const jobOf = (ev) => ev.on?.find((x) => x.includes("#"));
+
+/** The state word of an event's row: "waiting" for each wait, the run's kind before a run's result ("build passed"), else the action. */
+function stateWord(ev, run) {
+  if (WAITS.has(ev.action)) return "waiting";
+  if (ev.action === "started") return "picked up";
+  if (ev.action === "landed" || !run) return ev.action;
+  return `${run} ${ev.action}`;
+}
+
+/** An event's row: the time, then the issue's title, and under it the state, the ID and what the sentence adds. A chat turn's line is its message; a routing event's is its tier and model. `more` is the count of older rows folded behind it; `run` is the kind of the event's run. */
+export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
+  const chat = ev.subject === "chat", route = ev.action === "routed";
+  const title = chat || route ? "" : titles[ev.subject] ?? "";
+  const { lead, rest } = chat || route ? { lead: "", rest: "" } : parts(ev);
+  const word = stateWord(ev, run);
+  const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "")
+    : route ? esc(routeText(ev.note))
+    : `<span class="event-state">${esc(word)}</span>${[lead, rest !== word && rest].filter(Boolean).join(" · ")}`;
+  return feedRow({ tone: tone(ev.action), at: ev.at, by: ev.by, cls: route ? " sys" : "",
+    body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
+      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
+}
+
+/** An older event as a label and a short text: a run's kind and "#2 ✓", "waits" and what it waits for, or the action and what the sentence adds. */
+function brief(ev, runs = {}, chats = {}) {
+  const job = jobOf(ev), run = runs[job], n = job?.match(/#\d+$/)?.[0] ?? "";
+  const cut = (s) => esc(s ?? "");
+  if (ev.subject === "chat") return { ev, label: "", text: cut(chats[ev.on?.[0]]?.title) };
+  if (ev.action === "routed") return { ev, label: "routed", text: cut(routeText(ev.note)) };
+  const { lead, rest } = parts(ev), note = ev.note ? ` <span class="reason">${cut(ev.note)}</span>` : "";
+  if (WAITS.has(ev.action)) return { ev, label: "waits", text: (rest || lead) + note };
+  if (run) return { ev, label: run, text: `${n} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${note}` };
+  return { ev, label: ev.action === "started" ? "picked" : ev.action, text: (rest || lead) + note };
+}
+
+/** The older rows of a group, newest first: no start of a job with another event, nor of a run kind with a newer one, and a run of waits as one row. */
+function briefs([latest, ...earlier], runs = {}, chats = {}) {
+  // The gate can log a job's start after its result, so any other event of the job hides the start.
+  const ended = new Set([latest, ...earlier].filter((ev) => ev.action !== "running").map(jobOf));
+  const seen = new Set([runs[jobOf(latest)]]), out = [];
+  for (const ev of earlier) {
+    const job = jobOf(ev), run = runs[job];
+    if (ev.action === "running" && (ended.has(job) || (run && seen.has(run)))) continue;
+    seen.add(run);
+    const b = brief(ev, runs, chats), last = out.at(-1);
+    if (last?.label === "waits" && b.label === "waits") last.text += `, ${b.text}`;
+    else out.push(b);
+  }
+  return out;
+}
+
+/** An older row: the time, the label and the text, in the event's tone. */
+const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.action)}"><span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
+  `<span class="brief-label">${esc(label)}</span><span class="brief-text">${text}</span></div>`;
+
+/** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones briefly behind it; `row(ev, more)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
+const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
+  const older = briefs(events, runs, chats);
+  return { at: events[0].at, html: older.length ? fold(row(events[0], older.length), `<div class="herald-older">${older.map(briefRow).join("")}</div>`, { cls: "herald-group", id }) : row(events[0]) };
+});
 
 /** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */
 function issueRows(events, titles = {}, runs = {}) {
   const by = new Map();
   for (const ev of events) if (ev.subject !== "chat") by.set(ev.subject, [...(by.get(ev.subject) ?? []), ev]);
-  // An older row is under its group's title, so it shows its run's title after its sentence instead.
-  return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more, older) => eventRow(ev, older ? {} : titles, {}, more, older ? runs[ev.on?.[0]] : ""));
+  return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more) => eventRow(ev, titles, {}, more, runs[jobOf(ev)]), runs);
 }
 
 /** The rows of the chat events, newest first: one per session, its latest turn's newest event, with the earlier turns' behind an expand control. */
@@ -147,7 +217,7 @@ function chatRows(events, chats = {}) {
     const key = chats[turn]?.session ?? turn;
     sessions.set(key, [...(sessions.get(key) ?? []), ev]);
   }
-  return grouped([...sessions].map(([k, v]) => [`chat:${k}`, v]), (ev, more) => eventRow(ev, {}, chats, more));
+  return grouped([...sessions].map(([k, v]) => [`chat:${k}`, v]), (ev, more) => eventRow(ev, {}, chats, more), {}, chats);
 }
 
 /** A status text without the "health: " of each health line, which older history entries carry. */
@@ -173,8 +243,8 @@ export function renderHerald(s) {
   const history = [...(s.herald?.history ?? [])];
   if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
 
-  // A status row is the status sentence in its tone, with no label; the live row adds each error line the sentence lacks.
-  const status = history.map((ev, i) => ({ at: ev.at ?? "", html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : "", bodyCls: ` ${esc(ev.tone)}`,
+  // A status row is the status sentence in its tone between two rules, with no label; the live row is a card that adds each error line the sentence lacks.
+  const status = history.map((ev, i) => ({ at: ev.at ?? "", html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : " status", bodyCls: ` ${esc(ev.tone)}`,
     body: `${esc(statusText(ev.text))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).map(statusText).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}` }) }));
   // The status changes and the events in one feed, newest first; the live status row stays on top.
   const live = errors ? status.shift() : null;

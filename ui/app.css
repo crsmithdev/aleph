@@ -814,7 +814,7 @@ details.herald-group > summary { display: flex; align-items: baseline; padding: 
 details.herald-group > summary::before { content: none; }
 details.herald-group[open] .event-more { color: var(--ink); background: var(--rule); }
 .herald-group > summary .event-row { flex: 1; min-width: 0; }
-.herald-older { padding-left: var(--sp-16); border-left: 2px solid var(--rule-2); margin-left: var(--sp-4); }
+.herald-older { margin: 0 0 var(--sp-6) var(--sp-12); padding: var(--sp-4) var(--sp-10); background: var(--sunk); border-radius: var(--r-card); }
 .event-more { margin-left: var(--sp-8); font-size: var(--fs-2xs); font-weight: var(--fw-strong); color: var(--muted); padding: 0 var(--sp-6); border-radius: var(--r-tag); background: var(--sunk); }
 /* The event of an alert that still holds: tinted and ringed like an Ask card, as the Herald pins no copy of it. */
 .event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-8) var(--sp-10); margin-bottom: var(--sp-6); }
@@ -835,6 +835,30 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body, .event-row.need .event-body { color: var(--need); }
 .event-body.fine, .event-row.fine .event-body { color: var(--ink); }
 .event-body .reason { color: var(--muted); margin-left: var(--sp-6); font-family: var(--mono); font-size: var(--fs-2xs); }
+/* Ledger rows: a tone stripe at the left, and a state chip in the tone before the sentence's ID. */
+.event-row:not(.live):not(.status) { border-left: 3px solid var(--stripe, var(--rule)); padding-left: var(--sp-8); }
+.event-row.done { --stripe: var(--done); } .event-row.run { --stripe: var(--run); }
+.event-row.need { --stripe: var(--need); } .event-row.stuck { --stripe: var(--stuck); }
+.event-row.need .event-body, .event-row.stuck .event-body { color: var(--ink); }
+.event-state { margin-right: var(--sp-6); font-size: var(--fs-2xs); font-weight: var(--fw-strong); padding: 0 var(--sp-6); border-radius: var(--r-tag); background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
+.done .event-state { background: var(--done-bg); color: var(--done); } .run .event-state { background: var(--run-bg); color: var(--run); }
+.need .event-state { background: var(--need-bg); color: var(--need); } .stuck .event-state { background: var(--stuck-bg); color: var(--stuck); }
+/* A status change is a divider: its sentence in its tone between two rules. */
+.event-row.status { display: flex; gap: var(--sp-8); align-items: center; padding: var(--sp-6) 0; border-bottom: none; font-size: var(--fs-xs); }
+.event-row.status .event-body { flex: none; max-width: 80%; }
+.event-row.status::before, .event-row.status::after { content: ""; flex: 1; height: 1px; background: var(--rule); order: 1; }
+.event-row.status::before { order: -1; }
+.event-row.status .event-time { order: 0; }
+/* A routing event is quiet: no stripe colour, muted text. */
+.event-row.sys { --stripe: transparent; color: var(--muted); font-size: var(--fs-xs); padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
+.event-row.sys .event-body { color: var(--muted); }
+/* The older events of a group: one short line each, the time, then a label and a text. */
+.event-brief { display: grid; grid-template-columns: 44px 56px minmax(0, 1fr); gap: var(--sp-8); align-items: baseline; padding: var(--sp-2) 0; font-size: var(--fs-xs); color: var(--ink-2); }
+.brief-label { font-size: var(--fs-2xs); font-weight: var(--fw-strong); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brief-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.brief-text .reason { color: var(--muted); font-family: var(--mono); font-size: var(--fs-2xs); }
+.brief-mark { font-weight: var(--fw-strong); }
+.event-brief.done .brief-mark { color: var(--done); } .event-brief.stuck .brief-mark { color: var(--stuck); }
 .shead .say[data-jump="herald"] { cursor: pointer; }
 .shead .say[data-jump="herald"]:hover { text-decoration: underline; text-decoration-color: currentColor; }
 .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: var(--gap-in); }

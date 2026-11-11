@@ -56,7 +56,7 @@ test("the Herald panel shows weekly usage and warning tone in event history when
   const h = view.renderHerald({ ...calm, usage: { now: { seven_day: 93 } } });
   expect(h).toContain("weekly usage is at 93%");
   expect(h).not.toContain(">Warn<");
-  expect(h).toContain('class="event-row warning"');
+  expect(h).toContain('class="event-row warning status"');
   expect(h).toContain('class="event-body warning"');
 });
 
@@ -95,7 +95,7 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   const row = view.eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
   // Two columns: the time, then the title, the sentence with its job linked, and the note.
   expect(row).toContain('<div class="event-row stuck" data-by="gate"><span class="event-time">');
-  expect(row).toContain('<span class="event-say"><a class="idl" href="#/jobs/aleph-5%231">aleph-5#1</a> failed: past its time box</span>');
+  expect(row).toContain('<span class="event-say"><span class="event-state">failed</span><a class="idl" href="#/jobs/aleph-5%231">aleph-5#1</a> · past its time box</span>');
   expect(row).toContain('<span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span><span class="event-say">');
   expect(row).toContain("</span><span class=\"reason\">timed out</span>");
   expect(row.indexOf("event-title")).toBeLessThan(row.indexOf("event-say"));
@@ -112,7 +112,7 @@ test("an event from the stream goes into the Herald at once", () => {
   let html = "";
   const herald = { querySelectorAll: () => [], set outerHTML(v: string) { html = v; } };
   view.view.event({ querySelector: (q: string) => (q === "#herald" ? herald : null) }, { at: "2026-11-09T11:59:00Z", by: "gate", subject: "aleph-6", action: "landed", on: ["aleph-6#2"] });
-  expect(html).toContain('<span class="event-say"><a class="idl" href="#/jobs/aleph-6%232">aleph-6#2</a> landed</span>');
+  expect(html).toContain('<span class="event-say"><span class="event-state">landed</span><a class="idl" href="#/jobs/aleph-6%232">aleph-6#2</a></span>');
 });
 
 test("a Herald group keeps its open or closed state when a newer event arrives and the rows move, through the stream path", () => {
@@ -148,7 +148,7 @@ test("the Herald shows one row per chat session titled by its latest message's f
     const events = [1, 2, 3].map((n) => ({ at: `2026-11-09T1${n}:00:00Z`, by: "gate", subject: "chat", action: "done", on: [`chat#${n}`] }));
     const s = { ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, chats: heraldChats(events, allRuns()) } };
     const h = view.renderHerald(s);
-    const titles = [...h.matchAll(/<span class="event-say">([^<]*)</g)].map((m) => m[1]).filter(Boolean);
+    const titles = [...h.matchAll(/<span class="(?:event-say|brief-text)">([^<]*)</g)].map((m) => m[1]).filter(Boolean);
     // Newest session first; its earlier turn is in the details, after the row of its latest turn.
     expect(titles).toEqual(["Then the footer", "Fix the title", "Other question"]);
     expect(h.match(/<details class="herald-group" data-fold="chat:s1">/g)).toHaveLength(1);
@@ -159,7 +159,7 @@ test("the Herald shows one row per chat session titled by its latest message's f
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
 });
 
-test("the Herald's older rows under an issue show their run's kind after the sentence, none for an event with no run, and the top row keeps the issue's title", () => {
+test("the Herald's older rows under an issue are labelled by their run's kind with a mark, by the action for an event with no run, and the top row keeps the issue's title", () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-herald-runs-")), restore = withEnv({ ALEPH_JOBS_DIR: base });
   try {
     const kinds = ["intake", "build"];
@@ -179,13 +179,32 @@ test("the Herald's older rows under an issue show their run's kind after the sen
     const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the footer" }, chats: {}, runs } });
     const [top, older] = h.split('<div class="herald-older">');
     expect(top).toContain('<span class="event-title" title="Fix the footer">Fix the footer</span>');
-    expect(top).not.toContain("event-run");
-    const rows = older.split("</details>")[0].split('<div class="event-row').slice(1);
+    expect(top).toContain('<span class="event-state">done</span>');
+    const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
     expect(rows).toHaveLength(3);
     // Newest first: the build run, the intake run, then the "picked up" event, which has no run.
-    expect(rows[0]).toMatch(/<\/a> done <span class="event-run" title="build">build<\/span><\/span>/);
-    expect(rows[1]).toMatch(/<\/a> done <span class="event-run" title="intake">intake<\/span><\/span>/);
-    expect(rows[2]).not.toContain("event-run");
+    expect(rows[0]).toContain('<span class="brief-label">build</span><span class="brief-text">#2 <span class="brief-mark">✓</span></span>');
+    expect(rows[1]).toContain('<span class="brief-label">intake</span><span class="brief-text">#1 <span class="brief-mark">✓</span></span>');
+    expect(rows[2]).toContain('<span class="brief-label">picked</span>');
     expect(rows.join("")).not.toContain("event-title");
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
+});
+
+test("the Herald hides an older start of a run with a newer event, joins a run of waits into one row, and draws a routing event as tier, model and p", () => {
+  const events = [
+    { at: "2026-11-09T13:00:00Z", by: "gate", subject: "aleph-9", action: "passed", on: ["aleph-9#2"] },
+    { at: "2026-11-09T12:00:00Z", by: "gate", subject: "aleph-9", action: "running", on: ["aleph-9#2"] },
+    { at: "2026-11-09T11:30:00Z", by: "gate", subject: "aleph-9", action: "busy", on: ["aleph-8"], file: "ui/views/now.js" },
+    { at: "2026-11-09T11:00:00Z", by: "gate", subject: "aleph-9", action: "after", on: ["aleph-7"] },
+    { at: "2026-11-09T10:00:00Z", by: "rule", subject: "route", action: "routed", note: "cost 0.00004 model typesafe/jev-1.13-20260917 tier worker-medium p 0.83" },
+  ];
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: { "aleph-9#2": "build" } } });
+  const [top, older] = h.split('<div class="herald-older">');
+  expect(top).toContain('<span class="event-state">build passed</span>');
+  expect(top).toContain('<span class="event-more">+1</span>');
+  const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatch(/brief-label">waits<\/span><span class="brief-text"><a[^>]*>aleph-8<\/a> holds now\.js, <a[^>]*>aleph-7<\/a><\/span>/);
+  expect(h).toContain('<div class="event-row quiet sys" data-by="rule">');
+  expect(h).toContain("worker-medium · jev-1.13 · p 0.83");
 });
