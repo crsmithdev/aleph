@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { OFFERS } from "../jobs/lib/routing/models.ts";
 // @ts-ignore plain JS shared with the page
 import { costFrame, liveFrame, outcomesFrame, renderFactoryAgents, view } from "./views/factory-agents.js";
@@ -214,6 +215,14 @@ test("the Roles table heads its job count Jobs, and no head keeps the old words"
   expect(names).toContain("Jobs");
   expect(names.filter((t) => /runs|goal|part/i.test(t))).toEqual([]);
   expect(h).toContain(">Failed jobs</a>");
+});
+
+test("the Failed jobs link has no underline until hover or focus", () => {
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } });
+  expect(h).toContain('<a class="failed-jobs" href="#/factory/jobs?role=worker&condition=failed">Failed jobs</a>');
+  const css = readFileSync(new URL("./app.css", import.meta.url), "utf8");
+  expect(css).toMatch(/^a\.failed-jobs \{[^}]*text-decoration: none;/m);
+  expect(css).toMatch(/^a\.failed-jobs:hover, a\.failed-jobs:focus-visible \{[^}]*text-decoration: underline;/m);
 });
 
 test("a Roles count goes through count()", () => {

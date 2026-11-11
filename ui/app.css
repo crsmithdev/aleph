@@ -490,6 +490,8 @@ table.tbl th .arr { display: inline-block; width: 1em; margin-left: var(--sp-2);
 .idp { white-space: nowrap; font: var(--fs-xs) var(--mono); color: var(--muted); }
 a.idl { white-space: nowrap; font: var(--fw-mid) var(--fs-xs) var(--mono); color: var(--muted); text-decoration: none; }
 a.idl:hover, a.idl:focus-visible { color: var(--ink); text-decoration: underline; }
+a.failed-jobs { text-decoration: none; }
+a.failed-jobs:hover, a.failed-jobs:focus-visible { text-decoration: underline; }
 .chips { display: inline; white-space: normal; }
 table.tbl .chips { white-space: nowrap; }
 .chip { display: inline-block; margin: 0 var(--sp-4) var(--sp-2) 0; font-size: var(--fs-xs); line-height: 1.5; padding: 0 7px; border-radius: var(--r-pill); background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
