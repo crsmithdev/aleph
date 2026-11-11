@@ -8,20 +8,40 @@ description: >
   the loop (use /aleph:red-team).
 ---
 
-Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.
+Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it. Make each answer cheap: the user reads one explanation, then picks one option.
 
-Before the first round, name the **givens**: everything the plan treats as fixed and does not change. The schema under a UI change, the API a client calls, a library, a data flow. For each given, say what the plan looks like if that given moves, and what the move costs. A given that would make the plan smaller if it moved is the first question, with the smaller plan as the recommended answer. The user decides which givens stay fixed. The rest are the root of the tree.
+## Before the first question
 
-Ask **one question at a time**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. From the frontier, pick the question whose answer unblocks the most of the tree.
+Name the **givens**: everything the plan treats as fixed. The schema under a UI change, the API a client calls, a library, a data flow. For each given, say what the plan looks like if that given moves, and what the move costs. A given that would make the plan smaller if it moved is the first question, with the smaller plan as the recommended answer. The user decides which givens stay fixed. The rest are the root of the tree.
 
-For each question:
+Then find the branches. For each part of the plan, ask yourself the **question types**: feasibility (can it work under its constraints?), dependency (what must be settled first?), edge case (what happens when?), alternative (why this over that?), scope (in, or deferred?), ordering (what comes first?), failure mode (how does it fail, and how does it recover?). Each type that has no answer in the plan is a branch.
 
-1. Explain it in detail as regular output: what the decision is, why it matters, the options and their trade-offs (a table when there are more than two), and your recommendation with its reason.
-2. Put the decision to the user with AskUserQuestion: short option labels, a one-line description each, your recommended option first. The explanation stays in step 1, because the question body is too small for it.
-3. Wait for the answer. Say what it settles, recompute the frontier, and go to the next question.
+## Each question
 
-Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask another frontier question now.
+The **frontier** is every open decision whose prerequisites are settled: the questions you can ask now without guessing at answers you have not heard. From the frontier, pick the question whose answer unblocks the most of the tree. Ask one question per turn.
 
-The session is done when the frontier is empty: every branch of the design tree visited, nothing left silently assumed. Do not act on it until the user confirms you have reached a shared understanding. When they do, offer `/aleph:to-spec` to write the decisions down.
+1. **Explain it in full as regular output.** Start with the counter, `(n/total)`: `n` is this question's number, and `total` is `n` plus every open question you know of now. The total grows when an answer opens new branches; say so when it does. Then give: what the decision is, why it matters, the options and their trade-offs (a table when there are more than two), and your recommendation with its reason. If you looked something up for it, say what you found.
+2. **Ask it through AskUserQuestion.** Put the counter in the question text. Short option labels, a one-line description each, your recommended option first and marked "(Recommended)", so accepting it is one pick. Add a **Defer** option when the decision can wait without blocking the rest.
+3. **Wait for the answer.** Say in one line what it settles, and which questions it opens or closes. Recompute the frontier, and go to the next question.
 
-Adapted from Matt Pocock's `grilling` skill (github.com/mattpocock/skills).
+A **deferred** branch is closed for this session: it goes on the deferred list, and the questions that depend on it wait with it.
+
+Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (files, tools, a running system), dispatch a sub-agent with a fresh context to find it. Do not ask the user for anything you can look up. Do not block on it: a running lookup is an unsettled prerequisite, so only the questions downstream of it wait; ask another frontier question now. The _decisions_ are the user's: put each to them and wait.
+
+## Every 5 questions
+
+Show where the session stands, before the next question:
+
+```
+Settled: <decision>: <choice>, because <reason>   (one line each)
+Deferred: <decision>
+Open: <the questions left, in the order you will ask them>
+```
+
+The user can correct a settled line here. A correction reopens that decision and the ones that hang off it.
+
+## The end
+
+The session ends when the frontier is empty: every branch settled or deferred, nothing left silently assumed. Show the final summary: every settled decision with its reason, every deferred item, and the open risks you noticed but did not explore. Do not act on it until the user confirms you have reached a shared understanding. When they do, offer `/aleph:to-spec` to write the decisions down.
+
+Adapted from Matt Pocock's `grilling` skill (github.com/mattpocock/skills @4ae2317), with the question types, the periodic summary and the deferred state from usirin's grill-me (gist.github.com/usirin/0f01923f7b2126b0cce817f9f8d97788).
