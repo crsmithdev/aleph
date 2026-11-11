@@ -361,12 +361,13 @@ describe("render", () => {
     expect(h).not.toContain(next.text);
     expect(v.renderJob({ ...job, next: { step: "wait", action: "passed", to: "human", text: "passed → human" } })).toContain('<span class="quiet">Next</span> passed → human');
   });
-  test("the Detail head is a sectionHead inside the dp-detail block", () => {
+  test("the dp-detail block holds the detail panels, with no Detail head of its own", () => {
     const h = v.renderJob(job);
-    expect(h.slice(h.indexOf('<div class="dp-detail">'))).toStartWith('<div class="dp-detail"><div class="sh"><h2>Detail</h2></div>');
+    expect(h.slice(h.indexOf('<div class="dp-detail">'))).toStartWith('<div class="dp-detail"><details class="dp-panel dp-fold" open>');
+    expect(h).not.toContain("<h2>Detail</h2>");
     const css = readFileSync(join(import.meta.dir, "app.css"), "utf8");
     expect(css).not.toContain(".dp-detail > h2");
-    expect(css).toContain(".dp-detail > .sh { margin: var(--sp-8) 0 0; }");
+    expect(css).not.toContain(".dp-detail > .sh");
   });
   test("a job on an issue links to it above the Timeline, and its crumb goes through the issue", () => {
     const h = v.renderJob(job), href = "#/issues/fac/9";
@@ -378,10 +379,29 @@ describe("render", () => {
   test("the Checks panel shows each check's test counts and each failed test with its failure", () => {
     const tests = { ran: 1203, passed: 1180, failed: 23, skipped: 4, failures: [{ file: "a.test.ts", name: "s > <one>", message: "Error: boom\n  at a.test.ts:3" }] };
     const h = v.renderJob({ ...job, checks: [{ name: "tests", ok: false, seconds: 61, tests }, { name: "types", ok: true, seconds: 9 }] });
-    expect(h).toContain('<td class="num">1,203</td><td class="num">1,180</td><td class="num">23</td><td class="num">4</td><td class="num">1m 01s</td>');
+    expect(h).toContain('<td class="num">1,203</td><td class="num">1,180</td><td class="num bad">23</td><td class="num">4</td><td class="num">1m 01s</td>');
     expect(h).toContain('<td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">9s</td>');
     expect(h).toContain('<p><code>a.test.ts</code> s &gt; &lt;one&gt; <span class="quiet">tests</span></p><pre class="trailers">Error: boom\n  at a.test.ts:3</pre>');
     expect(h).toContain("22 more failed tests of tests not recorded.");
+  });
+  test("a job with no end and no cost shows the missing Took and Cost of span() and money()", () => {
+    const row = v.renderJobsTable([{ ...job, started: ago(5), ended: null, cost: null }]).split('<tr class="rowlink"')[1];
+    expect(row).toContain('<td class="num"></td><td class="num">$0.00</td><td class="time">');
+  });
+  test("a failed count is badCount's cell, and no cell of the checks table holds a button", () => {
+    const tests = { ran: 5, passed: 3, failed: 2, skipped: 0, failures: [] };
+    const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), logs: [{ name: "checks.log", size: 9 }] }], checks: [{ name: "tests", ok: false, seconds: 3, tests }] });
+    expect(h).toContain('<td class="num bad">2</td>');
+    expect(h).toContain('data-file="checks.log">checks.log</button>');
+    const table = h.slice(h.indexOf('<table class="tbl">'), h.indexOf("</table>"));
+    expect(table).not.toContain("<button");
+  });
+  test("the KPI strip shows its values through dur(), count() and miss(), with no hand-written look text", () => {
+    const h = v.renderJob({ name: "fac-9", repo: "fac", condition: "passed", runs: [], checkedBy: ["opus"], look: 5 });
+    expect(h).toContain('<span class="dp-v">0</span>');
+    expect(h).toContain('<span class="dp-v">–</span>');
+    expect(h).toContain("look: 5m 00s");
+    expect(h).not.toContain("about");
   });
   test("the Jobs table and the Job checks table head their duration column Took", () => {
     const heads = (h: string) => [...h.matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g)].map((m) => m[1].trim());
@@ -392,9 +412,9 @@ describe("render", () => {
     expect(checks).toContain("Took");
     expect(checks).not.toContain("Time");
   });
-  test("the Jobs table puts Job and Title first and Started last, and each row opens with the job id link", () => {
+  test("the Jobs table puts Id and Title first and Started last, and each row opens with the job id link", () => {
     const h = v.renderJobsTable([{ ...job, started: ago(5), ended: ago(4) }]);
-    expect([...h.matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g)].map((m) => m[1].trim())).toEqual(["Job", "Title", "State", "Project", "Model", "Took", "Cost", "Started"]);
+    expect([...h.matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g)].map((m) => m[1].trim())).toEqual(["Id", "Title", "State", "Project", "Model", "Took", "Cost", "Started"]);
     const row = h.split('<tr class="rowlink"').slice(1)[0];
     expect(/^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide"[^>]*><a[^>]*>[^<]*<\/a><\/td><td>/.test(row)).toBe(true);
     expect(/<td class="time">[^<]*<\/td><\/tr>/.test(row)).toBe(true);

@@ -1582,6 +1582,9 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/chart.js` | follow-up |
 | The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |
 | A textarea and a checkbox are written by hand: no helper | `ui/views/issues.js` | follow-up |
+| The Job page's Waits-on block is a hand `dp-blocked`, as on the Issue page: `blockersHtml()` writes only the items | `renderJob()` in `ui/views/jobs.js` | follow-up |
+| Quiet labels inside a line are hand `span.quiet`: the Next line, the check name after a failed test, the `logs:` label of a run's log buttons, a run's job ID in its event, the Work lane's head. `note()` makes a whole line, not a label | `renderJob()`, `logButtons()`, `jobEvent()`, `jobSegments()` in `ui/views/jobs.js` | follow-up |
+| A transcript's steps are hand `div.step`: no helper for a tool call with its input and result | `renderTranscript()` in `ui/views/jobs.js` | follow-up |
 | The File an Issue Project select takes its options from the registry after the page is drawn, written as hand `<option>` tags | `projectOptions()` in `ui/views/issues.js` | follow-up |
 
 ## Appendix

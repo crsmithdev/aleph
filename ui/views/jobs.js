@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { fold, pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
+import { fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
@@ -62,9 +62,9 @@ export function renderJobsTable(jobs, f = {}) {
   const rows = shown.map((j) => {
     const url = jobHref(j.id);
     return `<tr class="rowlink" data-annotate="${esc(j.id)}"><td>${idLink(shortText(j.id), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
-      `<td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td><td class="num">${j.cost !== null ? esc(money(j.cost)) : ""}</td><td class="time">${esc(when(j.started))}</td></tr>`;
+      `<td class="num">${esc(span(j.started, j.ended))}</td><td class="num">${esc(money(j.cost))}</td><td class="time">${esc(when(j.started))}</td></tr>`;
   }).join("");
-  return dataTable(h("Job", "id") + h("Title", "title") + h("State", "state") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started", { num: true }), rows) + pager(shown.length, all.length, PAGE);
+  return dataTable(h("Id", "id") + h("Title", "title") + h("State", "state") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started", { num: true }), rows) + pager(shown.length, all.length, PAGE);
 }
 
 /** Wire the state filter (it fetches again), the search, the sort and the pager; the last three redraw the table once `jobsNow()` gives the jobs. */
@@ -100,12 +100,10 @@ export function renderTranscript(steps) {
   }).join("") || empty("This run kept no steps.", "Open its logs for the raw output.");
 }
 
-const shortSha = (j) => (j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`);
-
 /** The event of one run: its condition as the tag, then its reason, the commit of a land, its job ID and its log buttons. */
 function jobEvent(x, nth, j) {
   const r = x.r, name = barLabel(r, nth);
-  const e = runEvent(x, name, r.kind === "land" && r.condition === "landed" && j.commit ? `${esc(name)} as ${shortSha(j)}.` : null);
+  const e = runEvent(x, name, r.kind === "land" && r.condition === "landed" && j.commit ? `${esc(name)} as ${shaLink(j.commit, j.commitUrl)}.` : null);
   return { ...e, html: e.html + (r.job ? ` <span class="quiet">${esc(r.job)}</span>` : "") + logButtons(r) };
 }
 
@@ -145,11 +143,11 @@ function jobKpis(j, now = Date.now()) {
   const bad = builds.filter((x) => ["returned", "failed"].includes(x.r.condition)).length, last = builds.at(-1)?.r.condition;
   const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j.stat);
   return renderKpis([
-    { k: "Builds", v: esc(builds.length), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
-    { k: "Elapsed", v: esc(runs.length ? dur((end - runs[0].start) / 1000) : "–"), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
-    { k: "Cost", v: j.cost !== undefined ? esc(money(j.cost)) : "–", sub: j.wk ? esc(wkText(j.wk)) : "" },
-    { k: "Change", v: esc(c?.lines ?? "–"), sub: [c ? esc(c.files) : "", j.commit ? shortSha(j) : ""].filter(Boolean).join(", ") },
-    { k: "Checked by", v: esc(j.checkedBy?.join(", ") || "–"), text: !!j.checkedBy?.length, sub: j.look ? esc(`look: about ${j.look}min`) : "" },
+    { k: "Builds", v: esc(count(builds.length)), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
+    { k: "Elapsed", v: esc(dur(runs.length ? (end - runs[0].start) / 1000 : undefined)), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
+    { k: "Cost", v: esc(money(j.cost)), sub: j.wk ? esc(wkText(j.wk)) : "" },
+    { k: "Change", v: c ? esc(c.lines) : miss("no change recorded"), sub: [c ? esc(c.files) : "", j.commit ? shaLink(j.commit, j.commitUrl) : ""].filter(Boolean).join(", ") },
+    { k: "Checked by", v: j.checkedBy?.length ? esc(j.checkedBy.join(", ")) : miss("no check recorded"), text: !!j.checkedBy?.length, sub: j.look ? esc(`look: ${dur(j.look * 60)}`) : "" },
   ]);
 }
 
@@ -160,30 +158,29 @@ export function renderJob(j) {
   const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: issueHref(`${j.repo}-${j.item.id}`) });
   const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${shortText(iss.id)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
   const nav = [iss ? linkButton("Issue", iss.href) : "", p?.next ? linkButton(`Next sub-issue: ${shortText(p.next.id)}`, p.next.href) : "", j.trace ? linkButton("Trace", j.trace) : ""].join("");
-  const pills = statusRow(badge(j.condition), j.item ? priorityBadge(j.item.priority) : "", `${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(shortText(p.id), p.href)}` }) : ""}<span class="idp">${esc(shortText(j.name))}</span>`);
+  const pills = statusRow(badge(j.condition), j.item ? priorityBadge(j.item.priority) : "", `${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(shortText(p.id), p.href)}` }) : ""}${idLink(shortText(j.name))}`);
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
-  const checkLog = checkRun ? `<button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(checkRun.job)}" data-file="checks.log">checks.log</button>` : "";
+  const checkLog = checkRun ? `<p><button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(checkRun.job)}" data-file="checks.log">checks.log</button></p>` : "";
   // A check that ran `bun test` has a record of its tests: the counts, and its failed tests with their failure.
-  const counts = (t) => ["ran", "passed", "failed", "skipped"].map((k) => `<td class="num">${t ? esc(count(t[k])) : "–"}</td>`).join("");
+  const counts = (t) => ["ran", "passed", "failed", "skipped"].map((k) => (k === "failed" ? badCount(t?.failed) : `<td class="num">${esc(count(t?.[k]))}</td>`)).join("");
   const failures = (j.checks ?? []).filter((c) => c.tests?.failed).map((c) => {
     const more = c.tests.failed - c.tests.failures.length;
     return c.tests.failures.map((f) => `<p><code>${esc(f.file)}</code> ${esc(f.name)} <span class="quiet">${esc(c.name)}</span></p><pre class="trailers">${esc(f.message)}</pre>`).join("") +
-      (more > 0 ? `<p class="quiet">${esc(plural(more, "more failed test"))} of ${esc(c.name)} not recorded.</p>` : "");
+      (more > 0 ? note(`${plural(more, "more failed test")} of ${c.name} not recorded.`) : "");
   }).join("");
   const checks = j.checks?.length
-    ? `<div class="dp-logs" data-logs>${pagedTable(heads(["Check", "Result", "Ran", "Passed", "Failed", "Skipped", "Took", "Log"], ["Ran", "Passed", "Failed", "Skipped", "Took"]), j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${badge(c.ok ? "passed" : "failed")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`))}${failures}<div class="logbody" hidden></div></div>`
+    ? `<div class="dp-logs" data-logs>${pagedTable(heads(["Check", "Result", "Ran", "Passed", "Failed", "Skipped", "Took"], ["Ran", "Passed", "Failed", "Skipped", "Took"]), j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${badge(c.ok ? "passed" : "failed")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td></tr>`))}${checkLog}${failures}<div class="logbody" hidden></div></div>`
     : empty("No check ran.", "A job runs its checks before it lands.");
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
-    pageHead(j.item?.title || j.title || id, { aside: nav }) + `${pills}${next}${blocked}` +
-    (j.reason && !(j.runs ?? []).length ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
-    (j.condition === "waiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") +
+    pageHead(j.item?.title || j.title || id, { aside: nav + (j.condition === "waiting" ? cmd(`aleph land ${j.name}`, { primary: true }) + cmd(`aleph drop ${j.name}`) : "") }) + `${pills}${next}${blocked}` +
+    (j.reason && !(j.runs ?? []).length ? note(j.reason) : "") +
     jobKpis(j) + renderTimeline(jobSegments(j)) +
     (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +
     (j.result ? panel("result", "Result", `<div class="md">${md(j.result)}</div>`) : "") +
-    `<div class="dp-detail">${sectionHead("Detail")}` +
+    `<div class="dp-detail">` +
     (j.review ? detailPanel("Review", verdict ? badge(verdict === "pass" ? "passed" : "returned") : "", `<div class="md">${md(j.review)}</div>`) : "") +
     (j.checks ? detailPanel("Checks", tag(`${passed} / ${j.checks.length}`, tone(passed === j.checks.length ? "passed" : "failed")), checks) : "") +
     detailPanel("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<div class="diff-panel" id="diff" data-job="${esc(j.id)}">${loadingLine("the diff")}</div>`) +
@@ -209,9 +206,9 @@ if (typeof document !== "undefined") {
     out.innerHTML = loadingLine("the log");
     try {
       const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.job)}/logs/${encodeURIComponent(b.dataset.file)}${q}`);
-      if (!res.ok) out.textContent = `The log failed to load (${res.status}).`;
+      if (!res.ok) out.innerHTML = error("Could not load the log.", undefined, { detail: `status ${res.status}` });
       else if (b.dataset.as) out.innerHTML = renderTranscript(await res.json());
       else out.innerHTML = `<pre class="trailers">${esc(await res.text())}</pre>`;
-    } catch (err) { out.textContent = `The log failed to load: ${err.message}`; }
+    } catch (err) { out.innerHTML = error("Could not load the log.", undefined, { detail: err.message }); }
   });
 }
