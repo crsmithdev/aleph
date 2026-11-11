@@ -78,5 +78,5 @@ test("a finding is fixed when a commit touched its path after the last hit", () 
   const at = (s: string, t: string) => hook(s, t, err);
   const before = findings(signals([at("a", "2026-11-10T00:00:00Z"), at("b", "2026-11-10T01:00:00Z")].join("\n")), 25).findings[0];
   const after = findings(signals([at("a", "2026-11-10T00:00:00Z"), at("b", "2026-11-10T13:00:00Z")].join("\n")), 25).findings[0];
-  expect([before.open, after.open, before.changed]).toEqual([false, true, "2026-11-10T12:00:00+00:00"]);
+  expect([before.open, after.open, before.changed]).toEqual([false, true, "2026-11-10T12:00:00.000Z"]);
 });

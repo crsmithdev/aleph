@@ -98,14 +98,15 @@ export const signals = (text: string): Signal[] => {
   return out;
 };
 
-/** The newest commit time of a path that exists, or that a repo once had. */
+/** The newest commit time of a path that exists, or that a repo once had, as UTC ISO 8601. */
 const changed = (path: string): string | undefined => {
   let dir = dirname(path);
   while (!existsSync(dir) && dir !== "/") dir = dirname(dir);
   const real = realpathSync(dir);
   const file = join(real, path.slice(dir.length));
   const r = git(real, "log", "-1", "--format=%cI", "--", file);
-  return r.ok ? r.out || undefined : undefined;
+  const at = r.ok ? Date.parse(r.out) : NaN; // git writes the zero offset as "Z" or "+00:00" by version
+  return Number.isNaN(at) ? undefined : new Date(at).toISOString();
 };
 
 /** Findings that pass their kind's threshold, most sessions first, at most `top` of each kind. */
