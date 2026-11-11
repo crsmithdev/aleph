@@ -67,11 +67,13 @@ export function once(key: string) {
   return { seen: (): boolean => s.get() !== null, mark: (): void => s.set(Date.now()) };
 }
 
+const MAX_AGE_MS = 86_400_000;
+
 /** A Pre event whose Post never came leaves a file behind; drop anything older than a day. */
-export function prune(maxAgeMs = 86_400_000): void {
+export function prune(): void {
   let names: string[];
   try { names = readdirSync(spoolDir()); } catch { return; }
-  const cutoff = Date.now() - maxAgeMs;
+  const cutoff = Date.now() - MAX_AGE_MS;
   for (const name of names) {
     const path = join(spoolDir(), name);
     try { if (statSync(path).mtimeMs < cutoff) unlinkSync(path); } catch { /* raced with another hook */ }

@@ -6,6 +6,8 @@ import { readFileSync } from "node:fs";
 
 type Entry = Record<string, any>;
 
+const MAX_CHARS = 12_000;
+
 export interface Digest {
   prompt: string;
   edits: string[];
@@ -77,7 +79,7 @@ export function readEntries(transcriptPath: string, promptId: string): Entry[] {
  * transcript: at Stop the transcript can still lack the last text, so its last
  * text is a mid-turn preamble ("I'll check ...").
  */
-export function digest(transcriptPath: string, promptId: string, stopFinal = "", maxChars = 12_000): Digest {
+export function digest(transcriptPath: string, promptId: string, stopFinal = ""): Digest {
   const entries = readEntries(transcriptPath, promptId);
   const results = new Map<string, Entry>();
   for (const e of entries) {
@@ -128,7 +130,7 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "",
   if (stopFinal) finalMessage = stopFinal;
 
   let body = items.join("\n");
-  if (body.length > maxChars) body = `…(${items.length} items, earliest trimmed)\n${body.slice(-maxChars)}`;
+  if (body.length > MAX_CHARS) body = `…(${items.length} items, earliest trimmed)\n${body.slice(-MAX_CHARS)}`;
   const text = [
     `USER PROMPT:\n${head(prompt, 600)}`,
     `TURN (in order):\n${body || "(no tool calls)"}`,

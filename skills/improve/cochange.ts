@@ -41,11 +41,13 @@ export function history(cwd: string, limit = 2000, since?: string): Commit[] {
   });
 }
 
+const Z = 1.96;
+
 /** The Wilson lower bound of k successes in n trials, at 95%. */
-export function wilson(k: number, n: number, z = 1.96): number {
+export function wilson(k: number, n: number): number {
   if (n === 0) return 0;
-  const p = k / n, z2 = z * z;
-  return (p + z2 / (2 * n) - z * Math.sqrt((p * (1 - p) + z2 / (4 * n)) / n)) / (1 + z2 / n);
+  const p = k / n, z2 = Z * Z;
+  return (p + z2 / (2 * n) - Z * Math.sqrt((p * (1 - p) + z2 / (4 * n)) / n)) / (1 + z2 / n);
 }
 
 /** Every rule A → B with n(A) ≥ 10 and confidence ≥ 0.6, keyed by A. */

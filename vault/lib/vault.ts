@@ -213,14 +213,16 @@ export function budgetFindings(notes: Note[]): Finding[] {
 const STOP = new Set("about after also been before being could does doing from have here into just like make more most much must only other over really should some such than that their them then there these they this those very want were what when where which while will with would your".split(" "));
 export const screenWords = (s: string) => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w));
 
-/** Live wiki notes in the draft's scope that share a title or alias word with it, minus those it supersedes or says it is consistent with, at most `max`. */
-export function screenCandidates(draft: Note, notes: Note[], max = 20): Note[] {
+const MAX_CANDIDATES = 20;
+
+/** Live wiki notes in the draft's scope that share a title or alias word with it, minus those it supersedes or says it is consistent with, at most `MAX_CANDIDATES`. */
+export function screenCandidates(draft: Note, notes: Note[]): Note[] {
   const want = new Set(screenWords([draft.title, ...list(draft.fm, "aliases")].join(" ")));
   const sup = new Set([...list(draft.fm, "supersedes"), ...list(draft.fm, "consistent_with")].map((t) => t.toLowerCase()));
   return wikiNotes(notes)
     .filter((n) => n.fm.scope === draft.fm.scope && !sup.has(n.title.toLowerCase()))
     .filter((n) => screenWords([n.title, ...list(n.fm, "aliases")].join(" ")).some((w) => want.has(w)))
-    .slice(0, max);
+    .slice(0, MAX_CANDIDATES);
 }
 
 /** The draft's text with `written_by` and `session` added to its frontmatter where it has none. */

@@ -16,13 +16,13 @@ const real: Clocks = { wall: () => Date.now(), mono: () => performance.now() };
 export const wallStepSince = (start: { wall: number; mono: number }, c: Clocks = real): number =>
   (c.wall() - start.wall) - (c.mono() - start.mono);
 
-export const clockStart = (c: Clocks = real) => ({ wall: c.wall(), mono: c.mono() });
+export const clockStart = () => ({ wall: real.wall(), mono: real.mono() });
 
 /** Watch both clocks for `windowMs`. Returns the step in milliseconds. */
-export async function watchWall(windowMs: number, c: Clocks = real): Promise<number> {
-  const start = clockStart(c);
+export async function watchWall(windowMs: number): Promise<number> {
+  const start = clockStart();
   await Bun.sleep(windowMs);
-  return wallStepSince(start, c);
+  return wallStepSince(start);
 }
 
 export function onWsl(): boolean {

@@ -63,10 +63,12 @@ export function classifyEnvironment(ancestorArgvs: string[][], override = proces
   return headless ? "headless" : "interactive";
 }
 
-export function ancestorArgvs(depth = 6): string[][] {
+const DEPTH = 6;
+
+export function ancestorArgvs(): string[][] {
   const out: string[][] = [];
   let pid = process.ppid;
-  for (let i = 0; i < depth && pid > 1; i++) {
+  for (let i = 0; i < DEPTH && pid > 1; i++) {
     let cmdline: string, status: string;
     try { cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf8"); status = readFileSync(`/proc/${pid}/status`, "utf8"); } catch { break; }
     out.push(cmdline.split("\0").filter(Boolean));
