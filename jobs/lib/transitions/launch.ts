@@ -27,7 +27,7 @@ const foreground = (): boolean => jobForeground();
 
 /** The environment a unit gets: every `ALEPH_*` and `SIDETONE_*` variable, as `--setenv` flags. */
 function passEnv(env: Record<string, string | undefined> = process.env): string[] {
-  return Object.entries(env).filter(([k]) => k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")).map(([k, v]) => `--setenv=${k}=${v}`);
+  return Object.entries(env).filter(([k]) => (k.startsWith("ALEPH_") || k.startsWith("SIDETONE_")) && k !== "ALEPH_UI_PASSWORD").map(([k, v]) => `--setenv=${k}=${v}`);
 }
 
 /** Where a started process writes its output: inherited, nowhere, or appended to a file. */

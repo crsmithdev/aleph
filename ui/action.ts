@@ -45,7 +45,7 @@ const CLIS = {
 
 /** Run `<cli> <args>`: its JSON on exit 0 (`{ output }` for text), else a Fail(422) with what it said. */
 export async function aleph(args: string[], o: { stdin?: string; cli?: keyof typeof CLIS } = {}): Promise<any> {
-  const p = Bun.spawn([...CLIS[o.cli ?? "aleph"](), ...args], { stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: "pipe", stderr: "pipe", env: process.env });
+  const p = Bun.spawn([...CLIS[o.cli ?? "aleph"](), ...args], { stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: "pipe", stderr: "pipe", env: { ...process.env, ALEPH_UI_PASSWORD: undefined } });
   const [stdout, stderr, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
   if (code !== 0) fail(422, (stderr || stdout).trim() || `${args[0]} exited ${code}`);
   try { return JSON.parse(stdout); } catch { return { output: stdout.trim() }; }

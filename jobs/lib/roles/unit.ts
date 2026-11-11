@@ -180,6 +180,8 @@ export async function unit(folder: string): Promise<void> {
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDECODE;
   delete env.ALEPH_RUN_ENV;
+  // The UI server's login password is not for a worker or a check.
+  delete env.ALEPH_UI_PASSWORD;
 
   // The job variables are for the worker: a check that runs aleph's own tests must not see them.
   // A factory repo's checks also get TZ=UTC and the browser tests, as CI runs them.
