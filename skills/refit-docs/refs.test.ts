@@ -38,10 +38,18 @@ test("finds broken links, anchors, paths, env vars and own-CLI flags, both ways"
 test("a doc nothing links to is an orphan; records are not docs", () => {
   const r = refs(repo({ "README.md": "# Hi\n", "docs/a.md": "# A\n", "docs/specs/s.md": "# S\n" }));
   expect(r.orphans).toEqual(["docs/a.md"]);
-  expect(r.docs).toBe(2);
+  expect(r.docs).toEqual(["README.md", "docs/a.md"]);
 });
 
 test("slugs match GitHub anchors", () => {
   expect(slug("Run it")).toBe("run-it");
   expect(slug("The `--dry` flag!")).toBe("the---dry-flag");
+});
+
+test("aleph's own docs have no broken reference and no orphan", () => {
+  const r = refs(join(import.meta.dir, "../.."));
+  expect(r.broken).toEqual([]);
+  expect(r.orphans).toEqual([]);
+  expect(r.docs).toContain("docs/factory.md");
+  expect(r.docs.filter((d) => d.startsWith("identity/"))).toEqual([]);
 });

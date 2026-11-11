@@ -9,7 +9,7 @@
  *
  *   bun refs.ts [root]   JSON
  *
- * Docs are the repo's markdown minus agent files (CLAUDE.md, AGENTS.md, skills) and records (specs, findings, ADRs):
+ * Docs are the repo's markdown minus agent files (CLAUDE.md, AGENTS.md, skills, identity/) and records (specs, findings, ADRs):
  * a record describes its day, not main. Source is every other tracked file.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -19,7 +19,7 @@ import { git } from "../../lib/git.ts";
 export type Ref = { doc: string; line: number; kind: "link" | "anchor" | "path" | "env" | "flag"; ref: string };
 
 const SKIP = /(^|\/)(node_modules|\.git|\.worktrees|dist|build|vendor)\//;
-const AGENT = /(^|\/)(CLAUDE\.md|CLAUDE\.local\.md|AGENTS\.md|SKILL\.md)$|(^|\/)(skills|\.claude)\//;
+const AGENT = /(^|\/)(CLAUDE\.md|CLAUDE\.local\.md|AGENTS\.md|SKILL\.md)$|(^|\/)(skills|\.claude|identity)\//;
 const RECORD = /(^|\/)(specs|findings|archive|adr|decisions|rfcs|history)\//;
 const TEST = /(\.test\.|_test\.|\.spec\.|(^|\/)tests?\/|fixture)/;
 /** Pages people land on: nothing has to link to them. */
@@ -130,7 +130,7 @@ export function refs(root: string) {
   const live = code.filter((c) => !TEST.test(c.f));
   const env = [...new Set(live.flatMap((c) => READS.flatMap((re) => [...c.text.matchAll(re)].map((m) => m[1]))))];
   return {
-    docs: docs.length,
+    docs,
     broken: broken.sort((a, b) => a.doc.localeCompare(b.doc) || a.line - b.line),
     undocumented: { env: env.filter((e) => !allDocs.includes(e)).sort() },
     orphans: docs.filter((d) => !ROOTS.test(d) && !linked.has(d)),
