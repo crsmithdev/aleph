@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { addNote, allJobs, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, readFile, tailOf } from "./job.ts";
+import { addNote, allJobs, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, openJobOfIssue, readFile, tailOf } from "./job.ts";
 import { type Run } from "./ledger.ts";
 import { putRun } from "./record.ts";
 import { asked, markAsked, waitsForSpecEdit } from "../asks/ask.ts";
@@ -77,5 +77,15 @@ describe("the evidence of a delivery", () => {
     expect(lookMinutes(1)).toBe(3);
     expect(lookMinutes(200)).toBe(3);
     expect(lookMinutes(201)).toBe(4);
+  });
+});
+
+describe("the open job of an issue", () => {
+  test("is the open job on the issue in the repo, not a closed one or another issue's", () => {
+    run("20261101-000003-b", "b", { name: "b", on: "fac-7", condition: "landed" });
+    run("20261101-000004-a", "a", { name: "a", on: "fac-7", condition: "running" });
+    run("20261101-000005-c", "c", { name: "c", on: "fac-8", condition: "running" });
+    expect(openJobOfIssue("fac", 7)![0].run.name).toBe("a");
+    expect(openJobOfIssue("fac", 9)).toBeUndefined();
   });
 });

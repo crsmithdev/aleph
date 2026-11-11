@@ -25,7 +25,7 @@ import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { sandboxRepos } from "../gates/factory-status.ts";
 import { endLost, openRun } from "./agent-run.ts";
-import { allJobs, isOpen, issue as issueOf, openJob, readFile } from "../records/job.ts";
+import { allJobs, isOpen, issue as issueOf, openJob, openJobOfIssue, readFile } from "../records/job.ts";
 import { isRunning } from "../infra/process.ts";
 import { git } from "../infra/git.ts";
 import { NO_OUTPUT, securityChange } from "../gates/gate.ts";
@@ -503,7 +503,7 @@ const no = (a: Action, why: string): Outcome => ({ refused: `${describe(a)}: ${w
 /** The open job of the case: its own run's job, else the open job of its item. */
 function jobOf(c: Exclude<Case, { at: "lesson" }>, n: number | string | undefined): string | undefined {
   if (c.at === "run") return c.entry.run.name;
-  return allJobs().find((j) => isOpen(j) && j[0].run.repo === c.repo.key && issueOf(j) === n)?.[0].run.name;
+  return openJobOfIssue(c.repo.key, n)?.[0].run.name;
 }
 
 /** Check one action against the rules and apply it, for the case's Ask only. */

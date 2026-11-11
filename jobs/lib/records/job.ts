@@ -38,6 +38,9 @@ export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.f
 /** The repo issue the job works on: the latest run that names one. */
 export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
+/** The first open job of issue `n` in `repo`. */
+export const openJobOfIssue = (repo: string, n: number | string | undefined, jobs = allJobs()): Job | undefined => jobs.find((j) => isOpen(j) && j[0].run.repo === repo && issue(j) === n);
+
 /** The job's state: that of the run that counts. */
 export const stateOf = (j: Job): State => record.counting(j).run.condition;
 
