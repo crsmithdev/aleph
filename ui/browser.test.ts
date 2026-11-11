@@ -280,6 +280,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(r.sh).toBe(r.wantSh);
   });
 
+  test("the Memory search and each segmented button fill --ctl-h, and a status dot is a pill", async () => {
+    await page.go("#/memory");
+    await page.when('document.querySelector("#view .msearch input[type=search]")');
+    expect(await page.ev('getComputedStyle(document.querySelector("#view .msearch input[type=search]")).height')).toBe(await page.ev('getComputedStyle(document.documentElement).getPropertyValue("--ctl-h").trim()'));
+    expect(await page.ev('getComputedStyle(document.documentElement).getPropertyValue("--ctl-h").trim()')).toBe("28px");
+    await page.go("#/issues");
+    await page.when('document.querySelector("#view .seg button")');
+    await page.ev('document.documentElement.style.setProperty("--ctl-h", "40px")');
+    const r = await page.ev<[number, number][]>('[...document.querySelectorAll("#view .seg")].map((s) => [s.clientHeight, s.querySelector("button").getBoundingClientRect().height])');
+    expect(r.length).toBeGreaterThan(0);
+    for (const [inner, h] of r) { expect(inner).toBeGreaterThanOrEqual(38); expect(h).toBe(inner); }
+    await page.ev('document.documentElement.style.removeProperty("--ctl-h")');
+    await page.go("#/factory/agents");
+    await page.when('document.querySelector(".event-dot")');
+    expect(await page.ev('getComputedStyle(document.querySelector(".event-dot")).borderRadius')).toBe("999px");
+  }, 30_000);
+
   test("Kit: every specimen draws, the charts draw from fixtures, and its theme pick stays on the kit page", async () => {
     await page.go("#/kit?theme=dark");
     await page.when('document.querySelector(".kit-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 3');

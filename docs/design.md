@@ -1574,7 +1574,12 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
-| The Memory search field is 44px high and `--fs-lg`; every other page uses the one `searchBox()` size | `.memory .msearch` in `ui/app.css` | follow-up |
+| The `@container` queries at 560px (`pipeline`) and 420px (a card) have no breakpoint token: a container query cannot read a custom property | `ui/app.css` | allowed |
+| The `@media (min-width: 721px)` query for the collapsed sidebar has no breakpoint token: a media query cannot read a custom property | `ui/app.css` | allowed |
+| The 16px floor in the `.tile b` `clamp()` has no size token | `.tile b` in `ui/app.css` | follow-up |
+| The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |
+| The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/chart.js` | follow-up |
+| The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/kit.js` | allowed |
 | Settings and forms written by hand: the worker tier checkbox in the Agents Models settings; the Memory alias, link, core line and edit forms, hand `label.mform` and `div.mform` | `models()` in `ui/views/factory-agents.js`; `actions()`, `links()`, `coreForm()` and `edit()` in `ui/views/memory.js` | follow-up |
 | A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | The Roles table's rows are hand `<tr>`s and its Failed Jobs link a hand `a.failed-jobs` | `roles()` in `ui/views/factory-agents.js` | follow-up |
