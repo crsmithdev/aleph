@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { renderHerald } from "./views/now.js";
 import { withFactory } from "./test-now.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -324,6 +324,21 @@ test("the scope bar takes a window name, its choices and an extra control; a cli
     expect(g.location.hash).toContain("days=30");
     expect(set).toEqual([]);
   } finally { delete g.localStorage; delete g.location; }
+});
+
+test("wiring a root again adds no click listener, so a click runs a tab or an edit once", () => {
+  const fns: any[] = [], root: any = { addEventListener: (_: string, f: any) => fns.push(f) };
+  const seen: string[] = [], toggled: unknown[] = [];
+  wireTabs(root, (id: string) => seen.push(id));
+  wireTabs(root, (id: string) => seen.push(id));
+  wireEdit(root);
+  wireEdit(root);
+  const sec = { dataset: { pane: "a" }, hidden: false };
+  const box: any = { querySelectorAll: (s: string) => (s.startsWith("button") ? [] : [sec]), classList: { toggle: (...a: unknown[]) => toggled.push(a) } };
+  const tab = { dataset: { tab: "a" }, closest: () => box }, ed = { dataset: { editor: "start" }, closest: () => box };
+  for (const f of fns) { f({ target: { closest: (s: string) => (s.includes("data-tab") ? tab : null) } }); f({ target: { closest: (s: string) => (s.includes("data-editor") ? ed : null) } }); }
+  expect(seen).toEqual(["a"]);
+  expect(toggled).toEqual([["editing", true]]);
 });
 
 test("sectionHead takes an id and a level, and card passes both through", () => {

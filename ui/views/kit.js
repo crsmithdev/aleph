@@ -299,7 +299,7 @@ export const view = {
     drawTokens(root);
     wireTabs(root);
     wireEdit(root);
-    root.addEventListener("click", (e) => { const b = e.target.closest("[data-kit-confirm]"); if (b && !arm(b, "Drop a1700? Click again")) b.textContent = "Dropped"; });
+    root.onclick = (e) => { const b = e.target.closest("[data-kit-confirm]"); if (b && !arm(b, "Drop a1700? Click again")) b.textContent = "Dropped"; };
     for (const [k, f] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="kit/${k}"]`).frame = f;
     root.querySelector("[data-theme-pick]")?.parentElement.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-theme-pick]");

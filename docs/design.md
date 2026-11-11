@@ -1206,7 +1206,7 @@ Tabs show one pane of a page at a time. A segmented control picks the pane.
 | 2 | Pane | The HTML of one tab, in a `section[data-pane]` | | the open pane shows, the others have `hidden` |
 
 - `items` is `[[id, label]]`; `panes` maps each id to its HTML. The first item is open unless `on` names another.
-- `wireTabs()` switches the panes without a redraw. A view that keeps the pick in `keep()` or in the address gives `onTab` and keeps it there.
+- `wireTabs()` switches the panes without a redraw. A view that keeps the pick in `keep()` or in the address gives `onTab` and keeps it there. Wiring a root again adds no listener: the root keeps one, and the last `onTab` is the one it calls.
 - Name each tab in one or two words, as the title of its pane.
 - Put all the panes in the page, hidden. Do not fetch a pane on a click.
 
@@ -1312,7 +1312,7 @@ An edit toggle turns a value into its editor in the same place. The reader click
 | 3 | Editor | The control for the value, in `.edit-only` | | hidden until editing |
 | 4 | Buttons | Edit (`data-editor="start"`, `.view-only`); Cancel (`data-editor="cancel"`) and Save (`primary`, a submit button), both `.edit-only` | | as a button |
 
-- `wireEdit(root)` toggles `.editing` on a click of a button with `data-editor`. Cancel resets the forms inside the container.
+- `wireEdit(root)` toggles `.editing` on a click of a button with `data-editor`. Cancel resets the forms inside the container. Wiring a root again adds no listener.
 - A control in `.edit-only` that sits apart from its form joins it with `form="id"`.
 - Save posts the form. Show a failure with `say()` and leave edit mode open. A success reloads the page, which drops edit mode.
 

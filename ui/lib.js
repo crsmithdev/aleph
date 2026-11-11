@@ -433,12 +433,15 @@ export const tabs = (label, items, panes, on = items[0]?.[0]) =>
 
 /** Switch the panes of each `tabs()` under `root` on a click; `onTab(id, el)` (optional) hears it, to keep the pick. */
 export function wireTabs(root, onTab) {
+  root._onTab = onTab;
+  if (root._tabs) return;
+  root._tabs = true;
   root.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-tab]"), box = b?.closest(".tabs");
     if (!box) return;
     box.querySelectorAll("button[data-tab]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     box.querySelectorAll(":scope > section[data-pane]").forEach((x) => { x.hidden = x.dataset.pane !== b.dataset.tab; });
-    onTab?.(b.dataset.tab, box);
+    root._onTab?.(b.dataset.tab, box);
   });
 }
 
@@ -496,6 +499,8 @@ export const editable = (shown, editor) => `<span class="view-only">${shown}</sp
 
 /** Toggle `.editing` on the `.editable` that holds a `data-editor` button: `start` turns it on, anything else (`cancel`) off and resets its forms. */
 export function wireEdit(root) {
+  if (root._edit) return;
+  root._edit = true;
   root.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-editor]"), box = b?.closest(".editable");
     if (!box) return;

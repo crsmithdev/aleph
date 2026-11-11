@@ -263,6 +263,11 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(r).toMatchObject({ values: 17, contrast: 13 });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
+    // Mount the kit again through the theme pick: one click on the confirm button arms it and does not drop it.
+    await page.ev('document.querySelector("button[data-theme-pick=light]").click()');
+    await page.when('document.documentElement.dataset.theme === "light" && document.querySelector("[data-kit-confirm]")');
+    await page.ev('document.querySelector("[data-kit-confirm]").click()');
+    expect(await page.ev('document.querySelector("[data-kit-confirm]").textContent')).toBe("Drop a1700? Click again");
     await page.go("#/jobs");
     expect(await page.ev("document.documentElement.dataset.theme ?? null")).toBeNull();
     expect(page.errors).toEqual([]);
