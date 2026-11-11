@@ -324,11 +324,6 @@ async function todoCmd(ctx: Ctx): Promise<void> {
       const e = verbs.edit(repo, id, fields, text);
       warn(e.follow);
       ctx.out(e.result);
-      // A parked issue's open job goes with it, as a dropped one's does: nothing is left to run or to land.
-      if (stat === "parked") {
-        const open = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === id)?.[0].run.name;
-        if (open) await drop(open, { reason: `issue ${repo.key}-${id} was parked`, quiet: true });
-      }
       dispatchAfterIssue(repo, e.item);
       return;
     }
