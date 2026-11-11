@@ -350,8 +350,8 @@ describe("views", () => {
       { status: "done", kind: "task", createdTime: iso("2026-10-01"), closedTime: iso("2026-10-05") },
       { status: "open", kind: "flake", createdTime: iso("2026-10-01"), closedTime: null },
     ], "month", new Date("2026-10-10T12:00"));
-    expect(c.kinds).toEqual(["task", "bug", "check", "proposal", "flake"]);
-    expect(c.p50).toEqual([4, 3, null, null, null]);
+    expect(c.kinds).toEqual(["task", "bug", "check", "flake"]);
+    expect(c.p50).toEqual([4, 3, null, null]);
     expect(c.p90[1]).toBe(5);
     expect(v.flow(rows, "week", now).ats).toHaveLength(7);
     expect(lib.day(v.flow(rows, "week", now).ats.at(-1), now)).toBe("Nov 01");

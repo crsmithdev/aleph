@@ -276,7 +276,7 @@ export function backlog(rows, win = "month", now = new Date()) {
   return { ats, counts: Object.fromEntries(PRIORITY_ORDER.map((p) => [p, ats.map((t) => open(p, t))])) };
 }
 
-const KINDS = ["task", "bug", "check", "proposal", "flake"];
+const KINDS = ["task", "bug", "check", "flake"];
 /** For each kind, the p50 and p90 from created to closed over the rows closed inside the window; null for a kind with none. `unit` is "hours" when a row counts and every value is under 2 days; else "days". */
 export function closeTimes(rows, win = "month", now = new Date()) {
   const out = { kinds: KINDS, unit: "days", p50: [], p90: [] };
