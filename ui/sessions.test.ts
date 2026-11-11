@@ -195,8 +195,33 @@ test("the Turn page uses pageHead, idLink and when", async () => {
   const h = v.renderTurn(t);
   expect(h).toContain(pageHead("Turn 2 of 2").replace("</header>", ""));
   expect(h).toContain('<a href="#/sessions/s1">s1</a> / <span>turn 2</span>');
-  expect(h).toContain(`<dt>Started</dt><dd>${when(t.start)}</dd>`);
+  expect(h).toContain(`<span class="dp-k">Started</span><span class="dp-v">${when(t.start)}</span>`);
   expect(h.match(/<h1/g)?.length).toBe(1);
+});
+
+test("the Turn and Session pages follow the detail layout: status row, KPI strip, tabs, and act links", async () => {
+  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
+  const turn = v.renderTurn(t);
+  expect(turn).toContain('class="status-row"');
+  expect(turn).toContain("dp-kpis");
+  expect(turn).toContain('<a class="act" href="http://langfuse.test/trace/t2">Open in Langfuse</a>');
+  const d = await chat("s1");
+  for (const q of [new URLSearchParams(), TABLE, new URLSearchParams("view=waterfall")]) {
+    const h = v.renderSession(d, { id: "s1" }, q);
+    expect(h).toContain('class="status-row"');
+    expect(h).toContain("dp-kpis");
+    expect(h).toContain('data-tab="waterfall"');
+    expect(h).not.toContain('class="fbar"');
+  }
+  expect(v.renderSession(d, { id: "s1" }, TABLE)).toContain('data-tab="table" aria-pressed="true"');
+});
+
+test("a waterfall with no error and no tool call shows no hand 0ms, none or No errors", () => {
+  const turn = { id: "turn-1", depth: 0, kind: "turn", name: "Turn 1", startMs: 0, endMs: 5000, durationMs: 5000, error: null };
+  const h = v.waterfall([turn], null);
+  expect(h).toContain('<dt>Wall time</dt><dd>5.0s</dd>');
+  for (const text of ["No errors", "none", "0ms", "Tool time", "Errors"]) expect(h).not.toContain(text);
+  expect(v.waterfall([turn, { id: "t", depth: 1, kind: "tool", name: "Bash", startMs: 0, endMs: 100, durationMs: 100, error: "x" }], null)).toContain('<dt>Errors</dt><dd><strong class="terr">1</strong></dd>');
 });
 
 test("the Turn page says so when a turn has no observations", async () => {
@@ -249,7 +274,7 @@ test("the chat is the default: messages in Markdown, folded tool calls, one turn
   d.turns[0].output = "line\n\n".repeat(30);
   d.turns[1].output = "**bold** and `code`";
   const h = v.renderSession(d, { id: "s1" }, new URLSearchParams());
-  expect(h).toContain('<button type="button" data-value="chat" aria-pressed="true">Chat</button>');
+  expect(h).toContain('<button type="button" data-tab="chat" aria-pressed="true">Chat</button>');
   expect(h).toContain('<header class="ph"><h1>Session s1</h1><span class="count">2</span>');
   expect(h).toContain('<details class="sysc"><summary><span class="chip">task-notification</span><span class="peek">Agent done</span>');
   expect(h).not.toContain('<div class="msg user md"><p>&lt;task');
@@ -257,17 +282,17 @@ test("the chat is the default: messages in Markdown, folded tool calls, one turn
   expect(h).toContain("<strong>bold</strong> and <code>code</code>");
   expect(h).toContain('<details class="tool"><summary><span class="tn">Bash</span><code class="ta">ls</code>');
   expect(h).toContain('<details class="tool err"><summary><span class="tn">Read</span><span class="terr">Error</span>');
-  expect(h).toContain('<p class="tline"><a href="#/sessions/s1/turns/1">Turn 1</a><span class="dot">·</span>opus<span class="dot">·</span>12.0s<span class="dot">·</span>$0.50');
-  expect(h).toContain(`<span class="time">${when(d.turns[0].start)}</span>`);
+  expect(h).toContain('<dl class="facts"><div><dt>Turn</dt><dd><a class="idl" href="#/sessions/s1/turns/1">1</a></dd></div><div><dt>Model</dt><dd>opus</dd></div><div><dt>Took</dt><dd>12.0s</dd></div><div><dt>Cost</dt><dd>$0.50');
+  expect(h).toContain(`<dt>Started</dt><dd>${when(d.turns[0].start)}</dd>`);
   expect(h).toContain('<div class="clamp">')
   expect(h).toContain('aria-expanded="false">Show more</button>');
   expect(h).toContain('<span class="of">2 of 2</span>');
-  expect(v.renderSession(d, { id: "s1" }, TABLE)).toContain('<th class="num">Turn</th><th>Prompt</th><th>Output</th>');
+  expect(v.renderSession(d, { id: "s1" }, TABLE)).toContain('<th>Turn</th><th>Prompt</th><th>Output</th>');
   expect(h).not.toContain("data-chat-from");
   expect(v.renderSession({ ...d, turns: [{ ...d.turns[0], prompt: "<script>x</script>" }] }, {}, new URLSearchParams())).not.toContain("<script>");
   expect(v.sessionView.api({ id: "a b" }, new URLSearchParams())).toBe("/api/sessions/a%20b/chat?limit=20");
   expect(v.sessionView.api({ id: "a b" }, TABLE)).toBe("/api/sessions/a%20b");
-  expect(v.renderSession(await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json(), {}, TABLE)).toContain('data-value="table" aria-pressed="true"');
+  expect(v.renderSession(await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json(), {}, TABLE)).toContain('data-tab="table" aria-pressed="true"');
 });
 
 test("generations: listed apart from tools with model, offsets, parent and cost; the waterfall draws them as rows", async () => {
@@ -296,7 +321,7 @@ test("generations: listed apart from tools with model, offsets, parent and cost;
     expect(rows.findIndex((r: any) => r.id === "p2")).toBeGreaterThan(g1);
     const h = v.waterfall(rows, "g1");
     expect(h).toContain("wf-row k-generation sel");
-    expect(h).toContain("Model time <strong>6.0s</strong>");
+    expect(h).toContain("<dt>Model time</dt><dd>6.0s</dd>");
     expect(h).not.toContain('data-select="g1"');
     const det = v.wfDetail(rows[g1]);
     expect(det).toContain("100 in, 20 out");
@@ -310,7 +335,7 @@ test("the turns, hooks and denials tables show empty() with no rows; the turns t
   const h = v.renderSession({ ...d, turns: Array.from({ length: 51 }, (_, i) => ({ ...d.turns[0], n: i + 1 })) }, {}, TABLE);
   expect(h).toContain("50 of 51");
   expect(h).toContain("Show 1 more");
-  expect(h.match(/<tr><td class="num">/g)).toHaveLength(50);
+  expect(h.match(/<tr><td><a class="idl"/g)).toHaveLength(50);
   const page = renderSessions({ window: 7, project: null, activity: { langfuse: "ok", tools: [], hooks: [], denials: { total: 0, recent: [] } }, skills: { projects: [], skills: [], unused: [] }, sessions: { projects: [], sessions: [] }, toolSessions: {} }, options(new URLSearchParams()));
   expect(page).toContain('<div class="empty"><p>No hook calls in this period.</p>');
   expect(page).toContain('<div class="empty"><p>The gate denied nothing in this period.</p>');
@@ -327,13 +352,15 @@ test("the Turns table and the Observations table head their duration column Took
   expect(obs).not.toContain("Duration");
 });
 
-test("the Turn page pages observations at 50 and gives Detail td.wide", async () => {
+test("the Turn page pages observations at 50 and gives the Name cell td.wide, indented by a token", async () => {
   const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
   const obs = Array.from({ length: 51 }, (_, i) => ({ id: `o${i}`, kind: "tool", name: `T${i}`, children: [], error: "boom" }));
   const h = v.renderTurn({ ...t, observations: obs });
   expect(h).toContain("50 of 51");
   expect(h).toContain("Show 1 more");
-  expect(h).toContain('<td class="wide">Error: boom</td>');
+  expect(h).toContain('<td>Error: boom</td>');
+  expect(h).toContain('<td class="wide" style="padding-left:calc(0 * var(--sp-14))"><strong>T0</strong>');
+  expect(h).not.toContain("14px");
   expect(h).not.toContain("<strong>T50</strong>");
 });
 

@@ -1473,10 +1473,11 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Waiting for You in `ui/views/gates.js`; Memory Health in `ui/views/memory.js`; the Status Alerts and lanes in `ui/views/now.js` | allowed |
 | Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
-| Empty, loading and error lines written inline | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/session.js`, `ui/views/ideas.js` | follow-up |
+| Empty, loading and error lines written inline | `ui/views/now.js`, `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/ideas.js` | follow-up |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
+| The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
 | Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/speed.js`, `ui/views/session.js` | allowed |
 | A table written by hand | `ui/views/memory.js` | follow-up |
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |

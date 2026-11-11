@@ -1,12 +1,12 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { clamp, count, fold, goQuery, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, linkButton, shortModel, tag, tone, when } from "../lib.js";
+import { clamp, count, fold, goQuery, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, heads, idLink, md, pager, pageHead, linkButton, shortModel, statusRow, tabs, tag, tone, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
-import { detailPanel } from "../timeline.js";
+import { detailPanel, renderKpis } from "../timeline.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
-const langfuse = (base, traceId) => (base && traceId ? `<a href="${esc(base)}/trace/${esc(traceId)}">Open in Langfuse</a>` : "");
+const langfuse = (base, traceId) => (base && traceId ? linkButton("Open in Langfuse", `${base}/trace/${traceId}`) : "");
 /** One line of `s`, cut at 60 characters with an ellipsis. */
 const line = (s) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > 60 ? `${t.slice(0, 59)}…` : t; };
 const href = (path) => `#${path}`;
@@ -21,15 +21,14 @@ function turnTable(d, limit = TURN_PAGE) {
   if (!d.turns.length) return empty("No turn in this session.", "Turns appear when the hooks send traces to Langfuse.");
   // Columns: turn (id), prompt (title), output, model, numbers, time.
   const rows = d.turns.slice(0, limit).map((t) =>
-    `<tr><td class="num">${idLink(String(t.n), href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}</td>` +
+    `<tr><td>${idLink(String(t.n), href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}</td>` +
     `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td title="${esc(t.output)}">${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${count(t.tools)}</td>` +
     `<td class="num">${esc(sdur(t.seconds))}</td><td class="num">${costHtml(t.cost, t.wk)}</td><td class="time">${esc(when(t.start))}</td></tr>`).join("");
-  return dataTable(heads(["Turn", "Prompt", "Output", "Model", "Tools", "Took", "Cost", "Started"], ["Turn", "Tools", "Took", "Cost", "Started"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
+  return dataTable(heads(["Turn", "Prompt", "Output", "Model", "Tools", "Took", "Cost", "Started"], ["Tools", "Took", "Cost", "Started"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
 }
 
 const CHAT_PAGE = 20;
 const CLIP_LINES = 20, CLIP_CHARS = 1600, TOOLS_SHOWN = 5, TOOLS_FOLD = 12;
-const INDENT_STEP = 14;
 
 /** Long text shows its first lines under a fade, with the clamp button. */
 const clip = (text, html) => (text.length > CLIP_CHARS || text.split("\n").length > CLIP_LINES ? clamp(html) : html);
@@ -84,10 +83,10 @@ function work(t) {
 /** One turn: its muted line (linked to the turn page), the system chips, the prompt, the tool calls, the reply. */
 export function chatTurn(id, t) {
   const { system, text } = systemParts(t.prompt);
-  const meta = [`<a href="${esc(href(`/sessions/${encodeURIComponent(id)}/turns/${t.n}`))}">Turn ${t.n}</a>`,
-    esc(shortModel(t.model)), esc(sdur(t.seconds)), costHtml(t.cost, t.wk), `<span class="time">${esc(when(t.start))}</span>`].filter(Boolean).join('<span class="dot">·</span>');
+  const meta = facts([["Turn", idLink(String(t.n), href(`/sessions/${encodeURIComponent(id)}/turns/${t.n}`))],
+    ["Model", esc(shortModel(t.model))], ["Took", esc(sdur(t.seconds))], ["Cost", costHtml(t.cost, t.wk)], ["Started", esc(when(t.start))]]);
   const out = String(t.output ?? "").trim();
-  return `<section class="turn" id="turn-${t.n}"><p class="tline">${meta}</p>` +
+  return `<section class="turn" id="turn-${t.n}">${meta}` +
     (system.length ? `<div class="sys">${system.map(sysChip).join("")}</div>` : "") +
     (text ? `<div class="msg user md">${clip(text, md(text))}</div>` : "") +
     work(t) +
@@ -136,9 +135,10 @@ function wfSummary(rows) {
   const modelMs = calls.filter((r) => r.kind === "generation").reduce((n, r) => n + (r.durationMs ?? 0), 0);
   const longest = calls.filter((r) => r.kind !== "generation").sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0)).slice(0, 3).filter((r) => r.durationMs);
   const errors = calls.filter((r) => r.error).length;
-  return `<p class="wf-sum">Wall time <strong>${esc(dur(Math.round(wall)) || "0ms")}</strong><span class="dot">·</span>Tool time <strong>${esc(dur(Math.round(toolMs)) || "0ms")}</strong>` +
-    `<span class="dot">·</span>Model time <strong>${esc(dur(Math.round(modelMs)) || "0ms")}</strong><span class="dot">·</span>Longest ${longest.length ? longest.map((r) => `<button class="link" type="button" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</button>`).join(", ") : "none"}` +
-    `<span class="dot">·</span>${errors ? `<strong class="terr">${errors} error${errors === 1 ? "" : "s"}</strong>` : "No errors"}</p>`;
+  const took = (ms) => (ms ? esc(dur(Math.round(ms))) : "");
+  return facts([["Wall time", took(wall)], ["Tool time", took(toolMs)], ["Model time", took(modelMs)],
+    ["Longest", longest.map((r) => `<button class="link" type="button" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</button>`).join(", ")],
+    ["Errors", errors ? `<strong class="terr">${errors}</strong>` : ""]]);
 }
 
 function wfRow(r, max, sel) {
@@ -146,7 +146,7 @@ function wfRow(r, max, sel) {
   const width = Math.max(0.2, ((r.endMs - r.startMs) / max) * 100);
   const label = r.kind === "turn" ? `<span class="tn">${esc(r.name)}</span>${r.args ? `<span class="ta">${esc(r.args)}</span>` : ""}` : `<span class="tn">${esc(r.name)}</span>${r.args ? `<code class="ta">${esc(r.args)}</code>` : ""}`;
   return `<div class="wf-row k-${r.kind}${r.error ? " err" : ""}${r.id === sel ? " sel" : ""}" role="row" tabindex="0" data-id="${esc(r.id)}" aria-selected="${r.id === sel}">` +
-    `<div class="wf-l" style="padding-left:${r.depth * INDENT_STEP}px" title="${esc(r.name + " " + (r.args ?? ""))}">${label}</div>` +
+    `<div class="wf-l" style="padding-left:calc(${r.depth} * var(--sp-14))" title="${esc(r.name + " " + (r.args ?? ""))}">${label}</div>` +
     `<div class="wf-r"><span class="wf-bar" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%"></span><span class="wf-d">${esc(dur(r.durationMs))}</span></div></div>`;
 }
 
@@ -176,10 +176,13 @@ export function renderSession(d, _params, query = new URLSearchParams()) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const table = isTable(query), wf = isWaterfall(query);
   const aside = [sessionLink(d), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
-  return `<div class="page">${crumb("#/sessions", [["sessions", "#/sessions"], [d.project], [d.id.slice(0, 8)]])}${pageHead(`Session ${d.id.slice(0, 8)}`, { count: table ? d.turns.length : d.total, aside })}` +
-    `${d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : ""}` +
-    filterBar([{ label: "View", bare: true, name: "view", options: [{ value: "chat", label: "Chat" }, { value: "table", label: "Table" }, { value: "waterfall", label: "Waterfall" }], value: table ? "table" : wf ? "waterfall" : "chat" }]) +
-    (table ? `<div id="turn-table">${turnTable(d)}</div>` : wf ? `<div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}` : chatBody(d)) + `</div>`;
+  const view = table ? "table" : wf ? "waterfall" : "chat";
+  // Only the open pane is drawn: the table reads the whole session, the chat and the waterfall page it, so a tab click reloads.
+  const pane = table ? `<div id="turn-table">${turnTable(d)}</div>` : wf ? `<div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}` : chatBody(d);
+  return `<div class="page dp-page">${crumb("#/sessions", [["sessions", "#/sessions"], [d.project], [d.id.slice(0, 8)]])}${pageHead(`Session ${d.id.slice(0, 8)}`, { count: table ? d.turns.length : d.total, aside })}` +
+    statusRow("", "", chips([d.project, ...(d.taskTypes ?? [])])) +
+    renderKpis([{ k: "Turns", v: esc(count(d.total ?? d.turns.length)) }, { k: "Started", v: esc(when(d.turns[0]?.start) || "–") }]) +
+    tabs("View", [["chat", "Chat"], ["table", "Table"], ["waterfall", "Waterfall"]], { [view]: pane }, view) + `</div>`;
 }
 
 // The toggle writes the hash; "Show all" uncuts a long message; "Show 20 more" appends the next turns in place.
@@ -207,9 +210,9 @@ function mountSession(root, d, query = new URLSearchParams()) {
       const row = e.target.closest?.(".wf-row");
       if (row) return select(row.dataset.id);
     }
-    const seg = e.target.closest?.(".fbar .seg button");
+    const seg = e.target.closest?.(".tabs > .seg button");
     if (seg) {
-      goQuery({ view: seg.dataset.value === "chat" ? "" : seg.dataset.value });
+      goQuery({ view: seg.dataset.tab === "chat" ? "" : seg.dataset.tab });
       return;
     }
     const more = e.target.closest?.("#turn-table button[data-more]");
@@ -238,15 +241,15 @@ function mountSession(root, d, query = new URLSearchParams()) {
 // One row per observation, children after their parent and indented by depth; input and output fold under the name.
 function obsRows(o, depth) {
   const detail = [
-    o.recall ? `candidates ${esc(o.recall.candidates ?? "–")}, asked ${esc(o.recall.asked ?? "–")}, kept ${esc(o.recall.kept ?? "–")}` : "",
+    o.recall ? `candidates ${esc(count(o.recall.candidates))}, asked ${esc(count(o.recall.asked))}, kept ${esc(count(o.recall.kept))}` : "",
     o.verify ? `${esc(o.verify.kind ?? "")} ${esc(o.verify.verdict ?? "")}` : "",
     o.model ? esc(shortModel(o.model)) : "",
     o.error ? `Error: ${esc(o.error)}` : "",
   ].filter(Boolean).join("; ");
   const ioFold = (label, text) => (text ? fold(label, `<pre>${esc(text)}</pre>`) : "");
   return `<tr><td>${tag(o.kind, tone(o.error ? "failed" : o.kind))}</td>` +
-    `<td style="padding-left:${depth * INDENT_STEP}px"><strong>${esc(o.name)}</strong>${ioFold("Input", o.input)}${ioFold("Output", o.output)}</td>` +
-    `<td class="wide">${detail}</td><td class="num">${esc(sdur(o.seconds))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
+    `<td class="wide" style="padding-left:calc(${depth} * var(--sp-14))"><strong>${esc(o.name)}</strong>${ioFold("Input", o.input)}${ioFold("Output", o.output)}</td>` +
+    `<td>${detail}</td><td class="num">${esc(sdur(o.seconds))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
 }
 
 export function renderTurn(d) {
@@ -255,7 +258,8 @@ export function renderTurn(d) {
   const nav = (n, label) => (n >= 1 && n <= d.total ? linkButton(label, href(`/sessions/${sid}/turns/${n}`)) : "");
   return `<div class="page dp-page">${crumb(`#/sessions/${sid}`, [["sessions", "#/sessions"], [d.id.slice(0, 8), `#/sessions/${sid}`], [`turn ${d.n}`]])}` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
-    facts([["Started", esc(when(d.start))], ["Cost", costHtml(d.cost, d.wk)], ["Took", esc(sdur(d.seconds))]]) +
+    statusRow("", "", chips([d.project])) +
+    renderKpis([{ k: "Started", v: esc(when(d.start)) }, { k: "Cost", v: costHtml(d.cost, d.wk) }, { k: "Took", v: esc(sdur(d.seconds)) }]) +
     (d.prompt ? detailPanel("Prompt", "", `<pre>${esc(d.prompt)}</pre>`) : "") + (d.output ? detailPanel("Output", "", `<pre>${esc(d.output)}</pre>`) : "") +
     detailPanel("Observations", count(d.observations.length), `<div id="obs-table">${obsTable(d)}</div>`) + `</div>`;
 }
