@@ -184,7 +184,7 @@ function wireHeraldJump(root) {
 /** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */
 function renderStatusLine(s, stale = false, w = "day") {
   const bar = scope().bar({ value: w, after: renderControls(s) });
-  return `<header class="ph shead"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}<div class="aside">${bar}</div></header>`;
+  return pageHead("", { head: "shead", after: `<span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}`, aside: bar });
 }
 
 /** The status sentence of `verdict`, each part a link to its card but the plain ones. */

@@ -176,6 +176,7 @@ test("idLink and pageHead", () => {
   expect(pageHead("Jobs")).toBe('<header class="ph"><h1>Jobs</h1></header>');
   expect(pageHead("T", { cls: "view-only", after: "<i></i>", aside: "a" })).toBe('<header class="ph"><h1 class="view-only">T</h1><i></i><div class="aside">a</div></header>');
   expect(pageHead("Jobs", { count: 0 })).toContain('<span class="count">0</span>');
+  expect(pageHead("", { head: "shead", after: "<i></i>", aside: "a" })).toBe('<header class="ph shead"><i></i><div class="aside">a</div></header>');
 });
 
 test("statusRow puts the state, the priority, then the labels in a status row", () => {

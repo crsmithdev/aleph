@@ -5,6 +5,8 @@ import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
 import { held, job, state } from "./fixtures/status-state.ts";
 import { asksOf, issue, withFactory } from "./test-now.ts";
+// @ts-ignore lib.js is plain JS, shared with the page
+import { pageHead } from "./lib.js";
 import { labelOf, verdict } from "../lib/status-words.ts";
 
 const calmState = { ...withFactory({}), asks: [], stuck: [] };
@@ -114,6 +116,24 @@ test("the page has no banner and the status line holds the alert", () => {
   const page = view.view.render(withFactory({ health: [mainRed] }));
   expect(page).not.toContain('class="banner"');
   expect(page).toMatch(/<header class="ph shead">[^]*the build is failing on main/);
+});
+
+test("the page has one head, built by pageHead: the time, the status sentence, then the window control with Pause; outOfDate redraws its sentence", () => {
+  let page = view.view.render(state, {}, new URLSearchParams());
+  expect(page.match(/<header class="ph/g)?.length).toBe(1);
+  const head = page.match(/<header class="ph[^]*?<\/header>/)![0];
+  expect(head.indexOf('class="asof"')).toBeLessThan(head.indexOf('class="say'));
+  expect(head.indexOf('class="say')).toBeLessThan(head.indexOf('data-act="pause"'));
+  expect(head).not.toContain("<h1");
+  const bar = head.match(/<div class="aside">([^]*)<\/div><\/header>/)![1];
+  expect(head).toBe(pageHead("", { head: "shead", after: head.match(/<span class="asof">[^]*?<\/span>/)![0] + view.renderLede(state), aside: bar }));
+  // A root that holds the page: the selector finds the sentence in the head, and setting its outerHTML rewrites the page.
+  const say = view.renderLede(state);
+  const root = { querySelector: (q: string) => (q === ".shead .say" && /<header class="ph shead">/.test(page) ? { set outerHTML(h: string) { page = page.replace(say, h); } } : null) };
+  view.view.outOfDate(root, true);
+  expect(view.renderLede(state, true)).not.toBe(say);
+  expect(page.match(/<header class="ph[^]*?<\/header>/)![0]).toContain(view.renderLede(state, true));
+  view.view.outOfDate(root, false);
 });
 
 test("the status line says your attention is needed when the Issues section has an item", () => {

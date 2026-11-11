@@ -1239,7 +1239,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Charts outside the chart panel: the Agent Time bar, the recall histogram, the session waterfall | `ui/views/speed.js`, `ui/views/memory.js`, `ui/views/session.js` | follow-up |
 | One metric card written by hand (Backends) | `ui/views/factory-agents.js` | follow-up |
 | A table written by hand | `ui/views/memory.js` | follow-up |
-| The Status page head written by hand | `ui/views/now.js` | follow-up |
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |

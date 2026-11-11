@@ -324,9 +324,9 @@ export const tone = (state) => TONES[state] ?? "quiet";
 // The CSS for these is in app.css (.ph, table.tbl, .idl, .chips, .fbar, .seg, .pager).
 // Column order for every table: time, id or name, title, state badge, project, labels, numbers.
 
-/** The page header: the serif title, a muted count, and an optional right-hand aside (`aside` is HTML). */
-export const pageHead = (title, { count, aside = "", cls = "", after = "" } = {}) =>
-  `<header class="ph"><h1${cls ? ` class="${cls}"` : ""}>${esc(title)}</h1>${after}${count != null && count !== "" ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<div class="aside">${aside}</div>` : ""}</header>`;
+/** The page header: the serif title (none when `title` is empty), a muted count, and an optional right-hand aside (`aside` is HTML); `head` adds a class to the header. */
+export const pageHead = (title, { count, aside = "", cls = "", after = "", head = "" } = {}) =>
+  `<header class="ph${head ? ` ${head}` : ""}">${title ? `<h1${cls ? ` class="${cls}"` : ""}>${esc(title)}</h1>` : ""}${after}${count != null && count !== "" ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<div class="aside">${aside}</div>` : ""}</header>`;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** A table's time, on one line: "10/28 08:45" for this year, "2025-12-03" for another; "" for a bad date. */
