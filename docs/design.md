@@ -236,7 +236,7 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 | Duration from milliseconds | 850ms, 1.2s | `durMs(ms)` | empty |
 | Duration between two times | 4m 05s | `span(from, to)` | empty |
 | Cost | $1.25, <$0.01 | `money()` | `$0.00` |
-| Weekly share | ≈1.4% wk | `wkText()` | empty |
+| Weekly share | ≈1% wk, ≈0.4% wk | `wkText()` | empty |
 | Percent | 12%, 0.4%, <0.1% | `pct(0 to 100)` | `–` |
 | Count | 12,345 | `count()` | `–` |
 | Id | a52 | `idLink()`, `repoIdLink()`; see [Naming](naming.md) | none |

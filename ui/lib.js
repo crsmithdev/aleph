@@ -23,7 +23,7 @@ export const hours = (h) => (h == null || Number.isNaN(h) ? "–" : `${h.toFixed
 /** A byte count as "512B", "1.5KiB" or "2.0MiB". */
 export const bytes = (n) => (n < 1024 ? `${n}B` : n < 1048576 ? `${(n / 1024).toFixed(1)}KiB` : `${(n / 1048576).toFixed(1)}MiB`);
 
-/** `≈1.4% wk` for a job's or session's estimated share of the weekly plan limit; "" without one. */
+/** `≈1% wk` or `≈0.4% wk` for a job's or session's estimated share of the weekly plan limit; "" without one. */
 /** A percent (0 to 100) as text: whole from 1%, one decimal from 0.05 to 1%, "<0.1%" above 0 and below 0.05, "–" for none. */
 export const pct = (v) => (v == null || Number.isNaN(v) ? "–" : v > 0 && v < 0.05 ? "<0.1%" : `${v < 1 ? v.toFixed(1) : Math.round(v)}%`);
 export const wkText = (wk) => (wk ? `\u2248${pct(wk.pct)} wk` : "");

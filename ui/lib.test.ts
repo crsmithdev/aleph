@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -183,6 +183,13 @@ test("when gives mm/dd hh:mm this year, YYYY-MM-DD another year, and '' for a ba
   expect(when(new Date(2026, 9, 28, 14, 5), now)).toBe("10/28 14:05");
   expect(when(new Date(2025, 11, 3, 14, 5), now)).toBe("2025-12-03");
   expect(when("x")).toBe("");
+});
+
+test("wkText follows the pct rule, and the Values table of docs/design.md lists those examples", async () => {
+  const got = [1.4, 0.4].map((p) => wkText({ pct: p }));
+  expect(got).toEqual(["≈1% wk", "≈0.4% wk"]);
+  const row = (await Bun.file(new URL("../docs/design.md", import.meta.url)).text()).split("\n").find((l) => l.startsWith("| Weekly share |"))!;
+  expect(row.split("|")[2].trim().split(", ")).toEqual(got);
 });
 
 test("clock gives hh:mm, and '' when it gets no time", () => {

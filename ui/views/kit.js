@@ -120,7 +120,7 @@ const AGO = new Date(T0 - 3 * 36e5);
 const VALUES = [
   ["Absolute time", "when()", when, [AGO]], ["Day", "day()", day, [AGO]], ["Axis hour", "hourLabel()", hourLabel, [new Date(2026, 10, 10, 4), new Date(2026, 10, 10, 13, 36)], "none"],
   ["Clock", "clock()", clock, [AGO.toISOString()]], ["Duration from seconds", "dur()", dur, [43, 245, 3720, 187200]], ["Duration from milliseconds", "durMs()", durMs, [850, 1200]],
-  ["Duration between two times", "span()", (a) => span(a, new Date(T0).toISOString()), [AGO.toISOString()]], ["Cost", "money()", money, [1.25, 0.003]], ["Weekly share", "wkText()", wkText, [{ pct: 1.4 }]],
+  ["Duration between two times", "span()", (a) => span(a, new Date(T0).toISOString()), [AGO.toISOString()]], ["Cost", "money()", money, [1.25, 0.003]], ["Weekly share", "wkText()", wkText, [{ pct: 1.4 }, { pct: 0.4 }]],
   ["Percent", "pct()", pct, [12, 0.4, 0.03]], ["Count", "count()", count, [12345]], ["Id", "idLink()", (x) => idLink(x, "#/kit"), ["a52"], "none"],
   ["Model", "shortModel()", shortModel, ["claude-opus-5-5"]], ["Bytes", "bytes()", bytes, [1536], "none"], ["Mean", "mean()", mean, [2.44]],
   ["Hours", "hours()", hours, [3.2, 12]], ["Days", "days()", days, [12]],
