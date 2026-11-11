@@ -211,7 +211,7 @@ A current item (the sidebar link, the contents entry) has an inset 2px `--ink` b
 | Rule | Value |
 |---|---|
 | Breakpoints | 720px and 1100px, literal, as `@media` takes no tokens |
-| Container widths | four `@container` widths, literal: 760px, 560px (`pipeline`), 480px (`rail-main`) and 420px (`.tile`, `.lane-card`, `.issue-row`) |
+| Container widths | three `@container` widths, literal: 560px (`pipeline`), 480px (`rail-main`) and 420px (`.tile`, `.lane-card`, `.issue-row`) |
 | Motion | `.15s ease-out` on borders and backgrounds; no animation; ECharts `animation: false` |
 
 ### The kit bridge
@@ -879,7 +879,7 @@ A lane is a column of item cards under a head with a count.
 | 2 | Cards | The item cards | | one column, `--sp-12` apart |
 | 3 | Empty line | The line when the lane has no items | | `--fs-sm`, `--muted` |
 
-- Put three lanes side by side in `.lanes`, `--sp-20` apart. In `.rail-main`, the lanes go to two columns when it is narrower than 760px, and to one under 480px (container queries). Elsewhere they stay at three.
+- Put Running and Queued side by side in `.lanes-top`, `--sp-12` apart, and Done under them, `--sp-16` below. The top row goes to one column when `.rail-main` is narrower than 480px (container query).
 - When a lane has a cap, its count is `<shown> of <cap>`.
 - Write the empty line as one sentence: `Nothing is running.`
 

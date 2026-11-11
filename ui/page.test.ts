@@ -47,3 +47,12 @@ test("the style sheet defines the dot and measure tokens and draws no circle wit
   for (const [name, val] of Object.entries({ "dot-s": "6px", "dot-m": "8px", "dot-l": "12px", measure: "76ch" })) expect(root).toContain(`--${name}: ${val};`);
   expect(css).not.toMatch(/border-radius:\s*50%/);
 });
+
+test("the Container widths row of the design doc lists exactly the @container widths of the style sheet", () => {
+  const css = readFileSync(new URL("./app.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const row = readFileSync(new URL("../docs/design.md", import.meta.url), "utf8").split("\n").find((l) => l.startsWith("| Container widths |"))!;
+  const widths = (s: string) => [...new Set([...s.matchAll(/(\d+)px/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
+  const queries = [...css.matchAll(/@container[^{]*\(\s*(?:max|min)-width:\s*(\d+)px/g)].map((m) => `${m[1]}px`).join(" ");
+  expect(widths(row)).toEqual(widths(queries));
+  expect(widths(row)).toEqual([420, 480, 560]);
+});
