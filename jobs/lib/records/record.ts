@@ -209,10 +209,10 @@ export function write(r: JobRecord): void {
 /** Run id to record key, for the runs this process has seen. */
 const keys = new Map<string, string>();
 
-/** The record key of run `id`: from this process's map, else from a scan of the records. */
+/** The record key of run `id`: from this process's map when that record still holds the run, else from a scan of the records. */
 function keyOfId(id: string): string | undefined {
   const known = keys.get(id);
-  if (known) return known;
+  if (known && read(known)?.runs.some((x) => x.id === id)) return known;
   const needle = JSON.stringify({ id }).slice(1, -1).replace(":", ": ");
   for (const dir of folders(false)) {
     if (!existsSync(dir)) continue;

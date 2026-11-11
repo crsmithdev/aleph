@@ -293,3 +293,12 @@ test("an archived record still reads in all and allRunRecords, and record.putRun
   expect(readdirSync(dir).filter((f) => f.endsWith(".json"))).toEqual(["aleph-7.json"]);
   expect(record.read("aleph-7")!.runs.map((x) => x.id)).toEqual(["y1", "y2"]);
 });
+
+test("a run that another process moved to a different record leaves no copy behind when it moves again", () => {
+  record.putRun("m1", run({ on: "aleph-41", name: "aleph-41" }));
+  // Another process moves the run: this process's key map still says aleph-41.
+  record.update("aleph-41", (r) => { r.runs = []; });
+  record.update("aleph-42", (r) => { r.runs.push({ ...run({ on: "aleph-42", name: "aleph-42" }), id: "m1" } as record.RunRecord); });
+  record.putRun("m1", run({ on: "aleph-43", name: "aleph-43" }));
+  expect(record.allRunRecords().filter((x) => x.id === "m1").map((x) => x.on)).toEqual(["aleph-43"]);
+});
