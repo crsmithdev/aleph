@@ -600,6 +600,21 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(page.errors).toEqual([]);
   }, 30_000);
 
+  test("the Issue page's contents link each panel it shows, and a click keeps the route", async () => {
+    await page.width(1400);
+    await page.go("#/issues/demo/21");
+    await page.when('document.querySelector(".issue-page .toc a")');
+    expect(await page.ev(`(() => { const links = [...document.querySelectorAll(".toc a")];
+      return { ok: links.every((a) => document.getElementById(a.getAttribute("href").slice(1))?.offsetParent), labels: links.map((a) => a.textContent) }; })()`))
+      .toMatchObject({ ok: true, labels: expect.arrayContaining(["Media", "Notes"]) });
+    await page.ev('document.querySelector(".toc a[href=\'#issue-notes\']").click()');
+    // A short page cannot scroll the last panel into the band wireToc() marks, so this checks the scroll, not aria-current.
+    await page.when('document.getElementById("issue-notes").getBoundingClientRect().top < innerHeight && scrollY > 0');
+    expect(await hash()).toBe("#/issues/demo/21");
+    expect(await page.ev('getComputedStyle(document.querySelector(".toc")).position')).toBe("sticky");
+    expect(page.errors).toEqual([]);
+  }, 30_000);
+
   test("Log out shows only behind the password gate", async () => {
     expect(await page.ev('document.querySelector("#logout").hidden')).toBe(true);
   }, 30_000);

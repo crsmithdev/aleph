@@ -162,8 +162,8 @@ export function renderTimeline(segments) {
 /** The KPI strip: `[{ k, v, sub, text? }]`, where `v` and `sub` are HTML; a `text` value is words, set smaller than a figure. */
 export const renderKpis = (items) => `<section class="dp-panel dp-kpis" aria-label="Summary">${items.map((i) => `<div class="dp-kpi"><span class="dp-k">${esc(i.k)}</span><span class="dp-v${i.text ? " text" : ""}">${i.v}</span>${i.sub ? `<span class="dp-sub">${i.sub}</span>` : ""}</div>`).join("")}</section>`;
 
-/** A Detail panel, open: its title, an aside (HTML) beside it, and its body. */
-export const detailPanel = (title, aside, body) => `<details class="dp-panel dp-fold" open><summary><span>${esc(title)}</span>${aside ? `<span class="dp-aside">${aside}</span>` : ""}</summary><div class="dp-body">${body}</div></details>`;
+/** A Detail panel, open: its title, an aside (HTML) beside it, its body, and an `id` for a contents link. */
+export const detailPanel = (title, aside, body, id = "") => `<details${id ? ` id="${esc(id)}"` : ""} class="dp-panel dp-fold" open><summary><span>${esc(title)}</span>${aside ? `<span class="dp-aside">${aside}</span>` : ""}</summary><div class="dp-body">${body}</div></details>`;
 
 /** A panel with a heading: the Spec, the Result, the Description. `body` is HTML; `aside` is HTML. */
 export const panel = (id, title, body, aside = "", cls = "") => `<section class="dp-panel dp-prose${cls ? ` ${cls}` : ""}" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;

@@ -985,6 +985,8 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 /* The Issue page and the Job page (ui/timeline.js): panels, the KPI strip, the Timeline and the Detail panels. */
 .dp-page { display: flex; flex-direction: column; gap: var(--sp-16); }
 .dp-page > .ph, .dp-page > .status-row, .dp-page > .crumb, .dp-page > section, .dp-page section.dp-panel { margin: 0; }
+.dp-page .toc-body { display: flex; flex-direction: column; gap: var(--sp-16); }
+.dp-page .toc-body > section { margin: 0; }
 .dp-page > .ph h1 { flex: 1 1 32rem; min-width: 0; }
 .dp-panel { background: var(--surface); border: 1px solid transparent; box-shadow: var(--card-lift); border-radius: var(--r-card); min-width: 0; }
 .dp-ph { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-6) var(--sp-12); padding: var(--sp-14) var(--sp-18) var(--sp-4); }

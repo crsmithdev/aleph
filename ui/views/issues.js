@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -631,11 +631,14 @@ export function renderIssue(d) {
       return row([`<td>${shaLink(c.hash, c.commitUrl)}</td>`, cell(c.subject, { wide: true }), ...(parts ? [`<td>${c.part ? idLink(shortText(c.part), issueHref(c.part)) : ""}</td>`] : []), `<td class="time">${esc(when(c.date))}</td>`]);
     }))
     : "";
-  const segments = issueSegments(d);
-  return `<div class="page dp-page issue-page editable">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askCard(d.ask) : "") +
-    issueKpis(d, segments) + renderTimeline(segments) +
+  const segments = issueSegments(d), timeline = renderTimeline(segments);
+  // An entry for each panel the view shows: an empty Description or Spec shows only while editing.
+  const contents = [timeline && ["h-timeline", "Timeline"], d.request && ["h-request", "Description"], d.spec && ["h-spec", "Spec"],
+    ["issue-media", "Media"], ["issue-notes", "Notes"], commits && ["issue-commits", "Commits"]].filter(Boolean);
+  return `<div class="page dp-page issue-page editable">${crumb(inventory, place)}` + issueHead(d, ref) + pills + toc(contents, fields + blocked + (d.ask ? askCard(d.ask) : "") +
+    issueKpis(d, segments) + timeline +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
-    `<div class="dp-detail">${detailPanel("Media", esc(count((d.media ?? []).length)), renderMedia(d, ref))}${detailPanel("Notes", esc(count(d.notes.length)), notes)}${commits && detailPanel("Commits", esc(count(d.commits.length)), commits)}</div></div>`;
+    `<div class="dp-detail">${detailPanel("Media", esc(count((d.media ?? []).length)), renderMedia(d, ref), "issue-media")}${detailPanel("Notes", esc(count(d.notes.length)), notes, "issue-notes")}${commits && detailPanel("Commits", esc(count(d.commits.length)), commits, "issue-commits")}</div>`) + `</div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
@@ -722,6 +725,6 @@ export const issueView = {
   api: (params) => issueApi(params.repo, params.n),
   render: renderIssue,
   // On the page itself, not the shell's container, which outlives the page.
-  mount: (root) => root.querySelector(".issue-page") && wireEdit(root.querySelector(".issue-page")),
+  mount: (root) => { const page = root.querySelector(".issue-page"); if (page) { wireEdit(page); wireToc(root); } },
 };
 export const views = [view, issueView];
