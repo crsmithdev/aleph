@@ -185,6 +185,11 @@ test("when gives mm/dd hh:mm this year, YYYY-MM-DD another year, and '' for a ba
   expect(when("x")).toBe("");
 });
 
+test("clock gives hh:mm, and '' when it gets no time", () => {
+  expect([null, undefined, "", "x"].map(clock)).toEqual(["", "", "", ""]);
+  expect(clock(new Date(2026, 9, 28, 14, 5))).toBe("14:05");
+});
+
 test("pct shows whole percents, one decimal under 1%, <0.1% under 0.05 and – for none", () => {
   expect([null, undefined, NaN].map(pct)).toEqual(["–", "–", "–"]);
   expect([0.02, 0.5, 30, 2.5].map(pct)).toEqual(["<0.1%", "0.5%", "30%", "3%"]);

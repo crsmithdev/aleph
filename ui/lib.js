@@ -8,10 +8,11 @@ export function esc(s) {
 }
 
 const pad = (n) => String(n).padStart(2, "0");
-/** "14:05" in local time, or "" for a bad date. */
+/** "14:05" in local time, or "" for no time or a bad date. */
 export const clock = (iso) => {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (iso == null || iso === "" || Number.isNaN(d.getTime())) return "";
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 export const count = (n) => (n == null || Number.isNaN(Number(n)) ? "–" : Number(n).toLocaleString("en-US"));
