@@ -1556,7 +1556,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Waiting for You in `ui/views/gates.js`; Memory Health in `ui/views/memory.js`; the Status Alerts and lanes in `ui/views/now.js` | allowed |
 | Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
-| Empty, loading and error lines written inline | `ui/views/gates.js`, `ui/views/memory.js`, `ui/views/ideas.js` | follow-up |
+| Empty, loading and error lines written inline | `ui/views/gates.js`, `ui/views/memory.js` | follow-up |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
 | Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`), the feed's rows (`div.event-row`, `div.event-brief`) and the lane card's face (`article.lane-card`) | `renderPipeline()`, `feedRow()`, `briefRow()`, `laneCard()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
@@ -1567,6 +1567,8 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | An item card's meta row clips its badges to one letter in a narrow lane | `ui/app.css` | review on `#/kit` |
 | Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
+| A lens result is a hand `iframe.lens-frame`, sandboxed: no helper for a result page; the Log pane's lines are a hand `ul` | `renderIdea()` in `ui/views/ideas.js` | follow-up |
+| The Ideas Updated time is a date from `git log --date=short`, so `when()` shows it as `00:00` | `renderIdeas()` in `ui/views/ideas.js` | follow-up |
 | Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/cards.js` | follow-up |
 | A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |

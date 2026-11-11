@@ -6,7 +6,9 @@ import { run } from "../jobs/commands.ts";
 import { add, drop, note } from "../ideas/ideas.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
-import { error, loadingLine } from "./lib.js";
+import { chips, count, empty, error, filterBar, loadingLine, repoIdLink, searchBox, statusRow, when } from "./lib.js";
+// @ts-ignore
+import { renderKpis } from "./timeline.js";
 // @ts-ignore
 import { ideaView, renderIdea, renderIdeas } from "./views/ideas.js";
 
@@ -92,10 +94,49 @@ test("a .md lens result loads behind loadingLine(), and a failed fetch puts erro
   expect(el.innerHTML).toBe(error("/x.md answered 404"));
 });
 
-test("renderIdeas puts the Idea title first, with its link in each row's first cell", () => {
-  const row = (slug: string, title: string) => ({ slug, title, last: "2026-01-02", status: "exploring", target: "aleph", lenses: [], questions: 1, spent: 0.5 });
+const row = (slug: string, title: string) => ({ slug, title, last: "2026-01-02", status: "exploring", target: "aleph", lenses: [], questions: 1234, spent: 0.5 });
+
+test("renderIdeas rows are rowlink rows with the link in the wide cell, Updated through when() and the count through count()", () => {
   const h = renderIdeas([row("alpha", "Alpha"), row("beta", "Beta")], "exploring");
-  expect(h).toContain("<tr><th>Idea</th><th>Status</th><th>Target</th><th>Lenses</th><th class=\"num\">Open Questions</th><th class=\"num\">Spent</th><th class=\"num\">Last Change</th></tr>");
-  expect(h).toContain('<tr><td class="wide" title="Alpha"><a href="#/ideas/alpha">Alpha</a></td><td>');
-  expect(h).toContain('<tr><td class="wide" title="Beta"><a href="#/ideas/beta">Beta</a></td><td>');
+  expect(h).toContain("<tr><th>Idea</th><th>Status</th><th>Target</th><th>Lenses</th><th class=\"num\">Open Questions</th><th class=\"num\">Spent</th><th class=\"num\">Updated</th></tr>");
+  expect(h).toContain('<tr class="rowlink"><td class="wide" title="Alpha"><a href="#/ideas/alpha">Alpha</a></td><td>');
+  expect(h).toContain('<tr class="rowlink"><td class="wide" title="Beta"><a href="#/ideas/beta">Beta</a></td><td>');
+  expect(h).toContain(`<td class="num">${count(1234)}</td>`);
+  expect(h).toContain(`<td class="time">${when("2026-01-02T00:00")}</td>`);
+});
+
+test("renderIdeas puts searchBox() before the filter bar, both inside the Ideas card, and empty() when no row shows", () => {
+  const h = renderIdeas([row("alpha", "Alpha")], "exploring", "");
+  const filter = filterBar([{ label: "Status", name: "status", options: ["exploring", "built", "dropped"], value: "exploring" }]);
+  const box = searchBox("ideas-search", "", "Search titles and targets");
+  expect(h.indexOf(box)).toBeGreaterThan(h.indexOf('<section class="card'));
+  expect(h.indexOf(box) + box.length).toBe(h.indexOf(filter));
+  expect(h.indexOf(filter)).toBeLessThan(h.indexOf("</section>"));
+  expect(renderIdeas([], "built")).toContain(empty("No built ideas.", "Add one with <code>aleph idea add</code>."));
+  const none = renderIdeas([row("alpha", "Alpha")], "exploring", "zzz");
+  expect(none).toContain(empty("No exploring ideas.", "Add one with <code>aleph idea add</code>."));
+  expect(none).toContain('value="zzz"');
+});
+
+test("renderIdea draws an empty log with empty(), built issues with repoIdLink(), a statusRow() and the renderKpis() strip", () => {
+  const d = { slug: "alpha", title: "Alpha", status: "exploring", target: "aleph", writeup: "", log: [], running: [], built: ["aleph-12"], lenses: [{ lens: "prior-art", file: "lenses/p.html", at: "2026-11-02 09:00" }, { lens: "prior-art", file: "lenses/o.html", at: "2026-11-01 09:00" }] };
+  const h = renderIdea(d);
+  expect(h).toContain(empty("No log yet.", "Add a line with <code>aleph idea note</code>."));
+  expect(h).toContain(repoIdLink("aleph-12", "#/issues/aleph/12"));
+  expect(h).toContain(statusRow('<span class="badge run">exploring</span>', "", chips(["aleph"])));
+  expect(h).toContain(renderKpis([{ k: "Results", v: "2" }, { k: "Running", v: "0" }, { k: "Built", v: repoIdLink("aleph-12", "#/issues/aleph/12"), text: true }]));
+  expect(h).toContain('<h3 class="sub-head">Older Results</h3><div class="list"><a href="/api/ideas/alpha/lenses/o.html" target="_blank">');
+  expect(h).toContain('11/01 09:00</a></div><button class="act" type="button" data-lens="prior-art">Queue job</button>');
+});
+
+test("a queue that fails says the act name, then failed:, then the reason", async () => {
+  const d = { slug: "alpha", title: "Alpha", status: "exploring", writeup: "", log: [], running: [], lenses: [] };
+  const msg: any = { textContent: "" }, btn: any = { dataset: { lens: "prior-art" }, parentElement: { querySelector: () => msg } };
+  const root: any = { querySelectorAll: () => [], querySelector: () => ({ addEventListener() {} }) }, was = globalThis.fetch;
+  globalThis.fetch = (async () => ({ ok: false, status: 422, text: async () => JSON.stringify({ error: "no lens named x" }) })) as any;
+  try {
+    ideaView.mount(root, d);
+    await root.onclick({ target: { closest: (sel: string) => (sel === "button[data-lens]" ? btn : null) } });
+  } finally { globalThis.fetch = was; }
+  expect(msg.textContent).toBe("Queue job failed: no lens named x");
 });

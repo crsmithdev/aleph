@@ -1,8 +1,9 @@
 // The Ideas views: the list at #/ideas (/api/ideas) and one idea at #/ideas/:slug (/api/ideas/:slug) with a tab for
 // the write-up, one per lens and the log. A lens result is shown from the lens file route in a sandboxed iframe.
-import { actButton, badge, card, crumb, dataTable, day, empty, error, esc, filterBar, goQuery, heads, kept, keep, loadingLine, md, money, pageHead, postJson, say, tabs, when, wireTabs } from "../lib.js";
+import { actButton, badge, card, chips, count, crumb, dataTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, kept, keep, list, loadingLine, md, money, pageHead, postJson, repoIdLink, say, searchBox, statusRow, subHead, tabs, when, wireTable, wireTabs } from "../lib.js";
 import { issueHref } from "../../lib/naming.ts";
 import { redraw } from "../router.js";
+import { renderKpis } from "../timeline.js";
 
 const STATUSES = ["exploring", "built", "dropped"];
 const LENS_TABS = [["prior-art", "Prior art"], ["red-team", "Red team"], ["explainer", "Explainer"]];
@@ -11,12 +12,19 @@ const target = (t) => t ?? "new project";
 /** A local `YYYY-MM-DD` or `YYYY-MM-DD HH:MM` from the store, as a local time. */
 const local = (s) => `${s.replace(" ", "T")}${s.length === 10 ? "T00:00" : ""}`;
 
-export function renderIdeas(rows, status) {
-  const table = rows.length
-    ? dataTable(heads(["Idea", "Status", "Target", "Lenses", "Open Questions", "Spent", "Last Change"], ["Open Questions", "Spent", "Last Change"]),
-      rows.map((r) => `<tr><td class="wide" title="${esc(r.title)}"><a href="${href(r.slug)}">${esc(r.title)}</a></td><td>${badge(r.status)}</td><td>${esc(target(r.target))}</td><td>${esc(r.lenses.join(", ") || "–")}</td><td class="num">${r.questions}</td><td class="num">${money(r.spent)}</td><td class="time">${esc(day(local(r.last)))}</td></tr>`).join(""))
+/** The table of the ideas whose title or target has the search text `q`, or the empty line. */
+function ideasTable(rows, status, q = "") {
+  const text = q.trim().toLowerCase();
+  const shown = rows.filter((r) => !text || `${r.title} ${target(r.target)}`.toLowerCase().includes(text));
+  return shown.length
+    ? dataTable(heads(["Idea", "Status", "Target", "Lenses", "Open Questions", "Spent", "Updated"], ["Open Questions", "Spent", "Updated"]),
+      shown.map((r) => `<tr class="rowlink"><td class="wide" title="${esc(r.title)}"><a href="${href(r.slug)}">${esc(r.title)}</a></td><td>${badge(r.status)}</td><td>${esc(target(r.target))}</td><td>${esc(r.lenses.join(", ") || "–")}</td><td class="num">${esc(count(r.questions))}</td><td class="num">${money(r.spent)}</td><td class="time">${esc(when(local(r.last)))}</td></tr>`).join(""))
     : empty(`No ${status} ideas.`, "Add one with <code>aleph idea add</code>.");
-  return `<div class="page">${pageHead("Ideas", { count: rows.length })}${filterBar([{ label: "Status", name: "status", options: STATUSES, value: status }])}${card("Ideas", table, { count: rows.length })}</div>`;
+}
+
+export function renderIdeas(rows, status, q = "") {
+  const body = searchBox("ideas-search", q, "Search titles and targets") + filterBar([{ label: "Status", name: "status", options: STATUSES, value: status }]) + `<div id="ideas-table">${ideasTable(rows, status, q)}</div>`;
+  return `<div class="page">${pageHead("Ideas", { count: rows.length })}${card("Ideas", body, { count: rows.length })}</div>`;
 }
 
 export const view = {
@@ -27,8 +35,9 @@ export const view = {
   order: -0.5,
   api: (_params, q = new URLSearchParams()) => `/api/ideas?status=${encodeURIComponent(q.get("status") || "exploring")}`,
   live: true,
-  render: (d, _params, q) => renderIdeas(d, q?.get("status") || "exploring"),
-  mount: (root) => {
+  render: (d, _params, q) => renderIdeas(d, q?.get("status") || "exploring", q?.get("q") || ""),
+  mount: (root, d, q) => {
+    wireTable(root, { redraw: () => { root.querySelector("#ideas-table").innerHTML = ideasTable(d, q?.get("status") || "exploring", hashQuery().get("q") || ""); }, search: "ideas-search" });
     root.onclick = (e) => {
       const b = e.target.closest("[data-name=status] button");
       if (b) goQuery({ status: b.dataset.value === "exploring" ? "" : b.dataset.value });
@@ -52,17 +61,19 @@ export function renderIdea(d) {
     const body = !newest ? empty(`No ${label} result yet.`, "Queue a job to get one.")
       : newest.file.endsWith(".md") ? `<div class="md" data-src="${esc(url(newest))}">${loadingLine("the result")}</div>`
       : `<iframe class="lens-frame" sandbox title="${esc(label)}" src="${esc(url(newest))}"></iframe>`;
-    const older = all.slice(1).map((l) => `<li><a href="${esc(url(l))}" target="_blank">${esc(when(local(l.at)))}</a></li>`).join("");
-    return `${body}${older ? `<h3>Older Results</h3><ul>${older}</ul>` : ""}<p>${now.has(`${d.slug}-${id}`) ? badge("running") : actButton("Queue job", { lens: id })}</p>`;
+    const older = all.slice(1).map((l) => `<a href="${esc(url(l))}" target="_blank">${esc(when(local(l.at)))}</a>`);
+    return `${body}${older.length ? subHead("Older Results") + list(older.join("")) : ""}${now.has(`${d.slug}-${id}`) ? badge("running") : actButton("Queue job", { lens: id })}`;
   };
   const panes = {
     writeup: `<div class="md">${md(d.writeup)}</div>`,
-    log: `<ul>${d.log.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`,
+    log: d.log.length ? `<ul>${d.log.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : empty("No log yet.", "Add a line with <code>aleph idea note</code>."),
     ...Object.fromEntries(LENS_TABS.map((t) => [t[0], lens(t)])),
   };
-  const built = (d.built ?? []).map((r) => `<a href="${esc(issueHref(r))}">${esc(r)}</a>`).join(" ");
+  const built = (d.built ?? []).map((r) => repoIdLink(r, issueHref(r))).join(" ");
   return `<div class="page">${crumb("#/ideas", [["ideas", "#/ideas"], [d.slug]])}` +
-    pageHead(d.title, { aside: `${esc(target(d.target))} ${badge(d.status)}${built ? ` · ${built}` : ""} ${actButton("Build", { build: "1" }, { primary: true })}` }) +
+    pageHead(d.title, { aside: actButton("Build", { build: "1" }, { primary: true }) }) +
+    statusRow(badge(d.status), "", chips([target(d.target)])) +
+    renderKpis([{ k: "Results", v: esc(count(d.lenses.length)) }, { k: "Running", v: esc(count(now.size)) }, { k: "Built", v: built || "–", text: true }]) +
     tabs("Idea tabs", items, panes, tab) + "</div>";
 }
 
@@ -86,7 +97,7 @@ export const ideaView = {
           const { started } = await postJson(`/api/ideas/${encodeURIComponent(d.slug)}/lenses/${q.dataset.lens}`, {});
           pending.set(started, false);
           redraw(true);
-        } catch (err) { say(q, `Could not queue it: ${err.message}`); }
+        } catch (err) { say(q, `Queue job failed: ${err.message}`); }
         return;
       }
       if (e.target.closest("button[data-build]")) {

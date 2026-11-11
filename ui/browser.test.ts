@@ -904,7 +904,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     const frame = 'document.querySelector("#view section[data-pane=prior-art] iframe")';
     expect(await page.ev<string>(`${frame}.getAttribute("src")`)).toBe("/api/ideas/issue-history/lenses/prior-art-2026-11-02-1000.html");
     expect(await page.ev<boolean>(`${frame}.hasAttribute("sandbox")`)).toBe(true);
-    expect(await page.ev<string>('document.querySelector("#view section[data-pane=prior-art] ul").textContent')).toMatch(/^(11\/01 09:00|2026-11-01)$/);
+    expect(await page.ev<string>('document.querySelector("#view section[data-pane=prior-art] .list").textContent')).toMatch(/^(11\/01 09:00|2026-11-01)$/);
     expect(page.errors).toEqual([]);
   }, 60_000);
 
