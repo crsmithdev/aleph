@@ -30,6 +30,11 @@
     {
       "copies": ["jobs/lib/transitions/tick.ts:19-26", "jobs/lib/roles/intake.ts:21-28"],
       "reason": "Both are import lines, not logic. tick.ts adds the land and Ask imports for the waited land Ask; each file keeps its own import list."
+    },
+    {
+      "concept": "lens tie-break and modes table of the retro skills",
+      "copies": ["skills/improve/SKILL.md:41-47", "skills/agent-ready/SKILL.md:41-48"],
+      "reason": "agent-ready takes improve's skeleton on purpose (Chris, 2026-11-11); the lenses and modes differ, and its retro and act steps point at improve's."
     }
   ]
 }
