@@ -15,6 +15,9 @@
  * When the page has the annotate tool (annotate.js), the @ button points the next message at annotations: one of the
  * page's notes, or a new one picked there and then. Their ids go with the message as `annotations`. Without the tool,
  * the button does not show.
+ *
+ * An image pasted or dropped on the panel goes with the next message as `images`, each `{ name, data }` with `data` in
+ * base64. The transcript keeps only the count of the images.
  */
 import { dock, host } from "./dock.js";
 
@@ -41,6 +44,7 @@ textarea { flex: 1; resize: none; min-height: 36px; max-height: 160px; padding: 
 .points { display: flex; flex-wrap: wrap; gap: 4px; }
 .points:empty { display: none; }
 .chip { display: inline-flex; gap: 2px; align-items: center; max-width: 100%; padding: 2px 4px 2px 8px; border-radius: 10px; background: var(--sunk); font-size: 12px; }
+.chip img { max-height: 40px; max-width: 80px; border-radius: 4px; }
 .chip button { border: 0; padding: 0 4px; background: none; color: var(--muted); }
 .fab[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 `;
@@ -65,23 +69,34 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   const el = host("kit-chat", CSS, `<button type="button" class="fab" title="${esc(title)}" aria-expanded="false">&#10022;</button>` +
     `<div class="card pop" hidden><div class="head"><b>${esc(title)}</b><button type="button" class="new">New</button></div>` +
     `<div class="log" aria-live="polite"></div><div class="menu" hidden></div><div class="points"></div>` +
-    `<form><textarea rows="1" placeholder="Ask, or tell it to do something"></textarea><button type="button" class="point" title="Point at an annotation" hidden>@</button><button type="submit">Send</button></form></div>`);
+    `<form><textarea rows="1" placeholder="Ask, or tell it to do something. Paste a screenshot to send it."></textarea><button type="button" class="point" title="Point at an annotation" hidden>@</button><button type="submit">Send</button></form></div>`);
   const ui = el.shadowRoot;
   const [fab, pop, log, menu, chips, form, box, point] = [".fab", ".pop", ".log", ".menu", ".points", "form", "textarea", ".point"].map((s) => ui.querySelector(s));
   /** The annotate tool's API when the page has the tool, else undefined. */
   const notes = () => document.getElementById("kit-annotate")?.annotate;
   /** The annotations the next message points at, as { id, label }. */
   let points = [];
+  /** The images the next message takes, as { name, data, src }. */
+  let shots = [];
 
   function draw() {
-    log.innerHTML = state.items.map((m) => `<p class="${m.by}">${esc(m.text)}${(m.points ?? []).map((l) => `<span class="ref">@ ${esc(l)}</span>`).join("")}</p>`).join("") +
+    log.innerHTML = state.items.map((m) => `<p class="${m.by}">${esc(m.text)}${(m.points ?? []).map((l) => `<span class="ref">@ ${esc(l)}</span>`).join("")}${m.shots ? `<span class="ref">${m.shots} image${m.shots > 1 ? "s" : ""}</span>` : ""}</p>`).join("") +
       (busy ? `<p class="busy">Working…</p>` : "") || `<p class="empty">No messages yet.</p>`;
     log.scrollTop = log.scrollHeight;
     form.querySelector("button[type=submit]").disabled = busy;
     point.hidden = !notes();
-    chips.innerHTML = points.map((p, i) => `<span class="chip">@ ${esc(p.label)}<button type="button" data-i="${i}" aria-label="Remove">&times;</button></span>`).join("");
+    chips.innerHTML = points.map((p, i) => `<span class="chip">@ ${esc(p.label)}<button type="button" data-i="${i}" aria-label="Remove">&times;</button></span>`).join("") +
+      shots.map((m, i) => `<span class="chip"><img src="${m.src}" alt="${esc(m.name)}"><button type="button" data-shot="${i}" aria-label="Remove">&times;</button></span>`).join("");
   }
-  const add = (by, text, refs) => { state.items.push({ by, text, ...(refs?.length ? { points: refs } : {}) }); save(); draw(); };
+  const add = (by, text, refs, n) => { state.items.push({ by, text, ...(refs?.length ? { points: refs } : {}), ...(n ? { shots: n } : {}) }); save(); draw(); };
+  /** Adds the images among `files` to the next message. */
+  const attachFiles = async (files) => {
+    for (const f of [...files].filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.type))) {
+      const src = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.readAsDataURL(f); });
+      shots.push({ name: f.name || `pasted.${f.type.split("/")[1]}`, data: src.slice(src.indexOf(",") + 1), src });
+    }
+    draw();
+  };
   /** Points the next message at annotation `a`, the `no`th note of the page. */
   const attach = (a, no) => { points = [...points.filter((p) => p.id !== a.id), { id: a.id, label: `#${no} ${a.note.split("\n")[0].slice(0, 40)}` }]; draw(); };
 
@@ -103,13 +118,14 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   }
 
   async function send(text) {
-    const ids = points.map((p) => p.id);
-    add("you", text, points.map((p) => p.label));
+    const ids = points.map((p) => p.id), images = shots.map(({ name, data }) => ({ name, data }));
+    add("you", text, points.map((p) => p.label), images.length);
     points = [];
+    shots = [];
     busy = true;
     draw();
     try {
-      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ text, session: state.session, ...(ids.length ? { annotations: ids } : {}), ...context() }) });
+      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ text, session: state.session, ...(ids.length ? { annotations: ids } : {}), ...(images.length ? { images } : {}), ...context() }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `${r.status}`);
       const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
       let buf = "";
@@ -166,12 +182,13 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
     if (i >= 0) attach(all[i], i + 1);
   });
   chips.addEventListener("click", (e) => {
-    const i = e.target.closest("button")?.dataset.i;
-    if (i === undefined) return;
-    points.splice(Number(i), 1);
+    const b = e.target.closest("button");
+    if (b?.dataset.shot !== undefined) shots.splice(Number(b.dataset.shot), 1);
+    else if (b?.dataset.i !== undefined) points.splice(Number(b.dataset.i), 1);
+    else return;
     draw();
   });
-  ui.querySelector(".new").addEventListener("click", () => { if (busy) return; state = { items: [] }; save(); draw(); });
+  ui.querySelector(".new").addEventListener("click", () => { if (busy) return; state = { items: [] }; shots = []; save(); draw(); });
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const text = box.value.trim();
@@ -181,6 +198,9 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   });
   box.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
   box.addEventListener("input", () => { box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`; });
+  pop.addEventListener("paste", (e) => { const fs = e.clipboardData?.files; if (fs?.length) { e.preventDefault(); attachFiles(fs); } });
+  pop.addEventListener("dragover", (e) => e.preventDefault());
+  pop.addEventListener("drop", (e) => { e.preventDefault(); attachFiles(e.dataTransfer?.files ?? []); });
   dock().append(el);
   draw();
 }

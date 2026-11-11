@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer } from "./test-server.ts";
@@ -84,4 +84,13 @@ test("a turn on an idea gets its path, the idea commands and the build steps; an
   const off = argv(await turn({ text: "hi" }));
   for (const s of ["idea.md", "aleph idea built", "--after", "File nothing"]) expect(off).not.toContain(s);
   expect((await turn({ text: "hi", idea: "no-such-idea" })).status).toBe(400);
+});
+
+test("a pasted image is saved in the run's folder and the prompt names its path; a bad one is refused", async () => {
+  const png = Buffer.from("89504e470d0a1a0a", "hex");
+  const said = (await turn({ text: "see", images: [{ name: "pasted.png", data: png.toString("base64") }] })).data[1].message.content[0].text as string;
+  const path = /^- (.*images\/1\.png)$/m.exec(said)?.[1];
+  expect(said).toContain("Chris attached these screenshots");
+  expect(path && readFileSync(path)).toEqual(png);
+  expect((await turn({ text: "see", images: [{ name: "x.exe", data: "AA==" }] })).status).toBe(400);
 });

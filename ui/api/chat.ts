@@ -1,6 +1,7 @@
 /**
  * `POST /api/chat`: one turn of the chat agent that ui/vendor/kit/chat.js talks to. The body is
- * `{ text, session?, page?, annotations?, idea? }`.
+ * `{ text, session?, page?, annotations?, idea?, images? }`. `images` are `{ name, data }`, `data` in base64: the server saves
+ * each in the run's folder and the prompt names its path, so the agent reads it.
  * The turn is a `chat` run in the ledger, so it has a folder, a log and a cost. The agent is `claude -p` in this checkout
  * with Chris's own setup, so it files issues with `aleph issue` and answers notes with `aleph annotation`; `session`
  * resumes the last turn's conversation. The annotations Chris points at (`annotations`, ids) go with the text first, then
@@ -9,8 +10,9 @@
  * The answer is a server-sent stream: each line of the run's stream-json output as it comes, then `end` with `{ error? }`.
  * A comment line every 20 s keeps the stream open under the server's idle timeout while a tool runs.
  */
-import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { MEDIA_BYTES, MEDIA_TYPES } from "../../issues/lib/store.ts";
 import { OPUS_MODEL } from "../../jobs/lib/routing/models.ts";
 import { openRun } from "../../jobs/lib/roles/agent-run.ts";
 import { runFile } from "../../jobs/lib/records/run-files.ts";
@@ -46,20 +48,49 @@ Chris is on the idea \`${slug}\`; its write-up is ${ideaFile(slug)}, and the len
 - To build the idea (Chris presses Build or says "build it"): read the write-up and the lens results, and ask Chris about each gap you find. Then show the drafted issues as a list with the title, kind, priority and order of each.
 - File nothing before Chris says yes to that list. When he says yes, file each issue open in the target repo with \`aleph issue add <repo> ...\`, each \`--after\` the one before, and then run \`aleph idea built ${slug} <ref>...\` with the filed refs.`;
 
+/** The image types the panel sends, by extension. */
+const IMAGES = Object.keys(MEDIA_TYPES).filter((x) => MEDIA_TYPES[x].startsWith("image/"));
+
+/** Save `images` in `folder` and return the part of the prompt that names them; "" when there are none. */
+function attached(folder: string, images: { ext: string; bytes: Buffer }[]): string {
+  if (!images.length) return "";
+  const dir = join(folder, "images");
+  mkdirSync(dir, { recursive: true });
+  const paths = images.map((m, i) => { const p = join(dir, `${i + 1}.${m.ext}`); writeFileSync(p, m.bytes); return p; });
+  return `\n\nChris attached these screenshots. Read each one with the Read tool:\n${paths.map((p) => `- ${p}`).join("\n")}`;
+}
+
+/** The images of the body as `{ ext, bytes }`, or an error. */
+function imagesOf(given: unknown): { ext: string; bytes: Buffer }[] | string {
+  if (given === undefined) return [];
+  if (!Array.isArray(given)) return "images must be a list";
+  const out = [];
+  for (const m of given) {
+    const ext = String(m?.name ?? "").split(".").pop()!.toLowerCase();
+    if (!IMAGES.includes(ext) || typeof m?.data !== "string") return `an image must be ${IMAGES.join(", ")} in base64`;
+    const bytes = Buffer.from(m.data, "base64");
+    if (bytes.length > MEDIA_BYTES) return `an image must be at most ${MEDIA_BYTES / 1024 / 1024} MB`;
+    out.push({ ext, bytes });
+  }
+  return out;
+}
+
 const enc = new TextEncoder();
 
 export const routes: Routes = {
   "POST /api/chat": async (req) => {
     if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
-    const { text, session, page, annotations, idea } = await req.json().catch(() => ({}));
+    const { text, session, page, annotations, idea, images } = await req.json().catch(() => ({}));
     if (typeof text !== "string" || !text.trim()) return Response.json({ error: "text must be a non-empty string" }, { status: 400 });
     if (idea !== undefined && (typeof idea !== "string" || !existsSync(ideaFile(idea)))) return Response.json({ error: `no idea named ${idea}` }, { status: 400 });
+    const shots = imagesOf(images);
+    if (typeof shots === "string") return Response.json({ error: shots }, { status: 400 });
     const run = openRun({
       role: "chat", who: "the chat agent", model: OPUS_MODEL, seconds: 3600, cwd: ROOT, name: "chat", command: `chat: ${text.slice(0, 120)}`, shown: true,
       flags: ["--permission-mode", "bypassPermissions", "--append-system-prompt", SYSTEM + (idea ? building(idea) : ""), ...(typeof session === "string" && session ? ["--resume", session] : [])],
     });
     const ids = Array.isArray(annotations) ? annotations.filter((x): x is string => typeof x === "string") : [];
-    const prompt = text + notesOn(typeof page === "string" ? page : undefined, ids);
+    const prompt = text + notesOn(typeof page === "string" ? page : undefined, ids) + attached(run.folder, shots);
     const turn = run.ask(prompt).then(() => undefined, (e: Error) => e.message);
     const log = runFile(run.folder, "output.log");
     let open = true, from = 0, rest = "";
