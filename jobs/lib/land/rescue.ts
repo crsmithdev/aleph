@@ -205,12 +205,12 @@ function hasWork({ r, repo }: Pick<Stuck, "r" | "repo">): boolean {
   return ahead.ok && Number(ahead.out) > 0;
 }
 
-/** Whether intake cannot split this issue: it is a part (id `n.m`), has parts. */
+/** Whether intake cannot split this issue: it is a part (id `n.m`) or a child filed with `from:`, or it has parts. */
 function splitAlready({ repo, issue }: Pick<Stuck, "repo" | "issue">): boolean {
   if (issue === undefined || typeof issue === "string") return true;
   const doc = reader().list(repo.key);
   const item = doc && issues.find(doc, issue);
-  return !!item && partsOf(doc, item).length > 0;
+  return !!item && (issues.parentRef(item) !== undefined || partsOf(doc, item).length > 0);
 }
 
 /** Set `plan` on the issue, so the next dispatch starts intake on it, which splits it. Returns the refusal, or null. */

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { writeList } from "../../../issues/lib/store.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { readList, writeList } from "../../../issues/lib/store.ts";
 import { dispatchIssues } from "../transitions/factory.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
 import { readEvents } from "../../../lib/layout.ts";
@@ -78,4 +77,15 @@ test("a spec question run, then the director's answer: the job keeps its Ask or 
   const started = f.specs.length > 0;
   expect(hasAsk || started).toBe(true);
   expect(r.refused.length + (started ? 1 : 0)).toBeGreaterThan(0);
+});
+
+test("a time box that runs out on a child filed with from: asks Chris and sets no plan, as intake skips a child", async () => {
+  const parent = newIssue();
+  const id = writeList({ key: "fac" }, "add a child", (doc) => issues.add(doc, "[ship] the child", { spec: "Do the part.", from: `fac-${parent}` }).id, true)!.value;
+  mk(`fac-${id}`, "build", "failed", { cause: "timeout", reason: "time box" });
+  const f = fakes();
+  await dispatchIssues(f.start, undefined, f.rescue);
+  expect(f.calls).toEqual([]);
+  expect(ask(id)).not.toBeNull();
+  expect(issues.find(readList(loadRegistry().fac)!, id)!.fm.plan).toBeUndefined();
 });
