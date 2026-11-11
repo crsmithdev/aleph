@@ -3,11 +3,11 @@ import { probe } from "../lib/git.ts";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { allRuns, type Run } from "./lib/records/ledger.ts";
-import { getRun, putRun } from "./lib/records/record.ts";
+import { getRun, numbered, putRun } from "./lib/records/record.ts";
 import { unitAlive } from "./lib/infra/process.ts";
 import { config as storeConfig } from "../issues/lib/store.ts";
 import { renderItem } from "../issues/lib/todo.ts";
-import { parseId } from "../lib/naming.ts";
+import { parseId, subjectOf } from "../lib/naming.ts";
 import { fixture } from "../tests/git-fixture.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
@@ -239,8 +239,6 @@ case $action in
   untracked) echo x > stray.txt ;;
   hold\\ *) f=\${action#hold }; "$FAKE_LOG/../wait" exists "$f"; echo "$RANDOM" > "held-$(basename "$f").txt"; git add .; git commit -qm "held $f" ;;
   sleep) tail --pid=$PPID -f /dev/null ;;
-  quiet) echo '{"type":"system"}'; tail --pid=$PPID -f /dev/null ;;
-  chatty) echo c > c.txt; git add c.txt; git commit -qm "add c.txt"; for i in 1 2 3 4 5; do echo '{"type":"system"}'; done ;;
   exit3) exit 3 ;;
   question) echo '{"type":"result","result":"I looked.\\nQUESTION: which colour?","structured_output":{"summary":"I looked.","defaults":[],"followups":[],"flakes":[],"already_met":null,"question":"which colour?"}}'; exit 0 ;;
   error) echo '{"type":"result","is_error":true,"result":"API Error: 500"}'; exit 0 ;;
@@ -475,7 +473,8 @@ export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | 
   const id = `20261030-${String(++seeded).padStart(6, "0")}-${repoKey}-seed-${run.kind}`;
   const folder = join(jobsDir, id);
   mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date(now).toISOString(), ...run } as Run);
+  const r = { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date(now).toISOString(), ...run } as Run;
+  putRun(basename(folder), { n: numbered(subjectOf(r), allRuns()).length + 1, ...r });
   return id;
 }
 

@@ -54,7 +54,7 @@ beforeAll(async () => {
   for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "failed" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    putRun(basename(join(folder)), { kind: "build", condition: "waiting", started: new Date(NOW).toISOString(), name, job: name, repo: "r", ...extra } as any);
+    putRun(basename(join(folder)), { kind: "build", condition: "waiting", started: new Date(NOW).toISOString(), name, job: name, repo: "r", n: 1, ...extra } as any);
   }
   ({ server, stop, at } = await withServer({ warm: false }));
   writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { add(doc, `issue ${i}`, i === 7 ? { spec: "Do it." } : {}); } for (const n of [6, 9]) addPart(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, spec: "x" }); return true; }, true);

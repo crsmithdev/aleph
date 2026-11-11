@@ -8,7 +8,7 @@
 import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
-import { allRuns, issueKeyOf, loadRegistry, runsByIssue, type Entry, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, issueKeyOf, loadRegistry, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
 import { counting as lastReal, jobIdOf } from "../../jobs/lib/records/record.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
@@ -69,10 +69,10 @@ function list(url: URL): Response {
 }
 
 /** A job as the Issue page lists it: the job ID of its run that counts, its name, state, times, cost and how many runs it holds. */
-function jobRow(runs: ReturnType<typeof allJobs>[number], every: Entry[]) {
+function jobRow(runs: ReturnType<typeof allJobs>[number]) {
   const last = lastReal(runs), r = last.run;
   const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
-  return { id: jobIdOf(last, every), name: r.name, condition: r.condition, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
+  return { id: jobIdOf(last), name: r.name, condition: r.condition, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
 }
 
 function detail(params: Record<string, string>, url: URL): Response {
@@ -94,11 +94,11 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const all = allJobs().filter((runs) => runs[0].run.repo === repo.key);
   const every = allRuns();
-  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === `${repo.key}-${r}`)).map((runs) => jobRow(runs, every));
+  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === `${repo.key}-${r}`)).map((runs) => jobRow(runs));
   // The runs on this issue, its old parts and its children.
   const by = runsByIssue(every, { rollUp: true }), keys = [ref, ...partRefs].map((r) => `${repo.key}-${r}`);
   const ours = new Set(keys.flatMap((k) => by.get(k) ?? []).map((e) => e.id));
-  const jobs = all.filter((runs) => runs.some((e) => ours.has(e.id))).map((runs) => jobRow(runs, every));
+  const jobs = all.filter((runs) => runs.some((e) => ours.has(e.id))).map((runs) => jobRow(runs));
 
   // The Issue page: the `## Request`, then the parts, each with its Job.
   const parts = partRefs.map((g) => {
@@ -108,7 +108,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
   const timeline = {
     filed: ((t) => (t == null ? null : new Date(t).toISOString()))(filed().issue.get(`${repo.key}-${ref}`)),
-    runs: all.flat().filter((e) => ours.has(e.id)).map((e) => ({ r: e.run, href: jobHref(jobIdOf(e, every)) })).map(({ r, href }) => ({ kind: r.kind, name: r.name, href, on: r.on, issue: issueKeyOf(r) ?? null, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
+    runs: all.flat().filter((e) => ours.has(e.id)).map((e) => ({ r: e.run, href: jobHref(jobIdOf(e)) })).map(({ r, href }) => ({ kind: r.kind, name: r.name, href, on: r.on, issue: issueKeyOf(r) ?? null, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
   };
   // The hold records of every job name the answer shows.
   const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...parts.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);

@@ -450,7 +450,7 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
   return {
     name, item,
     open: open ? record.counting(open).run.condition : null,
-    job: open ? record.jobIdOf(open[0], runs) : null,
+    job: open ? record.jobIdOf(open[0]) : null,
     busy: busyWait(repo, item, jobs, now),
     noCommits: noCommitStreak(repo.key, name, runs),
     capHeld: capMarked(name),

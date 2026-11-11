@@ -59,11 +59,11 @@ test("a role run that joins a job sorts after the job's earlier runs, even when 
   expect(ids.indexOf(run.folder)).toBeGreaterThan(ids.indexOf(earlier));
 });
 
-test("two jobs on one subject are #1 and #2, after the runs from before job IDs, and their folders are <stamp>-<subject>-<n>", () => {
+test("two jobs on one subject are numbered after an earlier run, and their folders are <stamp>-<subject>-<n>", () => {
   setSystemTime(NOW);
   const old = join(runsDir(), `${stamp(new Date(NOW.getTime() - 60_000))}-intake-r-9-intake`);
   mkdirSync(old, { recursive: true });
-  putRun(basename(old), { kind: "intake", job: "old-9", name: "intake-r-9", on: "r-9", condition: "done", told: true, started: NOW.toISOString() });
+  putRun(basename(old), { kind: "intake", job: "old-9", name: "intake-r-9", on: "r-9", n: 1, condition: "done", told: true, started: NOW.toISOString() });
   const one = openRun({ ...opening, on: "r-9" });
   const two = openRun({ ...opening, on: "r-9" });
   const e = (f: string) => allRuns().find((x) => x.folder === f)!;

@@ -84,7 +84,7 @@ export function run(o: Partial<Run> & { name: string }, files: Record<string, st
   const id = `${stamp(at)}-${key}-${o.name}-${++runs}-agent`;
   const folder = join(process.env.ALEPH_JOBS_DIR!, id);
   mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { kind: "build", job: id, repo: key, condition: "waiting", told: true, shown: true, started: at.toISOString(), ...o } as Run);
+  putRun(basename(folder), { kind: "build", job: id, repo: key, condition: "waiting", told: true, shown: true, started: at.toISOString(), n: 1, ...o } as Run);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }

@@ -73,7 +73,6 @@ function recorder(): Starts & { taken: string[]; directors: number } {
   return r;
 }
 
-const tickLog = () => { try { return readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8"); } catch { return ""; } };
 const missedKeys = () => readEvents().filter((e) => e.action === "missed").map((e) => e.subject);
 
 test("an intake that sets an Ask starts the director at once, with no tick", async () => {
@@ -145,7 +144,6 @@ test("the sweep logs work that two ticks in a row saw as missed, once, and start
   expect(p.dispatches).toBe(0);
   expect(await sweep(NOW + MIN, s, p)).toEqual([`ask:${key}-1`]);
   expect(missedKeys()).toEqual([`ask:${key}-1`]);
-  expect(tickLog()).toBe("");
   expect(p.dispatches).toBe(1);
   expect(await sweep(NOW + 2 * MIN, s, p)).toEqual([]);
   expect(p.dispatches).toBe(1);
@@ -177,7 +175,7 @@ test("the sweep with nothing to move starts nothing", async () => {
   const s = readTick();
   await sweep(NOW, s, p);
   await sweep(NOW + MIN, s, p);
-  expect({ dispatches: p.dispatches, suites: p.suites, log: tickLog() }).toEqual({ dispatches: 0, suites: 0, log: "" });
+  expect({ dispatches: p.dispatches, suites: p.suites }).toEqual({ dispatches: 0, suites: 0 });
 });
 
 test("a red main that moved since its record (a fix by hand) starts the suite once for the new commit", async () => {

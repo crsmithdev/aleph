@@ -532,8 +532,6 @@ describe("views", () => {
     expect(first("cost")).toBe("b");
     expect(first("age")).toBe("a");
     expect(v.ageText({ status: "done", createdTime: iso("2026-10-01"), closedTime: iso("2026-10-11") })).toBe("10d");
-    expect(v.dateText("2026-10-20", new Date("2026-11-01T12:00"))).toBe("Oct 20");
-    expect(v.dateText("2025-10-20", new Date("2026-11-01T12:00"))).toBe("2025-10-20");
   });
 
   test("the Status filter defaults to Open, newest first; Any shows every status", async () => {

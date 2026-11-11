@@ -27,10 +27,13 @@ beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 const now = NOW;
 const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
+const seq: Record<string, number> = {};
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  putRun(basename(join(dir)), { kind: "build", told: true, started: ago(3), ...extra } as any);
+  const subject = String(extra.on ?? extra.name);
+  seq[subject] = (seq[subject] ?? 0) + 1;
+  putRun(basename(join(dir)), { kind: "build", told: true, started: ago(3), n: seq[subject], ...extra } as any);
   for (const [f, t] of Object.entries(files)) writeFileSync(join(dir, f), t);
 }
 async function get(path: string) {
@@ -145,7 +148,7 @@ describe("GET /api/jobs", () => {
   test("the Role filter offers the six actors and no old role", () => {
     const h = v.renderFilters({});
     const role = h.slice(h.indexOf('data-name="role"'));
-    expect([...role.matchAll(/data-value="([^"]*)"/g)].map((m) => m[1])).toEqual(["", "worker", "reviewer", "intake", "director", "monitor", "firefighter"]);
+    expect([...role.matchAll(/data-value="([^"]*)"/g)].map((m) => m[1])).toEqual(["", "worker", "reviewer", "intake", "director", "monitor"]);
     expect(h).not.toContain('value="triage"');
     expect(h).not.toContain('value="planner"');
   });

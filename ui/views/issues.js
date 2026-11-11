@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -54,10 +54,8 @@ export const href = (r) => issueHref(ref(r));
 /** A Factory window, or week for any other value. */
 const winOf = (w) => (FACTORY.includes(w) ? w : "week");
 const ms = (s) => Date.parse(s) || 0;
-/** A store date `YYYY-MM-DD` as local midnight in ms, as the CLI writes it; 0 for none. */
 /** An ISO UTC time from the store as ms; 0 for none. */
 const isoMs = (s) => Date.parse(s ?? "") || 0;
-const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? localMs(String(s).slice(0, 10)) : 0);
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
@@ -172,13 +170,6 @@ export function sortRows(rows, sort = UPDATED) {
 
 /** With a search and no chosen sort, the best match first. */
 const ordered = (rows, o) => (o.sort || !(o.q ?? "").trim() ? sortRows(rows, o.sort ?? UPDATED) : [...rows].sort((a, b) => b.score - a.score || ms(b.at) - ms(a.at)));
-
-/** A store date as the table shows it: "Oct 20" this year, "2025-12-03" another; "" for none. */
-export function dateText(s, now = new Date()) {
-  const t = dayMs(s);
-  if (!t) return "";
-  return day(new Date(t), now);
-}
 
 /** When a row last changed, in ms. */
 const updatedMs = (r) => isoMs(r.atTime);

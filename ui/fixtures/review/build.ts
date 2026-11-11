@@ -10,6 +10,7 @@ import { writeList } from "../../../issues/lib/store.ts";
 import { add, clock, note, setStatus } from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { putRun, setIssueAsk } from "../../../jobs/lib/records/record.ts";
+import { subjectOf } from "../../../lib/naming.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };
@@ -70,13 +71,17 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
   // The fixture keeps each run as a state.json; the copy keeps it in its job record, where the ledger reads it.
   const records = process.env.ALEPH_RECORDS_DIR;
   process.env.ALEPH_RECORDS_DIR = join(dest, "jobs", ".records");
+  const seen: Record<string, number> = {};
   try {
     for (const id of readdirSync(join(dest, "jobs"))) {
       const file = join(dest, "jobs", id, "state.json");
       let run;
       try { run = JSON.parse(readPlain(file)); } catch { continue; }
       for (const k of ["started", "ended"]) if (run[k]) run[k] = new Date(Date.parse(run[k]) + shift).toISOString();
-      putRun(id, run);
+      // A fixture run states no `n`: it takes its place in start order on its subject.
+      const subject = subjectOf(run);
+      seen[subject] = (seen[subject] ?? 0) + 1;
+      putRun(id, { n: seen[subject], ...run });
       rmSync(file);
     }
   } finally {

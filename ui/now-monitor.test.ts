@@ -4,16 +4,7 @@ import * as view from "./views/now.js";
 import { withFactory } from "./test-now.ts";
 
 const calm = { ...withFactory({}), asks: [], stuck: [] };
-const P = (day: number | null, trailing: number | null) => ({ day, trailing });
-const monitor = {
-  day: "2026-10-20",
-  findings: ["Build runs <b>rose</b> to 38% from 20%, **no usable result** is 3.", "Plans rose."],
-  stages: [{ stage: "build", costPerItem: P(1.5, 2), runsPerItem: P(2, 1.4), unusable: P(0.25, null) }],
-  holds: [{ kind: "stops", goals: P(2, 1.5), hours: P(5, 2) }],
-};
-const render = (m: any) => view.view.render({ ...calm, factory: { ...calm.factory, monitor: m } });
-
-test("the Pipeline card shows the 8 stages of the window in order with runs per issue and p90, and no other role", () => {
+test("the Pipeline card shows the 6 stages of the window in order with runs per issue and p90, and no other role", () => {
   const rows = [
     { stage: "monitor", runs: 1, items: 1, unusable: 0, p90: 10 },
     { stage: "build", runs: 9, items: 5, unusable: 2, p90: 804 },
@@ -21,30 +12,13 @@ test("the Pipeline card shows the 8 stages of the window in order with runs per 
   ];
   const h = view.renderPipeline({ window: "week", stages: { rows } });
   const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
-  expect(names).toEqual(["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"]);
+  expect(names).toEqual(["intake", "spec-check", "build", "review", "recheck", "land"]);
   expect(h).toContain('<span class="pv">1.8<span class="pu"> / issue</span></span><span class="pt">13m 24s</span>');
   expect(h).toContain('<span class="pv">1.0<span class="pu"> / issue</span></span><span class="pt">–</span>');
   expect(h).toContain('title="Build: 9 runs on 5 issues, 2 failed"');
-  expect(h.match(/class="pnode idle"/g)).toHaveLength(6);
+  expect(h.match(/class="pnode idle"/g)).toHaveLength(4);
   expect(h).not.toContain(">monitor<");
   expect(view.renderPipeline(null)).toContain("Loading the pipeline…");
-});
-
-test("the Monitor panel shows the findings with numbers and **text** in bold, other HTML escaped, and no table", () => {
-  const html = view.renderMonitor({ factory: { monitor } });
-  expect(html).toContain('<h2 id="h-monitor">Monitor</h2><span class="aside"><span class="asof">2026-10-20</span></span>');
-  expect(html).not.toContain("Monitor,");
-  expect(html).toContain("<li>Build runs &lt;b&gt;rose&lt;/b&gt; to <b>38%</b> from <b>20%</b>, <b>no usable result</b> is <b>3</b>.</li>");
-  expect(html).toContain("<li>Plans rose.</li>");
-  expect(html).not.toContain("<summary>Table</summary>");
-  expect(html).not.toContain("monitor-table");
-});
-
-test("a report with no reading says why; one with no findings says nothing looks off; no report shows no panel", () => {
-  expect(view.renderMonitor({ factory: { monitor: { ...monitor, findings: [], error: "the monitor reader timed out" } } })).toMatch(/<div class="error" role="alert"><p>No reading: the monitor reader timed out<\/p>/);
-  expect(view.renderMonitor({ factory: { monitor: { ...monitor, findings: [] } } })).toContain('<div class="empty"><p>Nothing looks off.</p>');
-  expect(view.renderMonitor({ factory: { monitor: null } })).toBe("");
-  expect(render(null)).not.toContain('id="monitor"');
 });
 
 test("the Herald shows its alerts under an N active badge in the worst alert's tone, then the events", () => {

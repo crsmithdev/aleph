@@ -6,8 +6,9 @@ import { askOf } from "../asks/ask.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues, suiteStep } from "./factory.ts";
 import type { Rescue } from "../land/rescue.ts";
-import { allJobs, type Run } from "../records/ledger.ts";
-import { putRun } from "../records/record.ts";
+import { allJobs, allRuns, type Run } from "../records/ledger.ts";
+import { numbered, putRun } from "../records/record.ts";
+import { subjectOf } from "../../../lib/naming.ts";
 import type { ChecksStop } from "../gates/checks.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 
@@ -64,7 +65,8 @@ export function mk(name: string, kind: Run["kind"], state: Run["condition"], ext
   const folder = join(ctx.base, "jobs", id);
   mkdirSync(folder, { recursive: true });
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
-  putRun(basename(folder), { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date(now).toISOString(), ...extra } as Run);
+  const run = { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date(now).toISOString(), ...extra } as Run;
+  putRun(basename(folder), { n: numbered(subjectOf(run), allRuns()).length + 1, ...run });
   return { folder, job: extra.job ?? id };
 }
 export const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";

@@ -92,7 +92,7 @@ test("a stream with a project sends only the ev events of that project, and a ch
 test("a temporary record or factory file and a log count as no change", () => {
   expect(countsInRecords("r-1.json.123.tmp")).toBe(false);
   expect(countsInRecords("r-1.json")).toBe(true);
-  expect(countsInFactory("tick.log")).toBe(false);
+  expect(countsInFactory("x.log")).toBe(false);
   expect(countsInFactory("tick.json.4242.tmp")).toBe(false);
   expect(countsInFactory("paused")).toBe(true);
 });

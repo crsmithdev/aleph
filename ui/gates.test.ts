@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
@@ -286,15 +286,6 @@ test("log collapses a run of identical gate events into one with times, first an
     expect(Date.parse(g[0].first!)).toBeCloseTo(NOW - 30 * 60_000, -4);
     expect(Date.parse(g[0].at)).toBeCloseTo(NOW - 10 * 60_000, -4);
   });
-});
-
-test("a director line only in tick.log gives no log entry and no event file", async () => {
-  const dir = process.env.ALEPH_FACTORY_DIR!;
-  rmSync(eventsDir(), { recursive: true, force: true });
-  rmSync(join(dir, "tick.converted"), { force: true });
-  appendFileSync(join(dir, "tick.log"), `${ago(0.3)} director: r-10: run-cap: decided: rerun: the cause is fixed\n`);
-  expect(((await body()) as any).log.entries.find((x: any) => x.subject === "r-10")).toBeUndefined();
-  expect(existsSync(eventsDir())).toBe(false);
 });
 
 const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");

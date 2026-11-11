@@ -9,7 +9,7 @@
 import { afterOf, areasOf, labels } from "../../../issues/lib/store.ts";
 import { RUN_CAP } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { word, type Event } from "../../../lib/naming.ts";
+import type { Event } from "../../../lib/naming.ts";
 import { POLICY } from "../records/outcome.ts";
 
 /** Runs of one issue in a row that may end with no commit before the dispatch stops starting it. */
@@ -82,7 +82,7 @@ function notReady(f: IssueFacts): Extract<IssueDecision, { kind: "not-ready" }> 
   if (f.done(f.name)) return not("the item is already done", "The item is already done", { action: "done" });
   const ids = pendingWaits(afterOf(f.item), f.done);
   if (ids.length) return { ...not(`after ${ids.join(",")}`, `Waits on ${ids.join(", ")}`, { action: "after", on: ids }), ids };
-  if (f.open) return not(`its job is ${f.open}`, `Its job is ${f.open}`, { action: word("state", f.open), on: f.job ? [f.job] : undefined });
+  if (f.open) return not(`its job is ${f.open}`, `Its job is ${f.open}`, { action: f.open, on: f.job ? [f.job] : undefined });
   return null;
 }
 

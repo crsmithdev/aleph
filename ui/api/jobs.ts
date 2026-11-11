@@ -99,13 +99,13 @@ const KIND = { build: "worker", recheck: "worker", land: "land", plain: "plain",
 const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
   worker: "worker", review: "reviewer", intake: "intake", director: "director", monitor: "monitor",
 };
-/** The runs of a job as the page shows them; with `all`, every run, each also gets its job ID. */
-function runInfos(runs: Entry[], fit: Fit | null, all: Entry[]): RunInfo[] {
+/** The runs of a job as the page shows them, each with its job ID. */
+function runInfos(runs: Entry[], fit: Fit | null): RunInfo[] {
   const out: RunInfo[] = [];
   runs.forEach((e) => {
     const r = e.run;
     const condition = r.condition;
-    const info: RunInfo = { id: e.id, ...(all ? { job: jobIdOf(e, all) } : {}), kind: KIND[r.kind] ?? "worker", condition, started: r.started };
+    const info: RunInfo = { id: e.id, job: jobIdOf(e), kind: KIND[r.kind] ?? "worker", condition, started: r.started };
     if (r.ended) info.ended = r.ended;
     if (r.cost !== undefined) info.cost = r.cost;
     if (r.model) info.model = r.model;
@@ -141,13 +141,13 @@ export interface Row {
 }
 
 /** Each run as a row, with its job ID and its issue's title. */
-function rowsOf(runs: Entry[], all: Entry[]): Row[] {
+function rowsOf(runs: Entry[]): Row[] {
   const lists = jobProjector().lists;
   return runs.map((e) => {
     const r = e.run, issue = issueKeyOf(r) ?? null;
     const ended = r.ended ?? null, kind = KIND[r.kind as keyof typeof KIND] ?? "worker";
     return {
-      id: jobIdOf(e, all), subject: subjectOf(r), name: r.name, repo: r.repo ?? "", kind: r.kind, actor: RUN_ACTOR[kind] ?? null, state: r.condition,
+      id: jobIdOf(e), subject: subjectOf(r), name: r.name, repo: r.repo ?? "", kind: r.kind, actor: RUN_ACTOR[kind] ?? null, state: r.condition,
       title: (issue && lists.item(r.repo!, onOf(r)!)?.title) || r.name, issue, started: r.started, ended,
       seconds: ended ? Math.round((Date.parse(ended) - Date.parse(r.started)) / 1000) : null, cost: r.cost ?? null, model: r.model ?? null,
     };
@@ -168,7 +168,7 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
   const fit = await currentFit().catch(() => null);
   const projector = jobProjector();
   const job = projector.toJob(runs, v);
-  const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit, allRuns()), holds: readHolds([job.name]) };
+  const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit), holds: readHolds([job.name]) };
   const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
   if (blockers.length) detail.blockers = blockers;
   const rec = readRecord(keyOf(counting(runs).run));
@@ -214,7 +214,7 @@ export const routes: Routes = {
     const hit = all.filter(({ run: r }) => repoIn(r.repo, sc.project) && (!state || r.condition === state) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)))
       .sort((a, b) => Date.parse(b.run.started) - Date.parse(a.run.started));
     const page = hit.slice(0, limit);
-    return Response.json({ jobs: rowsOf(page, all), next: hit.length > limit ? page.at(-1)!.run.started : null });
+    return Response.json({ jobs: rowsOf(page), next: hit.length > limit ? page.at(-1)!.run.started : null });
   },
 
   // The jobs of one issue and its sub-issues, newest first.
@@ -224,7 +224,7 @@ export const routes: Routes = {
     if (!p || !repoIn(p.repo, projectOf(url))) return Response.json({ error: "no such issue" }, { status: 404 });
     const all = allRuns();
     const mine = [...(runsByIssue(all, { rollUp: true }).get(`${p.repo}-${tail(p)}`) ?? [])].reverse();
-    return Response.json({ jobs: rowsOf(mine, all) });
+    return Response.json({ jobs: rowsOf(mine) });
   },
 
   "GET /api/jobs/:id": async (_req, params, url) => {

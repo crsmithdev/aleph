@@ -9,7 +9,7 @@
  * action. An Ask the director did not decide goes to Chris when its run ends: a failed run, a bad reply, or actions that
  * leave the Ask open all write case text. Actions that leave the Ask open write the director's case text and one line on
  * what it did and could not do; a failed run or a malformed reply writes the fallback. Each outcome is a `director` event in the job record of its item,
- * the record that later runs read, and log events in tick.log (the Gates page log): one `escalated`, or one per applied action.
+ * the record that later runs read, and log events (the Gates page log): one `escalated`, or one per applied action.
  */
 import { existsSync, readFileSync } from "node:fs";
 import * as jobRecord from "../records/record.ts";
@@ -33,7 +33,7 @@ import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { FULL, refs as idsIn, word } from "../../../lib/naming.ts";
+import { FULL, refs as idsIn } from "../../../lib/naming.ts";
 import type { Hold } from "../gates/issue-decision.ts";
 import { DIRECTOR_CAP, needsYouLog } from "../infra/settings.ts";
 import { vaultDir } from "../../../lib/paths.ts";
@@ -551,7 +551,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     if (issue !== undefined) store.note(repo, issue, `director: dropped ${name}: ${reason}${a.do === "drop" && a.after ? `; after ${a.after.join(", ")}` : ""}`);
     // A run's Ask goes with its run; an item's Ask stays when its job is dropped.
     const ev: Hold = a.do === "answer" ? { action: "answered", sub, note: a.note }
-      : { action: "dropped", sub: fate ? word("sub", fate) : sub, on: fate === "duplicate" ? idsIn(a.reason).filter((x) => x !== `${repo.key}-${issue}`) : undefined, note: a.reason };
+      : { action: "dropped", sub: fate ?? sub, on: fate === "duplicate" ? idsIn(a.reason).filter((x) => x !== `${repo.key}-${issue}`) : undefined, note: a.reason };
     return waits ? no(a, `dropped, but after not set: ${waits}`) : done(a, ev, c.at === "run");
   }
   if (!item || issues.status(item) !== "open") return no(a, `no open issue ${c.at === "run" ? c.entry.run.on ?? "for the run" : c.on}`);

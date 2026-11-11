@@ -9,7 +9,7 @@ import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { allRuns, isWaiting, issueKeyOf, loadRegistry, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
+import { isWaiting, issueKeyOf, loadRegistry, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting as lastReal, jobIdOf } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
@@ -217,9 +217,6 @@ function landedTrailers(repo: Repo | undefined, commit: string | undefined): { k
 export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jobs?: Runs[]) {
   const lists = reader();
   const bases = new Map<string, string | null>();
-  let every: Entry[] | undefined;
-  // A run from before job IDs has no `n`: its ID needs every run's start order, read once.
-  const jobOf = (e: Entry) => (e.run.n !== undefined ? jobIdOf(e) : jobIdOf(e, every ??= allRuns()));
 
   // The trailer the land writes.
   const needsYouIssue = (key: string | undefined, todo: number | string | undefined): { key: string; value: string }[] =>
@@ -230,7 +227,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     const todo = v.item;
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
-      id: jobOf(runs.find((e) => e.id === v.run.id) ?? lastReal(runs)), name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
+      id: jobIdOf(runs.find((e) => e.id === v.run.id) ?? lastReal(runs)), name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
       condition: v.condition, started: v.started, run: { id: v.run.id, kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
@@ -321,7 +318,7 @@ export function state(now = new Date()): State {
       running.push(toJob(runs));
       continue;
     }
-    // An intake, triage, planner or facts run sorts an issue and never lands; it shows only when it awaits you.
+    // An intake run sorts an issue and never lands; it shows only when it awaits you.
     if (last.kind === "intake") {
       if (isOpen(runs) && isWaiting(lastReal(runs).run.condition)) needs.push(toJob(runs));
       continue;

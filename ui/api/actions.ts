@@ -19,7 +19,7 @@ function find(id: string): Entry {
   loadRegistry();
   const all = allRuns(), e = runOfJob(id, all) ?? fail(404, `no job ${id}`);
   const now = lastReal(latestJob(e.run.name)!);
-  if (now.id !== e.id) fail(409, `${id} is no longer the job of ${e.run.name}: ${jobIdOf(now, all)} is`);
+  if (now.id !== e.id) fail(409, `${id} is no longer the job of ${e.run.name}: ${jobIdOf(now)} is`);
   return e;
 }
 

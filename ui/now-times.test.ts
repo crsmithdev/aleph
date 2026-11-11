@@ -52,11 +52,6 @@ test("Status times use the state's own now for the year check", () => {
   expect(page).not.toMatch(/\d\d? ?[AP]M/i);
 });
 
-test("a planner run shows as planner in the running lane", async () => {
-  const plan = { name: "plan-aleph-5", item: { title: "Big" }, condition: "running", run: { kind: "plan", started: "2026-10-27T16:50:00Z" }, started: "2026-10-27T16:50:00Z" };
-  expect(withAttn({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run" title="planner">planner');
-});
-
 test("app.css colours the Pause or Resume button from the need tokens", async () => {
   const css = await Bun.file(`${import.meta.dir}/app.css`).text();
   expect(css).toMatch(/\.act\.warn \{[^}]*var\(--need-bg\)[^}]*var\(--need\)/);

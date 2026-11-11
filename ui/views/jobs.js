@@ -35,7 +35,7 @@ export function renderScope(jobs, f = {}) {
   return scope({ get: (k) => f[k] }).bar({ more: repos });
 }
 
-const ROLES = ACTORS.filter((a) => !["human", "rule", "gate", "check"].includes(a));
+const ROLES = ACTORS.filter((a) => !["human", "rule", "gate", "check", "firefighter"].includes(a));
 export const renderFilters = (f = {}) => filterBar([
   { label: "State", name: "state", value: f.state || "", options: [{ value: "", label: "All" }, ...STATES] },
   { label: "Role", name: "role", value: f.role || "", options: [{ value: "", label: "All" }, ...ROLES] },

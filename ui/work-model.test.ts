@@ -28,9 +28,12 @@ beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 const now = new Date(NOW);
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
+const seq: Record<string, number> = {};
 const run = (id: string, extra: Record<string, unknown>) => {
   mkdirSync(join(runsDir, id), { recursive: true });
-  putRun(id, { repo: "fac", told: true, started: ago(2), ...extra } as any);
+  const subject = String(extra.on ?? extra.name);
+  seq[subject] = (seq[subject] ?? 0) + 1;
+  putRun(id, { repo: "fac", told: true, started: ago(2), n: seq[subject], ...extra } as any);
 };
 
 beforeAll(async () => {

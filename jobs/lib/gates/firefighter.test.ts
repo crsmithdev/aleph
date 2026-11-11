@@ -1,7 +1,7 @@
 // The firefighter as code: one critical issue per failing commit, from a red baseline or a red CI,
 // and a rescue Ask on a land live past 30 minutes. No agent run starts.
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
@@ -278,13 +278,11 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
   expect(reds()[0].notes.at(-1)).toContain(`past the failing commit ${failed.slice(0, 7)}`);
 });
 
-test("a step that fails is an event of the firefighter with the failure in its note, and no line in tick.log", async () => {
+test("a step that fails is an event of the firefighter with the failure in its note", async () => {
   fresh([]);
   ciStep([loadRegistry()[key]], listing([{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }]));
   await firefight({ gh: () => { throw new Error("gh broke"); }, after: () => {} });
   const events = readEvents().filter((e) => e.by === "firefighter" && e.action === "failed");
   expect(events.length).toBeGreaterThan(0);
   expect(events.some((e) => e.note?.includes("gh broke"))).toBe(true);
-  const tick = join(process.env.ALEPH_FACTORY_DIR!, "tick.log");
-  expect(existsSync(tick) ? readFileSync(tick, "utf8") : "").not.toContain("firefighter:");
 });

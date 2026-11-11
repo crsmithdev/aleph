@@ -194,10 +194,9 @@ test("stepOf: a run whose cause is not rescuable, as credit, waits; the rescue n
   expect(record.stepOf(job([{ condition: "failed", cause: "no-commit" }])).step).toBe("rescue");
 });
 
-test("jobIdOf: a numbered run reads its n; an un-numbered one its place in start order on its subject in runs, else 1", () => {
-  const runs = job([{ on: "aleph-1375", n: 6 }, { on: "aleph-1375" }, { on: undefined, kind: "monitor", name: "monitor", n: 14 }, { on: "aleph-1375" }]);
-  expect(runs.map((e) => record.jobIdOf(e))).toEqual(["aleph-1375#6", "aleph-1375#1", "monitor#14", "aleph-1375#1"]);
-  expect(runs.map((e) => record.jobIdOf(e, runs))).toEqual(["aleph-1375#6", "aleph-1375#2", "monitor#14", "aleph-1375#3"]);
+test("jobIdOf: a run reads its subject and its n", () => {
+  const runs = job([{ on: "aleph-1375", n: 6 }, { on: undefined, kind: "monitor", name: "monitor", n: 14 }]);
+  expect(runs.map((e) => record.jobIdOf(e))).toEqual(["aleph-1375#6", "monitor#14"]);
 });
 
 test("next: a stuck run the factory asked Chris about waits", () => {

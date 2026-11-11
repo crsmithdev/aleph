@@ -51,7 +51,7 @@ function renderOutcome(d) {
 }
 
 /** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. */
-const PIPE = Object.fromEntries(["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
+const PIPE = Object.fromEntries(["intake", "spec-check", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
 /** The Pipeline card for the window: each stage with its runs per issue and p90 runtime. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
 export function renderPipeline(d) {
   const box = (body, aside = "") => card("Pipeline", body, { id: "pipeline", aside });
@@ -70,16 +70,6 @@ export function renderPipeline(d) {
 export function findingHtml(text) {
   return esc(text).split(/\*\*(.+?)\*\*/).map((part, i) => i % 2 ? `<b>${part}</b>`
     : part.replace(/(&#?\w+;)|(\$?\d+(?:[.,]\d+)*%?)/g, (m, entity) => (entity ? m : `<b>${m}</b>`))).join("");
-}
-
-/** The monitor's newest daily report: the reader's findings in rank order. Nothing before the first report. */
-export function renderMonitor(s) {
-  const m = s.factory?.monitor;
-  if (!m) return "";
-  const said = m.error ? error(`No reading: ${m.error}`, "The monitor reads again at its next run.")
-    : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`
-    : empty("Nothing looks off.");
-  return card("Monitor", said, { id: "monitor", aside: `<span class="asof">${esc(m.day)}</span>`, label: `Monitor ${m.day}` });
 }
 
 /** The events the stream sent since the page loaded, oldest first; the Herald merges them with the state's. */
@@ -259,8 +249,8 @@ function runningLane(s) {
   const issues = (s.runningIssues ?? []).map((i) => runningIssue(i, s.now)).join("");
   const rows = issues + (s.running ?? []).map((j) => {
     const run = j.run ?? { kind: "build", started: j.started };
-    const worker = run.kind === "agent" || run.kind === "build";
-    const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
+    const worker = run.kind === "build";
+    const kind = worker ? "worker" : run.kind;
     const tier = TIERS[j.tier ?? shortModel(j.model)];
     const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
     return laneCard(j.name, `run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));

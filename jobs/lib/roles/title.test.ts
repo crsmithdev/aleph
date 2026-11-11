@@ -1,5 +1,5 @@
 import { afterAll, expect, setSystemTime, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { titleProblem } from "../../../issues/lib/todo.ts";
@@ -74,7 +74,6 @@ test("when the GPU slot stays taken past the title call's time box, the title co
     expect(await title).toBe("A title from Claude");
     expect(readFileSync(join(dir, "args-busy"), "utf8")).toContain("--model haiku");
     expect(readEvents().find((e) => e.action === "gpu")?.note).toContain("the call falls back to Claude");
-    expect(existsSync(join(dir, "factory-busy", "tick.log"))).toBe(false);
   } finally {
     release();
     setSystemTime();

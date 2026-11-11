@@ -58,7 +58,7 @@ describe("startJob", () => {
     const job = "20261103-000001-fac-x-agent";
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
-    putRun(basename(folder), { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: NOW } as Run);
+    putRun(basename(folder), { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", n: 1, made: NOW } as Run);
     expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).toBe("x is running as x#1");
     expect(runs()).toEqual([job]);
   });

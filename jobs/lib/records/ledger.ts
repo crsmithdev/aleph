@@ -102,7 +102,7 @@ export interface Run {
   told: boolean; shown?: boolean; started: string; ended?: string;
   /** Milliseconds since the epoch, set under the dispatch lock: the order runs were made in. */
   made?: number;
-  /** The run's number on its subject (`subjectOf`), from 1 in start order: the `n` of its job ID. A run from before job IDs has none. */
+  /** The run's number on its subject (`subjectOf`), from 1 in start order: the `n` of its job ID. Every stored run has one; `makeRun` sets it. */
   n?: number;
 }
 
@@ -191,7 +191,7 @@ export function runOfJob(id: string, runs = allRuns()): Entry | undefined {
 export function trailerOf(job: string): string {
   const runs = allRuns();
   const first = runs.find((e) => e.id === job);
-  return first ? record.jobIdOf(first, runs) : job;
+  return first ? record.jobIdOf(first) : job;
 }
 
 /**
