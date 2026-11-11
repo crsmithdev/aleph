@@ -187,11 +187,11 @@ export function renderLog(d, by, limit = PAGE) {
   const entries = d.log.entries.filter((e) => !pick || e.by === pick);
   const rows = entries.slice(0, limit).map((e) => {
     const subject = e.action === "changed" && !parseId(e.subject) ? `<a href="#rules">${esc(e.subject)}</a>` : idHtml(e.subject);
-    return `<tr><td class="time">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${subject}</td><td>${esc(e.action || "–")}</td><td>${esc(e.sub ?? "")}</td>` +
+    return `<tr><td>${subject}</td><td class="time">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${esc(e.action || "–")}</td><td>${esc(e.sub ?? "")}</td>` +
       `<td class="what">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return `<section id="gates-log" aria-label="Log">${sectionHead("Log")}${filter}` +
-    (rows ? dataTable(heads(["Logged", "By", "Subject", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
+    (rows ? dataTable(heads(["Subject", "Logged", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
 }
 
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */

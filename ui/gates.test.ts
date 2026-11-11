@@ -131,7 +131,8 @@ test("a hold writes its event, and the log shows it as busy with the job and the
     setCodes({ aleph: "a" });
     expect(contentText(e)).toBe("a1372 → issues.js");
     const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
-    expect(h).toContain('<td><a class="idl" title="aleph-1420" href="#/issues/aleph/1420">a1420</a></td><td>busy</td><td></td><td class="what"><a class="idl" title="aleph-1372" href="#/issues/aleph/1372">a1372</a> → <code title="ui/views/issues.js">issues.js</code></td>');
+    expect(h).toContain('<tr><td><a class="idl" title="aleph-1420" href="#/issues/aleph/1420">a1420</a></td><td class="time">');
+    expect(h).toContain('</td><td>busy</td><td></td><td class="what"><a class="idl" title="aleph-1372" href="#/issues/aleph/1372">a1372</a> → <code title="ui/views/issues.js">issues.js</code></td>');
   } finally { setHolds(was); }
 });
 
@@ -251,9 +252,10 @@ test("the log filter keeps one actor's entries", () => {
   const h = gates.renderLog(data(), "human");
   expect(h).toMatch(/class="seg"[^>]*>.*aria-pressed="true">human</);
   expect(h).not.toContain("fchip");
-  expect(h).toContain('<td><a href="#rules">rescue</a></td><td>changed</td><td>rescue</td>');
+  expect(h).toContain('<tr><td><a href="#rules">rescue</a></td><td class="time">');
+  expect(h).toContain("</td><td>changed</td><td>rescue</td>");
   expect(h).not.toContain("r-5");
-  expect(h).toContain('<tr><th>Logged</th><th>By</th><th>Subject</th><th>Action</th><th>Sub</th><th>Content</th><th class="num">Times</th></tr>');
+  expect(h).toContain('<tr><th>Subject</th><th>Logged</th><th>By</th><th>Action</th><th>Sub</th><th>Content</th><th class="num">Times</th></tr>');
   expect(h).toContain(`<td class="what"><div class="clamp">set to recommended</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
   expect(gates.renderLog(data(), "rule")).not.toContain("clamp");
 });

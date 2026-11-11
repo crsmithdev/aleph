@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { run } from "../jobs/commands.ts";
 import { add, drop, note } from "../ideas/ideas.ts";
 import { withEnv, withServer } from "./test-server.ts";
+// @ts-ignore ideas.js is plain JS, shared with the page
+import { renderIdeas } from "./views/ideas.js";
 
 // The fake lens agent: it writes result.md and ends as stream-json does, with the cost $FAKE_COST.
 const FAKE = `#!/usr/bin/env bash
@@ -71,3 +73,11 @@ test("POST refuses an unknown lens or idea, else starts the lens and answers at 
   for (let i = 0; i < 5000 && (await json("/api/ideas/alpha")).lenses.length === before; i++);
   expect((await json("/api/ideas/alpha")).lenses).toHaveLength(before + 1);
 }, 30000);
+
+test("renderIdeas puts the Idea title first, with its link in each row's first cell", () => {
+  const row = (slug: string, title: string) => ({ slug, title, last: "2026-01-02", status: "exploring", target: "aleph", lenses: [], questions: 1, spent: 0.5 });
+  const h = renderIdeas([row("alpha", "Alpha"), row("beta", "Beta")], "exploring");
+  expect(h).toContain("<tr><th>Idea</th><th>Last Change</th><th>Status</th><th>Target</th><th>Lenses</th><th class=\"num\">Open Questions</th><th class=\"num\">Spent</th></tr>");
+  expect(h).toContain('<tr><td class="wide" title="Alpha"><a href="#/ideas/alpha">Alpha</a></td><td class="time">');
+  expect(h).toContain('<tr><td class="wide" title="Beta"><a href="#/ideas/beta">Beta</a></td><td class="time">');
+});
