@@ -1,6 +1,6 @@
 // The Ideas views: the list at #/ideas (/api/ideas) and one idea at #/ideas/:slug (/api/ideas/:slug) with a tab for
 // the write-up, one per lens and the log. A lens result is shown from the lens file route in a sandboxed iframe.
-import { actButton, badge, crumb, dataTable, day, empty, esc, filterBar, goQuery, heads, kept, keep, md, money, pageHead, postJson, say, seg, when } from "../lib.js";
+import { actButton, badge, crumb, dataTable, day, empty, error, esc, filterBar, goQuery, heads, kept, keep, loadingLine, md, money, pageHead, postJson, say, seg, when } from "../lib.js";
 import { issueHref } from "../../lib/naming.ts";
 import { redraw } from "../router.js";
 
@@ -50,7 +50,7 @@ export function renderIdea(d) {
     const url = (l) => `/api/ideas/${encodeURIComponent(d.slug)}/${l.file}`;
     const newest = all[0];
     const body = !newest ? empty(`No ${label} result yet.`)
-      : newest.file.endsWith(".md") ? `<div class="md" data-src="${esc(url(newest))}">Loading…</div>`
+      : newest.file.endsWith(".md") ? `<div class="md" data-src="${esc(url(newest))}">${loadingLine("the result")}</div>`
       : `<iframe class="lens-frame" sandbox title="${esc(label)}" src="${esc(url(newest))}"></iframe>`;
     const older = all.slice(1).map((l) => `<li><a href="${esc(url(l))}" target="_blank">${esc(when(local(l.at)))}</a></li>`).join("");
     return `${body}${older ? `<h3>Older Results</h3><ul>${older}</ul>` : ""}<p>${now.has(`${d.slug}-${id}`) ? badge("running") : actButton("Queue job", { lens: id })}</p>`;
@@ -76,7 +76,8 @@ export const ideaView = {
   render: renderIdea,
   mount: (root, d) => {
     for (const el of root.querySelectorAll(".md[data-src]")) {
-      fetch(el.dataset.src).then((r) => r.text()).then((t) => { el.innerHTML = md(t); });
+      fetch(el.dataset.src).then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${el.dataset.src} answered ${r.status}`))))
+        .then((t) => { el.innerHTML = md(t); }, (err) => { el.innerHTML = error(err.message); });
     }
     root.onclick = async (e) => {
       const t = e.target.closest("button[data-tab]");

@@ -46,7 +46,7 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
 function renderOutcome(d) {
   const outcome = (body) => card("Agent Time", body, { id: "outcome", label: "Agent time" });
   if (!d) return outcome(loadingLine("the outcomes"));
-  if (d.error) return outcome(`<p>${esc(d.error)}</p>`);
+  if (d.error) return outcome(error(d.error));
   return outcome(bar(d));
 }
 

@@ -5,8 +5,10 @@ import { join } from "node:path";
 import { run } from "../jobs/commands.ts";
 import { add, drop, note } from "../ideas/ideas.ts";
 import { withEnv, withServer } from "./test-server.ts";
-// @ts-ignore ideas.js is plain JS, shared with the page
-import { renderIdeas } from "./views/ideas.js";
+// @ts-ignore plain JS, shared with the page
+import { error, loadingLine } from "./lib.js";
+// @ts-ignore
+import { ideaView, renderIdea, renderIdeas } from "./views/ideas.js";
 
 // The fake lens agent: it writes result.md and ends as stream-json does, with the cost $FAKE_COST.
 const FAKE = `#!/usr/bin/env bash
@@ -73,6 +75,19 @@ test("POST refuses an unknown lens or idea, else starts the lens and answers at 
   for (let i = 0; i < 5000 && (await json("/api/ideas/alpha")).lenses.length === before; i++);
   expect((await json("/api/ideas/alpha")).lenses).toHaveLength(before + 1);
 }, 30000);
+
+test("a .md lens result loads behind loadingLine(), and a failed fetch puts error() in the pane", async () => {
+  const d = { slug: "alpha", title: "Alpha", status: "exploring", writeup: "", log: [], running: [], lenses: [{ lens: "prior-art", file: "lenses/p.md", at: "2026-11-02 09:00" }] };
+  const h = renderIdea(d);
+  expect(h).toContain(`<div class="md" data-src="/api/ideas/alpha/lenses/p.md">${loadingLine("the result")}</div>`);
+  const el: any = { dataset: { src: "/x.md" }, innerHTML: "" }, was = globalThis.fetch;
+  globalThis.fetch = (async () => ({ ok: false, status: 404, text: async () => "nope" })) as any;
+  try {
+    ideaView.mount({ querySelectorAll: () => [el] }, d);
+    await new Promise((r) => setTimeout(r, 0));
+  } finally { globalThis.fetch = was; }
+  expect(el.innerHTML).toBe(error("/x.md answered 404"));
+});
 
 test("renderIdeas puts the Idea title first, with its link in each row's first cell", () => {
   const row = (slug: string, title: string) => ({ slug, title, last: "2026-01-02", status: "exploring", target: "aleph", lenses: [], questions: 1, spent: 0.5 });

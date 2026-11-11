@@ -123,7 +123,7 @@ function recallHistory(hist = []) {
   const total = hist.reduce((a, b) => a + b, 0), top = Math.max(...hist, 1);
   return `<h4>Recall history, 30 days</h4>` + (total
     ? `<div class="spark mhist" role="img" aria-label="${total} recalls in 30 days">${hist.map((c) => `<i title="${c}" data-n="${c}" style="height:${c ? Math.max(12, (c / top) * 100) : 4}%"></i>`).join("")}</div>`
-    : `<p class="quiet">No recall in the last 30 days.</p>`);
+    : empty("No recall in the last 30 days."));
 }
 
 const why = `<input class="mwhy" name="why" placeholder="Why (optional)" aria-label="Why">`;
@@ -369,7 +369,7 @@ function mount(root, m) {
   search();
 }
 
-const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <span class="hint">${esc([n.kind, n.scope].filter(Boolean).join(" · "))}</span></li>`).join("")}</ul>` : `<p class="quiet">None.</p>`);
+const crumbs = (t) => (t.length ? `<ul>${t.map((n) => `<li>${link(n.title)} <span class="hint">${esc([n.kind, n.scope].filter(Boolean).join(" · "))}</span></li>`).join("")}</ul>` : empty("None."));
 
 /** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. */
 export function renderNote(n) {

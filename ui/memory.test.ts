@@ -10,7 +10,7 @@ import { items } from "./memory-items.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
-import { dataTable, heads, priorityBadge } from "./lib.js";
+import { dataTable, empty, heads, priorityBadge } from "./lib.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
@@ -246,7 +246,7 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   expect(h.match(/<i title=/g)).toHaveLength(30);
   expect(h).toContain('data-n="2"');
   expect(h).toContain('aria-label="3 recalls in 30 days"');
-  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain("No recall in the last 30 days.");
+  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain(empty("No recall in the last 30 days."));
 });
 
 test("/api/memory lint gives no stale finding to an old note that the read log shows read lately", async () => {
@@ -334,6 +334,8 @@ test("the page is the search, the freshness filter, seven type tiles, the result
   expect(v.view.api({}, new URLSearchParams("project=aleph"))).toBe("/api/memory?project=aleph");
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
+  const none = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "x", links: [], backlinks: [] });
+  expect(none.match(/<div class="empty"><p>None\.<\/p><\/div>/g)).toHaveLength(2);
 });
 
 test("each type has its own layout, filters keep by type and freshness, and the tiles count before the type filter", () => {

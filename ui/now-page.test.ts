@@ -1,6 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
+// @ts-ignore plain JS, shared with the page
+import { error } from "./lib.js";
 import { setCodes } from "../lib/naming.ts";
 import { job, state } from "./fixtures/status-state.ts";
 import { full, section } from "./test-now.ts";
@@ -205,4 +207,10 @@ test("a land card has its own kind class, and the Done header shows the count of
 test("the Status page scorecard is a tiles section with the id scorecard", () => {
   const page = view.view.render({ ...full, usage: undefined } as any, {}, new URLSearchParams()) as string;
   expect(page).toContain('<section class="tiles" id="scorecard" aria-label="Scorecard">');
+});
+
+test("a failed flow load shows error() in the Agent Time card", () => {
+  const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams()), bad = view.view.render({ ...state, usage: USAGE, flow: { error: "x" } }, {}, new URLSearchParams());
+  expect(page).not.toContain('role="alert"');
+  expect(bad.slice(bad.indexOf('id="outcome"'), bad.indexOf('id="pipeline"'))).toContain(error("x"));
 });
