@@ -239,6 +239,24 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('getComputedStyle(document.querySelector("#nav li.head")).display')).not.toBe("none");
   }, 30_000);
 
+  test("Kit: every specimen draws, the charts draw from fixtures, and its theme pick stays on the kit page", async () => {
+    await page.go("#/kit?theme=dark");
+    await page.when('document.querySelector(".kit-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 3');
+    const r = await page.ev<any>(`({
+      specimens: document.querySelectorAll('[data-annotate^="kit/"]').length,
+      swatches: document.querySelectorAll(".kit-swatch").length,
+      charts: document.querySelectorAll("aleph-chart canvas").length,
+      theme: document.documentElement.dataset.theme,
+      error: /Could not load|failed to render/.test(document.querySelector("#view").textContent.replace("Could not load jobs.", "")),
+    })`);
+    expect(r).toMatchObject({ theme: "dark", error: false, charts: 3 });
+    expect(r.specimens).toBeGreaterThan(20);
+    expect(r.swatches).toBeGreaterThan(20);
+    await page.go("#/jobs");
+    expect(await page.ev("document.documentElement.dataset.theme ?? null")).toBeNull();
+    expect(page.errors).toEqual([]);
+  }, 30_000);
+
   test("at 390 px a metric value stays one line and a segmented control stays one row or scrolls inside itself", async () => {
     await page.width(390);
     for (const route of ["#/", "#/issues", "#/jobs", "#/agents"]) {

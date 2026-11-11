@@ -2,6 +2,8 @@
 
 The design language of `ui/`, read from the code by the design-language skill (`skills/design-language/SKILL.md`). It goes from principles to foundations to components. Each component has what it is, when to use it, and Do and Don't pairs. A value the rules do not allow is a deviation, listed at the end.
 
+The renders are on the Kit page, `#/kit` (`ui/views/kit.js`): each component and token, drawn by its own helper from fixture data, in light and dark. A new component gets a specimen there.
+
 ## Principles
 
 1. **One token set, two themes.** Colours are custom properties on `:root` in `ui/app.css`, re-set for dark by `@media (prefers-color-scheme: dark)` and by `:root[data-theme="dark"]`. A view that uses only tokens gets dark mode free. Light is lavender; dark is Palenight.
