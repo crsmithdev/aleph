@@ -225,3 +225,15 @@ test("a change sent before the stream opened is caught: opening it loads the vie
   expect(p.drawn).toEqual([{ n: "before the change" }, { n: "after the change" }]);
   expect(p.firsts).toEqual([true, false]);
 });
+
+test("opening the stream draws again only when the view's data changed", async () => {
+  const p = page();
+  const shown = p.router.show(p.route);
+  p.answer(0, { n: 1 });
+  await shown;
+  FakeStream.last.onopen();
+  await new Promise((r) => setTimeout(r));
+  p.answer(1, { n: 1 });
+  await new Promise((r) => setTimeout(r));
+  expect(p.drawn).toEqual([{ n: 1 }]);
+});

@@ -71,12 +71,16 @@ export function loader(env) {
 
   // Each load takes a number; an answer that finds a newer number is dropped, so an old load never draws over a new one.
   // `drawn` is the last mount: the next draw waits for it.
-  async function load(route, first) {
+  // `quiet`: draw nothing when the data equals what the view shows, so a check for a missed change does not redraw the page.
+  async function load(route, first, quiet) {
     const mine = ++seq, more = route.view.more;
     let data = null;
     if (route.view.api) {
       try {
         data = await dataOf(route, get);
+        const raw = JSON.stringify(data);
+        if (quiet && mine === seq && route === shown && raw === route.raw) return;
+        route.raw = raw;
         if (route === shown) env.ok(route);
       } catch (e) {
         if (route !== shown || mine !== seq) return;
@@ -101,13 +105,13 @@ export function loader(env) {
 
   // One reload at a time; a call that comes during it makes one more. A reload waits while the reader types (the blur
   // runs it) and does not draw over a button armed for its second click, which stands for five seconds at most.
-  async function reload() {
+  async function reload(quiet) {
     if (!shown?.view) return;
     if (reloading) { again = true; return; }
     if (env.armed()) return;
     if (env.focused()) { pending = true; return; }
     reloading = true;
-    try { await load(shown, false); } finally { reloading = false; }
+    try { await load(shown, false, quiet === true); } finally { reloading = false; }
     if (again) { again = false; reload(); }
   }
 
@@ -140,7 +144,7 @@ export function loader(env) {
       if (es.readyState === env.EventSource.CLOSED && es === events) setTimeout(() => { if (es === events) { follow(); reload(); } }, 2000);
     };
     // A change sent before the stream opened reached no one, so each open loads again once the first load ends.
-    es.onopen = () => { heard(); firstLoad.then(reload); };
+    es.onopen = () => { heard(); firstLoad.then(() => reload(true)); };
   }
 
   /** Open the stream again when it went quiet for 60 s. */
