@@ -494,7 +494,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       expect(m.clip).not.toContain(true);
       expect(m.widths[0]!).toBeGreaterThan(m.widths[2]!);
       expect(m.page).toBeLessThanOrEqual(w);
-      await page.ev('document.querySelector("#obar-probe").remove()');
+      await page.ev('document.querySelector("#obar-probe")?.remove()');
     }, 30_000);
   }
 
@@ -521,7 +521,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
         expect(Math.abs(sep[1]! - bottom!)).toBeLessThanOrEqual(0.1);
       }
     }
-    await page.ev('document.querySelector("#obar-probe").remove()');
+    await page.ev('document.querySelector("#obar-probe")?.remove()');
   }, 30_000);
 
   test("the second tile figure is a share of the value", async () => {
