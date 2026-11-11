@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { session } from "../../hooks/lib/handshake.ts";
 import { scan } from "./clones.ts";
 import { accepted, changed, history, holes, rules, wilson } from "./cochange.ts";
 
@@ -76,6 +77,15 @@ test("the hook blocks once per session for the same findings, and never a stop a
   expect(first.reason).toContain("b.ts changed with it in 12 of 12 commits");
   expect(stop(input)).toBe("");
   expect(stop({ ...input, session_id: "s2", stop_hook_active: true })).toBe("");
+});
+
+test("the hook skips a change from before the session started", () => {
+  write("a.ts", "export const a = 99;\n");
+  const input = { hook_event_name: "Stop", session_id: "s3", cwd: root };
+  session("s3").set({ start: Date.now() + 60_000 });
+  expect(stop(input)).toBe("");
+  session("s3").set({ start: Date.now() - 60_000 });
+  expect(JSON.parse(stop(input)).decision).toBe("block");
 });
 
 test("a copy of code a boundary protects, in a changed file, blocks with the owner", () => {

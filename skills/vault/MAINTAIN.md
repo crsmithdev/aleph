@@ -1,6 +1,6 @@
 # Vault maintenance
 
-Maintenance ops of [vault](SKILL.md). Same script: `bun ~/.claude/skills/aleph/vault/cli.ts <op>`.
+Maintenance ops of [vault](SKILL.md). Same script as the one SKILL.md names.
 
 ## rename-scope
 

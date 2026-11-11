@@ -28,7 +28,7 @@ Known false positives, dropped with the reason:
   fences. The fix is the code span, not the closing tag that `--fix` writes.
 - **CC-HK-003 "no matcher".** A tool hook with no matcher matches every tool; it is a finding only when the hook
   means one tool.
-- **XP-003 hard-coded path.** A path to the user's own data (`~/.claude/`, `~/.<tool>/`) in a file that only
+- **XP-003 hard-coded path.** A path to the user's own data (a path under the home folder's tool directory) in a file that only
   that machine loads is not a portability problem.
 
 Warnings and infos are candidates: rate them 1-5 like any judgment.

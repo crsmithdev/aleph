@@ -8,19 +8,20 @@
  *
  * A finding blocks the stop once per session, with the evidence, so the agent changes the companion, calls the
  * owner, or records the second way in `.refit.json`. The same findings do not block twice, and a stop that a
- * Stop hook already continued is never blocked.
+ * Stop hook already continued is never blocked. A change from before the session started is not the agent's: the
+ * hook counts only the commits and edits since the session's start.
  */
 import { createHash } from "node:crypto";
-import { once } from "../../hooks/lib/handshake.ts";
+import { once, session } from "../../hooks/lib/handshake.ts";
 import { scan } from "./clones.ts";
 import { accepted, base, changed, history, holes, isAccepted, rules } from "./cochange.ts";
 
 const at = (s: { name: string; start: number; function?: string }) => `${s.name}:${s.start}${s.function ? ` (${s.function})` : ""}`;
 
 /** The block reason for the findings, or null when there are none. */
-export function reason(root: string): string | null {
+export function reason(root: string, since = 0): string | null {
   const from = base(root);
-  const change = changed(root, from);
+  const change = changed(root, from, since);
   if (!change.size) return null;
   const ok = accepted(root);
   const left = holes(root, change, rules(history(root)), ok);
@@ -41,7 +42,7 @@ if (import.meta.main) {
   if (input.hook_event_name !== "Stop" || input.stop_hook_active === true) process.exit(0);
   const top = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], { cwd: input.cwd ?? process.cwd(), stdout: "pipe", stderr: "ignore" });
   if (top.exitCode !== 0) process.exit(0);
-  const text = reason(top.stdout.toString().trim());
+  const text = reason(top.stdout.toString().trim(), session(input.session_id).get()?.start);
   if (!text) process.exit(0);
   const blocked = once(`oneway:${input.session_id}:${createHash("sha1").update(text).digest("hex").slice(0, 12)}`);
   if (blocked.seen()) process.exit(0);

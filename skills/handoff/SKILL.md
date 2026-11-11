@@ -8,7 +8,7 @@ effort: low
 
 Write a handoff for the next session. The next session reads it with no other context.
 
-Path, where `<handoffs dir>` is `$ALEPH_HANDOFFS_DIR` if set, else `~/.aleph/handoffs`:
+Path, where `<handoffs dir>` is `!`echo "${ALEPH_HANDOFFS_DIR:-$HOME/.aleph/handoffs}"``:
 
 - With an argument `<name>` (the Sidetone bridge passes `sidetone`): `<handoffs dir>/<name>.md`.
 - With no argument: `<handoffs dir>/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`.

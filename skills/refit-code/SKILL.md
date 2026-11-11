@@ -75,8 +75,9 @@ one subagent over the whole repo, with the full seed. Each returns
 5. **Owner and hold.** For each finding, its lens's Fix section names what changes, and its Hold section names
    what keeps it from coming back. Done when every finding has both.
 6. **Report.** Write the HTML report of [REPORT.md](REPORT.md), strongest first, then accepted and dropped.
-   Give the user its absolute path. Then ask which findings to act on, in an `AskUserQuestion`. File issues
-   only when the user asks. Done when the report is written and the question asked.
+   Give the user its absolute path. Then ask which findings to act on, in an `AskUserQuestion`. In a headless
+   run, `AskUserQuestion` is not available: end the reply with the findings as a numbered list instead. File
+   issues only when the user asks. Done when the report is written and the question asked.
 
 ## Act
 

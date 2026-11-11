@@ -10,7 +10,7 @@
  *   bun cochange.ts seed  [--since 90.days]   JSON: the files fixed most, and the strongest pairs
  *   bun cochange.ts holes                      JSON: companions the current change left out
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { scan } from "./clones.ts";
 
@@ -95,10 +95,13 @@ export function base(root: string): string {
   return git(root, "merge-base", "HEAD", "origin/HEAD").trim() || git(root, "merge-base", "HEAD", "main").trim();
 }
 
-/** The files the current change touches: the branch since it left the default branch, plus the working tree. */
-export function changed(root: string, from = base(root)): Set<string> {
-  const branch = from ? git(root, "diff", "--name-only", `${from}...HEAD`).split("\n") : [];
-  const tree = git(root, "status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3).split(" -> ").pop()!);
+/** The files the current change touches: the branch since it left the default branch, plus the working tree. With `since` (ms), only the commits and edits from then on, so a change from before the session does not count. */
+export function changed(root: string, from = base(root), since = 0): Set<string> {
+  const branch = !from ? [] : since
+    ? git(root, "log", `--since=${new Date(since).toISOString()}`, "--name-only", "--pretty=format:", `${from}..HEAD`).split("\n")
+    : git(root, "diff", "--name-only", `${from}...HEAD`).split("\n");
+  const edited = (f: string) => { try { return statSync(join(root, f)).mtimeMs >= since; } catch { return true; } };
+  const tree = git(root, "status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3).split(" -> ").pop()!).filter(edited);
   return new Set([...branch, ...tree].filter(Boolean));
 }
 

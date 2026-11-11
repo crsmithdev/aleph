@@ -16,7 +16,7 @@ From `load.ts`:
 - **A long skill body.** Over 500 lines, or reference that only some branches need, still in `SKILL.md`.
 - **Hook output.** Each event in `hooks` injects text; measure it from a session trace (Langfuse in aleph) or by
   running the hook with a sample input. A hook that prints the same block every turn is load.
-- **A memory file that repeats another.** The same rule in `~/.claude/CLAUDE.md` and the repo's `CLAUDE.md`.
+- **A memory file that repeats another.** The same rule in the user's global `CLAUDE.md` and the repo's `CLAUDE.md`.
 
 In a live session, `/skill-doctor` shows each skill's cost per turn and the skills a session never invoked, and
 `/status` shows the memory files that are too long. Ask the user to run them; you cannot.
