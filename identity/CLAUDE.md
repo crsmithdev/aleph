@@ -108,13 +108,10 @@ Every repo in the registry keeps its list in the work store at
 follow-up you name in a summary, a `TODO` you meet in the code. File it in the
 same turn you name it, and quote the issue number after that.
 
-Write through the command, never by hand:
-`aleph issue <add|list|show|note|edit|done|drop|lint> <repo> ...`. `add` takes
-`"<title>" [--request -] [--spec -] [--priority high] [--kind bug] [--labels a,b]`, `list` takes
-`[--status open|done|dropped] [--label x] [--kind x]`, and `-` reads stdin.
+Write through `aleph issue`, never by hand; `aleph issue --help` gives its syntax.
 A title is an imperative of at most 60 characters that says what changes, not
 how, with no final period and no `<words>: ` prefix. `--kind` is `task` (the
-default), `bug`, `check`, `flake` or `proposal`.
+default), `bug`, `check`, `flake` or `acceptance`.
 Each write is a commit on `origin/main`, so it reaches main at once, not with
 your branch. Measurements and write-ups go in a findings file or the spec, and
 a note links them.

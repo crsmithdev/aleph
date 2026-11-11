@@ -51,6 +51,38 @@ const DAY_MS = 24 * 3600_000;
 const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day", "--url", "--selector", "--by", "--target", "--sketch", "--writeup"];
 const FATES: Fate[] = ["duplicate", "met", "manual"];
 
+/** One row per command of route(): its usage line and its purpose. `help`, `--help`, and each usage refusal read this table. */
+const COMMANDS: Record<string, { usage: string; purpose: string }> = {
+  job: { usage: "aleph job <repo> <name> --spec <file|-> [--on <ref>] [--model <m>] [--land]", purpose: "start a worker job on a branch of the repo" },
+  run: { usage: "aleph run <name> [-- <command...>]", purpose: "run a command as a tracked plain job" },
+  jobs: { usage: "aleph jobs [<name>]", purpose: "list the open and recent jobs, or show one" },
+  recheck: { usage: "aleph recheck <name>", purpose: "run the checks of a job again" },
+  drop: { usage: "aleph drop <name> [<reason>] [--quiet] [--fate duplicate|met|manual]", purpose: "drop a job and its worktree" },
+  unit: { usage: "aleph unit <run-dir>", purpose: "run a started job's unit in the foreground" },
+  land: { usage: "aleph land <name> [--checked]", purpose: "land a job's branch on main" },
+  checked: { usage: "aleph checked <name>", purpose: "mark a landed job's check as done" },
+  issue: { usage: `aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo> ... [--kind ${issues.KINDS.join("|")}]`, purpose: "read and write a repo's issues" },
+  idea: { usage: "aleph idea <add|list|show|edit|note|save|lens|built|drop> ...", purpose: "keep and develop ideas" },
+  annotation: { usage: "aleph annotation <list [--all] [--url <u>] [--json] | add (--on <id> | --selector <css>) [--url <u>] <text|-> | reply <id> [--by you|agent] <text|-> | resolve <id> | reopen <id> | drop <id> | put>", purpose: "read and write notes on UI pages" },
+  tick: { usage: "aleph tick", purpose: "run the periodic steps that are due and the sweep" },
+  director: { usage: "aleph director", purpose: "run one director step" },
+  suite: { usage: "aleph suite", purpose: "run one suite step" },
+  monitor: { usage: "aleph monitor [--dry] [--day YYYY-MM-DD]", purpose: "write the monitor's table and reading of a day" },
+  dispatch: { usage: "aleph dispatch", purpose: "start every ready issue up to the live cap" },
+  intake: { usage: "aleph intake <repo>-<n>", purpose: "run intake on an issue" },
+  status: { usage: "aleph status [<repo>-<n>[.<k>]] [--json]", purpose: "show the stage of an issue, or the recent ones" },
+  report: { usage: "aleph report [--hook]", purpose: "show the runs not yet seen and the factory's health" },
+  pause: { usage: "aleph pause", purpose: "stop the factory from starting work" },
+  resume: { usage: "aleph resume", purpose: "let the factory start work again" },
+  always: { usage: "aleph always <list|grant <reason> <action>|revoke <reason>|timeout [<reason> <minutes>]>", purpose: "list and change the standing permissions" },
+  models: { usage: "aleph models [set <tier> <model> | enable <tier> | disable <tier>]", purpose: "list and change the model of each tier" },
+  judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
+  doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
+  "doc-claims": { usage: "aleph doc-claims", purpose: "list each doc claim the code does not back" },
+  help: { usage: "aleph help [--brief]", purpose: "list each command with its usage and purpose" },
+};
+const usage = (cmd: string) => `usage: ${COMMANDS[cmd].usage}`;
+
 /** Where a call of `aleph` writes and reads. `stdout` gets each write as it happens; `run` also returns them all as `out`. */
 export interface Io { stdout?: (s: string) => void; stderr?: (s: string) => void; stdin?: () => Promise<string> }
 
@@ -221,7 +253,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     // `--media <file>` may repeat.
     media: ctx.rest.flatMap((a, i) => (a === "--media" && ctx.rest[i + 1] !== undefined ? [ctx.rest[i + 1]] : [])),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo> ... [--kind task|bug|check|flake|acceptance]");
+  const sub = verb ?? refuse(usage("issue"));
   const registry = loadRegistry();
   const ref = parseId(repoKey);
   if (ref && sub !== "add") {
@@ -323,7 +355,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
       for (const f of l.findings) ctx.err(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|retitle> <repo> ... [--kind task|bug|check|flake|acceptance]");
+    default: refuse(usage("issue"));
   }
 }
 
@@ -351,7 +383,7 @@ function todoRecent(ctx: Ctx, sub: "list" | "lint", registry: Record<string, Rep
 /** `aleph intake <repo>-<n>`: take in one issue now, under the dispatch's gates. */
 async function intakeCmd(ctx: Ctx): Promise<void> {
   const registry = loadRegistry();
-  const ref = issues.parseRef(ctx.rest[0] ?? "") ?? refuse("usage: aleph intake <repo>-<n>");
+  const ref = issues.parseRef(ctx.rest[0] ?? "") ?? refuse(usage("intake"));
   const repo = registry[ref.repo] ?? refuse(`no repo ${ref.repo}`);
   ctx.out(await intakeNow(repo, ref.id));
 }
@@ -395,7 +427,7 @@ function reportCmd(ctx: Ctx): void {
 function statusCmd(ctx: Ctx): void {
   if (!ctx.positional[0]) return statusRecent(ctx);
   const reg = loadRegistry();
-  const p = issues.parseIssueRef(ctx.positional[0]) ?? refuse("usage: aleph status [<repo>-<n>[.<k>]] [--json]");
+  const p = issues.parseIssueRef(ctx.positional[0]) ?? refuse(usage("status"));
   const key = p.repo, itemRef = p.id, n = String(p.id);
   const repo = reg[key] ?? refuse(`no repo named ${key} in the registry`);
   let s: Stage | undefined;
@@ -434,7 +466,7 @@ function printRows(ctx: Ctx, rows: issues.Issue[], key: string, indent = ""): vo
   for (const [n, i] of rows.entries()) ctx.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${store.priorityOf(i).padEnd(8)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
 }
 
-const IDEA_USAGE = "usage: aleph idea <add|list|show|edit|note|save|lens|built|drop> ...";
+const IDEA_USAGE = usage("idea");
 
 /** `aleph idea ...`: the ideas store (ideas/ideas.ts). `-` as a text flag reads stdin. */
 async function ideaCmd(ctx: Ctx): Promise<void> {
@@ -481,7 +513,7 @@ async function ideaCmd(ctx: Ctx): Promise<void> {
   }
 }
 
-const ANNOTATION_USAGE = "usage: aleph annotation <list [--all] [--url <u>] [--json] | add (--on <id> | --selector <css>) [--url <u>] <text|-> | reply <id> [--by you|agent] <text|-> | resolve <id> | reopen <id> | drop <id> | put>";
+const ANNOTATION_USAGE = usage("annotation");
 
 /** `aleph annotation ...`: the notes pinned on UI pages (lib/annotations.ts). `list` prints Markdown, the rest JSON; `put` reads one note as JSON on stdin. */
 async function annotationCmd(ctx: Ctx): Promise<void> {
@@ -531,7 +563,11 @@ async function doctorCmd(ctx: Ctx): Promise<void> {
 
 /** The command table: `aleph <cmd> ...`. */
 async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
+  if (cmd && cmd in COMMANDS && (ctx.rest.includes("--help") || ctx.rest.includes("-h"))) return ctx.log(`${COMMANDS[cmd].usage}\n  ${COMMANDS[cmd].purpose}`);
   switch (cmd) {
+    case "help":
+      for (const [name, c] of Object.entries(COMMANDS)) ctx.log(ctx.rest.includes("--brief") ? `${name}: ${c.purpose}` : `${c.usage}\n  ${c.purpose}`);
+      break;
     case "doctor": await doctorCmd(ctx); break;
     case "doc-claims": {
       // Each doc claim of this repo the code does not back, read now: run it after the last edit of a doc.
@@ -564,7 +600,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "monitor": {
       // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.
       const day = ctx.flag("day") ?? addDays(issues.today(), -1);
-      if (!/^\d{4}-\d\d-\d\d$/.test(day)) refuse("usage: aleph monitor [--dry] [--day YYYY-MM-DD]");
+      if (!/^\d{4}-\d\d-\d\d$/.test(day)) refuse(usage("monitor"));
       if (ctx.rest.includes("--dry")) { ctx.write(renderTable(tableOf(day))); break; }
       const r = await runMonitor(day) ?? refuse("another monitor job holds the lock");
       ctx.out({ day: r.day, findings: r.findings, ...(r.error ? { error: r.error } : {}), run: r.run, note: r.note ?? r.noteError });
@@ -580,29 +616,29 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       const [sub, reason, action] = ctx.positional;
       const rules = readAlways;
       if (sub === "list" || sub === undefined) ctx.out(rules());
-      else if (sub === "grant") { const bad = grant(reason ?? refuse("usage: aleph always grant <reason> <action>"), action ?? refuse("usage: aleph always grant <reason> <action>")); if (bad) refuse(bad); ctx.out(rules()); }
-      else if (sub === "revoke") { revoke(reason ?? refuse("usage: aleph always revoke <reason>")); ctx.out(rules()); }
+      else if (sub === "grant") { const bad = grant(reason ?? refuse(usage("always")), action ?? refuse(usage("always"))); if (bad) refuse(bad); ctx.out(rules()); }
+      else if (sub === "revoke") { revoke(reason ?? refuse(usage("always"))); ctx.out(rules()); }
       else if (sub === "timeout") {
-        if (reason !== undefined) { const bad = setTimeoutOf(reason, Number(action ?? refuse("usage: aleph always timeout <reason> <minutes>"))); if (bad) refuse(bad); }
+        if (reason !== undefined) { const bad = setTimeoutOf(reason, Number(action ?? refuse(usage("always")))); if (bad) refuse(bad); }
         ctx.out(readTimeouts());
       }
-      else refuse("usage: aleph always <list|grant <reason> <action>|revoke <reason>|timeout [<reason> <minutes>]>");
+      else refuse(usage("always"));
       break;
     }
     case "models": {
       const change = ctx.positional[0] === "set" ? { model: ctx.positional[2] ?? "" } : ctx.positional[0] === "enable" || ctx.positional[0] === "disable" ? { enabled: ctx.positional[0] === "enable" } : undefined;
       if (change) { const bad = setModel(ctx.positional[1] ?? "", change); if (bad) refuse(bad); }
-      else if (ctx.positional[0] !== undefined) refuse("usage: aleph models [set <tier> <model> | enable <tier> | disable <tier>]");
+      else if (ctx.positional[0] !== undefined) refuse(usage("models"));
       ctx.out(readModels());
       break;
     }
     case "judge": {
       const v = ctx.positional[0];
       if (v === "jev" || v === "haiku") setJudgeChoice(v);
-      else if (v !== undefined) refuse("usage: aleph judge [jev|haiku]");
+      else if (v !== undefined) refuse(usage("judge"));
       ctx.out({ judge: judgeChoice() });
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|idea|annotation|tick|suite|report|pause|resume|status|judge|models|dispatch|doctor|doc-claims|monitor> ...");
+    default: refuse(`usage: aleph <${Object.keys(COMMANDS).join("|")}> ... (aleph help lists them)`);
   }
 }

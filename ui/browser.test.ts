@@ -338,6 +338,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("a slow first load does not draw over a newer one", async () => {
     // Hold the fetch of the first /api/factory load, let a second (the refresh timer) answer, then release the first.
+    // A read of /api/flow, the last a Status load makes (its `more`), sets window.flowRead after the load that reads it ends.
     await page.ev(`(() => {
       const now = Date.now;
       window.skew = 0;
@@ -346,6 +347,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       const rf = window.fetch;
       let held = true;
       window.fetch = (u, o) => {
+        if (String(u).startsWith("/api/flow")) return rf(u, o).then((r) => {
+          const j = r.json.bind(r);
+          const read = () => { window.flowRead = true; };
+          r.json = () => j().then((d) => { setTimeout(read); return d; });
+          return r;
+        });
         if (!String(u).startsWith("/api/factory") || !held) return rf(u, o);
         held = false;
         return new Promise((ok) => { window.release = () => ok(rf(u, o).then((r) => {
@@ -361,6 +368,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when("window.release");
     await page.ev("window.skew += 61_000; window.tick()");
     await page.when('document.querySelector("#view .page, #view > *") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
+    await page.when("window.flowRead"); // The second load's `more` drew: only the old answer could draw now.
     await page.ev('document.querySelector("#view > *").dataset.mark = "1"');
     await page.ev("window.release()");
     await page.when("window.firstRead");

@@ -12,6 +12,7 @@ After you change a hook, run `/reload-plugins`.
 | `SessionStart` | | `vault-context.ts` | 10 | Injects `MEMORY.md` and the `core:` lines |
 | `SessionStart` | `startup\|clear` | `handoff-start.ts` | 10 | Injects a waiting handoff |
 | `SessionStart` | | `jobs/cli.ts report --hook` | 20 | Injects the factory report |
+| `SessionStart` | | `jobs/cli.ts help --brief` | 10 | Injects one line per `aleph` command, for factory agents too |
 | `UserPromptSubmit` | | `verify-gate.ts` | 10 | Snapshots the repo for the Stop check |
 | `UserPromptSubmit` | | `vault-recall.ts` | 5 | Injects up to 3 vault notes |
 | `PreToolUse` | `Edit\|Write\|NotebookEdit` | `git-guard.ts` | 10 | Denies edits on `main`, in the work store and on `VAULT.md` |

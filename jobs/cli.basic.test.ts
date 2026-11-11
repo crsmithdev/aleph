@@ -172,3 +172,48 @@ describe("models", () => {
     expect(bad.stderr).toContain("unknown tier");
   });
 });
+
+describe("help", () => {
+  test("help names each command with its usage line and purpose", async () => {
+    const r = await aleph(["help"]);
+    expect(r.code).toBe(0);
+    for (const c of ["job", "run", "land", "issue", "idea", "annotation", "status", "doctor", "drop", "intake", "report", "always", "models"]) expect(r.stdout).toMatch(new RegExp(`^aleph ${c}\\b.*\\n  \\S`, "m"));
+    expect(r.stdout).toContain("aleph land <name> [--checked]\n  land a job's branch on main");
+  });
+
+  test("help --brief prints one line per command, with ALEPH_AGENT set", async () => {
+    const r = await aleph(["help", "--brief"], { ALEPH_AGENT: "1" });
+    expect(r.code).toBe(0);
+    const lines = r.stdout.trim().split("\n");
+    expect(lines).toContain("land: land a job's branch on main");
+    expect(lines.every((l) => /^[\w-]+: \S/.test(l))).toBe(true);
+  });
+
+  test("--help and -h print the usage and run nothing", async () => {
+    const a = await aleph(["job", "De mo", "alpha", "--spec", "-"], {}, "Goal: alpha\nACTION: commit a.txt\n");
+    expect(a.code).toBe(0);
+    const d = await aleph(["drop", "alpha", "--help"]);
+    expect(d.code).toBe(0);
+    expect(d.stdout).toContain("aleph drop <name> [<reason>]");
+    const l = await aleph(["land", "-h"]);
+    expect(l.code).toBe(0);
+    expect(l.stdout).toContain("aleph land <name> [--checked]");
+    const j = (await aleph(["jobs", "alpha"])).json;
+    expect(j.condition).not.toBe("dropped");
+  });
+
+  test("a wrong call prints the usage line of its command", async () => {
+    const i = await aleph(["intake", "nonsense"]);
+    expect(i.code).toBe(1);
+    expect(i.stderr).toContain("usage: aleph intake <repo>-<n>");
+    const d = await aleph(["idea"]);
+    expect(d.code).toBe(1);
+    expect(d.stderr).toContain("usage: aleph idea <add|list|show");
+    const s = await aleph(["issue", "nonsense", "aleph"]);
+    expect(s.code).toBe(1);
+    expect(s.stderr).toContain("usage: aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo>");
+    const a = await aleph(["always", "grant"]);
+    expect(a.code).toBe(1);
+    expect(a.stderr).toContain("usage: aleph always <list|grant <reason> <action>|revoke <reason>|timeout");
+  });
+});
