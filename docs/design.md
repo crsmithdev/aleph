@@ -128,6 +128,7 @@ The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` te
 | `--fw-mid` | 500 | ids, numbers |
 | `--fw-strong` | 600 | headings, table headers |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather | body, code, numbers, titles; `--metric` is Work Sans |
+| `--chart` | `--sans` | the font of text in the ECharts canvas |
 | `--chart-scale`, `--chart-weight` | 1, 400 | text in the ECharts canvas: its relative size and weight |
 
 Weight 700 stays a literal on `.mark`.
