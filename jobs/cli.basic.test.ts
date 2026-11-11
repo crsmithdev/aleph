@@ -77,6 +77,14 @@ describe("job", () => {
     expect(names).toEqual(["open", "newer", "older"]);
   });
 
+  test("with no name, jobs leaves an open chat run out of the list", async () => {
+    seedRun("demo", { kind: "chat", condition: "returned", name: "chat-open", job: "chat-open" });
+    seedRun("demo", { kind: "build", condition: "returned", name: "build-open", job: "build-open" });
+    const names = (await aleph(["jobs"])).json.map((j: any) => j.name);
+    expect(names).toContain("build-open");
+    expect(names).not.toContain("chat-open");
+  });
+
   test("drop removes the worktree and branch and ends the job", async () => {
     const r = await aleph(["drop", "alpha", "not", "needed"]);
     expect(r.code).toBe(0);

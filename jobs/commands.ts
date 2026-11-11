@@ -213,7 +213,7 @@ function jobs(ctx: Ctx): void {
     const listed = (j: Entry[]) => isOpen(j) || (counting(j).run.condition === "landed" && counting(j).run.check === "open");
     const ended = (j: Entry[]) => Date.parse(counting(j).run.ended ?? "");
     const recent = all.filter((j) => !listed(j) && Date.now() - ended(j) < DAY_MS).sort((a, b) => ended(b) - ended(a));
-    return ctx.out([...all.filter(listed), ...recent].map((j) => summary(j, fates)));
+    return ctx.out([...all.filter((j) => listed(j) && counting(j).run.kind !== "chat"), ...recent].map((j) => summary(j, fates)));
   }
   const runs = findJob(name, null, all);
   if (!runs) refuse(`no job named ${name}`);

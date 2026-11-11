@@ -313,6 +313,8 @@ export function state(now = new Date()): State {
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   for (const runs of jobs) {
     const last = counting(runs).run;
+    // A chat run shows in the Herald, not in the job lanes.
+    if (last.kind === "chat") continue;
     // A running intake (or planner) counts as running; it is not a live agent.
     if (last.kind === "intake" && last.condition === "running") {
       running.push(toJob(runs));

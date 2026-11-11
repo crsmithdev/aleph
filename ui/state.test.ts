@@ -181,6 +181,23 @@ describe("an intake run", () => {
   });
 });
 
+describe("a chat run", () => {
+  test("is in no job lane and no Ask, and a build run beside it still runs", () => {
+    run("20261027-000051-a", { kind: "chat", job: "chat-1", name: "chat-1", condition: "running", started: ago(1) });
+    run("20261027-000052-a", { kind: "chat", job: "chat-2", name: "chat-2", condition: "returned", started: ago(1) });
+    run("20261027-000053-a", { kind: "build", job: "fac-53", name: "fac-53", condition: "running", started: ago(1) });
+    const s = state(now);
+    const names = (l: { name: string }[]) => l.map((j) => j.name);
+    expect(names(s.running)).toContain("fac-53");
+    for (const n of ["chat-1", "chat-2"]) {
+      expect(names(s.running)).not.toContain(n);
+      expect(names(s.stuck)).not.toContain(n);
+      expect(JSON.stringify(s.asks)).not.toContain(n);
+    }
+    for (const id of ["20261027-000051-a", "20261027-000052-a", "20261027-000053-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
+  });
+});
+
 describe("an issue that acceptance failed twice", () => {
   test("a held run from before v6 phase 6 still reads: its old phase, and its stored second review as the Ask's review", () => {
     run("20261027-000060-a", { job: "fac-60", name: "fac-60", condition: "waiting", ask: HELD, reason: "held path held/x.ts", stat: " held/x.ts | 1 +", phase: "check oracle", review: { call: "passed" } },
