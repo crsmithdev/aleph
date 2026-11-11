@@ -103,7 +103,7 @@ function hooksCard(d) {
   if (a.langfuse !== "ok") return "";
   const denials = a.denials ?? { total: 0, recent: [] };
   const hooks = (a.hooks ?? []).length
-    ? dataTable(heads(["Last Call", "Hook", "Calls", "Errors"], ["Calls", "Errors"]), a.hooks.map((h) => `<tr><td class="time">${esc(when(h.lastAt))}</td><td class="wide">${esc(h.name)}</td><td class="num">${count(h.calls)}</td><td class="num${h.errors ? " bad" : ""}">${h.errors}</td></tr>`).join(""))
+    ? dataTable(heads(["Hook", "Last Call", "Calls", "Errors"], ["Calls", "Errors"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="time">${esc(when(h.lastAt))}</td><td class="num">${count(h.calls)}</td><td class="num${h.errors ? " bad" : ""}">${h.errors}</td></tr>`).join(""))
     : empty("No hook calls in this period.");
   const list = denials.recent.length
     ? dataTable(heads(["Denied", "Reason"]), denials.recent.map((r) => `<tr><td class="time">${esc(when(r.at))}</td><td class="wide" title="${esc(r.reason)}">${esc(r.reason)}</td></tr>`).join(""))
@@ -117,9 +117,9 @@ function renderSessionsTable(d, o) {
   if (!all.length) return empty(o.pick || o.q ? "No session matches." : `No session in the last ${o.days} days.`, o.pick || o.q ? "Clear the selection or the search." : "Sessions appear when the hooks send traces to Langfuse.");
   const shown = all.slice(0, o.limit);
   const h = (label, key, c) => sortHead(label, key, o.sort, c);
-  const rows = shown.map((s) => `<tr><td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td><td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`, { title: s.id })}</td>` +
-    `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td><td title="${esc(s.taskTypes.join(", "))}">${chips(s.taskTypes.slice(0, 2))}${s.taskTypes.length > 2 ? ` <span class="quiet">+${s.taskTypes.length - 2}</span>` : ""}</td><td class="num">${s.turns}</td><td class="num">${costHtml(s.cost, s.wk)}</td></tr>`).join("");
-  return dataTable(`${h("Started", "start")}${h("Last Turn", "last")}${heads(["Session"])}${h("First Prompt", "prompt")}${h("Project", "project")}${heads(["Kinds"])}${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}`, rows) + pager(shown.length, all.length, STEP);
+  const rows = shown.map((s) => `<tr><td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`, { title: s.id })}</td>` +
+    `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td><td>${esc(s.project)}</td><td title="${esc(s.taskTypes.join(", "))}">${chips(s.taskTypes.slice(0, 2))}${s.taskTypes.length > 2 ? ` <span class="quiet">+${s.taskTypes.length - 2}</span>` : ""}</td><td class="num">${s.turns}</td><td class="num">${costHtml(s.cost, s.wk)}</td></tr>`).join("");
+  return dataTable(`${heads(["Session"])}${h("First Prompt", "prompt")}${h("Started", "start")}${h("Last Turn", "last")}${h("Project", "project")}${heads(["Kinds"])}${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}`, rows) + pager(shown.length, all.length, STEP);
 }
 
 function sessionsHead(d, o) {

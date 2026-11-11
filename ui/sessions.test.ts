@@ -262,7 +262,7 @@ test("the chat is the default: messages in Markdown, folded tool calls, one turn
   expect(h).toContain('<div class="clamp">')
   expect(h).toContain('aria-expanded="false">Show more</button>');
   expect(h).toContain('<span class="of">2 of 2</span>');
-  expect(v.renderSession(d, { id: "s1" }, TABLE)).toContain('<th>Started</th><th class="num">Turn</th>');
+  expect(v.renderSession(d, { id: "s1" }, TABLE)).toContain('<th class="num">Turn</th><th>Prompt</th><th>Started</th>');
   expect(h).not.toContain("data-chat-from");
   expect(v.renderSession({ ...d, turns: [{ ...d.turns[0], prompt: "<script>x</script>" }] }, {}, new URLSearchParams())).not.toContain("<script>");
   expect(v.sessionView.api({ id: "a b" }, new URLSearchParams())).toBe("/api/sessions/a%20b/chat?limit=20");
@@ -310,7 +310,7 @@ test("the turns, hooks and denials tables show empty() with no rows; the turns t
   const h = v.renderSession({ ...d, turns: Array.from({ length: 51 }, (_, i) => ({ ...d.turns[0], n: i + 1 })) }, {}, TABLE);
   expect(h).toContain("50 of 51");
   expect(h).toContain("Show 1 more");
-  expect(h.match(/<tr><td class="time">/g)).toHaveLength(50);
+  expect(h.match(/<tr><td class="num">/g)).toHaveLength(50);
   const page = renderSessions({ window: 7, project: null, activity: { langfuse: "ok", tools: [], hooks: [], denials: { total: 0, recent: [] } }, skills: { projects: [], skills: [], unused: [] }, sessions: { projects: [], sessions: [] }, toolSessions: {} }, options(new URLSearchParams()));
   expect(page).toContain('<div class="empty"><p>No hook calls in this period.</p>');
   expect(page).toContain('<div class="empty"><p>The gate denied nothing in this period.</p>');

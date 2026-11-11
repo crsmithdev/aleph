@@ -17,12 +17,12 @@ const sessionLink = (s) =>
 const TURN_PAGE = 50;
 function turnTable(d, limit = TURN_PAGE) {
   if (!d.turns.length) return empty("No turn in this session.");
-  // Columns: time, turn (id), prompt (title), output, model, numbers.
+  // Columns: turn (id), prompt (title), time, output, model, numbers.
   const rows = d.turns.slice(0, limit).map((t) =>
-    `<tr><td class="time">${esc(when(t.start))}</td><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
-    `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
+    `<tr><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
+    `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td class="time">${esc(when(t.start))}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
     `<td class="num">${esc(sdur(t.seconds))}</td><td class="num">${costHtml(t.cost, t.wk)}</td></tr>`).join("");
-  return dataTable(heads(["Started", "Turn", "Prompt", "Output", "Model", "Tools", "Took", "Cost"], ["Turn", "Tools", "Took", "Cost"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
+  return dataTable(heads(["Turn", "Prompt", "Started", "Output", "Model", "Tools", "Took", "Cost"], ["Turn", "Tools", "Took", "Cost"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
 }
 
 const CHAT_PAGE = 20;
