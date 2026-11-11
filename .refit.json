@@ -40,6 +40,11 @@
       "concept": "the COMMANDS table rows of the aleph CLI",
       "copies": ["jobs/commands.ts:56-63", "jobs/commands.ts:57-64", "jobs/commands.ts:56-64", "jobs/commands.ts:64-72", "jobs/commands.ts:68-76", "jobs/commands.ts:72-80"],
       "reason": "COMMANDS is the one table of each command's usage and purpose. Its rows share one shape on purpose: help, --help and every usage refusal read the table, so each row is data, not a second way."
+    },
+    {
+      "concept": "the shared layout of the refit skills",
+      "copies": ["skills/refit-tests/SKILL.md:38", "skills/refit-agents/SKILL.md:51", "skills/refit-code/SKILL.md", "skills/refit-docs/SKILL.md"],
+      "reason": "Each refit skill ends its lens table with the same 'Report a candidate under one lens only.' line and opens the same Modes table, so a reader moves between them without a new layout. The text is a template, not logic (Chris, 2026-11-11)."
     }
   ]
 }
