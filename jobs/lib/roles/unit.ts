@@ -658,7 +658,8 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
       const w = await callAgent("reviewer", text, {
         model, cmd: reviewerCmd(), flags: ["--permission-mode", "bypassPermissions", "--tools", "Read", "Grep", "Glob", "Bash"], schema: REVIEW_SCHEMA,
         cwd: wt, env: agentEnv(env, folder), stdout: runFile(folder, "review.log"), stderr: runFile(folder, "review.err"), limit: reviewSeconds(),
-        onSpawn: (p) => { child = p; },
+        // No GPU slot: the job's own run holds it, as in the worker's call.
+        slot: false, onSpawn: (p) => { child = p; },
       });
       child = null;
       const v = parseReview(w.data);
