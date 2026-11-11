@@ -10,7 +10,7 @@ import { items } from "./memory-items.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
-import { dataTable, empty, heads, priorityBadge } from "./lib.js";
+import { dataTable, empty, heads, pageHead, priorityBadge, scope } from "./lib.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
@@ -327,8 +327,16 @@ const page = { exists: true, total: 1, byKind: {}, byScope: {}, scopes: ["aleph"
 
 test("the page is the search, the freshness filter, seven type tiles, the results and the inspector, then health", () => {
   const h = v.renderMemory(page, v.options(new URLSearchParams("q=work")), [it({}), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" })]);
-  for (const t of ['data-ui="mem-search"', 'value="work"', "Read in 7 days", 'id="mem-inspector"', "<h2>Health</h2>", "3000 / 6000 bytes, 1 core lines", '<datalist id="mem-titles"><option value="N"><option value="Never"></datalist>', '<option value="other">other</option>'])
+  for (const t of ['data-ui="mem-search"', 'value="work"', "Read in 7 days", 'id="mem-inspector"', "<h2>Health</h2>", "2.9KiB / 5.9KiB, 1 core lines", '<div class="msearch">', '<datalist id="mem-titles"><option value="N"><option value="Never"></datalist>', '<option value="other">other</option>'])
     expect(h).toContain(t);
+  expect(h).not.toContain("3000 / 6000 bytes");
+  // The page head's filter is scope().bar(): the Project select, then the window control.
+  expect(h).toContain(`<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: "", more: page.scopes }) })}`);
+  expect(h).toContain('aria-label="Window" data-name="window"');
+  // Page head, tiles, search, freshness filter, then the results.
+  const at = ["<h1>Memory</h1>", 'name="project"', 'id="mem-board"', 'data-ui="mem-search"', 'id="mem-fresh"', 'id="mem-results"'].map((t) => h.indexOf(t));
+  expect(at).toEqual([...at].sort((x, y) => x - y));
+  expect(at[0]).toBeGreaterThanOrEqual(0);
   expect(h.match(/data-tile=/g)).toHaveLength(7);
   expect(h).toMatch(/data-tile="working" aria-pressed="false"><span class="r1"><span class="k">Working<\/span><\/span><b>1<\/b>/);
   expect(h).toMatch(/data-tile="parametric"[^]*?<b>–<\/b>/);
@@ -355,8 +363,11 @@ test("each type has its own layout, filters keep by type and freshness, and the 
   expect(keep("fresh=old")).toEqual(["skill vault"]);
   expect(v.typeCounts(rs, v.options(new URLSearchParams("type=procedural&fresh=never")), status)).toMatchObject({ semantic: 1, procedural: 0 });
   const h = v.renderResults(rs, v.options(), status);
-  expect(h).toContain("<th>Loaded when</th>");          // procedural: a table
+  expect(h).toContain("<th>Loaded When</th>");          // procedural: a table
+  expect(h).toContain('<th class="num">Updated</th>');
   expect(h).toContain('<ul class="mrows tl">');           // episodic: a timeline
+  expect(h).toContain('<td class="wide" title="the vault">');  // procedural: the title cell's full text
+  expect(v.renderResults([it({ type: "episodic", source: "episode", key: "e.md", title: "e", at: "" })], v.options(), status)).toContain('<span class="time"><span title="No date">–</span></span>');
   expect(h).toContain(priorityBadge("high"));             // prospective: cards with the priority
   expect(h).toContain("read never");                      // semantic: the read date
   expect(h.match(/<li class="mrow[^>]* tabindex="0"/g)?.length).toBeGreaterThan(0);
@@ -371,7 +382,18 @@ test("the procedural table is dataTable's, so it has the tscroll wrapper, the tb
   const o = v.options();
   const proc = it({ type: "procedural", source: "skill", key: "vault", title: "skill vault", text: "the vault", at: "2026-01-01" });
   const h = v.renderResults([proc], o, new Map());
-  expect(h).toContain(dataTable(heads(["Source", "What it says", "Loaded when", "Changed"]), v.ruleRow(proc, o)));
+  expect(h).toContain(dataTable(heads(["Source", "What It Says", "Loaded When", "Updated"], ["Updated"]), v.ruleRow(proc, o)));
+});
+
+test("the overview writes its counts through count() and its sizes through bytes()", () => {
+  const big = { ...page, misses: { recalls: 12345, days: 30, empty: 1000, empty_share: 0.1, reformulated: 2000 }, lint: { refuse: [], warn: Array.from({ length: 1200 }, () => ({ rule: "r", note: "N", detail: "d" })) },
+    start: { aleph: { bytes: 2048, budget: 4096, cut: 1500, core: [] } } };
+  const rs = Array.from({ length: 1000 }, (_, i) => it({ key: `n${i}`, title: `n${i}` }));
+  const h = v.renderMemory(big, v.options(), rs);
+  expect(h).toMatch(/data-tile="semantic"[^]*?<b>1,000<\/b>/);
+  expect(h).toContain('<h3>Semantic</h3><span class="count">1,000</span>');
+  for (const t of ["12,345 recalls in 30 days, 1,000 empty", "2.0KiB / 4.0KiB, 0 core lines, 1,500 cut", '<span class="count">1,200</span>', "1,200 warned"]) expect(h).toContain(t);
+  expect(h).not.toContain("refusals,");
 });
 
 test("the procedural table hides its 51st row and its pager says 50 of 51", () => {
@@ -379,7 +401,7 @@ test("the procedural table hides its 51st row and its pager says 50 of 51", () =
   const procs = Array.from({ length: 51 }, (_, i) => it({ type: "procedural", source: "skill", key: `s${i}`, title: `s${i}` }));
   const rows = procs.map((x, i) => v.ruleRow(x, o).replace("<tr ", i < 50 ? "<tr " : "<tr hidden ")).join("");
   const h = v.renderResults(procs, o, new Map());
-  expect(h).toContain(dataTable(heads(["Source", "What it says", "Loaded when", "Changed"]), rows));
+  expect(h).toContain(dataTable(heads(["Source", "What It Says", "Loaded When", "Updated"], ["Updated"]), rows));
   expect(h).toContain("50 of 51");
   const trs = h.slice(h.indexOf("<tbody>") + 7, h.indexOf("</tbody>")).split("<tr ").slice(1);
   expect(trs).toHaveLength(51);

@@ -1576,6 +1576,10 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |
 | The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/chart.js` | follow-up |
 | The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/kit.js` | allowed |
+| The Memory rows are hand `li.mrow` and `tr.mrow`: each takes the selection attributes (`tabindex`, `data-id`, `aria-selected`), which `row()` and `cell()` cannot, and a cell with markup is a hand `<td>`, the time one a `td.time` | `noteRow()`, `ruleRow()`, `eventRow()`, `cardRow()` in `ui/views/memory.js` | follow-up |
+| The Memory Source cell is a hand `td.mono` with a link to the memory's page: a rule, a skill or a note has a title, not an ID, so `idLink()` does not fit | `ruleRow()` in `ui/views/memory.js` | allowed |
+| The legend of the Memory read chart uses `c-use`, `c-stale` and `c-never`, the classes of its meter segments, not timeline classes: no timeline class has the colour of "never" (`--rule`) | `readChart()` in `ui/views/memory.js` | follow-up |
+| The Memory page head has a Window control that does nothing: the memory API takes no window, and `scope().bar()` always draws one | `renderMemory()` in `ui/views/memory.js` | follow-up |
 | Forms written by hand: the Memory alias, link, core line and edit forms, hand `label.mform` and `div.mform` | `actions()`, `links()`, `coreForm()` and `edit()` in `ui/views/memory.js` | follow-up |
 | A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | The Roles table's rows are hand `<tr>`s and its Failed Jobs link a hand `a.failed-jobs` | `roles()` in `ui/views/factory-agents.js` | follow-up |

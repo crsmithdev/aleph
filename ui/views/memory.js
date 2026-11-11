@@ -4,7 +4,7 @@
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
 import { panelOf } from "../chart.js";
-import { actButton, fold, linkButton, codeText, facts, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { actButton, bytes, count, fold, linkButton, codeText, facts, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, miss, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -78,7 +78,7 @@ export function typeCounts(results, o, status) {
 }
 
 const renderTiles = (counts, o, loaded) => tiles("Memory types", TYPES.map((t) =>
-  statCard({ k: t.name, v: t.id === "parametric" || !loaded ? "–" : String(counts[t.id]), note: t.holds, key: t.id, on: t.id === o.type })).join(""));
+  statCard({ k: t.name, v: t.id === "parametric" || !loaded ? "–" : count(counts[t.id]), note: t.holds, key: t.id, on: t.id === o.type })).join(""));
 
 const sel = (it, o) => `tabindex="0" data-id="${esc(idOf(it))}" aria-selected="${idOf(it) === o.item}"`;
 const titleLink = (it) => (it.href ? `<a href="${esc(it.href)}">${esc(it.title)}</a>` : esc(it.title));
@@ -88,10 +88,10 @@ const noteRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${
   `<p>${codeText(it.text)}</p><p class="mm">${it.at ? `written ${esc(shortDay(it.at))}` : ""}${it.source === "note" ? ` · read ${it.read ? esc(shortDay(it.read)) : "never"}` : ""}${it.core ? ` · <span class="core">core line</span>` : ""}</p></li>`;
 
 /** A rule, a skill, a hook or a lesson: what it says and when it is loaded. */
-export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide">${codeText(it.text)}</td><td class="eff">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
+export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide" title="${esc(it.text)}">${codeText(it.text)}</td><td class="eff">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
 
 /** An event in time: when first, then what. */
-const eventRow = (it, o) => `<li class="mrow mev" ${sel(it, o)}><span class="time">${esc(shortDay(it.at) || "–")}</span><div><b>${titleLink(it)}</b>${it.scope ? ` ${q(esc(it.scope))}` : ""}<p>${codeText(it.text)}</p></div></li>`;
+const eventRow = (it, o) => `<li class="mrow mev" ${sel(it, o)}><span class="time">${shortDay(it.at) ? esc(shortDay(it.at)) : miss("No date")}</span><div><b>${titleLink(it)}</b>${it.scope ? ` ${q(esc(it.scope))}` : ""}<p>${codeText(it.text)}</p></div></li>`;
 
 /** A handoff, an issue or a miss: what it is and what it does next. */
 const cardRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${titleLink(it)}${it.priority ? ` ${priorityBadge(it.priority)}` : ""}</b><span class="quiet">${esc([it.scope, it.at && ago(it.at)].filter(Boolean).join(" · "))}</span></div><p>${codeText(it.text)}</p><p class="mm eff">${esc(it.effect)}</p></li>`;
@@ -102,7 +102,7 @@ const list = (rows, cls = "") => `<div class="mem-page"><ul class="mrows${cls}">
 
 const LAYOUT = {
   semantic: (xs, o) => list(xs.map((it) => noteRow(it, o))),
-  procedural: (xs, o) => pagedTable(heads(["Source", "What it says", "Loaded when", "Changed"]), xs.map((it) => ruleRow(it, o)), STEP),
+  procedural: (xs, o) => pagedTable(heads(["Source", "What It Says", "Loaded When", "Updated"], ["Updated"]), xs.map((it) => ruleRow(it, o)), STEP),
   episodic: (xs, o) => list([...xs].sort((a, b) => String(b.at).localeCompare(String(a.at))).map((it) => eventRow(it, o)), " tl"),
   working: (xs, o) => list(xs.map((it) => cardRow(it, o))),
   prospective: (xs, o) => list(xs.map((it) => cardRow(it, o))),
@@ -115,7 +115,7 @@ export function renderResults(results, o, status) {
   if (!rows.length) return empty(o.q ? `No memory matches “${o.q}”.` : "No memory matches.", "Loosen the filters, or search another word.");
   return TYPES.filter((t) => LAYOUT[t.id]).map((t) => {
     const xs = rows.filter((it) => it.type === t.id);
-    return xs.length ? `<section class="mgroup" aria-label="${esc(t.name)}">${sectionHead(t.name, { level: 3, count: xs.length, aside: dot(t.id) })}${LAYOUT[t.id](xs, o)}</section>` : "";
+    return xs.length ? card(t.name, LAYOUT[t.id](xs, o), { level: 3, count: count(xs.length), aside: dot(t.id), cls: "mgroup" }) : "";
   }).join("");
 }
 
@@ -184,10 +184,10 @@ function renderHealth(m) {
   const f = (x) => `<li><code>${esc(x.rule)}</code> ${x.note ? link(x.note) : ""} <span class="quiet">${esc(x.detail)}</span></li>`;
   const { refuse, warn } = m.lint;
   const med = m.misses;
-  return (refuse.length ? sectionHead("Refusals", { count: refuse.length, level: 3 }) + `<ul>${refuse.map(f).join("")}</ul>` : "") +
-    (warn.length ? sectionHead("Warnings", { count: warn.length, level: 3 }) + `<ul>${warn.map(f).join("")}</ul>` : "") +
+  return (refuse.length ? sectionHead("Refusals", { count: count(refuse.length), level: 3 }) + `<ul>${refuse.map(f).join("")}</ul>` : "") +
+    (warn.length ? sectionHead("Warnings", { count: count(warn.length), level: 3 }) + `<ul>${warn.map(f).join("")}</ul>` : "") +
     (!refuse.length && !warn.length ? empty("Lint finds nothing.", "Every note passes the vault checks.") : "") +
-    (med ? `<p>${esc(`${med.recalls} recalls in ${med.days} days, ${med.empty} empty (${pct(med.empty_share * 100)}), ${med.reformulated} reformulated.`)}</p>` : "");
+    (med ? `<p>${esc(`${count(med.recalls)} recalls in ${count(med.days)} days, ${count(med.empty)} empty (${pct(med.empty_share * 100)}), ${count(med.reformulated)} reformulated.`)}</p>` : "");
 }
 
 /** Lint by rule, largest first. */
@@ -207,34 +207,33 @@ function readChart(rows) {
     if (!of.length) return "";
     const week = of.filter((n) => n.read && noteStatus({ read: n.read }) === "use").length, older = of.filter((n) => n.read).length - week, never = of.length - week - older;
     const w = (x) => ((x / of.length) * 100).toFixed(2);
-    return barRow(esc(k), 0, `${week} · ${older} · ${never} never`, { bar: meter([{ pct: w(week), cls: "c-use" }, { pct: w(older), cls: "c-stale" }, { pct: w(never), cls: "c-never" }], `${week} in the last 7 days, ${older} earlier, ${never} never`) });
+    return barRow(esc(k), 0, `${count(week)} · ${count(older)} · ${count(never)} never`, { bar: meter([{ pct: w(week), cls: "c-use" }, { pct: w(older), cls: "c-stale" }, { pct: w(never), cls: "c-never" }], `${count(week)} in the last 7 days, ${count(older)} earlier, ${count(never)} never`) });
   }).join("");
   return lines ? `${legendHtml([["Last 7 days", "c-use"], ["Earlier", "c-stale"], ["Never", "c-never"]])}${barList(lines)}` : empty("No notes yet.", "Notes show here once the vault holds some.");
 }
 
 function renderBroad(m, rows) {
   const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
-  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.", "Every note passes the vault checks.")) +
-    fold("Every finding", renderHealth(m), { cls: "fold" }), { count: `${lint.refuse.length} refusals, ${lint.warn.length} warnings` });
+  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${count(r.refused)} refused`, r.warned && `${count(r.warned)} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.", "Every note passes the vault checks.")) +
+    fold("Every finding", renderHealth(m), { cls: "fold" }), { count: count(lint.refuse.length + lint.warn.length) });
   const reads = card("When Recall Last Returned Each Note", readChart(rows), { label: "When recall last returned each note" });
   const start = Object.entries(m.start ?? {});
-  const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${x.bytes} / ${x.budget} bytes, ${x.core.length} core lines${x.cut ? `, ${x.cut} cut` : ""}`)).join("")) : empty("No start context.", "A scope with core lines shows its budget here."), { label: "Start context" });
-  const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: (m.writes ?? []).length, label: "Recent writes" });
+  const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${bytes(x.bytes)} / ${bytes(x.budget)}, ${count(x.core.length)} core lines${x.cut ? `, ${count(x.cut)} cut` : ""}`)).join("")) : empty("No start context.", "A scope with core lines shows its budget here."), { label: "Start context" });
+  const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: count((m.writes ?? []).length), label: "Recent writes" });
   return `<div class="pair">${lintCard}${reads}</div><div class="pair">${budget}${writes}</div>`;
 }
 
-const projectBar = (m, project) => filterBar([{ label: "Project", name: "project", data: true, value: project, options: [{ value: "", label: "All" }, ...(m.scopes ?? [])] }]);
 const freshBar = (o) => filterBar([{ label: "Freshness", name: "fresh", value: o.fresh, options: FRESH }]);
 
 export function renderMemory(m, o = options(), results = null) {
   const status = new Map(noteRows(m).map((n) => [n.title, n.status]));
   const titles = `<datalist id="mem-titles">${(m.notes ?? []).map((n) => `<option value="${esc(n.title)}">`).join("")}</datalist>`;
-  return `<div class="page sp memory">${pageHead("Memory", { aside: projectBar(m, m.project ?? "") })}` +
+  return `<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: m.project ?? "", more: m.scopes }) })}` +
+    `<div id="mem-board">${renderTiles(typeCounts(results ?? [], o, status), o, results !== null)}</div>` +
     `<div class="msearch">${searchBox("mem-search", o.q, "Search every kind of memory")}</div>` +
     `<div id="mem-fresh" data-ui="mem-filter">${freshBar(o)}</div>` +
-    `<div id="mem-board">${renderTiles(typeCounts(results ?? [], o, status), o, results !== null)}</div>` +
     `<div class="browse"><div id="mem-results" aria-live="polite">${renderResults(results, o, status)}</div>` +
-    `<aside class="card ins" id="mem-inspector" aria-label="Memory inspector">${renderInspector(null)}</aside></div>` +
+    card("Inspector", `<div id="mem-inspector">${renderInspector(null)}</div>`, { cls: "ins", label: "Memory inspector" }) + `</div>` +
     `<section aria-label="Health" id="mem-health">${sectionHead("Health")}${renderBroad(m, noteRows(m))}</section>${titles}</div>`;
 }
 
@@ -336,7 +335,7 @@ async function write(btn) {
 
 function mount(root, m) {
   live = { root, m, results: null, note: null, status: new Map(noteRows(m).map((n) => [n.title, n.status])) };
-  wireScope(root);
+  scope().wire(root);
   let timer;
   // Properties, not listeners: `root` is the page container, and each mount replaces the last one's handlers.
   root.oninput = (e) => {

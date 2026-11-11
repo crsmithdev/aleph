@@ -944,6 +944,7 @@ mark { color: inherit; background: var(--need-bg); border-radius: var(--r-hair);
 .unused a:hover { color: var(--ink); border-color: var(--run); }
 .browse { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--gap-in); align-items: start; }
 .ins { position: sticky; top: var(--sp-8); max-height: calc(100vh - 16px); overflow: auto; }
+#mem-inspector { display: flex; flex-direction: column; gap: var(--sp-12); }
 .ins h3 { margin: 0; overflow-wrap: anywhere; }
 .ins ul { margin: 0; padding: 0; list-style: none; }
 .ins li { padding: var(--sp-4) 0; border-top: 1px solid var(--rule-2); overflow-wrap: anywhere; }
