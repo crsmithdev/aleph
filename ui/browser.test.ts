@@ -653,3 +653,36 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(await page.ev<string[]>(`[...document.querySelectorAll(".media-grid img")].map((i) => i.alt)`)).toEqual(["shot.png", "pasted.png"]);
   }, 60_000);
 });
+
+describe.skipIf(!chromeUsable)("Ideas", () => {
+  let rig: Rig, page: Page;
+  beforeAll(async () => {
+    rig = await startRig((e) => {
+      e.ALEPH_IDEAS = join(e.HOME, "ideas");
+      mkdirSync(join(e.ALEPH_IDEAS, "issue-history", "lenses"), { recursive: true });
+      writeFileSync(join(e.ALEPH_IDEAS, "issue-history", "idea.md"), "---\ntitle: Issue history\nstatus: exploring\nbuilt: []\n---\nA sketch.\n\n## Log\n");
+      for (const f of ["prior-art-2026-11-01-0900.html", "prior-art-2026-11-02-1000.html"]) writeFileSync(join(e.ALEPH_IDEAS, "issue-history", "lenses", f), `<p>${f}</p>`);
+    });
+    page = await rig.open("#/ideas");
+  }, 150_000);
+  afterAll(() => rig?.stop());
+
+  test("the list shows an idea after Issues in the nav, and the idea page shows its tabs and the newest prior art", async () => {
+    await page.when('document.querySelector("#view tbody tr")');
+    expect(await page.ev<string>('document.querySelector("#view tbody tr").textContent')).toContain("Issue historynew project");
+    
+    expect(await page.ev<boolean>('(() => { const n = [...document.querySelectorAll("#nav li a")].map((a) => a.textContent); return n.indexOf("Ideas") === n.indexOf("Issues") + 1; })()')).toBe(true);
+    await page.go("#/ideas/issue-history");
+    await page.when('document.querySelector("#view [data-tab]")');
+    expect(await page.ev<string[]>('[...document.querySelectorAll("#view [data-tab]")].map((b) => b.textContent)')).toEqual(["Write-up", "Prior art", "Red team", "Explainer", "Log"]);
+    await click('#view [data-tab="prior-art"]');
+    await page.when('document.querySelector("#view section[data-pane=prior-art]:not([hidden]) iframe")');
+    const frame = 'document.querySelector("#view section[data-pane=prior-art] iframe")';
+    expect(await page.ev<string>(`${frame}.getAttribute("src")`)).toBe("/api/ideas/issue-history/lenses/prior-art-2026-11-02-1000.html");
+    expect(await page.ev<boolean>(`${frame}.hasAttribute("sandbox")`)).toBe(true);
+    expect(await page.ev<string>('document.querySelector("#view section[data-pane=prior-art] ul").textContent')).toBe("2026-11-01 09:00");
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
+  const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
+});
