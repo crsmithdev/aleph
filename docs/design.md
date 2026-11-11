@@ -611,7 +611,8 @@ A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 - Keep the colour of a key the same in all windows. If a key can have no value in a window, set `color` on each key, because the keys after it move up one colour.
 - Show at most seven keys. Fold the rest into one key, `Other`.
 - Show a legend. When the frame has one key and the title names it, set `legend: false`.
-- When there is no data, the frame shows its `empty` line.
+- When there is no data, the frame shows its `empty` line and its `hint`.
+- A linked row is also a link in a list under the chart, for the keyboard. The list shows when a link has focus.
 - When the data did not rebuild, give `error` and `since`. The panel tells how old the data is.
 - Put two or three panels side by side in `.trio`, which has three columns. With two panels, give one the class `wide`: `panelOf(key, frame, "wide")`. Under 1100px, they stack.
 
@@ -721,6 +722,7 @@ The timeline shows the runs of an issue or a job over time, with their events.
 
 - `renderTimeline()` makes the whole panel: its title, its legend and its rows. Do not wrap it, and do not add a legend.
 - Give `segments` as `[{ title, aside, rows }]`. Make each row with `laneRow()`. It sets the tones of the bars, the waits, the time and the cost from the runs. Do not set a tone by hand.
+- A bar with no link takes focus. Each bar names its state in its text, not only in `title`.
 - Put the events of a run under its row. A long event is clamped.
 - With no rows, `renderTimeline()` shows nothing.
 - Under 740px, the timeline scrolls sideways.
@@ -1489,6 +1491,8 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Memory search field is 44px high and `--fs-lg`; every other page uses the one `searchBox()` size | `.memory .msearch` in `ui/app.css` | follow-up |
 | Settings and forms written by hand: a form in a table cell, a select in a table cell, a hand-built armed button | `ui/views/gates.js`, `ui/views/factory-agents.js`, `ui/views/memory.js` | aleph-1891 (pending) |
 | A table row's fold chevron is a hand `<button class="fold">`: no helper for a row toggle | `renderRow()` in `ui/views/issues.js` | follow-up |
+| The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/timeline.js` | follow-up |
+| The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/chart.js` | follow-up |
 | The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |
 | A textarea, a checkbox, the id span `idp`, the plural of "job" and the `<code>` of a commit with no URL are written by hand: no helper | `ui/views/issues.js` | follow-up |
 | The File an Issue Project select takes its options from the registry after the page is drawn, written as hand `<option>` tags | `projectOptions()` in `ui/views/issues.js` | follow-up |

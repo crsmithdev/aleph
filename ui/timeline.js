@@ -1,7 +1,7 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { clamp, codeText, legendHtml, dur, esc, money, shortModel, tag, tone, when } from "./lib.js";
+import { clamp, codeText, legendHtml, dur, esc, money, sectionHead, shortModel, tag, tone, when } from "./lib.js";
 import { word, contentText } from "../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
@@ -94,7 +94,8 @@ export function waitEvent(w, holds = []) {
   const h = topHold(w, Array.isArray(holds) ? holds : []); // `waits.map(waitEvent)` passes an index
   const e = h?.event ?? {};
   const text = [e.sub, contentText(e), dur((w.end - w.start) / 1000), h?.text].filter(Boolean).join(" · ");
-  return { at: w.start, tag: e.action ?? (h ? word("gate", h.kind) : "waiting"), tone: "need", html: esc(text) };
+  const state = e.action ?? (h ? word("gate", h.kind) : "waiting");
+  return { at: w.start, tag: state, tone: tone(state), html: esc(text) };
 }
 
 /** A label: the kind, a number when the lane has more than one of that kind, the model (not on a bar) and, with `cost`, the cost. */
@@ -145,7 +146,7 @@ export function renderTimeline(segments) {
   const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);
   const lane = (r) => `<div class="dp-lane">` +
     r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting you" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
-    r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ""} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}</${t}>`; }).join("") +
+    r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ` tabindex="0"`} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}<span class="sr">${esc(b.tip ?? b.label)}</span></${t}>`; }).join("") +
     (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
   const events = (evs) => {
     const list = [...(evs ?? [])].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
@@ -154,7 +155,7 @@ export function renderTimeline(segments) {
   const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${lane(r)}<span class="dp-res">${r.result ?? ""}</span><span class="num">${esc(r.time ?? "–")}</span><span class="num">${esc(r.cost ?? "–")}</span></div>${events(r.events)}</div>`;
   return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2>${legendHtml(key)}</div>` +
     `<div class="dp-scroll"><div class="dp-tl dp-axis"><span>Long spans are compressed</span><div class="dp-ticks">${ticks}</div><span>Result</span><span class="num">Took</span><span class="num">Cost</span></div>` +
-    segments.filter((s) => s.rows.length).map((s) => `<div class="dp-seg"><h3>${esc(s.title)}</h3>${s.aside ? `<span class="quiet">${esc(s.aside)}</span>` : ""}</div>${s.rows.map(row).join("")}`).join("") +
+    segments.filter((s) => s.rows.length).map((s) => `<div class="dp-seg">${sectionHead(s.title, { aside: s.aside && esc(s.aside), level: 3 })}</div>${s.rows.map(row).join("")}`).join("") +
     `</div></section>`;
 }
 

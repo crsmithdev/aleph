@@ -54,8 +54,8 @@ test("three chart panels in one row replace the old cards, each says its data fo
     "Slowest 10: Intake peak 1m 40s, Queue peak 10m 00s, Build peak 1h 06m, Land peak 3m 20s",
   ]);
   // The stage's own line sits under the trend's title; each panel keeps its own empty line.
-  expect(row).toContain("<p>From filing to the last land.</p>");
-  expect(queue).toContain("<p>From intake to the first agent job. This includes waits for a slot or for another issue.</p>");
+  expect(row).toContain('<p class="notice" role="status">From filing to the last land.</p>');
+  expect(queue).toContain('<p class="notice" role="status">From intake to the first agent job. This includes waits for a slot or for another issue.</p>');
   expect(lead).not.toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
   expect(queue).toContain("Queue peak 10m 00s");
   expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);

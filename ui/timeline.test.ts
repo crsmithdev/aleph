@@ -98,6 +98,12 @@ describe("the event tags", () => {
     expect(tagTone(runTag({ condition: "landed" }))).toEqual(["landed", "done"]);
   });
 
+  test("a wait's tone is the tone of its state: a red hold is stuck", () => {
+    const w = { start: Date.parse(iso(0)), end: Date.parse(iso(9)) };
+    const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "x" }]);
+    expect([e.tag, e.tone]).toEqual(["red", "stuck"]);
+  });
+
   test("a wait's tag is waiting, for the factory's wait and yours", () => {
     const w = { start: Date.parse(iso(0)), end: Date.parse(iso(9)) };
     expect(tagTone(waitEvent({ ...w, chris: false }))).toEqual(["waiting", "need"]);
@@ -154,6 +160,18 @@ describe("the compact scale", () => {
 });
 
 describe("the timeline panel", () => {
+  test("a bar with no link takes focus, and every bar names its state outside title; a segment aside is the kit's aside", () => {
+    const [a, b] = spans([run("worker", "2026-11-01T10:00:00Z", "2026-11-01T10:05:00Z", { condition: "failed" }), run("worker", "2026-11-01T10:10:00Z", "2026-11-01T10:15:00Z", { condition: "landed", href: undefined })]);
+    const row = laneRow({ head: "h", runs: [a, b] });
+    const bars = renderTimeline([{ title: "Work", aside: "to the <land>", rows: [row] }]).match(/<(?:a|span) class="dp-bar[^>]*>.*?<\/(?:a|span)>/g) as string[];
+    expect(bars).toHaveLength(2);
+    expect(bars[0]).not.toContain("tabindex");
+    expect(bars[0]).toContain('<span class="sr">build 1 · failed · 5m 00s</span>');
+    expect(bars[1]).toContain('tabindex="0"');
+    expect(bars[1]).toContain('<span class="sr">build 2 · landed · 5m 00s</span>');
+    expect(renderTimeline([{ title: "Work", aside: "to the <land>", rows: [row] }])).toContain('<span class="aside">to the &lt;land&gt;</span>');
+  });
+
   test("it shows the axis, the segments, the bars as links to their jobs and the events, escaped", () => {
     const h = renderTimeline(issueSegments(issue({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: <b>x</b>"].map(noteOf) })));
     expect(h).toContain('<h2 id="h-timeline">Timeline</h2>');

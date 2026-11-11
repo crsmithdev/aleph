@@ -63,6 +63,7 @@ test("the panel has a form control for its group, or the empty line under its ti
   expect(none).toContain("<h2>Agents Live by Role</h2>");
   expect(none).toContain("Nothing to plot in this window.");
   expect(none).not.toContain("chartbox");
+  expect(none).toMatch(/<div class="empty"><p>[^<]+<\/p><p class="hint">[^<]+<\/p><\/div>/);
 });
 
 test("a frame's own empty line replaces the default, and its note is under the title", () => {
@@ -70,11 +71,11 @@ test("a frame's own empty line replaces the default, and its note is under the t
   expect(panel(f, "area")).toContain("No time to plot in this window.");
   expect(panel(f, "area")).not.toContain("Nothing to plot in this window.");
   const h = panel({ ...time, note: "From filing to the last land." }, "area");
-  expect(h).toContain("<p>From filing to the last land.</p>");
+  expect(h).toContain('<p class="notice" role="status">From filing to the last land.</p>');
   expect(h).toContain("<h2>Agents Live by Role</h2>");
 });
 
-test("the option carries the link of a row: the point of a time frame, the bar and the label of a category frame; the markup lists no links", () => {
+test("the option carries the link of a row: the point of a time frame, the bar and the label of a category frame", () => {
   const t = { ...time, rows: [{ at: at(27), a: 1, href: "#/factory/jobs/a1" }, { at: at(28), a: 2 }] };
   expect(option(t, "points", T).series[0].data).toEqual([{ value: 1, href: "#/factory/jobs/a1" }, 2]);
   const c = { ...cat, rows: [{ name: "a1", a: 1, href: "#/factory/jobs/a1" }, { name: "Worker", a: 3 }] };
@@ -82,7 +83,29 @@ test("the option carries the link of a row: the point of a time frame, the bar a
   expect(o.series[0].data).toEqual([{ value: 1, href: "#/factory/jobs/a1" }, 3]);
   expect(o.yAxis.triggerEvent).toBe(true);
   expect(o.yAxis.axisLabel.interval).toBe(0);
-  expect(panel(c, "stacked")).not.toContain('<a class="idl"');
+});
+
+test("a linked row is also a link in the markup, for the keyboard; a frame with no link has no list", () => {
+  const c = { ...cat, rows: [{ name: "a1", a: 1, href: "#/factory/jobs/a1" }, { name: "Worker", a: 3 }] };
+  expect(panel(c, "stacked")).toContain('<ul class="chartlinks sr"><li><a href="#/factory/jobs/a1">a1</a></li></ul>');
+  expect(panel(cat, "stacked")).not.toContain("chartlinks");
+});
+
+test("a time frame's tooltip header has the date with the hour label, and the axis shows the label", () => {
+  const hour = (h: number) => new Date(2026, 9, 27, h).toISOString();
+  const x = option({ ...time, over: { kind: "time", window: "day" }, rows: [{ at: hour(4), a: 1 }, { at: hour(5), a: 2 }] }, "area", T).xAxis;
+  expect(x.data).toEqual(["Oct 27 4a", "Oct 27 5a"]);
+  expect(x.data.map((s: string, i: number) => x.axisLabel.formatter(s, i))).toEqual(["4a", "5a"]);
+});
+
+test("a frame of more than seven keys with values draws seven and one Other that sums the rest", () => {
+  const ks = Array.from({ length: 9 }, (_, i) => ({ key: `k${i}`, name: `K${i}` }));
+  const f = { ...time, by: { name: "Role", keys: ks }, rows: [{ at: at(27), ...Object.fromEntries(ks.map((k, i) => [k.key, i + 1])) }, { at: at(28), k8: 4 }] };
+  const s = option(f, "area", { muted: "#m" }).series;
+  expect(s.map((x: any) => x.name)).toEqual(["K0", "K1", "K2", "K3", "K4", "K5", "K6", "Other"]);
+  expect(s.at(-1).data).toEqual([8 + 9, 4]);
+  expect(label(f)).toContain("Other peak 17");
+  expect(option({ ...f, by: { name: "Role", keys: ks.slice(0, 7) } }, "area", T).series).toHaveLength(7);
 });
 
 test("the time group offers points, for one dot per row, and a kept points form stays", () => {

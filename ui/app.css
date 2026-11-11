@@ -910,6 +910,7 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--gap-in); align-items: start; }
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-in); }
 .trio > .wide { grid-column: span 2; }
+.chartlinks:focus-within { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; margin: 0; padding-left: var(--sp-16); font-size: var(--fs-xs); }
 .chartbox { width: 100%; height: 200px; min-width: 0; }
 /* A chart panel fills its grid cell; its chart takes the height the card leaves. The basis is 0, not the content:
    ECharts sizes its canvas to the box, so a box sized by its content grows each time the chart resizes. */
@@ -1017,6 +1018,8 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 .dp-ticks span.end { transform: translateX(-100%); }
 .dp-seg { display: flex; align-items: baseline; gap: var(--sp-10); padding: var(--sp-12) 0 var(--sp-2); border-top: 1px solid var(--rule); font-size: var(--fs-xs); }
 .dp-seg h3 { margin: 0; font: var(--fw-strong) var(--fs-sm) var(--sans); }
+.dp-seg .sh { margin: 0; padding: 0; border: 0; }
+.dp-seg .sh .aside { margin-left: 0; }
 .dp-row { padding: var(--sp-8) 0; }
 .dp-row + .dp-row { border-top: 1px solid var(--rule-2); }
 .dp-head { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; font-size: var(--fs-sm); }
