@@ -68,6 +68,33 @@ describe("the Sessions page", () => {
     expect(h).toContain('href="#/skills/aleph%3Ahandoff"');
   });
 
+  test("the cards use the kit parts: a fold of unused skills, a legend key, a link button", () => {
+    const h = v.renderSessions(data(), opts("pick=skill:x"));
+    const skills = h.slice(h.indexOf('aria-label="Skills"'), h.indexOf("</section>", h.indexOf('aria-label="Skills"')));
+    expect(skills).toContain('href="#/skills/tidy"');
+    expect(skills).not.toContain('class="unused"');
+    expect(skills).not.toContain("<h3");
+    expect(h).toContain('<a class="act" href="#/skills/x">Open the skill</a>');
+    expect(h).not.toContain("red part");
+    expect(h).toContain('<ul class="legend"><li>162 calls</li><li><i class="c-err"></i>17 errors</li></ul>');
+  });
+
+  test("the search box sits outside the Sessions card, which redraws whole in #ag-sessions", () => {
+    const h = v.renderSessions(data(), opts("pick=skill:aleph:handoff"));
+    const box = h.slice(h.indexOf('<div id="ag-sessions">'), h.indexOf("</section>", h.indexOf('<div id="ag-sessions">')));
+    expect(box).toStartWith('<div id="ag-sessions"><section class="card" id="ag-sess" aria-label="Sessions">');
+    expect(box).toContain("Show all sessions");
+    expect(box).not.toContain('data-ui="ag-search"');
+    expect(h.indexOf('data-ui="ag-search"')).toBeLessThan(h.indexOf('<div id="ag-sessions">'));
+  });
+
+  test("a Langfuse failure names the reason in the hint, not as a raw Langfuse failed line", () => {
+    const h = v.renderSessions({ ...data(), activity: { langfuse: "error", error: "timeout", tools: [] } }, opts());
+    expect(h).not.toContain("Langfuse failed:");
+    expect(h).toContain("The tools did not load.");
+    expect(h).toContain("timeout. Check that Langfuse is running");
+  });
+
   test("a window past the pages the fetch reads says the counts are of part of it; one inside them says nothing", () => {
     const d = data();
     expect(v.renderSessions({ ...d, partial: true }, opts())).toContain("cover only part of the window");
@@ -77,8 +104,11 @@ describe("the Sessions page", () => {
   test("a failed part says so and the others still show", () => {
     const off = v.renderSessions({ ...data(), activity: { langfuse: "off", tools: [] }, skills: { error: "boom" }, sessions: { error: "down" } }, opts());
     expect(off).toContain("Langfuse is not configured");
-    expect(off).toContain("Skills failed: boom");
-    expect(off).toContain("Sessions failed: down");
+    expect(off).not.toMatch(/(Skills|Sessions) failed:/);
+    expect(off).toContain("The skills did not load.");
+    expect(off).toContain("boom. Check that Langfuse is running");
+    expect(off).toContain("The sessions did not load.");
+    expect(off).toContain("down. Check that Langfuse is running");
     expect(v.renderSessions({ ...data(), skills: { error: "boom" } }, opts())).toContain("dear one");
   });
 });
