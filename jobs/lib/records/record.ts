@@ -353,7 +353,7 @@ export const counting = (j: Entry[]): Entry => j.findLast((e) => counts(e.run)) 
 /**
  * The next step of the job. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
  * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a returned or failed run
- * goes to the rescue, unless the factory asked Chris about it or its cause is not `rescuable` (`POLICY`): then it
+ * goes to the rescue, unless the factory asked Chris about it after it ended or its cause is not `rescuable` (`POLICY`): then it
  * waits; a landed, done or dropped job does nothing; an issue
  * with no open run waits for its `wait`, else starts. The run that counts is the newest one that `counts`: a director
  * run changes the step through the Ask and the `director` event it writes, never as the run that counts.
@@ -368,7 +368,8 @@ export function next(r: JobRecord): Step {
   if (last?.next === "land") return { step: "land", action: last.condition };
   if (last?.condition === "passed") return { step: "wait", action: "passed", to: "human" };
   if (last && (last.condition === "returned" || last.condition === "failed")) {
-    if (r.events.some((e) => e.kind === "asked" && e.run === last.id)) return { step: "wait", action: "waiting", to: "human" };
+    // An Ask made while the run was live (a slow land) was about the live run, not about this end.
+    if (r.events.some((e) => e.kind === "asked" && e.run === last.id && !(last.ended && e.at < last.ended))) return { step: "wait", action: "waiting", to: "human" };
     if (!policyOf(causeOf(last)).rescuable) return { step: "wait", action: last.condition, ...subOf(last) };
     return { step: "rescue", action: last.condition, ...subOf(last) };
   }

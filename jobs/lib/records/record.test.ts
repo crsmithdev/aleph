@@ -205,6 +205,12 @@ test("next: a stuck run the factory asked Chris about waits", () => {
   expect(record.next(rec([{ condition: "failed" }], { events })).step).toBe("wait");
 });
 
+test("next: a land asked about while it was live (a slow land) and failed later goes to the rescue", () => {
+  const events = [{ at: AT, kind: "asked", what: "slow land", run: "0" }];
+  expect(record.next(rec([{ kind: "land", condition: "failed", cause: "check", ended: "2026-11-04T10:30:00.000Z" }], { events })).step).toBe("rescue");
+  expect(record.next(rec([{ kind: "land", condition: "failed", cause: "check", ended: "2026-11-04T09:30:00.000Z" }], { events })).step).toBe("wait");
+});
+
 test("next: an issue with no run waits for its hold, else starts", () => {
   expect(record.next(rec([], { wait: { kind: "after", reason: "after aleph-6", since: AT } }))).toEqual({ step: "wait", action: "waiting" });
   expect(record.next(rec([])).step).toBe("start");
