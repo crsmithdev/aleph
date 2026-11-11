@@ -4,6 +4,7 @@
  * all read a spec through this module.
  */
 import { createHash } from "node:crypto";
+import { isJsTestFile } from "../gates/test-files.ts";
 import { section, type Issue } from "../../../issues/lib/todo.ts";
 
 /** The sections an issue's spec has. */
@@ -80,7 +81,7 @@ export const commandsIn = (text: string): string[] => [...text.matchAll(/`([^`\n
  * `bun test` takes a file whose name has no `.test` or `.spec` (such as `a.accept.ts`) only with a `./` path; without it
  * the argument is a name filter that matches no test file. True for such an argument.
  */
-const nameFilter = (arg: string): boolean => /^[^-./].*\.[jt]sx?$/.test(arg) && !/\.(?:test|spec)\.[jt]sx?$/.test(arg);
+const nameFilter = (arg: string): boolean => /^[^-./].*\.[jt]sx?$/.test(arg) && !isJsTestFile(arg);
 
 /** The file arguments of a `bun test` command that bun reads as a name filter, as nameFilter says. */
 export const nameFilters = (command: string): string[] => (/^bun test\s/.test(command) ? command.split(/\s+/).slice(2).filter(nameFilter) : []);

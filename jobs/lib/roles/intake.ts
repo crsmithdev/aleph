@@ -26,6 +26,7 @@ import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
 import { filing } from "../transitions/filing.ts";
+import { jsTestFilesInText, siblingTestFile, testFileInText } from "../gates/test-files.ts";
 import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec } from "./issue-spec.ts";
 
 /** The model an intake run asks for. */
@@ -147,7 +148,7 @@ const COMMANDS = new Set(["bun", "bunx", "npm", "npx", "pnpm", "yarn", "node", "
 /** Whether an Oracle names a test file or a command a shell runs. `aleph check` is not one. */
 export function realOracle(text: string): boolean {
   if (/\baleph check\b/.test(text)) return false;
-  if (/[\w./-]+\.(test|spec)\.[a-z]+\b|(^|[\s`/])(tests?|__tests__)\/[\w./-]+|\btest_[\w-]+\.py\b|_test\.(go|py)\b/m.test(text)) return true;
+  if (testFileInText.test(text)) return true;
   return commandsIn(text).some(isCommand);
 }
 
@@ -157,8 +158,6 @@ const isCommand = (span: string): boolean => {
   return COMMANDS.has(word) || word.startsWith("./") || (!!word && !!Bun.which(word));
 };
 
-/** A test file, which sits beside the code it tests. */
-const TEST_FILE = /\.(test|spec|accept)\.[a-z]+$|(^|\/)test_[\w-]+\.py$|_test\.(go|py)$/;
 /** A placeholder left for the reader: `???`, `TBD`, a section that is only `TODO`, or `<name>` in a command or a path (hasPlaceholder). */
 const PLACEHOLDER = /\?\?\?|\bTBD\b/;
 
@@ -189,7 +188,7 @@ function specProblems(repo: Repo, s: Spec, at: string): string[] {
   // make. A name in another backtick span (such as a fixture name in test data) is not a file.
   const surface = s.surface.map((p) => p.path);
   const named = [oracle.replace(/`[^`\n]+`/g, " "), ...commandsIn(oracle).filter(isCommand)].join("\n");
-  for (const m of new Set([...named.matchAll(/(?:^|[\s`(])\.?\/?([\w.@-]+(?:\/[\w.@-]+)*\.(?:test|spec)\.[jt]sx?)\b/g)].map((m) => m[1]))) {
+  for (const m of new Set([...named.matchAll(jsTestFilesInText)].map((m) => m[1]))) {
     if (!onMainTree(repo, m) && !inSurface(m, surface)) out.push(`${at}: the Oracle names ${m}, which is not on main and not in the Edit surface`);
   }
   return out;
@@ -340,7 +339,7 @@ export function addParts(repo: Repo, file: File, issue: issues.Issue, parts: Par
 /** Whether the build route is a worker's test-only follow-up: every path of its Edit surfaces is a test file. */
 const testOnly = (item: issues.Issue, v: Extract<Route, { route: "build" }>): boolean => {
   const paths = [...(v.parts?.flatMap((p) => p.spec.surface) ?? v.spec?.surface ?? [])].map((p) => p.path);
-  return sourceOf(item) === "worker" && issues.kindOf(item) !== "bug" && paths.length > 0 && paths.every((p) => TEST_FILE.test(p));
+  return sourceOf(item) === "worker" && issues.kindOf(item) !== "bug" && paths.length > 0 && paths.every((p) => siblingTestFile.test(p));
 };
 
 /** A red-main issue's red, while its repo's main or CI is still red; else null. Intake does not close such an issue: the fix may lie outside the repo, and that is Chris's to decide. */
