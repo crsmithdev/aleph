@@ -482,7 +482,7 @@ table.tbl th .arr { display: inline-block; width: 1em; margin-left: var(--sp-2);
 .issue-page:not(.editing) .edit-only, .issue-page.editing .view-only { display: none; }
 .issue-page .title-edit { flex: 1 1 auto; min-width: 0; font: inherit; font-size: var(--fs-lg); }
 .issue-page .body-edit { display: block; width: 100%; }
-.part-row td:nth-child(2) { padding-left: 22px; }
+.sub-row td:nth-child(2) { padding-left: 22px; }
 .status-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); margin: 0 0 var(--sp-12); }
 .idp { white-space: nowrap; font: var(--fs-xs) var(--mono); color: var(--muted); }
 a.idl { white-space: nowrap; font: var(--fw-mid) var(--fs-xs) var(--mono); color: var(--muted); text-decoration: none; }

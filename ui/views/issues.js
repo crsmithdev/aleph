@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember } from "../lib.js";
+import { actButton, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -173,13 +173,6 @@ export function sortRows(rows, sort = UPDATED) {
 /** With a search and no chosen sort, the best match first. */
 const ordered = (rows, o) => (o.sort || !(o.q ?? "").trim() ? sortRows(rows, o.sort ?? UPDATED) : [...rows].sort((a, b) => b.score - a.score || ms(b.at) - ms(a.at)));
 
-/** The rows with each child moved under its parent, in their order. A child whose parent is not in the rows keeps its place. */
-export function nest(rows) {
-  const ids = new Set(rows.map((r) => r.id)), under = (r) => r.parent && ids.has(r.parent);
-  const kids = Map.groupBy(rows.filter(under), (r) => r.parent);
-  return rows.filter((r) => !under(r)).flatMap((r) => [r, ...(kids.get(r.id) ?? [])]);
-}
-
 /** A store date as the table shows it: "Oct 20" this year, "2025-12-03" another; "" for none. */
 export function dateText(s, now = new Date()) {
   const t = dayMs(s);
@@ -199,21 +192,25 @@ export function ageText(r, now = Date.now()) {
   return `${Math.max(0, Math.floor(((r.status === "open" ? now : isoMs(r.closedTime) || now) - from) / DAY))}d`;
 }
 
-/** One issue row; a sub-issue is indented under its parent. */
-export function renderRow(r) {
-  return `<tr class="rowlink${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(localId(`${r.repo}-${r.n}`, r.repo), r.href)}</td>` +
-    `<td class="wide"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
+/** One issue row. `fold` is "open" or "closed" for a parent with parts, which gets a chevron; `sub` indents a part shown under its parent. */
+export function renderRow(r, { fold, sub } = {}) {
+  const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
+  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(localId(`${r.repo}-${r.n}`, r.repo), r.href)}</td>` +
+    `<td class="wide">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
     `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${priorityBadge(r.priority)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
     `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td></tr>`;
 }
 
 export function renderTable(rows, o = {}) {
-  const all = nest(ordered(filterRows(rows, o), o));
+  const flat = ordered(filterRows(rows, o), o), group = kept("issues.group", false), open = new Set(kept("issues.open", []));
+  const ids = new Set(flat.map((r) => r.id)), parents = new Set(flat.map((r) => r.parent)), under = (r) => group && r.parent && ids.has(r.parent);
+  const kids = Map.groupBy(flat.filter(under), (r) => r.parent);
+  const all = group ? flat.filter((r) => !under(r)).flatMap((r) => [r, ...(open.has(r.id) ? kids.get(r.id) ?? [] : [])]) : flat;
   if (!all.length) return empty("Nothing matches.", "Loosen the filters, or file an issue below.");
   const shown = all.slice(0, o.limit ?? PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
   const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
-  return `${dataTable(head, shown.map(renderRow).join(""))}${pager(shown.length, all.length, PAGE)}`;
+  return `${dataTable(head, shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) && (open.has(r.id) ? "open" : "closed"), sub: under(r) } : {})).join(""))}${pager(shown.length, all.length, PAGE)}`;
 }
 
 /** Whether a stored time is inside the span of `b`, the buckets of a window. */
@@ -382,6 +379,7 @@ export function renderFilters(rows, o = {}) {
     { label: "Stage", name: "stage", data: true, value: o.stage ?? "", options: [{ value: "", label: "All" }, ...stages] },
     { label: "Priority", name: "priority", value: o.priority ?? "", options: PRIORITY_OPTIONS },
     { label: "Label", name: "label", data: true, value: o.label ?? "", options: [{ value: "", label: "All" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
+    { html: `<label><input type="checkbox" name="group"${kept("issues.group", false) ? " checked" : ""}> Group sub-issues</label>` },
   ]);
 }
 
@@ -669,10 +667,18 @@ if (typeof document !== "undefined") {
     const t = e.target.closest ? e.target : null;
     const seg = t?.closest("#inv-filters .seg button");
     if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" });
+    const fold = t?.closest("#issues-table button[data-fold]");
+    if (fold) {
+      const open = new Set(kept("issues.open", []));
+      if (!open.delete(fold.dataset.fold)) open.add(fold.dataset.fold);
+      keep("issues.open", [...open]);
+      return refill();
+    }
     const win = t?.closest("#inv-scope .seg button");
     if (win) { remember("window", win.dataset.value); return setQuery({ window: win.dataset.value }); }
   });
   document.addEventListener("change", (e) => {
+    if (e.target.matches?.('#inv-filters input[name="group"]')) { keep("issues.group", e.target.checked); return refill(); }
     const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
     if (f) { remember(f.name, f.value); setQuery({ [f.name]: f.value, limit: "" }); }
   });

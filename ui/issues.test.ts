@@ -310,17 +310,54 @@ describe("views", () => {
     expect(v.renderTable(rows, { status: "open", q: "land" })).toContain("<mark>land</mark>");
   });
 
-  test("a child and an old part show indented under their parent, whatever the sort; a child whose parent is filtered out keeps its place", () => {
-    const rows = v.issueRows({ issues: [
+  describe("grouping sub-issues", () => {
+    const rows = () => v.issueRows({ issues: [
       { id: 1, repo: "fac", title: "parent", status: "open", labels: [], updatedTime: iso("2026-10-01") },
       { id: 2, repo: "fac", title: "other", status: "open", labels: [], updatedTime: iso("2026-10-20") },
       { id: 3, repo: "fac", title: "child", parent: "1", status: "open", labels: [], updatedTime: iso("2026-10-31") },
       { id: 1, ref: "1.1", parent: "1", repo: "fac", title: "old part", status: "open", labels: [], updatedTime: iso("2026-10-30") },
       { id: 4, repo: "fac", title: "lone child", parent: "9", status: "open", labels: [], updatedTime: iso("2026-10-10") },
     ] });
-    const html = v.renderTable(rows, { status: "open" });
-    expect([...html.matchAll(/<td class="wide"><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1])).toEqual(["other", "lone child", "parent", "child", "old part"]);
-    expect([...html.matchAll(/<tr class="rowlink( part-row)?"[^>]*data-n="([^"]+)"/g)].filter((m) => m[1]).map((m) => m[2])).toEqual(["4", "3", "1.1"]);
+    const store = (group: boolean, open: string[] = []) => {
+      const m: Record<string, string> = { "aleph.issues.group": JSON.stringify(group), "aleph.issues.open": JSON.stringify(open) };
+      (globalThis as any).localStorage = { getItem: (k: string) => m[k] ?? null, setItem: (k: string, x: string) => { m[k] = x; } };
+    };
+    afterAll(() => { delete (globalThis as any).localStorage; });
+    const titles = (html: string) => [...html.matchAll(/<td class="wide">(?:<button.*?<\/button> )?<a[^>]*>(.*?)<\/a>/g)].map((m) => m[1]);
+    const subs = (html: string) => (html.match(/class="rowlink sub-row"/g) ?? []).length;
+
+    test("off, the table is a flat list in sort order with no indent", () => {
+      store(false);
+      const html = v.renderTable(rows(), { status: "open" });
+      expect(titles(html)).toEqual(["child", "old part", "other", "lone child", "parent"]);
+      expect(subs(html)).toBe(0);
+      expect(html).not.toContain("data-fold");
+    });
+
+    test("on and collapsed, a parent has a chevron and hides its parts; a part with no parent in the filter is top level", () => {
+      store(true);
+      const html = v.renderTable(rows(), { status: "open" });
+      expect(titles(html)).toEqual(["other", "lone child", "parent"]);
+      expect(html.match(/data-fold="fac-1"[^>]*aria-expanded="false"/g)).toHaveLength(1);
+      expect(html.match(/data-fold/g)).toHaveLength(1);
+      expect(titles(v.renderTable(rows(), { status: "open", q: "child" })).map((t) => t.replace(/<\/?mark>/g, ""))).toContain("child");
+      expect(v.renderTable(rows(), { status: "open", q: "child" })).not.toContain("sub-row");
+    });
+
+    test("on and expanded, the parts follow their parent, indented, in the sort order", () => {
+      store(true, ["fac-1"]);
+      const html = v.renderTable(rows(), { status: "open", sort: { key: "id", dir: -1 } });
+      expect(titles(html)).toEqual(["lone child", "other", "parent", "child", "old part"]);
+      expect(subs(html)).toBe(2);
+      expect(titles(v.renderTable(rows(), { status: "open", sort: { key: "id", dir: 1 } }))).toEqual(["parent", "old part", "child", "other", "lone child"]);
+    });
+
+    test("the controls hold a Group sub-issues checkbox that follows the kept state", () => {
+      store(true);
+      expect(v.renderFilters(rows(), {})).toMatch(/<input type="checkbox" name="group" checked> Group sub-issues/);
+      store(false);
+      expect(v.renderFilters(rows(), {})).toMatch(/<input type="checkbox" name="group"> Group sub-issues/);
+    });
   });
 
   test("the numbers: open, filed and closed in 7 days, the week before, age and runs; a part's run counts once, by its own total", () => {
@@ -528,7 +565,7 @@ describe("views", () => {
     ] });
     const [, partRow] = rows;
     expect(partRow).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", part: true, parent: "fac-910" });
-    expect(v.renderRow(partRow)).toContain("part-row");
+    expect(v.renderRow(partRow, { sub: true })).toContain("sub-row");
     expect(v.sortRows(rows, { key: "id", dir: -1 })[0]).toBe(partRow);
   });
 });
