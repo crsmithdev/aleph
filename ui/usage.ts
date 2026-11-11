@@ -253,6 +253,8 @@ interface UsageSummary {
   hours: number;
   /** Weekly percent points used in the last 5 hours (`gainSince`); null with no snapshot near 5 hours ago in the reset window. */
   last5h: number | null;
+  /** Percent of the week spent off this machine, set by `/api/factory`; see `off`. */
+  off?: number | null;
 }
 
 /** How far from the target time a snapshot may lie to count as "nearest": a bit over the 10-minute poll, times 3. */
@@ -292,4 +294,27 @@ export function summary(clock = Date.now()): UsageSummary {
 /** Sets `wk` on each job that has a cost and a fit. */
 export function annotate<T extends { cost?: number; model?: string; wk?: Wk }>(jobs: T[], f: Fit | null): void {
   for (const j of jobs) { const w = share(f, j.cost, j.model); if (w) j.wk = w; }
+}
+
+/** The hour the week of `u` began, where Langfuse's hourly rows start: its reset less a week, to the nearest hour; with no reset time, the first snapshot's hour. */
+function weekStart(u: UsageSummary): number {
+  const r = Date.parse(u.now?.seven_day_resets_at ?? "") - WEEK;
+  return Number.isNaN(r) ? Math.floor(Date.parse(u.series[0].at) / HOUR) * HOUR : Math.round(r / HOUR) * HOUR;
+}
+
+/** The weekly percent spent off this machine: the latest 7-day percent less the fit's share of this machine's Claude dollars since the reset, at least 0. Null with no fit or no current snapshot. */
+export function off(f: Fit | null, u: UsageSummary, spend: Hourly[]): number | null {
+  if (!f || !u.now) return null;
+  const from = weekStart(u);
+  const mine = spend.filter((x) => x.at >= from && x.model.startsWith("claude-")).reduce((a, x) => a + (share(f, x.cost, x.model)?.pct ?? 0), 0);
+  return Math.max(0, u.now.seven_day - mine);
+}
+
+/** `summary()` with `off` set: the spend since the reset comes from Langfuse; `off` is null when it does not answer. */
+export async function summaryOff(f: Fit | null): Promise<UsageSummary> {
+  const u = summary();
+  if (!f || !u.now) return { ...u, off: null };
+  const from = new Date(weekStart(u));
+  try { return { ...u, off: off(f, u, await need().hourly({ from, to: new Date() }, "usage")) }; }
+  catch { return { ...u, off: null }; }
 }

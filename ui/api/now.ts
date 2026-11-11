@@ -4,7 +4,7 @@ import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import { eventIn, inProject, known, repoIn, scopeOf } from "./scope.ts";
 import { WINDOWS } from "../../lib/windows.ts";
 import { state, type State } from "../state.ts";
-import { annotate, currentFit, summary } from "../usage.ts";
+import { annotate, currentFit, summaryOff } from "../usage.ts";
 
 /** The state with only `project`'s jobs, issues, asks and Herald events; the factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
@@ -21,7 +21,7 @@ export async function stateBody(project: string | null, ms = WINDOWS.week) {
   const from = Date.now() - ms;
   const fit = await currentFit().catch(() => null);
   annotate([...s.stuck, ...s.running], fit);
-  return { ...s, doneCount: doneStamps.filter((d) => d.at >= from).length, usage: summary(), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
+  return { ...s, doneCount: doneStamps.filter((d) => d.at >= from).length, usage: await summaryOff(fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
 }
 
 export const routes: Routes = {

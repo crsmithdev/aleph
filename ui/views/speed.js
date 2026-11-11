@@ -85,7 +85,8 @@ export function statusCards(s, d, { efficiency, performance }) {
 
 /** The Usage card: the 7-day value, the bar with the mark for the week gone, and an optional note. `link` is `{href}` or `{key, on}`. */
 export function usageCard(s, link = { href: "#/factory/agents" }) {
-  const cur = s.usage?.now, p = pace(s), note = usageAge(s) || (p ? `${p.word} pace, live` : "live, not the window");
+  const cur = s.usage?.now, p = pace(s), off = s.usage?.off, base = usageAge(s) || (p ? `${p.word} pace, live` : "live, not the window");
+  const note = off == null ? base : `${pct(off)} off this machine, ${base}`;
   if (!cur) return statCard({ k: "Usage", v: "–", note: "usage unknown", ...link });
   const gone = weekGone(cur.seven_day_resets_at, s.now);
   const tip = gone === null ? "" : `${pct(gone)} of the week gone`;

@@ -6,7 +6,7 @@ import { withEnv } from "./test-server.ts";
 import { agentStats, CLASSES, classify, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { bar, statusCards, xLabel } from "./views/speed.js";
+import { bar, statusCards, usageCard, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { pct } from "./lib.js";
 // @ts-ignore plain JS shared with the page
@@ -94,6 +94,14 @@ test("the Status cards show the answer's figures and trend them against its base
   expect(h).toContain("<b>20%<em> / 2.0h</em></b>");
   expect(h).toContain("baseline 40%, the previous 7 days");
   expect(h).toContain("<b>3<em> / 0</em></b>");
+});
+
+test("the Usage card shows the percent off this machine next to the total, and none without it", () => {
+  const u = { now: { seven_day: 40, seven_day_resets_at: "2026-11-07T08:00:00Z" } };
+  const h = usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, off: 12 } });
+  expect(h).toContain("40%");
+  expect(h).toContain("12% off this machine");
+  expect(usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, off: null } })).not.toContain("off this machine");
 });
 
 test("the Status Usage meter fill takes the default fill", () => {

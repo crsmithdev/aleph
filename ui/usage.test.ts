@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, setSystemTime, test
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { currentFit, fit, gainSince, pollOnce, pollOpenRouter, readSnapshots, runShare, share, sinceReset, summary, type Snapshot } from "./usage.ts";
+import { currentFit, fit, gainSince, pollOnce, off, pollOpenRouter, readSnapshots, runShare, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
 import { openRouterFactor } from "../jobs/lib/routing/models.ts";
@@ -104,6 +104,26 @@ test("a run's share puts its reviewer's dollars on the review's model", () => {
   expect(w.pct).toBeCloseTo(0.6, 9);
   expect(runShare(f, { model: "sonnet", cost: 4 })!.pct).toBeCloseTo(0.2, 9);
   expect(runShare(f, { model: "sonnet" })).toBeUndefined();
+});
+
+test("off: the 7-day percent less the fitted share of this machine's Claude dollars since the reset", () => {
+  // The week starts at 00:00, its reset time a hair under the hour; the polls fall 3 minutes past each hour.
+  const start = Date.parse("2026-11-04T00:00:00Z"), reset = new Date(start + 7 * 24 * H - 59).toISOString();
+  const rows = (r: string | null) => Array.from({ length: 11 }, (_, h): Snapshot => ({ at: new Date(start + h * H + 3 * 60_000).toISOString(), five_hour: 0, seven_day: 3 * h, seven_day_resets_at: r }));
+  const write = (r: string | null) => writeFileSync(process.env.ALEPH_USAGE_FILE!, rows(r).map((x) => JSON.stringify(x)).join("\n"));
+  write(reset);
+  const f = { fable: 1.5, rest: 0.125, pooled: false, hours: 24 };
+  const spend = Array.from({ length: 10 }, (_, h) => [
+    { at: start + h * H, model: "claude-fable-5-1", cost: 1 }, { at: start + h * H, model: "claude-opus-5-5", cost: 4 },
+    { at: start + h * H, model: "deepseek/deepseek-v4.1-flash", cost: 50 }, { at: start - H, model: "claude-opus-5-5", cost: 99 },
+  ]).flat();
+  // Rise of 30 points; 10 x (1 x 1.5 + 4 x 0.125) = 20 of them are this machine's, the first hour's bucket too.
+  expect(off(f, summary(), spend)).toBeCloseTo(10, 9);
+  expect(off(null, summary(), spend)).toBeNull();
+  expect(off(f, summary(), spend.map((x) => ({ ...x, cost: x.cost * 10 })))).toBe(0);
+  // With no reset time the week starts at the first snapshot's hour.
+  write(null);
+  expect(off(f, summary(), spend)).toBeCloseTo(10, 9);
 });
 
 test("gainSince: the latest weekly percent minus the snapshot nearest to 5 hours before, in the reset window", () => {
