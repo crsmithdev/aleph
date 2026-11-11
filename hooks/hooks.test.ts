@@ -386,13 +386,13 @@ describe("obs hook generations", () => {
   });
 
   test("a generation's cost prices each kind of token", () => {
-    // fable 5.1: 10 in @ $10/M, 20 out @ $50/M, 300 cache read @ $0.25/M, 40 cache write @ $12.5/M
+    // fable 5.1: 10 in @ $10/M, 20 out @ $50/M, 300 cache read @ $0.25/M, 40 cache write @ $20/M
     const cost = JSON.parse(attr(gens[0], "langfuse.observation.cost_details"));
     expect(cost.input).toBeCloseTo(0.0001, 10);
     expect(cost.output).toBeCloseTo(0.001, 10);
     expect(cost.cache_read_input_tokens).toBeCloseTo(0.000075, 10);
-    expect(cost.cache_creation_input_tokens).toBeCloseTo(0.0005, 10);
-    expect(cost.total).toBeCloseTo(0.001675, 10);
+    expect(cost.cache_creation_input_tokens).toBeCloseTo(0.0008, 10);
+    expect(cost.total).toBeCloseTo(0.001975, 10);
   });
 
   test("a generation runs from the line before it to its first block", () => {

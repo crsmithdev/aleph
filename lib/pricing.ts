@@ -1,6 +1,8 @@
 /**
  * USD per million tokens, from https://platform.claude.com/docs/en/about-claude/pricing
  * (read 2026-09-03); the three 5.5 models from https://claude.com/pricing (read 2026-10-27).
+ * A cache write costs twice the input rate: Claude Code uses the 1-hour cache, and
+ * an exact fit over 465 result events showed that rate (read 2026-11-11).
  * These are API list prices. Chris's runs use the claude.ai subscription, so a
  * cost from this table is an API-equivalent estimate. Where Claude Code reports
  * a cost (`total_cost_usd` in a `claude -p` result), that cost wins for a Claude
@@ -16,21 +18,21 @@ type Price = Rate & { long?: { above: number; rate: Rate } };
 const PER_MILLION: Record<string, Price> = {
   // The local and OpenRouter models, by name and by the id a transcript carries.
   ...Object.fromEntries(Object.entries(MODELS).flatMap(([name, m]) => (m.price ? [[name, m.price], [m.id, m.price]] : []))),
-  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
-  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 8 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 4 },
   "claude-haiku-5-5": {
-    input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125,
-    long: { above: 100_000, rate: { input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 } },
+    input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.2,
+    long: { above: 100_000, rate: { input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 1 } },
   },
-  "claude-fable-5-1": { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
-  "claude-fable-5": { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
-  "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-  "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-  "claude-opus-4-7": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-  "claude-opus-4-6": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-  "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
-  "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+  "claude-fable-5-1": { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 20 },
+  "claude-fable-5": { input: 10, output: 50, cacheRead: 1, cacheWrite: 20 },
+  "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 10 },
+  "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 10 },
+  "claude-opus-4-7": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 10 },
+  "claude-opus-4-6": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 10 },
+  "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 4 },
+  "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 6 },
+  "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 2 },
 };
 
 export interface Usage { input: number; output: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
