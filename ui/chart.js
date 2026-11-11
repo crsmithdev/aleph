@@ -10,7 +10,7 @@
 //   by: { name, keys: [{ key, name, color? }] }   color is a token name; a key keeps its colour in every window.
 //   rows: time [{ at, [key]: n }], category [{ name, [key]: n }]; a row may carry `name` and `href`.
 //   form: the form the panel opens in, where its group offers it. note: a line under the title.
-//   empty: the line the panel shows instead of the chart when no key has a value.
+//   empty: the line the panel shows instead of the chart when no key has a value. hint: the line under it.
 //   legend: false hides the legend, for a frame of one key that the title already names.
 //   error, since: the mark of data that failed to rebuild; the panel says how old it is and why.
 // The kind of `over` is the group, and the group gives the forms.
@@ -99,7 +99,7 @@ export function option(f, form, t, hidden = []) {
 /** The panel's markup for frame `f` in `form`: the card, its form control and the chart box, or the empty line. */
 export function panel(f, form) {
   const mark = f.error && f.since ? notice(markLine(title(f), f), true) : "";
-  if (!shown(f).length) return card(title(f), mark + empty(f.empty ?? "Nothing to plot in this window."));
+  if (!shown(f).length) return card(title(f), mark + empty(f.empty ?? "Nothing to plot in this window.", f.hint));
   const forms = seg("Chart form", FORMS[f.over.kind].map((x) => ({ label: x.label, icon: x.icon, on: x.key === form, attrs: ` data-form="${esc(x.key)}"` })));
   return card(title(f), mark + (f.note ? `<p>${esc(f.note)}</p>` : "") + `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>`, { aside: forms });
 }

@@ -115,9 +115,30 @@ test("empty phases show dashes and no error", () => {
   expect(h).not.toMatch(/NaN|undefined|Infinity/);
 });
 
-test("the title is the sidebar name; models with no name say not recorded", () => {
+test("the title is the sidebar name", () => {
   expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><div class="aside"><div class="fbar">');
-  expect(renderFactoryJobs(D, null, "lead")).toContain("not recorded");
+});
+
+test("the Checks table groups a job count and the Models table names a model by shortModel()", () => {
+  const h = renderFactoryJobs({ ...D, checks: [{ name: "tests", count: 1234, p50: 51, p90: 171 }], models: [{ model: "claude-opus-5-5", count: 3, p50: 700 }, { model: "unset", count: 2, p50: 480 }] }, null, "lead");
+  expect(h).toContain('<td class="num">1,234</td>');
+  expect(h).toContain('<td class="wide">opus</td>');
+  expect(h).toContain('<td class="wide">unset</td>');
+  expect(h).not.toContain("not recorded");
+});
+
+test("each slowest stage has a colour that it keeps whatever other stages the data holds", () => {
+  const all = slowestFrame(D, "lead").by.keys, one = slowestFrame(D, "queue").by.keys;
+  expect(all.map((k: any) => k.key)).toEqual(["intake", "queue", "implement", "land"]);
+  for (const k of all) expect(k.color).toBeTruthy();
+  expect(new Set(all.map((k: any) => k.color)).size).toBe(4);
+  expect(one[0].color).toBe(all.find((k: any) => k.key === "queue").color);
+});
+
+test("each Jobs chart frame with no data shows its empty line and its hint in the empty block", () => {
+  const none = renderFactoryJobs({ ...D, buckets: [], times: [] }, null, "lead");
+  const blocks = [...none.matchAll(/<div class="empty"><p>No time to plot in this window\.<\/p><p class="hint">Pick a longer window or another stage\.<\/p><\/div>/g)];
+  expect(blocks).toHaveLength(3);
 });
 
 const J: any = { id: "fac-9#2", subject: "fac-9", name: "fac-9", repo: "fac", kind: "build", actor: "worker", state: "landed", title: "Fix it", issue: "fac-9", started: "2026-11-01T08:00:00Z", ended: null, seconds: null, cost: 0.75, model: null };

@@ -1,6 +1,6 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { card, pagedTable, dur, empty, error, esc, failMessage, heads, loadingLine, onTile, pageHead, searchBox, setQuery, statCard, cardTrend, tiles, scope } from "../lib.js";
+import { card, pagedTable, dur, count, empty, error, esc, failMessage, heads, loadingLine, onTile, pageHead, searchBox, setQuery, shortModel, statCard, cardTrend, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./jobs.js";
@@ -13,7 +13,7 @@ export const STAGES = [
   ["implement", NAMES.build, "From the first agent job to the last finish with work to land."],
   ["land", NAMES.land, "From the finish to the land. This includes waits for a review or for Chris."],
 ];
-const PARTS = [["intake", NAMES.intake], ["queue", NAMES.queue], ["implement", NAMES.build], ["land", NAMES.land]];
+const PARTS = [["intake", NAMES.intake, "series-1"], ["queue", NAMES.queue, "series-2"], ["implement", NAMES.build, "series-3"], ["land", NAMES.land, "series-4"]];
 
 /** A stage card: p50 / p90 over the window, with the last 24h p50 against the window's as the trend. */
 const stageTile = ([key, name], d, day, on) => {
@@ -24,6 +24,7 @@ const stageTile = ([key, name], d, day, on) => {
 
 /** The line a Jobs chart shows when the window holds no time for the stage. */
 const NONE = "No time to plot in this window.";
+const HINT = "Pick a longer window or another stage.";
 
 /** The p50 and p90 of a stage by bucket, as two lines: a bucket with no time is null, a gap. */
 export const trendFrame = (d, key, name, text) => ({
@@ -35,6 +36,7 @@ export const trendFrame = (d, key, name, text) => ({
   form: "lines",
   note: text,
   empty: NONE,
+  hint: HINT,
 });
 
 /** One point per issue with a time for the stage and a filing time, in filing order, coloured by outcome; a point's `href` is its issue. */
@@ -46,6 +48,7 @@ export const stripFrame = (d, key, name) => ({
   form: "points",
   note: "One point per issue, by outcome: its filing time across, its time up.",
   empty: NONE,
+  hint: HINT,
 });
 
 /**
@@ -66,11 +69,12 @@ export const slowestFrame = (d, key) => {
   return {
     measure: { name: "Slowest 10", unit: "seconds", agg: "max" },
     over: { kind: "category" },
-    by: { keys: parts.map(([k, name]) => ({ key: k, name })) },
+    by: { keys: parts.map(([k, name, color]) => ({ key: k, name, color })) },
     rows: top.map((r) => ({ name: r.label, href: r.href, [r.k]: r.secs })),
     form: "stacked",
     note: (key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage.") + " Click one to open it.",
     empty: NONE,
+    hint: HINT,
   };
 };
 
@@ -88,8 +92,8 @@ export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   return `<div class="page sp" id="perf">${pageHead("Jobs", { aside: head })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
     `<div class="trio">${panelOf(chartKey("trend"), trendFrame(d, key, name, text))}${panelOf(chartKey("strip"), stripFrame(d, key, name))}${panelOf(chartKey("slowest"), slowestFrame(d, key))}</div>` +
-    `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
-    card("Build Time by Model", table(["Model", "Jobs", "p50"], ["Jobs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
+    `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, count(x.count), dur(x.p50), dur(x.p90)])))}` +
+    card("Build Time by Model", table(["Model", "Jobs", "p50"], ["Jobs", "p50"], d.models.map((m) => [shortModel(m.model), count(m.count), dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs instanceof Error ? error(jobs.message) : jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
 }
 
