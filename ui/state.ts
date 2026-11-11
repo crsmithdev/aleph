@@ -56,6 +56,16 @@ export function heraldChats(events: Event[], runs: Entry[]): Record<string, { ti
   return chats;
 }
 
+/** The title of each run an issue event names, by its job ID: the run's kind, or "merge" for a merge-only run. */
+export function heraldRuns(events: Event[], runs: Entry[]): Record<string, string> {
+  const titles: Record<string, string> = {};
+  for (const e of events) {
+    const run = e.subject !== "chat" && e.on?.[0] && !(e.on[0] in titles) ? runOfJob(e.on[0], runs) : undefined;
+    if (run) titles[e.on![0]] = run.run.merge ? "merge" : run.run.kind;
+  }
+  return titles;
+}
+
 export interface Job {
   /** The job ID of the run that counts, `a1430#2`: the Job page's address and the one an action acts on. */
   id: string;
@@ -173,7 +183,8 @@ export interface State {
   doneStamps: { id: string; at: number }[];
   /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
   herald?: { history: HeraldHistoryItem[]; events: Event[]; /** The title of each issue the events name, by its full ID. */ titles: Record<string, string>;
-    /** The chat run each `chat` event names, by its job ID: the message's first line and the run's session key. */ chats: Record<string, { title: string; session?: string }> };
+    /** The chat run each `chat` event names, by its job ID: the message's first line and the run's session key. */ chats: Record<string, { title: string; session?: string }>;
+    /** The title of each run an issue event names, by its job ID. */ runs: Record<string, string> };
 }
 
 const DONE = 10;
@@ -472,7 +483,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), events, titles, chats: heraldChats(events, jobs.flat()) },
+    herald: { history: currentStatusHistory(), events, titles, chats: heraldChats(events, jobs.flat()), runs: heraldRuns(events, jobs.flat()) },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {

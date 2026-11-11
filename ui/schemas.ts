@@ -19,7 +19,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   }],
   "/api/factory": {
     now: "time", factory: { paused: "boolean", liveCap: "number", liveRuns: "number", runCap: "number", runStarts: "number", nextTick: "time?" },
-    herald: { history: [{ at: "time", tone: "string", text: "string" }], events: [{ at: "time", subject: "string", action: "string" }], titles: { "*": "string" } },
+    herald: { history: [{ at: "time", tone: "string", text: "string" }], events: [{ at: "time", subject: "string", action: "string" }], titles: { "*": "string" }, runs: { "*": "string" } },
     done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }], doneCount: "number",
     stuck: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],

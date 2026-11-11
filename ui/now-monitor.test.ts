@@ -5,7 +5,7 @@ import { withFactory } from "./test-now.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { heraldChats } from "./state.ts";
+import { heraldChats, heraldRuns } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
 import { putRun } from "../jobs/lib/records/record.ts";
@@ -137,5 +137,36 @@ test("the Herald shows one row per chat session titled by its latest message's f
     expect(h).not.toContain("event-id");
     expect(h).not.toMatch(/>chat</);
     expect(h).not.toContain("chat#");
+  } finally { restore(); rmSync(base, { recursive: true, force: true }); }
+});
+
+test("the Herald's older rows under an issue show their run's kind after the sentence, none for an event with no run, and the top row keeps the issue's title", () => {
+  const base = mkdtempSync(join(tmpdir(), "aleph-herald-runs-")), restore = withEnv({ ALEPH_JOBS_DIR: base });
+  try {
+    const kinds = ["intake", "build"];
+    kinds.forEach((kind, i) => {
+      const id = `20261109-10000${i}-aleph-9-${i + 1}`;
+      mkdirSync(join(base, id));
+      putRun(id, { kind, job: id, name: "aleph-9", on: "aleph-9", condition: "done", started: "2026-11-09T10:00:00Z", n: i + 1 } as any);
+    });
+    const events = [
+      { at: "2026-11-09T10:30:00Z", by: "gate", subject: "aleph-9", action: "started" },
+      { at: "2026-11-09T11:00:00Z", by: "gate", subject: "aleph-9", action: "done", on: ["aleph-9#1"] },
+      { at: "2026-11-09T12:00:00Z", by: "gate", subject: "aleph-9", action: "done", on: ["aleph-9#2"] },
+      { at: "2026-11-09T13:00:00Z", by: "gate", subject: "aleph-9", action: "done", on: ["aleph-9#3"] },
+    ];
+    const runs = heraldRuns(events, allRuns());
+    expect(runs).toEqual({ "aleph-9#1": "intake", "aleph-9#2": "build" });
+    const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the footer" }, chats: {}, runs } });
+    const [top, older] = h.split('<div class="herald-older">');
+    expect(top).toContain('<span class="event-title" title="Fix the footer">Fix the footer</span>');
+    expect(top).not.toContain("event-run");
+    const rows = older.split("</details>")[0].split('<div class="event-row').slice(1);
+    expect(rows).toHaveLength(3);
+    // Newest first: the build run, the intake run, then the "picked up" event, which has no run.
+    expect(rows[0]).toMatch(/<\/a> done <span class="event-run" title="build">build<\/span><\/span>/);
+    expect(rows[1]).toMatch(/<\/a> done <span class="event-run" title="intake">intake<\/span><\/span>/);
+    expect(rows[2]).not.toContain("event-run");
+    expect(rows.join("")).not.toContain("event-title");
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
 });

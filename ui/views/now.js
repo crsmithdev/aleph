@@ -112,14 +112,14 @@ const saidHtml = (p) => {
   return to ? idLink(shownId(p.id), to) : `<span class="event-id">${esc(shownId(p.id))}</span>`;
 };
 
-/** An event's row: the time, then the issue's title, the sentence under it and the note after. A chat turn's sentence is its message. `more` is the count of older events folded behind it. */
-export function eventRow(ev, titles = {}, chats = {}, more = 0) {
+/** An event's row: the time, then the issue's title, the sentence under it and the note after. A chat turn's sentence is its message. `more` is the count of older events folded behind it; `run` is the title of the event's run, which follows the sentence on its line. */
+export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
   const chat = ev.subject === "chat";
   const title = chat ? "" : titles[ev.subject] ?? "";
   const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "") : say(ev).map(saidHtml).join("");
   return feedRow({ tone: tone(ev.action), at: ev.at, by: ev.by,
     body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
-      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
+      `<span class="event-say">${line}${run ? ` <span class="event-run" title="${esc(run)}">${esc(run)}</span>` : ""}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
 }
 
 /** Rows of `lists`, each newest first: the newest event's row, with the older ones folded behind it; `row(ev, more, older)` draws one. */
@@ -127,11 +127,11 @@ const grouped = (lists, row) => lists.map(([latest, ...earlier]) => ({ at: lates
   html: earlier.length ? fold(row(latest, earlier.length), `<div class="herald-older">${earlier.map((ev) => row(ev, 0, true)).join("")}</div>`, { cls: "herald-group" }) : row(latest) }));
 
 /** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */
-function issueRows(events, titles = {}) {
+function issueRows(events, titles = {}, runs = {}) {
   const by = new Map();
   for (const ev of events) if (ev.subject !== "chat") by.set(ev.subject, [...(by.get(ev.subject) ?? []), ev]);
-  // An older row is under its group's title, so it does not repeat it.
-  return grouped([...by.values()], (ev, more, older) => eventRow(ev, older ? {} : titles, {}, more));
+  // An older row is under its group's title, so it shows its run's title after its sentence instead.
+  return grouped([...by.values()], (ev, more, older) => eventRow(ev, older ? {} : titles, {}, more, older ? runs[ev.on?.[0]] : ""));
 }
 
 /** The rows of the chat events, newest first: one per session, its latest turn's newest event, with the earlier turns' behind an expand control. */
@@ -176,7 +176,7 @@ export function renderHerald(s) {
   // The status changes and the events in one feed, newest first; the live status row stays on top.
   const live = errors ? status.shift() : null;
   const events = heraldEvents(s);
-  const rows = [...status, ...issueRows(events, s.herald?.titles), ...chatRows(events, s.herald?.chats)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const rows = [...status, ...issueRows(events, s.herald?.titles, s.herald?.runs), ...chatRows(events, s.herald?.chats)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = (live ? [live, ...rows] : rows).map((r) => r.html).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
