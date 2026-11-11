@@ -31,6 +31,7 @@ beforeAll(() => {
     ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_REPOS: join(base, "repos.json"),
     ALEPH_USAGE_FILE: join(base, "usage.jsonl"), XDG_RUNTIME_DIR: join(base, "run"),
   });
+  mkdirSync(join(base, "factory"));
 });
 afterAll(() => {
   KEYS.forEach((k, i) => { if (saved[i] === undefined) delete process.env[k]; else process.env[k] = saved[i]; });

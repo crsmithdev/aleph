@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,9 +53,6 @@ beforeAll(async () => {
   const systemctl = join(base, "systemctl");
   writeFileSync(systemctl, `#!/bin/sh\necho "$@" >> ${join(base, "systemctl.log")}\ncase "$*" in *"show aleph-tick"*) echo "TimersMonotonic={ OnUnitActiveUSec=1min ; next_elapse=1min }";; *"show aleph-suite"*) echo "TimersMonotonic={ OnUnitActiveUSec=1h ; next_elapse=1h }";; esac\n`, { mode: 0o755 });
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake, ALEPH_SYSTEMCTL: systemctl, ALEPH_UNIT_DIR: join(base, "config/systemd/user") });
-  logEvent({ at: ago(3), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" });
-  logEvent({ at: ago(2), by: "firefighter", subject: "r-6", action: "answered", note: "r-6: picked the plain option" });
-  logEvent({ at: ago(2.5), by: "director", subject: "r-8", action: "reran", sub: "capped", note: "the cause is fixed" });
   setHolds([
     // The log shows a hold's stored event, not its text; a hold with no event has no row.
     { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live", event: { at: ago(5), by: "gate", subject: "r-3", action: "full", sub: "local" } },
@@ -65,6 +62,8 @@ beforeAll(async () => {
   ]);
   ({ stop, at } = await withServer({ warm: false }));
 });
+// Each test starts with no events and no caps file: the ones it reads, it writes.
+beforeEach(() => { rmSync(eventsDir(), { recursive: true, force: true }); rmSync(join(base, "factory", "caps.json"), { force: true }); });
 afterAll(() => {
   stop();
   restoreEnv();
@@ -106,6 +105,9 @@ test("the body names the held backend and the line it holds with, and the backen
 const line = (x: any) => [x.by, x.subject, x.action, x.sub ?? "-", contentText(x) || "-", x.note ?? "-"].join(" | ");
 
 test("the log reads the hold, the rules Chris set, and the old rule, director and firefighter lines as events, newest first, 7 days back", async () => {
+  logEvent({ at: ago(3), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" });
+  logEvent({ at: ago(2), by: "firefighter", subject: "r-6", action: "answered", note: "r-6: picked the plain option" });
+  logEvent({ at: ago(2.5), by: "director", subject: "r-8", action: "reran", sub: "capped", note: "the cause is fixed" });
   const d: any = await body();
   const e = d.log.entries;
   expect(d.log.days).toBe(7);

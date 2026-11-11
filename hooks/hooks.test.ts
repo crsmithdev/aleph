@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -77,6 +77,8 @@ describe("obs hook", () => {
     const code = await proc.exited;
     return { code, stdout: await new Response(proc.stdout).text(), stderr: await new Response(proc.stderr).text() };
   }
+  // Each test starts in a started session: its turns read the name and tags it leaves.
+  beforeEach(async () => { await fire({ hook_event_name: "SessionStart", source: "startup", permission_mode: "auto" }); });
   const lastSpans = () => posted.at(-1).body.resourceSpans[0].scopeSpans[0].spans;
   const attr = (span: any, key: string) => span.attributes.find((a: any) => a.key === key)?.value;
 
@@ -105,7 +107,6 @@ describe("obs hook", () => {
   });
 
   test("a prompt opens a turn trace whose root carries the prompt, name, tags and auth headers", async () => {
-    // A minute before the next test's t0: that test ends this turn.
     await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p1", prompt: "hello" }, { ALEPH_NOW: "2026-09-03T09:59:00.000Z" });
     const spans = lastSpans();
     expect(spans).toHaveLength(1);
@@ -131,15 +132,16 @@ describe("obs hook", () => {
     // Each hook reads the clock once; ALEPH_NOW puts the two reads 250 ms apart.
     const t0 = Date.parse("2026-09-03T10:00:00.000Z");
     const at = (ms: number) => ({ ALEPH_NOW: new Date(t0 + ms).toISOString() });
-    const pre = await fire({ hook_event_name: "PreToolUse", prompt_id: "p1", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" } }, at(0));
+    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p4", prompt: "hello" }, at(-60_000));
+    const pre = await fire({ hook_event_name: "PreToolUse", prompt_id: "p4", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" } }, at(0));
     expect(pre.code).toBe(0);
     const before = posted.length;
-    await fire({ hook_event_name: "PostToolUse", prompt_id: "p1", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" }, tool_response: "a\nb" }, at(250));
+    await fire({ hook_event_name: "PostToolUse", prompt_id: "p4", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" }, tool_response: "a\nb" }, at(250));
     expect(posted.length).toBe(before + 1);
     const tool = lastSpans()[0];
     expect(tool.name).toBe("Bash");
-    expect(tool.traceId).toBe(turnTraceIdFor("p1"));
-    expect(tool.parentSpanId).toBe(turnSpanIdFor("p1"));
+    expect(tool.traceId).toBe(turnTraceIdFor("p4"));
+    expect(tool.parentSpanId).toBe(turnSpanIdFor("p4"));
     expect(attr(tool, "langfuse.observation.type")).toEqual({ stringValue: "tool" });
     expect(attr(tool, "langfuse.observation.output")).toEqual({ stringValue: "a\nb" });
     expect(attr(tool, "langfuse.environment")).toEqual({ stringValue: "test" });
@@ -147,18 +149,18 @@ describe("obs hook", () => {
     const durationMs = Number(BigInt(tool.endTimeUnixNano) - BigInt(tool.startTimeUnixNano)) / 1e6;
     expect(durationMs).toBe(250);
 
-    await fire({ hook_event_name: "PostToolUseFailure", prompt_id: "p1", tool_name: "Skill", tool_use_id: "t2", tool_input: { skill: "aleph:interview" }, tool_error: "boom" });
+    await fire({ hook_event_name: "PostToolUseFailure", prompt_id: "p4", tool_name: "Skill", tool_use_id: "t2", tool_input: { skill: "aleph:interview" }, tool_error: "boom" });
     const failed = lastSpans()[0];
     expect(failed.name).toBe("skill:aleph:interview");
     expect(failed.status).toEqual({ code: 2, message: "boom" });
     expect(attr(failed, "langfuse.observation.level")).toEqual({ stringValue: "ERROR" });
 
-    // The turn started in an earlier test, before t0, so it is longer than 250 ms.
-    await fire({ hook_event_name: "Stop", prompt_id: "p1", last_assistant_message: "done", cwd: "/tmp/proj/.worktrees/x" }, at(250));
+    // The turn started a minute before t0, so it is longer than 250 ms.
+    await fire({ hook_event_name: "Stop", prompt_id: "p4", last_assistant_message: "done", cwd: "/tmp/proj/.worktrees/x" }, at(250));
     const turn = lastSpans()[0];
     expect(turn.name).toBe("turn");
-    expect(turn.traceId).toBe(turnTraceIdFor("p1"));
-    expect(turn.spanId).toBe(turnSpanIdFor("p1"));
+    expect(turn.traceId).toBe(turnTraceIdFor("p4"));
+    expect(turn.spanId).toBe(turnSpanIdFor("p4"));
     expect(turn.parentSpanId).toBeUndefined();
     expect(attr(turn, "langfuse.observation.input")).toEqual({ stringValue: "hello" });
     expect(attr(turn, "langfuse.observation.output")).toEqual({ stringValue: "done" });
@@ -196,11 +198,12 @@ describe("obs hook", () => {
   });
 
   test("other events inside a turn become metadata-only events; outside a turn, or without keys, nothing posts", async () => {
-    await fire({ hook_event_name: "PreCompact", prompt_id: "p2", compact_reason: "auto", trigger: "auto" });
+    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p8", prompt: "compact" });
+    await fire({ hook_event_name: "PreCompact", prompt_id: "p8", compact_reason: "auto", trigger: "auto" });
     const ev = lastSpans()[0];
     expect(ev.name).toBe("PreCompact");
-    expect(ev.traceId).toBe(turnTraceIdFor("p2"));
-    expect(ev.parentSpanId).toBe(turnSpanIdFor("p2"));
+    expect(ev.traceId).toBe(turnTraceIdFor("p8"));
+    expect(ev.parentSpanId).toBe(turnSpanIdFor("p8"));
     expect(attr(ev, "langfuse.observation.metadata.compact_reason")).toEqual({ stringValue: "auto" });
 
     let before = posted.length;

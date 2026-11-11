@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, setSystemTime, spyOn, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, setSystemTime, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -18,10 +18,13 @@ let restore: () => void;
 const now = new Date(2026, 9, 28, 15, 0, 0);
 const at = (daysAgo: number, h: number, m = 0) => new Date(2026, 9, 28 - daysAgo, h, m).toISOString();
 let n = 0;
+/** The runs a test adds: they go after it, so the next test reads the runs of the setup only. */
+const made: string[] = [];
 function run(r: Record<string, unknown>) {
   const dir = join(base, "jobs", `r${String(++n).padStart(3, "0")}`);
   mkdirSync(dir, { recursive: true });
   record.putRun(basename(join(dir)), { job: `j${n}`, name: `j${n}`, told: true, n, ...r } as any);
+  made.push(dir);
 }
 const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, h), ended: new Date(Date.parse(at(daysAgo, h)) + s * 1000).toISOString() });
 
@@ -43,6 +46,11 @@ beforeAll(() => {
   // three days ago and 20 days ago
   run({ kind: "build", condition: "passed", model: "claude-sonnet-5-5", cost: 0.5, checks: [{ name: "tests", ok: true, seconds: 40 }], ...secs(3, 9, 300) });
   run({ kind: "intake", condition: "done", ...secs(20, 9, 90) });
+  made.length = 0;
+});
+afterEach(() => {
+  for (const dir of made) { record.removeRun(basename(dir)); rmSync(dir, { recursive: true, force: true }); }
+  made.length = 0;
 });
 afterAll(() => {
   restore();

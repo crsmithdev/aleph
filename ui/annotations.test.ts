@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer } from "./test-server.ts";
-import { add, read } from "../lib/annotations.ts";
+import { add, drop, read } from "../lib/annotations.ts";
 
 let base: string, at: Awaited<ReturnType<typeof withServer>>["at"], stop: () => void, restoreEnv: () => void;
 
@@ -33,9 +33,11 @@ test("a direct write to the file sends a change naming /api/annotations", async 
   const ctl = new AbortController();
   const reader = (await at("/api/events", { signal: ctl.signal })).body!.getReader();
   expect(new TextDecoder().decode((await reader.read()).value)).toMatch(/^event: ping/);
-  add("h1", "direct", { url: "/" });
-  let text = "";
-  while (!/event: change\ndata: .*\n\n/.test(text)) text += new TextDecoder().decode((await reader.read()).value);
-  ctl.abort();
-  expect(JSON.parse(text.match(/event: change\ndata: (.*)\n/)![1]).keys).toContain("/api/annotations");
+  const { id } = add("h1", "direct", { url: "/" });
+  try {
+    let text = "";
+    while (!/event: change\ndata: .*\n\n/.test(text)) text += new TextDecoder().decode((await reader.read()).value);
+    ctl.abort();
+    expect(JSON.parse(text.match(/event: change\ndata: (.*)\n/)![1]).keys).toContain("/api/annotations");
+  } finally { drop(id); }
 });

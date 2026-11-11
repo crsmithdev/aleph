@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
@@ -38,6 +38,7 @@ afterAll(() => setSystemTime());
 /** An item stored as an issue: `kind: goal` on a plain number. */
 const seedPart = (doc: Doc, title: string, body = "") => { return add(doc, title, { spec: body || "Do it." }); };
 
+let items = "", seeded = "";
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, jobsDir: string, argvFile: string, stdinFile: string;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
@@ -73,7 +74,8 @@ beforeAll(async () => {
   sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "prose only\n\nthis finishes Item: fac-1 in words.\n\nbut no trailer");
   sh(repo, "git", "push", "-q", "origin", "main");
   sh(repo, "git", "fetch", "-q", "origin");
-  const itemsRemote = join(base, "items.git"), items = join(base, "items");
+  const itemsRemote = join(base, "items.git");
+  items = join(base, "items");
   sh(base, "git", "init", "-q", "--bare", "-b", "main", itemsRemote);
   sh(base, "git", "clone", "-q", itemsRemote, items);
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
@@ -96,7 +98,19 @@ beforeAll(async () => {
   writeList({ key: "oth" }, "seed", (doc) => { add(doc, "other thing"); return true; }, true);
   run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", condition: "landed", on: "fac-1" });
   run("20261027-000002-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "running", on: "oth-1" });
+  seeded = sh(items, "git", "rev-parse", "origin/main");
+  cpSync(jobsDir, `${jobsDir}-seed`, { recursive: true });
   ({ server, stop } = await withServer({ warm: false }));
+});
+// Each test ends by putting back the fixture store and runs, so no test reads what another wrote.
+afterEach(() => {
+  // A fetch never moves origin/main back, so the reset sets the ref here as well as on the remote.
+  sh(items, "git", "push", "-qf", "origin", `${seeded}:refs/heads/main`);
+  sh(items, "git", "update-ref", "refs/remotes/origin/main", seeded);
+  // The folders stay, emptied, because the server watches the records folder.
+  const records = join(jobsDir, ".records");
+  for (const d of [jobsDir, records]) for (const f of readdirSync(d)) if (join(d, f) !== records) rmSync(join(d, f), { recursive: true, force: true });
+  cpSync(`${jobsDir}-seed`, jobsDir, { recursive: true });
 });
 afterAll(() => {
   stop();
@@ -784,7 +798,7 @@ describe("a parked issue", () => {
 
 describe("what an issue waits on", () => {
   let waiter: string, live: string, dead: string, tracker: string;
-  beforeAll(() => {
+  beforeEach(() => {
     writeList({ key: "oth" }, "blockers", (doc) => {
       const d = add(doc, "gone work"); setStatus(d, "dropped");
       const t = add(doc, "note log"); t.fm.tracker = "true";

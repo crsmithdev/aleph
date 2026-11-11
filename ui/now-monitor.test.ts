@@ -106,7 +106,12 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   expect(row).not.toContain("event-tone");
 });
 
-test("an event from the stream goes into the Herald at once", () => {
+// The stream path keeps its events in now.js for the page's life: each such test takes a copy of the module of its own.
+let copies = 0;
+const fresh = () => import(`./views/now.js?copy=${++copies}`);
+
+test("an event from the stream goes into the Herald at once", async () => {
+  const view = await fresh();
   const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { history: [], events: [] } };
   view.view.render(s, {}, new URLSearchParams());
   let html = "";
@@ -115,7 +120,8 @@ test("an event from the stream goes into the Herald at once", () => {
   expect(html).toContain('<span class="event-say"><span class="event-state">landed</span><a class="idl" href="#/jobs/aleph-6%232">aleph-6#2</a></span>');
 });
 
-test("a Herald group keeps its open or closed state when a newer event arrives and the rows move, through the stream path", () => {
+test("a Herald group keeps its open or closed state when a newer event arrives and the rows move, through the stream path", async () => {
+  const view = await fresh();
   const ev = (at: string, subject: string, n: number) => ({ at, by: "gate", subject, action: "done", on: [`${subject}#${n}`] });
   const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { history: [], events: [ev("2026-11-09T10:00:00Z", "aleph-1", 1), ev("2026-11-09T10:01:00Z", "aleph-1", 2), ev("2026-11-09T10:02:00Z", "aleph-2", 1), ev("2026-11-09T10:03:00Z", "aleph-2", 2)] } };
   view.view.render(s, {}, new URLSearchParams());

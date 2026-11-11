@@ -151,7 +151,8 @@ test("a change of the Langfuse port's base reads the new server, not the kept an
 test("a restart builds the saved keys at once: a request shares that build, and the next one hits Langfuse zero times", async () => {
   // Other warm-ups (memory's `vault misses` subprocess, the Agents page's 7-day window) reach the fake too: only the skills lists' 30-day reads count.
   const mine = () => asked.filter((u) => (u.pathname === "/api/public/traces" || ["AGENT", "TOOL"].includes(u.searchParams.get("type") ?? "")) && Date.parse(u.searchParams.get("fromStartTime") ?? u.searchParams.get("fromTimestamp") ?? "") < NOW - 10 * 86400_000).length;
-  const restoreEnv = withEnv({ ALEPH_FACTORY_DIR: join(tmp, "factory") });
+  // The build Worker outlives a server in this process and keeps its rows per Langfuse base: a base of its own is a cold one, as after a restart.
+  const restoreEnv = withEnv({ ALEPH_FACTORY_DIR: join(tmp, "factory"), LANGFUSE_BASE_URL: `http://localhost:${lf.port}` });
   // The keys the last process kept: the restart builds them before any request.
   mkdirSync(join(tmp, "ui"), { recursive: true });
   writeFileSync(join(tmp, "ui", "keys.json"), JSON.stringify({ "/api/skills/aleph:pickup": NOW, "/api/sessions?window=week": NOW }));

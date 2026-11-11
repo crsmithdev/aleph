@@ -9,8 +9,13 @@ import { actionJob, cli, drop, jobView } from "./flow.testkit.ts";
 beforeAll(setup);
 afterAll(teardown);
 
+/** The lines of the setup log, which every job start in this file appends to. */
+const setups = () => (existsSync(setupLog) ? readFileSync(setupLog, "utf8").split("\n").length - 1 : 0);
+
+// Each test starts a job of its own name, so no test reads another's job.
 describe("job", () => {
   test("a worker that commits ends passed, with setup, checks, result and news", async () => {
+    const before = setups();
     const r = await aleph(["job", "De mo", "alpha", "--spec", "-"], { ALEPH_UI_PASSWORD: "hunter2" }, "Goal: alpha\nACTION: commit a.txt\n");
     expect(r.code).toBe(0);
     const s = state(r.json.run);
@@ -24,7 +29,7 @@ describe("job", () => {
     expect(s.checks.map((c: any) => c.name)).toContain("tests");
     expect(s.checks.map((c: any) => c.name)).not.toContain("android build");
     for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
-    expect(readFileSync(setupLog, "utf8")).toBe("ran\n");
+    expect(setups()).toBe(before + 1);
     expect(told).toContain("alpha#1 passed");
     const args = readFileSync(join(fakeLog, "args"), "utf8");
     expect(args).toContain(`--session-id ${s.session}`);
@@ -34,31 +39,34 @@ describe("job", () => {
     expect(workerEnv).not.toMatch(/^(CLAUDECODE|ANTHROPIC_API_KEY|ALEPH_UI_PASSWORD)=/m);
   });
 
-  // In-process, but here: the jobs list below reads the result of this follow-up.
   test("a follow-up runs in the same worktree with the spec, notes and previous result", async () => {
-    const r = await actionJob("alpha", "commit b.txt");
+    const before = setups();
+    expect((await actionJob("beta", "commit a.txt")).code).toBe(0);
+    const r = await actionJob("beta", "commit b.txt");
     expect(r.code).toBe(0);
-    const first = jobRuns("alpha", "build")[0];
+    const first = jobRuns("beta", "build")[0];
     expect(r.json.job).toBe(first);
     expect(r.json.run).not.toBe(first);
     expect(state(r.json.run).condition).toBe("passed");
     expect(existsSync(join(jobsDir, first, "notes", "001.md"))).toBe(true);
     const prompt = readFileSync(join(fakeLog, "prompt"), "utf8");
-    expect(prompt).toContain("You are a worker on job `alpha`");
-    expect(prompt).toContain("## Spec\n\nGoal: alpha\nACTION: commit a.txt");
-    expect(prompt).toContain("## Note 001\n\nGoal: alpha\nACTION: commit b.txt");
+    expect(prompt).toContain("You are a worker on job `beta`");
+    expect(prompt).toContain("## Spec\n\nGoal: beta\nACTION: commit a.txt");
+    expect(prompt).toContain("## Note 001\n\nGoal: beta\nACTION: commit b.txt");
     expect(prompt).toContain("## Previous run: build, passed");
     expect(prompt).toContain("did commit a.txt");
-    expect(readFileSync(setupLog, "utf8")).toBe("ran\n");
-    expect(sh(worktree("alpha"), "git", "log", "--format=%s")).toBe("add b.txt\nadd a.txt\ninit");
+    // Setup runs when the worktree is made, not again for the follow-up.
+    expect(setups()).toBe(before + 1);
+    expect(sh(worktree("beta"), "git", "log", "--format=%s")).toBe("add b.txt\nadd a.txt\ninit");
   });
 
   test("jobs lists open jobs; jobs <name> adds the result", async () => {
+    expect((await actionJob("gamma", "commit a.txt")).code).toBe(0);
     const list = await aleph(["jobs"]);
-    const alpha = list.json.find((j: any) => j.name === "alpha");
-    expect(alpha).toMatchObject({ repo: "demo", goal: "Goal: alpha", condition: "passed" });
-    const one = await aleph(["jobs", "alpha"]);
-    expect(one.json.result).toBe("did commit b.txt");
+    const gamma = list.json.find((j: any) => j.name === "gamma");
+    expect(gamma).toMatchObject({ repo: "demo", goal: "Goal: gamma", condition: "passed" });
+    const one = await aleph(["jobs", "gamma"]);
+    expect(one.json.result).toBe("did commit a.txt");
     expect(one.json.checks).toContain("## tests: exit 0");
   });
 
@@ -83,22 +91,23 @@ describe("job", () => {
   });
 
   test("drop removes the worktree and branch and ends the job", async () => {
-    const r = await aleph(["drop", "alpha", "not", "needed"]);
+    expect((await actionJob("delta", "commit a.txt")).code).toBe(0);
+    const r = await aleph(["drop", "delta", "not", "needed"]);
     expect(r.code).toBe(0);
     expect(r.json).toMatchObject({ condition: "dropped", reason: "not needed" });
-    expect(existsSync(worktree("alpha"))).toBe(false);
-    expect(branchExists("alpha")).toBe(false);
-    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "alpha")).toMatchObject({ condition: "dropped" });
-    expect((await aleph(["drop", "alpha"])).code).toBe(1);
+    expect(existsSync(worktree("delta"))).toBe(false);
+    expect(branchExists("delta")).toBe(false);
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "delta")).toMatchObject({ condition: "dropped" });
+    expect((await aleph(["drop", "delta"])).code).toBe(1);
   });
 
   test("drop --fate with an unknown value is refused and the job stays open", async () => {
-    await actionJob("alpha", "commit r.txt");
-    const r = await aleph(["drop", "alpha", "--fate", "bogus"]);
+    await actionJob("epsilon", "commit r.txt");
+    const r = await aleph(["drop", "epsilon", "--fate", "bogus"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("duplicate, met, manual");
-    expect((await jobView("alpha")).json.condition).not.toBe("dropped");
-    await drop("alpha");
+    expect((await jobView("epsilon")).json.condition).not.toBe("dropped");
+    await drop("epsilon");
   });
 });
 
@@ -193,15 +202,15 @@ describe("help", () => {
   });
 
   test("--help and -h print the usage and run nothing", async () => {
-    const a = await aleph(["job", "De mo", "alpha", "--spec", "-"], {}, "Goal: alpha\nACTION: commit a.txt\n");
+    const a = await aleph(["job", "De mo", "zeta", "--spec", "-"], {}, "Goal: zeta\nACTION: commit a.txt\n");
     expect(a.code).toBe(0);
-    const d = await aleph(["drop", "alpha", "--help"]);
+    const d = await aleph(["drop", "zeta", "--help"]);
     expect(d.code).toBe(0);
     expect(d.stdout).toContain("aleph drop <name> [<reason>]");
     const l = await aleph(["land", "-h"]);
     expect(l.code).toBe(0);
     expect(l.stdout).toContain("aleph land <name> [--checked]");
-    const j = (await aleph(["jobs", "alpha"])).json;
+    const j = (await aleph(["jobs", "zeta"])).json;
     expect(j.condition).not.toBe("dropped");
   });
 

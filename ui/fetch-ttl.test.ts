@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { watch } from "node:fs";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -48,8 +48,9 @@ beforeAll(() => {
     putRun(basename(join(folder)), { n: 1, kind: "build", condition: "running", started: "2026-10-27T10:00:00.000Z", name, job: name, repo, on: `${repo}-1` } as any);
   }
   restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
-  skipFetches();
 });
+// Each test starts with fetches skipped, as in the UI: the preload turns them on again after every test.
+beforeEach(() => skipFetches());
 afterAll(() => {
   skipFetches(false);
   restoreEnv();
@@ -106,7 +107,7 @@ test("a fetch that brings an older remote state cannot move origin/main back", a
   sh(base, "git", "clone", "-q", "--bare", join(base, "items.git"), staleRemote);
   sh(items, "git", "remote", "add", "stale", staleRemote);
   sh(items, "git", "config", "remote.stale.fetch", "+refs/heads/*:refs/remotes/origin/*");
-  const w = writeList({ key: "a" }, "write after the snapshot", (doc) => { add(doc, "written"); return true; });
+  const w = writeList({ key: "a" }, "write after the snapshot", (doc) => { add(doc, "written"); return true; }, true);
   expect(w).not.toBeNull();
   writeFileSync(stale, "");
   await settled();

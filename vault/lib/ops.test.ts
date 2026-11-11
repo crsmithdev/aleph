@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -76,17 +76,20 @@ function note(title: string, over: Record<string, string> = {}, body?: string): 
   return path;
 }
 
-beforeAll(() => {
+// Each test gets a vault of its own, made by init, and writes the notes it reads.
+beforeEach(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-vault-"));
   vault = join(base, "vault");
   drafts = join(base, "drafts");
   mkdirSync(drafts);
+  expect((await cli("init")).code).toBe(0);
 });
-afterAll(() => rmSync(base, { recursive: true, force: true }));
+afterEach(() => rmSync(base, { recursive: true, force: true }));
 
 describe("init", () => {
   test("lays down the layout, config and first commit", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
+    // The CLI test of this op: it spawns vault/cli.ts, on a path no vault holds yet.
+    vault = join(base, "fresh");
     const r = (await spawnCli("init"));
     expect(r.code).toBe(0);
     expect(r.json.commit).toMatch(/^[0-9a-f]{7,}$/);
@@ -141,7 +144,8 @@ describe("write", () => {
     expect(r.json.path).toBe("wiki/decisions/No API Judge.md");
   });
   test("each write is its own commit", async () => {
-    expect(gitLog().split("\n").filter((l) => l.startsWith("write: ")).length).toBe(6);
+    for (const t of ["First Write", "Second Write"]) expect((await cli("write", note(t), "--why", "x")).code).toBe(0);
+    expect(gitLog().split("\n").filter((l) => l.startsWith("write: ")).length).toBe(2);
   });
   test("refuses a note in the wrong folder", async () => {
     mkdirSync(join(vault, "wiki/concepts"), { recursive: true });
@@ -170,6 +174,7 @@ describe("write", () => {
     expect(r.stderr).not.toContain("aliases");
   });
   test("refuses a duplicate title or alias", async () => {
+    expect((await cli("write", note("Stop Hook Block Shape"), "--why", "x")).code).toBe(0);
     const r = (await cli("write", note("Another Name", { aliases: "[stop hook block shape]" }), "--why", "x"));
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("refuse duplicate");
@@ -197,6 +202,7 @@ describe("write", () => {
     expect(r.stderr).toContain("human-owned");
   });
   test("supersedes: archives the old note with reason, logs, commits", async () => {
+    expect((await cli("write", note("Stop Hook Block Shape"), "--why", "x")).code).toBe(0);
     const r = (await cli("write", note("Stop Hook Deny Shape", { supersedes: "[Stop Hook Block Shape]" }), "--why", "renamed"));
     expect(r.code).toBe(0);
     expect(r.json).toMatchObject({ op: "supersede", archived: ["Stop Hook Block Shape"] });
@@ -212,6 +218,7 @@ describe("write", () => {
     expect(r.stderr).toContain("no live wiki note has that title");
   });
   test("rewriting an existing title updates it in place", async () => {
+    expect((await cli("write", note("Stop Hook Deny Shape"), "--why", "x")).code).toBe(0);
     const r = (await cli("write", note("Stop Hook Deny Shape", { updated: "2026-09-05" }), "--why", "update"));
     expect(r.code).toBe(0);
     expect(readFileSync(join(vault, "wiki/gotchas/Stop Hook Deny Shape.md"), "utf8")).toContain("updated: 2026-09-05");
@@ -222,6 +229,7 @@ describe("write", () => {
     expect(r.stderr).toContain("refuse generated Home");
   });
   test("MEMORY.md: commits and refuses a dangling link", async () => {
+    expect((await cli("write", note("No API Judge", { kind: "decision" }), "--why", "x")).code).toBe(0);
     const memory = join(vault, "MEMORY.md");
     const text = readFileSync(memory, "utf8");
     writeFileSync(memory, text + "\n- Chris, Pacific, WSL2. See [[No API Judge]].\n");
@@ -457,6 +465,7 @@ describe("rename-scope", () => {
     for (const t of ["Old Scope One", "Old Scope Two"]) (await cli("archive", t, "--why", "test fixture"));
   });
   test("refuses a scope no note has, and names the ones that exist", async () => {
+    expect((await cli("write", note("In Scope Aleph"), "--why", "x")).code).toBe(0);
     const r = (await cli("rename-scope", "voyce-bridge", "sidetone"));
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("no note has scope voyce-bridge");
@@ -497,6 +506,7 @@ describe("adopt", () => {
     expect(r.stderr).toContain("adopt forgives the template, not the schema");
     rmSync(bad);
 
+    expect((await cli("write", note("Drafted In Place", { kind: "decision" }), "--why", "x")).code).toBe(0);
     const already = (await cli("adopt", join(vault, "wiki/decisions/Drafted In Place.md"), "--why", "x"));
     expect(already.code).toBe(1);
     expect(already.stderr).toContain("already tracked");
@@ -682,6 +692,7 @@ describe("recall", () => {
   test("--scope narrows the search, and alone it lists the scope", async () => {
     (await cli("write", note("Scoped To Beamline", { scope: "beamline" }), "--why", "x"));
     (await cli("write", note("Also Beamline", { scope: "beamline" }), "--why", "x"));
+    (await cli("write", note("Outside Beamline"), "--why", "x"));
     const all = (await cli("recall", "--scope", "beamline"));
     expect(all.json.map((h: any) => h.title).sort()).toEqual(["Also Beamline", "Scoped To Beamline"]);
     expect(all.json.every((h: any) => h.scope === "beamline")).toBe(true);
@@ -694,6 +705,7 @@ describe("recall", () => {
     expect((await cli("recall", "also", "--scope", "aleph")).json).toEqual([]);
   });
   test("an unknown scope names the ones that exist", async () => {
+    (await cli("write", note("Scoped To Beamline", { scope: "beamline" }), "--why", "x"));
     const r = (await cli("recall", "--scope", "beemline"));
     expect(r.code).toBe(0);
     expect(r.json).toEqual([]);
@@ -721,6 +733,8 @@ describe("compile", () => {
       return new Response("nope", { status: 404 });
     } });
     failing = Bun.serve({ port: 0, fetch: () => new Response("down", { status: 503 }) });
+  });
+  beforeEach(() => {
     mkdirSync(join(base, "handoffs"), { recursive: true });
     writeFileSync(join(base, "handoffs", "2026-09-04-101001.md"), "# Handoff\n\nIntent: vault.\n");
     writeFileSync(join(vault, "daily", "2026-09-04.md"), "# 2026-09-04\n\n- 10:00 wrote Verify Gate\n");
@@ -730,6 +744,7 @@ describe("compile", () => {
 
   test("digests turns, handoffs, daily note and cited traces", async () => {
     // The CLI test of this op: it spawns vault/cli.ts.
+    expect((await cli("write", note("Cites A Trace"), "--why", "x")).code).toBe(0);
     const r = await spawnRun(env(server.port), "compile", "2026-09-04");
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("### trace t1 (/home/x/aleph)");
@@ -822,8 +837,9 @@ describe("provenance and the contradiction screen", () => {
   const snapshot = () => Bun.spawnSync(["bash", "-c", `cd ${v} && find . -path ./.git -prune -o -type f -print | sort | xargs cat | sha256sum`], { stdout: "pipe" }).stdout.toString();
   const write = (path: string, extra: Record<string, string> = {}) => runAsync(env(extra), "write", path, "--why", "t");
 
+  // One vault for the describe: each test writes notes of its own titles and reads only those.
   beforeAll(async () => {
-    v = join(base, "vault-screen");
+    v = join(mkdtempSync(join(tmpdir(), "aleph-vault-screen-")), "vault");
     expect((await run({ ALEPH_VAULT: v }, "init")).code).toBe(0);
     server = Bun.serve({
       port: 0,
@@ -835,7 +851,7 @@ describe("provenance and the contradiction screen", () => {
       },
     });
   });
-  afterAll(() => server.stop(true));
+  afterAll(() => { server.stop(true); rmSync(join(v, ".."), { recursive: true, force: true }); });
   const reset = (a = 0.9) => { asked = []; answer = a; };
   // Titles share "widget" and nothing else with the other tests' notes.
   const live = async (title: string) => { const r = await write(note(title, { scope: "screen" }), { ALEPH_JUDGE: "haiku" }); expect(r.code).toBe(0); };

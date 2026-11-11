@@ -69,11 +69,14 @@ test("POST refuses an unknown lens or idea, else starts the lens and answers at 
   const post = (p: string) => at(p, { method: "POST", headers: { "X-Aleph-UI": "1" } });
   expect((await post("/api/ideas/alpha/lenses/nope")).status).toBe(422);
   expect((await post("/api/ideas/nope/lenses/prior-art")).status).toBe(422);
-  const before = (await json("/api/ideas/alpha")).lenses.length;
-  process.env.FAKE_COST = "0.1";
-  expect((await post("/api/ideas/alpha/lenses/prior-art")).status).toBe(200);
-  for (let i = 0; i < 5000 && (await json("/api/ideas/alpha")).lenses.length === before; i++);
-  expect((await json("/api/ideas/alpha")).lenses).toHaveLength(before + 1);
+  // An idea of its own: the lens adds a result and a cost that the other tests do not expect.
+  add("Delta", "sketch");
+  try {
+    process.env.FAKE_COST = "0.1";
+    expect((await post("/api/ideas/delta/lenses/prior-art")).status).toBe(200);
+    for (let i = 0; i < 5000 && (await json("/api/ideas/delta")).lenses.length === 0; i++);
+    expect((await json("/api/ideas/delta")).lenses).toHaveLength(1);
+  } finally { rmSync(join(base, "ideas", "delta"), { recursive: true, force: true }); }
 }, 30000);
 
 test("a .md lens result loads behind loadingLine(), and a failed fetch puts error() in the pane", async () => {

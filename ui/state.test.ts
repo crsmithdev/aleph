@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, setSystemTime, spyOn, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -35,9 +35,12 @@ const now = new Date(NOW);
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
 const HELD = { kind: "approval", reason: "held-path", question: "", options: [], why: [], situation: "The run changes hooks/x.ts.", effects: [{ action: "land", text: "Merges it." }, { action: "drop", text: "Throws it away." }], recommend: { action: "drop", why: "the path is held" } };
 let seq = 0;
+// The runs a test adds, removed after it, so no test sees another's runs.
+let made = new Set<string>();
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
+  made.add(id);
   putRun(basename(join(dir)), { kind: "build", repo: "fac", told: true, started: ago(3), n: ++seq, ...extra } as any);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(dir, f), text);
 }
@@ -69,6 +72,11 @@ beforeAll(() => {
   run("20261027-000003-a", { job: "fac-4", name: "fac-4", condition: "running", on: "fac-4" });
   run("20261027-000004-a", { job: "fac-5", name: "fac-5", condition: "landed", on: "fac-5", commit: "abcdef1234567", ended: ago(2), started: ago(3) });
   run("20261027-000005-a", { job: "fac-6", name: "fac-6", condition: "landed", on: "fac-6", commit: "123456abcdef", ended: ago(30), started: ago(31) });
+  made = new Set();
+});
+afterEach(() => {
+  for (const id of made) (rmSync(join(jobsDir, id), { recursive: true, force: true }), removeRun(id));
+  made = new Set();
 });
 afterAll(() => {
   restore();

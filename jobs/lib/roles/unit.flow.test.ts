@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { base, branchExists, fakeLog, file, jobRuns, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../../cli.helpers";
@@ -12,53 +12,58 @@ afterAll(teardown);
 
 describe("job", () => {
   test("refuses an unknown repo, prints the keys, creates nothing", async () => {
+    const before = readdirSync(jobsDir);
     const r = await job("nowhere", "alpha", "x");
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("demo, auto, other, fac");
-    expect(readdirSync(jobsDir)).toEqual([]);
+    expect(readdirSync(jobsDir)).toEqual(before);
   });
 
-  describe("with the job alpha open", () => {
-    beforeAll(async () => {
-      expect((await job("demo", "alpha", "Goal: alpha\nACTION: commit a.txt\n")).code).toBe(0);
+  // Each test opens a job of its own name, so no test sees another's runs.
+  describe("with a job open", () => {
+    let name = "", n = 0;
+    beforeEach(async () => {
+      name = `open${++n}`;
+      expect((await job("demo", name, `Goal: ${name}\nACTION: commit a.txt\n`)).code).toBe(0);
     });
 
     test("a name open in another repo is refused, naming that repo", async () => {
-      const r = await actionJob("alpha", "commit c.txt", {}, "other");
+      const r = await actionJob(name, "commit c.txt", {}, "other");
       expect(r.code).toBe(1);
-      expect(r.stderr).toContain("alpha is open in demo");
+      expect(r.stderr).toContain(`${name} is open in demo`);
     });
 
     test("a follow-up started after the wall clock steps back sorts after the job's runs", async () => {
-      const before = jobRuns("alpha", "build");
+      const before = jobRuns(name, "build");
       setSystemTime(new Date("2020-01-01T00:00:00Z"));
-      const r = await actionJob("alpha", "commit s.txt").finally(() => setSystemTime());
+      const r = await actionJob(name, "commit s.txt").finally(() => setSystemTime());
       expect(r.code).toBe(0);
       expect(r.json.job).toBe(before[0]);
       expect([...before, r.json.run].sort().at(-1)).toBe(r.json.run);
-      expect((await jobView("alpha")).json.run.id).toBe(r.json.run);
+      expect((await jobView(name)).json.run.id).toBe(r.json.run);
     });
 
     test("drop writes the fate by-hand, none with --quiet, and --fate overrides it", async () => {
-      await actionJob("alpha", "commit p.txt");
-      await drop("alpha", "not needed");
-      expect(state((await jobView("alpha")).json.run.id)).toMatchObject({ fate: "manual", reason: "not needed" });
-      await actionJob("alpha", "commit q.txt");
-      await drop("alpha", "", true);
-      expect(state((await jobView("alpha")).json.run.id).fate).toBeUndefined();
-      await actionJob("alpha", "commit f.txt");
-      await dropAs("alpha", { fate: "duplicate" });
-      expect(state((await jobView("alpha")).json.run.id)).toMatchObject({ fate: "duplicate", reason: "dropped by Chris" });
+      await actionJob(name, "commit p.txt");
+      await drop(name, "not needed");
+      expect(state((await jobView(name)).json.run.id)).toMatchObject({ fate: "manual", reason: "not needed" });
+      await actionJob(name, "commit q.txt");
+      await drop(name, "", true);
+      expect(state((await jobView(name)).json.run.id).fate).toBeUndefined();
+      await actionJob(name, "commit f.txt");
+      await dropAs(name, { fate: "duplicate" });
+      expect(state((await jobView(name)).json.run.id)).toMatchObject({ fate: "duplicate", reason: "dropped by Chris" });
     }, 30_000);
 
     test("a new job with an ended job's name starts fresh, clearing a leftover branch", async () => {
-      sh(repo, "git", "branch", "job/alpha", "origin/main");
-      const r = await actionJob("alpha", "commit d.txt");
+      await drop(name);
+      sh(repo, "git", "branch", `job/${name}`, "origin/main");
+      const r = await actionJob(name, "commit d.txt");
       expect(r.json.job).toBe(r.json.run);
       expect(r.code).toBe(0);
       expect(state(r.json.run).condition).toBe("passed");
-      expect(sh(worktree("alpha"), "git", "log", "--format=%s")).toBe("add d.txt\ninit");
-      await drop("alpha");
+      expect(sh(worktree(name), "git", "log", "--format=%s")).toBe("add d.txt\ninit");
+      await drop(name);
     });
   });
 });

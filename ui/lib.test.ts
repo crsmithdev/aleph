@@ -365,7 +365,11 @@ describe("loadDiff", () => {
 describe("projectKeysOnce", () => {
   const real = globalThis.fetch;
   afterEach(() => { globalThis.fetch = real; });
+  // lib.js keeps the keys for the page's life: each test takes a copy of the module of its own.
+  let copies = 0;
+  const once = async () => (await import(`./lib.js?copy=${++copies}`)).projectKeysOnce as typeof projectKeysOnce;
   test("a non-ok response gives an empty list and does not throw, and the next call fetches again", async () => {
+    const projectKeysOnce = await once();
     let calls = 0;
     globalThis.fetch = (async () => { calls++; return new Response("no", { status: 500 }); }) as any;
     expect(await projectKeysOnce()).toEqual([]);
@@ -374,6 +378,7 @@ describe("projectKeysOnce", () => {
     expect(calls).toBe(2);
   });
   test("two calls give the same keys from one request", async () => {
+    const projectKeysOnce = await once();
     const urls: string[] = [];
     globalThis.fetch = (async (u: string) => { urls.push(u); return Response.json({ aleph: "a", other: null }); }) as any;
     expect(await projectKeysOnce()).toEqual(["aleph", "other"]);

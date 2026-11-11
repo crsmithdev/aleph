@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,6 +28,8 @@ beforeAll(async () => {
 });
 
 afterAll(() => { stop(); restoreEnv(); rmSync(base, { recursive: true, force: true }); });
+// Each test adds the notes it reads.
+beforeEach(() => rmSync(join(base, "annotations.json"), { force: true }));
 
 const turn = async (body: unknown) => {
   const r = await at("/api/chat", { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -39,6 +41,7 @@ const turn = async (body: unknown) => {
 test("a turn streams the agent's events, ends, and is a chat run with its cost", async () => {
   add("h1", "fix this title", { url: "http://x/#/now" });
   add("h2", "elsewhere", { url: "http://x/#/jobs" });
+  const had = new Set(allRuns().map((e) => e.id));
   const t = await turn({ text: "hello", page: "http://x/#/now" });
   expect(t.status).toBe(200);
   expect(t.data.map((e) => e.type)).toEqual(["system", "assistant", "result", undefined]);
@@ -49,11 +52,12 @@ test("a turn streams the agent's events, ends, and is a chat run with its cost",
   expect(said[0].text).not.toContain("elsewhere");
   expect(said[1].input.command).not.toContain("--resume");
   expect(t.text).toMatch(/event: end\ndata: \{\}\n\n$/);
-  const runs = allRuns().filter((e) => e.run.kind === "chat");
+  const runs = allRuns().filter((e) => e.run.kind === "chat" && !had.has(e.id));
   expect(runs.map((e) => [e.run.condition, e.run.cost])).toEqual([["done", 0.25]]);
 });
 
 test("the notes a message points at come first, once, from any page and in any state", async () => {
+  add("h1", "fix this title", { url: "http://x/#/now" });
   const one = mark(add("p1", "this one", { url: "http://x/#/jobs" }).id, "resolved"), two = add("p2", "here and open", { url: "http://x/#/now" });
   const said = (await turn({ text: "look", page: "http://x/#/now", annotations: [one.id, two.id] })).data[1].message.content[0].text as string;
   expect(said).toStartWith("look\n\nChris points at these annotations:\n- ");

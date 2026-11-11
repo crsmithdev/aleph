@@ -73,18 +73,20 @@ test("the text changes: core, alias, link and unlink", () => {
 });
 
 test("a note's core line, alias and links are written through vault write and committed", async () => {
-  const title = "Worktree Serve Needs A Port";
-  expect((await post(noteAt(title, "core"), { core: "A worktree serve takes its own port." })).status).toBe(200);
-  expect(noteFile("gotchas", title)).toContain("core: A worktree serve takes its own port.");
-  expect((await post(noteAt(title, "alias"), { alias: "worktree port clash" })).status).toBe(200);
-  expect(noteFile("gotchas", title)).toContain("aliases: [worktree port clash]");
+  const title = "Takes A Core Line";
+  write("Link Away", body("A note the next one stops linking"));
+  write(title, body("A note takes a core line", "[[Link Away]]"));
+  expect((await post(noteAt(title, "core"), { core: "A note takes its own core line." })).status).toBe(200);
+  expect(noteFile("gotchas", title)).toContain("core: A note takes its own core line.");
+  expect((await post(noteAt(title, "alias"), { alias: "core line clash" })).status).toBe(200);
+  expect(noteFile("gotchas", title)).toContain("aliases: [core line clash]");
   expect((await post(noteAt(title, "link"), { target: "Unrelated Fact" })).status).toBe(200);
   expect(noteFile("gotchas", title)).toContain("[[Unrelated Fact]]");
-  expect((await post(noteAt(title, "link"), { target: "Land From The Main Checkout", unlink: true })).status).toBe(200);
-  expect(noteFile("gotchas", title)).not.toContain("[[Land From The Main Checkout]]");
+  expect((await post(noteAt(title, "link"), { target: "Link Away", unlink: true })).status).toBe(200);
+  expect(noteFile("gotchas", title)).not.toContain("[[Link Away]]");
   expect(gitLog()).toContain(`write: ${title}`);
   const n: any = await (await at(noteAt(title))).json();
-  expect(n.text).toContain("core: A worktree serve takes its own port.");
+  expect(n.text).toContain("core: A note takes its own core line.");
 });
 
 test("an edit that vault write refuses changes nothing and says why", async () => {
@@ -97,23 +99,29 @@ test("an edit that vault write refuses changes nothing and says why", async () =
   expect(noteFile("decisions", title)).toContain("Bun runs every test");
 });
 
+// The tests that change a note or a file write their own, so no test reads what another changed.
 test("delete refuses a note with a caller; archive and delete commit", async () => {
-  const r = await post(noteAt("Unrelated Fact", "delete"), {});
+  write("Called Note", body("A note with a caller"));
+  write("Calling Note", body("A note that calls another", "[[Called Note]]"));
+  write("Lone Note", body("A note with no caller"));
+  const r = await post(noteAt("Called Note", "delete"), {});
   expect(r.status).toBe(422);
   expect(((await r.json()) as any).error).toContain("inbound");
-  expect((await post(noteAt("Unrelated Fact", "archive"), { why: "over" })).status).toBe(200);
-  expect(existsSync(join(vault, "archive", "Unrelated Fact.md"))).toBe(true);
-  expect((await post(noteAt("Land From The Main Checkout", "delete"), {})).status).toBe(200);
-  expect(existsSync(join(vault, "wiki", "gotchas", "Land From The Main Checkout.md"))).toBe(false);
-  expect(gitLog()).toContain("delete: Land From The Main Checkout");
+  expect((await post(noteAt("Called Note", "archive"), { why: "over" })).status).toBe(200);
+  expect(existsSync(join(vault, "archive", "Called Note.md"))).toBe(true);
+  expect((await post(noteAt("Lone Note", "delete"), {})).status).toBe(200);
+  expect(existsSync(join(vault, "wiki", "gotchas", "Lone Note.md"))).toBe(false);
+  expect(gitLog()).toContain("delete: Lone Note");
 });
 
 test("handoffs and episodes are edited and deleted as files; MEMORY.md through vault write; a key outside its folder is 404", async () => {
-  expect(((await (await at(fileAt("handoff", "current.md"))).json()) as any).text).toContain("worktree serve");
-  expect((await post(fileAt("handoff", "current.md", "edit"), { text: "## Intent\n\nNew.\n" })).status).toBe(200);
-  expect(readFileSync(join(hand, "current.md"), "utf8")).toBe("## Intent\n\nNew.\n");
-  expect((await post(fileAt("episode", "aleph-9 Port.md", "delete"), {})).status).toBe(200);
-  expect(existsSync(join(eps, "aleph-9 Port.md"))).toBe(false);
+  writeFileSync(join(hand, "edit-me.md"), "## Intent\n\nOld.\n");
+  writeFileSync(join(eps, "aleph-8 Drop.md"), `---\nkind: episode\nscope: aleph\nupdated: ${day}\n---\n## Goal\nDrop me.\n`);
+  expect(((await (await at(fileAt("handoff", "edit-me.md"))).json()) as any).text).toContain("Old.");
+  expect((await post(fileAt("handoff", "edit-me.md", "edit"), { text: "## Intent\n\nNew.\n" })).status).toBe(200);
+  expect(readFileSync(join(hand, "edit-me.md"), "utf8")).toBe("## Intent\n\nNew.\n");
+  expect((await post(fileAt("episode", "aleph-8 Drop.md", "delete"), {})).status).toBe(200);
+  expect(existsSync(join(eps, "aleph-8 Drop.md"))).toBe(false);
   expect((await post(fileAt("handoff", "../vault/Home.md", "delete"), {})).status).toBe(404);
   expect((await post(fileAt("memory-md", "MEMORY.md", "delete"), {})).status).toBe(404);
   const mem = readFileSync(join(vault, "MEMORY.md"), "utf8");

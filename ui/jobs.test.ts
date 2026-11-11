@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, setSystemTime, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -28,11 +28,14 @@ afterAll(() => setSystemTime());
 const now = NOW;
 const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
 const seq: Record<string, number> = {};
+// The runs a test adds, removed after it, so no test sees another's runs.
+let made: [string, string][] = [];
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
   const subject = String(extra.on ?? extra.name);
   seq[subject] = (seq[subject] ?? 0) + 1;
+  made.push([id, subject]);
   putRun(basename(join(dir)), { kind: "build", told: true, started: ago(3), n: seq[subject], ...extra } as any);
   for (const [f, t] of Object.entries(files)) writeFileSync(join(dir, f), t);
 }
@@ -85,6 +88,11 @@ beforeAll(() => {
   run("20261027-000003-a", { job: "fac-9", name: "fac-9", kind: "land", repo: "fac", branch: "factory/fac-9", condition: "landed", started: ago(2.5), ended: ago(2), commit: "abc1234" });
   run("20261027-000004-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "failed", started: ago(1) });
   run("20261027-000005-a", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", condition: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
+  made = [];
+});
+afterEach(() => {
+  for (const [id, subject] of made) (rmSync(join(jobsDir, id), { recursive: true, force: true }), removeRun(id), seq[subject]--);
+  made = [];
 });
 afterAll(() => {
   restore();
