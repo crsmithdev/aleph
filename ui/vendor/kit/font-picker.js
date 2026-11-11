@@ -36,6 +36,9 @@ const STEPS = {
   spacing: ["Spacing", [["Tighter", -0.02], ["Tight", -0.01], ["Wide", 0.02], ["Wider", 0.05]]],
 };
 
+// A size the steps can scale: a length, or a var(), calc(), clamp(), min() or max(). A keyword such as `small` is not one.
+const SIZE = /^(?:-?[\d.]+(?:px|r?em|%|pt|vw|vh|vmin|vmax|ch|ex)|(?:var|calc|clamp|min|max)\(.+\))$/;
+
 const CSS = `
 summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }
@@ -47,11 +50,13 @@ select { flex: 1; min-width: 0; padding: 4px 6px; text-overflow: ellipsis; }
 .row button { flex: none; width: 30px; padding: 0; font-size: 16px; line-height: 1; }
 pre { height: 6em; overflow: auto; margin: 0; padding: 8px; font: 11px/1.4 var(--code); white-space: pre-wrap; background: var(--sunk); border-radius: 6px; }
 .reset { justify-self: start; }
-@media (max-width: 720px) { :host { display: none; } }
 `;
 
-/** Mounts the picker in the dock; `local` names families the page loads itself, which the picker does not fetch. */
-export function fontPicker({ roles = ROLES, base = "sans", key = "font-picker", local = [] } = {}) {
+/**
+ * Mounts the picker in the dock. `local` names families the page loads itself, which the picker does not fetch.
+ * `hideBelow` hides the picker on a viewport narrower than that many pixels; 0 shows it at every width.
+ */
+export function fontPicker({ roles = ROLES, base = "sans", key = "font-picker", local = [], hideBelow = 0 } = {}) {
   if (document.getElementById("kit-fonts")) return;
   const root = document.documentElement.style;
   const chosen = read(key);
@@ -78,7 +83,7 @@ export function fontPicker({ roles = ROLES, base = "sans", key = "font-picker", 
     ]).join("\n") || "(the defaults)";
   }
 
-  const el = host("kit-fonts", CSS, `<details><summary class="fab" title="Fonts" aria-label="Fonts">Aa</summary>
+  const el = host("kit-fonts", CSS + (hideBelow ? `@media (max-width: ${hideBelow}px) { :host { display: none; } }` : ""), `<details><summary class="fab" title="Fonts" aria-label="Fonts">Aa</summary>
     <div class="card pop">${roles.map((r) => roleHtml(r, chosen, step, unset(r, roles, base))).join("")}<pre></pre><button type="button" class="reset">Reset</button></div></details>`);
   const shadow = el.shadowRoot;
   const out = shadow.querySelector("pre");
@@ -157,7 +162,7 @@ function scan(source, roles, base) {
     const role = roles.find((r) => `${font} ${family}`.includes(`var(--${r.name})`))?.name;
     const m = font.match(/^(?:(\d{3})\s+)?(\S+?)(?:\/\S+)?\s/);
     const size = m?.[2] || get("font-size"), spacing = get("letter-spacing");
-    out.push({ selector: selector.trim(), media, role: role ?? base, bound: Boolean(role), size: /px$|em$|var\(--fs/.test(size) ? size : "",
+    out.push({ selector: selector.trim(), media, role: role ?? base, bound: Boolean(role), size: SIZE.test(size) ? size : "",
       weight: Number(m?.[1] || get("font-weight")) || 0, spacing: /em$/.test(spacing) ? spacing : "" });
   }
   return out;

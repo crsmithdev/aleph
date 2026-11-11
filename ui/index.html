@@ -64,6 +64,7 @@
   const role = (name, label, fonts, def, fallback, steps) => ({ name, label, fonts, default: def, fallback, steps });
   fontPicker({
     key: "aleph-fonts",
+    hideBelow: 720,
     local: ["Hack Nerd Font"],
     roles: [
       role("display", "Titles", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"),
