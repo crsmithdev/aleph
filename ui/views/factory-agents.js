@@ -90,7 +90,7 @@ export function outcomesFrame(d) {
   return {
     measure: { name: "Outcomes", unit: "count", agg: "sum" },
     over: { kind: "category", name: "Role" },
-    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: tone("failed") }, { key: "stuck", name: "Stuck", color: "need" }] },
+    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: tone("failed") }, { key: "stuck", name: "Stuck", color: "stuck" }] },
     rows: d.agents.roles.filter((r) => rows.some((o) => o.role === r.key)).map((r) => ({ name: r.name, succeeded: sum(r, "succeeded"), failed: sum(r, "failed"), stuck: sum(r, "stuck") })),
   };
 }

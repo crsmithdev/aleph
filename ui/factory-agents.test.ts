@@ -117,7 +117,7 @@ test("the outcomes frame sums succeeded, failed and stuck per role, as horizonta
   const o = option(outcomesFrame(E), "stacked", T);
   expect(o.yAxis.type).toBe("category");
   expect(o.yAxis.data).toEqual(["Worker", "Triage"]);
-  expect(o.series.map((s: any) => [s.name, s.stack, s.color, s.data])).toEqual([["Succeeded", "all", "#d", [10, 5]], ["Failed", "all", "#s", [2, 0]], ["Stuck", "all", "#n", [1, 0]]]);
+  expect(o.series.map((s: any) => [s.name, s.stack, s.color, s.data])).toEqual([["Succeeded", "all", "#d", [10, 5]], ["Failed", "all", "#s", [2, 0]], ["Stuck", "all", "#s", [1, 0]]]);
 });
 
 test("the cost frame has one key per model with the bucket costs, and its axis goes through money()", () => {
