@@ -307,7 +307,7 @@ export async function loadDiff(el, url) {
   } catch (err) { return msg(`The diff failed to load: ${err.message}`); }
 }
 
-const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "stuck", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "stuck", failed: "stuck", dropped: "quiet", parked: "parked" };
+const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "stuck", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "stuck", failed: "stuck", dropped: "quiet", parked: "parked", exploring: "run", built: "done" };
 /** The badge tone of a state (a job's, land's or issue's): run, done, need, stuck, or quiet for any other. */
 export const tone = (state) => TONES[state] ?? "quiet";
 

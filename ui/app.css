@@ -601,6 +601,7 @@ p.aged { margin: 0 0 var(--sp-6); color: var(--stuck); font-size: var(--fs-sm); 
 .md h1, .md h2, .md h3, .md h4 { font: var(--fw-strong) var(--fs-lg)/1.35 var(--sans); margin: var(--sp-14) 0 var(--sp-6); }
 .md h1 { font-size: var(--fs-lg); }
 .md pre { background: var(--sunk); padding: var(--sp-8) var(--sp-10); border-radius: var(--r-tag); overflow-x: auto; font: var(--fs-xs)/1.55 var(--mono); }
+.lens-frame { width: 100%; height: 70vh; border: 0; }
 @media (max-width: 720px) {
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .side {

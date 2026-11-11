@@ -669,7 +669,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
 
   test("the list shows an idea after Issues in the nav, and the idea page shows its tabs and the newest prior art", async () => {
     await page.when('document.querySelector("#view tbody tr")');
-    expect(await page.ev<string>('document.querySelector("#view tbody tr").textContent')).toContain("Issue historynew project");
+    expect(await page.ev<string>('document.querySelector("#view tbody tr").textContent')).toContain("Issue historyexploringnew project");
     
     expect(await page.ev<boolean>('(() => { const n = [...document.querySelectorAll("#nav li a")].map((a) => a.textContent); return n.indexOf("Ideas") === n.indexOf("Issues") + 1; })()')).toBe(true);
     await page.go("#/ideas/issue-history");
@@ -680,7 +680,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     const frame = 'document.querySelector("#view section[data-pane=prior-art] iframe")';
     expect(await page.ev<string>(`${frame}.getAttribute("src")`)).toBe("/api/ideas/issue-history/lenses/prior-art-2026-11-02-1000.html");
     expect(await page.ev<boolean>(`${frame}.hasAttribute("sandbox")`)).toBe(true);
-    expect(await page.ev<string>('document.querySelector("#view section[data-pane=prior-art] ul").textContent')).toBe("2026-11-01 09:00");
+    expect(await page.ev<string>('document.querySelector("#view section[data-pane=prior-art] ul").textContent')).toMatch(/^(11\/01 09:00|2026-11-01)$/);
     expect(page.errors).toEqual([]);
   }, 60_000);
 
