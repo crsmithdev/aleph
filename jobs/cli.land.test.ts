@@ -44,8 +44,7 @@ describe("land", () => {
     expect((await jobView("phoneland")).json.check).toBeUndefined();
   });
 
-  // flaky: tests/flaky.md#land-manual-check
-  test.skip("a job with a manual check lands with the check open as a to-do item, until checked", async () => {
+  test("a job with a manual check lands with the check open as a to-do item, until checked", async () => {
     await job("phonelater", "commit android/later.txt");
     const r = await land("phonelater");
     expect(r.code).toBe(0);
@@ -86,8 +85,7 @@ describe("land", () => {
     expect((await jobView("stepback")).json).toMatchObject({ run: { kind: "land" }, condition: "landed" });
   });
 
-  // flaky: tests/flaky.md#land-autoland
-  test.skip("in a repo that lands by itself, a passed job lands with no aleph land", async () => {
+  test("in a repo that lands by itself, a passed job lands with no aleph land", async () => {
     const r = await job("selfland", "commit selfland.txt", {}, "auto");
     expect(state(r.json.run)).toMatchObject({ condition: "passed", next: "land" });
     const runs = readdirSync(jobsDir).filter((d) => /-selfland-\d+$/.test(d)).sort();

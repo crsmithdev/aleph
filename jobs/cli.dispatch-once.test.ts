@@ -46,8 +46,7 @@ describe("a factory run", () => {
       await when(() => settled(d), jobsDir);
     }, 60_000);
 
-    // flaky: tests/flaky.md#dispatch-once-cap-1
-    test.skip("two dispatches at once with a live cap of 1 start only one issue", async () => {
+    test("two dispatches at once with a live cap of 1 start only one issue", async () => {
       const e = await issue("e");
       const f = await issue("f");
       ids.push(e, f);

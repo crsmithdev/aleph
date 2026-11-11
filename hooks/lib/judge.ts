@@ -77,7 +77,9 @@ async function haiku(digestText: string, left: () => number, started: number): P
   let error = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
     if (left() <= 0) return { verdict: null, error: `judge budget spent${error ? `: ${error}` : ""}`, ms: Date.now() - started };
-    const { code, stderr, result } = await oneShot("judge", process.env.ALEPH_JUDGE_CMD ?? "claude", RUBRIC, digestText, left());
+    const { code, stderr, result, timedOut } = await oneShot("judge", process.env.ALEPH_JUDGE_CMD ?? "claude", RUBRIC, digestText, left());
+    // The box was all the budget left, though left() can still read a ms or two above 0 when it ends.
+    if (timedOut) return { verdict: null, error: "judge budget spent", ms: Date.now() - started };
     if (code !== 0) { error = `exit ${code}: ${stderr.slice(0, 200)}`; continue; }
     const verdict = parseVerdict(result);
     if (verdict) return { verdict, ms: Date.now() - started };

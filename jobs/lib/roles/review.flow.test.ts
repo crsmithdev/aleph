@@ -63,8 +63,7 @@ describe("a factory run", () => {
       await drop("rheld");
     });
 
-    // flaky: tests/flaky.md#review-held-path
-    test.skip("a held path the reviewer holds is a fix round, not an Ask", async () => {
+    test("a held path the reviewer holds is a fix round, not an Ask", async () => {
       rmSync(join(fakeLog, "holdonce"), { force: true });
       await job("fac", "rheldhold", "Goal: rheldhold REVIEW:holdonce\nACTION: commit held/h.txt\n");
       const rs = runsOf("rheldhold");

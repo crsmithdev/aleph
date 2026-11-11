@@ -9,8 +9,7 @@ describe("a batch of lands", () => {
   const landRuns = (name: string) => jobRuns(name, "land").map((d) => ({ id: d, ...state(d) }));
 
   // Two `aleph land` processes: the lock between processes is what the case tests.
-  // flaky: tests/flaky.md#landcheck-two-lands
-  test.skip("two lands of one job at once start one land run", async () => {
+  test("two lands of one job at once start one land run", async () => {
     await job("twice", "commit batch/twice.txt");
     const rs = await Promise.all([aleph(["land", "twice"]), aleph(["land", "twice"])]);
     expect(rs.filter((r) => r.code === 0).length).toBe(1);

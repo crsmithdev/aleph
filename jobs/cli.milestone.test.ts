@@ -19,8 +19,7 @@ describe("milestone 2", () => {
     sh(other, "git", "push", "-q", "origin", "main");
   }
 
-  // flaky: tests/flaky.md#milestone-three-branches
-  test.skip("three ready branches land one at a time, in the order their lands were made", async () => {
+  test("three ready branches land one at a time, in the order their lands were made", async () => {
     for (const n of ["qa", "qb", "qc"]) await job(n, `commit pair/${n}.txt`);
     const lands = await Promise.all(["qa", "qb", "qc"].map((n) => land(n)));
     const order = lands.map((l) => state(l.json.run)).sort((a, b) => a.made - b.made).map((s) => s.name);

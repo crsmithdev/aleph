@@ -23,10 +23,9 @@ describe("a factory run", () => {
     expect(factoryBranch("ftest")).toBe(false);
   });
 
-  // flaky: tests/flaky.md#review-stuck-follow-up
-  test.skip("a follow-up on a stuck job starts from the job's previous branch", async () => {
+  test("a follow-up on a stuck job starts from the job's previous branch", async () => {
     const r = await fjob("fagain", "commit FAIL");
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "tests failed" });
+    expect(state(r.json.run)).toMatchObject({ condition: "returned", reason: "tests failed" });
     expect(state(r.json.run).checks).toEqual([{ name: "tests", ok: false, seconds: expect.any(Number) }]);
     const f = await fjob("fagain", "branchlog");
     expect(readFileSync(join(fakeLog, "branchlog"), "utf8")).toContain("add FAIL");

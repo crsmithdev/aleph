@@ -18,16 +18,15 @@ describe("land: conflicts", () => {
     sh(other, "git", "push", "-q", "origin", "main");
   }
 
-  const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
+  const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => new RegExp(`-${name}-\\d+$`).test(d)).sort().map((d) => ({ id: d, ...state(d) }));
 
-  // flaky: tests/flaky.md#conflict-records-paths
-  test.skip("a conflict records its paths, sends the job back to the worker, and the passed follow-up lands", async () => {
+  test("a conflict records its paths, sends the job back to the worker, and the passed follow-up lands", async () => {
     await actionJob("mend", "resolve-later mend.txt");
     pushFromOther("mend.txt", "theirs\n");
     const r = await land("mend");
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "merge conflict", conflicts: ["mend.txt"], next: "worker" });
     expect(file(r.json.run, "land.log")).toContain("## conflicts\nmend.txt");
-    expect(told).toContain("demo/mend failed; sent back to the worker");
+    expect(told).toContain("mend#2 failed conflict");
     const runs = runsOf("mend");
     expect(runs.map((x) => [x.kind, x.condition])).toEqual([["build", "passed"], ["land", "failed"], ["build", "passed"], ["land", "landed"]]);
     expect(runs[2].land).toBe(true);

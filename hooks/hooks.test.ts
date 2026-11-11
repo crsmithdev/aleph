@@ -105,7 +105,8 @@ describe("obs hook", () => {
   });
 
   test("a prompt opens a turn trace whose root carries the prompt, name, tags and auth headers", async () => {
-    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p1", prompt: "hello" });
+    // A minute before the next test's t0: that test ends this turn.
+    await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p1", prompt: "hello" }, { ALEPH_NOW: "2026-09-03T09:59:00.000Z" });
     const spans = lastSpans();
     expect(spans).toHaveLength(1);
     const turn = spans[0];
@@ -126,8 +127,7 @@ describe("obs hook", () => {
     expect(posted.at(-1).headers.authorization).toBe(`Basic ${Buffer.from("pk:sk").toString("base64")}`);
   });
 
-  // flaky: tests/flaky.md#hooks-tools-nest
-  test.skip("tools nest under the turn in its trace with real duration; Stop completes the same turn span", async () => {
+  test("tools nest under the turn in its trace with real duration; Stop completes the same turn span", async () => {
     // Each hook reads the clock once; ALEPH_NOW puts the two reads 250 ms apart.
     const t0 = Date.parse("2026-09-03T10:00:00.000Z");
     const at = (ms: number) => ({ ALEPH_NOW: new Date(t0 + ms).toISOString() });

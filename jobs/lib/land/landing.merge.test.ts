@@ -47,8 +47,7 @@ test("a branch that is gone fails", async () => {
   expect(r.outcome).toMatchObject({ condition: "failed", reason: "branch gone: job/nobranch" });
 });
 
-// flaky: tests/flaky.md#merge-lost-race
-test.skip("a push that loses a race merges again in the same land, and lands", async () => {
+test("a push that loses a race merges again in the same land, and lands", async () => {
   const e = job("racer", [["x.txt", "x\n"]]);
   const r = await land(e, repo, ports({ races: 1 }));
   expect(r.outcome.condition).toBe("landed");

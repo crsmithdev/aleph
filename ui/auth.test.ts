@@ -23,8 +23,7 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-// flaky: tests/flaky.md#auth-password-gate
-test.skip("password gate: login, session across servers, logout", async () => {
+test("password gate: login, session across servers, logout", async () => {
   const at = await start();
   const home = await at("/");
   const html = await home.text();
@@ -59,7 +58,7 @@ test.skip("password gate: login, session across servers, logout", async () => {
   expect(tokens()).toHaveLength(1);
 
   const headers = { cookie };
-  expect(await (await at("/", { headers })).text()).toContain("/api/views");
+  expect(await (await at("/", { headers })).text()).toContain('from "/router.js"');
   expect((await at("/api/factory", { headers })).status).toBe(200);
 
   const again = await start();
