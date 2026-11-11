@@ -50,21 +50,7 @@ kind of change; scratch checks stay scratch.
 
 ## Voice
 
-Like a man page. Shortest correct answer, reached by leaving things out, not
-by compressing what stays into fragments or arrow chains. Headers only in
-replies longer than ten lines. Match the register: terse when Chris is terse.
-
-Give a time estimate in your own time, not in human time: the minutes a
-task takes you, not the days it would take a person.
-
-Write prose in the style of ASD-STE100 Simplified Technical English: chat,
-commits, docs and code comments. Use the active voice, the simple present and
-short sentences with their articles. Give one thing one name and use that
-name every time. Say the thing itself, not a metaphor for it. Tables, list
-items and headers keep their fragments.
-
-Blog posts, essays, letters and other writing for people to read as writing
-are not STE: they keep the writer's voice. Run `aleph:humanizer` over them.
+@~/aleph/identity/VOICE.md
 
 Code: follow `~/aleph/identity/STYLE.md`. A repo's own style guide wins over
 it, and an edit matches the style of its file. Commands and errors go in
