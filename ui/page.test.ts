@@ -40,3 +40,10 @@ test("the style sheet defines the dim, control, bar and spacing tokens and uses 
   const spacing = [...rest.matchAll(/(?<![\w-])(?:(?:row-|column-)?gap|padding[\w-]*|margin[\w-]*|scroll-padding[\w-]*):([^;}]*)/g)].map((m) => m[1]);
   expect(spacing.filter((v) => /(?<![\w.-])-?\d*\.?\d+px/.test(v.replace(/(?<![\w.-])-?1px/g, "")))).toEqual([]);
 });
+
+test("the style sheet defines the dot and measure tokens and draws no circle with 50%", () => {
+  const css = readFileSync(new URL("./app.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const root = css.match(/:root\s*\{[^}]*\}/)![0];
+  for (const [name, val] of Object.entries({ "dot-s": "6px", "dot-m": "8px", "dot-l": "12px", measure: "76ch" })) expect(root).toContain(`--${name}: ${val};`);
+  expect(css).not.toMatch(/border-radius:\s*50%/);
+});

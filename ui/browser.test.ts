@@ -263,6 +263,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('getComputedStyle(document.querySelector("#nav li.head")).display')).not.toBe("none");
   }, 30_000);
 
+  test("Kit: the ask dot is 8px, the detail prose stops at 76ch, and a selected row has the Selected look", async () => {
+    await page.go("#/kit");
+    await page.when('document.querySelector(".ask-dot") && document.querySelector(".dp-prose > .md") && document.querySelector("tr.mrow[aria-selected=true]")');
+    // A probe inside the prose, styled with the token, gives the computed form of 76ch, --sunk and the 2px --run bar.
+    const r = await page.ev<any>(`(() => {
+      const probe = (style) => { const i = document.createElement("div"); i.style.cssText = style; document.querySelector(".dp-prose > .md").append(i); const c = getComputedStyle(i); const o = { w: c.width, bg: c.backgroundColor, sh: c.boxShadow }; i.remove(); return o; };
+      const row = getComputedStyle(document.querySelector("tr.mrow[aria-selected=true]")), want = probe("display:block;width:76ch;background:var(--sunk);box-shadow:inset 2px 0 0 var(--run)");
+      return { dot: getComputedStyle(document.querySelector(".ask-dot")).width, prose: getComputedStyle(document.querySelector(".dp-prose > .md")).maxWidth, want: want.w,
+        bg: row.backgroundColor, wantBg: want.bg, sh: row.boxShadow, wantSh: want.sh };
+    })()`);
+    expect(r.dot).toBe("8px");
+    // Chrome rounds the probe's width to its layout grid, so the two agree to within a fraction of a pixel.
+    expect(Math.abs(parseFloat(r.prose) - parseFloat(r.want))).toBeLessThan(0.1);
+    expect(r.bg).toBe(r.wantBg);
+    expect(r.sh).toBe(r.wantSh);
+  });
+
   test("Kit: every specimen draws, the charts draw from fixtures, and its theme pick stays on the kit page", async () => {
     await page.go("#/kit?theme=dark");
     await page.when('document.querySelector(".kit-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 3');
