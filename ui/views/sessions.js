@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
-import { actButton, badCount, chip, chipRow, codeText, fold, notice, barList, count, barRow, legendHtml, linkButton, meter, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, count, barRow, legendHtml, linkButton, meter, miss, plural, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
 import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
 export const view = {
@@ -68,11 +68,13 @@ export function shownSessions(d, o) {
 }
 
 const rate = (r) => pct(r.rate * 100);
-const renderFails = (d, o) => tiles("Failing Most", failing(d).map((r) => statCard({ k: r.name, v: rate(r), note: `${r.kind}: ${count(r.errors)} of ${count(r.n)} ${r.kind === "tool" ? "calls" : "uses"}`, key: r.pick, on: o.pick === r.pick })).join(""));
+// plural() prints a bare number; this keeps count()'s thousands separator.
+const counted = (n, one) => plural(n, one).replace(/^\d+/, count(n));
+const renderFails = (d, o) => tiles("Failing Most", failing(d).map((r) => statCard({ k: r.name, v: rate(r), note: `${r.kind}: ${count(r.errors)} of ${counted(r.n, r.kind === "tool" ? "call" : "use")}`, key: r.pick, on: o.pick === r.pick })).join(""));
 
 function ranked(kind, rows, o) {
   const top = Math.max(1, ...rows.map((r) => r.n));
-  const row = (r) => barRow(esc(r.name), 0, `${count(r.n)}${r.errors ? ` ${tag(`${count(r.errors)} errors`, "stuck")}` : ""}`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
+  const row = (r) => barRow(esc(r.name), 0, `${count(r.n)}${r.errors ? ` ${tag(counted(r.errors, "error"), "stuck")}` : ""}`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
     bar: meter([{ pct: ((r.n - r.errors) / top) * 100 }, { pct: (r.errors / top) * 100, cls: "c-err" }]) });
   const rest = rows.slice(ROWS);
   return barList(rows.slice(0, ROWS).map(row).join("")) + (rest.length ? fold(`${rest.length} more`, barList(rest.map(row).join("")), { cls: "more", open: rest.some((r) => o.pick === `${kind}:${r.name}`) }) : "");
@@ -86,16 +88,16 @@ function toolsCard(d, o) {
   if (a.langfuse === "error") return card("Tools", error("The tools did not load.", `${a.error}. Check that Langfuse is running, then reload.`), opts);
   const t = toolsOf(d);
   return card("Tools", t.length ? ranked("tool", t.map((x) => ({ name: x.name, n: x.calls, errors: x.errors })), o) : empty("No tool calls in this period.", "Widen the window."),
-    { aside: legendHtml([[`${count(sum(t, (x) => x.calls))} calls`], [`${count(sum(t, (x) => x.errors))} errors`, "c-err"]]) });
+    { aside: legendHtml([[counted(sum(t, (x) => x.calls), "call")], [counted(sum(t, (x) => x.errors), "error"), "c-err"]]) });
 }
 
 function skillsCard(d, o) {
   if (d.skills?.error) return card("Skills", error("The skills did not load.", `${d.skills.error}. Check that Langfuse is running, then reload.`));
   const s = skillsOf(d), unused = d.skills?.unused ?? [];
   return card("Skills", (d.skills?.failed ? notice(`The last reload failed: ${d.skills.failed}.`, true) : "") +
-    (s.length ? ranked("skill", s.map((x) => ({ name: x.name, n: x.uses, errors: x.errors })), o) : empty(`No skill was used in the last ${o.days} days.`, "A use is a Skill tool call or a slash command.")) +
+    (s.length ? ranked("skill", s.map((x) => ({ name: x.name, n: x.uses, errors: x.errors })), o) : empty(`No skill was used in the last ${plural(Number(o.days), "day")}.`, "A use is a Skill tool call or a slash command.")) +
     (unused.length ? fold(`${count(unused.length)} unused`, chipRow(unused.map((n) => chip(n, { el: "a", attrs: ` href="${esc(skillHref(n))}"` })).join(""), "div")) : ""),
-    { aside: legendHtml([[`${count(sum(s, (x) => x.uses))} uses`], [`${count(sum(s, (x) => x.errors))} errors`, "c-err"]]) });
+    { aside: legendHtml([[counted(sum(s, (x) => x.uses), "use")], [counted(sum(s, (x) => x.errors), "error"), "c-err"]]) });
 }
 
 function hooksCard(d) {
@@ -103,10 +105,10 @@ function hooksCard(d) {
   if (a.langfuse !== "ok") return "";
   const denials = a.denials ?? { total: 0, recent: [] };
   const hooks = (a.hooks ?? []).length
-    ? dataTable(heads(["Hook", "Calls", "Errors", "Last Call"], ["Calls", "Errors", "Last Call"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="num">${count(h.calls)}</td>${badCount(h.errors)}<td class="time">${esc(when(h.lastAt))}</td></tr>`).join(""))
+    ? dataTable(heads(["Hook", "Calls", "Errors", "Last Call"], ["Calls", "Errors", "Last Call"]), a.hooks.map((h) => row([cell(h.name, { wide: true }), cell(count(h.calls), { num: true }), badCount(h.errors), `<td class="time">${esc(when(h.lastAt))}</td>`])).join(""))
     : empty("No hook calls in this period.", "Widen the window.");
   const list = denials.recent.length
-    ? dataTable(heads(["Denied", "Reason"]), denials.recent.map((r) => `<tr><td class="time lead">${esc(when(r.at))}</td><td class="wide" title="${esc(r.reason)}">${esc(r.reason)}</td></tr>`).join(""))
+    ? dataTable(heads(["Denied", "Reason"]), denials.recent.map((r) => row([`<td class="time lead">${esc(when(r.at))}</td>`, cell(r.reason, { wide: true })])).join(""))
     : empty("The gate denied nothing in this period.", "Widen the window to see older denials.");
   return `<div class="pair">${card("Hooks", hooks)}${card("Verify-Gate Denials", list, { count: count(denials.total), label: "Verify-gate denials" })}</div>`;
 }
@@ -114,29 +116,30 @@ function hooksCard(d) {
 function renderSessionsTable(d, o) {
   if (d.sessions?.error) return error("The sessions did not load.", `${d.sessions.error}. Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.`);
   const all = shownSessions(d, o);
-  if (!all.length) return empty(o.pick || o.q ? "No session matches." : `No session in the last ${o.days} days.`, o.pick || o.q ? "Clear the selection or the search." : "Sessions appear when the hooks send traces to Langfuse.");
+  if (!all.length) return empty(o.pick || o.q ? "No session matches." : `No session in the last ${plural(Number(o.days), "day")}.`, o.pick || o.q ? "Clear the selection or the search." : "Sessions appear when the hooks send traces to Langfuse.");
   const shown = all.slice(0, o.limit);
   const h = (label, key, c) => sortHead(label, key, o.sort, c);
-  const rows = shown.map((s) => `<tr><td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`, { title: s.id })}</td>` +
-    `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td><td title="${esc(s.taskTypes.join(", "))}">${chips(s.taskTypes.slice(0, 2))}${s.taskTypes.length > 2 ? ` <span class="quiet">+${s.taskTypes.length - 2}</span>` : ""}</td><td class="num">${count(s.turns)}</td><td class="num">${costHtml(s.cost, s.wk)}</td><td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
+  const rows = shown.map((s) => row([`<td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`, { title: s.id })}</td>`,
+    cell(s.firstPrompt, { wide: true }), s.project ? cell(s.project) : `<td>${miss("No project")}</td>`,
+    `<td title="${esc(s.taskTypes.join(", "))}">${chips([...s.taskTypes.slice(0, 2), ...(s.taskTypes.length > 2 ? [`+${s.taskTypes.length - 2}`] : [])])}</td>`,
+    cell(count(s.turns), { num: true }), `<td class="num">${costHtml(s.cost, s.wk)}</td>`, `<td class="time">${esc(when(s.start))}</td>`, `<td class="time">${esc(when(s.last))}</td>`])).join("");
   return dataTable(`${heads(["Session"])}${h("First Prompt", "prompt")}${h("Project", "project")}${heads(["Kinds"])}${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}${h("Started", "start", { num: true })}${h("Last Turn", "last", { num: true })}`, rows) + pager(shown.length, all.length, STEP);
 }
 
 function sessionsCard(d, o) {
-  const name = o.pick.slice(o.pick.indexOf(":") + 1), n = shownSessions(d, o).length;
+  const name = o.pick.slice(o.pick.indexOf(":") + 1), shown = shownSessions(d, o);
   const title = o.pick ? `Sessions That Used ${name}` : "Sessions";
   const open = o.pick.startsWith("skill:") ? linkButton("Open the skill", skillHref(name)) : "";
-  return card(title, renderSessionsTable(d, o), { count: count(n), aside: `${open}${o.pick ? actButton("Show all sessions", { tile: "" }) : ""}`, id: "ag-sess", label: "Sessions" });
+  const lede = `${money(sum(shown, (s) => s.cost ?? 0))} recorded across these sessions.`;
+  return card(title, renderSessionsTable(d, o), { count: count(shown.length), aside: `${open}${o.pick ? actButton("Show all sessions", { tile: "" }) : ""}`, id: "ag-sess", label: "Sessions", lede });
 }
 
 const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
 
 export function renderSessions(d, o = options()) {
   const projects = d?.sessions?.projects ?? d?.activity?.projects ?? [];
-  const total = sum(d?.sessions?.sessions ?? [], (s) => s.cost ?? 0);
   const head = scope().bar({ project: projects.includes(o.project) ? o.project : "", value: o.days, more: projects, name: "days", options: DAYS });
-  return `<div class="page sp agents">${pageHead("Sessions", { aside: head })}<div id="ag-live" class="sp">${renderLive(d, o)}</div>` +
-    `${notice(`${money(total)} recorded across these sessions.`)}</div>`;
+  return `<div class="page sp agents">${pageHead("Sessions", { aside: head })}<div id="ag-live" class="sp">${renderLive(d, o)}</div></div>`;
 }
 
 // The search box sits over the Sessions card, outside the part that redraws, so it keeps the focus.

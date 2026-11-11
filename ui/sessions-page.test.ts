@@ -60,11 +60,41 @@ describe("the Sessions page", () => {
     for (const s of ["<h2>Verify-Gate Denials</h2>", 'aria-label="Verify-gate denials"', '<button type="button" data-sort="prompt">First Prompt<']) expect(h).toContain(s);
   });
 
+  test("a hook's name and a session's prompt are wide cells with their text as the title; extra kinds are a chip, not a quiet span", () => {
+    const d = data();
+    d.sessions.sessions[1].taskTypes = ["debug", "plan", "review"];
+    const h = v.renderSessions(d, opts());
+    expect(h).toContain('<td class="wide" title="vault-recall">vault-recall</td>');
+    expect(h).toContain('<td class="wide" title="dear one">dear one</td>');
+    expect(h).toContain('<td class="wide" title="no &lt;run&gt;">no &lt;run&gt;</td>');
+    expect(h).toContain('<td title="debug, plan, review">');
+    expect(h).toContain('<span class="chip">+1</span>');
+    expect(h).not.toContain('class="quiet"');
+  });
+
+  test("the total sits in the Sessions card's lede, and the counts say one error, not 1 errors", () => {
+    const d = data();
+    const h = v.renderSessions(d, opts());
+    expect(h).toContain('<p class="lede">$10.00 recorded across these sessions.</p>');
+    d.skills.skills[0].errors = 1;
+    expect(v.renderSessions(d, opts())).toContain(">1 error</span>");
+  });
+
+  test("the lede totals only the sessions the card shows, and the counts keep their thousands separator", () => {
+    expect(v.renderSessions(data(), opts("pick=tool:Monitor"))).toContain('<p class="lede">$1.00 recorded across these sessions.</p>');
+    const d = data();
+    d.activity.tools[0].calls = 12345;
+    d.activity.tools[0].errors = 1500;
+    const h = v.renderSessions(d, opts());
+    for (const s of ["12,407 calls", "1,507 errors", "of 12,345 calls", ">1,500 errors</span>"]) expect(h).toContain(s);
+  });
+
   test("a selection is pressed, titles the list, and offers the way back and the skill's page", () => {
     const h = v.renderSessions(data(), opts("pick=skill:aleph:handoff"));
     expect(h).toContain("<h2 id=\"h-ag-sess\">Sessions That Used aleph:handoff</h2>");
     expect(h).toContain('data-tile="skill:aleph:handoff" aria-pressed="true"');
-    expect(h).toContain("Show all sessions");
+    // The way back sits in the card's aside, not in a row, so it is a plain button and not kind small.
+    expect(h).toContain('<button class="act" type="button" data-tile="">Show all sessions</button>');
     expect(h).toContain('href="#/skills/aleph%3Ahandoff"');
   });
 
