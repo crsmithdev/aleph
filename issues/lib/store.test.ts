@@ -338,7 +338,6 @@ describe("the fetch of origin/main", () => {
   const narrow = () => sh(clone(), "git", "config", "remote.origin.fetch", "+refs/heads/none:refs/remotes/origin/none");
   const widen = () => sh(clone(), "git", "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
   const saved = lockRetry.pause;
-  beforeAll(() => store.skipFetches(false));
   afterEach(() => { lockRetry.pause = saved; widen(); });
 
   test("a clone whose fetch refspec misses main still gets origin/main on a read, a write and fetchStore", async () => {

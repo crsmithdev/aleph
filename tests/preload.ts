@@ -7,6 +7,7 @@ import { afterEach } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { skipFetches } from "../issues/lib/store.ts";
 import { procId } from "./git-fixture.ts";
 
 // bun --parallel never fires process.on("exit"), so each folder carries the id of its process, and a test
@@ -83,3 +84,7 @@ if (process.env.ALEPH_LIVE !== "1") {
   for (const k of ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]) delete process.env[k];
 }
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
+
+// A UI test's serve() turns the store's fetches off, and modules are shared across the test files of a process:
+// each test ends with them on again, as the CLI has them (aleph-1762).
+afterEach(() => skipFetches(false));
