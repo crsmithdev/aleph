@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "../records/ledger.ts";
@@ -52,16 +52,27 @@ function committed(setup: string[] = [], checks: { name: string; run: string }[]
 const extraTrees = (path: string) => sh(path, "git", "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).length - 1;
 
 test("checksAt hands each check's process to onSpawn, so a drop can kill a running check, and a killed check gives no verdict", async () => {
-  const { repo, sha } = committed([], [{ name: "slow", run: "tail -f /dev/null" }]);
+  // The check writes its own pid and its tail's; `timeout` leads the check's process group, so the kill goes to the group once the check runs.
+  const pids = join(base, "pids");
+  const { repo, sha } = committed([], [{ name: "slow", run: `tail -f /dev/null & echo "$$ $!" > ${pids}; wait` }]);
   const spawned: ReturnType<typeof Bun.spawn>[] = [];
   const why = await checksAt({
     folder: base, repo, changed: [], phase: () => {},
-    onSpawn: (p) => { spawned.push(p); p.kill("SIGKILL"); },
+    onSpawn: (p) => {
+      spawned.push(p);
+      while (!existsSync(pids) || !readFileSync(pids, "utf8").endsWith("\n"));
+      process.kill(-p.pid, "SIGKILL");
+    },
   }, sha, process.env);
   // A killed check does not run again here.
   expect(spawned).toHaveLength(1);
   expect(why).toMatchObject({ cause: "infra", checkName: "slow", reason: "no verdict: check slow was killed" });
   expect(extraTrees(repo.path)).toBe(0);
+  // Neither the check nor its tail child lives on.
+  const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  const gone = readFileSync(pids, "utf8").trim().split(" ").map(Number);
+  for (const pid of gone) await Bun.spawn(["timeout", "10", "tail", "--pid", String(pid), "-f", "/dev/null"]).exited;
+  expect(gone.map(alive)).toEqual([false, false]);
 }, 20_000);
 
 test("checksAt runs the checks in a detached worktree at the commit, and checkEnv gives them TZ=UTC; the worktree goes after", async () => {
