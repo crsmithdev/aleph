@@ -111,12 +111,13 @@ function inline(text) {
 }
 const emph = (s) => s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
 
-/** Markdown to HTML: headings, lists, fenced code, paragraphs, inline code, links and [[wiki links]]. Everything else is escaped. */
+/** Markdown to HTML: headings, lists, pipe tables, fenced code, paragraphs, inline code, links and [[wiki links]]. Everything else is escaped. */
 export function md(src) {
   const lines = String(src ?? "").replace(/\r\n?/g, "\n").split("\n");
   const out = [];
   let para = [], list = null;
   const flushPara = () => { if (para.length) out.push(`<p>${inline(para.join(" "))}</p>`); para = []; };
+  const cells = (r) => r.trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/).map((c) => c.trim());
   const flushList = () => { if (list) out.push(`<${list.tag}>${list.items.map((i) => `<li>${inline(i)}</li>`).join("")}</${list.tag}>`); list = null; };
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
@@ -140,6 +141,16 @@ export function md(src) {
       continue;
     }
     if (!l.trim()) { flushPara(); flushList(); continue; }
+    const head = l.includes("|") && cells(l);
+    if (head && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[i + 1] ?? "") && cells(lines[i + 1]).length === head.length) {
+      flushPara(); flushList();
+      const row = (tag, r) => `<tr>${r.map((c) => `<${tag}>${inline(c)}</${tag}>`).join("")}</tr>`;
+      const body = [];
+      for (i += 2; i < lines.length && lines[i].includes("|"); i++) body.push(row("td", cells(lines[i])));
+      i--;
+      out.push(`<table><thead>${row("th", head)}</thead><tbody>${body.join("")}</tbody></table>`);
+      continue;
+    }
     if (list && /^\s+\S/.test(l)) { list.items[list.items.length - 1] += " " + l.trim(); continue; }
     flushList();
     para.push(l.trim());

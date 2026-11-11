@@ -14,6 +14,18 @@ test("md renders a heading, a list, code and a link", () => {
   expect(h).toContain("<pre><code>x &lt; y</code></pre>");
 });
 
+test("md renders a pipe table with a head, a body and escaped cells", () => {
+  const h = md("| Step | Who |\n|---|:--:|\n| one | `a<b` |");
+  expect(h).toContain("<table><thead><tr><th>Step</th><th>Who</th></tr></thead>");
+  expect(h).toContain("<tbody><tr><td>one</td><td><code>a&lt;b</code></td></tr></tbody>");
+  expect(h).not.toContain("<p>");
+});
+
+test("md makes a table of a pipe line only when a delimiter row follows it", () => {
+  expect(md("a | b\nc")).toBe("<p>a | b c</p>");
+  expect(md("a | b\n--|--\nc | d")).toBe("<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>c</td><td>d</td></tr></tbody></table>");
+});
+
 test("mountView calls mount only when the view has one", () => {
   const calls: unknown[][] = [];
   expect(mountView({ mount: (...a: unknown[]) => calls.push(a) }, "root", 1)).toBe(true);

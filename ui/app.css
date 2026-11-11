@@ -1107,3 +1107,5 @@ ul.logs .step { margin: var(--sp-6) 0; }
 /* A number cell with a bar: the bar starts at the cell's left edge, the number stays right-aligned. */
 .vpair { display: flex; align-items: center; gap: var(--sp-6); }
 .vpair > .meter { flex: none; width: 40px; margin-right: auto; }
+.md table { border-collapse: collapse; margin: var(--sp-8) 0; font-size: var(--fs-xs); }
+.md th, .md td { border: 1px solid var(--rule); padding: var(--sp-4) var(--sp-8); text-align: left; }
