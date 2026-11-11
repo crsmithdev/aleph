@@ -46,11 +46,11 @@ test("an outcome on a full model id joins the row of its short model; an unset m
   const o = (role: string, model: string, runs: number) => ({ role, model, runs, succeeded: runs, failed: 0, stuck: 0, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 });
   const outcomes = [o("intake", "claude-opus-5-5", 151), o("worker", "claude-haiku-4-5-20251001", 7), o("reviewer", "unset", 3)];
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(row(h, "Intake")).toMatch(/<select.*<td class="num">151<\/td>/);
+  expect(row(h, "Intake")).toMatch(/<td>opus<\/td><td class="num">151<\/td>/);
   expect(h.match(/<td>Intake<\/td>/g)!.length).toBe(1);
-  expect(row(h, "Worker")).toMatch(/<select/);
+  expect(row(h, "Worker")).toContain("<td>haiku, sonnet</td>");
   expect(h).not.toMatch(/<td>claude-/);
-  expect(row(h, "Reviewer")).toContain("<select");
+  expect(row(h, "Reviewer")).not.toContain("<select");
   expect(h.match(/<td>Reviewer<\/td>/g)!.length).toBe(1);
   expect(h).not.toMatch(/<td>unset<\/td>/);
 });
@@ -60,7 +60,7 @@ test("the tiles are usage, OpenRouter spend for the window's UTC period, worker 
   const m = { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
   expect(keys(h)).toEqual(["Usage", "Spend", "Worker slots", "Backends"]);
-  for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", "OpenRouter, this week (UTC)", '<span class="event-dot fine"></span>Local server: up', '<span class="event-dot alert"></span>OpenRouter: down']) expect(h).toContain(t);
+  for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", "OpenRouter, this week (UTC)", '<span class="event-dot fine" aria-hidden="true"></span>Local server: up', '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>$1.50</b>");
   const none = renderFactoryAgents(S, D);
   expect(none).toContain("OpenRouter spend unknown");
@@ -142,20 +142,20 @@ const tiers = (low: string, medium: string) => ({
   judge: { enabled: true, model: "haiku" },
 });
 
-test("the Roles table carries the model choice: no Models card, a select per tier, fixed text for the rest, one Success column", () => {
+test("the Roles table is read-only; the Models settings list holds a select per tier, a checkbox per worker tier, one Success column", () => {
   const html = renderFactoryAgents(S, E, "live", "week", { tiers: tiers("haiku", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
-  expect(html).not.toContain(">Models<");
-  const row = (name: string) => html.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
+  const [roles, models] = html.split('id="models"');
+  expect(roles).not.toMatch(/<td[^>]*>[^<]*<(select|input|button)/);
+  expect(models).toContain(">Models</h2>");
+  const row = (name: string) => models.match(new RegExp(`<label class="sl" for="model-[^"]+">${name}</label>.*?</div>`))![0];
   const opts = (r: string) => [...r.matchAll(/<option value="([^"]+)"/g)].map((x) => x[1]);
-  const w = row("Worker");
-  const lowSelect = w.match(/<select data-tier="worker-low".*?<\/select>/s)![0];
-  const medSelect = w.match(/<select data-tier="worker-medium".*?<\/select>/s)![0];
-  expect(opts(lowSelect)).toEqual(OFFERS["worker-low"]);
-  expect(opts(medSelect)).toEqual(OFFERS["worker-medium"]);
+  const w = (n: string) => row(`Worker ${n}`);
+  expect(opts(w("low").match(/<select.*?<\/select>/s)![0])).toEqual(OFFERS["worker-low"]);
+  expect(opts(w("medium").match(/<select.*?<\/select>/s)![0])).toEqual(OFFERS["worker-medium"]);
   expect(OFFERS["worker-low"]).toContain("deepseek-v4.1-flash");
-  expect(w).toContain('type="checkbox" data-tier="worker-low" aria-label="Worker low enabled" checked');
-  expect(w).toContain('type="checkbox" data-tier="worker-medium" aria-label="Worker medium enabled">');
-  expect(w).toContain('<option value="gpt-oss-20b" selected>');
+  expect(w("low")).toContain('type="checkbox" data-tier="worker-low" aria-label="Worker low enabled" checked');
+  expect(w("medium")).toContain('type="checkbox" data-tier="worker-medium" aria-label="Worker medium enabled">');
+  expect(w("medium")).toContain('<option value="gpt-oss-20b" selected>');
   for (const n of ["Merge", "Reviewer", "Intake", "Director", "Monitor", "Title", "Judge"]) { expect(row(n)).toContain("<select"); expect(row(n)).not.toContain("checkbox"); }
   expect(html).not.toContain(">Succeeded<");
   expect(html).not.toContain(">Failed<");
@@ -191,10 +191,10 @@ test("an outcome joins the tier row of its role and model; non-tier roles stay t
   const o = (role: string, model: string, rate: number) => ({ role, model, runs: 10, succeeded: rate * 10, failed: 10 - rate * 10, stuck: 0, rate, p50: 60, cost: 1.5, baseline: 0.7 });
   const row = (h: string, name: string) => h.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("intake", "opus", 0.95), o("triage", "opus", 0.9)] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(row(h, "Intake")).toMatch(/<select.*<td class="num">10<\/td><td class="num">95%/);
+  expect(row(h, "Intake")).toMatch(/<td>opus<\/td><td class="num">10<\/td><td class="num">95%/);
   expect(h.match(/<td>Intake<\/td>/g)!.length).toBe(1);
   expect(row(h, "Triage")).toContain("90%");
-  expect(row(h, "Worker")).toMatch(/<select/);
+  expect(row(h, "Worker")).toContain("<td>haiku, sonnet</td>");
 });
 
 test("the Worker row adds up the worker outcomes and the Reviewer row has its own counts", () => {
@@ -242,12 +242,12 @@ test("a Roles count goes through count()", () => {
 
 test("a Roles row with no outcome shows a dash in every cell, with num on the number cells", () => {
   const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(row(html, "Director")).toMatch(new RegExp(`<select.*>${'<td class="num">–</td>'.repeat(4)}<td>–</td>`));
+  expect(row(html, "Director")).toMatch(new RegExp(`<td>opus</td>${'<td class="num">–</td>'.repeat(4)}<td>–</td>`));
 });
 
 test("an empty Roles table shows the empty line", () => {
   const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } });
-  expect(html).toContain('<div class="empty"><p>No agent ran in this window.</p></div>');
+  expect(html).toContain('<div class="empty"><p>No agent ran in this window.</p><p class="hint">Pick a longer window.</p></div>');
   expect(html).not.toContain("<table");
 });
 

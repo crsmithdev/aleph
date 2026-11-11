@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, setting, settings, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
@@ -88,7 +88,7 @@ export function renderCaps(d) {
 /** The newest monitor report: a summary that expands to every finding and the reader's reply, or why there is no reading. */
 export function renderMonitor(d) {
   const m = d.monitor;
-  if (!m) return card("Monitor", "<p>The monitor has not run.</p>", { id: "monitor" });
+  if (!m) return card("Monitor", empty("The monitor has not run.", "It reads once a day, in the tick."), { id: "monitor" });
   const n = m.findings.length, first = n ? ` First: ${findingHtml(m.findings[0])}` : "";
   const summary = `${esc(m.day)}: ${n} ${n === 1 ? "finding" : "findings"}.${first}`;
   const body = (n ? findingsList(m.findings) : "") +
@@ -96,65 +96,58 @@ export function renderMonitor(d) {
   return card("Monitor", fold(summary, body), { id: "monitor" });
 }
 
-/** The interval of a schedule on a timer of its own, with a form to change it; the monitor runs in the tick, once a day. */
-function intervalCell(s) {
-  if (s.name === "monitor") return `<td>${esc(s.every)}</td>`;
-  return `<td><form class="capform schedform" data-schedule="${esc(s.name)}"><label class="sr-only" for="every-${esc(s.name)}">${esc(s.name)} interval</label>` +
-    `<input id="every-${esc(s.name)}" name="every" type="text" pattern="[1-9][0-9]*(s|min|h)" value="${esc(s.every ?? "")}" required>` +
-    actButton("Save", { label: "Save" }, { type: "submit" }) + `</form></td>`;
-}
-
-/** The tick, the suite and the monitor: whether each is on (every one is, and none can be turned off yet), how often it runs, when it last ran and what came of it. */
+/** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran. The monitor runs in the tick, once a day, so only the other two have an interval to edit. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => `<tr><td><label class="sched-on"><input type="checkbox" checked disabled aria-label="${esc(s.name)} on"> ${esc(s.name)}</label></td>` +
-    `${intervalCell(s)}<td>${s.last ? when(s.last) : "has not run"}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
-  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Last Run", "Result"]), rows) : empty("No schedule."), { id: "gates-schedules" });
+  const rows = d.schedules.map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(s.every)}</td><td>${s.result ? esc(s.result) : ""}</td><td class="time">${s.last ? when(s.last) : "has not run"}</td></tr>`).join("");
+  const edit = d.schedules.filter((s) => s.name !== "monitor").map((s) => {
+    const id = `every-${s.name}`;
+    return setting(`${s.name} every`, inputBox("every", s.every ?? "", { id, attrs: ' pattern="[1-9][0-9]*(s|min|h)" required' }), { id, save: "Save", hint: "A number and s, min or h, such as 30s.", attrs: ` data-schedule="${esc(s.name)}"` });
+  });
+  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) + settings("Schedule intervals", edit) : empty("No schedule.", "The factory lists its schedules once it runs."), { id: "gates-schedules" });
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */
 function renderWaiting(d) {
   const rows = d.asks.map((i) => askCard(i, d.now)).join("");
-  return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for You", { count: d.asks.length })}` +
-    (rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.")) + `</section>`;
+  return card("Waiting for You", rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.", "An Ask that needs you shows here."), { id: "gates-waiting", count: d.asks.length });
 }
 
 /** Each kind of Ask that Chris answered the same way 3 or more times, with a button that makes the answer the rule when it is the reason's automatic mode. */
 export function renderRepeats(d) {
-  const rows = d.repeats.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
-    (r.mode ? actButton("Make it a rule", { rule: r.reason, mode: r.mode, label: "Make it a rule" }) : "") + `</td></tr>`);
-  return card("Rule Candidates", rows.length ? pagedTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats."),
+  const rows = d.repeats.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td></tr>`);
+  const make = d.repeats.filter((r) => r.mode).map((r) => setting(r.name, actButton("Make it a rule", { rule: r.reason, mode: r.mode, label: "Make it a rule" })));
+  return card("Rule Candidates", rows.length ? pagedTable(heads(["Ask", "Answer", "Times"], ["Times"]), rows) + settings("Make a rule", make) : empty("No answer repeats.", "An Ask you answer the same way 3 times shows here."),
     { id: "gates-repeats", count: d.repeats.length, label: "Rule candidates" });
 }
 
 /** The minutes after which the factory lands an escalated Ask of a land reason that the director recommends landing; 0 waits for Chris. */
-function timeoutForm(r) {
-  const id = `timeout-${esc(r.reason)}`;
-  return `<form class="capform timeoutform" data-timeout="${esc(r.reason)}"><label for="${id}">Land after</label>` +
-    `<input id="${id}" name="minutes" type="number" min="0" step="1" inputmode="numeric" value="${esc(r.timeout)}" required> min with no answer` +
-    actButton("Save", { label: "Save" }, { type: "submit" }) +
-    `<small class="hint">${r.timeout ? "Only when the director recommends the land." : "0: waits for you."}</small></form>`;
-}
+const timeoutRow = (r) => {
+  const id = `timeout-${r.reason}`;
+  return setting(`${r.name}: land after`, inputBox("minutes", r.timeout, { id, type: "number", attrs: ' min="0" step="1" inputmode="numeric" required' }) + " min with no answer",
+    { id, save: "Save", hint: r.timeout ? "Only when the director recommends the land." : "0: waits for you.", attrs: ` data-timeout="${esc(r.reason)}"` });
+};
 
-/** One row per Ask reason: who decides it. Ask me, or the reason's one automatic mode. */
+/** One row per Ask reason: how often it fired and who decided, then a settings list of who decides it. Ask me, or the reason's one automatic mode. */
 export function renderRules(d) {
   const rows = d.rules.map((r) => {
+    const num = (n) => `<td class="num">${n}</td>`, dec = r.decided, out = r.outcome;
+    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? `<p class="quiet">${esc(r.line)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
+  }).join("");
+  const decide = d.rules.flatMap((r) => {
     const g = r.granted;
-    let control = "", hint = "";
+    let control, hint = "";
     if (r.places) {
       hint = r.places.length ? `Granted for ${r.places.join(", ")}.` : "";
-      control = `<p class="quiet note">Set per target from the proposal.</p>`;
+      control = "Set per target from the proposal.";
     } else {
       const btn = (mode, label, on) => ({ label, on, attrs: ` data-rule="${esc(r.reason)}" data-mode="${esc(mode)}"` });
       control = seg(`Who decides ${r.name}`, [btn("", "Ask me", !g), ...(r.mode ? [btn(r.mode, modeLabel(r.mode), g?.action === r.mode)] : [])]);
       if (!r.mode) hint = "The director decides first and sends the rest to you.";
       if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
     }
-    if (r.timeout !== undefined) control += timeoutForm(r);
-    const num = (n) => `<td class="num">${n}</td>`;
-    const dec = r.decided, out = r.outcome;
-    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? `<p class="quiet">${esc(r.line)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
-  }).join("");
-  return card("Rules", !rows ? empty("No rule.") : dataTable(heads(["Rule", "Who Decides", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"]), rows, { id: "rules-table" }), { id: "rules" });
+    return [setting(r.name, control, { hint }), ...(r.timeout !== undefined ? [timeoutRow(r)] : [])];
+  });
+  return card("Rules", !rows ? empty("No rule.", "A rule shows here for each kind of Ask.") : dataTable(heads(["Rule", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"], ["Fired"]), rows, { id: "rules-table" }) + settings("Who decides", decide), { id: "rules" });
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
@@ -162,7 +155,7 @@ export function renderHeld(d) {
   const repos = d.repoHeld ?? [];
   const rows = repos.length
     ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${r.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>`).join("")
-    : empty("No repo names held paths.");
+    : empty("No repo names held paths.", "Add held globs to a repo in the registry.");
   return card("Held Paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the job. A test is never held.</p>` +
     `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`, { label: "Held paths" });
 }
@@ -183,7 +176,7 @@ function contentHtml(e) {
 /** The log, newest first, filtered by `by` (an actor) from the address; `limit` rows show. A row's note opens with its button. */
 export function renderLog(d, by, limit = PAGE) {
   const pick = Object.hasOwn(BY, by ?? "") ? by : "";
-  const filter = filterBar([{ name: "by", label: "By", value: pick, options: [{ value: "", label: "all" }, ...Object.keys(BY).map((k) => ({ value: k, label: k }))] }]);
+  const filter = filterBar([{ name: "by", label: "By", value: pick, options: [{ value: "", label: "All" }, ...Object.keys(BY).map((k) => ({ value: k, label: k }))] }]);
   const entries = d.log.entries.filter((e) => !pick || e.by === pick);
   const rows = entries.slice(0, limit).map((e) => {
     const subject = e.action === "changed" && !parseId(e.subject) ? `<a href="#rules">${esc(e.subject)}</a>` : idHtml(e.subject);
@@ -191,14 +184,14 @@ export function renderLog(d, by, limit = PAGE) {
       `<td class="what">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return card("Log", filter +
-    (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")), { id: "gates-log" });
+    (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.", "Pick a longer window or clear the By filter.")), { id: "gates-log" });
 }
 
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
 export function mount(root) {
   scope().wire(root);
   root.onsubmit = async (e) => {
-    const sched = e.target.closest?.("form.schedform");
+    const sched = e.target.closest?.("form[data-schedule]");
     if (sched) {
       e.preventDefault();
       const btn = sched.querySelector("button");
@@ -208,7 +201,7 @@ export function mount(root) {
       } catch (err) { btn.disabled = false; say(btn, `Could not save the interval: ${err.message}`); return; }
       return redraw(true);
     }
-    const timed = e.target.closest?.("form.timeoutform");
+    const timed = e.target.closest?.("form[data-timeout]");
     if (timed) {
       e.preventDefault();
       const btn = timed.querySelector("button");

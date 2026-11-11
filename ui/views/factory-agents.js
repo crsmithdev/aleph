@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, heads, loadingLine, money, pageHead, pct, say, shortModel, statCard, tiles, scope } from "../lib.js";
+import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, heads, loadingLine, money, pageHead, pct, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard } from "./speed.js";
@@ -17,7 +17,7 @@ function spendCard(m, win) {
 
 /** The Backends tile: how many backends are up, with a light for the local server and one for OpenRouter. */
 function backendsCard(m) {
-  const light = (name, up) => `<span class="light"><span class="event-dot ${up == null ? "" : up ? "fine" : "alert"}"></span>${esc(name)}: ${up == null ? "–" : up ? "up" : "down"}</span>`;
+  const light = (name, up) => statusLight(up == null ? "" : up ? "fine" : "alert", `${name}: ${up == null ? "–" : up ? "up" : "down"}`);
   const local = m ? m.local === "up" : null, router = m ? !m.down.includes("deepseek-v4.1-flash") : null;
   const extra = `<span class="lights">${light("Local server", local)}${light("OpenRouter", router)}</span>`;
   if (!m) return statCard({ k: "Backends", v: "–", note: "backend state unknown", extra });
@@ -45,7 +45,7 @@ function roles(a, m) {
   // The outcome row for a config row: the one of its role and current model. A reviewer records no model, so its row is the one of its role.
   const find = (role, model) => outs.find((x) => x.role === role && (role === "reviewer" || shortModel(x.model) === shortModel(model)));
   const stats = (o) => {
-    if (!o) return `${cell(null).repeat(num.length)}<td>–</td>`;
+    if (!o) return `${cell(null).repeat(num.length)}<td>${count(null)}</td>`;
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
     return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td><td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
@@ -56,28 +56,25 @@ function roles(a, m) {
     const n = (k) => rs.reduce((x, o) => x + (o[k] ?? 0), 0), ended = n("succeeded") + n("failed") + n("stuck");
     return rs.length ? { role: "worker", runs: n("runs"), succeeded: n("succeeded"), failed: n("failed"), stuck: n("stuck"), rate: ended ? n("succeeded") / ended : null, cost: n("cost") } : null;
   };
-  const workerRow = () => {
-    const low = m.tiers["worker-low"], med = m.tiers["worker-medium"];
-    const offersLow = m.offers["worker-low"] ?? [], offersMed = m.offers["worker-medium"] ?? [];
-    const sel = (tier, t, offers, label) => `<span class="worker-tier"><input type="checkbox" data-tier="${esc(tier)}" aria-label="${label} enabled"${t?.enabled ? " checked" : ""}> <span class="quiet">${label}:</span> <select data-tier="${esc(tier)}" aria-label="${label} model">` +
-      offers.map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(shortModel(v))}</option>`).join("") + `</select></span>`;
-    return `<tr><td>Worker</td><td>${sel("worker-low", low, offersLow, "Worker low")} ${sel("worker-medium", med, offersMed, "Worker medium")}</td>${stats(allWorkers())}</tr>`;
-  };
-  const pick = ([tier, name]) => {
-    const t = m.tiers[tier];
-    const offers = m.offers[tier] ?? [];
-    return `<tr><td>${esc(name)}</td><td><select data-tier="${esc(tier)}" aria-label="${esc(name)} model">` +
-      offers.map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(shortModel(v))}</option>`).join("") + `</select></td>${stats(find(tier, t?.model))}</tr>`;
-  };
+  const model = (t) => shortModel(t?.model);
+  const workerRow = () => `<tr><td>Worker</td><td>${model(m.tiers["worker-low"])}, ${model(m.tiers["worker-medium"])}</td>${stats(allWorkers())}</tr>`;
+  const pick = ([tier, name]) => `<tr><td>${esc(name)}</td><td>${model(m.tiers[tier])}</td>${stats(find(tier, m.tiers[tier]?.model))}</tr>`;
   const tierRoles = new Set(["worker", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
   const config = m ? workerRow() + Object.entries(TIERS).map(pick).join("") : "";
   const rows = config + (m ? outs.filter((o) => !tierRoles.has(o.role)) : outs).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${o.model === "unset" ? "not recorded" : esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
-  return rows ? dataTable(heads(["Role", "Model", ...num, ""], num), rows) : empty("No agent ran in this window.");
+  return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty("No agent ran in this window.", "Pick a longer window.");
 }
 
 const timed = (a) => a.roles.filter((r) => r.hours != null);
 /** The colour of the role at index `i` of the fixed role list, so a role keeps its colour in every window. */
 const ROLE_COLORS = ["series-1", "series-2", "series-3", "series-4", "series-5", "chart-6", "chart-7"];
+
+/** The model of each tier, and whether each worker tier is on. A row applies on change. */
+function models(m) {
+  const sel = (tier, label, id) => selectBox(`${label} model`, tier, (m.offers[tier] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), m.tiers[tier]?.model, { id, attrs: ` data-tier="${esc(tier)}"` });
+  const worker = (tier, label) => setting(label, `<input type="checkbox" data-tier="${esc(tier)}" aria-label="${label} enabled"${m.tiers[tier]?.enabled ? " checked" : ""}> ` + sel(tier, label, `model-${tier}`), { id: `model-${tier}` });
+  return settings("Models", [worker("worker-low", "Worker low"), worker("worker-medium", "Worker medium"), ...Object.entries(TIERS).map(([tier, name]) => setting(name, sel(tier, name, `model-${tier}`), { id: `model-${tier}` }))]);
+}
 
 /** The live frame: agents live per point, by role. */
 export const liveFrame = (d) => ({
@@ -119,7 +116,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
   const head = scope().bar({ value: win });
   return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${tiles("Scorecard", scorecard(s, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
-    card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + `</div>`;
+    card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + (m ? card("Models", models(m), { id: "models" }) : "") + `</div>`;
 }
 
 /** The old address. */
@@ -144,7 +141,7 @@ export const view = {
     scope().wire(root);
     if (s.flow?.agents) for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(s.flow);
     root.onchange = async (e) => {
-      const b = e.target.closest?.("#roles [data-tier]");
+      const b = e.target.closest?.("#models [data-tier]");
       if (!b || e.type !== "change") return;
       const m = await postJson("/api/models", { tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => say(b, err.message));
       if (m) await redraw(true);

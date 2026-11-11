@@ -192,8 +192,8 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(h).not.toContain('data-cap="awaiting"');
   expect(h).not.toContain("Edit caps");
   for (const [reason, r] of Object.entries(ASK_REASONS)) {
-    const row = h.slice(h.indexOf(`<tr class="rule" data-reason="${reason}">`)).split("</tr>")[0];
-    const modes = [...row.matchAll(/data-mode="([^"]*)"/g)].map((m) => m[1]);
+    const row = h.split('<div class="srow">').find((x: string) => x.startsWith(`<label class="sl">${reasonText(reason).name}</label>`))!;
+    const modes = [...row.matchAll(new RegExp(`data-rule="${reason}" data-mode="([^"]*)"`, "g"))].map((m) => m[1]);
     if (reason.startsWith("proposal-")) expect(modes).toEqual([]);
     else expect(modes).toEqual(r.always ? ["", r.always] : [""]);
     if (!r.always && !reason.startsWith("proposal-")) {
@@ -209,7 +209,7 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(card).toContain("<b>r</b>");
   expect(card).toContain('<code class="chip">src/auth/**</code>');
   for (const p of SECURITY_PATHS) expect(card).toContain(`<code class="chip">${p}</code>`);
-  expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No repo names held paths.</p>');
+  expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No repo names held paths.</p><p class="hint">');
 });
 
 const entry = (by: string, action = "answered", subject = "r-1") => ({ at: ago(1), by, subject, action }) as any;
@@ -488,13 +488,16 @@ test("the body has the tick, the suite and the monitor with their last run from 
   expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d" }]);
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
   expect(h).toContain(">Schedules</h2>");
-  expect(h).toContain("<th>Schedule</th><th>Every</th><th>Last Run</th><th>Result</th>");
-  expect(h).toContain('<input type="checkbox" checked disabled aria-label="tick on"> tick');
+  expect(h).toContain(`<th>Schedule</th><th>Every</th><th>Result</th><th class="num">Last Run</th>`);
+  expect(h).not.toContain("<td><input");
+  expect(h).toContain('<form class="srow" data-schedule="tick"><label class="sl" for="every-tick">tick every</label>');
+  expect(h).not.toContain('data-schedule="monitor"');
   expect(h).toContain('value="1min"');
   expect(h.match(/has not run/g)).toHaveLength(3);
+  expect(h.indexOf("Last Run")).toBeLessThan(h.indexOf("<tbody>"));
   const tbody = h.split("<tbody>")[1].split("</tbody>")[0];
   expect(tbody.match(/<tr>/g)).toHaveLength(3);
-  expect(tbody).toContain("<td>has not run</td><td></td></tr>");
+  expect(tbody).toContain(`<td class="time">has not run</td></tr>`);
   expect(h).not.toContain("tick,has not run");
   const ran = { "suite plain": { at: ago(11), result: "green" }, "suite held": { at: ago(10), result: "green" }, monitor: { at: ago(50), result: "7 findings" } };
   writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {}, ran }));
