@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { type Entry, type Run } from "../records/ledger.ts";
 import { putRun } from "../records/record.ts";
-import { isRunning, markEnded, markStarted, processState, runHealth, STARTING_MS, stop, unitAlive } from "./process.ts";
+import { holdsWork, isRunning, markEnded, markStarted, processState, runHealth, STARTING_MS, stop, unitAlive } from "./process.ts";
 
 const NOW = Date.parse("2026-11-03T00:00:00Z");
 let base: string;
@@ -100,4 +100,13 @@ test("a running run with a dead pid is killed when it started before the boot, a
   expect(runHealth(e, NOW - 1)).toBe("lost");
   expect(runHealth({ ...e, run: { ...e.run, condition: "done" } }, NOW + 1)).toBe("lost");
   expect(runHealth(entry("r-new"), NOW + 1)).toBe("starting");
+});
+
+test("a lost director run frees its work and a live one holds it", async () => {
+  const dead = entry("r-dir", { kind: "director", on: "x1" });
+  markStarted(dead.folder, 999_999_999);
+  expect(holdsWork([dead], "director", "x1")).toBe(false);
+  const live = entry("r-dir2", { kind: "director", on: "x2" });
+  await liveIn(live.folder);
+  expect(holdsWork([live], "director", "x2")).toBe(true);
 });

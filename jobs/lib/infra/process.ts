@@ -55,9 +55,9 @@ export function runHealth(e: Entry, booted = bootedAt()): Health {
   return e.run.condition === "running" && Date.parse(e.run.started) < booted && s !== "live" && s !== "starting" ? "killed" : s;
 }
 
-/** An intake or director run of `on` that has not ended: its process holds the work, so nothing starts a second. */
+/** An intake or director run of `on` that is running and live or starting: it holds the work, so nothing starts a second. A lost or killed run frees it. */
 export const holdsWork = (runs: Entry[], kind: string, on: string): boolean =>
-  runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running");
+  runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running" && ["live", "starting"].includes(runHealth(e)));
 
 /** The run's process is live or still starting: a second run of its job must not start. */
 export const isRunning = (e: Entry): boolean => ["live", "starting"].includes(processState(e));
