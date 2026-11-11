@@ -281,6 +281,24 @@ describe("an issue that acceptance failed twice", () => {
   });
 });
 
+describe("a returned run with its rework queued", () => {
+  test("is running, not stuck, so the Herald does not call it unhealthy; one with no next stays stuck", () => {
+    run("20261027-000080-a", { job: "fac-80", name: "fac-80", condition: "returned", failed: "review", next: "worker", on: "fac-80" });
+    const names = (l: { name: string }[]) => l.map((j) => j.name);
+    // fac-3 is the fixture's only stuck job: dropping it isolates fac-80 in the status sentence.
+    const drop3 = (to: "dropped" | "open") => writeList({ key: "fac" }, `fac-3 ${to}`, (doc) => { setStatus(doc.items.find((i) => i.id === 3)!, to); return true; }, true);
+    try {
+      drop3("dropped");
+      const s = state(now);
+      expect(names(s.stuck)).not.toContain("fac-80");
+      expect(names(s.running)).toContain("fac-80");
+      expect(s.herald!.history[0].text.toLowerCase()).not.toContain("jobs are unhealthy");
+    } finally { drop3("open"); }
+    run("20261027-000081-a", { job: "fac-81", name: "fac-81", condition: "returned", reason: "a check failed", on: "fac-81" });
+    expect(names(state(now).stuck)).toContain("fac-81");
+  });
+});
+
 describe("a stuck job whose last run failed a check", () => {
   test("carries the failed check's name, so its card line can name the check", () => {
     run("20261027-000070-a", { job: "fac-70", name: "fac-70", condition: "failed", cause: "check", checkName: "tests", reason: "tests failed", started: ago(2) });
