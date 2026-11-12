@@ -45,3 +45,29 @@ done | sort -n | head -20
 ```
 
 Adjust the extension and the comment marker for the stack. The orphan sweep matches on basename, so it over-reports for common names and under-reports for re-exported ones: every hit still goes through the proof table.
+
+## Stores nothing reads
+
+A file, table or env name that code writes on a schedule and no other code reads. The dead lens owns the finding; this sweep lists the candidates as `file:line`, run at the repo root. A mention in docs, a UI file or a script counts as a reader here, so the sweep leaves those out of its list and the proof table in [DEAD.md](DEAD.md) rules on the rest.
+
+```sh
+# write-only stores: a file, table or env name that code writes and no non-test line reads
+{
+  # a file write names its store by the last string literal of its path, else by its path function
+  git grep --untracked -n -P '\b(?:writeFileSync|appendFileSync|writeFile|appendFile|Bun\.write)\(' -- '*.ts' ':!*.test.*' ':!*fixture*' |
+    perl -ne 'my ($f, $l, $t) = /^([^:]+):(\d+):(.*)$/ or next;
+      while ($t =~ /\b(?:writeFileSync|appendFileSync|writeFile|appendFile|Bun\.write)\(((?:[^(),]++|(?<p>\((?:[^()]++|(?&p))*\)))*)/g) {
+        my $a = $1; my @s = $a =~ /["\x27\x60]([^"\x27\x60\$]+)["\x27\x60]/g;
+        my ($k) = @s ? $s[-1] : grep { !/^(?:join|resolve|dirname)$/ } $a =~ /([A-Za-z_]\w*)\(/g;
+        print "$f:$l:$k\n" if defined $k }'
+  git grep --untracked -n -o -P -i '(?:INSERT (?:OR \w+ )?INTO|CREATE TABLE (?:IF NOT EXISTS )?)\s*\K\w+' -- '*.ts' ':!*.test.*' ':!*fixture*'
+  git grep --untracked -n -o -P 'process\.env\.\K\w+(?=\s*=[^=])' -- '*.ts' ':!*.test.*' ':!*fixture*'
+} | while IFS=: read -r f l k; do
+  git grep --untracked -h -w -F -e "$k" -- . ':!*.test.*' ':!*fixture*' |
+    grep -v -E 'writeFile|appendFile|Bun\.write|rmSync|unlink|mkdir|INSERT|CREATE TABLE|process\.env\.\w+ *=[^=]|^\s*import |(const|let|var|function) +'"$k"'\b' |
+    grep -q . || echo "$f:$l"
+done | sort -u
+exit 0 # stops `bash -c "$(awk ...)"` before it reads the closing fence
+```
+
+Each hit is a store with a writer and no reader anywhere outside tests: a read in the writer's own file counts. The sweep names a file by the last literal in its path (`"suite-history.jsonl"`) or, when the path has none, by its path function (`historyFile`), so it skips a write to a bare variable such as `out`; follow that variable by hand. A reader in another process, a string lookup that builds the name, or a person who reads it by hand also keep a store alive: those are the hatches in DEAD.md.

@@ -13,6 +13,11 @@ detector exists, use the grep sweep in DETECTORS.md.
 Scope by `git log`: mass accumulates where nobody has looked in a long time, so the cold files are the first
 candidates here, unlike the other lenses.
 
+A store that code writes and nothing reads is dead too: a table, column, record field, file, cache key or env
+name whose writes run on a schedule while no code, UI or runbook reads it. The code runs, so a reachability
+detector misses it. DETECTORS.md has the sweep that lists the candidates as `file:line`. A store whose only
+readers list or display it, such as an `aleph report` that prints file names, is still a candidate: T3.
+
 ## Proof
 
 A candidate is dead when every one of these is ruled out. Work the list; do not sample it.
@@ -25,6 +30,7 @@ A candidate is dead when every one of these is ruled out. Work the list; do not 
 | Public API | Exported from the package entry point. A consumer you cannot see is still a consumer |
 | String lookup | Grep the bare name, not just the symbol. Feature flags, env keys and event names hide here |
 | Docs and ops | A runbook that tells a human to call it keeps it alive until the runbook changes too |
+| Store readers | For a store: a reader in another process, the UI, a string lookup that builds the name, or a person who reads it by hand. Grep every reader of its path, its directory function and its name |
 
 Resolve every reference to the module that declares it. Two modules can export the same name, and counting the
 word then answers for the wrong one.
@@ -52,7 +58,8 @@ on.
 ## Fix
 
 Delete the whole finding in one commit per tier, lowest first: the code, its tests, its fixtures, its exports,
-its docs entry, its dependency line. A red baseline reverts the finding, marked "proof failed" with the hatch
+its docs entry, its dependency line. For a store nothing reads, delete both the write and the store: the
+table, column, field, file or key, and its migration, path function and env name. A red baseline reverts the finding, marked "proof failed" with the hatch
 you missed: that is a finding about the proof, not a reason to loosen it.
 
 ## Report
@@ -67,4 +74,5 @@ the holds table lists it as unchecked.
 
 ## Check
 
-Does a new export, file or dependency have a caller? Does the change leave something without one?
+Does a new export, file or dependency have a caller? Does the change leave something without one? Does each new
+store (table, column, field, file, cache key, env name) have a reader?

@@ -32,7 +32,7 @@ they exist: they name owners and settled decisions. Read `.refit.json` at the re
 | **depth** | Does this module earn its interface? | [DEPTH.md](DEPTH.md) |
 | **seams** | Does code reach past a module's interface? | [SEAMS.md](SEAMS.md) |
 | **slop** | Is this code bigger than its job? | [SLOP.md](SLOP.md) |
-| **dead** | Does this code run at all? | [DEAD.md](DEAD.md) |
+| **dead** | Does this code run at all, and does anything read what it writes? | [DEAD.md](DEAD.md) |
 | **waste** | Does this code do work it does not need? | [WASTE.md](WASTE.md) |
 | **layout** | Are files and directories where a reader looks for them? | [LAYOUT.md](LAYOUT.md) |
 
@@ -110,6 +110,7 @@ tool.
 | slop | An impossible fallback or a needless assertion | unchecked | typescript-eslint, not yet wired |
 | slop | An empty or swallowing `catch`, an `any` | unchecked | a shrink-only ratchet, not yet wired |
 | dead | An export or file nothing uses | unchecked | knip, not yet wired |
+| dead | A new store with a writer and no reader | model | `check` |
 | waste | A path a user or test waits on grows slower | unchecked | a timing test with a ceiling, not yet wired |
 | depth | A one-line pass-through | model | `check` |
 | layout | A new file outside the directory of its callers and kind | model | `check` |
