@@ -45,27 +45,25 @@ function homeSections(notes: Note[], keep: (n: Note) => boolean, project: string
   return project ? sections.filter((s) => s.entries.length) : sections;
 }
 
-/** The last 20 lines the vault's CLI appended to its daily notes, newest first; `at` is the line's local time as ISO UTC. */
-function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, project: string | null) {
+/** Every line the vault's CLI appended to its daily notes, newest first; `at` is the line's local time as ISO UTC. */
+function opLines(root: string) {
   const dir = join(root, "daily");
   if (!existsSync(dir)) return [];
-  const targets = linkTargets(notes);
-  const out: { at: string; text: string }[] = [];
-  for (const f of readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort().reverse()) {
-    const lines = readFileSync(join(dir, f), "utf8").split("\n").reverse();
-    for (const l of lines) {
+  return readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort().reverse().flatMap((f) =>
+    readFileSync(join(dir, f), "utf8").split("\n").reverse().flatMap((l) => {
       const m = /^- (\d{2}:\d{2}) (.*)$/.exec(l);
-      if (!m) continue;
-      if (project) {
-        const t = links(m[2])[0];
-        const hit = t ? targets.get(t.toLowerCase()) : undefined;
-        if (!hit || !keep(hit)) continue;
-      }
-      out.push({ at: new Date(`${f.slice(0, 10)}T${m[1]}`).toISOString(), text: m[2] });
-      if (out.length === 20) return out;
-    }
-  }
-  return out;
+      return m ? [{ at: new Date(`${f.slice(0, 10)}T${m[1]}`).toISOString(), text: m[2] }] : [];
+    }));
+}
+
+/** The last 20 op lines, newest first. Lines about a note outside the project's scope are dropped. */
+function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, project: string | null) {
+  const targets = linkTargets(notes);
+  return opLines(root).filter((l) => {
+    if (!project) return true;
+    const t = links(l.text)[0], hit = t ? targets.get(t.toLowerCase()) : undefined;
+    return hit && keep(hit);
+  }).slice(0, 20);
 }
 
 /** `vault misses --days 7`'s JSON, or null when it fails (no Langfuse keys, offline). It runs in a subprocess that reads
@@ -147,6 +145,45 @@ async function overview(url: URL): Promise<Response> {
   const m = await slow;
   if (m) body.misses = m;
   return json(body);
+}
+
+const LOG_DAYS = 30;
+/** One recall event per call: the recall log appends a call's titles in a row, in rank order, so a run of lines with one day and query is one call. */
+function recallEvents(root: string, since: string) {
+  const out: { date: string; query: string; titles: string[] }[] = [];
+  let lines: string[] = [];
+  try { lines = readFileSync(join(root, ".recall-log.jsonl"), "utf8").split("\n"); } catch { /* no log yet */ }
+  for (const l of lines) {
+    try {
+      const e = JSON.parse(l);
+      if (e.date < since) continue;
+      const last = out.at(-1);
+      if (last && last.date === e.date && last.query === e.query && !last.titles.includes(e.title)) last.titles.push(e.title);
+      else out.push({ date: e.date, query: e.query, titles: [e.title] });
+    } catch { /* a bad line is skipped */ }
+  }
+  return out;
+}
+
+/** `GET /api/memory/log`: the last 30 days of writes (daily op lines), recalls (recall log) and misses (`vault misses`), newest first. */
+async function log(url: URL): Promise<Response> {
+  const slow = misses();
+  const project = projectOf(url), root = vaultDir(), keep = inScope(project);
+  const all = await allNotes(root), targets = linkTargets(all);
+  const since = today(new Date(Date.now() - LOG_DAYS * 86400_000));
+  const mine = (title: string) => { const hit = targets.get(title.toLowerCase()); return !project || (!!hit && keep(hit)); };
+  const rows: { at: string; kind: string; op: string; note: string; why: string; titles: string[] }[] = [];
+  for (const l of opLines(root)) {
+    const m = /^(write|update|supersede|archive|adopt) \[\[([^\]]+)\]\]\s*(.*)$/.exec(l.text);
+    if (l.at.slice(0, 10) >= since && m && mine(m[2])) rows.push({ at: l.at, kind: "write", op: m[1], note: m[2], why: m[3].replace(/\[\[|\]\]/g, "").replace(/^[—–-]\s*/, ""), titles: [] });
+  }
+  for (const e of recallEvents(root, since)) {
+    const titles = e.titles.filter(mine);
+    if (titles.length) rows.push({ at: e.date, kind: "recall", op: "recall", note: titles[0], why: e.query, titles });
+  }
+  const m: any = await slow;
+  for (const x of m?.missed ?? []) rows.push({ at: x.at, kind: "miss", op: "miss", note: "", why: x.query, titles: [] });
+  return json({ project, rows: rows.sort((a, b) => b.at.localeCompare(a.at)) });
 }
 
 /** The vault's notes, or none when it has no Home.md. */
@@ -265,6 +302,7 @@ const deleteFile: Post = async ({ source, key }) => {
 
 export const routes: Routes = {
   "GET /api/memory": (_req, _p, url) => overview(url),
+  "GET /api/memory/log": (_req, _p, url) => log(url),
   "GET /api/memory/search": (_req, _p, url) => search(url),
   "GET /api/memory/notes/:title": (_req, { title }, url) => note(title, url),
   "GET /api/memory/files/:source/:key": (_req, { source, key }) => file(source, key),

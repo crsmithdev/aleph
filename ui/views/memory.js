@@ -5,7 +5,7 @@
 import { get } from "../router.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel } from "../timeline.js";
-import { actButton, badge, bytes, count, fold, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, miss, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { actButton, badge, bytes, count, fold, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, goQuery, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, miss, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tag, tiles, when, scope } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -13,10 +13,10 @@ export const view = {
   icon: "brain",
   group: "claude",
   order: 1,
-  api: (_params, q = new URLSearchParams()) => scope(q).url("/api/memory"),
+  api: (_params, q = new URLSearchParams()) => scope(q).url(q.get("tab") === "log" ? "/api/memory/log" : "/api/memory"),
   live: true,
-  render: (m, _params, query) => renderMemory(m, options(query)),
-  mount: (root, m) => mount(root, m),
+  render: (m, _params, query) => (query?.get("tab") === "log" ? renderLog(m, options(query)) : renderMemory(m, options(query))),
+  mount: (root, m, query) => (query?.get("tab") === "log" ? mountLog(root) : mount(root, m)),
 };
 
 const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
@@ -52,7 +52,7 @@ const FRESH = [{ value: "", label: "Any" }, { value: "use", label: "Read in 7 da
 
 /** The page's state from the route's query: ?q=text&type=semantic&fresh=never&item=note:Title. */
 export function options(qs = new URLSearchParams()) {
-  return { q: qs.get("q") ?? "", type: qs.get("type") ?? "", fresh: qs.get("fresh") ?? "", item: qs.get("item") ?? "" };
+  return { q: qs.get("q") ?? "", type: qs.get("type") ?? "", fresh: qs.get("fresh") ?? "", item: qs.get("item") ?? "", kind: qs.get("kind") ?? "" };
 }
 
 export const idOf = (it) => `${it.source}:${it.key}`;
@@ -226,10 +226,52 @@ function renderBroad(m, rows) {
 
 const freshBar = (o) => filterBar([{ label: "Freshness", name: "fresh", value: o.fresh, options: FRESH }]);
 
+/** The views of the page: Search and Log are routes (`?tab=`); Context and Processes are not built, so they are not links. */
+export function renderTabs(on, project = "") {
+  const href = (tab) => { const p = new URLSearchParams(); if (tab) p.set("tab", tab); if (project) p.set("project", project); return `#/memory${p.size ? `?${p}` : ""}`; };
+  const t = ([id, label]) => (id === "context" || id === "processes"
+    ? `<span class="soon" aria-disabled="true" title="Not built">${label}</span>`
+    : `<a href="${href(id)}"${id === on ? ' aria-current="page"' : ""}>${label}</a>`);
+  return `<nav class="vtabs" aria-label="Memory views">${[["", "Search"], ["context", "Context"], ["log", "Log"], ["processes", "Processes"]].map(t).join("")}</nav>`;
+}
+
+const TONE = { write: "done", recall: "run", miss: "need" };
+const KINDS = [{ value: "", label: "All" }, { value: "write", label: "Writes" }, { value: "recall", label: "Recalls" }, { value: "miss", label: "Misses" }];
+/** The `when` of a log row: a time for a write or a miss, the day for a recall (the recall log keeps no time). */
+const logTime = (at) => (at.length > 10 ? when(at) : shortDay(at));
+
+/** One event of the log. A recall's query opens to the notes it returned, in rank order. */
+export function logRow(r) {
+  const why = r.kind === "recall"
+    ? `<details><summary>${esc(r.why)}</summary><ol>${r.titles.map((t) => `<li>${link(t)}</li>`).join("")}</ol></details>`
+    : esc(r.why);
+  return `<tr><td class="time">${esc(logTime(r.at))}</td><td>${tag(r.op, TONE[r.kind])}</td>` +
+    `<td>${r.note ? link(r.note) : q("none")}${r.titles.length > 1 ? ` ${q(`+${r.titles.length - 1}`)}` : ""}</td><td class="wide">${why}</td></tr>`;
+}
+
+/** The Log tab: every write, recall and miss of the last 30 days, newest first, 50 to a page. */
+export function renderLog(m, o = options()) {
+  const rows = m.rows.filter((r) => !o.kind || r.kind === o.kind);
+  return `<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: m.project ?? "" }) })}${renderTabs("log", m.project ?? "")}` +
+    `<div id="log-kind" data-ui="log-filter">${filterBar([{ label: "Kind", name: "kind", value: o.kind, options: KINDS }])}</div>` +
+    `<div id="log-rows">${logRows(rows)}</div></div>`;
+}
+const logRows = (rows) => rows.length
+  ? pagedTable(heads(["Time", "Kind", "Note", "Why or Query"]), rows.map(logRow), STEP)
+  : empty("No events.", "Writes, recalls and misses of the last 30 days show here.");
+
+function mountLog(root) {
+  scope().wire(root);
+  root.onclick = (e) => {
+    const b = e.target.closest?.("#log-kind .seg button");
+    if (b) goQuery({ kind: b.dataset.value });
+  };
+}
+
 export function renderMemory(m, o = options(), results = null) {
   const status = new Map(noteRows(m).map((n) => [n.title, n.status]));
   const titles = `<datalist id="mem-titles">${(m.notes ?? []).map((n) => `<option value="${esc(n.title)}">`).join("")}</datalist>`;
-  return `<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: m.project ?? "", more: m.scopes }) })}` +
+  return `<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: m.project ?? "", more: m.scopes }) })}${renderTabs("", m.project ?? "")}` +
     `<div id="mem-board">${renderTiles(typeCounts(results ?? [], o, status), o, results !== null)}</div>` +
     `<div class="msearch">${searchBox("mem-search", o.q, "Search every kind of memory")}</div>` +
     `<div id="mem-fresh" data-ui="mem-filter">${freshBar(o)}</div>` +

@@ -443,3 +443,34 @@ test("the inspector says how a memory reaches the agent, shows its recall histor
   expect(v.renderInspector(it({ title: "<x>" }))).toContain("&lt;x&gt;");
   expect(v.renderInspector(null)).toContain("Select a memory");
 });
+
+test("/api/memory/log lists writes and recalls newest first, one recall per call, and honours the project", async () => {
+  const root = join(base, "vault"), log = join(root, ".recall-log.jsonl"), daily = join(root, "daily", "2026-11-03.md");
+  writeFileSync(daily, "# d\n\n- 09:00 supersede [[Use Bun]] → [[Other trap]]\n- 09:10 build abc — not a note\n");
+  writeFileSync(log, [["Use Bun", "q1"], ["Other trap", "q1"], ["Use Bun", "q2"]].map(([title, query]) => JSON.stringify({ date: "2026-11-03", title, query })).join("\n") + "\n");
+  await fresh();
+  try {
+    const m = await (await at("/api/memory/log")).json() as any;
+    expect(m.rows.map((r: any) => [r.kind, r.op, r.note, r.why, r.titles])).toEqual([
+      ["write", "write", "Other trap", "why", []], ["write", "write", "Use Bun", "why", []],
+      ["write", "supersede", "Use Bun", "→ Other trap", []],
+      ["recall", "recall", "Use Bun", "q1", ["Use Bun", "Other trap"]], ["recall", "recall", "Use Bun", "q2", ["Use Bun"]],
+    ]);
+    const mine = await (await at("/api/memory/log?project=other")).json() as any;
+    expect(mine.rows.map((r: any) => [r.op, r.titles])).toEqual([["write", []], ["recall", ["Other trap"]]]);
+  } finally { rmSync(log, { force: true }); rmSync(daily, { force: true }); await fresh(); }
+});
+
+test("the tabs link Search and Log, and leave Context and Processes unbuilt; the log row opens a recall to its notes", () => {
+  const h = v.renderTabs("log", "aleph");
+  expect(h).toContain('<a href="#/memory?project=aleph">Search</a>');
+  expect(h).toContain('<a href="#/memory?tab=log&project=aleph" aria-current="page">Log</a>');
+  expect(h).toContain('<span class="soon" aria-disabled="true" title="Not built">Context</span>');
+  expect(v.renderMemory(page)).toContain('<nav class="vtabs"');
+  const r = { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: ["A", "B"] };
+  expect(v.logRow(r)).toContain('<details><summary>q</summary><ol><li><a href="#/memory/A">A</a></li><li><a href="#/memory/B">B</a></li></ol></details>');
+  expect(v.logRow(r)).toContain("+1");
+  const rows = [r, { ...r, kind: "miss", op: "miss", note: "", titles: [] }];
+  expect(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss")))).not.toContain("<details>");
+  expect(v.renderLog({ project: "", rows: [] })).toContain("No events.");
+});

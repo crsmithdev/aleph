@@ -807,6 +807,13 @@ form.stack textarea, form.stack input:not([type="checkbox"]), .field textarea, .
 .srow .sctl input, .srow .sctl select { min-height: var(--ctl-h); }
 .srow .hint { grid-column: 2; margin: 0; font-size: var(--fs-xs); color: var(--muted); }
 .tabs > .seg { margin-bottom: var(--sp-12); }
+.vtabs { display: flex; flex-wrap: wrap; gap: var(--sp-24); border-bottom: 1px solid var(--rule); margin-bottom: var(--sp-16); font-size: var(--fs-sm); }
+.vtabs a, .vtabs .soon { padding: var(--sp-8) var(--sp-4); color: var(--muted); border-bottom: 2px solid transparent; text-decoration: none; margin-bottom: -1px; }
+.vtabs a:hover { color: var(--ink); }
+.vtabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: var(--fw-strong); }
+.vtabs .soon { opacity: var(--dim); cursor: not-allowed; }
+.memory td details ol { margin: var(--sp-6) 0 0; padding-left: var(--sp-20); white-space: normal; }
+.memory td summary { cursor: pointer; white-space: normal; }
 @media (max-width: 720px) { .srow { grid-template-columns: minmax(0, 1fr); } .srow .hint { grid-column: 1; } }
 form.stack > button { justify-self: start; }
 .issue-page .edit-only input, .issue-page .edit-only select { min-height: var(--ctl-h); }

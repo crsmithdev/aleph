@@ -40,7 +40,7 @@ const SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 60_000;
 export const KEYED = new Set([
   "/api/factory", "/api/flow", "/api/automation", "/api/issues", "/api/issues/:id", "/api/issues/:id/jobs", "/api/jobs", "/api/jobs/:id",
   "/api/sessions", "/api/skills/:name", "/api/sessions/:id", "/api/sessions/:id/chat", "/api/sessions/:id/turns/:n",
-  "/api/memory", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key",
+  "/api/memory", "/api/memory/log", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key",
 ]);
 
 /** The key of a request: its path and its non-empty query parameters, sorted. */

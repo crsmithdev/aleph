@@ -76,6 +76,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     project: "string?", exists: "boolean", total: "number", byKind: { "*": "number" }, byScope: { "*": "number" }, scopes: ["string"], home: "array",
     lint: "object", writes: "array", notes: "array", start: "object", "misses?": "any", "cachedAt?": "time",
   },
+  "/api/memory/log": { project: "string?", rows: [{ at: "string", kind: "string", op: "string", note: "string", why: "string", titles: ["string"] }] },
   "/api/memory/search": { q: "string", results: [{ type: "string", source: "string", key: "string", title: "string" }] },
   "/api/memory/notes/:title": "object",
   "/api/memory/files/:source/:key": "text",
