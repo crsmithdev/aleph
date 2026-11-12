@@ -29,7 +29,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/automation": {
     now: "time", capEnv: { "*": "boolean" }, settings: { "*": "number?" }, metrics: { days: "number", rate: "object?", catches: "object", held: "object" },
     schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", gated: "object?", baseline: "array", rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
-    repeats: [{ reason: "string", name: "string", answer: "string" }], held: ["string"], repoHeld: "array", log: { days: "number", max: "number", entries: "array" },
+    held: ["string"], repoHeld: "array", log: { days: "number", max: "number", entries: "array" },
   },
   "/api/flow": {
     window: "string", done: "number", kinds: "object", phases: "object", asks: { count: "number", manual: "number" }, checks: "array",
@@ -54,7 +54,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   },
   "/api/jobs/:id/diff": "text",
   "/api/jobs/:id/logs/:file": "text",
-  "/api/projects": { "*": "string?" },
+  "/api/projects": { "*": { code: "string?", issues: "number", onboarded: "boolean" } },
   "/api/models": { tiers: { "*": { enabled: "boolean", model: "string" } }, offers: { "*": ["string"] }, down: ["string"], local: "string", spend: "object?" },
   "/api/sessions": {
     window: "number", project: "string?", partial: "boolean", activity: { days: ["string"], langfuse: "string", tools: "array", hooks: "array" },

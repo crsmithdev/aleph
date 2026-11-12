@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, setting, settings, goQuery, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
@@ -37,13 +37,13 @@ export const BY = Object.fromEntries(["human", "rule", "director", "firefighter"
 
 const PAGE = 50;
 
-const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"], ["gates-waiting", "Waiting for the User"], ["gates-repeats", "Rule Candidates"],
+const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"], ["gates-waiting", "Waiting for the User"],
   ["rules", "Rules"], ["gates-caps", "Controls"], ["gates-held", "Held Paths"], ["gates-log", "Log"]];
 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { aside: scope(q).bar() })}` + toc(CONTENTS,
-    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
-    `<div class="pair">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
+    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRules(d) +
+    renderCaps(d) + renderHeld(d) + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
 }
 
 /** The environment variable that overrides each key of caps.json, as jobs/lib/infra/settings.ts names it. */
@@ -61,7 +61,6 @@ export function renderNow(d) {
   const tilesHtml = [
     statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without the user", "asks"] } : { note: "no Ask decided" }) }),
     statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed later"] }),
-    statCard({ k: "Rule candidates", v: count(d.repeats.length), note: "Asks answered the same way 3+ times" }),
     statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["in a hold", "issues"] }),
   ].join("");
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
@@ -97,28 +96,28 @@ export function renderMonitor(d) {
   return card("Monitor", fold(summary, body), { id: "monitor" });
 }
 
+/** An interval as systemd writes it ("30s", "1min", "2h") split into a number and its unit, or null for any other form. */
+const UNITS = [["s", "seconds"], ["min", "minutes"], ["h", "hours"]];
+const splitEvery = (every) => { const m = /^([1-9]\d*)(s|min|h)$/.exec(every ?? ""); return m ? { n: m[1], unit: m[2] } : null; };
+
+/** The Every cell of a schedule with a timer: a number and a unit, locked until Edit opens them, then Save posts them. */
+function everyForm(s) {
+  const v = splitEvery(s.every) ?? { n: "", unit: "min" }, id = `every-${s.name}`;
+  return `<form class="every" data-schedule="${esc(s.name)}">${inputBox("n", v.n, { id, type: "number", attrs: ` min="1" step="1" inputmode="numeric" required disabled aria-label="${esc(s.name)} every"` })}` +
+    selectBox(`${s.name} unit`, "unit", UNITS.map(([value, label]) => ({ value, label })), v.unit, { attrs: " disabled" }) +
+    `<button type="button" class="act" data-edit>Edit</button></form>`;
+}
+
 /** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran. The monitor runs in the tick, once a day, so only the other two have an interval to edit. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${esc(s.every)}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
-  const edit = d.schedules.filter((s) => s.name !== "monitor").map((s) => {
-    const id = `every-${s.name}`;
-    return setting(`${s.name} every`, inputBox("every", s.every ?? "", { id, attrs: ' pattern="[1-9][0-9]*(s|min|h)" required' }), { id, save: "Save", hint: "A number and s, min or h, such as 30s.", attrs: ` data-schedule="${esc(s.name)}"` });
-  });
-  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) + settings("Schedule intervals", edit) : empty("No schedule.", "The factory lists its schedules once it runs."), { id: "gates-schedules" });
+  const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${s.name === "monitor" ? esc(s.every) : everyForm(s)}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
+  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) : empty("No schedule.", "The factory lists its schedules once it runs."), { id: "gates-schedules" });
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */
 function renderWaiting(d) {
   const rows = d.asks.map((i) => askCard(i, d.now)).join("");
   return card("Waiting for the User", rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for the user.", "An Ask that needs the user shows here."), { id: "gates-waiting", count: d.asks.length });
-}
-
-/** Each kind of Ask that Chris answered the same way 3 or more times, with a button that makes the answer the rule when it is the reason's automatic mode. */
-export function renderRepeats(d) {
-  const rows = d.repeats.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td></tr>`);
-  const make = d.repeats.filter((r) => r.mode).map((r) => setting(r.name, actButton("Make it a rule", { rule: r.reason, mode: r.mode, label: "Make it a rule" })));
-  return card("Rule Candidates", rows.length ? pagedTable(heads(["Ask", "Answer", "Times"], ["Times"]), rows) + settings("Make a rule", make) : empty("No answer repeats.", "An Ask answered the same way 3 times shows here."),
-    { id: "gates-repeats", count: d.repeats.length, label: "Rule candidates" });
 }
 
 /** The minutes after which the factory lands an escalated Ask of a land reason that the director recommends landing; 0 waits for Chris. */
@@ -190,7 +189,7 @@ export function renderLog(d, by, page = 1) {
 
 /** What each settings form posts, by its `data-` key: the URL, the body and the word for an error line. */
 const SAVES = {
-  schedule: (f) => ["/api/automation/schedules", { name: f.dataset.schedule, every: f.elements.every.value.trim() }, "interval"],
+  schedule: (f) => ["/api/automation/schedules", { name: f.dataset.schedule, every: `${f.elements.n.value}${f.elements.unit.value}` }, "interval"],
   timeout: (f) => [`/api/automation/rules/${encodeURIComponent(f.dataset.timeout)}/timeout`, { minutes: Number(f.elements.minutes.value) }, "timeout"],
   cap: (f) => ["/api/automation/caps", { [f.dataset.cap]: Number(f.elements[f.dataset.cap].value) }, "cap"],
 };
@@ -211,6 +210,17 @@ export function mount(root) {
     await redraw(true);
   };
   root.onclick = async (e) => {
+    // The first click unlocks the row's interval and turns Edit into Save; the next submits it.
+    const edit = e.target.closest?.("form.every button");
+    if (edit) {
+      const f = edit.form;
+      if (f.elements.n.disabled) {
+        for (const el of f.elements) el.disabled = false;
+        edit.textContent = "Save";
+        return f.elements.n.focus();
+      }
+      return f.requestSubmit();
+    }
     const seg = e.target.closest?.("#gates-log .seg button");
     if (seg) return goQuery({ by: seg.dataset.value, page: "" });
     const turn = e.target.closest?.("#gates-log button[data-page]");

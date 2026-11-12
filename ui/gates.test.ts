@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
-import { LOG_MAX, gatesBody, log, metrics, repeats, rules, securityFacts } from "./api/gates.ts";
+import { LOG_MAX, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
 import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
@@ -75,7 +75,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(await securityFacts
 
 test("the body of /api/automation has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "capEnv", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules", "settings"]);
+  expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "capEnv", "gated", "held", "log", "metrics", "monitor", "now", "repoHeld", "rules", "schedules", "settings"]);
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
@@ -169,7 +169,6 @@ const data = () => ({
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
-  repeats: [],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
@@ -182,7 +181,7 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
   const tiles = [...h.matchAll(/<div class="tile sc"><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
-  expect(tiles).toEqual(["Automation rate", "Gate catches", "Rule candidates", "Held time"]);
+  expect(tiles).toEqual(["Automation rate", "Gate catches", "Held time"]);
   expect(h).toContain('<section class="tiles" aria-label="Metrics">');
   expect(h).not.toContain("gtile");
   expect(h).not.toContain("gt-head");
@@ -320,11 +319,10 @@ test("POST /api/automation/caps refuses a missing header with 403 and bad values
 test("the Gates page says the user, never you, your or Chris, in its visible text", () => {
   const d = data();
   const text = (h: string) => h.replace(/<[^>]*>/g, " ");
-  const h = gates.renderGates({ ...d, asks: [], repeats: [] });
+  const h = gates.renderGates({ ...d, asks: [] });
   expect(h).toContain(">Waiting for the User</h2>");
   expect(h).toContain("Nothing waits for the user.");
   expect(h).toContain("An Ask that needs the user shows here.");
-  expect(h).toContain("An Ask answered the same way 3 times shows here.");
   expect(gates.renderGates(d)).toContain("decided without the user");
   expect(h).toContain("wait for the user after the reviewer passes the job");
   expect(text(h)).not.toMatch(/\b(you|your|Chris)\b/i);
@@ -400,7 +398,7 @@ test("the view is Automation at #/automation in the Factory group; #/gates redir
   expect(gates.redirect("#/automation")).toBeNull();
 });
 
-test("the Automation page has no explaining aside; the controls panel holds the cap forms and no Pause button, before Held paths in one row", () => {
+test("the Automation page has no explaining aside; the controls panel holds the cap forms and no Pause button, before Held paths, each full width", () => {
   for (const paused of [false, true]) {
     const h = gates.renderGates({ ...data(), gated: null, factory: { ...data().factory, paused } });
     const head = h.slice(h.indexOf('<header class="ph">'), h.indexOf("</header>"));
@@ -413,9 +411,8 @@ test("the Automation page has no explaining aside; the controls panel holds the 
     expect(panel).toContain('data-cap="live"');
     expect(panel).toContain('data-cap="run"');
     expect(h).not.toContain("gates-two");
-    const row = h.slice(h.indexOf('<div class="pair">'));
-    expect(row.indexOf('id="gates-caps"')).toBeGreaterThan(0);
-    expect(row.indexOf('id="gates-caps"')).toBeLessThan(row.indexOf('aria-label="Held paths"'));
+    expect(h).not.toContain('<div class="pair">');
+    expect(h.indexOf('id="gates-caps"')).toBeLessThan(h.indexOf('id="gates-held"'));
   }
   const h = gates.renderGates(data());
   for (const t of ["What can stop, hold or ask", "Every goal passes these in order", "Who decides each kind of Ask"]) expect(h).not.toContain(t);
@@ -532,9 +529,12 @@ test("the body has the tick, the suite and the monitor with their last run from 
   expect(h).toContain(`<th>Schedule</th><th>Every</th><th>Result</th><th class="num">Last Run</th>`);
   expect(h).toContain('<td class="wide" title="tick">tick</td>');
   expect(h).not.toContain("<td><input");
-  expect(h).toContain('<form class="srow" data-schedule="tick"><label class="sl" for="every-tick">tick every</label>');
+  // The interval sits in its row: a locked number and unit with an Edit button, and none for the monitor.
+  expect(h).toMatch(/<form class="every" data-schedule="tick"><input name="n" type="number" id="every-tick" value="1"[^>]* disabled[^>]*><select name="unit"[^>]* disabled><option value="s">seconds<\/option><option value="min" selected>minutes/);
+  expect(h).toContain('<button type="button" class="act" data-edit>Edit</button></form>');
+  expect(h).toMatch(/data-schedule="suite"><input[^>]*value="1"[^>]*>.*<option value="h" selected>hours/);
   expect(h).not.toContain('data-schedule="monitor"');
-  expect(h).toContain('value="1min"');
+  expect(h).toContain("<td>1d</td>");
   expect(h).not.toContain("has not run");
   expect(h.indexOf("Last Run")).toBeLessThan(h.indexOf("<tbody>"));
   const tbody = h.split("<tbody>")[1].split("</tbody>")[0];
@@ -557,27 +557,11 @@ test("the body has the tick, the suite and the monitor with their last run from 
   }
 });
 
-test("repeats() lists the answers that Chris gave 3 times to one Ask reason; renderRepeats and the tile show them, the button carries the reason and the mode", () => {
-  const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
-  const rec = (n: number, reason: string): any => ({ issue: `x-${n}`, asks: [{ set: at(n * 10), cleared: at(n * 10 + 1), reason }], runs: [], events: [] });
-  const records = [1, 2, 3].map((n) => rec(n, "intake-failed")).concat([4, 5].map((n) => rec(n, "question")));
-  const entries: any[] = [1, 2, 3, 4, 5].map((n) => ({ at: at(n * 10), by: "human", subject: `x-${n}`, action: n < 4 ? "reran" : "answered", note: n < 4 ? "Chris: run intake again" : `Chris decided: My recommendation is plan ${n}.` }));
-  const r = repeats(entries, records, NOW + 3600_000);
-  expect(r).toEqual([{ reason: "intake-failed", answer: "retry", count: 3, name: "Failed intake", mode: "retry" }]);
-  const rescue = [6, 7, 8].map((n) => rec(n, "rescue"));
-  const approved = [6, 7, 8].map((n) => ({ at: at(n * 10), by: "human", subject: `x-${n}`, action: "answered", note: `Chris decided: My recommendation is fix ${n}.` }));
-  expect(repeats(approved as any, rescue, NOW + 3600_000)).toEqual([{ reason: "rescue", answer: "recommended", count: 3, name: "Rescue of a stuck job", mode: "recommended" }]);
-  const d = { ...data(), repeats: r };
-  const h = gates.renderRepeats(d);
-  expect(h).toContain(">Rule Candidates</h2>");
-  expect(h).toMatch(/<button[^>]*data-rule="intake-failed"[^>]*data-mode="retry"/);
+test("renderNow shows a dash, not undefined or NaN, with no rate and no held time", () => {
+  const d = data();
   const bare = gates.renderNow({ ...d, metrics: { ...d.metrics, rate: null, held: undefined } });
   expect(bare).not.toMatch(/undefined|NaN/);
   expect(bare).toContain("<b>–</b>");
-  expect(gates.renderNow(d)).toMatch(/Rule candidates<\/span><\/span><b>1<\/b>/);
-  const none = gates.renderRepeats(data());
-  expect(none).toContain("No answer repeats.");
-  expect(none).not.toContain("<button");
 });
 
 test("GET /api/automation takes window and project: the log and the metrics keep that window and that repo; no parameter keeps 7 days of every repo; a bad window is 400", async () => {
@@ -623,9 +607,9 @@ test("the Held time card reads hours() and the Automation rate reads pct()", () 
   expect(h).toContain(`<b>${pct(12.5)}<em>`);
 });
 
-test("Monitor, Schedules, Rule Candidates, Rules and Log are each a card that keeps its id", async () => {
-  const d = { ...(await body()), repeats: [], rules: [], log: { entries: [] } } as any;
-  const h = { monitor: gates.renderMonitor(d), "gates-schedules": gates.renderSchedules(d), "gates-repeats": gates.renderRepeats(d), rules: gates.renderRules(d), "gates-log": gates.renderLog(d) };
+test("Monitor, Schedules, Rules and Log are each a card that keeps its id", async () => {
+  const d = { ...(await body()), rules: [], log: { entries: [] } } as any;
+  const h = { monitor: gates.renderMonitor(d), "gates-schedules": gates.renderSchedules(d), rules: gates.renderRules(d), "gates-log": gates.renderLog(d) };
   for (const [id, html] of Object.entries(h)) {
     expect(html).toStartWith('<section class="card"');
     expect(html).toContain(`id="${id}"`);
@@ -640,13 +624,11 @@ test("Monitor, Schedules, Rule Candidates, Rules and Log are each a card that ke
   }
 });
 
-test("Schedules, Repeat Answers, Rules and Log show empty() with no rows; Repeat Answers and Log page at 50", () => {
+test("Schedules, Rules and Log show empty() with no rows; the Log pages at 50", () => {
   expect(gates.renderLog({ log: { entries: [] } } as any)).toContain('class="empty"');
   expect(gates.renderLog({ log: { entries: Array.from({ length: 51 }, (_, i) => ({ at: new Date(NOW - i * 1000).toISOString(), by: "rule", subject: "x-1", action: "reran", note: `t${i}` })) } } as any)).toContain("50 of 51");
   expect(gates.renderSchedules({ schedules: [] })).toContain('class="empty"');
   expect(gates.renderRules({ rules: [] })).toContain('class="empty"');
-  expect(gates.renderRepeats({ repeats: [] })).toContain('class="empty"');
-  expect(gates.renderRepeats({ repeats: Array.from({ length: 51 }, (_, i) => ({ reason: `r${i}`, answer: "a", count: 3 })) })).toContain("50 of 51");
 });
 
 test("POST /api/automation/schedules writes a drop-in that keeps the boot and startup triggers, reloads systemd and restarts the timer; a bad interval or name is 422", async () => {

@@ -72,32 +72,6 @@ export function rules(entries: LogEntry[] = [], records = record.all(), now = Da
   });
 }
 
-/** The action of each answer note that the UI writes (ui/api/issues.ts): `retriage`, `rerun` and the approved recommendation of a prose question. */
-const ANSWERS: [RegExp, string][] = [[/^Chris: run intake again$/, "retry"], [/^Chris: run it again$/, "rerun"], [/^Chris decided: My recommendation\b/i, "recommended"]];
-
-/**
- * The answers that Chris gave 3 or more times to one Ask reason, in the window: his log entry inside an Ask's span on the same issue.
- * The answer is the action its note names (ANSWERS), else the note without `Chris: ` or `Chris decided: `.
- * `mode` is the answer when it is the reason's automatic mode, else "": only then can the answer become the rule.
- */
-export function repeats(entries: LogEntry[], records = record.all(), now = Date.now(), ms = LOG_DAYS * DAY) {
-  const from = now - ms, SLACK = 60_000;
-  const counts = new Map<string, { reason: string; answer: string; count: number }>();
-  for (const rec of records) for (const a of rec.asks ?? []) {
-    if (!a.reason || !a.cleared || Date.parse(a.set) < from) continue;
-    const lo = Date.parse(a.set), hi = Date.parse(a.cleared) + SLACK;
-    const e = entries.find((x) => answer(x) && x.subject === rec.issue && Date.parse(x.at) >= lo && Date.parse(x.at) <= hi);
-    if (!e) continue;
-    const note = e.note ?? "";
-    const said = ANSWERS.find(([re]) => re.test(note))?.[1] ?? note.replace(/^Chris(?: decided)?: /, "");
-    const k = `${a.reason}\n${said}`;
-    const c = counts.get(k) ?? { reason: a.reason, answer: said, count: 0 };
-    c.count++;
-    counts.set(k, c);
-  }
-  return [...counts.values()].filter((c) => c.count >= 3).map((c) => ({ ...c, name: reasonText(c.reason).name, mode: ASK_REASONS[c.reason]?.always === c.answer ? c.answer : "" }));
-}
-
 /** The held paths, from ui/security-facts.ts in a process of its own: the server imports no security path. */
 export async function securityFacts(): Promise<{ held: string[] }> {
   const p = Bun.spawn([process.execPath, join(import.meta.dir, "..", "security-facts.ts")], { stdout: "pipe", stderr: "pipe", env: process.env });
@@ -279,7 +253,6 @@ export function gatesBody(security: { held: string[] }, ms = LOG_DAYS * DAY, pro
     gated: gates({ jobs }) ?? (hold ? { gate: "backend", why: `waits for ${BACKENDS[hold.via]}: ${hold.why}`, text: `Waiting for ${BACKENDS[hold.via]}: ${hold.why}` } : null),
     baseline: baselineGate(),
     rules: rules(all, records, Date.now(), ms),
-    repeats: repeats(all, records, Date.now(), ms),
     ...security,
     repoHeld: repoHeld(),
     log: { days: ms / DAY, max: LOG_MAX, entries },

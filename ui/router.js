@@ -362,7 +362,7 @@ export async function start() {
 
   document.addEventListener("click", dispatch);
 
-  setCodes(Object.fromEntries(Object.entries(await fetch("/api/projects", { cache: "no-store" }).then((r) => r.json()).catch(() => ({}))).filter(([, c]) => c)));
+  setCodes(Object.fromEntries(Object.entries(await fetch("/api/projects", { cache: "no-store" }).then((r) => r.json()).catch(() => ({}))).filter(([, p]) => p.code).map(([k, p]) => [k, p.code])));
   const names = await fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch(() => []);
   const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => (typeof m.redirect === "function" && redirects.push(m.redirect), m.views ?? (m.view ? [m.view] : [])), (e) => { console.error(n, e); return []; })));
   views = mods.flat().filter((v) => v && typeof v.path === "string" && typeof v.render === "function")

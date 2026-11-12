@@ -308,7 +308,7 @@ describe("views", () => {
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
     expect(h).toContain('<option value="oth" selected>oth</option>');
     expect(h).toContain('<option value="fac">fac</option>');
-    expect(h).toContain('<option value="">All</option>');
+    expect(h).toContain('<option value="">All Projects</option>');
     expect(h).not.toMatch(/<option[^>]*>[^<]*\(\d+\)<\/option>/);
     const rows = v.issueRows(d);
     const counts = (o: object) => v.renderProjects(d.projects, rows, o);

@@ -61,8 +61,10 @@ test("/api/factory carries the asks and no Done count; /api/automation carries n
   for (const k of ["asks", "factory", "codes"]) expect(k in a).toBe(false);
 });
 
-test("/api/projects maps each registry repo to its code", async () => {
-  expect(await (await at("/api/projects")).json()).toEqual({ aleph: null, other: null });
+test("/api/projects maps each registry repo to its code, open issue count and onboarded flag", async () => {
+  const p: any = await (await at("/api/projects")).json();
+  expect(Object.keys(p)).toEqual(["aleph", "other"]);
+  for (const v of Object.values<any>(p)) expect(v).toEqual({ code: null, issues: expect.any(Number), onboarded: false });
 });
 
 test("a new view file and api file are served with no edit to server.ts", async () => {

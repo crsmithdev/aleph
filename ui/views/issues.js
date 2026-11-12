@@ -358,7 +358,7 @@ const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medi
 
 /** The project filter scopes the tiles too: a select in the page head. */
 export function renderProjects(projects, _rows, o = {}) {
-  return scope().bar({ project: o.project ?? "", value: o.window ?? "week", more: projects, label: (p) => p || "All" });
+  return scope().bar({ project: o.project ?? "", value: o.window ?? "week", more: projects });
 }
 
 export function renderFilters(rows, o = {}) {
