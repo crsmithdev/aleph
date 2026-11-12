@@ -233,6 +233,7 @@ An Obsidian vault in its own git repo, pushed on each commit. `vault/lib/` owns 
 | `VAULT.md` | Chris's contract; the agent never edits it |
 | `.index/vault.sqlite` | FTS5 search index, git-ignored |
 | `.index/seen/<session>.json` | Notes recall already showed, kept 7 days |
+| `.index/runs/<name>.json` | The newest run of one vault process (`seen prune`, `recall trim`, `vault push`) as `{at, result, detail?}`; `result` is `ok` or `failed` |
 
 Note frontmatter: `kind`, `scope` (a repo or `global`), `confidence` (`measured`, `reported`, `inferred`), `updated`, `supersedes`, `sources`, and optionally `aliases`, `tags`, `core` (one line of at most 160 characters for the start context). A note decays after a number of days by kind: project 30, gotcha 60, decision 180, concept and entity 365.
 
