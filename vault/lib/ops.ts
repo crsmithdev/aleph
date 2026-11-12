@@ -3,7 +3,8 @@
  * on stderr, and ends with `Exit` for a refusal, which the CLI turns into its exit code.
  */
 import { readJsonOr } from "../../lib/json.ts";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { langfuse } from "../../lib/langfuse.ts";
@@ -16,7 +17,7 @@ import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
 import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
-import { logEvent } from "../../lib/layout.ts";
+import { layout, logEvent } from "../../lib/layout.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
 export class Exit extends Error { constructor(readonly code: number) { super(`exit ${code}`); } }
@@ -267,9 +268,11 @@ async function write(): Promise<void> {
 
 async function recall(): Promise<void> {
   requireVault();
-  const q = rest.filter((a, i) => !a.startsWith("--") && rest[i - 1]?.startsWith("--") !== true).join(" ").trim().toLowerCase();
+  // `--episodes` takes no value, so the word after it stays in the query.
+  const args = rest.filter((a) => a !== "--episodes");
+  const q = args.filter((a, i) => !a.startsWith("--") && args[i - 1]?.startsWith("--") !== true).join(" ").trim().toLowerCase();
   const scope = flag("scope");
-  if (!q && !scope) { console.error('usage: vault recall <query> [--scope <name>]  |  vault recall --scope <name>'); exit(1); }
+  if (!q && !scope) { console.error('usage: vault recall [--episodes] <query> [--scope <name>]  |  vault recall [--episodes] --scope <name>'); exit(1); }
   // `--scope` alone lists a project's notes: at 165 notes "what do we know
   // about cloudchamber" is a real question, and ranking every note by one word
   // could not answer it.
@@ -285,7 +288,20 @@ async function recall(): Promise<void> {
     const known = [...new Set(notes.map((n) => String(n.fm.scope)))].sort();
     console.error(`no note has scope ${scope}; the vault uses: ${known.join(", ")}`);
   }
-  out(hits.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
+  const found = hits.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, scope: String(n.fm.scope), frontmatter: n.fm }));
+  // The episode pages are the factory's, not the vault's: they get a throwaway index and no read log.
+  if (has("episodes")) {
+    const dir = join(layout().factory, "episodes");
+    const pages = (await loadVault(dir)).filter((n) => scope === undefined || String(n.fm.scope) === scope);
+    const tmp = mkdtempSync(join(tmpdir(), "aleph-episodes-"));
+    try {
+      const db = openIndex(tmp, pages);
+      const ranked = q ? rankNotes(db, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
+      db.close();
+      found.push(...ranked.map(({ n, r }) => ({ title: n.title, path: join("episodes", n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  }
+  out(found);
 }
 
 const asValue = (v: unknown): any => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
@@ -538,7 +554,7 @@ export async function run(argv: string[]): Promise<void> {
     case "compile": await compile(); break;
     case "misses": await misses(); break;
     default:
-      console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]>");
+      console.error("usage: vault <init|write <file> --why <text>|recall [--episodes] <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]>");
       exit(2);
   }
 }

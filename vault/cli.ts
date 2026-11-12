@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * vault <init|write|adopt|recall [--scope]|lint [--fix]|archive|delete|compile|misses [--days N]> — the
+ * vault <init|write|adopt|recall [--episodes] [--scope]|lint [--fix]|archive|delete|compile|misses [--days N]> — the
  * mechanical half of /aleph:vault.
  * Vault path: $ALEPH_VAULT or ~/.aleph/vault. JSON on stdout, findings on
  * stderr, exit 1 on refusal. See docs/vault.md.
