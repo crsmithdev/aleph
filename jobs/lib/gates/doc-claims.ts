@@ -13,7 +13,8 @@
  * - each `` `name` in `path` `` (also `from`, `of`, `` `path`'s `name` ``) against the text of that file: it must define the name (a function, class, const, let, var, interface, type, enum or member key; a non-identifier such as a selector need only appear);
  * - each `` `.selector` in `path.css` `` (also `from`, `of`) against the text of that file;
  * - each `` `path` imports only `a` and `b` `` against the imports of that file;
- * - each `--flag` of an `aleph` or `aleph-ui` command against the CLI source.
+ * - each `--flag` of an `aleph` or `aleph-ui` command against the CLI source;
+ * - each `--flag` of a `bun vault/cli.ts` command, and of an op row of the vault Commands table, against the `flag("name")` and `has("name")` reads of the vault code.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, normalize as normPath } from "node:path";
@@ -32,6 +33,8 @@ export interface Truth {
   source: string;
   /** The text the `--flags` must appear in as a quoted literal. */
   cliSource: string;
+  /** The vault code's text: its ops are the `case "op":` lines, its flags the `flag("name")` and `has("name")` reads. */
+  vaultSource: string;
   /** The repo root, for paths. */
   root: string;
   /** The repo's files, repo-relative, for a bare file name in a `file:line`. Empty: bare names are not checked. */
@@ -179,17 +182,21 @@ function importsOf(text: string): string[] {
   return [...out];
 }
 
-/** The `--flags` of `aleph` and `aleph-ui` commands in code spans and code blocks, with the command they follow. */
-function flagsIn(docs: Doc[]): { flag: string; command: string; file: string; line: number }[] {
-  const out: { flag: string; command: string; file: string; line: number }[] = [];
+/** The `--flags` of `aleph`, `aleph-ui` and `vault/cli.ts` commands in code spans and code blocks, and of a vault op's Commands table row (`ops` names the ops), with the command they follow. */
+function flagsIn(docs: Doc[], ops: Set<string>): { flag: string; command: string; vault: boolean; file: string; line: number }[] {
+  const out: { flag: string; command: string; vault: boolean; file: string; line: number }[] = [];
   for (const d of docs) {
     let fenced = false;
     d.text.split("\n").forEach((text, i) => {
       if (/^\s*```/.test(text)) { fenced = !fenced; return; }
+      const add = (command: string, vault: boolean) => { for (const f of command.matchAll(/(?<![\w-])--[a-z][a-z-]*/g)) out.push({ flag: f[0], command, vault, file: d.file, line: i + 1 }); };
       const spans = fenced ? [text] : [...text.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-      for (const span of spans) for (const c of span.matchAll(/(?:^|\|)\s*((?:aleph|aleph-ui)\s[^#|]*)/g)) {
-        for (const f of c[1].matchAll(/(?<![\w-])--[a-z][a-z-]*/g)) out.push({ flag: f[0], command: c[1].trim(), file: d.file, line: i + 1 });
+      for (const span of spans) {
+        for (const c of span.matchAll(/(?:^|\|)\s*((?:aleph|aleph-ui)\s[^#|]*)/g)) add(c[1].trim(), false);
+        for (const c of span.matchAll(/\bvault\/cli\.ts\s[^#|]*/g)) add(c[0].trim(), true);
       }
+      const row = fenced ? null : text.match(/^\|\s*`([a-z-]+)(\s[^`]*)`\s*\|/);
+      if (row && ops.has(row[1])) add(`${row[1]}${row[2]}`, true);
     });
   }
   return out;
@@ -282,8 +289,11 @@ export function docProblems(docs: Doc[], truth: Truth): string[] {
       problems.push(`${c.file}:${c.line}: "${c.quote}": ${c.path} imports ${has.length ? has.join(", ") : "nothing"}${missing.length ? `; not ${missing.join(", ")}` : ""}`);
     }
   }
-  for (const f of flagsIn(docs)) {
-    if (![`"${f.flag}"`, `'${f.flag}'`, `\`${f.flag}`].some((q) => truth.cliSource.includes(q))) problems.push(`${f.file}:${f.line}: "${f.command}" uses ${f.flag}, which the CLI source does not define`);
+  const ops = new Set([...truth.vaultSource.matchAll(/\bcase "([a-z-]+)":/g)].map((m) => m[1]));
+  const vaultFlags = new Set([...truth.vaultSource.matchAll(/\b(?:flag|has)\("([a-z-]+)"\)/g)].map((m) => `--${m[1]}`));
+  for (const f of flagsIn(docs, ops)) {
+    const defined = f.vault ? vaultFlags.has(f.flag) : [`"${f.flag}"`, `'${f.flag}'`, `\`${f.flag}`].some((q) => truth.cliSource.includes(q));
+    if (!defined) problems.push(`${f.file}:${f.line}: "${f.command}" uses ${f.flag}, which the ${f.vault ? "vault" : "CLI"} source does not define`);
   }
   return problems;
 }

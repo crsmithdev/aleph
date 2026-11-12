@@ -94,6 +94,7 @@ export function repoTruth(root = ROOT): Truth {
     root,
     files,
     source: read(files.filter((f) => (code(f) || f === "package.json" || /^compose\/[^/]+$/.test(f) || f === ".env.example") && !f.startsWith("jobs/lib/gates/doc-claims"))),
+    vaultSource: read(files.filter((f) => /^vault\/.*\.ts$/.test(f) && !f.endsWith(".test.ts"))),
     cliSource: read(files.filter((f) => code(f) && !f.startsWith("tests/") && !f.endsWith(".test.ts") && !f.startsWith("jobs/lib/gates/doc-claims"))),
   };
 }

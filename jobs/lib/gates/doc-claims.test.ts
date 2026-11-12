@@ -52,6 +52,16 @@ describe("a doc that does not match fails, quoting the claim", () => {
     expect(one(`\`fileText\` (\`${d}:${def}\`)`)).toEqual([]);
   });
 
+  test("a --flag of a vault command that the vault code does not read, in the Commands table or a code block", () => {
+    const doc = (a: string, b: string, c: string) => `## Commands\n\n| Command | Does |\n|---|---|\n| \`recall [${a}] query [${b} name]\` | Ranks |\n\n\`\`\`\nbun vault/cli.ts lint ${c}\n\`\`\`\n`;
+    expect(one(doc("--nosuch", "--scope", "--nosuch"))).toEqual([
+      expect.stringMatching(/^docs\/x\.md:5: "recall \[--nosuch\] query \[--scope name\]" uses --nosuch, which the vault source does not define$/),
+      expect.stringMatching(/^docs\/x\.md:8: "vault\/cli\.ts lint --nosuch" uses --nosuch, which the vault source does not define$/),
+    ]);
+    expect(one(doc("--why", "--scope", "--fix"))).toEqual([]);
+    expect(one("`bun vault/cli.ts misses --days 3`; `bun vault/cli.ts lint --overlap --template`")).toEqual([]);
+  });
+
   test("a CSS selector cited in a stylesheet that does not hold it", () => {
     expect(one("`.no-such-class` in `ui/app.css`, `.chat .clamp` in `ui/app.css`, `.chat .clam` in `ui/app.css`")).toEqual([
       'docs/x.md:1: "`.no-such-class` in `ui/app.css`": ui/app.css has no .no-such-class',
