@@ -33,11 +33,12 @@ export async function smokeProblem(base = `http://127.0.0.1:${port()}`): Promise
 
 const read = (file: string): Smoke => readJsonOr(file, { fails: 0 });
 
-/** One smoke test: the count of failures in a row, kept in `file`, with the first failure's time. */
-export async function smokeStep(file = smokeFile(), base?: string, now = Date.now()): Promise<void> {
+/** One smoke test: the count of failures in a row, kept in `file`, with the first failure's time. Returns why it failed, or null. */
+export async function smokeStep(file = smokeFile(), base?: string, now = Date.now()): Promise<string | null> {
   const reason = await smokeProblem(base);
   const last = read(file);
   writeJson(file, (reason ? { fails: last.fails + 1, reason, at: last.at ?? new Date(now).toISOString() } : { fails: 0 }));
+  return reason;
 }
 
 /** The health line, once FAILS_TO_REPORT ticks in a row failed. */

@@ -205,7 +205,7 @@ The tick moves each finished record into the archive folder `<records>-archive` 
 | `suite-history.jsonl` | One line per suite run | `aleph suite` |
 | `flaky.json` | `[{repo, check, run, at, tests?}]` | Checks that passed on the rerun |
 | `ci.json` | GitHub CI state per repo | Tick |
-| `tick.json` | Last due times, missed keys | Tick and every step |
+| `tick.json` | Last due times, missed keys, `ran`: `{at, result}` of each tick step, of each suite and of the monitor; a result is `ok`, a short summary or `failed: <error>` | Tick and every step |
 | `events/<day>.jsonl` | The event log: one event as JSON per line, by UTC day | `logEvent`, each run state change, each Ask set or cleared, each new hold and each issue filed or closed |
 | `stalls.json`, `smoke.json` | Stall first-seen times; the smoke test | Tick |
 | `corrections.json` | Signals and lessons | Corrections |

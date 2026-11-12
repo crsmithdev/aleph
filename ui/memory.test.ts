@@ -464,19 +464,21 @@ test("/api/memory/log lists writes and recalls newest first, one recall per call
 test("/api/memory/processes reads the tick, the corrections store, the episode pages and the stale notes", async () => {
   const tick = join(base, "factory", "tick.json"), store = join(base, "factory", "corrections.json");
   utimesSync(join(base, "factory", "episodes", "aleph-1 Goal.md"), NOW / 1000, NOW / 1000);
-  writeFileSync(tick, JSON.stringify({ last: { episodes: "2026-11-04T11:30:00.000Z" } }));
+  writeFileSync(tick, JSON.stringify({ last: { episodes: "2026-11-04T11:30:00.000Z" }, ran: { episodes: { at: "2026-11-04T11:30:00.000Z", result: "failed: no page" } } }));
   writeFileSync(store, JSON.stringify({ minedAt: "2026-11-04T11:00:00.000Z", lessons: [{ sentence: "Run the checks.", state: "proposed" }, { sentence: "Old.", state: "declined" }] }));
   try {
     const m = await (await at("/api/memory/processes")).json() as any;
     expect(m.steps.map((s: any) => [s.name, s.last, s.next, s.result])).toEqual([
-      ["episodes", "2026-11-04T11:30:00.000Z", "2026-11-04T12:00:00.000Z", "ok"],
-      ["corrections", "2026-11-04T11:00:00.000Z", m.steps[1].next, "ok"],
+      ["episodes", "2026-11-04T11:30:00.000Z", "2026-11-04T12:00:00.000Z", "failed: no page"],
+      ["corrections", "2026-11-04T11:00:00.000Z", m.steps[1].next, null],
     ]);
     expect(m.episodes.pages).toBe(1);
     expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1 });
     expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ sentence: "Run the checks.", state: "proposed" }] });
     const h = v.renderProcessesTab(m);
     expect(h).toContain("Run the checks.");
+    expect(h).toContain('<span class="badge stuck">failed: no page</span>');
+    expect(v.renderProcessesTab({ ...m, steps: [{ ...m.steps[0], result: "2 written" }] })).toContain('<span class="badge done">2 written</span>');
     expect(h).toContain("No note is stale.");
     expect(h).toContain('<a href="#/memory?tab=processes" aria-current="page">Processes</a>');
   } finally { rmSync(tick, { force: true }); rmSync(store, { force: true }); }

@@ -7,7 +7,7 @@ const flow = (...boxes) => `<p class="quiet" style="display:flex;flex-wrap:wrap;
 const time = (ts) => (ts ? esc(when(ts)) : '<span class="quiet">none</span>');
 
 const stepRow = (s) => `<tr><td><strong>${esc(s.name)}</strong></td><td>${esc(s.runs)}</td><td class="time">${time(s.last)}</td><td class="time">${time(s.next)}</td>` +
-  `<td>${s.result ? tag(s.result, s.result === "ok" ? "done" : "stuck") : ""}</td><td class="wide">${esc(s.does)}</td></tr>`;
+  `<td>${s.result ? tag(s.result, s.result.startsWith("failed") ? "stuck" : "done") : ""}</td><td class="wide">${esc(s.does)}</td></tr>`;
 
 function episodes(e) {
   const top = Math.max(1, ...e.days.map((d) => d.pages));
@@ -40,6 +40,6 @@ function decay(d) {
 
 /** The body of the tab: `m` is the /api/memory/processes body. */
 export const renderProcesses = (m) =>
-  card("Schedule · aleph tick runs every minute", dataTable(heads(["Process", "Runs", "Last run", "Next", "Last result", "Does"]), m.steps.map(stepRow).join("")), { aside: "From tick.json, corrections.json and factory events" }) +
+  card("Schedule · aleph tick runs every minute", dataTable(heads(["Process", "Runs", "Last run", "Next", "Last result", "Does"]), m.steps.map(stepRow).join("")), { aside: "From tick.json and corrections.json" }) +
   `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:var(--gap-in)">${episodes(m.episodes)}${corrections(m.corrections)}${screen()}${decay(m.decay)}</div>` +
   card("Not automatic today", `<p>Consolidation, dedupe and reflection have no job. Compile, archive and delete run by hand, and the Log tab shows each run. A new job gets a row in Schedule when it exists.</p>`);

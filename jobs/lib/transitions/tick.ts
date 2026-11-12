@@ -134,35 +134,58 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     const out: Record<string, unknown> = {};
     // Paused or not: a chat turn whose server died holds no lock.
     await endLost("chat", (run) => chatLock(run.job));
-    const c = await correctionsStep(now);
+    // Each step's time and result, in `ran` of tick.json; `say` gives the result, or null for a step that did not run.
+    const ran: Record<string, { at: string; result: string }> = {};
+    const step = async <T>(key: string, run: () => T | Promise<T>, say: (v: T) => string | null = () => "ok"): Promise<T | undefined> => {
+      try {
+        const v = await run(), result = say(v);
+        if (result) ran[key] = { at, result };
+        return v;
+      } catch (e: any) {
+        const note = String(e?.message ?? e);
+        logEvent({ by: "rule", subject: key, action: "failed", sub: "error", note });
+        ran[key] = { at, result: `failed: ${note}` };
+      }
+    };
+    const c = await step("corrections", () => correctionsStep(now), (r) => r && `${r.signals} signals, ${r.lessons} lessons, ${r.proposed} proposed`);
     if (c) out.corrections = c;
     // Before the sweep, so the issues a lifted hold frees are keys it starts this tick.
-    const lifted = await probeHold();
+    const lifted = await step("hold", probeHold);
     if (lifted) out.hold = lifted;
-    try {
-      const m = await sweep(now, s, p);
-      if (m.length) out.missed = m;
-    } catch (e: any) { logEvent({ by: "rule", subject: "sweep", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
-    if (due(s, "episodes", now)) { s.last.episodes = at; out.episodes = await episodeStep(); }
+    const m = await step("sweep", () => sweep(now, s, p), (k) => `${k.length} missed`);
+    if (m?.length) out.missed = m;
+    if (due(s, "episodes", now)) {
+      s.last.episodes = at;
+      // A page that failed to write makes the step's result a failure.
+      const e = await step("episodes", episodeStep, (r) => r.failed.length
+        ? `failed: ${r.failed.length} of ${r.written.length + r.failed.length} pages, ${r.failed[0]}`
+        : `${r.written.length} written`);
+      out.episodes = e?.written ?? [];
+    }
     if (due(s, "ci", now)) {
       s.last.ci = at;
-      try { ciStep(sandboxRepos()); } catch (e: any) { logEvent({ by: "rule", subject: "ci", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+      await step("ci", () => ciStep(sandboxRepos()), (r) => `${r.length} red`);
     }
-    await smokeStep(undefined, undefined, now);
-    const old = archiveOld(now);
+    await step("smoke", () => smokeStep(undefined, undefined, now), (reason) => (reason ? `failed: ${reason}` : "ok"));
+    const old = (await step("archive", () => archiveOld(now), (o) => `${o.length} archived`)) ?? [];
     if (old.length) out.archived = old;
-    try { const gone = retain(now); if (gone) out.retained = gone; } catch (e: any) { logEvent({ by: "rule", subject: "retention", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+    const gone = await step("retention", () => retain(now), (n) => `${n} removed`);
+    if (gone) out.retained = gone;
     if (due(s, "firefight", now)) {
       s.last.firefight = at;
-      const f = await firefight(undefined, now);
-      // A filed red starts its own intake (its filing's effects); a slow land's rescue Ask is the director's.
-      if (f?.asked.length) directIfNew();
+      const f = await step("firefighter", async () => {
+        const r = await firefight(undefined, now);
+        // A filed red starts its own intake (its filing's effects); a slow land's rescue Ask is the director's.
+        if (r?.asked.length) directIfNew();
+        return r;
+      }, (r) => r && `${r.filed.length} filed, ${r.asked.length} asked`);
       if (f && (f.filed.length || f.asked.length)) out.firefighter = f;
     }
-    try { const t = await timeoutStep(takeOnTimeout, now); if (t.length) out.timedOut = t; } catch (e: any) { logEvent({ by: "rule", subject: "timeout", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
-    const m = await monitorStep(new Date(now));
-    if (m) out.monitor = m.day;
-    await editTick((t) => ({ ...t, ...s }));
+    const t = await step("timeout", () => timeoutStep(takeOnTimeout, now), (n) => `${n.length} taken`);
+    if (t?.length) out.timedOut = t;
+    const mon = await monitorStep(new Date(now));
+    if (mon) out.monitor = mon.day;
+    await editTick((t) => ({ ...t, ...s, ran: { ...t.ran, ...ran } }));
     return out;
   } finally {
     release();

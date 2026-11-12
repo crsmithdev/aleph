@@ -248,3 +248,55 @@ test("a tick, paused or not, ends a running chat run whose lock is free and leav
   expect(getRun("20261110-152010-chat-1")).toMatchObject({ condition: "done", reason: "failed: its process ended before a reply", cause: "unanswered" });
   expect(getRun("20261110-152020-chat-2")?.condition).toBe("running");
 });
+
+const quiet = (): TickPorts => ({ dispatch: async () => {}, suite: () => {}, intake: () => {} });
+const tickFile = () => join(process.env.ALEPH_FACTORY_DIR!, "tick.json");
+
+test("a tick records the time and result of each due step in ran and keeps the suite's and the monitor's keys", async () => {
+  seed([]);
+  mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
+  const kept = { "suite tk1": { at: "2026-11-04T10:00:00.000Z", result: "green" }, monitor: { at: "2026-11-04T03:00:00.000Z", result: "2 findings" } };
+  writeFileSync(tickFile(), JSON.stringify({ last: {}, missed: [], suite: {}, ran: kept }));
+  // The monitor writes its own key when it runs: here it does not.
+  process.env.ALEPH_MONITOR = "off";
+  try { await runTick(NOW, quiet()); } finally { delete process.env.ALEPH_MONITOR; }
+  const ran = JSON.parse(readFileSync(tickFile(), "utf8")).ran;
+  const at = new Date(NOW).toISOString();
+  for (const k of ["ci", "episodes", "sweep", "hold", "smoke", "archive", "retention", "firefighter", "timeout"]) {
+    expect(ran[k]).toEqual({ at, result: expect.stringMatching(/\S/) });
+  }
+  expect(ran["suite tk1"]).toEqual(kept["suite tk1"]);
+  expect(ran.monitor).toEqual(kept.monitor);
+});
+
+test("a step that fails in a tick records a result that starts with failed and its error message", async () => {
+  seed([]);
+  // A directory where the CI read writes its file: the write throws.
+  mkdirSync(join(process.env.ALEPH_FACTORY_DIR!, "ci.json"), { recursive: true });
+  // An aleph-ui that answers 503: the smoke test fails without a throw.
+  const ui = Bun.serve({ port: 0, fetch: () => new Response("", { status: 503 }) });
+  process.env.ALEPH_UI_PORT = String(ui.port);
+  try { await runTick(NOW, quiet()); } finally { delete process.env.ALEPH_UI_PORT; ui.stop(true); }
+  const ran = JSON.parse(readFileSync(tickFile(), "utf8")).ran;
+  expect(ran.ci.result).toMatch(/^failed: \S/);
+  expect(ran.smoke.result).toBe("failed: / answered 503");
+  expect(ran.episodes.result).toBe("0 written");
+});
+
+test("a tick where an episode page fails to write records the episodes result as failed", async () => {
+  // A specced issue that landed on main, with a run: its page is due.
+  const id = writeList({ key }, "add", (doc) => issues.add(doc, "ship it", { spec: "## Goal\nShip it." }).id, true)!.value;
+  const dir = join(base, "repo");
+  writeFileSync(join(dir, `${key}.txt`), "x\n");
+  git(dir, "add", ".");
+  git(dir, "commit", "-q", "-m", "ship it", "-m", `Issue: ${key}-${id}`);
+  git(dir, "push", "-q", "origin", "main");
+  mkdirSync(join(process.env.ALEPH_JOBS_DIR!, "20261104-110000-ship"), { recursive: true });
+  putRun("20261104-110000-ship", { n: 1, kind: "build", job: "20261104-110000-ship", name: `${key}-${id}`, repo: key, on: `${key}-${id}`, condition: "landed", told: true, started: new Date(NOW - 60 * MIN).toISOString(), ended: new Date(NOW - 30 * MIN).toISOString() });
+  // An episodes folder the tick cannot write in.
+  const episodes = join(process.env.ALEPH_FACTORY_DIR!, "episodes");
+  mkdirSync(episodes, { recursive: true });
+  chmodSync(episodes, 0o555);
+  try { await runTick(NOW, quiet()); } finally { chmodSync(episodes, 0o755); }
+  expect(JSON.parse(readFileSync(tickFile(), "utf8")).ran.episodes.result).toMatch(/^failed: 1 of 1 pages, \S/);
+});

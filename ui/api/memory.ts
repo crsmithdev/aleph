@@ -16,7 +16,6 @@ import { items, search as searchItems } from "../memory-items.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
 import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
-import { readEvents } from "../../lib/layout.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { backlinks, coreNotes, KINDS, linkTargets, links, lintVault, loadVault, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
@@ -201,11 +200,10 @@ function nextDaily(at: string): string {
  * store is read as a file: corrections.ts loads the factory's actions, which the server must not. */
 async function processes(): Promise<Response> {
   const root = vaultDir(), now = Date.now();
-  const tick = readJsonOr<{ last?: Record<string, string> }>(join(factoryDir(), "tick.json"), {});
+  const tick = readJsonOr<{ last?: Record<string, string>; ran?: Record<string, { result: string }> }>(join(factoryDir(), "tick.json"), {});
   const store = readJsonOr<{ minedAt: string; lessons: { sentence: string; state: string }[] }>(join(factoryDir(), "corrections.json"), { minedAt: "", lessons: [] });
-  const failed = (subject: string, last: string) => readEvents(now - 2 * 86400_000).some((e) => e.subject === subject && e.action === "failed" && e.at >= last);
   const step = (name: string, runs: string, last: string | undefined, next: string | null, does: string) =>
-    ({ name, runs, last: last ?? null, next, result: last ? (failed(name, last) ? "failed" : "ok") : null, does });
+    ({ name, runs, last: last ?? null, next, result: tick.ran?.[name]?.result ?? null, does });
   const steps = [
     step("episodes", "every 30 min", tick.last?.episodes, tick.last?.episodes ? new Date(Date.parse(tick.last.episodes) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
     step("corrections", "daily after 03:00", store.minedAt || undefined, store.minedAt ? nextDaily(store.minedAt) : null, "mines lessons from transcripts, gate denials and drop reasons"),

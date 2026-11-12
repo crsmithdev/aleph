@@ -199,23 +199,18 @@ function correctionsDue(now = Date.now()): boolean {
   return !at || Number.isNaN(t) || today(new Date(t)) !== today(new Date(now));
 }
 
-/** The tick's daily correction mining (corrections.ts), under the pause gate. An error is logged, never thrown. */
+/** The tick's daily correction mining (corrections.ts), under the pause gate. The tick catches and records an error. */
 export async function correctionsStep(now = Date.now()): Promise<{ signals: number; lessons: number; proposed: number } | null> {
   if (gates({ only: ["pause"] }) || !correctionsDue(now)) return null;
-  try {
-    const store = await mine(now, filing);
-    const r = {
-      signals: store.lessons.reduce((n, l) => n + l.signals.length, 0),
-      lessons: store.lessons.length,
-      proposed: store.lessons.filter((l) => l.state === "proposed").length,
-    };
-    // A proposed lesson is an Ask.
-    if (r.proposed) directIfNew();
-    return r;
-  } catch (e) {
-    logEvent({ by: "monitor", subject: "corrections", action: "failed", sub: "error", note: (e as Error).message });
-    return null;
-  }
+  const store = await mine(now, filing);
+  const r = {
+    signals: store.lessons.reduce((n, l) => n + l.signals.length, 0),
+    lessons: store.lessons.length,
+    proposed: store.lessons.filter((l) => l.state === "proposed").length,
+  };
+  // A proposed lesson is an Ask.
+  if (r.proposed) directIfNew();
+  return r;
 }
 
 /** The detached starts that follow a write: an intake of one issue, and the director. Tests replace them. */
@@ -270,17 +265,12 @@ export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
   return d;
 }
 
-/** The tick's episode pages for issues that finished (episode.ts); never throws. */
-export async function episodeStep(): Promise<string[]> {
-  try {
-    if (gates({ only: ["pause"] })) return [];
-    const r = await writeEpisodes(sandboxRepos());
-    for (const f of r.failed) logEvent({ by: "rule", subject: "episodes", action: "failed", sub: "error", note: f });
-    return r.written;
-  } catch (e: any) {
-    try { logEvent({ by: "rule", subject: "episodes", action: "failed", sub: "error", note: String(e?.message ?? e) }); } catch {}
-    return [];
-  }
+/** The tick's episode pages for issues that finished (episode.ts), written and failed. The tick catches and records an error. */
+export async function episodeStep(): Promise<{ written: string[]; failed: string[] }> {
+  if (gates({ only: ["pause"] })) return { written: [], failed: [] };
+  const r = await writeEpisodes(sandboxRepos());
+  for (const f of r.failed) logEvent({ by: "rule", subject: "episodes", action: "failed", sub: "error", note: f });
+  return r;
 }
 
 /** Main's baseline as a closed state: `line` is the sentence for logs and skip lines. */
