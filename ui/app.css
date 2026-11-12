@@ -948,9 +948,6 @@ tr.rowlink td.wide a::after { content: ""; position: absolute; inset: 0; }
 tr.rowlink:hover td.wide a, tr.rowlink td.wide a:focus-visible { text-decoration: underline; }
 tr.rowlink a.idl { position: relative; z-index: var(--z-rowlink); }
 mark { color: inherit; background: var(--need-bg); border-radius: var(--r-hair); }
-.unused { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
-.unused a { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); border: 1px solid var(--rule); border-radius: var(--r-tag); padding: 1px var(--sp-6); text-decoration: none; }
-.unused a:hover { color: var(--ink); border-color: var(--run); }
 .browse { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--gap-in); align-items: start; }
 .ins { position: sticky; top: var(--sp-8); max-height: calc(100vh - 16px); overflow: auto; }
 #mem-inspector { display: flex; flex-direction: column; gap: var(--sp-12); }
