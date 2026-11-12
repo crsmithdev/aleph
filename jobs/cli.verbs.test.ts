@@ -87,3 +87,17 @@ describe("doc-claims", () => {
     expect(r.code).toBe(last.startsWith("every") ? 0 : 1);
   });
 });
+
+describe("memory", () => {
+  test("runs the vault ops on ALEPH_VAULT with their JSON and exit codes; an unknown op exits non-zero; help lists it", async () => {
+    const e = { ALEPH_VAULT: join(base, "vault") };
+    const i = await aleph(["memory", "init"], e);
+    expect(i.code).toBe(0);
+    expect(i.json).toMatchObject({ op: "init", path: join(base, "vault") });
+    const r = await aleph(["memory", "recall", "--scope", "aleph"], e);
+    expect(r.code).toBe(0);
+    expect(r.json).toEqual([]);
+    expect((await aleph(["memory", "nosuch"], e)).code).not.toBe(0);
+    expect((await aleph(["help"])).stdout).toContain("aleph memory <");
+  });
+});

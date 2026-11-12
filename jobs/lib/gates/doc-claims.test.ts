@@ -59,6 +59,8 @@ describe("a doc that does not match fails, quoting the claim", () => {
       expect.stringMatching(/^docs\/x\.md:8: "vault\/cli\.ts lint --nosuch" uses --nosuch, which the vault source does not define$/),
     ]);
     expect(one(doc("--why", "--scope", "--fix"))).toEqual([]);
+    expect(one("`aleph memory lint --fix`")).toEqual([]);
+    expect(one("`aleph memory lint --nosuch`")).toEqual([expect.stringContaining("uses --nosuch, which the vault source does not define")]);
     expect(one("`bun vault/cli.ts misses --days 3`; `bun vault/cli.ts lint --overlap --template`")).toEqual([]);
   });
 

@@ -841,6 +841,8 @@ describe("misses", () => {
     expect(recallQuery('bun ~/.claude/skills/aleph/vault/cli.ts recall "x"')).toBe("x");
     expect(recallQuery('cd v && bun cli.ts recall "y z" --scope aleph | head')).toBe("y z");
     expect(recallQuery("vault recall --episodes a b")).toBe("a b");
+    expect(recallQuery('aleph memory recall "x" --scope aleph')).toBe("x");
+    expect(recallQuery("aleph memory lint")).toBeNull();
     expect(recallQuery('grep "cli.ts recall" f')).toBeNull();
     expect(recallQuery("cat <<EOF\nvault recall q\nEOF")).toBeNull();
   });

@@ -14,7 +14,7 @@
  * - each `` `.selector` in `path.css` `` (also `from`, `of`) against the text of that file;
  * - each `` `path` imports only `a` and `b` `` against the imports of that file;
  * - each `--flag` of an `aleph` or `aleph-ui` command against the CLI source;
- * - each `--flag` of a `bun vault/cli.ts` command, and of an op row of the vault Commands table, against the `flag("name")` and `has("name")` reads of the vault code.
+ * - each `--flag` of a `bun vault/cli.ts` or `aleph memory` command, and of an op row of the vault Commands table, against the `flag("name")` and `has("name")` reads of the vault code.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, normalize as normPath } from "node:path";
@@ -182,7 +182,7 @@ function importsOf(text: string): string[] {
   return [...out];
 }
 
-/** The `--flags` of `aleph`, `aleph-ui` and `vault/cli.ts` commands in code spans and code blocks, and of a vault op's Commands table row (`ops` names the ops), with the command they follow. */
+/** The `--flags` of `aleph`, `aleph-ui` and `vault/cli.ts` commands (an `aleph memory` command reads against the vault code) in code spans and code blocks, and of a vault op's Commands table row (`ops` names the ops), with the command they follow. */
 function flagsIn(docs: Doc[], ops: Set<string>): { flag: string; command: string; vault: boolean; file: string; line: number }[] {
   const out: { flag: string; command: string; vault: boolean; file: string; line: number }[] = [];
   for (const d of docs) {
@@ -192,7 +192,7 @@ function flagsIn(docs: Doc[], ops: Set<string>): { flag: string; command: string
       const add = (command: string, vault: boolean) => { for (const f of command.matchAll(/(?<![\w-])--[a-z][a-z-]*/g)) out.push({ flag: f[0], command, vault, file: d.file, line: i + 1 }); };
       const spans = fenced ? [text] : [...text.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
       for (const span of spans) {
-        for (const c of span.matchAll(/(?:^|\|)\s*((?:aleph|aleph-ui)\s[^#|]*)/g)) add(c[1].trim(), false);
+        for (const c of span.matchAll(/(?:^|\|)\s*((?:aleph|aleph-ui)\s[^#|]*)/g)) add(c[1].trim(), /^aleph\s+memory\b/.test(c[1]));
         for (const c of span.matchAll(/\bvault\/cli\.ts\s[^#|]*/g)) add(c[0].trim(), true);
       }
       const row = fenced ? null : text.match(/^\|\s*`([a-z-]+)(\s[^`]*)`\s*\|/);

@@ -80,6 +80,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   models: { usage: "aleph models [set <tier> <model> | enable <tier> | disable <tier>]", purpose: "list and change the model of each tier" },
   judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
   doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
+  memory: { usage: "aleph memory <init|write|adopt|recall|lint|archive|delete|compile|misses> ...", purpose: "run a vault op, as bun vault/cli.ts does" },
   "doc-claims": { usage: "aleph doc-claims", purpose: "list each doc claim the code does not back" },
   help: { usage: "aleph help [--brief]", purpose: "list each command with its usage and purpose" },
 };
@@ -583,6 +584,17 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       const r = (await import("./lib/gates/doc-claims-repo.ts")).docClaimsReport();
       ctx.log(r.text);
       if (!r.ok) ctx.code = 1;
+      break;
+    }
+    case "memory": {
+      // The vault ops print through console and end with an Exit: its output goes to this run's stdout and stderr, its exit code is this one's.
+      const { run: vault, Exit } = await import("../vault/lib/ops.ts");
+      const { log, error } = console;
+      console.log = (...a) => ctx.log(a.join(" "));
+      console.error = (...a) => ctx.err(a.join(" "));
+      try { await vault(ctx.command.slice(1)); }
+      catch (e) { if (!(e instanceof Exit)) throw e; ctx.code = e.code; }
+      finally { console.log = log; console.error = error; }
       break;
     }
     case "job": await job(ctx); break;

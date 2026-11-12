@@ -1,5 +1,5 @@
 /**
- * The query of a Bash command that runs the vault CLI's recall (`vault recall …`, `bun …/cli.ts recall …`),
+ * The query of a Bash command that runs the vault CLI's recall (`vault recall …`, `bun …/cli.ts recall …`, `aleph memory recall …`),
  * as a command word after an optional `cd …;` or `&&`; null for anything else. Heredoc bodies are skipped,
  * and a grep or echo that only mentions the text is not a command word. Flags and their values are dropped.
  */
@@ -27,11 +27,10 @@ export function recallQuery(cmd: string): string | null {
     }
     endCmd();
     for (const w of cmds) {
-      const i = w[0] === "vault" ? 0 : /^(bun|bunx)$/.test(w[0]) ? (w[1] === "run" ? 2 : 1) : -1;
-      if (i < 0) continue;
-      const ok = i === 0 ? w[1] === "recall" : /(^|\/)cli\.ts$/.test(w[i]) && w[i + 1] === "recall";
-      if (!ok) continue;
-      const args = w.slice(i === 0 ? 2 : i + 2), q: string[] = [];
+      const j = /^(bun|bunx)$/.test(w[0]) ? (w[1] === "run" ? 2 : 1) : -1;
+      const at = w[0] === "vault" ? 1 : w[0] === "aleph" && w[1] === "memory" ? 2 : j >= 0 && /(^|\/)cli\.ts$/.test(w[j]) ? j + 1 : -1;
+      if (w[at] !== "recall") continue;
+      const args = w.slice(at + 1), q: string[] = [];
       for (let k = 0; k < args.length; k++) {
         if (args[k] === "--scope") k++;
         else if (!args[k].startsWith("--")) q.push(args[k]);
