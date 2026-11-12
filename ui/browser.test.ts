@@ -380,6 +380,27 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect([r.badge, r.date, r.dur]).toEqual([0, 0, 0]);
   }, 30_000);
 
+  test("at 390 px the Context session select stays inside the page width and keeps each option's full label", async () => {
+    await page.go("#/");
+    await page.width(390);
+    const project = "-home-user-a-very-long-directory-name-another-long-directory-name-and-more";
+    const r = await page.ev<any>(`import("/views/context.js").then(({ renderContext }) => {
+      const p = document.createElement("div");
+      p.className = "page";
+      const usage = { input: 1, cacheRead: 0, cacheWrite: 0, output: 1 };
+      p.innerHTML = renderContext({ sessions: [{ id: "abcdef123456", updated: "2026-11-12T10:00:00Z", project: ${JSON.stringify(project)} }], session: { id: "abcdef123456", requests: [{ n: 1, fill: 10, usage, parts: [] }] } });
+      document.body.append(p);
+      const sel = p.querySelector("#ctx-session");
+      const out = { over: sel.getBoundingClientRect().right - p.getBoundingClientRect().right, wide: document.documentElement.scrollWidth - document.documentElement.clientWidth, label: sel.options[0].text };
+      p.remove();
+      return out;
+    })`);
+    await page.width(1200);
+    expect(r.over).toBeLessThanOrEqual(0);
+    expect(r.wide).toBeLessThanOrEqual(0);
+    expect(r.label).toContain(project);
+  }, 30_000);
+
   test("an empty Queued lane keeps its head and rule level with Running's, and only its empty block is the dashed box", async () => {
     await page.go("#/");
     const measure = () => page.ev<any>(`import("/views/now.js").then(({ renderLanes }) => {

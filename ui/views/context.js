@@ -14,7 +14,7 @@ function picker(m, id, session, r) {
   const last = session.requests.length;
   const opts = m.sessions.map((s) => `<option value="${esc(s.id)}"${s.id === id ? " selected" : ""}>${esc(`${s.id.slice(0, 8)} · ${s.updated.slice(0, 10)} · ${s.project}`)}</option>`).join("");
   const step = (label, n) => `<button type="button" data-n="${n}"${n < 1 || n > last || n === r.n ? " disabled" : ""}>${label}</button>`;
-  return `<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center"><label>Session <select id="ctx-session" name="session">${opts}</select></label>` +
+  return `<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center"><label class="ctx-session">Session <select id="ctx-session" name="session">${opts}</select></label>` +
     `<span>Request ${step("Previous", r.n - 1)} <strong>${r.n}</strong> of ${last} ${step("Next", r.n + 1)} ${step("Latest", last)}</span></div>`;
 }
 

@@ -652,6 +652,8 @@ pre.stat b { color: var(--need); }
 .error .hint { color: var(--muted); font-size: var(--fs-sm); margin-top: var(--sp-2); }
 .error details { font-size: var(--fs-sm); color: var(--muted); }
 .error pre { margin: var(--sp-4) 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--fs-xs)/1.5 var(--mono); color: var(--ink-2); }
+.ctx-session { max-width: 100%; min-width: 0; }
+.ctx-session select { max-width: 100%; }
 .page h1 { font-family: var(--display); font-weight: var(--fw-text); }
 .md h1, .md h2, .md h3, .md h4 { font: var(--fw-strong) var(--fs-lg)/1.35 var(--sans); margin: var(--sp-14) 0 var(--sp-6); }
 .md h1 { font-size: var(--fs-lg); }
