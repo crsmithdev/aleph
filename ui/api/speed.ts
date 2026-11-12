@@ -353,9 +353,9 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
   return Object.fromEntries(PHASE_KEYS.map((k) => [k, phaseStat(t[k].map((x) => x.secs))])) as Speed["phases"];
 }
 
-/** Where an issue is, per bucket: the issues in intake (filed to triaged), queued (to the first agent start), running (to the land, else the last agent end) and landed in it. An issue counts once in each stage it was in during the bucket. An issue with no agent run is not in `runs`, so a waiting issue shows only once it starts. */
+/** Where an issue is, per bucket: the issues in intake (filed to triaged), queued (to the first agent start), running (to the land, else the last agent end) and landed in it. An issue counts once in each stage it was in during the bucket. An open issue with no agent run waits in intake from its filing to its intake run's end (else to now), then in the queue to now. `open` says whether an issue key counts as open and in the chart's project. */
 export interface Active { at: string; intake: number; queue: number; running: number; landed: number }
-export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof buckets>, now: number): Active[] {
+export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof buckets>, now: number, open: (key: string) => boolean = () => false): Active[] {
   type Span = [number, number];
   const per = new Map<string, { triaged?: number; start?: number; end?: number; land?: number }>();
   for (const r of runs) {
@@ -370,6 +370,7 @@ export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof
     } else if (r.kind === "land" && (r.condition === "landed" || r.condition === "done") && e > (t.land ?? -Infinity)) t.land = e;
     per.set(key, t);
   }
+  for (const key of issue.keys()) if (!per.has(key) && open(key)) per.set(key, {});
   const rows: Active[] = b.starts.map((at) => ({ at: new Date(at).toISOString(), intake: 0, queue: 0, running: 0, landed: 0 }));
   const edges = [...b.starts, b.until];
   const mark = (stage: "intake" | "queue" | "running", span: Span | null) => {
@@ -377,8 +378,14 @@ export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof
     rows.forEach((row, i) => { if (span[0] < edges[i + 1] && span[1] > edges[i]) row[stage]++; });
   };
   for (const [key, t] of per) {
-    if (t.start === undefined) continue;
-    const created = issue.get(key), sorted = t.triaged !== undefined && t.triaged <= t.start ? t.triaged : undefined;
+    const created = issue.get(key);
+    if (t.start === undefined) {
+      if (created == null || !open(key)) continue;
+      mark("intake", [created, t.triaged ?? now]);
+      if (t.triaged !== undefined) mark("queue", [t.triaged, now]);
+      continue;
+    }
+    const sorted = t.triaged !== undefined && t.triaged <= t.start ? t.triaged : undefined;
     if (created != null && sorted !== undefined) mark("intake", [created, sorted]);
     const queued = sorted ?? created;
     if (queued != null) mark("queue", [queued, t.start]);
@@ -634,7 +641,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: b.starts.map((at, i) => ({ at: new Date(at).toISOString(), runs: started[i], cost: costs[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) }) as Speed["buckets"][number]),
     times: ended.issues,
-    active: activeIssues(all, inp.filed, b, now.getTime()),
+    active: activeIssues(all, inp.filed, b, now.getTime(), (k) => inProject(k, project) && statusOf(k) === "open"),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     stages,
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(quantile(xs, 0.5)!) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),

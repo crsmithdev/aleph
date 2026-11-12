@@ -587,3 +587,18 @@ test("activeIssues counts each issue once per bucket in each stage it was in", (
   expect(at2(3.2)).toMatchObject({ running: 1, landed: 1 }); // ax-1 landed at 3h: it counts as landed, not running, in that hour
   expect(rows).toHaveLength(24);
 });
+
+test("activeIssues counts an open issue with no agent run in intake, then in the queue", () => {
+  const H = 3600_000, t0 = new Date(2026, 2, 10, 12).getTime(), at = (h: number) => t0 + h * H;
+  const now = at(3.5), b = buckets("day", now), slot = (h: number) => b.slotOf(at(h));
+  const intake = { kind: "intake", job: "ax-2", name: "x", repo: "ax", on: "ax-2", condition: "done", started: new Date(at(0)).toISOString(), ended: new Date(at(2)).toISOString() } as any;
+  const f = { issue: new Map<string, number | null>([["ax-1", at(0.5)], ["ax-2", at(-1)], ["ax-3", at(0.5)]]) };
+  // ax-1 is open with no run, ax-2 is open with an ended intake run, ax-3 is closed with no run.
+  const rows = activeIssues([intake], f, b, now, (k) => k !== "ax-3");
+  const at2 = (h: number) => rows[slot(h)];
+  expect(at2(-0.5)).toMatchObject({ intake: 1, queue: 0 }); // ax-2 only: ax-1 is filed at 0.5h
+  expect(at2(1.2)).toMatchObject({ intake: 2, queue: 0 }); // both wait in intake
+  expect(at2(2.2)).toMatchObject({ intake: 1, queue: 1 }); // ax-2 left intake at 2h: the edge is not in the hour before
+  expect(at2(3.2)).toMatchObject({ intake: 1, queue: 1, running: 0, landed: 0 }); // up to now
+  expect(rows.slice(slot(-1) + 1).every((r) => r.intake + r.queue <= 2)).toBe(true); // ax-3 is never counted
+});
