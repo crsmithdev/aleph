@@ -904,7 +904,8 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-in); }
 .trio > .wide { grid-column: span 2; }
 .chartlinks:focus-within { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; margin: 0; padding-left: var(--sp-16); font-size: var(--fs-xs); }
-.chartbox { width: 100%; height: 200px; min-width: 0; }
+/* ECharts sets its canvas to the box width in px; the box clips it, so a narrower page does not scroll until the chart resizes. */
+.chartbox { width: 100%; height: 200px; min-width: 0; overflow: hidden; }
 /* A chart panel fills its grid cell; its chart takes the height the card leaves. The basis is 0, not the content:
    ECharts sizes its canvas to the box, so a box sized by its content grows each time the chart resizes. */
 aleph-chart { display: flex; min-width: 0; }
