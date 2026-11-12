@@ -3,6 +3,7 @@
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
+import { mountContext, renderContext } from "./context.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel } from "../timeline.js";
 import { actButton, badge, bytes, count, fold, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, goQuery, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, miss, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tag, tiles, when, scope } from "../lib.js";
@@ -13,10 +14,10 @@ export const view = {
   icon: "brain",
   group: "claude",
   order: 1,
-  api: (_params, q = new URLSearchParams()) => scope(q).url(q.get("tab") === "log" ? "/api/memory/log" : "/api/memory"),
+  api: (_params, q = new URLSearchParams()) => (q.get("tab") === "context" ? "/api/context" : scope(q).url(q.get("tab") === "log" ? "/api/memory/log" : "/api/memory")),
   live: true,
-  render: (m, _params, query) => (query?.get("tab") === "log" ? renderLog(m, options(query)) : renderMemory(m, options(query))),
-  mount: (root, m, query) => (query?.get("tab") === "log" ? mountLog(root) : mount(root, m)),
+  render: (m, _params, query) => (query?.get("tab") === "context" ? renderContextTab(m, query) : query?.get("tab") === "log" ? renderLog(m, options(query)) : renderMemory(m, options(query))),
+  mount: (root, m, query) => (query?.get("tab") === "context" ? mountContext(root, m, query) : query?.get("tab") === "log" ? mountLog(root) : mount(root, m)),
 };
 
 const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
@@ -226,10 +227,10 @@ function renderBroad(m, rows) {
 
 const freshBar = (o) => filterBar([{ label: "Freshness", name: "fresh", value: o.fresh, options: FRESH }]);
 
-/** The views of the page: Search and Log are routes (`?tab=`); Context and Processes are not built, so they are not links. */
+/** The views of the page: Search, Context and Log are routes (`?tab=`); Processes is not built, so it is not a link. */
 export function renderTabs(on, project = "") {
   const href = (tab) => { const p = new URLSearchParams(); if (tab) p.set("tab", tab); if (project) p.set("project", project); return `#/memory${p.size ? `?${p}` : ""}`; };
-  const t = ([id, label]) => (id === "context" || id === "processes"
+  const t = ([id, label]) => (id === "processes"
     ? `<span class="soon" aria-disabled="true" title="Not built">${label}</span>`
     : `<a href="${href(id)}"${id === on ? ' aria-current="page"' : ""}>${label}</a>`);
   return `<nav class="vtabs" aria-label="Memory views">${[["", "Search"], ["context", "Context"], ["log", "Log"], ["processes", "Processes"]].map(t).join("")}</nav>`;
@@ -267,6 +268,10 @@ function mountLog(root) {
     if (b) goQuery({ kind: b.dataset.value });
   };
 }
+
+/** The Context tab: the page head and tabs around the body of `renderContext`. */
+export const renderContextTab = (m, query = new URLSearchParams()) =>
+  `<div class="page sp memory">${pageHead("Memory")}${renderTabs("context")}${renderContext(m, { n: query.get("n") })}</div>`;
 
 export function renderMemory(m, o = options(), results = null) {
   const status = new Map(noteRows(m).map((n) => [n.title, n.status]));

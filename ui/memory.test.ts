@@ -461,11 +461,12 @@ test("/api/memory/log lists writes and recalls newest first, one recall per call
   } finally { rmSync(log, { force: true }); rmSync(daily, { force: true }); await fresh(); }
 });
 
-test("the tabs link Search and Log, and leave Context and Processes unbuilt; the log row opens a recall to its notes", () => {
+test("the tabs link Search, Context and Log, and leave Processes unbuilt; the log row opens a recall to its notes", () => {
   const h = v.renderTabs("log", "aleph");
   expect(h).toContain('<a href="#/memory?project=aleph">Search</a>');
   expect(h).toContain('<a href="#/memory?tab=log&project=aleph" aria-current="page">Log</a>');
-  expect(h).toContain('<span class="soon" aria-disabled="true" title="Not built">Context</span>');
+  expect(h).toContain('<a href="#/memory?tab=context&project=aleph">Context</a>');
+  expect(h).toContain('<span class="soon" aria-disabled="true" title="Not built">Processes</span>');
   expect(v.renderMemory(page)).toContain('<nav class="vtabs"');
   const r = { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: ["A", "B"] };
   expect(v.logRow(r)).toContain('<details><summary>q</summary><ol><li><a href="#/memory/A">A</a></li><li><a href="#/memory/B">B</a></li></ol></details>');
@@ -473,4 +474,22 @@ test("the tabs link Search and Log, and leave Context and Processes unbuilt; the
   const rows = [r, { ...r, kind: "miss", op: "miss", note: "", titles: [] }];
   expect(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss")))).not.toContain("<details>");
   expect(v.renderLog({ project: "", rows: [] })).toContain("No events.");
+});
+
+test("the Context tab draws one parts row per part of the selected request, fixed parts est. and message parts exact", () => {
+  const part = (name: string, tokens: number, how: string) => ({ name, rec: "r", tokens, how });
+  const parts = [part("System prompt", 600, "est"), part("Tools · 2", 300, "est"), part("Your messages · 1", 100, "exact")];
+  const usage = { input: 2, cacheRead: 900, cacheWrite: 98, output: 7 };
+  const session = { id: "s1", requests: [{ n: 1, fill: 1000, usage, parts: parts.slice(0, 2) }, { n: 2, fill: 1000, usage, parts }] };
+  const sessions = [{ id: "s1aaaaaaaa", project: "aleph", updated: "2026-11-10T10:00:00Z" }];
+  const h = v.renderContextTab({ sessions, session }, new URLSearchParams("tab=context&n=2"));
+  expect(h).toContain('<a href="#/memory?tab=context" aria-current="page">Context</a>');
+  const table = h.slice(h.indexOf("<table"), h.indexOf("</table>"));
+  const rows = table.split("<tr>").slice(2).map((r: string) => r.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  expect(rows).toEqual(["System prompt r 600 est.", "Tools · 2 r 300 est.", "Your messages · 1 r 100 exact", "Total message.usage 1,000 exact"]);
+  expect(h).toContain("Fill of request 2");
+  expect(h.match(/data-n="\d+" aria-label="request/g)?.length).toBe(2);
+  expect(v.renderContextTab({ sessions, session }, new URLSearchParams("n=9"))).toContain("Fill of request 2");
+  expect(v.renderContextTab({ sessions })).toContain("Loading the session");
+  expect(v.renderContextTab({ sessions: [] })).toContain("No sessions.");
 });
