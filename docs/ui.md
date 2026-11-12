@@ -48,7 +48,7 @@ A URL names the data it returns in the terms of `docs/naming.md`. An action is a
 
 | Route | Returns |
 |---|---|
-| `GET /api/factory` | The Status page: the factory, the asks, the live jobs, the queue, the Done lane and its count for `?window=` |
+| `GET /api/factory` | The Status page: the factory, the asks, the live jobs, the queue, the Done lane |
 | `POST /api/factory/pause`, `/resume` | Pauses or resumes the factory |
 | `GET /api/flow` | The Flow page and the Jobs page charts, for `?window=` |
 | `GET /api/automation` | The Automation page: the rules, the caps' settings, held paths and the decision log |

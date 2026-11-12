@@ -259,8 +259,6 @@ main { min-width: 0; }
 .asof { color: var(--muted); margin: 0; }
 .agents { display: grid; gap: var(--sp-16); }
 .agent-row .now { margin: var(--sp-4) 0 0; font-size: var(--fs-sm); color: var(--muted); }
-.incoming-row .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-12); font-size: var(--fs-sm); }
-.incoming-row .ih .t { font-weight: var(--fw-strong); text-decoration: none; }
 
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--sp-28); align-items: start; }
 .rail { position: sticky; top: var(--sp-16); }

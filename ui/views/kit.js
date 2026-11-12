@@ -96,7 +96,7 @@ const TIMELINE = [{ title: "Runs", rows: [
 ] }];
 const NOW = "2026-11-10T17:00:00Z";
 const STATUS = {
-  now: NOW, factory: { liveRuns: 1, liveCap: 5 }, doneCount: 1,
+  now: NOW, factory: { liveRuns: 1, liveCap: 5 },
   running: [{ name: "aleph-1700", repo: "aleph", item: { id: 1700, title: "Give each component in design.md a live render", priority: "high" }, run: { kind: "agent", started: "2026-11-10T16:40:00Z" }, model: "claude-sonnet-5-5", started: "2026-11-10T16:40:00Z" }],
   queued: [{ repo: "aleph", id: 1701, title: "Fail CI on a new hard-coded colour in ui/", priority: "medium", stage: "queued", at: "2026-11-10T16:00:00Z" }],
   done: [{ id: "aleph-1702", href: "#/kit", title: "Show the cost of each run on its job page", priority: "low", finished: "2026-11-10T15:30:00Z" }],

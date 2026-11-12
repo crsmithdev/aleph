@@ -103,7 +103,7 @@ test("the lanes: Running shows live agent runs of the cap and lists every open r
   expect(h).toContain('<div class="sh"><h2 id="h-running">Running</h2><span class="count">12 of 12</span></div>');
   expect((h.match(/class="[^"]*run-row/g) ?? []).length).toBe(14);
   const d = (n: number) => ({ id: `aleph-${n}`, title: `D${n}`, href: "#/x", jobs: [] });
-  const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)), doneCount: 10 });
+  const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)) });
   expect(done).not.toContain("h-done");
   expect(done).not.toContain("done-row");
 });

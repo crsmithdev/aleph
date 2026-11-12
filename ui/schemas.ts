@@ -20,7 +20,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/factory": {
     now: "time", factory: { paused: "boolean", liveCap: "number", liveRuns: "number", runCap: "number", runStarts: "number", nextTick: "time?" },
     herald: { history: [{ at: "time", tone: "string", text: "string" }], events: [{ at: "time", subject: "string", action: "string" }], titles: { "*": "string" }, runs: { "*": "string" } },
-    done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }], doneCount: "number",
+    done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }],
     stuck: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],
     asks: [{ key: "string", kind: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }],

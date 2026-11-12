@@ -51,9 +51,9 @@ test("/api/factory?project= keeps only that project's jobs", async () => {
   for (const k of ["stuck", "running", "queued"]) expect(other[k].every((j: any) => j.repo === "other")).toBe(true);
 });
 
-test("/api/factory carries the Done count of its window and the asks; /api/automation carries no asks and no factory block", async () => {
+test("/api/factory carries the asks and no Done count; /api/automation carries no asks and no factory block", async () => {
   const f: any = await (await at("/api/factory?window=month")).json();
-  expect(typeof f.doneCount).toBe("number");
+  expect("doneCount" in f).toBe(false);
   expect(Array.isArray(f.asks)).toBe(true);
   expect("doneStamps" in f).toBe(false);
   expect((await at("/api/factory?window=year")).status).toBe(400);
