@@ -878,3 +878,15 @@ describe("provenance and the contradiction screen", () => {
     expect(r.stderr).toContain("warn contradiction");
   });
 });
+
+describe("docs/vault.md", () => {
+  test("each command in its Commands table is in the CLI's usage line", async () => {
+    const doc = readFileSync(join(import.meta.dir, "..", "..", "docs", "vault.md"), "utf8");
+    const table = doc.split("## Commands")[1].split("\n## ")[0];
+    const commands = table.split("\n").filter((l) => /^\| `/.test(l)).map((l) => l.match(/^\| `([\w-]+)/)![1]);
+    expect(commands).toContain("init");
+    const usage = (await run({ ALEPH_VAULT: vault }, "no-such-command")).stderr;
+    const listed = usage.replace(/^usage: vault </, "").replace(/>\s*$/, "").split("|").map((s) => s.trim().split(" ")[0]);
+    for (const c of commands) expect(listed).toContain(c);
+  });
+});

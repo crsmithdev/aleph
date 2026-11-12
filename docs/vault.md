@@ -27,7 +27,6 @@ In a session, the `vault` skill runs these for you.
 | `lint [--fix] [--overlap] [--template]` | Checks every note; `--fix` repairs what is mechanical |
 | `adopt <path> --why <text>` | Takes in a note that was written in the vault by hand |
 | `rename-scope <old> <new> [--apply]` | Renames a scope on every note |
-| `consolidate [--apply]` | Merges notes that say the same thing |
 | `archive <title> --why <text>` | Moves a note out of the index |
 | `delete <title> --why <text>` | Removes a note no live note links to; git keeps it |
 | `compile [date]` | Prints a digest of a day's Langfuse turns, handoffs and daily note |

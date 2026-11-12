@@ -345,7 +345,7 @@ export interface Health { notes: number; dangling: number; stale: number; date: 
  * The counts that go in Home's last line, which SessionStart injects.
  *
  * `stale` is here because nothing else shows it. A decay window that nobody
- * reads is a window that closes quietly, and no hook runs `consolidate`.
+ * reads is a window that closes quietly, and no hook reports it.
  */
 export function health(notes: Note[], read: Record<string, string> = {}): Health {
   const { refuse, warn } = lintVault(notes, { read });
