@@ -607,11 +607,13 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev(`(() => { const links = [...document.querySelectorAll(".toc a")];
       return { ok: links.every((a) => document.getElementById(a.getAttribute("href").slice(1))?.offsetParent), labels: links.map((a) => a.textContent) }; })()`))
       .toMatchObject({ ok: true, labels: expect.arrayContaining(["Media", "Notes"]) });
-    await page.ev('document.querySelector(".toc a[href=\'#issue-notes\']").click()');
-    // A short page cannot scroll the last panel into the band wireToc() marks, so this checks the scroll, not aria-current.
-    await page.when('document.getElementById("issue-notes").getBoundingClientRect().top < innerHeight && scrollY > 0');
+    // The click on Media ends the scroll at the end of the page, where the last entry would be current: the click keeps Media current.
+    await page.ev('document.querySelector(".toc a[href=\'#issue-media\']").click()');
+    await page.when("scrollY > 0 && scrollY + innerHeight >= document.documentElement.scrollHeight - 1");
+    expect(await page.ev('[...document.querySelectorAll(".toc a[aria-current]")].map((a) => a.textContent)')).toEqual(["Media"]);
     expect(await hash()).toBe("#/issues/demo/21");
-    await page.ev("scrollTo(0, document.documentElement.scrollHeight)");
+    // A scroll by hand drops the click: at the end of the page the last entry is current.
+    await page.ev('dispatchEvent(new WheelEvent("wheel")); scrollTo(0, document.documentElement.scrollHeight)');
     await page.when('[...document.querySelectorAll(".toc a")].at(-1).hasAttribute("aria-current")');
     expect(await page.ev('[...document.querySelectorAll(".toc a[aria-current]")].map((a) => a.textContent)'))
       .toEqual([await page.ev('[...document.querySelectorAll(".toc a")].at(-1).textContent')]);
