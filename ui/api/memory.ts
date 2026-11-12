@@ -203,13 +203,13 @@ async function processes(): Promise<Response> {
   const tick = readJsonOr<{ last?: Record<string, string>; ran?: Record<string, { result: string }> }>(join(factoryDir(), "tick.json"), {});
   const store = readJsonOr<{ minedAt: string; lessons: { sentence: string; state: string }[] }>(join(factoryDir(), "corrections.json"), { minedAt: "", lessons: [] });
   const step = (name: string, runs: string, last: string | undefined, next: string | null, does: string) =>
-    ({ name, runs, last: last ?? null, next, result: tick.ran?.[name]?.result ?? null, does });
+    ({ name, runs, last: last ?? null, next, result: tick.ran?.[name]?.result ?? null, detail: null, does });
   const steps = [
     step("episodes", "every 30 min", tick.last?.episodes, tick.last?.episodes ? new Date(Date.parse(tick.last.episodes) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
     step("corrections", "daily after 03:00", store.minedAt || undefined, store.minedAt ? nextDaily(store.minedAt) : null, "mines lessons from transcripts, gate denials and drop reasons"),
     ...([["seen prune", "with each recall that injects a note", "deletes seen lists older than 7 days"], ["recall trim", "with each logged recall", "keeps 30 days of the recall log"], ["vault push", "with each vault write", "pushes the vault commit to origin"]] as const).map(([name, runs, does]) => {
       const run = readRun(root, name);
-      return { name, runs, last: run?.at ?? null, next: null, result: run?.result ?? null, does };
+      return { name, runs, last: run?.at ?? null, next: null, result: run?.result ?? null, detail: run?.detail ?? null, does };
     }),
   ];
   const dir = episodesDir();

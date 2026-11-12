@@ -479,8 +479,10 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
     writeFileSync(join(runs, "seen prune.json"), JSON.stringify({ at: "2026-11-04T11:45:00.000Z", result: "ok" }));
     writeFileSync(join(runs, "vault push.json"), JSON.stringify({ at: "2026-11-04T11:50:00.000Z", result: "failed", detail: "no route" }));
     await fresh("factory");
-    const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(2).map((s: any) => [s.name, s.last, s.result]);
-    expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok"], ["recall trim", null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed"]]);
+    const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(2).map((s: any) => [s.name, s.last, s.result, s.detail]);
+    expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok", null], ["recall trim", null, null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed", "no route"]]);
+    const row = v.renderProcessesTab(await (await at("/api/memory/processes")).json()).split("<tr>").find((t: string) => t.includes("vault push"))!;
+    expect(row).toContain('<span class="badge stuck">failed</span> <span class="quiet">no route</span>');
     expect(m.episodes.pages).toBe(1);
     expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1 });
     expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ sentence: "Run the checks.", state: "proposed" }] });
