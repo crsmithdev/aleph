@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Memory · Processes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&amp;family=Merriweather:wght@700&amp;display=swap">
+<style>
+body{margin:0;background:#F4F3FA}
+a{color:#3B5FC8}a:hover{color:#2A4596}
+.tabs a{padding:10px 4px;text-decoration:none;color:#62688A;font-weight:500;border-bottom:2px solid transparent}
+.tabs a.on{color:#292D3E;border-bottom-color:#292D3E}
+.card{background:#FFF;border:1px solid #DCD9EC;border-radius:12px;padding:16px}
+.lbl{font-size:12px;color:#62688A;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.mono{font-family:Hack,ui-monospace,Menlo,monospace;font-size:12px}
+.btn{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid #DCD9EC;background:#FFF;color:#292D3E;min-height:36px}
+table{border-collapse:collapse;width:100%}
+th{font-size:12px;color:#62688A;text-align:left;font-weight:600;padding:8px;border-bottom:1px solid #DCD9EC}
+td{padding:8px;border-bottom:1px solid #ECEAF6;vertical-align:top}
+.ok{color:#437018;font-weight:600}
+.bad{color:#C0304C;font-weight:600}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
+.box{padding:8px 10px;border:1px solid #DCD9EC;border-radius:8px;background:#F8F7FC}
+.arr{color:#62688A}
+</style>
+</helmet>
+<div style="font-family: 'Work Sans', system-ui, sans-serif; color: #292D3E; font-size: 14px; background: #F4F3FA; min-height: 1400px; box-sizing: border-box; padding: 32px 24px">
+<div style="max-width: 1232px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+<h1 style="margin: 0; font-family: Merriweather, Georgia, serif; font-size: 28px">Memory</h1>
+<nav class="tabs" aria-label="Memory views" style="display: flex; flex-wrap: wrap; gap: 24px; border-bottom: 1px solid #DCD9EC">
+<a href="Main.dc.html">Search</a>
+<a href="Context.dc.html">Context</a>
+<a href="Log.dc.html">Log</a>
+<a class="on" href="Processes.dc.html" aria-current="page">Processes</a>
+</nav>
+
+<div class="card" style="padding: 0; overflow-x: auto">
+<div style="padding: 16px 16px 0; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px">
+<span class="lbl">Schedule · aleph tick runs every minute</span>
+<span style="font-size: 12px; color: #62688A">From ~/.aleph/factory/tick.json and factory/events</span>
+</div>
+<table>
+<thead><tr><th>Process</th><th>Runs</th><th>Last run</th><th>Next</th><th>Last result</th><th>Does</th></tr></thead>
+<tbody>
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="6">
+<tr><td><strong>{{s.name}}</strong></td><td>{{s.when}}</td><td class="mono">{{s.last}}</td><td class="mono">{{s.next}}</td><td><span class="{{s.cls}}">{{s.res}}</span></td><td style="color: #4A4F6C">{{s.does}}</td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+
+<div class="card" style="display: flex; flex-direction: column; gap: 12px">
+<span class="lbl">Episodes · every 30 min</span>
+<div class="flow">
+<span class="box">transcripts</span><span class="arr">to</span><span class="box">episode pages · 1,371</span><span class="arr">to</span><span class="box">pruned after 14 days</span>
+</div>
+<div style="display: flex; align-items: flex-end; gap: 4px; height: 90px; border-bottom: 1px solid #DCD9EC" role="img" aria-label="Episode pages written per day, last 14 days">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="14">
+<div style="{{d.style}}" title="{{d.label}}"></div>
+</sc-for>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 12px; color: #62688A"><span>14 days ago</span><span>pages written per day</span><span>today</span></div>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 12px">
+<span class="lbl">Corrections · daily after 03:00</span>
+<div class="flow">
+<span class="box">transcripts</span><span class="arr">to</span><span class="box">lessons · 25</span><span class="arr">to</span><span class="box">you decide</span><span class="arr">to</span><span class="box">vault note</span>
+</div>
+<div style="display: flex; height: 18px; border-radius: 6px; overflow: hidden" role="img" aria-label="25 lessons: 4 open, 6 approved, 15 declined">
+<div style="width: 16%; background: #8A5A00"></div><div style="width: 24%; background: #437018"></div><div style="width: 60%; background: #B9B5D0"></div>
+</div>
+<div style="display: flex; gap: 16px; font-size: 12px; color: #62688A"><span>4 open</span><span>6 approved</span><span>15 declined</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{lessons}}" as="l" hint-placeholder-count="2">
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; border-top: 1px solid #ECEAF6; padding-top: 8px">
+<span style="flex: 1 1 240px">{{l}}</span>
+<span style="display: flex; gap: 6px"><button class="btn">Approve</button><button class="btn">Decline</button></span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 12px">
+<span class="lbl">Contradiction screen · on each write</span>
+<div class="flow">
+<span class="box">new note</span><span class="arr">to</span><span class="box">Jev screen</span><span class="arr">to</span><span class="box">refused if p ≥ 0.7</span>
+</div>
+<div style="padding: 12px; border: 1px dashed #DCD9EC; border-radius: 8px; color: #62688A; font-size: 13px">No record today: a refusal goes to stderr only. To show refusals here, the screen must write an event first.</div>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 12px">
+<span class="lbl">Decay · lint, run by hand</span>
+<div class="flow">
+<span class="box">note age</span><span class="arr">over</span><span class="box">DECAY_DAYS × confidence factor</span><span class="arr">to</span><span class="box">stale</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<div style="display: flex; justify-content: space-between; gap: 8px"><a href="Main.dc.html">Factory Uses Hidden Checks</a><span style="color: #62688A">past decay by [N] days</span></div>
+<div style="display: flex; justify-content: space-between; gap: 8px"><a href="Main.dc.html">Caller Runs On Twilio</a><span style="color: #62688A">past decay by [N] days</span></div>
+</div>
+<div style="display: flex; gap: 6px"><button class="btn">Run lint</button><button class="btn">Archive stale</button></div>
+</div>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 8px">
+<span class="lbl">Not automatic today</span>
+<span style="color: #4A4F6C">Consolidation, dedupe and reflection have no job. Compile, archive and delete run by hand, and the Log tab shows each run. A new job gets a row in Schedule when it exists.</span>
+</div>
+
+<p style="margin: 0; font-size: 12px; color: #62688A">Sample times. Real counts: 1,371 episode files and 25 lessons (4 open, 6 approved, 15 declined) on 2026-11-12.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1400}}'>
+class Component extends DCLogic {
+renderVals() {
+const steps = [
+["episodeStep", "every 30 min", "14:00:03", "14:30", "ok", "ok · 6 pages, 14 pruned", "writes episode pages, prunes pages older than 14 days"],
+["correctionsStep", "daily after 03:00", "03:00:41", "tomorrow 03:00", "ok", "ok · 2 lessons", "mines lessons from transcripts"],
+["seen-list prune", "each recall hook", "14:02:17", "next recall", "ok", "ok", "drops .index/seen lists older than 7 days"],
+["recall log trim", "each CLI recall", "yesterday", "next recall", "ok", "ok", "keeps 30 days of .recall-log.jsonl"],
+["vault push", "each vault commit", "14:06:12", "next write", "bad", "failed · 1 retry", "pushes the vault to its private remote"]
+].map(([name, when, last, next, cls, res, does]) => ({ name, when, last, next, cls, res, does }));
+const per = [96, 88, 102, 91, 40, 35, 99, 97, 110, 93, 89, 101, 94, 62];
+const days = per.map((n, i) => ({ label: n + " pages", style: "flex: 1; height: " + Math.round(n / 110 * 86) + "px; background: " + (i === 13 ? "#3B5FC8" : "#9AABE4") + "; border-radius: 3px 3px 0 0" }));
+const lessons = ["Run the pre-commit hook before you claim a pass", "Name the session ID before you report what it did"];
+return { steps, days, lessons };
+}
+}
+</script>
+</body>
+</html>

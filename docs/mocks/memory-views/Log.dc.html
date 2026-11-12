@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Memory · Log</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&amp;family=Merriweather:wght@700&amp;display=swap">
+<style>
+body{margin:0;background:#F4F3FA}
+a{color:#3B5FC8}a:hover{color:#2A4596}
+.tabs a{padding:10px 4px;text-decoration:none;color:#62688A;font-weight:500;border-bottom:2px solid transparent}
+.tabs a.on{color:#292D3E;border-bottom-color:#292D3E}
+.card{background:#FFF;border:1px solid #DCD9EC;border-radius:12px;padding:16px}
+.lbl{font-size:12px;color:#62688A;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.mono{font-family:Hack,ui-monospace,Menlo,monospace;font-size:12px}
+.btn{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid #DCD9EC;background:#FFF;color:#292D3E;min-height:36px}
+.btn.on{background:#292D3E;color:#FFF;border-color:#292D3E}
+table{border-collapse:collapse;width:100%}
+th{font-size:12px;color:#62688A;text-align:left;font-weight:600;padding:8px;border-bottom:1px solid #DCD9EC}
+td{padding:8px;border-bottom:1px solid #ECEAF6;vertical-align:top}
+.k{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.k.write{background:#E3EBD6;color:#2F5010}
+.k.recall{background:#DEE4F7;color:#2A4596}
+.k.miss{background:#F6E6C8;color:#6B4600}
+.k.prune{background:#ECEAF6;color:#4A4F6C}
+</style>
+</helmet>
+<div style="font-family: 'Work Sans', system-ui, sans-serif; color: #292D3E; font-size: 14px; background: #F4F3FA; min-height: 1300px; box-sizing: border-box; padding: 32px 24px">
+<div style="max-width: 1232px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+<h1 style="margin: 0; font-family: Merriweather, Georgia, serif; font-size: 28px">Memory</h1>
+<nav class="tabs" aria-label="Memory views" style="display: flex; flex-wrap: wrap; gap: 24px; border-bottom: 1px solid #DCD9EC">
+<a href="Main.dc.html">Search</a>
+<a href="Context.dc.html">Context</a>
+<a class="on" href="Log.dc.html" aria-current="page">Log</a>
+<a href="Processes.dc.html">Processes</a>
+</nav>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+<div class="card" style="display: flex; flex-direction: column; gap: 4px"><span class="lbl">Writes · 7 days</span><span style="font-size: 26px; font-weight: 600">[N]</span><span style="font-size: 12px; color: #62688A">daily notes + vault git</span></div>
+<div class="card" style="display: flex; flex-direction: column; gap: 4px"><span class="lbl">Recalls offered · 7 days</span><span style="font-size: 26px; font-weight: 600">[N]</span><span style="font-size: 12px; color: #62688A">hook spans + CLI log</span></div>
+<div class="card" style="display: flex; flex-direction: column; gap: 4px"><span class="lbl">Misses · 7 days</span><span style="font-size: 26px; font-weight: 600">[N]</span><span style="font-size: 12px; color: #62688A">vault misses</span></div>
+<div class="card" style="display: flex; flex-direction: column; gap: 4px"><span class="lbl">Notes never recalled</span><span style="font-size: 26px; font-weight: 600">[N]</span><span style="font-size: 12px; color: #62688A">of 556 semantic</span></div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<button class="btn on">All</button><button class="btn">Writes</button><button class="btn">Recalls</button><button class="btn">Misses</button><button class="btn">Pruned</button>
+<span style="width: 12px"></span>
+<label for="sess" style="font-size: 13px; color: #62688A">Session</label>
+<select id="sess" style="font: inherit; padding: 8px; border: 1px solid #DCD9EC; border-radius: 8px; background: #FFF"><option>any</option><option>aa11a76c (this one)</option></select>
+<label for="note" style="font-size: 13px; color: #62688A">Note</label>
+<input id="note" placeholder="title" style="font: inherit; padding: 8px; border: 1px solid #DCD9EC; border-radius: 8px; background: #FFF; width: 200px">
+</div>
+
+<div class="card" style="padding: 0; overflow-x: auto">
+<table>
+<thead><tr><th style="width: 70px">Time</th><th style="width: 80px">Kind</th><th>Note</th><th>Why or query</th><th style="width: 110px">Session</th><th style="width: 70px">Source</th></tr></thead>
+<tbody>
+<tr><td colspan="6" style="background: #F4F3FA; font-weight: 600; font-size: 13px">Today · 2026-11-12</td></tr>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="10">
+<tr>
+<td class="mono">{{r.t}}</td>
+<td><span class="k {{r.kind}}">{{r.op}}</span></td>
+<td><a href="Main.dc.html">{{r.note}}</a></td>
+<td style="color: #4A4F6C">{{r.why}}</td>
+<td class="mono"><a href="Context.dc.html">{{r.sess}}</a></td>
+<td style="font-size: 12px; color: #62688A">{{r.src}}</td>
+</tr>
+<sc-if value="{{r.open}}" hint-placeholder-val="{{ false }}">
+<tr><td></td><td colspan="5" style="background: #F8F7FC">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 4px 0">
+<span style="font-size: 13px">Query <span class="mono">“pager next 50 page turn”</span> · 40 candidates · asked 12 · kept 5 · offered 3</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span class="k recall">1 · Live Pages Refetch On A Pushed Change Signal</span>
+<span class="k recall">2 · UI Charts Are Frame Panels</span>
+<span class="k recall">3 · Design Review Runs On The Kit Page</span>
+<span class="k prune">kept, not offered · 2</span>
+</div>
+<span style="font-size: 12px; color: #62688A">From the Langfuse vault-recall span. The request that carried it: <a href="Context.dc.html">request 4 in Context</a>.</span>
+</div>
+</td></tr>
+</sc-if>
+</sc-for>
+<tr><td colspan="6" style="background: #F4F3FA; font-weight: 600; font-size: 13px">Yesterday · 2026-11-11</td></tr>
+<tr><td class="mono" style="color: #62688A">—</td><td><span class="k recall">recall</span></td><td><a href="#">Issue Titles Are Imperative And At Most 60 Characters</a></td><td style="color: #4A4F6C">aleph vault search “issue title”</td><td class="mono" style="color: #62688A">—</td><td style="font-size: 12px; color: #62688A">CLI</td></tr>
+</tbody>
+</table>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<button class="btn">Previous 50</button><button class="btn">Next 50</button>
+<span style="color: #62688A; font-variant-numeric: tabular-nums">51–100 of [N]</span>
+</div>
+
+<p style="margin: 0; font-size: 12px; color: #62688A">Sample rows. CLI recalls log only the day, so their time shows as a dash. A write has no session unless the note frontmatter names one. The recall score is not stored today, so ranks show without scores.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1300}}'>
+class Component extends DCLogic {
+renderVals() {
+const rows = [
+["14:06", "write", "write", "The Pager Turns Pages", "pager moved from Show more to Next and Previous", "aa11a76c", "daily", false],
+["14:02", "recall", "recall", "Live Pages Refetch On A Pushed Change Signal", "offered 3 of 40", "aa11a76c", "hook", true],
+["13:41", "miss", "miss", "—", "“context inspector transcript usage”: no note above the floor", "aa11a76c", "hook", false],
+["12:18", "write", "supersede", "Worker-Low Runs On DeepSeek V4.1 Flash", "replaces the mimo note after the shadow run", "d9ad263e", "daily", false],
+["11:50", "write", "archive", "Factory Uses The srt Sandbox", "the rebuild removes the sandbox", "—", "daily", false],
+["09:30", "prune", "prune", "episodes before 2026-10-29", "episodeStep: 14 pages older than 14 days", "—", "tick", false],
+["03:04", "write", "adopt", "Lesson: ask before a force push", "correctionsStep lesson approved", "—", "tick", false]
+].map(([t, kind, op, note, why, sess, src, open]) => ({ t, kind, op, note, why, sess, src, open }));
+return { rows };
+}
+}
+</script>
+</body>
+</html>

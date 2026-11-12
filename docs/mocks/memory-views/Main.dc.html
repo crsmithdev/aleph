@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Memory · Search</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&amp;family=Merriweather:wght@700&amp;display=swap">
+<style>
+body{margin:0;background:#F4F3FA}
+a{color:#3B5FC8}a:hover{color:#2A4596}
+.tabs a{padding:10px 4px;text-decoration:none;color:#62688A;font-weight:500;border-bottom:2px solid transparent}
+.tabs a.on{color:#292D3E;border-bottom-color:#292D3E}
+.card{background:#FFF;border:1px solid #DCD9EC;border-radius:12px;padding:16px}
+.lbl{font-size:12px;color:#62688A;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.mono{font-family:Hack,ui-monospace,Menlo,monospace;font-size:12px}
+</style>
+</helmet>
+<div style="font-family: 'Work Sans', system-ui, sans-serif; color: #292D3E; font-size: 14px; background: #F4F3FA; min-height: 1000px; box-sizing: border-box; padding: 32px 24px">
+<div style="max-width: 1232px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px">
+<h1 style="margin: 0; font-family: Merriweather, Georgia, serif; font-size: 28px">Memory</h1>
+<div style="display: flex; gap: 8px; align-items: center; font-size: 13px; color: #62688A">Scope
+<select aria-label="Scope" style="font: inherit; color: #292D3E; padding: 6px 8px; border: 1px solid #DCD9EC; border-radius: 8px; background: #FFF"><option>all scopes</option><option>aleph</option></select>
+</div>
+</div>
+
+<nav class="tabs" aria-label="Memory views" style="display: flex; flex-wrap: wrap; gap: 24px; border-bottom: 1px solid #DCD9EC">
+<a class="on" href="Main.dc.html" aria-current="page">Search</a>
+<a href="Context.dc.html">Context</a>
+<a href="Log.dc.html">Log</a>
+<a href="Processes.dc.html">Processes</a>
+</nav>
+
+<div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{types}}" as="t" hint-placeholder-count="7">
+<div class="card" style="padding: 12px; display: flex; flex-direction: column; gap: 4px">
+<span class="lbl">{{t.name}}</span>
+<span style="font-size: 22px; font-weight: 600">{{t.n}}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+<label for="q" style="position: absolute; left: -9999px">Search memory</label>
+<input id="q" value="pager" style="flex: 1 1 420px; font: inherit; padding: 12px 14px; border: 1px solid #DCD9EC; border-radius: 10px; background: #FFF">
+<div style="display: flex; gap: 6px; font-size: 13px; color: #62688A; align-items: center">Freshness
+<button style="font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #292D3E; background: #292D3E; color: #FFF">any</button>
+<button style="font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #DCD9EC; background: #FFF; color: #292D3E">fresh</button>
+<button style="font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #DCD9EC; background: #FFF; color: #292D3E">stale</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div class="card" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<span class="lbl">semantic · 4 of 556</span>
+<sc-for list="{{hits}}" as="h" hint-placeholder-count="4">
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid #ECEAF6">
+<a href="#">{{h.title}}</a><span style="color: #62688A; font-size: 13px">{{h.when}}</span>
+</div>
+</sc-for>
+</div>
+<div class="card" style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 8px">
+<span class="lbl">Inspector</span>
+<strong>The Pager Turns Pages</strong>
+<span style="color: #62688A; font-size: 13px">semantic · aleph · written 2026-11-12 · recalled 3 times</span>
+<p style="margin: 0; line-height: 1.5">Next and Previous replace the rows. The page lives in the address as page=N.</p>
+<a href="Log.dc.html" style="font-size: 13px">See this note in the log</a>
+</div>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 8px">
+<span class="lbl">Health (unchanged)</span>
+<span style="color: #62688A">Lint · last recall per note · Start context budget · Recent writes. Recent writes moves to the Log tab and leaves a link here.</span>
+</div>
+
+<p style="margin: 0; font-size: 12px; color: #62688A">Address: #/memory, #/memory/context, #/memory/log, #/memory/processes. Each tab keeps its own query. Sample values.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1000}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+types: [["semantic","556"],["procedural","[N]"],["episodic","1,371"],["working","[N]"],["prospective","[N]"],["retrieval","[N]"],["parametric","[N]"]].map(([name, n]) => ({ name, n })),
+hits: [
+{ title: "The Pager Turns Pages", when: "today" },
+{ title: "Live Pages Refetch On A Pushed Change Signal", when: "12 d" },
+{ title: "UI Charts Are Frame Panels", when: "20 d" },
+{ title: "Design Review Runs On The Kit Page", when: "31 d" }
+]
+};
+}
+}
+</script>
+</body>
+</html>
