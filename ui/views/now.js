@@ -84,8 +84,8 @@ const health = (share) => (share < 0.1 ? "fine" : share <= 0.25 ? "warning" : "a
 /** The Jobs filter of each stage: its stage tile there and the role of its runs. Review and Recheck have no stage tile, so they filter by role alone; a recheck is a worker run. */
 const DRILL = { intake: { stage: "intake", role: "intake" }, queue: { stage: "queue" }, build: { stage: "implement", role: "worker" }, review: { role: "reviewer" }, recheck: { role: "worker" }, land: { stage: "land" } };
 /** The Jobs page for a stage, in the window and project of `q`. */
-export const drillHref = (k, q) => {
-  const s = scope(q), out = new URLSearchParams(DRILL[k]);
+export const drillHref = (k, q, extra = {}) => {
+  const s = scope(q), out = new URLSearchParams({ ...DRILL[k], ...extra });
   if (s.window !== "week") out.set("window", s.window);
   if (s.project) out.set("project", s.project);
   return `#/factory/jobs?${out}`;
@@ -108,7 +108,7 @@ export function renderPipeline(d, q = new URLSearchParams()) {
     if (n === null) return `<div class="pnode idle"><span class="ring">–</span><span class="pn">${esc(name)}</span><span class="pt">${miss("Nothing ran in this window")}</span></div>`;
     const share = r.runs ? (r.unusable ?? 0) / r.runs : 0, tone = health(share);
     const tip = `${name}: ${plural(r.runs, "run")} on ${plural(r.items, "issue")}${r.unusable ? `, ${count(r.unusable)} failed` : ""}`;
-    return `<div class="pnode ${tone}">${go(k, tip, `<span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span><span class="pt">${esc(dur(r.p90))}</span>`)}<span class="pf">${pct(share * 100)} failed</span></div>`;
+    return `<div class="pnode ${tone}">${go(k, tip, `<span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span><span class="pt">${esc(dur(r.p90))}</span>`)}${r.unusable ? `<a class="pf" href="${esc(drillHref(k, q, { unusable: "1" }))}">${pct(share * 100)} failed</a>` : `<span class="pf">${pct(share * 100)} failed</span>`}</div>`;
   };
   const nodes = Object.entries(PIPE).map(node).join(`<span class="parrow" aria-hidden="true"></span>`);
   return box(`<div class="pflow" role="group" aria-label="Stages">${nodes}</div>`, `<span class="asof">runs / issue in the ring · p90 time under it</span>`);

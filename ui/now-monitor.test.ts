@@ -22,11 +22,11 @@ test("the Pipeline card shows the 6 stages in order, each a ring of runs per iss
   const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
   expect(names).toEqual(["Intake", "Queue", "Build", "Review", "Recheck", "Land"]);
   // 2 of 9 build runs failed: 22%, amber; 0 of 3 intake runs: green.
-  expect(h).toContain('<div class="pnode warning"><a class="pgo" href="#/factory/jobs?stage=implement&amp;role=worker" title="Build: 9 runs on 5 issues, 2 failed"><span class="ring">1.8</span><span class="pn">Build</span><span class="pt">13m 24s</span></a><span class="pf">22% failed</span>');
+  expect(h).toContain('<div class="pnode warning"><a class="pgo" href="#/factory/jobs?stage=implement&amp;role=worker" title="Build: 9 runs on 5 issues, 2 failed"><span class="ring">1.8</span><span class="pn">Build</span><span class="pt">13m 24s</span></a><a class="pf" href="#/factory/jobs?stage=implement&amp;role=worker&amp;unusable=1">22% failed</a>');
   expect(h).toContain('<div class="pnode fine"><a class="pgo" href="#/factory/jobs?stage=intake&amp;role=intake" title="Intake: 3 runs on 3 issues"><span class="ring">1.0</span>');
   expect(h).toContain('<span class="pn">Queue</span><span class="pt">1m 19s</span>');
   // The failed share is pct()'s text: 1 of 400 is 0.3%, not a rounded 0%.
-  expect(h).toContain('<span class="pf">0.3% failed</span>');
+  expect(h).toContain('>0.3% failed</a>');
   expect(h.match(/class="pnode idle"/g)).toHaveLength(2);
   // A stage with no run shows a "–" with its reason, not words; so does an empty queue.
   expect(h).toContain('<span class="pt"><span title="Nothing ran in this window">–</span></span>');
@@ -46,8 +46,17 @@ test("each Pipeline ring links to Jobs with its stage and role, in the window an
     "#/factory/jobs?stage=queue&window=day&project=aleph",
     "#/factory/jobs?role=reviewer&window=day&project=aleph",
     "#/factory/jobs?role=worker&window=day&project=aleph",
+    "#/factory/jobs?role=worker&unusable=1&window=day&project=aleph",
   ]);
   expect(h.match(/class="pnode idle"/g)).toHaveLength(3);
+});
+
+test("a Pipeline stage with an unusable run links its failed share to the unusable runs of the page's window and project; one with none keeps plain text", () => {
+  const rows = [{ stage: "build", runs: 9, items: 5, unusable: 2, p90: 804 }, { stage: "intake", runs: 3, items: 3, unusable: 0, p90: null }];
+  const h = view.renderPipeline({ window: "day", stages: { rows }, phases: {} }, new URLSearchParams("window=day&project=aleph"));
+  expect(h).toContain('<a class="pf" href="#/factory/jobs?stage=implement&amp;role=worker&amp;unusable=1&amp;window=day&amp;project=aleph">22% failed</a>');
+  expect(h).toContain('<span class="pf">0.0% failed</span>');
+  expect(h.match(/class="pf"/g)).toHaveLength(2);
 });
 
 test("the Herald shows its alerts under a Not OK badge in the worst alert's tone, then the events", () => {

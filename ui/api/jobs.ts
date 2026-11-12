@@ -14,6 +14,7 @@ import { currentFit, runShare, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
 import { resultContent } from "../../lib/toolresult.ts";
 import { contentText, issueHref, parseId, subjectOf, tail } from "../../lib/naming.ts";
+import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
@@ -203,7 +204,7 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
 const none = () => Response.json({ error: "no such job" }, { status: 404 });
 
 export const routes: Routes = {
-  // One row per job, newest first: `?project=`, `?window=` (default week), `?state=`, and the page `?limit=`, `?before=` (an ISO start).
+  // One row per job, newest first: `?project=`, `?window=` (default week), `?state=`, `?unusable=1` (the runs the monitor counts as failed), and the page `?limit=`, `?before=` (an ISO start).
   "GET /api/jobs": (_req, _p, url) => {
     const q = url.searchParams, sc = scopeOf(url);
     if (sc instanceof Response) return sc;
@@ -213,7 +214,7 @@ export const routes: Routes = {
     if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
     loadRegistry();
     const since = Date.now() - sc.ms, all = allRuns();
-    const hit = all.filter(({ run: r }) => repoIn(r.repo, sc.project) && (!state || r.condition === state) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)))
+    const hit = all.filter((e) => { const r = e.run; return repoIn(r.repo, sc.project) && (!state || r.condition === state) && (q.get("unusable") !== "1" || unusable(e)) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)); })
       .sort((a, b) => Date.parse(b.run.started) - Date.parse(a.run.started));
     const page = hit.slice(0, limit);
     return Response.json({ jobs: rowsOf(page), next: hit.length > limit ? page.at(-1)!.run.started : null });

@@ -130,6 +130,13 @@ describe("GET /api/jobs", () => {
     const [row] = (await (await get("/api/jobs?project=fac")).json()).jobs;
     expect(row).toMatchObject({ id: "fac-9#3", subject: "fac-9", name: "fac-9", repo: "fac", kind: "land", actor: null, state: "landed", started: ago(2.5), ended: ago(2), seconds: 1800, cost: null });
   });
+  test("?unusable=1 keeps the runs the monitor counts as failed: failed, returned, dropped, or with a cause; not passed or landed", async () => {
+    run("20261027-000006-a", { job: "fac-3", name: "fac-3", repo: "fac", condition: "returned", started: ago(1) });
+    run("20261027-000007-a", { job: "fac-4", name: "fac-4", repo: "fac", condition: "dropped", started: ago(1) });
+    run("20261027-000008-a", { job: "fac-5", name: "fac-5", repo: "fac", condition: "passed", cause: "timeout", started: ago(1) });
+    expect((await idsOf("unusable=1")).sort()).toEqual(["fac-3#1", "fac-4#1", "fac-5#1", "fac-9#1", "oth-1#1"]);
+    expect(await idsOf("unusable=1&project=oth")).toEqual(["oth-1#1"]);
+  });
   test("pages by ?limit= and ?before=, and says where the next page starts", async () => {
     const one = await (await get("/api/jobs?window=month&limit=2")).json();
     expect(one.jobs.map((j: any) => j.id)).toEqual(["oth-1#1", "fac-9#3"]);

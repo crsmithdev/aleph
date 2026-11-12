@@ -115,7 +115,7 @@ const inside = (iso: string | undefined, from: number, to: number): boolean => {
 };
 
 /** A run that ended with nothing the line can use: it failed, was returned or was dropped, or it states a cause. */
-function unusable(e: Entry): boolean {
+export function unusable(e: Entry): boolean {
   const r = e.run;
   return r.condition === "failed" || r.condition === "returned" || r.condition === "dropped" || causeOf(r) !== undefined;
 }

@@ -85,6 +85,10 @@ test("a picked window asks for the jobs of the same window, and the state goes a
   expect(listUrl(null, new URLSearchParams("window=week&role=worker&state=failed"))).toBe("/api/jobs?state=failed&limit=2000");
 });
 
+test("the unusable filter of the page goes to the jobs URL", () => {
+  expect(listUrl(null, new URLSearchParams("window=day&project=aleph&unusable=1&stage=implement"))).toBe("/api/jobs?project=aleph&window=day&unusable=1&limit=2000");
+});
+
 test("the route of #?window=day is Status, on the day window", () => {
   const { path, query } = parseHash("#?window=day");
   expect(path).toBe("/");
