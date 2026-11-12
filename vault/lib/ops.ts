@@ -14,7 +14,7 @@ import { handoffsFor, traceDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
+import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 import { logEvent } from "../../lib/layout.ts";
 
@@ -44,6 +44,7 @@ function commitAndPush(subject: string, paths: string[]): string | null {
   const commit = commitPaths(root, subject, paths);
   if (!commit) return null;
   const p = pushOrigin(root);
+  if (p.detail !== "no origin") recordRun(root, "vault push", p.pushed ? "ok" : "failed", p.detail);
   if (!p.pushed && p.detail !== "no origin") console.error(`warn push ${subject}: ${p.detail}; the commit stands, push it when you can`);
   return commit;
 }

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -131,5 +131,20 @@ test("each injected note is appended to the recall log with source hook, and not
   const lines = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   expect(lines).toEqual([{ date: lines[0].date, title: "Jev Screens Bounded Judgments", query: PROMPT, session: "s-log", source: "hook" }]);
   expect(existsSync(join(v, ".recall.json"))).toBe(false);
+  rmSync(v, { recursive: true, force: true });
+});
+
+test("an injection records a seen-list prune run and deletes a seen list older than 7 days", async () => {
+  const v = mkdtempSync(join(tmpdir(), "aleph-recall-prune-"));
+  note(v, "Jev Screens Bounded Judgments", "Jev answers bounded questions before Haiku.");
+  mkdirSync(join(v, ".index", "seen"), { recursive: true });
+  const stale = join(v, ".index", "seen", "stale.json");
+  writeFileSync(stale, "[]");
+  utimesSync(stale, new Date("2020-01-01"), new Date("2020-01-01"));
+  expect(injected((await run(v, PROMPT, {}, turn())).out)).toContain("Jev Screens Bounded Judgments");
+  expect(existsSync(stale)).toBe(false);
+  const rec = JSON.parse(readFileSync(join(v, ".index", "runs", "seen prune.json"), "utf8"));
+  expect(rec.result).toBe("ok");
+  expect(Date.parse(rec.at)).toBeGreaterThan(Date.parse("2026-11-01"));
   rmSync(v, { recursive: true, force: true });
 });

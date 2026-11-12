@@ -18,7 +18,7 @@ import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
 import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { backlinks, coreNotes, KINDS, linkTargets, links, lintVault, loadVault, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { backlinks, coreNotes, KINDS, linkTargets, links, lintVault, loadVault, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 
@@ -207,6 +207,10 @@ async function processes(): Promise<Response> {
   const steps = [
     step("episodes", "every 30 min", tick.last?.episodes, tick.last?.episodes ? new Date(Date.parse(tick.last.episodes) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
     step("corrections", "daily after 03:00", store.minedAt || undefined, store.minedAt ? nextDaily(store.minedAt) : null, "mines lessons from transcripts, gate denials and drop reasons"),
+    ...([["seen prune", "with each recall that injects a note", "deletes seen lists older than 7 days"], ["recall trim", "with each logged recall", "keeps 30 days of the recall log"], ["vault push", "with each vault write", "pushes the vault commit to origin"]] as const).map(([name, runs, does]) => {
+      const run = readRun(root, name);
+      return { name, runs, last: run?.at ?? null, next: null, result: run?.result ?? null, does };
+    }),
   ];
   const dir = episodesDir();
   const mtimes = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md")).map((f) => statSync(join(dir, f)).mtimeMs) : [];

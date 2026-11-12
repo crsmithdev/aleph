@@ -428,6 +428,9 @@ describe("push", () => {
     expect(broken.json.commit).toMatch(/^[0-9a-f]{7,}$/);
     expect(broken.stderr).toContain("warn push");
     expect(broken.stderr).toContain("the commit stands");
+    const run = JSON.parse(readFileSync(join(vault, ".index", "runs", "vault push.json"), "utf8"));
+    expect(run).toMatchObject({ result: "failed", detail: expect.stringContaining("repository") });
+    expect(Date.parse(run.at)).toBeGreaterThan(0);
 
     Bun.spawnSync(["git", "-C", vault, "remote", "remove", "origin"]);
     (await cli("archive", "Pushed Upstream", "--why", "test fixture"));

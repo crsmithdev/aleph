@@ -471,7 +471,17 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
     expect(m.steps.map((s: any) => [s.name, s.last, s.next, s.result])).toEqual([
       ["episodes", "2026-11-04T11:30:00.000Z", "2026-11-04T12:00:00.000Z", "failed: no page"],
       ["corrections", "2026-11-04T11:00:00.000Z", m.steps[1].next, null],
+      ["seen prune", null, null, null],
+      ["recall trim", null, null, null],
+      ["vault push", null, null, null],
     ]);
+    const runs = join(base, "vault", ".index", "runs");
+    mkdirSync(runs, { recursive: true });
+    writeFileSync(join(runs, "seen prune.json"), JSON.stringify({ at: "2026-11-04T11:45:00.000Z", result: "ok" }));
+    writeFileSync(join(runs, "vault push.json"), JSON.stringify({ at: "2026-11-04T11:50:00.000Z", result: "failed", detail: "no route" }));
+    await fresh("factory");
+    const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(2).map((s: any) => [s.name, s.last, s.result]);
+    expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok"], ["recall trim", null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed"]]);
     expect(m.episodes.pages).toBe(1);
     expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1 });
     expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ sentence: "Run the checks.", state: "proposed" }] });
@@ -481,7 +491,7 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
     expect(v.renderProcessesTab({ ...m, steps: [{ ...m.steps[0], result: "2 written" }] })).toContain('<span class="badge done">2 written</span>');
     expect(h).toContain("No note is stale.");
     expect(h).toContain('<a href="#/memory?tab=processes" aria-current="page">Processes</a>');
-  } finally { rmSync(tick, { force: true }); rmSync(store, { force: true }); }
+  } finally { rmSync(tick, { force: true }); rmSync(store, { force: true }); rmSync(join(base, "vault", ".index", "runs"), { recursive: true, force: true }); }
 });
 
 test("the tabs link Search, Context, Log and Processes; the log row opens a recall to its notes", () => {

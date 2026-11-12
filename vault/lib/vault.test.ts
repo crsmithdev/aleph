@@ -1,8 +1,8 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lintVault, loadVault, loadWiki, screenCandidates, wikiNotes } from "./vault.ts";
+import { appendRecallLog, lintVault, loadVault, loadWiki, readRun, screenCandidates, wikiNotes } from "./vault.ts";
 
 let root: string;
 const N = 300;
@@ -41,4 +41,18 @@ test("consistent_with leaves a note out of screenCandidates and out of the overl
   expect((await other()).title).toBe("Pipeline Gate Rules");
   expect(lintVault(await get(), { overlap: true }).warn.some((f) => f.rule === "overlap")).toBe(false);
   rmSync(r, { recursive: true, force: true });
+});
+
+test("appendRecallLog records a recall trim run and drops a line older than 30 days", () => {
+  setSystemTime(Date.parse("2026-11-04T12:00:00Z"));
+  const r = mkdtempSync(join(tmpdir(), "vault-trim-"));
+  const line = (date: string, title: string) => JSON.stringify({ date, title, query: "q", session: null, source: "cli" });
+  writeFileSync(join(r, ".recall-log.jsonl"), [line("2026-09-25", "Old"), line("2026-11-02", "Kept")].join("\n") + "\n");
+  expect(readRun(r, "recall trim")).toBeNull();
+  appendRecallLog(r, ["New"], "q", null, "cli");
+  const titles = readFileSync(join(r, ".recall-log.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l).title);
+  expect(titles).toEqual(["Kept", "New"]);
+  expect(readRun(r, "recall trim")).toEqual({ at: "2026-11-04T12:00:00.000Z", result: "ok" });
+  rmSync(r, { recursive: true, force: true });
+  setSystemTime();
 });

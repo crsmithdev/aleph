@@ -6,6 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statS
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import { today } from "../../lib/day.ts";
+import { readJsonOr, writeJson } from "../../lib/json.ts";
 import { vaultDir } from "../../lib/paths.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { probe } from "../../lib/git.ts";
@@ -59,12 +60,28 @@ export interface Finding { note: string; rule: string; detail: string }
 
 export { today };
 
+export type Run = { at: string; result: "ok" | "failed"; detail?: string };
+const runFile = (root: string, name: string) => join(root, ".index", "runs", `${name}.json`);
+
+/** The newest run of a vault process, one file each in `.index/runs` (outside git), so the record never grows. A failed write changes nothing. */
+export function recordRun(root: string, name: string, result: Run["result"], detail?: string): void {
+  try { writeJson(runFile(root, name), { at: new Date().toISOString(), result, ...(detail ? { detail } : {}) }); } catch { /* the record must never fail its process */ }
+}
+
+/** The newest run of `name`, or null when it never ran or its record is unreadable. */
+export function readRun(root: string, name: string): Run | null {
+  try { return readJsonOr<Run | null>(runFile(root, name), null); } catch { return null; }
+}
+
 /** Every logged return, one JSON line of date, title, query, session and source, for 30 days. Outside git; the CLI and the hook both append through here. */
 export function appendRecallLog(root: string, titles: string[], query: string, session: string | null, source: "cli" | "hook"): void {
   const file = join(root, ".recall-log.jsonl");
   const cut = today(new Date(Date.now() - 30 * 86400_000));
-  const old = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l && JSON.parse(l).date >= cut) : [];
-  writeFileSync(file, [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query, session, source }))].join("\n") + "\n");
+  try {
+    const old = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l && JSON.parse(l).date >= cut) : [];
+    writeFileSync(file, [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query, session, source }))].join("\n") + "\n");
+  } catch (e: any) { recordRun(root, "recall trim", "failed", e?.message ?? String(e)); throw e; }
+  recordRun(root, "recall trim", "ok");
 }
 
 export function clock(d = new Date()): string {
