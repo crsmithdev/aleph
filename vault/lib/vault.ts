@@ -2,7 +2,7 @@
  * The vault on disk: notes, links, validation, lint, health. Pure functions
  * over a directory; the CLI decides what to write and commit.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import { today } from "../../lib/day.ts";
@@ -62,6 +62,15 @@ export { today };
 export function clock(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** Append `- HH:MM <line>` to today's daily note under `root`, making the note when it is new. */
+export function appendDaily(root: string, line: string): void {
+  const dir = join(root, "daily");
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${today()}.md`);
+  if (!existsSync(file)) writeFileSync(file, `# ${today()}\n\n`);
+  appendFileSync(file, `- ${clock()} ${line}\n`);
 }
 
 export function readNote(path: string, root: string): Note {

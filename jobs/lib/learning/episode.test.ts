@@ -8,6 +8,7 @@ import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
 import { loadRegistry, type Run } from "../records/ledger.ts";
 import { putRun } from "../records/record.ts";
+import { clock, today } from "../../../vault/lib/vault.ts";
 import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -132,6 +133,10 @@ test(`a page older than ${KEEP_DAYS} days is deleted, and an issue whose last ru
   const r = await writeEpisodes([loadRegistry().fac]);
   expect(r).toEqual({ written: [`fac-${fresh} fresh one`], failed: [] });
   expect(pages()).toEqual([`fac-${fresh} fresh one.md`]);
+  const v = join(base, "vault");
+  const daily = readFileSync(join(v, "daily", `${today()}.md`), "utf8");
+  expect(daily.split("\n").filter((l) => l.includes("prune episodes"))).toEqual([`- ${clock()} prune episodes before ${today(new Date(NOW - KEEP_DAYS * 86400_000))} — 1 pages older than ${KEEP_DAYS} days`]);
+  expect(sh(v, "git", "status", "--porcelain", "--", "daily")).toBe("");
 });
 
 /** Adds a top-level issue and `titles.length` parts under it, all done with a landed commit and a run. */

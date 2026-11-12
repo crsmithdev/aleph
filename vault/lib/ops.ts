@@ -3,7 +3,7 @@
  * on stderr, and ends with `Exit` for a refusal, which the CLI turns into its exit code.
  */
 import { readJsonOr } from "../../lib/json.ts";
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { langfuse } from "../../lib/langfuse.ts";
@@ -14,7 +14,7 @@ import { handoffsFor, traceDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { backlinks, budgetFindings, citedTraces, clock, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
+import { appendDaily as writeDaily, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
@@ -59,13 +59,7 @@ function requireVault(): void {
   if (!existsSync(join(root, "Home.md"))) { console.error(`no vault at ${root}; run: vault init`); exit(1); }
 }
 
-function appendDaily(line: string): void {
-  const dir = join(root, "daily");
-  mkdirSync(dir, { recursive: true });
-  const file = join(dir, `${today()}.md`);
-  if (!existsSync(file)) writeFileSync(file, `# ${today()}\n\n`);
-  appendFileSync(file, `- ${clock()} ${line}\n`);
-}
+function appendDaily(line: string): void { writeDaily(root, line); }
 
 /**
  * Undo exactly the paths one write touched, and nothing else.

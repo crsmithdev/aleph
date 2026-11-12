@@ -8,6 +8,8 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { today } from "../../../lib/day.ts";
+import { commitPaths } from "../../../vault/lib/git.ts";
+import { appendDaily, vaultDir } from "../../../vault/lib/vault.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
 import { traceIdFor } from "../../../lib/otlp.ts";
 import { partsOf, readList } from "../../../issues/lib/store.ts";
@@ -167,14 +169,18 @@ async function writeEpisode(repo: Repo, item: issues.Issue): Promise<{ title: st
   }
 }
 
-/** Delete the pages last written more than KEEP_DAYS ago. */
+/** Delete the pages last written more than KEEP_DAYS ago, and when any went, log one op line in the vault's daily note and commit it. */
 function pruneEpisodes(now = Date.now()): void {
   const dir = episodesDir();
   if (!existsSync(dir)) return;
+  let deleted = 0;
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
-    if (statSync(p).mtimeMs < now - KEEP_DAYS * 86400_000) rmSync(p);
+    if (statSync(p).mtimeMs < now - KEEP_DAYS * 86400_000) { rmSync(p); deleted++; }
   }
+  if (!deleted) return;
+  appendDaily(vaultDir(), `prune episodes before ${today(new Date(now - KEEP_DAYS * 86400_000))} — ${deleted} pages older than ${KEEP_DAYS} days`);
+  commitPaths(vaultDir(), "prune episodes", [join(vaultDir(), "daily", `${today()}.md`)]);
 }
 
 /** The done issues of `repos`, the one whose last run ended longest ago first, at most `cap` pages. */
