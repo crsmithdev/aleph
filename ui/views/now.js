@@ -3,6 +3,7 @@
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, count, empty, error, esc, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say as sayParts } from "../../lib/naming.ts";
+import { panelOf } from "../chart.js";
 import { bar, flowOf, statusCards, usable } from "./speed.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
 import { verdict } from "../../lib/status-words.ts";
@@ -17,11 +18,14 @@ export const view = {
   refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
-  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(f), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f)}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(f), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderActive(f)}${renderPipeline(f)}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
   more: async (s, q) => ({ ...s, flow: await flowOf(scope(q).window, q, true) }),
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
-  mount: (root, _s, q) => { scope(q).wire(root); wireHeraldJump(root); },
+  mount: (root, s, q) => {
+    scope(q).wire(root); wireHeraldJump(root);
+    if (usable(s.flow)) root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow);
+  },
   // An event from the stream goes into the Herald at once; the reload that follows draws it from the state.
   event: (root, ev) => {
     streamed.push(ev);
@@ -51,6 +55,24 @@ function renderOutcome(d) {
   if (!d) return outcome(loadingLine("the outcomes"));
   if (d.error) return outcome(error(d.error));
   return outcome(bar(d));
+}
+
+/** The active-issues frame: per bucket, the issues in each stage (`d.active` of /api/flow), stacked. */
+export const activeFrame = (d) => ({
+  measure: { name: "Active Issues", unit: "count", agg: "max" },
+  over: { kind: "time", window: d.window },
+  by: { name: "Stage", keys: [{ key: "intake", name: NAMES.intake, color: "chart-6" }, { key: "queue", name: "Queued", color: "series-4" }, { key: "running", name: "Running", color: "run" }, { key: "landed", name: "Landed", color: "done" }] },
+  rows: d.active ?? [],
+  form: "area",
+  empty: "No issue was active in this window.",
+  hint: "Pick a longer window.",
+});
+
+/** The Active Issues chart above the Pipeline card. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
+export function renderActive(d) {
+  if (!d) return card("Active Issues", loadingLine("the active issues"), { id: "active-issues" });
+  if (d.error) return card("Active Issues", error(d.error), { id: "active-issues" });
+  return panelOf("status/active", activeFrame(d), "active-issues");
 }
 
 /** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. Queue is the wait before the first build, not a run. */
@@ -324,13 +346,6 @@ function laneCard(id, cls, row, title, href, below = "") {
 const lane = (id, title, n, rows, none, cap = 0) =>
   `<section id="lane-${id}" class="lane${rows ? "" : " none"}" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : none, cap)}</section>`;
 
-/** Done: the done parts and issues /api/factory sends, newest first, each its own card. */
-function doneLane(s) {
-  const rows = (s.done ?? []).map((i) =>
-    laneCard(i.id, "done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: badge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
-  return lane("done", "Done", (s.done ?? []).length, rows, empty("Nothing is done yet.", "Landed work shows here."), s.doneCount ?? 0);
-}
-
 function queuedLane(s) {
   const rows = (s.queued ?? []).map((w) => {
     const dead = (w.waits ?? []).filter((b) => b.dead);
@@ -363,9 +378,9 @@ function runningLane(s) {
   return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, empty("Nothing is running.", "Started work shows here."), s.factory.liveCap ?? 0);
 }
 
-/** The three lanes: Running and Queued in one row, Done the full width under them. */
+/** The two lanes: Running and Queued in one row. */
 export function renderLanes(s) {
-  return `<div class="lanes"><div class="lanes-top">${runningLane(s)}${queuedLane(s)}</div>${doneLane(s)}</div>`;
+  return `<div class="lanes"><div class="lanes-top">${runningLane(s)}${queuedLane(s)}</div></div>`;
 }
 
 

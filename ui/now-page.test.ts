@@ -96,17 +96,16 @@ test("more fetches the week with its baseline, and the page fills the scorecard,
   expect(page).not.toContain("Loading the outcomes");
 });
 
-test("the lanes: Running shows live agent runs of the cap and lists every open run; Done lists every done item", () => {
+test("the lanes: Running shows live agent runs of the cap and lists every open run; there is no Done lane", () => {
   const mk = (n: number, kind: string) => job({ name: `${kind}-${n}`, run: { kind, started: "2026-10-30T09:00:00Z" } });
   const running = [...Array.from({ length: 12 }, (_, i) => mk(i, "agent")), mk(1, "land"), mk(2, "land")];
   const h = view.renderLanes({ ...full, running, factory: { ...full.factory, liveCap: 12, liveRuns: 12 }, done: [] });
   expect(h).toContain('<div class="sh"><h2 id="h-running">Running</h2><span class="count">12 of 12</span></div>');
   expect((h.match(/class="[^"]*run-row/g) ?? []).length).toBe(14);
   const d = (n: number) => ({ id: `aleph-${n}`, title: `D${n}`, href: "#/x", jobs: [] });
-  const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)) });
-  expect((done.match(/done-row/g) ?? []).length).toBe(10);
-  expect(done).toContain('<h2 id="h-done">Done</h2><span class="count">10</span>');
-  expect(done).not.toContain("Latest done");
+  const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)), doneCount: 10 });
+  expect(done).not.toContain("h-done");
+  expect(done).not.toContain("done-row");
 });
 
 test("lane cards show no why text and a worker tag reads its tier and model", () => {
@@ -193,15 +192,12 @@ test("a held Queued card ends its meta row with its hold event: the action word 
   expect(html).not.toContain(">blocked</span>");
 });
 
-test("a land card has its own kind class, and the Done header shows the count of its window", () => {
+test("a land card has its own kind class", () => {
   const run = (kind: string) => ({ name: "j", repo: "r", item: { title: "t" }, started: "2026-11-02T11:00:00Z", run: { kind, started: "2026-11-02T11:00:00Z" } });
   const html = view.renderLanes({ ...state, running: [run("land"), run("build")] });
   expect(html).toContain("run-row kind-land");
   expect(html).toContain('data-annotate="j"');
   expect(html).toContain("run-row kind-worker");
-  const done = { ...state, done: [1, 2].map((n) => ({ id: `r-${n}`, title: "d", href: "#/x", jobs: [] })), doneCount: 4 };
-  expect(view.renderLanes(done)).toContain('data-annotate="r-2"');
-  expect(view.renderLanes(done)).toContain('<h2 id="h-done">Done</h2><span class="count">2 of 4</span>');
 });
 
 test("the Status page scorecard is a tiles section with the id scorecard", () => {
@@ -215,12 +211,11 @@ test("a failed flow load shows error() in the Agent Time card", () => {
   expect(bad.slice(bad.indexOf('id="outcome"'), bad.indexOf('id="pipeline"'))).toContain(error("x"));
 });
 
-test("an empty Done, Queued or Running lane draws empty() with a hint", () => {
+test("an empty Queued or Running lane draws empty() with a hint", () => {
   const h = view.renderLanes({ ...state, done: [], queued: [], running: [], runningIssues: [] });
-  expect(h).toContain(empty("Nothing is done yet.", "Landed work shows here."));
   expect(h).toContain(empty("Nothing is queued.", "Issues wait here for a worker."));
   expect(h).toContain(empty("Nothing is running.", "Started work shows here."));
-  expect(h.match(/<p class="hint">/g)).toHaveLength(3);
+  expect(h.match(/<p class="hint">/g)).toHaveLength(2);
 });
 
 test("a stuck job's fold reads Technical details, and its blocker is an idLink", () => {
@@ -228,4 +223,16 @@ test("a stuck job's fold reads Technical details, and its blocker is an idLink",
   expect(h).toContain("<summary>Technical details</summary>");
   expect(h).not.toContain("<summary>Details</summary>");
   expect(h).toContain('Blocker <a class="idl" href="#/issues/aleph/7">aleph-7</a>: Open work');
+});
+
+test("the Active Issues chart sits between Outcome and Pipeline: loading, error, and a chart panel with the stage keys", () => {
+  const draw = (flow: unknown) => view.view.render({ ...state, usage: USAGE, flow } as any, {}, new URLSearchParams()) as string;
+  const slice = (h: string) => h.slice(h.indexOf('id="outcome"'), h.indexOf('id="pipeline"'));
+  expect(slice(draw(undefined))).toContain("Loading the active issues");
+  expect(slice(draw({ error: "x" }))).toContain(error("x"));
+  const ok = slice(draw({ ...WEEK, active: [{ at: "2026-10-27T00:00:00", intake: 1, queue: 2, running: 3, landed: 4 }] }));
+  expect(ok).toContain('<aleph-chart key="status/active"');
+  const f = view.activeFrame({ ...WEEK, active: [] });
+  expect(f.by.keys.map((k: any) => k.key)).toEqual(["intake", "queue", "running", "landed"]);
+  expect(f.form).toBe("area");
 });

@@ -54,6 +54,8 @@ export interface Speed {
   asks: { count: number; manual: number };
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string; `cost` is the recorded cost of the agent runs that started in it, per model. */
+  /** Issues in each stage per bucket, for the Status page's chart. */
+  active: Active[];
   buckets: ({ at: string; runs: number; cost: Record<string, number>; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
   /** Every issue with a phase that ended in the window. */
   times: IssueTimes[];
@@ -351,6 +353,42 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
   return Object.fromEntries(PHASE_KEYS.map((k) => [k, phaseStat(t[k].map((x) => x.secs))])) as Speed["phases"];
 }
 
+/** Where an issue is, per bucket: the issues in intake (filed to triaged), queued (to the first agent start), running (to the land, else the last agent end) and landed in it. An issue counts once in each stage it was in during the bucket. An issue with no agent run is not in `runs`, so a waiting issue shows only once it starts. */
+export interface Active { at: string; intake: number; queue: number; running: number; landed: number }
+export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof buckets>, now: number): Active[] {
+  type Span = [number, number];
+  const per = new Map<string, { triaged?: number; start?: number; end?: number; land?: number }>();
+  for (const r of runs) {
+    const key = issueKeyOf(r, { parent: true });
+    if (key === undefined) continue;
+    const t = per.get(key) ?? {}, a = Date.parse(r.started), e = Date.parse(r.ended ?? "");
+    if (isAgentRun(r.kind)) {
+      t.start = Math.min(a, t.start ?? Infinity);
+      t.end = Math.max(Number.isFinite(e) ? e : now, t.end ?? -Infinity);
+    } else if (r.kind === "intake") {
+      if (e < (t.triaged ?? Infinity)) t.triaged = e;
+    } else if (r.kind === "land" && (r.condition === "landed" || r.condition === "done") && e > (t.land ?? -Infinity)) t.land = e;
+    per.set(key, t);
+  }
+  const rows: Active[] = b.starts.map((at) => ({ at: new Date(at).toISOString(), intake: 0, queue: 0, running: 0, landed: 0 }));
+  const edges = [...b.starts, b.until];
+  const mark = (stage: "intake" | "queue" | "running", span: Span | null) => {
+    if (!span || !(span[1] >= span[0])) return;
+    rows.forEach((row, i) => { if (span[0] < edges[i + 1] && span[1] > edges[i]) row[stage]++; });
+  };
+  for (const [key, t] of per) {
+    if (t.start === undefined) continue;
+    const created = issue.get(key), sorted = t.triaged !== undefined && t.triaged <= t.start ? t.triaged : undefined;
+    if (created != null && sorted !== undefined) mark("intake", [created, sorted]);
+    const queued = sorted ?? created;
+    if (queued != null) mark("queue", [queued, t.start]);
+    mark("running", [t.start, t.land ?? t.end!]);
+    const slot = t.land === undefined ? -1 : b.slotOf(t.land);
+    if (slot >= 0) rows[slot].landed++;
+  }
+  return rows;
+}
+
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
 const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "director"], ["monitor", "monitor"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
 type AgentKey = (typeof AGENT_ROLES)[number][0];
@@ -596,6 +634,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: b.starts.map((at, i) => ({ at: new Date(at).toISOString(), runs: started[i], cost: costs[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) }) as Speed["buckets"][number]),
     times: ended.issues,
+    active: activeIssues(all, inp.filed, b, now.getTime()),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     stages,
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(quantile(xs, 0.5)!) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),

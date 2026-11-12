@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { withEnv } from "./test-server.ts";
-import { agentStats, CLASSES, classify, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
+import { activeIssues, agentStats, CLASSES, classify, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
+import { buckets } from "../lib/windows.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
 import { bar, statusCards, usageCard, xLabel } from "./views/speed.js";
@@ -564,4 +565,25 @@ test("classify: the restart loop starts at the run cap setting", () => {
     expect(reran.issues).toBe(1);
     expect(out.notCounted.runs).toBe(5);
   } finally { off(); }
+});
+
+test("activeIssues counts each issue once per bucket in each stage it was in", () => {
+  const H = 3600_000, t0 = new Date(2026, 2, 10, 12).getTime(), at = (h: number) => t0 + h * H;
+  const r = (n: number, kind: string, state: string, a: number, b: number) => ({ kind, job: `ax-${n}`, name: "x", repo: "ax", on: `ax-${n}`, condition: state, started: new Date(at(a)).toISOString(), ended: new Date(at(b)).toISOString() }) as any;
+  // The day window ends in the hour of `now` (15:30): hourly buckets from 16:00 the day before.
+  const now = at(3.5), b = buckets("day", now), slot = (h: number) => b.slotOf(at(h));
+  const f = { issue: new Map<string, number | null>([["ax-1", at(-2)], ["ax-2", at(0.5)]]) };
+  const rows = activeIssues([
+    // ax-1: filed -2h, triaged 0.5h (intake), starts 1.5h (queued), builds to 2.5h, lands 3h.
+    r(1, "intake", "done", 0, 0.5), r(1, "build", "passed", 1.5, 2.5), r(1, "land", "landed", 2.9, 3),
+    // ax-2: filed 0.5h with no intake run, starts 2h and is still running.
+    { ...r(2, "build", "running", 2, 2), ended: undefined },
+  ], f, b, now);
+  const at2 = (h: number) => rows[slot(h)];
+  expect(at2(-2)).toMatchObject({ intake: 1, queue: 0, running: 0, landed: 0 }); // ax-1 is in intake from its filing
+  expect(at2(0.7)).toMatchObject({ intake: 1, queue: 2, running: 0 }); // ax-1 is triaged at 0.5h and ax-2 is filed then
+  expect(at2(1.7)).toMatchObject({ intake: 0, queue: 2, running: 1 }); // ax-1 starts at 1.5h and ax-2 still waits
+  expect(at2(2.2)).toMatchObject({ queue: 0, running: 2, landed: 0 }); // ax-2 starts at 2h: the edge is not in the hour before
+  expect(at2(3.2)).toMatchObject({ running: 1, landed: 1 }); // ax-1 landed at 3h: it counts as landed, not running, in that hour
+  expect(rows).toHaveLength(24);
 });
