@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
+import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
@@ -36,11 +36,11 @@ const CLOSED = ["done", "dropped"];
 const DEFAULT_STATUS = "open";
 const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
 
-/** The filters and the sort, from the route's query: ?status=open&project=x&stage=x&priority=x&label=x&q=text&sort=title&dir=asc&limit=100. With a search and no sort, the best match comes first. */
+/** The filters and the sort, from the route's query: ?status=open&project=x&stage=x&priority=x&label=x&q=text&sort=title&dir=asc&page=2. With a search and no sort, the best match comes first. */
 export function hashOptions(q = new URLSearchParams()) {
   const s = scope(q);
   return {
-    limit: limitOf(q, PAGE),
+    page: pageOf(q),
     status: statusOf(q.get("status")), project: s.project, stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open", window: s.window,
     sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
   };
@@ -198,10 +198,10 @@ export function renderTable(rows, o = {}) {
   const kids = Map.groupBy(flat.filter(under), (r) => r.parent);
   const all = group ? flat.filter((r) => !under(r)).flatMap((r) => [r, ...(open.has(r.id) ? kids.get(r.id) ?? [] : [])]) : flat;
   if (!all.length) return empty("Nothing matches.", "Loosen the filters, or file an issue below.");
-  const shown = all.slice(0, o.limit ?? PAGE);
+  const shown = pageRows(all, o.page ?? 1, PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
   const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
-  return `${dataTable(head, shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) && (open.has(r.id) ? "open" : "closed"), sub: under(r) } : {})).join(""))}${pager(shown.length, all.length, PAGE)}`;
+  return `${dataTable(head, shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) && (open.has(r.id) ? "open" : "closed"), sub: under(r) } : {})).join(""))}${pager(o.page ?? 1, all.length, PAGE)}`;
 }
 
 /** Whether a stored time is inside the span of `b`, the buckets of a window. */
@@ -329,11 +329,11 @@ export const chartKey = (k) => `issues/${k}`;
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
 const TILE_FILTER = {
-  open: { tile: "", status: "", sort: "", dir: "", limit: "" },
-  filed: { tile: "filed", status: "any", sort: "", dir: "", limit: "" },
-  closed: { tile: "closed", status: "any", sort: "", dir: "", limit: "" },
-  age: { tile: "age", status: "", sort: "age", dir: "desc", limit: "" },
-  runs: { tile: "runs", status: "any", sort: "runs", dir: "desc", limit: "" },
+  open: { tile: "", status: "", sort: "", dir: "", page: "" },
+  filed: { tile: "filed", status: "any", sort: "", dir: "", page: "" },
+  closed: { tile: "closed", status: "any", sort: "", dir: "", page: "" },
+  age: { tile: "age", status: "", sort: "age", dir: "desc", page: "" },
+  runs: { tile: "runs", status: "any", sort: "runs", dir: "desc", page: "" },
 };
 
 const TOP_RUNS = 10;
@@ -426,7 +426,7 @@ export async function mount(root, d) {
   live = { root, tests: d?.tests, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(hashQuery()) };
   if (root.querySelector?.(".chartbox")) draw(root);
   const table = root.querySelector?.('section[aria-label="Issues"]');
-  if (table) wireTable(table, { redraw: refill, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, page: PAGE, search: "inv-search" });
+  if (table) wireTable(table, { redraw: refill, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, search: "inv-search" });
   onTile(root.querySelector?.("#inv-numbers"), (k) => {
     setQuery(TILE_FILTER[k]);
     root.querySelector(`button[data-tile="${k}"]`)?.focus();
@@ -647,7 +647,7 @@ if (typeof document !== "undefined") {
   document.addEventListener("click", (e) => {
     const t = e.target.closest ? e.target : null;
     const seg = t?.closest("#inv-filters .seg button");
-    if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" });
+    if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, page: "" });
     const fold = t?.closest("#issues-table button[data-fold]");
     if (fold) {
       const open = new Set(kept("issues.open", []));
@@ -661,7 +661,7 @@ if (typeof document !== "undefined") {
   document.addEventListener("change", (e) => {
     if (e.target.matches?.('#inv-filters input[name="group"]')) { keep("issues.group", e.target.checked); return refill(); }
     const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
-    if (f) { remember(f.name, f.value); setQuery({ [f.name]: f.value, limit: "" }); }
+    if (f) { remember(f.name, f.value); setQuery({ [f.name]: f.value, page: "" }); }
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target.closest && e.target.closest('form[data-ui="issue-edit"], form[data-ui="issue-note"]');

@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
-import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, count, barRow, legendHtml, linkButton, meter, miss, plural, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, count, barRow, legendHtml, linkButton, meter, miss, plural, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, setQuery, sortHead, hashQuery, pageOf, pageRows, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
 import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
 export const view = {
@@ -34,9 +34,9 @@ export function redirect(hash) {
 
 const STEP = 50, ROWS = 10, MIN_FOR_RATE = 5;
 
-/** The state from the route's query: ?days=7&project=x&pick=tool:Bash&q=text&sort=cost&dir=desc&limit=100. */
+/** The state from the route's query: ?days=7&project=x&pick=tool:Bash&q=text&sort=cost&dir=desc&page=2. */
 export function options(q = new URLSearchParams()) {
-  return { days: q.get("days") || "7", project: q.get("project") ?? "", pick: q.get("pick") ?? "", q: q.get("q") ?? "", sort: { key: q.get("sort") || "cost", dir: q.get("dir") === "asc" ? 1 : -1 }, limit: limitOf(q, STEP) };
+  return { days: q.get("days") || "7", project: q.get("project") ?? "", pick: q.get("pick") ?? "", q: q.get("q") ?? "", sort: { key: q.get("sort") || "cost", dir: q.get("dir") === "asc" ? 1 : -1 }, page: pageOf(q) };
 }
 
 const skillHref = (name) => `#/skills/${encodeURIComponent(name)}`;
@@ -117,13 +117,13 @@ function renderSessionsTable(d, o) {
   if (d.sessions?.error) return error("The sessions did not load.", `${d.sessions.error}. Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.`);
   const all = shownSessions(d, o);
   if (!all.length) return empty(o.pick || o.q ? "No session matches." : `No session in the last ${plural(Number(o.days), "day")}.`, o.pick || o.q ? "Clear the selection or the search." : "Sessions appear when the hooks send traces to Langfuse.");
-  const shown = all.slice(0, o.limit);
+  const shown = pageRows(all, o.page, STEP);
   const h = (label, key, c) => sortHead(label, key, o.sort, c);
   const rows = shown.map((s) => row([`<td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`, { title: s.id })}</td>`,
     cell(s.firstPrompt, { wide: true }), s.project ? cell(s.project) : `<td>${miss("No project")}</td>`,
     `<td title="${esc(s.taskTypes.join(", "))}">${chips([...s.taskTypes.slice(0, 2), ...(s.taskTypes.length > 2 ? [`+${s.taskTypes.length - 2}`] : [])])}</td>`,
     cell(count(s.turns), { num: true }), `<td class="num">${costHtml(s.cost, s.wk)}</td>`, `<td class="time">${esc(when(s.start))}</td>`, `<td class="time">${esc(when(s.last))}</td>`])).join("");
-  return dataTable(`${heads(["Session"])}${h("First Prompt", "prompt")}${h("Project", "project")}${heads(["Kinds"])}${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}${h("Started", "start", { num: true })}${h("Last Turn", "last", { num: true })}`, rows) + pager(shown.length, all.length, STEP);
+  return dataTable(`${heads(["Session"])}${h("First Prompt", "prompt")}${h("Project", "project")}${heads(["Kinds"])}${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}${h("Started", "start", { num: true })}${h("Last Turn", "last", { num: true })}`, rows) + pager(o.page, all.length, STEP);
 }
 
 function sessionsCard(d, o) {
@@ -156,9 +156,9 @@ const here = () => options(hashQuery());
 function mount(root, d) {
   live = { root, d };
   wireScope(root);
-  wireTable(root, { redraw: () => redraw(false), sortOf: (h) => options(new URLSearchParams(h)).sort, downFirst: new Set(["cost", "turns", "start", "last"]), page: STEP, search: "ag-search" });
+  wireTable(root, { redraw: () => redraw(false), sortOf: (h) => options(new URLSearchParams(h)).sort, downFirst: new Set(["cost", "turns", "start", "last"]), search: "ag-search" });
   // A second press on the selected tile or rank clears it, and "Show all sessions" says "" outright.
-  onTile(root.querySelector("#ag-live"), (v) => { setQuery({ pick: here().pick === v ? "" : v, limit: "" }); redraw(true); });
+  onTile(root.querySelector("#ag-live"), (v) => { setQuery({ pick: here().pick === v ? "" : v, page: "" }); redraw(true); });
 }
 
 /** Redraw the sessions; `all` also redraws the tiles and ranks, whose pressed state the selection sets. */

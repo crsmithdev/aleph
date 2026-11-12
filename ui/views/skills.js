@@ -1,7 +1,7 @@
 // One skill: how often it ran, from Langfuse. `renderSkill` takes /api/skills/:name and does not touch the DOM.
 // The list of skills is in sessions.js.
 import { redraw } from "../router.js";
-import { chips, codeText, count, crumb, dataTable, esc, heads, idLink, notice, pageHead, pager, setQuery, statusRow, when } from "../lib.js";
+import { chips, codeText, count, crumb, dataTable, esc, heads, idLink, notice, pageHead, pageOf, pageRows, pager, setQuery, statusRow, when } from "../lib.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, renderKpis } from "../timeline.js";
 
@@ -28,12 +28,12 @@ const staleNote = (d, now = new Date()) => d.failed
 
 const sessionCell = (id) => (id ? idLink(id.slice(0, 8), sessionHref(id)) : "");
 const PAGE = 50;
-/** A panel of `rows` (row strings) that shows `limit` of them with a pager; no rows, no panel. A `fit` table is as wide as its cells. */
-const table = (name, title, head, rows, limit, fit = false) => rows.length
-  ? detailPanel(title, count(rows.length), `<div data-t="${name}">${dataTable(head, rows.slice(0, limit).join(""), { fit })}${pager(limit, rows.length, PAGE)}</div>`) : "";
+/** A panel of `rows` (row strings) that shows page `page` of them with a pager; no rows, no panel. A `fit` table is as wide as its cells. */
+const table = (name, title, head, rows, page, fit = false) => rows.length
+  ? detailPanel(title, count(rows.length), `<div data-t="${name}">${dataTable(head, pageRows(rows, page, PAGE).join(""), { fit })}${pager(page, rows.length, PAGE)}</div>`) : "";
 
-export function renderSkill(d, limits = {}) {
-  const lim = (name) => Number(limits[name]) || PAGE;
+export function renderSkill(d, pages = {}) {
+  const at = (name) => pageOf({ page: pages[name] });
   // Sessions: a list, time last. Errors: an event log, time first.
   const sessions = d.sessions.map((s) =>
     `<tr><td>${sessionCell(s.id)}</td><td class="wide" title="${esc(s.prompt)}">${esc(s.prompt)}</td><td>${esc(s.project)}</td>` +
@@ -47,10 +47,10 @@ export function renderSkill(d, limits = {}) {
     statusRow("", "", chips(d.projects.map((p) => p.project))) +
     renderKpis([{ k: "Uses", v: esc(count(d.uses)) }, { k: "Sessions", v: esc(count(d.sessions.length)) }, { k: "Errors", v: esc(count(d.errors.length)) }]) +
     (d.uses ? panelOf(chartKey(d.name), usesFrame(d)) : "") +
-    table("projects", "Projects", heads(["Project", "Uses"], ["Uses"]), projects, lim("projects"), true) +
-    table("sessions", "Sessions", heads(["Session", "First Prompt", "Project", "Started by", "Started"], ["Started"]), sessions, lim("sessions")) +
-    table("tools", "Tools Called After It, in the Same Turn", heads(["Tool", "Calls"], ["Calls"]), tools, lim("tools"), true) +
-    table("errors", "Turns with Errors", heads(["Started", "Session", "Error", "Project"]), errors, lim("errors")) +
+    table("projects", "Projects", heads(["Project", "Uses"], ["Uses"]), projects, at("projects"), true) +
+    table("sessions", "Sessions", heads(["Session", "First Prompt", "Project", "Started by", "Started"], ["Started"]), sessions, at("sessions")) +
+    table("tools", "Tools Called After It, in the Same Turn", heads(["Tool", "Calls"], ["Calls"]), tools, at("tools"), true) +
+    table("errors", "Turns with Errors", heads(["Started", "Session", "Error", "Project"]), errors, at("errors")) +
     `</div>`;
 }
 
@@ -59,16 +59,15 @@ export const view = {
   title: "Skill",
   group: "claude",
   api: "/api/skills/:name",
-  // A table's row limit is in the address under the table's name (`?sessions=100`).
+  // A table's page is in the address under the table's name (`?sessions=2`).
   render: (d, _params, q) => renderSkill(d, Object.fromEntries(q ?? [])),
-  mount: (root, d, q) => {
+  mount: (root, d) => {
     const el = root.querySelector(`aleph-chart[key="${chartKey(d.name)}"]`);
     if (el) el.frame = usesFrame(d);
     root.onclick = (e) => {
-      const more = e.target.closest?.("[data-t] button[data-more]");
-      if (!more) return;
-      const name = more.closest("[data-t]").dataset.t;
-      setQuery({ [name]: String((Number(q.get(name)) || PAGE) + Number(more.dataset.more)) });
+      const turn = e.target.closest?.("[data-t] button[data-page]");
+      if (!turn) return;
+      setQuery({ [turn.closest("[data-t]").dataset.t]: turn.dataset.page });
       redraw();
     };
   },

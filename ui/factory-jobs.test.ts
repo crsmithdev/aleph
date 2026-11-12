@@ -156,10 +156,10 @@ test("the page lists the jobs with the search, the State filter and the Project 
   expect(h).toContain('<table class="tbl">');
   expect(h.slice(h.indexOf('id="jobs-table"')).match(/<th[ >]/g)).toHaveLength(8);
   expect(h).not.toContain("<style>");
-  expect(h).not.toContain("data-more");
+  expect(h).not.toContain("data-page");
   const many = renderFactoryJobs(D, null, "lead", Array.from({ length: 51 }, (_, i) => ({ ...J, id: `fac-${i}#1` })), {});
   expect(many.match(/<tr class="rowlink"/g)).toHaveLength(50);
-  expect(many).toContain('data-more="1"');
+  expect(many).toContain('data-page="2">Next 1<');
   expect(many).toContain("50 of 51");
   expect(renderFactoryJobs(D, null, "lead", [], {})).toContain("No job matches.");
   expect(renderFactoryJobs(D, null, "lead", null, {})).toContain("Loading jobs");
@@ -187,17 +187,17 @@ test("the Checks and Models tables show empty() with no rows and page at 50", ()
   expect(renderFactoryJobs({ ...D, checks }, null, "lead")).toContain("50 of 51");
 });
 
-test("Show more under the Checks table reveals rows in place and leaves the Jobs table's limit alone", () => {
+test("Next under the Checks table turns the page in place and leaves the Jobs table's page alone", () => {
   const was = { location: globalThis.location, history: globalThis.history };
   const set: string[] = [];
   Object.assign(globalThis, { location: { hash: "#/factory/jobs" }, history: { replaceState: (_s: unknown, _t: string, url: string) => set.push(url) } });
   try {
     const root: any = {};
     wireJobs(root, () => null);
-    const click = (paged: boolean) => root.onclick({ target: { closest: (s: string) => (s === "button[data-more]" ? { dataset: { more: "50" } } : s === ".paged" && paged ? {} : null) } });
+    const click = (paged: boolean) => root.onclick({ target: { closest: (s: string) => (s === "button[data-page]" ? { dataset: { page: "2" } } : s === ".paged" && paged ? {} : null) } });
     click(true);
     expect(set).toEqual([]);
     click(false);
-    expect(set).toEqual(["#/factory/jobs?limit=100"]);
+    expect(set).toEqual(["#/factory/jobs?page=2"]);
   } finally { Object.assign(globalThis, was); }
 });

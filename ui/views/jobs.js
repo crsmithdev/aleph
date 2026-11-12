@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
+import { fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, pageOf, pageRows, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
@@ -57,7 +57,7 @@ function shownJobs(jobs, f = {}) {
 export function renderJobsTable(jobs, f = {}) {
   const all = shownJobs(jobs, f);
   if (!all.length) return empty("No job matches.", "Widen the window or clear a filter.");
-  const shown = all.slice(0, limitOf(f, PAGE)), sort = sortOf(f);
+  const shown = pageRows(all, pageOf(f), PAGE), sort = sortOf(f);
   const h = (label, key, c) => sortHead(label, key, sort, c);
   // Columns: id, title, state, project, model, took, cost, then started: the Issues table's order.
   const rows = shown.map((j) => {
@@ -65,13 +65,13 @@ export function renderJobsTable(jobs, f = {}) {
     return `<tr class="rowlink" data-annotate="${esc(j.id)}"><td>${idLink(shortText(j.id), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
       `<td class="num">${esc(span(j.started, j.ended))}</td><td class="num">${esc(money(j.cost))}</td><td class="time">${esc(when(j.started))}</td></tr>`;
   }).join("");
-  return dataTable(h("Id", "id") + h("Title", "title") + h("State", "state") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started", { num: true }), rows) + pager(shown.length, all.length, PAGE);
+  return dataTable(h("Id", "id") + h("Title", "title") + h("State", "state") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started", { num: true }), rows) + pager(pageOf(f), all.length, PAGE);
 }
 
 /** Wire the state filter (it fetches again), the search, the sort and the pager; the last three redraw the table once `jobsNow()` gives the jobs. */
 export function wireJobs(root, jobsNow) {
   const redraw = () => { const jobs = jobsNow(); if (jobs) root.querySelector("#jobs-table").innerHTML = renderJobsTable(jobs, Object.fromEntries(hashQuery())); };
-  wireTable(root, { redraw, sortOf, downFirst: DOWN_FIRST, page: PAGE, search: "jobs-search" });
+  wireTable(root, { redraw, sortOf, downFirst: DOWN_FIRST, search: "jobs-search" });
   const table = root.onclick;
   root.onclick = (e) => {
     const seg = e.target.closest?.(".card .seg button");

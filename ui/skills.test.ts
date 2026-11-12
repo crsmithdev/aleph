@@ -229,7 +229,7 @@ test("the skill detail leaves out each panel with no rows and pages Sessions at 
   const sessions = Array.from({ length: 51 }, (_, i) => ({ id: `s${i}abcdefgh`, time: "2026-11-01T00:00:00Z", prompt: "p", project: "a", via: "slash" }));
   const h = v.renderSkill({ ...base, sessions });
   expect(h).toContain("50 of 51");
-  expect(v.renderSkill({ ...base, sessions }, { sessions: 100 })).toContain("51 of 51");
+  expect(v.renderSkill({ ...base, sessions }, { sessions: 2 })).toContain("51 of 51");
 });
 
 test("a skill's answer fits its schema", async () => {

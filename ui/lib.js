@@ -773,11 +773,15 @@ export const legend = { type: "scroll", top: 0, right: 0, itemWidth: 10, itemHei
 export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls]) => `<li>${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}</li>`).join("")}</ul>`;
 /** The sort after a click on `key`: the same key flips; a new key starts largest first when `downFirst` has it, else smallest first. */
 export const nextSort = (cur, key, downFirst) => ({ key, dir: cur?.key === key ? -cur.dir : downFirst.has(key) ? -1 : 1 });
-/** The row limit in the query `q` (URLSearchParams or object), never less than `page`. */
-export function limitOf(q, page) {
-  const v = typeof q.get === "function" ? q.get("limit") : q.limit;
-  return Math.max(page, Number.parseInt(v, 10) || page);
+/** The page number in the query `q` (URLSearchParams or object): 1 unless `page` is a larger whole number. */
+export function pageOf(q) {
+  const v = typeof q.get === "function" ? q.get("page") : q.page;
+  return Math.max(1, Number.parseInt(v, 10) || 1);
 }
+/** `page` held to the pages that `total` rows fill, `step` to a page: a page past the end is the last page. */
+const pageIn = (page, total, step) => Math.min(Math.max(1, page), Math.max(1, Math.ceil(total / step)));
+/** The rows of page `page` of `rows`, `step` to a page. */
+export const pageRows = (rows, page, step = 50) => { const p = pageIn(page, rows.length, step); return rows.slice((p - 1) * step, p * step); };
 /** A copy of `rows` in the order of `sort` ({key, dir}); `by[key](row)` is the value, `tie(a, b)` orders equal rows. */
 export const sortRows = (rows, by, sort, tie) => [...rows].sort((a, b) => {
   const x = by[sort.key](a), y = by[sort.key](b);
@@ -785,30 +789,38 @@ export const sortRows = (rows, by, sort, tie) => [...rows].sort((a, b) => {
   return c * sort.dir || (tie ? tie(a, b) : 0);
 });
 let searchTimer;
-/** Wire one table: a sort head (`data-sort`), the pager (`data-more`) and the search input (`[data-ui=opts.search]`) write the hash, then call `opts.redraw`. `opts` also has `sortOf(query)`, `downFirst` and `page`. */
+/** Wire one table: a sort head (`data-sort`), the pager (`data-page`) and the search input (`[data-ui=opts.search]`) write the hash, then call `opts.redraw`. A sort or a search goes back to page 1. `opts` also has `sortOf(query)` and `downFirst`. */
 export function wireTable(root, opts) {
   const go = (changes) => { setQuery(changes); opts.redraw(); };
   root.onclick = (e) => {
-    const s = e.target.closest?.("button[data-sort]"), m = e.target.closest?.("button[data-more]");
-    if (s) { const n = nextSort(opts.sortOf(Object.fromEntries(hashQuery())), s.dataset.sort, opts.downFirst); go({ sort: n.key, dir: n.dir > 0 ? "asc" : "desc" }); }
-    else if (m) go({ limit: String(limitOf(hashQuery(), opts.page) + Number(m.dataset.more)) });
+    const s = e.target.closest?.("button[data-sort]"), m = e.target.closest?.("button[data-page]");
+    if (s) { const n = nextSort(opts.sortOf(Object.fromEntries(hashQuery())), s.dataset.sort, opts.downFirst); go({ sort: n.key, dir: n.dir > 0 ? "asc" : "desc", page: "" }); }
+    else if (m) go({ page: m.dataset.page });
   };
   root.oninput = (e) => {
     if (!e.target.matches?.(`[data-ui="${opts.search}"]`)) return;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => go({ q: e.target.value, limit: "" }), 120);
+    searchTimer = setTimeout(() => go({ q: e.target.value, page: "" }), 120);
   };
 }
 
-/** Under a long table: "50 of 345" and a "Show 50 more" button (`data-more` holds the step) while rows are left. */
-export function pager(shown, total, step = 50, { cls = "", attr = "data-more", value = more => more } = {}) {
-  const n = Math.min(shown, total), more = Math.min(step, total - n);
-  return `<div class="pager${cls ? ` ${cls}` : ""}">${more > 0 ? actButton(`Show ${more} more`, { [attr.slice(5)]: value(more, n) }) : ""}<span class="of">${n} of ${total}</span></div>`;
+/** Under a long table: "Previous 50" and "Next 50" (`data-page` holds the page each goes to) and "51–100 of 345". */
+export function pager(page, total, step = 50, { cls = "" } = {}) {
+  const p = pageIn(page, total, step), from = (p - 1) * step, to = Math.min(total, from + step);
+  const prev = p > 1 ? actButton(`Previous ${step}`, { page: p - 1 }) : "", next = to < total ? actButton(`Next ${Math.min(step, total - to)}`, { page: p + 1 }) : "";
+  return `<div class="pager${cls ? ` ${cls}` : ""}">${prev}${next}<span class="of">${to - from > 1 && total > step ? `${from + 1}–${to}` : to} of ${total}</span></div>`;
 }
 
-/** A `dataTable` that shows `step` rows and a pager; the "Show more" button reveals the rest in place. `rows` is an array of `<tr>` strings. */
+/** Show page `page` of the rows in `box` (its `tbody` rows, or its list items) and hide the rest. */
+export function turnPage(box, page, step = 50) {
+  const rows = [...box.querySelectorAll(":scope tbody > tr, :scope > ul > li")], p = pageIn(page, rows.length, step);
+  rows.forEach((r, i) => { r.hidden = i < (p - 1) * step || i >= p * step; });
+  box.querySelector(".pager").outerHTML = pager(p, rows.length, step);
+}
+
+/** A `dataTable` that shows `step` rows and a pager that turns the page in place. `rows` is an array of `<tr>` strings. */
 export const pagedTable = (head, rows, step = 50) =>
-  `<div class="paged">${dataTable(head, rows.map((r, i) => (i < step ? r : r.replace("<tr", "<tr hidden"))).join(""))}${pager(step, rows.length, step)}</div>`;
+  `<div class="paged" data-step="${step}">${dataTable(head, rows.map((r, i) => (i < step ? r : r.replace("<tr", "<tr hidden"))).join(""))}${pager(1, rows.length, step)}</div>`;
 /** Open or close the clamped text before the button `b`, and set the button to match. */
 function openClamp(b, open) {
   b.previousElementSibling.classList.toggle("clamp", !open);
@@ -818,12 +830,21 @@ function openClamp(b, open) {
 
 if (typeof document !== "undefined") {
   document.addEventListener("click", (e) => {
-    const b = e.target.closest?.(".paged button[data-more]");
+    const b = e.target.closest?.(".paged .pager button[data-page]");
     if (!b) return;
-    const box = b.closest(".paged"), rows = [...box.querySelectorAll("tbody tr")], step = Number(b.dataset.more), n = rows.filter((r) => !r.hidden).length + step;
-    rows.forEach((r, i) => { r.hidden = i >= n; });
-    box.querySelector(".pager").outerHTML = pager(n, rows.length, step);
+    const box = b.closest(".paged");
+    turnPage(box, Number(b.dataset.page), Number(box.dataset.step) || 50);
   });
+  // After a page turn, bring the top of the table into view. Capture runs before the view's handler draws the table
+  // again, so the box is found while the button is still in it; a box drawn again is found by its id.
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest?.(".pager button[data-page]"), box = b?.closest(".paged, [id]");
+    if (!box) return;
+    requestAnimationFrame(() => {
+      const el = box.isConnected ? box : box.id && document.getElementById(box.id);
+      if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: "start" });
+    });
+  }, true);
 }
 
 /** A sortable header cell; `sort` is `{key, dir}` (dir 1 up, -1 down). Every table shows the same arrow. */

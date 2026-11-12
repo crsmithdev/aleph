@@ -227,7 +227,7 @@ function renderKit(d, query) {
       { label: "Status", name: "status", value: "open", options: ["open", "done", "dropped"] },
       { label: "Project", name: "project", data: true, value: "", options: [{ value: "", label: "All" }, "aleph", "sidetone"] },
     ])) +
-    spec("pager", "Pager", pager(50, 345) + pager(345, 345)) +
+    spec("pager", "Pager", pager(1, 345) + pager(2, 345) + pager(7, 345)) +
     spec("search", "Search box", searchBox("kit-search", "", "Search ids and titles")) +
     spec("tabs", "Tabs", tabs("Kit tabs", [["one", "Write-up"], ["two", "Log"], ["three", "Lens"]], { one: "<p>The first pane.</p>", two: "<p>The second pane.</p>", three: "<p>The third pane.</p>" })) +
     spec("select", "Select", row(selectBox("Model", "model", ["opus", "sonnet", { value: "haiku", disabled: true }], "sonnet"))) +

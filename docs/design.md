@@ -294,7 +294,7 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 |---|---|
 | `Jobs per Item`, `Linked from` | `Jobs Per Item`, `jobs per item`, `Linked From` |
 | `Running` with a muted `3` after it | `Running (3)` |
-| `Show 50 more` | `Click here to load more results` |
+| `Next 50` | `Click here to load more results` |
 | `running`, `landed`, `critical` | `Running`, `LANDED` |
 | `No job matches.` with the hint `Widen the window or clear a filter.` | `No data` |
 | `Could not load the agents.` with the hint `Check that aleph-ui is running, then reload.` and the upstream message in a Technical details fold | `Error: fetch failed` |
@@ -624,7 +624,7 @@ A table shows items that have the same columns.
   `{ num: true }`. A time that comes first goes in `td.time.lead`, which aligns to the left.
 - When a row goes to a page, make it `tr.rowlink` and put the link in `td.wide`.
 - To sort, use `sortHead()` and `wireTable()`. Keep the sort in the address as `sort` and `dir`.
-- When there are more than 50 rows, use `pagedTable()`, or `pager()` with `limitOf()`.
+- When there are more than 50 rows, use `pagedTable()`, or `pager()` with `pageOf()` and `pageRows()`.
 - For a short table of names and numbers, set `fit: true`.
 - Make a row with `row(cells)` and a cell of text with `cell(v, { num, wide, title })` (Row and cell).
 - A row action goes in a last `td.acts` column, as a small button (Row actions). A data cell never holds a button.
@@ -1438,27 +1438,32 @@ An edit toggle turns a value into its editor in the same place. The reader click
 
 #### Pager
 
-A pager shows the rows after the first 50.
+A pager splits a long table or list into pages of 50 rows. Next replaces the rows with the next 50, so the page
+stays one screen of rows and does not grow.
 
 **Use:** under a table of more than 50 rows. **Not for:** a short list; use `moreFold()`.
 
 | Helper | Reference |
 |---|---|
-| `pager(shown, total)`; `limitOf()`; `pagedTable()` | `ui/views/issues.js` |
+| `pager(page, total)`; `pageOf()`; `pageRows()`; `pagedTable()` | `ui/views/issues.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Button | `Show 50 more` | | the button |
-| 2 | Count | `50 of 345` | | `--num` `--fs-xs` `--fw-mid` tabular, `--muted` |
+| 1 | Previous button | `Previous 50` | yes, not on page 1 | the button |
+| 2 | Next button | `Next 50` | yes, not on the last page | the button |
+| 3 | Range | `51–100 of 345` | | `--num` `--fs-xs` `--fw-mid` tabular, `--muted` |
 
-- For a table that `wireTable()` sorts, filters or searches, use `pager()` with `limitOf()`. The limit stays in the address.
-- For a table that does not change, use `pagedTable()`. It shows the rows in place.
+- For a table that `wireTable()` sorts, filters or searches, use `pager()` with `pageOf()` and `pageRows()`. The page
+  number stays in the address as `page`. A change to the sort, a filter or the search goes back to page 1.
+- For a table that does not change, use `pagedTable()`. It turns the page in place.
 - Do not use both under one root.
-- The button names the rows that are left, up to 50: `Show 12 more`.
+- Next names the rows on the next page, up to 50: `Next 12` on the last page.
+- After a turn, the top of the table is in view.
+- A page number past the end shows the last page.
 
 | Do | Don't |
 |---|---|
-| `Show 50 more` with `50 of 345` | page numbers |
+| `Previous 50`, `Next 50` with `51–100 of 345` | `Show 50 more`, which grows the page; page numbers |
 
 #### Empty state
 

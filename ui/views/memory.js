@@ -97,9 +97,9 @@ const eventRow = (it, o) => `<li class="mrow mev" ${sel(it, o)}><span class="tim
 /** A handoff, an issue or a miss: what it is and what it does next. */
 const cardRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${titleLink(it)}${it.priority ? ` ${priorityBadge(it.priority)}` : ""}</b><span class="quiet">${esc([it.scope, it.at && ago(it.at)].filter(Boolean).join(" · "))}</span></div><p>${codeText(it.text)}</p><p class="mm eff">${esc(it.effect)}</p></li>`;
 
-/** Rows past STEP start hidden; the pager in `.mem-page` shows more. */
+/** Rows past STEP start hidden; the pager turns the page in place, as under `pagedTable()`. */
 const hide = (rows) => rows.map((r, i) => (i < STEP ? r : r.replace(/^<li /, "<li hidden "))).join("");
-const list = (rows, cls = "") => `<div class="mem-page"><ul class="mrows${cls}">${hide(rows)}</ul>${pager(Math.min(STEP, rows.length), rows.length, STEP)}</div>`;
+const list = (rows, cls = "") => `<div class="paged" data-step="${STEP}"><ul class="mrows${cls}">${hide(rows)}</ul>${pager(1, rows.length, STEP)}</div>`;
 
 const LAYOUT = {
   semantic: (xs, o) => list(xs.map((it) => noteRow(it, o))),
@@ -349,13 +349,6 @@ function mount(root, m) {
     if (tile) { setQuery({ type: tile.dataset.tile === here().type ? "" : tile.dataset.tile }); return redraw(); }
     const seg = t.closest?.("#mem-fresh .seg button");
     if (seg) { setQuery({ fresh: seg.dataset.value }); return redraw(); }
-    const more = t.closest?.(".mem-page button[data-more]");
-    if (more) {
-      const box = more.closest(".mem-page"), rows = [...box.querySelectorAll(".mrow")], n = rows.filter((r) => !r.hidden).length + Number(more.dataset.more);
-      rows.forEach((r, i) => { r.hidden = i >= n; });
-      box.querySelector(".pager").outerHTML = pager(n, rows.length, STEP);
-      return;
-    }
     const btn = t.closest?.("#mem-inspector button[data-mact]");
     if (btn) return write(btn);
     const row = t.closest?.(".mrow");

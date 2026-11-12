@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { renderHerald } from "./views/now.js";
 import { withFactory } from "./test-now.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -293,12 +293,36 @@ test("nextSort flips the current key and starts a new key by downFirst", () => {
   expect(nextSort({ key: "a", dir: -1 }, "b", down)).toEqual({ key: "b", dir: 1 });
 });
 
-test("limitOf is the page size unless the limit is a larger number", () => {
+test("pageOf is 1 unless the page is a larger whole number", () => {
   const q = (s: string) => new URLSearchParams(s);
-  expect(limitOf(q(""), 50)).toBe(50);
-  expect(limitOf(q("limit=x"), 50)).toBe(50);
-  expect(limitOf(q("limit=20"), 50)).toBe(50);
-  expect(limitOf(q("limit=120"), 50)).toBe(120);
+  expect(pageOf(q(""))).toBe(1);
+  expect(pageOf(q("page=x"))).toBe(1);
+  expect(pageOf(q("page=0"))).toBe(1);
+  expect(pageOf(q("page=3"))).toBe(3);
+  expect(pageOf({ page: "2" })).toBe(2);
+});
+
+test("pageRows gives one page of rows, and a page past the end is the last page", () => {
+  const rows = Array.from({ length: 120 }, (_, i) => i);
+  expect(pageRows(rows, 1)).toEqual(rows.slice(0, 50));
+  expect(pageRows(rows, 2)).toEqual(rows.slice(50, 100));
+  expect(pageRows(rows, 3)).toEqual(rows.slice(100));
+  expect(pageRows(rows, 9)).toEqual(rows.slice(100));
+});
+
+test("pager: Next and Previous go one page each way, and the range names the rows shown", () => {
+  const first = pager(1, 120), mid = pager(2, 120), last = pager(3, 120);
+  expect(first).toContain('data-page="2">Next 50<');
+  expect(first).not.toContain("Previous");
+  expect(first).toContain("1–50 of 120");
+  expect(mid).toContain('data-page="1">Previous 50<');
+  expect(mid).toContain('data-page="3">Next 20<');
+  expect(mid).toContain("51–100 of 120");
+  expect(last).not.toContain("Next");
+  expect(last).toContain("101–120 of 120");
+  expect(pager(9, 120)).toBe(last);
+  expect(pager(1, 12)).toBe('<div class="pager"><span class="of">12 of 12</span></div>');
+  expect(pager(2, 51)).toContain("51 of 51");
 });
 
 test("sortRows sorts a copy, numbers by value, text in numeric mode, ties by tie", () => {

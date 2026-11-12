@@ -278,8 +278,8 @@ test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times"
   entries[0] = { ...entries[0], by: "gate", times: 3, first: entries[1].at };
   const h = gates.renderLog({ log: { entries } } as any);
   expect(h.match(/<tr>/g)!.length - 1).toBe(50);
-  expect(h).toContain("50 of 120");
-  expect(h).toContain("Show 50 more");
+  expect(h).toContain("1–50 of 120");
+  expect(h).toContain("Next 50");
   expect(h).toContain('<td class="num">3</td>');
   expect(h).not.toContain("×3");
 });

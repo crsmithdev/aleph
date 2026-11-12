@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, setting, settings, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, setting, settings, goQuery, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
@@ -43,7 +43,7 @@ const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"], ["ga
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { aside: scope(q).bar() })}` + toc(CONTENTS,
     renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
-    `<div class="pair">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE))) + `</div>`;
+    `<div class="pair">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
 }
 
 /** The environment variable that overrides each key of caps.json, as jobs/lib/infra/settings.ts names it. */
@@ -174,18 +174,18 @@ function contentHtml(e) {
   return contentText(e).split(" ").map((t) => (ids.has(t) ? idHtml(ids.get(t)) : t === file ? `<code title="${esc(e.file)}">${esc(t)}</code>` : esc(t))).join(" ");
 }
 
-/** The log, newest first, filtered by `by` (an actor) from the address; `limit` rows show. A row's note opens with its button. */
-export function renderLog(d, by, limit = PAGE) {
+/** The log, newest first, filtered by `by` (an actor) from the address; page `page` shows. A row's note opens with its button. */
+export function renderLog(d, by, page = 1) {
   const pick = Object.hasOwn(BY, by ?? "") ? by : "";
   const filter = filterBar([{ name: "by", label: "By", value: pick, options: [{ value: "", label: "All" }, ...Object.keys(BY).map((k) => ({ value: k, label: k }))] }]);
   const entries = d.log.entries.filter((e) => !pick || e.by === pick);
-  const rows = entries.slice(0, limit).map((e) => {
+  const rows = pageRows(entries, page, PAGE).map((e) => {
     const subject = e.action === "changed" && !parseId(e.subject) ? `<a href="#rules">${esc(e.subject)}</a>` : idHtml(e.subject);
     return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${subject}</td><td>${tag(e.by, tone(e.by))}</td><td>${e.action ? esc(e.action) : miss("no action")}</td><td>${e.sub ? esc(e.sub) : miss("no sub")}</td>` +
       `<td class="wide">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return card("Log", filter +
-    (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.", "Pick a longer window or clear the By filter.")), { id: "gates-log" });
+    (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty("No entry in this window.", "Pick a longer window or clear the By filter.")), { id: "gates-log" });
 }
 
 /** What each settings form posts, by its `data-` key: the URL, the body and the word for an error line. */
@@ -212,10 +212,10 @@ export function mount(root) {
   };
   root.onclick = async (e) => {
     const seg = e.target.closest?.("#gates-log .seg button");
-    if (seg) return goQuery({ by: seg.dataset.value, limit: "" });
-    const more = e.target.closest?.("#gates-log button[data-more]");
-    if (more) {
-      setQuery({ limit: String(limitOf(hashQuery(), PAGE) + Number(more.dataset.more)) });
+    if (seg) return goQuery({ by: seg.dataset.value, page: "" });
+    const turn = e.target.closest?.("#gates-log button[data-page]");
+    if (turn) {
+      setQuery({ page: turn.dataset.page });
       return redraw();
     }
     const r = e.target.closest?.("button[data-rule]");

@@ -334,7 +334,7 @@ test("the turns, hooks and denials tables show empty() with no rows; the turns t
   expect(v.renderSession({ ...d, turns: [] }, {}, TABLE)).toContain('class="empty"');
   const h = v.renderSession({ ...d, turns: Array.from({ length: 51 }, (_, i) => ({ ...d.turns[0], n: i + 1 })) }, {}, TABLE);
   expect(h).toContain("50 of 51");
-  expect(h).toContain("Show 1 more");
+  expect(h).toContain("Next 1");
   expect(h.match(/<tr><td><a class="idl"/g)).toHaveLength(50);
   const page = renderSessions({ window: 7, project: null, activity: { langfuse: "ok", tools: [], hooks: [], denials: { total: 0, recent: [] } }, skills: { projects: [], skills: [], unused: [] }, sessions: { projects: [], sessions: [] }, toolSessions: {} }, options(new URLSearchParams()));
   expect(page).toContain('<div class="empty"><p>No hook calls in this period.</p>');
@@ -357,7 +357,7 @@ test("the Turn page pages observations at 50 and gives the Name cell td.wide, in
   const obs = Array.from({ length: 51 }, (_, i) => ({ id: `o${i}`, kind: "tool", name: `T${i}`, children: [], error: "boom" }));
   const h = v.renderTurn({ ...t, observations: obs });
   expect(h).toContain("50 of 51");
-  expect(h).toContain("Show 1 more");
+  expect(h).toContain("Next 1");
   expect(h).toContain('<td>Error: boom</td>');
   expect(h).toContain('<td class="wide" style="padding-left:calc(0 * var(--sp-14))"><strong>T0</strong>');
   expect(h).not.toContain("14px");
