@@ -40,7 +40,7 @@ function parts(r) {
   const rows = r.parts.map((p) => `<tr><td>${esc(p.name)}</td><td class="mono">${esc(p.rec)}</td><td class="num">${count(p.tokens)}</td><td>${how(p.how)}</td></tr>`);
   rows.push(`<tr><td><strong>Total</strong></td><td class="mono">message.usage</td><td class="num"><strong>${count(r.fill)}</strong></td><td>${how("exact")}</td></tr>`);
   return card(`What is in request ${r.n}`, dataTable(heads(["Part", "Record", "Tokens", "How"], ["Tokens"]), rows.join("")) +
-    `<p class="quiet">The fixed parts sum to the fill of request 1, exact; their split is est. A message part is the usage of its request minus the usage of the request before it, exact unless one gap held more than one kind of record.</p>`);
+    `<p class="quiet">The fixed parts sum to the fill of request 1. With an Anthropic key, count_tokens counts each one and Other holds the rest. Without a key, the split is est. A message part is the usage of its request minus the usage of the request before it, exact unless one gap held more than one kind of record.</p>`);
 }
 
 /** The body of the tab: `m` is the /api/context body, with `session` the /api/context/:id body once loaded; `o.n` the request. */

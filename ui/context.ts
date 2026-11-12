@@ -107,6 +107,8 @@ function withFixed({ out, fixed }: Scan, counts: number[] | null): Request[] {
       left -= tokens;
       return { name, rec, tokens, how: "est" };
     });
+    // Counted parts miss what request 1 holds besides them (skill and deferred-tool lists, reminders); the rest keeps the sum at the fill.
+    if (counts) parts.push({ name: "Other", rec: "rest of request 1", tokens: out[0].fill - counts.reduce((s, n) => s + n, 0), how: "exact" });
     for (const r of out) r.parts = [...parts, ...r.parts];
   }
   return out;
@@ -122,10 +124,12 @@ export async function parseExact(jsonl: string, fetchFn: typeof fetch = fetch): 
   const s = scan(jsonl), key = anthropicKey();
   if (!key || !s.model || !s.out.length) return withFixed(s, null);
   const field = ["system", "tools"];
+  // The snapshot keeps each tool's wire definition under `schema`.
+  const wire = ({ schema: s }: any) => ({ name: s.name, description: s.description, input_schema: s.input_schema });
   try {
     const counts = await Promise.all(s.fixed.map(async ([, , text], i) => {
       if (!text.length) return 0;
-      const body = { model: s.model, messages: [{ role: "user", content: i > 1 ? (text as string) : "." }], ...(i < 2 && { [field[i]]: text }) };
+      const body = { model: s.model, messages: [{ role: "user", content: i > 1 ? (text as string) : "." }], ...(i < 2 && { [field[i]]: i ? (text as unknown[]).map(wire) : text }) };
       const res = await fetchFn(COUNT_URL, { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`count_tokens ${res.status}`);
       return ((await res.json()) as { input_tokens: number }).input_tokens;

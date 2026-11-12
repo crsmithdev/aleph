@@ -10,7 +10,7 @@ const result = { type: "user", message: { content: [{ type: "tool_result", conte
 const lines = [
   { attachment: { type: "instructions", files: [{ content: "i".repeat(200) }] } },
   { attachment: { type: "hook_additional_context", content: ["m".repeat(100)] } },
-  { attachment: { type: "prompt_snapshot", systemPrompt: ["s".repeat(300)], tools: [{ name: "t".repeat(60) }] } },
+  { attachment: { type: "prompt_snapshot", systemPrompt: ["s".repeat(300)], tools: [{ name: "t", schema: { name: "t".repeat(60), input_schema: { type: "object" } } }] } },
   { type: "user", message: { content: "hi" } },
   req("r1", 2, 0, 1000),
   // a second content block of request 1 carries the same usage and must not count twice
@@ -108,7 +108,9 @@ describe("parseExact", () => {
     const r = await parseExact(withModel, fake);
     restore();
     expect(r[0].parts.slice(0, 4).map((p) => [p.tokens, p.how])).toEqual([[11, "exact"], [22, "exact"], [33, "exact"], [44, "exact"]]);
+    expect(r[0].parts.slice(0, 5).reduce((s, p) => s + p.tokens, 0)).toBe(r[0].fill);
     expect(bodies.map((b) => b.model)).toEqual(Array(4).fill("claude-test-1"));
+    expect(bodies.find((b) => b.tools).tools[0].input_schema).toEqual({ type: "object" });
     expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
   });
 
