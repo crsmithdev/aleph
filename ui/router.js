@@ -11,7 +11,7 @@
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
 import { setCodes } from "../lib/naming.ts";
-import { arm, cmd, notice, pageHead, postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
+import { arm, cmd, notice, pageHead, postJson, say, actMessages, denyReasons, loadDiff, error, linkButton, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
@@ -302,7 +302,7 @@ export async function start() {
     if (!m) {
       page.show({ view: null });
       document.title = "Not found · aleph";
-      $("view").innerHTML = `<div class="page nf">${pageHead(`Nothing at ${path}`)}${empty()}</div>`;
+      $("view").innerHTML = `<div class="page nf">${pageHead(`Nothing at ${path}`)}${linkButton("Status", "#/")}</div>`;
       $("offline").hidden = true;
       return;
     }

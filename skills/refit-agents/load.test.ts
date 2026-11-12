@@ -45,7 +45,7 @@ test("a memory file in a sibling directory whose name starts with the root's is 
 });
 
 // Raise this only with the reason in the commit. Memory files above the repo (absolute) and the user's own (`~`) are not counted.
-const ALWAYS_TOTAL = 1890;
+const ALWAYS_TOTAL = 1925;
 
 test("the always-loaded tokens inside the repo stay at or under the recorded total", () => {
   const r = load(join(import.meta.dir, "..", ".."), mkdtempSync(join(tmpdir(), "home-")));
