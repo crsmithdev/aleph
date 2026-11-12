@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -117,4 +117,19 @@ test("a core note of the session's scope is not asked about: its line is already
   const asked0 = Object.values(asked[0].questions).map((q: any) => q.instructions).join("\n");
   expect(asked0).toContain("Jev Screens Bounded Judgments");
   expect(asked0).not.toContain("Jev Screen Is Always On");
+});
+
+test("each injected note is appended to the recall log with source hook, and nothing is appended when none is injected", async () => {
+  const v = mkdtempSync(join(tmpdir(), "aleph-recall-log-"));
+  note(v, "Jev Screens Bounded Judgments", "Jev answers bounded questions before Haiku.");
+  const file = join(v, ".recall-log.jsonl");
+  answer = () => 0.4;
+  await run(v, PROMPT, {}, { session_id: "s-log" });
+  expect(existsSync(file)).toBe(false);
+  answer = () => 0.9;
+  await run(v, PROMPT, {}, { session_id: "s-log" });
+  const lines = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  expect(lines).toEqual([{ date: lines[0].date, title: "Jev Screens Bounded Judgments", query: PROMPT, session: "s-log", source: "hook" }]);
+  expect(existsSync(join(v, ".recall.json"))).toBe(false);
+  rmSync(v, { recursive: true, force: true });
 });

@@ -59,6 +59,14 @@ export interface Finding { note: string; rule: string; detail: string }
 
 export { today };
 
+/** Every logged return, one JSON line of date, title, query, session and source, for 30 days. Outside git; the CLI and the hook both append through here. */
+export function appendRecallLog(root: string, titles: string[], query: string, session: string | null, source: "cli" | "hook"): void {
+  const file = join(root, ".recall-log.jsonl");
+  const cut = today(new Date(Date.now() - 30 * 86400_000));
+  const old = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l && JSON.parse(l).date >= cut) : [];
+  writeFileSync(file, [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query, session, source }))].join("\n") + "\n");
+}
+
 export function clock(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())}`;

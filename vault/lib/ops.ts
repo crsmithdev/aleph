@@ -14,7 +14,7 @@ import { handoffsFor, traceDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
+import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
@@ -93,8 +93,6 @@ const READ_LOG = () => join(root, ".recall.json");
 function readLog(): Record<string, string> {
   return readJsonOr(READ_LOG(), {});
 }
-/** Every logged return, one JSON line of date, title and query, for 30 days. Also outside git. */
-const RECALL_LOG = () => join(root, ".recall-log.jsonl");
 function noteRead(titles: string[], query: string): void {
   // `--unlogged`: a person browsing is not a read by an agent, and the Memory page shows the log as use.
   if (!titles.length || rest.includes("--unlogged")) return;
@@ -102,9 +100,7 @@ function noteRead(titles: string[], query: string): void {
     const log = readLog();
     for (const t of titles) log[t] = today();
     writeFileSync(READ_LOG(), JSON.stringify(log, null, 0));
-    const cut = today(new Date(Date.now() - 30 * 86400_000));
-    const old = existsSync(RECALL_LOG()) ? readFileSync(RECALL_LOG(), "utf8").split("\n").filter((l) => l && JSON.parse(l).date >= cut) : [];
-    writeFileSync(RECALL_LOG(), [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query }))].join("\n") + "\n");
+    appendRecallLog(root, titles, query, process.env.CLAUDE_CODE_SESSION_ID || null, "cli");
   } catch { /* a read must never fail on its own bookkeeping */ }
 }
 

@@ -11,7 +11,7 @@ import { judgeChoice, nouls, type Noul } from "../lib/jev.ts";
 import { truncate } from "../lib/otlp.ts";
 import { postTurnSpan } from "./lib/trace.ts";
 import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
-import { coreNotes, loadWiki, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
+import { appendRecallLog, coreNotes, loadWiki, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
 
 const MIN_PROMPT = 20;
 // Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout.
@@ -87,6 +87,7 @@ async function main() {
   await postSpan(input, start, meta, picked.map(({ n }) => n.rel), additionalContext);
   if (!picked.length) return;
   writeSeen(root, input.session_id, seen, picked.map(({ n }) => n.rel));
+  try { appendRecallLog(root, picked.map(({ n }) => n.title), prompt, input.session_id ?? null, "hook"); } catch { /* the log must never block the injection */ }
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } }));
 }
 

@@ -669,12 +669,12 @@ describe("recall", () => {
     const lines = () => readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
     (await cli("write", note("Log Probe"), "--why", "x"));
     writeFileSync(file, JSON.stringify({ date: "2000-01-01", title: "Ancient", query: "old" }) + "\n");
-    (await cli("recall", "log probe"));
-    (await cli("recall", "probe"));
+    await run({ ALEPH_VAULT: vault, CLAUDE_CODE_SESSION_ID: "sess-1" }, "recall", "log probe");
+    await run({ ALEPH_VAULT: vault, CLAUDE_CODE_SESSION_ID: "" }, "recall", "probe");
     const day = JSON.parse(readFileSync(join(vault, ".recall.json"), "utf8"))["Log Probe"];
     expect(day).toMatch(/^\d{4}-\d\d-\d\d$/);
-    expect(lines()).toEqual([{ date: day, title: "Log Probe", query: "log probe" }, { date: day, title: "Log Probe", query: "probe" }]);
-    (await cli("recall", "log probe", "--unlogged"));
+    expect(lines()).toEqual([{ date: day, title: "Log Probe", query: "log probe", session: "sess-1", source: "cli" }, { date: day, title: "Log Probe", query: "probe", session: null, source: "cli" }]);
+    await run({ ALEPH_VAULT: vault, CLAUDE_CODE_SESSION_ID: "sess-1" }, "recall", "log probe", "--unlogged");
     expect(lines()).toHaveLength(2);
   });
   test("ranks title, alias, contains, body; empty list otherwise", async () => {
