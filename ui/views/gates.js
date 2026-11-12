@@ -139,15 +139,15 @@ function decidedCell(d) {
   return meter([["rule", d.rule], ["dir", d.director], ["user", d.chris]].map(([k, n]) => ({ pct: (100 * n) / all, cls: `c-${k}` })), line) + `<small class="split">${esc(line)}</small>`;
 }
 
-/** A reason has an Edit row when the factory can change something on it: a rule action, a stale grant or a timeout. */
-const editable = (r) => !r.places && (!!r.mode || !!r.granted || r.timeout !== undefined);
+/** A reason has an Edit row unless it is a memory proposal, which is granted per place. */
+const editable = (r) => !r.places;
 
 /** The Edit row of a reason, hidden until its Edit button opens it. Save posts only what changed. */
 function ruleForm(r) {
   const opt = (value, label, on) => ({ label, on, attrs: ` data-value="${esc(value)}"` });
   const g = r.granted?.action ?? "";
-  const decide = !r.mode && !g ? setting("Decides", "Director", { hint: "The factory has no rule for this Ask." }) : setting("Decides", seg(`Who decides ${r.name}`, [opt("", "Director", !g), ...(r.mode ? [opt(r.mode, modeLabel(r.mode), g === r.mode)] : []), ...(g && g !== r.mode ? [opt(g, modeLabel(g), true)] : [])], ' data-field="decide"'),
-    { hint: "Director: the director decides and sends the rest to the user." });
+  const decide = setting("Decides", seg(`Who decides ${r.name}`, [opt("", "Director", !g), ...(r.mode ? [opt(r.mode, modeLabel(r.mode), g === r.mode)] : []), ...(g && g !== r.mode && g !== "user" ? [opt(g, modeLabel(g), true)] : []), opt("user", "User", g === "user")], ' data-field="decide"'),
+    { hint: "Director: the director decides and sends the rest to the user. User: the Ask goes to the user with no director run." });
   let wait = "";
   if (r.timeout !== undefined) {
     const v = r.timeout ? splitWait(r.timeout) : { n: 30, unit: "min" }, off = r.timeout ? "" : " disabled";

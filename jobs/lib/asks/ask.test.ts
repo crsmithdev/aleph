@@ -115,6 +115,16 @@ test("grant then always round-trips; revoke removes it", () => {
   expect(readAlways()).toEqual({});
 });
 
+test("user is granted on any reason but a memory proposal, and a stored grant stays", () => {
+  expect(grant("question", "user")).toBeNull();
+  expect(always("question")?.action).toBe("user");
+  expect(readAlways().question?.action).toBe("user");
+  expect(grant("proposal-skill", "user")).not.toBeNull();
+  expect(grant("proposal-skill:aleph", "user")).not.toBeNull();
+  revoke("question");
+  expect(always("question")).toBeNull();
+});
+
 const CLI = join(import.meta.dir, "..", "..", "cli.ts");
 const cli = (...args: string[]) => {
   const p = Bun.spawnSync(["bun", CLI, ...args], { env: { ...process.env, ALEPH_FACTORY_DIR: dir }, stdout: "pipe", stderr: "pipe" });

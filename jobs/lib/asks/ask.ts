@@ -1,7 +1,7 @@
 /**
  * The Ask module: what a run, an issue or a part needs from Chris, and its whole lifecycle. It holds the reasons and
  * what each one offers, sets an Ask on an issue, says which actor (Chris or the director) may take which action on it,
- * and says what clears it. Every new Ask goes to the director first (director.ts); it reaches Chris when the director escalates it. Callers do not read the Ask fields or test reason names for these rules.
+ * and says what clears it. Every new Ask goes to the director first (director.ts); it reaches Chris when the director escalates it, or at once when an Always rule grants the reason `user`. Callers do not read the Ask fields or test reason names for these rules.
  *
  * The Ask of an issue and of its runs is one: `ask` of the issue's job record (record.ts). While a run awaits Chris
  * the record names that run in `askRun`, and the run reads it as its own `ask`; else the Ask is on the issue.
@@ -200,11 +200,13 @@ export const askNote = (a: Ask): string =>
 const alwaysFile = () => join(layout().factory, "always.json");
 
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
-const allows = (r: Reason, action: string): boolean => r.actions.includes(action) || action === r.always;
+/** `user` sends the Ask to Chris with no director run; every reason takes it but the memory proposals. */
+const USER = "user";
+const allows = (reason: string, r: Reason, action: string): boolean => r.actions.includes(action) || action === r.always || (action === USER && !reason.startsWith("proposal-"));
 
 /** always.json. A missing file is empty; a bad one throws. An entry that grant() would refuse is ignored. */
 export const readAlways = (): Record<string, Granted> =>
-  Object.fromEntries(Object.entries(readJsonOr<Record<string, Granted>>(alwaysFile(), {})).filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(r, g?.action); }));
+  Object.fromEntries(Object.entries(readJsonOr<Record<string, Granted>>(alwaysFile(), {})).filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(reason, r, g?.action); }));
 
 const write = (s: Record<string, Granted>): void => writeJson(alwaysFile(), s);
 
@@ -215,7 +217,7 @@ export const always = (reason: string): Granted | null => readAlways()[reason] ?
 export function grant(reason: string, action: string): string | null {
   const r = reasonFor(reason);
   if (!r) return `unknown reason ${reason}; known: ${Object.keys(ASK_REASONS).join(", ")}`;
-  if (!allows(r, action)) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
+  if (!allows(reason, r, action)) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
   write({ ...readAlways(), [reason]: { action, at: new Date().toISOString() } });
   return null;
 }

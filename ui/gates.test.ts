@@ -195,9 +195,9 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   for (const [reason, r] of Object.entries(ASK_REASONS)) {
     const form = h.split('<form class="rule-form"').find((x: string) => x.startsWith(` data-rule="${reason}"`));
     const modes = form ? [...form.slice(form.indexOf('data-field="decide"')).split("</div>")[0].matchAll(/data-value="([^"]*)"/g)].map((m) => m[1]) : [];
-    // A reason with no rule, no grant and no timeout has nothing to edit, so it has no Edit row.
-    if (reason.startsWith("proposal-") || !r.always) expect(form).toBeUndefined();
-    else expect(modes).toEqual(["", r.always]);
+    // A memory proposal is granted per place, so it has no Edit row; every other reason offers Director, its mode and User.
+    if (reason.startsWith("proposal-")) expect(form).toBeUndefined();
+    else expect(modes).toEqual(["", ...(r.always ? [r.always] : []), "user"]);
   }
   expect(h).not.toContain("The director decides first");
   const rescue = h.slice(h.indexOf('data-rule="rescue"'));
@@ -425,7 +425,7 @@ test("rules() has one row per Ask reason; renderRules is one table with a row pe
   expect(h.match(/<tr class="rule" data-reason="/g)!.length).toBe(r.length);
 });
 
-test("a stored firefighter grant for held-path is dead: rules() shows no grant and Decides offers only Director", () => {
+test("a stored firefighter grant for held-path is dead: rules() shows no grant and Decides offers only Director and User", () => {
   const f = join(base, "factory", "always.json");
   const saved = readFileSync(f, "utf8");
   try {
@@ -434,7 +434,32 @@ test("a stored firefighter grant for held-path is dead: rules() shows no grant a
     expect(row.granted).toBeNull();
     const h = gates.renderRules({ rules: [row] });
     expect(h).not.toContain("always.json grants");
-    expect(h).not.toContain('data-field="decide"');
+    expect(h).not.toContain("firefighter");
+    expect(h).toMatch(/data-value="" aria-pressed="true">Director<\/button><button type="button" data-value="user" aria-pressed="false">User</);
+  } finally { writeFileSync(f, saved); }
+});
+
+test("a reason granted user shows User in Decides, and the proposal-skill row offers no User choice", () => {
+  const f = join(base, "factory", "always.json");
+  const saved = readFileSync(f, "utf8");
+  try {
+    writeFileSync(f, JSON.stringify({ "held-path": { action: "user", at: ago(5) } }));
+    const all = rules();
+    const held = gates.renderRules({ rules: all.filter((x) => x.reason === "held-path") });
+    expect(held).toContain("<td>User</td>");
+    expect(held).toMatch(/data-value="user" aria-pressed="true">User</);
+    const skill = gates.renderRules({ rules: all.filter((x) => x.reason === "proposal-skill") });
+    expect(skill).not.toContain('data-value="user"');
+  } finally { writeFileSync(f, saved); }
+});
+
+test("a grant that is neither the reason's mode nor user still shows pressed in Decides", () => {
+  const f = join(base, "factory", "always.json");
+  const saved = readFileSync(f, "utf8");
+  try {
+    writeFileSync(f, JSON.stringify({ "intake-failed": { action: "close", at: ago(5) } }));
+    const h = gates.renderRules({ rules: rules().filter((x) => x.reason === "intake-failed") });
+    expect(h).toMatch(/data-value="" aria-pressed="false">Director<\/button><button type="button" data-value="retry" aria-pressed="false">[^<]+<\/button><button type="button" data-value="close" aria-pressed="true">[^<]+<\/button><button type="button" data-value="user" aria-pressed="false">User</);
   } finally { writeFileSync(f, saved); }
 });
 
@@ -656,7 +681,7 @@ test("a land reason shows its timeout in the largest whole unit, and its Edit ro
   expect(h).toMatch(/data-value="1" aria-pressed="true">Land if recommended/);
   expect(h).toMatch(/<input name="n" type="number" value="2"[^>]*>/);
   expect(h).toContain('<option value="h" selected>hours</option>');
-  expect(h).toContain('<label class="sl">Decides</label><span class="sctl">Director</span>');
+  expect(h).toMatch(/data-field="decide"><button type="button" data-value="" aria-pressed="true">Director<\/button><button type="button" data-value="user" aria-pressed="false">User</);
   const off = gates.renderRules({ rules: [row(0)] });
   expect(off).toContain("<td>Keep waiting</td>");
   expect(off).toMatch(/<input name="n"[^>]* disabled>/);

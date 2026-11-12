@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { markAsked, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
+import { grant, markAsked, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
 import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "../transitions/factory.ts";
@@ -248,6 +248,19 @@ test("a drop reason that names another issue of this repo on main gets the fate 
   reply([{ do: "drop", reason: "the work is already in gpu-faults-2" }]);
   await direct();
   expect(dropped.map((d) => d.fate)).toEqual(["duplicate", undefined]);
+});
+
+test("an Ask whose reason a rule grants user is escalated at once with no director run; other reasons still get one", async () => {
+  fresh([{ title: "product", ask: choice() }, { title: "other", ask: { ...plain("which wins?"), reason: "no-commit" } }]);
+  expect(grant("question", "user")).toBeNull();
+  replyWith({ case: TEXT });
+  const out = await direct();
+  expect(out.map((d) => [d.reason, d.outcome])).toEqual(expect.arrayContaining([["question", "escalated"]]));
+  expect(asked(1)!.situation).toContain("a rule sends this Ask to the user");
+  expect(awaitsChris(`${key}-1`)).toBe(true);
+  expect(readRecord().find((d) => d.reason === "question")).toMatchObject({ outcome: "escalated", why: "a rule sends this Ask to the user" });
+  expect(events()).toContainEqual(expect.objectContaining({ by: "director", subject: `${key}-1`, action: "escalated", to: "human", note: "a rule sends this Ask to the user" }));
+  expect(directorRuns().map((e) => e.run.on)).toEqual([`${key}-2`]);
 });
 
 test("an edit-goal with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
