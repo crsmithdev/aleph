@@ -89,36 +89,43 @@ export const routes: Routes = {
       role: "chat", who: "the chat agent", model: OPUS_MODEL, seconds: 3600, cwd: ROOT, name: "chat", command: `chat: ${text.slice(0, 120)}`, shown: true, session: typeof session === "string" && session ? session : undefined, lock: chatLock,
       flags: ["--permission-mode", "bypassPermissions", "--append-system-prompt", SYSTEM + (idea ? building(idea) : ""), ...(typeof session === "string" && session ? ["--resume", session] : [])],
     });
-    const ids = Array.isArray(annotations) ? annotations.filter((x): x is string => typeof x === "string") : [];
-    const prompt = text + notesOn(typeof page === "string" ? page : undefined, ids) + attached(run.folder, shots);
-    const turn = run.ask(prompt).then(() => undefined, (e: Error) => e.message);
-    const log = runFile(run.folder, "output.log");
-    let open = true, from = 0, rest = "";
-    const body = new ReadableStream<Uint8Array>({
-      async start(c) {
-        const send = (s: string) => { if (open) try { c.enqueue(enc.encode(s)); } catch { open = false; } };
-        const drain = () => {
-          const size = statSync(log, { throwIfNoEntry: false })?.size ?? 0;
-          if (size <= from) return;
-          const buf = Buffer.alloc(size - from), fd = openSync(log, "r");
-          try { readSync(fd, buf, 0, buf.length, from); } finally { closeSync(fd); }
-          from = size;
-          const lines = (rest + buf.toString("utf8")).split("\n");
-          rest = lines.pop()!;
-          for (const l of lines) if (l.trim()) send(`data: ${l}\n\n`);
-        };
-        const poll = setInterval(drain, POLL_MS);
-        const keep = setInterval(() => send(":\n\n"), KEEP_MS);
-        const error = await turn;
-        clearInterval(poll);
-        clearInterval(keep);
-        drain();
-        run.end(error ? `failed: ${error}` : "answered");
-        send(`event: end\ndata: ${JSON.stringify(error ? { error } : {})}\n\n`);
-        if (open) c.close();
-      },
-      cancel() { open = false; },
-    });
-    return new Response(body, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+    // A throw before the stream takes over would leave the run open and its chat lock held.
+    try {
+      const ids = Array.isArray(annotations) ? annotations.filter((x): x is string => typeof x === "string") : [];
+      const prompt = text + notesOn(typeof page === "string" ? page : undefined, ids) + attached(run.folder, shots);
+      const turn = run.ask(prompt).then(() => undefined, (e: Error) => e.message);
+      const log = runFile(run.folder, "output.log");
+      let open = true, from = 0, rest = "";
+      const body = new ReadableStream<Uint8Array>({
+        async start(c) {
+          const send = (s: string) => { if (open) try { c.enqueue(enc.encode(s)); } catch { open = false; } };
+          const drain = () => {
+            const size = statSync(log, { throwIfNoEntry: false })?.size ?? 0;
+            if (size <= from) return;
+            const buf = Buffer.alloc(size - from), fd = openSync(log, "r");
+            try { readSync(fd, buf, 0, buf.length, from); } finally { closeSync(fd); }
+            from = size;
+            const lines = (rest + buf.toString("utf8")).split("\n");
+            rest = lines.pop()!;
+            for (const l of lines) if (l.trim()) send(`data: ${l}\n\n`);
+          };
+          const poll = setInterval(drain, POLL_MS);
+          const keep = setInterval(() => send(":\n\n"), KEEP_MS);
+          const error = await turn;
+          clearInterval(poll);
+          clearInterval(keep);
+          drain();
+          run.end(error ? `failed: ${error}` : "answered");
+          send(`event: end\ndata: ${JSON.stringify(error ? { error } : {})}\n\n`);
+          if (open) c.close();
+        },
+        cancel() { open = false; },
+      });
+      return new Response(body, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      run.end(`failed: ${error}`);
+      return Response.json({ error }, { status: 500 });
+    }
   },
 };

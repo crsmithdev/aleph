@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { withEnv, withServer } from "./test-server.ts";
 import { add, mark } from "../lib/annotations.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
+import { chatLock } from "../jobs/lib/roles/agent-run.ts";
+import { lockSync } from "../jobs/lib/infra/locks.ts";
 
 let base: string, at: Awaited<ReturnType<typeof withServer>>["at"], stop: () => void, restoreEnv: () => void;
 
@@ -113,4 +115,17 @@ test("a pasted image is saved in the run's folder and the prompt names its path;
   expect(said).toContain("Chris attached these screenshots");
   expect(path && readFileSync(path)).toEqual(png);
   expect((await turn({ text: "see", images: [{ name: "x.exe", data: "AA==" }] })).status).toBe(400);
+});
+
+test("a throw after the run opens answers an error and ends the run, freeing its chat lock", async () => {
+  writeFileSync(join(base, "annotations.json"), "{ not json");
+  const had = new Set(allRuns().map((e) => e.id));
+  const t = await turn({ text: "hello", page: "http://x/#/now" });
+  expect(t.status).not.toBe(200);
+  const opened = allRuns().find((e) => e.run.kind === "chat" && !had.has(e.id))!;
+  expect(opened.run.condition).toBe("done");
+  expect(opened.run.reason).toStartWith("failed: ");
+  const release = lockSync(chatLock(opened.run.job), 0);
+  expect(release).not.toBeNull();
+  release?.();
 });
