@@ -509,7 +509,6 @@ table.tbl .badge { margin-right: var(--sp-2); }
 table.tbl td.num.bad { color: var(--stuck); }
 table.tbl.fit { width: auto; min-width: 40%; }
 table.tbl.fit td.wide { width: auto; max-width: 60ch; }
-table.tbl .spark { display: block; width: 120px; height: 18px; }
 table.tbl tr.muted td { color: var(--muted); }
 table.tbl th button { all: unset; cursor: pointer; }
 table.tbl th button:hover, table.tbl th button:focus-visible { color: var(--ink); }

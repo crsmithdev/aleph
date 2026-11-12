@@ -81,7 +81,9 @@ test("/app.css is the style sheet, and the page links it", async () => {
   const res = await at("/app.css");
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("text/css");
-  expect(await res.text()).toContain(":root");
+  const css = await res.text();
+  expect(css).toContain(":root");
+  expect(css).not.toContain(".spark");
   expect(await (await at("/")).text()).toContain('<link rel="stylesheet" href="/app.css">');
 });
 
