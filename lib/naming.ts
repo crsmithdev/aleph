@@ -8,13 +8,13 @@ export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"];
 const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"];
 const ASKS = ["protected", "question", "incomplete", "capped", "proposal"];
-export const ACTIONS = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed"];
+export const ACTIONS = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed", "refused"];
 /** Why a run stopped: the closed set of causes (outcome.ts `Cause`). */
 export const CAUSES = ["no-commit", "timeout", "stalled", "infra", "locked", "credit", "check", "conflict", "moved", "review", "unanswered", "other"] as const;
 export const SUBS = [
   ...CAUSES,
   "duplicate", "met", "manual", "protected", "question", "intake", "capped", "override", "error", "rescue",
-  "local", "starts",
+  "local", "starts", "contradiction",
 ];
 export const ACTORS = ["human", "rule", "gate", "worker", "reviewer", "check", "intake", "director", "monitor", "firefighter"];
 /** The kinds of an issue. */

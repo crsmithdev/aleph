@@ -16,6 +16,7 @@ import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
 import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
+import { logEvent } from "../../lib/layout.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
 export class Exit extends Error { constructor(readonly code: number) { super(`exit ${code}`); } }
@@ -220,7 +221,12 @@ async function write(): Promise<void> {
       try {
         const { p } = await nouls({ draft: draft.title }, questions);
         const hits = candidates.filter((_, i) => p[`n${i}`] >= 0.7);
-        if (hits.length) refuse(hits.map((n) => ({ note: n.title, rule: "contradiction", detail: `the draft [${draft.title}] may contradict [${n.title}]` })), "add it to supersedes or fix the draft: this write changed nothing; name it in consistent_with if the two agree");
+        if (hits.length) {
+          // A log that cannot be written must not turn the refusal into a write.
+          try { logEvent({ by: "gate", subject: draft.title, action: "refused", sub: "contradiction", on: hits.map((n) => n.title) }); }
+          catch (e) { console.error(`warn contradiction ${draft.title}: event not logged, ${(e as Error).message}`); }
+          refuse(hits.map((n) => ({ note: n.title, rule: "contradiction", detail: `the draft [${draft.title}] may contradict [${n.title}]` })), "add it to supersedes or fix the draft: this write changed nothing; name it in consistent_with if the two agree");
+        }
       } catch (e) {
         if (e instanceof Exit) throw e; // the refusal above
         console.error(`warn contradiction ${draft.title}: screen skipped, ${(e as Error).message}`);

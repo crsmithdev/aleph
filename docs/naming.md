@@ -36,7 +36,7 @@ Text that people read does not use these old words: goal (an issue), part (an is
 
 ## Events
 
-Every event has these fields: a log row, a job's end, a Status card line, a report line. A writer stores the fields. Only the display joins them. A log event is one line of the event log, `factory/events/<day>.jsonl`: the event as JSON, in the file of its UTC day, which `logEvent` in `lib/layout.ts` writes. A day before today never changes, so a reader reads only the days of its window (`readEvents`). Each write that changes a run's state logs one event by `gate` on the run's subject, with the state as the action and the job ID in `on`; an event of a run that ends has its `cost`, and one of a run that lands its `commit`. An Ask set logs `question` and an Ask cleared logs `answered`, on the record's key. Each new issue logs one `filed` event by its filer (`writeFiling` in `issues/lib/store.ts`), and `close` logs `done` or `dropped`, on the issue's full ID. A gate hold logs its event when it writes a new hold, and also keeps it in the job record.
+Every event has these fields: a log row, a job's end, a Status card line, a report line. A writer stores the fields. Only the display joins them. A log event is one line of the event log, `factory/events/<day>.jsonl`: the event as JSON, in the file of its UTC day, which `logEvent` in `lib/layout.ts` writes. A day before today never changes, so a reader reads only the days of its window (`readEvents`). Each write that changes a run's state logs one event by `gate` on the run's subject, with the state as the action and the job ID in `on`; an event of a run that ends has its `cost`, and one of a run that lands its `commit`. An Ask set logs `question` and an Ask cleared logs `answered`, on the record's key. Each new issue logs one `filed` event by its filer (`writeFiling` in `issues/lib/store.ts`), and `close` logs `done` or `dropped`, on the issue's full ID. A `vault write` that the contradiction screen refuses logs one `refused` event by `gate`, sub `contradiction`, with the draft's title as the subject and the title of each note it may contradict in `on`. A gate hold logs its event when it writes a new hold, and also keeps it in the job record.
 
 | Field | Form | Example |
 |---|---|---|
@@ -76,8 +76,8 @@ Every value is lower case, in storage and on the page. A word means one thing in
 |---|---|---|
 | Issue status | yes | open, parked, done, dropped |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered |
-| Sub | yes | no-commit, timeout, stalled, infra, locked, credit, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, other |
+| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered, refused |
+| Sub | yes | no-commit, timeout, stalled, infra, locked, credit, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, contradiction, other |
 | Actor | yes | human, rule, gate, worker, reviewer, check, intake, director, monitor, firefighter |
 | Kind | yes, never shown | build, recheck, land, intake, director, monitor, chat |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
