@@ -20,8 +20,8 @@ const empty: Sources = { runs: [], holds: [], specChecks: [], items: [], storeLo
 
 describe("stages", () => {
   const runs = [
-    run({ kind: "build", on: "p-1", started: at(DAY, 9), ended: at(DAY, 9, 10), condition: "passed", cost: 1, review: { call: "passed", seconds: 90 } }),
-    run({ kind: "build", on: "p-1", started: at(DAY, 10), ended: at(DAY, 10, 20), condition: "failed", cause: "no-commit", cost: 2, review: { call: "failed" } }),
+    run({ kind: "build", on: "p-1", started: at(DAY, 9), ended: at(DAY, 9, 10), condition: "passed", cost: 1, review: { call: "passed", seconds: 90, cost: 0.5 } }),
+    run({ kind: "build", on: "p-1", started: at(DAY, 10), ended: at(DAY, 10, 20), condition: "failed", cause: "no-commit", cost: 2, review: { call: "failed", cost: 0.5 } }),
     run({ kind: "build", on: "p-2", started: at(DAY, 11), ended: at(DAY, 11, 30), condition: "passed", cost: 3 }),
     run({ kind: "build", on: "p-3", started: at(DAY, 12), condition: "running" }),
     run({ kind: "intake", on: "p-1", started: at(DAY, 8), ended: at(DAY, 8, 1), reason: "failed: no reply", cause: "unanswered" }),
@@ -37,7 +37,7 @@ describe("stages", () => {
   const row = (stage: string, w = t.today) => w.stages.find((s) => s.stage === stage);
 
   test("runs per item, runs with no usable result, cost, the median time and the p90; a live run is left out", () => {
-    expect(row("build")).toEqual({ stage: "build", runs: 3, items: 2, unusable: 1, cost: 6, minutes: 20, p90: 1800 });
+    expect(row("build")).toEqual({ stage: "build", runs: 3, items: 2, unusable: 1, cost: 5, minutes: 20, p90: 1800 });
     expect(row("build", t.trailing)).toEqual({ stage: "build", runs: 2, items: 1, unusable: 1, cost: 14, minutes: 40, p90: 3600 });
   });
 
@@ -53,14 +53,30 @@ describe("stages", () => {
   });
 
   test("the reviewer is a stage of its own, and its error is no usable result; a spec check has only its cost", () => {
-    expect(row("review")).toMatchObject({ runs: 2, items: 1, unusable: 1, cost: null });
+    expect(row("review")).toMatchObject({ runs: 2, items: 1, unusable: 1, cost: 1 });
     expect(row("spec-check")).toEqual({ stage: "spec-check", runs: 2, items: 1, unusable: null, cost: 1, minutes: null, p90: null });
+  });
+
+  test("a review that records no cost adds none to the review row, and its build keeps the whole run cost", () => {
+    const runs2 = [
+      run({ kind: "build", on: "p-9", started: at(DAY, 9), ended: at(DAY, 9, 5), condition: "passed", cost: 4, review: { call: "passed", cost: 1.5 } }),
+      run({ kind: "build", on: "p-9", started: at(DAY, 10), ended: at(DAY, 10, 5), condition: "passed", cost: 3, review: { call: "passed" } }),
+    ];
+    const w = measure({ ...empty, runs: runs2 }, DAY, Date.parse(at(DAY, 23)));
+    const cost = (stage: string) => w.today.stages.find((s) => s.stage === stage)!.cost;
+    expect(cost("review")).toBe(1.5);
+    expect(cost("build")).toBe(5.5);
   });
 
   test("the table puts the day's value first and the trailing mean per day in brackets", () => {
     const text = renderTable(t);
-    expect(text).toContain("| build | 3 (0.3) | 1.5 (2) | 1, 33% (50%) | $6.00 ($2.00) | $3.00 ($14.00) | 20 (40) |");
+    expect(text).toContain("| build | 3 (0.3) | 1.5 (2) | 1, 33% (50%) | $5.00 ($2.00) | $2.50 ($14.00) | 20 (40) |");
     expect(text).toContain("| spec-check | 2 (0) | 2 (-) | - |");
+  });
+
+  test("the Not measured list keeps its other lines and no longer names the cost of the reviewer", () => {
+    const notMeasured = renderTable(t).split("## Not measured\n\n")[1].trim().split("\n");
+    expect(notMeasured.map((l) => l.slice(2, l.indexOf(":")))).toEqual(["spec checks (before intake) with no usable result, and their time", "time in each state of an item after its start (awaiting, answered)", "usage per agent"]);
   });
 });
 

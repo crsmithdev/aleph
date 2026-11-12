@@ -89,7 +89,6 @@ export interface Table {
 
 /** The metrics the design names that no recorded data gives; the table says so. */
 const LEFT_OUT = [
-  "cost of the reviewer: a build run records only its worker's cost",
   "spec checks (before intake) with no usable result, and their time: the job record keeps only the cost",
   "time in each state of an item after its start (awaiting, answered): no record keeps those changes with their times",
   "usage per agent: usage.jsonl is the account's quota, not per run",
@@ -128,10 +127,11 @@ function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun
     const r = e.run;
     if (r.kind === "plain" || r.condition === "running" || !inside(r.started, from, to)) continue;
     const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
-    // A run on no item (a firefighter sweep) is its own item.
-    yield { stage: r.kind, item: r.on ?? r.job, issue: !!r.on, unusable: unusable(e), secs: took >= 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost : null };
     // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
-    if (r.kind === "build" && r.review && r.review.call !== "running") yield { stage: "review", item: r.on ?? r.name, issue: !!r.on, unusable: r.review.call === "failed", secs: r.review.seconds ?? null, cost: null };
+    const review = r.kind === "build" && r.review && r.review.call !== "running" ? r.review : undefined;
+    // A run on no item (a firefighter sweep) is its own item. The run's cost is the worker's plus the reviewer's, so the build stage counts the worker's share only.
+    yield { stage: r.kind, item: r.on ?? r.job, issue: !!r.on, unusable: unusable(e), secs: took >= 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost - (review?.cost ?? 0) : null };
+    if (review) yield { stage: "review", item: r.on ?? r.name, issue: !!r.on, unusable: review.call === "failed", secs: review.seconds ?? null, cost: review.cost ?? null };
   }
 }
 
