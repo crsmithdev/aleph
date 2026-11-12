@@ -1,7 +1,7 @@
 /**
  * `aleph tick`, from its timer every minute. It starts only periodic work, each step on its own due rule: the
- * corrections and the monitor once a day, the episodes, the CI read and the firefighter on a fixed period, the probe
- * of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
+ * corrections and the monitor once a day, the housekeeper once a day and after a land, the episodes, the CI read and
+ * the firefighter on a fixed period, the probe of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
  * and an Ask each start their next step at once. The sweep is the safety net: work that should have started and did
  * not is logged as `missed: <key>`, so the cause gets fixed, and is started. A tick that finds nothing due reads
  * only local files: no agent run and no fetch.
@@ -23,7 +23,8 @@ import { retain } from "../infra/retention.ts";
 import { archiveOld } from "../records/record.ts";
 import { allJobs, loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { intakeDetached, suiteDetached } from "./launch.ts";
+import { housekeeperDetached, intakeDetached, suiteDetached } from "./launch.ts";
+import { housekeepDue } from "../roles/housekeeper.ts";
 import { monitorStep } from "../roles/monitor.ts";
 import { chatLock, endLost } from "../roles/agent-run.ts";
 import { timeoutStep, type Waiting } from "../asks/timeout.ts";
@@ -183,6 +184,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     }
     const t = await step("timeout", () => timeoutStep(takeOnTimeout, now), (n) => `${n.length} taken`);
     if (t?.length) out.timedOut = t;
+    await step("housekeep", () => housekeepDue(now) && (housekeeperDetached(), true), (on) => (on ? "started" : null));
     const mon = await monitorStep(new Date(now));
     if (mon) out.monitor = mon.day;
     await editTick((t) => ({ ...t, ...s, ran: { ...t.ran, ...ran } }));

@@ -131,3 +131,8 @@ export function suiteDetached(): void {
   detached(["suite"], join(factoryDir(), "dispatch.log"));
 }
 
+/** Start `aleph housekeep` detached, for a land or the daily review of parked issues. It never fails the caller. */
+export function housekeeperDetached(): void {
+  if (!dispatchOn()) return;
+  detached(["housekeep"], join(factoryDir(), "housekeeper.log"));
+}

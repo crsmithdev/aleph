@@ -32,6 +32,7 @@ import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
 import { health } from "./lib/gates/factory-status.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
 import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
+import { housekeep } from "./lib/roles/housekeeper.ts";
 import { cutTitle, fit } from "./lib/roles/title.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
 import type { Fate } from "./lib/records/outcome.ts";
@@ -66,6 +67,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   annotation: { usage: "aleph annotation <list [--all] [--url <u>] [--json] | add (--on <id> | --selector <css>) [--url <u>] <text|-> | reply <id> [--by you|agent] <text|-> | resolve <id> | reopen <id> | drop <id> | put>", purpose: "read and write notes on UI pages" },
   tick: { usage: "aleph tick", purpose: "run the periodic steps that are due and the sweep" },
   director: { usage: "aleph director", purpose: "run one director step" },
+  housekeep: { usage: "aleph housekeep", purpose: "review the parked issues a land touched, or every parked issue once a day" },
   suite: { usage: "aleph suite", purpose: "run one suite step" },
   monitor: { usage: "aleph monitor [--dry] [--day YYYY-MM-DD]", purpose: "write the monitor's table and reading of a day" },
   dispatch: { usage: "aleph dispatch", purpose: "start every ready issue up to the live cap" },
@@ -603,6 +605,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "idea": await ideaCmd(ctx); break;
     case "tick": await tickCmd(ctx); break;
     case "director": ctx.out(await directorStep()); break;
+    case "housekeep": ctx.out(await housekeep(Date.now()) ?? refuse("another housekeeper holds the lock")); break;
     case "suite": ctx.out(await suiteStep()); break;
     case "monitor": {
       // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.
