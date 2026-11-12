@@ -10,14 +10,21 @@ export interface LangfuseConfig {
 /** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
 const envFile = (): string => alephPath("ALEPH_ENV_FILE", ".env");
 
-/** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
-export function openRouterKey(): string | null {
-  if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY;
+/** One key from the dotenv file, never copied to process.env; null when the file or the key is missing. */
+function dotenvKey(name: string): string | null {
   let text: string;
   try { text = readFileSync(envFile(), "utf8"); } catch { return null; }
-  const m = text.match(/^\s*(?:export\s+)?OPENROUTER_API_KEY=(.*)$/m);
+  const m = text.match(new RegExp(`^\\s*(?:export\\s+)?${name}=(.*)$`, "m"));
   return m ? m[1].trim().replace(/^(["'])(.*)\1$/, "$2") : null;
 }
+
+/** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
+export function openRouterKey(): string | null {
+  return process.env.OPENROUTER_API_KEY || dotenvKey("OPENROUTER_API_KEY");
+}
+
+/** ANTHROPIC_API_KEY from the dotenv file only: a process that has it in its environment bills the API instead of the subscription. */
+export const anthropicKey = (): string | null => dotenvKey("ANTHROPIC_API_KEY");
 
 /**
  * Hooks inherit the shell, not a dotenv; read the dotenv file (`envFile()`) ourselves. process.env wins.

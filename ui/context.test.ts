@@ -1,8 +1,8 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parse } from "./context.ts";
+import { parse, parseExact } from "./context.ts";
 import { withEnv, withServer } from "./test-server.ts";
 
 const req = (id: string, input: number, cacheRead: number, cacheWrite: number) => ({ type: "assistant", requestId: id, message: { usage: { input_tokens: input, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: cacheWrite, output_tokens: 7 } } });
@@ -72,4 +72,60 @@ test("GET /api/context lists the newer session first and /api/context/:id return
   const one: any = await at("/api/context/new").then((r) => r.json());
   expect(one.requests.map((x: any) => [x.n, x.fill])).toEqual([[1, 1002], [2, 1503], [3, 1804]]);
   expect((await at("/api/context/nope")).status).toBe(404);
+});
+
+test("GET /api/context/:id counts the fixed parts with count_tokens when the dotenv has the key", async () => {
+  writeFileSync(join(base, "-p", "model.jsonl"), transcript.replaceAll('"usage"', '"model":"claude-test-1","usage"'));
+  writeFileSync(join(base, "env"), "ANTHROPIC_API_KEY=sk-test\n");
+  const restore = withEnv({ ALEPH_ENV_FILE: join(base, "env") });
+  const real = globalThis.fetch, models: string[] = [];
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (!String(url).includes("count_tokens")) return real(url, init);
+    models.push(JSON.parse(init!.body as string).model);
+    return Response.json({ input_tokens: 5 });
+  }) as typeof fetch;
+  try {
+    const one: any = await at("/api/context/model").then((r) => r.json());
+    expect(one.requests[0].parts.slice(0, 4).map((p: any) => [p.tokens, p.how])).toEqual(Array(4).fill([5, "exact"]));
+    expect(models).toEqual(Array(4).fill("claude-test-1"));
+  } finally { globalThis.fetch = real; restore(); }
+});
+
+describe("parseExact", () => {
+  const withModel = transcript.replace('"usage"', '"model":"claude-test-1","usage"');
+  const envFile = (text: string) => { const f = join(base, "env"); writeFileSync(f, text); return f; };
+  // input_tokens by the text each body holds
+  const tokens: [string, number][] = [["s".repeat(300), 11], ["t".repeat(60), 22], ["i".repeat(200), 33], ["m".repeat(100), 44]];
+  const bodies: any[] = [];
+  const fake = (async (_url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(init.body as string));
+    return Response.json({ input_tokens: tokens.find(([t]) => (init.body as string).includes(t))![1] });
+  }) as unknown as typeof fetch;
+
+  test("counts each fixed part with the session's model and marks it exact, without the key reaching process.env", async () => {
+    const restore = withEnv({ ALEPH_ENV_FILE: envFile("ANTHROPIC_API_KEY=sk-test\n") });
+    delete process.env.ANTHROPIC_API_KEY;
+    const r = await parseExact(withModel, fake);
+    restore();
+    expect(r[0].parts.slice(0, 4).map((p) => [p.tokens, p.how])).toEqual([[11, "exact"], [22, "exact"], [33, "exact"], [44, "exact"]]);
+    expect(bodies.map((b) => b.model)).toEqual(Array(4).fill("claude-test-1"));
+    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  test("with no key it keeps chars ÷ 4 estimates and makes no call", async () => {
+    const restore = withEnv({ ALEPH_ENV_FILE: envFile("OTHER=1\n") });
+    let calls = 0;
+    const r = await parseExact(withModel, (async () => { calls++; return Response.json({}); }) as unknown as typeof fetch);
+    restore();
+    expect(calls).toBe(0);
+    expect(r[0].parts.slice(0, 4)).toEqual(parse(transcript)[0].parts.slice(0, 4));
+    expect(r[0].parts.every((p) => p.how === "est")).toBe(true);
+  });
+
+  test("when a call fails it keeps the estimates", async () => {
+    const restore = withEnv({ ALEPH_ENV_FILE: envFile("ANTHROPIC_API_KEY=sk-test\n") });
+    const r = await parseExact(withModel, (async () => new Response("no", { status: 500 })) as unknown as typeof fetch);
+    restore();
+    expect(r[0].parts.slice(0, 4).every((p) => p.how === "est")).toBe(true);
+  });
 });

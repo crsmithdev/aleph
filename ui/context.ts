@@ -1,4 +1,5 @@
 /** A Claude Code session's requests, read from its transcript jsonl: each request's fill and the parts it holds. */
+import { anthropicKey } from "../lib/env.ts";
 
 export interface Part { name: string; rec: string; tokens: number; how: "exact" | "est" }
 export interface Request {
@@ -18,15 +19,22 @@ const MESSAGES: [string, string][] = [
 
 /**
  * The requests of a transcript, in order. The fixed parts split request 1's fill by chars (chars ÷ 4 scaled to the
- * exact sum), as estimates. A later request adds its fill minus the fill of the request before: the output of that
+ * exact sum), as estimates (`parseExact` counts them instead). A later request adds its fill minus the fill of the request before: the output of that
  * request as an assistant turn, the rest to the records between them. When those records are of more than one kind,
  * the rest splits by chars and those parts are estimates. After a compaction, the compact summary is the fill minus
  * request 1's fill, and the message parts start again.
  */
 export function parse(jsonl: string): Request[] {
+  return withFixed(scan(jsonl), null);
+}
+
+/** The fixed parts of a transcript: its text (the tools as the array) and the model of its first request. */
+interface Scan { out: Request[]; fixed: [string, string, string | unknown[]][]; model: string }
+
+function scan(jsonl: string): Scan {
   const out: Request[] = [];
   const seen = new Set<string>();
-  let system = "", tools: unknown[] = [], instructions: string[] = [], memory = "";
+  let system = "", model = "", tools: unknown[] = [], instructions: string[] = [], memory = "";
   let gap = new Map<string, { chars: number; count: number }>();
   let held = new Map<string, { tokens: number; count: number; est: boolean }>();
   const note = (rec: string, chars: number, count: number) => {
@@ -53,6 +61,7 @@ export function parse(jsonl: string): Request[] {
       note(o.isCompactSummary ? "isCompactSummary" : results ? "tool_result" : "user", JSON.stringify(c ?? "").length, results || 1);
     } else if (o.type === "assistant" && !o.isSidechain && o.message?.usage) {
       const id = o.requestId ?? o.message.id;
+      model ||= o.message.model ?? "";
       if (seen.has(id)) continue;
       seen.add(id);
       const u = o.message.usage;
@@ -80,19 +89,47 @@ export function parse(jsonl: string): Request[] {
       out.push({ n: out.length + 1, fill, usage, parts });
     }
   }
+  return { out, model, fixed: [
+    ["System prompt", "prompt_snapshot", system], [`Tools · ${tools.length}`, "prompt_snapshot.tools", tools],
+    [`Instructions · ${instructions.length} files`, "attachment instructions", instructions.join("")], ["Memory start context", "hook_additional_context", memory],
+  ] };
+}
+
+/** Puts the fixed parts before each request's parts: `counts` (exact) per fixed part, else chars ÷ 4 scaled to request 1's fill (estimates). */
+function withFixed({ out, fixed }: Scan, counts: number[] | null): Request[] {
   if (out.length) {
-    const fixed: [string, string, number][] = [
-      ["System prompt", "prompt_snapshot", system.length], [`Tools · ${tools.length}`, "prompt_snapshot.tools", JSON.stringify(tools).length],
-      [`Instructions · ${instructions.length} files`, "attachment instructions", instructions.join("").length], ["Memory start context", "hook_additional_context", memory.length],
-    ];
-    const total = Math.max(fixed.reduce((s, p) => s + p[2], 0), 1);
+    const chars = fixed.map(([, , t]) => (typeof t === "string" ? t : JSON.stringify(t)).length);
+    const total = Math.max(chars.reduce((s, n) => s + n, 0), 1);
     let left = out[0].fill;
-    const parts: Part[] = fixed.map(([name, rec, n], i) => {
-      const tokens = i === fixed.length - 1 ? left : Math.round(out[0].fill * n / total);
+    const parts: Part[] = fixed.map(([name, rec], i) => {
+      if (counts) return { name, rec, tokens: counts[i], how: "exact" };
+      const tokens = i === fixed.length - 1 ? left : Math.round(out[0].fill * chars[i] / total);
       left -= tokens;
       return { name, rec, tokens, how: "est" };
     });
     for (const r of out) r.parts = [...parts, ...r.parts];
   }
   return out;
+}
+
+const COUNT_URL = "https://api.anthropic.com/v1/messages/count_tokens";
+
+/**
+ * `parse`, with each fixed part counted by the Anthropic count_tokens endpoint for the session's model and marked exact.
+ * The key comes from the dotenv file. With no key, no model, or any call failing, the fixed parts stay estimates.
+ */
+export async function parseExact(jsonl: string, fetchFn: typeof fetch = fetch): Promise<Request[]> {
+  const s = scan(jsonl), key = anthropicKey();
+  if (!key || !s.model || !s.out.length) return withFixed(s, null);
+  const field = ["system", "tools"];
+  try {
+    const counts = await Promise.all(s.fixed.map(async ([, , text], i) => {
+      if (!text.length) return 0;
+      const body = { model: s.model, messages: [{ role: "user", content: i > 1 ? (text as string) : "." }], ...(i < 2 && { [field[i]]: text }) };
+      const res = await fetchFn(COUNT_URL, { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(`count_tokens ${res.status}`);
+      return ((await res.json()) as { input_tokens: number }).input_tokens;
+    }));
+    return withFixed(s, counts);
+  } catch { return withFixed(s, null); }
 }

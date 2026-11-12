@@ -17,5 +17,7 @@ Not built. Values on the boards are samples, except where a board names a real c
 
 - The total fill of a request is exact. It is input + cache read + cache write from the transcript usage.
 - Each message is exact. Its size is the usage of its request minus the usage of the request before it.
-- The fixed parts of request 1 (system prompt, tools, instructions, memory) are exact as a sum. Their split is an
-  estimate, chars ÷ 4, because the repo has no tokenizer.
+- Each fixed part of request 1 (system prompt, tools, instructions, memory) is counted with the Anthropic
+  count_tokens endpoint for the session's model, using `ANTHROPIC_API_KEY` read from `~/.aleph/.env` (never put into
+  `process.env`), and is marked exact. With no key, or when the call fails, the split is an estimate, chars ÷ 4
+  scaled to the exact sum, and is marked as an estimate.

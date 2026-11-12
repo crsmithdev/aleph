@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parse } from "../context.ts";
+import { parseExact } from "../context.ts";
 import type { Routes } from "../server.ts";
 
 const root = () => process.env.ALEPH_CLAUDE_PROJECTS ?? join(homedir(), ".claude", "projects");
@@ -14,8 +14,8 @@ export const routes: Routes = {
       .map((f) => ({ id: f.slice(f.indexOf("/") + 1, -6), project: f.slice(0, f.indexOf("/")), updated: statSync(join(root(), f)).mtime.toISOString() }))
       .sort((a, b) => b.updated.localeCompare(a.updated)),
   }),
-  "GET /api/context/:id": (_req, params) => {
+  "GET /api/context/:id": async (_req, params) => {
     const f = transcripts().find((t) => t.endsWith(`/${params.id}.jsonl`));
-    return f ? Response.json({ id: params.id, requests: parse(readFileSync(join(root(), f), "utf8")) }) : Response.json({ error: "no such session" }, { status: 404 });
+    return f ? Response.json({ id: params.id, requests: await parseExact(readFileSync(join(root(), f), "utf8")) }) : Response.json({ error: "no such session" }, { status: 404 });
   },
 };
