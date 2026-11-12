@@ -61,8 +61,8 @@ export function span(from, to) {
   return ms >= 0 ? dur(ms / 1000) : "";
 }
 
-/** The empty state, after old aleph's EmptyState: one sentence, one hint. `hint` is HTML. */
-export const empty = (line, hint = "") => `<div class="empty"><p>${esc(line)}</p>${hint ? `<p class="hint">${hint}</p>` : ""}</div>`;
+/** The one empty state: "No data". Pass `line` only for a state that is not missing data, in at most three words. */
+export const empty = (line = "No data") => `<div class="empty"><p>${esc(line)}</p></div>`;
 
 /** The line for a failed API response: the JSON body's `error`, else the body's text cut to 300 characters. */
 export function failMessage(url, status, body) {
@@ -307,7 +307,7 @@ export const diffHtml = (t) => String(t ?? "").trim()
       const c = l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ") ? "meta" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : l[0] === "@" ? "hunk" : "";
       return `<span class="l d-${c}">${esc(l)}</span>`;
     }).join("")}</pre>`
-  : empty("No changes from the merge base.");
+  : empty("No changes");
 
 /** Fetch a diff from `url` into `el`: a loading line, then the diff or a `.msg` line. Returns the diff text, or null on a failure. */
 export async function loadDiff(el, url) {

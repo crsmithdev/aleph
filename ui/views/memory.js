@@ -116,7 +116,7 @@ const LAYOUT = {
 export function renderResults(results, o, status) {
   if (results === null) return loadingLine("memory");
   const rows = keepRows(results, o, status);
-  if (!rows.length) return empty(o.q ? `No memory matches “${o.q}”.` : "No memory matches.", "Loosen the filters, or search another word.");
+  if (!rows.length) return empty();
   return TYPES.filter((t) => LAYOUT[t.id]).map((t) => {
     const xs = rows.filter((it) => it.type === t.id);
     return xs.length ? card(t.name, LAYOUT[t.id](xs, o), { level: 3, count: count(xs.length), aside: dot(t.id), cls: "mgroup" }) : "";
@@ -133,7 +133,7 @@ export const recallFrame = (hist = []) => ({
 });
 
 /** The chart panel of a note's recalls (`inspect` sets its frame), or the line that there were none. */
-const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : `<h4>Recall history, 30 days</h4>${empty("No recall in the last 30 days.", "A note shows here once recall returns it.")}`;
+const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : `<h4>Recall history, 30 days</h4>${empty()}`;
 
 const why = field("Why (optional)", inputBox("why"));
 // `data-mact`, not `data-act`: router.js runs its own command for every `button.act[data-act]`.
@@ -156,8 +156,8 @@ function actions(it) {
 }
 
 /** The note's links out, each with Unlink, the notes that link to it, and a field to add a link. */
-const links = (n) => `<h4>Links to</h4>${n.links?.length ? `<ul>${n.links.map((l) => `<li>${link(l.title)} ${actButton("Unlink", { mact: "unlink", target: l.title })}</li>`).join("")}</ul>` : empty("No links out.", "Add one with the field below.")}` +
-  `<h4>Linked from</h4>${n.backlinks?.length ? `<ul>${n.backlinks.map((l) => `<li>${link(l.title)}</li>`).join("")}</ul>` : empty("No note links here.", "A note links here when it names this one in double brackets.")}` +
+const links = (n) => `<h4>Links to</h4>${n.links?.length ? `<ul>${n.links.map((l) => `<li>${link(l.title)} ${actButton("Unlink", { mact: "unlink", target: l.title })}</li>`).join("")}</ul>` : empty()}` +
+  `<h4>Linked from</h4>${n.backlinks?.length ? `<ul>${n.backlinks.map((l) => `<li>${link(l.title)}</li>`).join("")}</ul>` : empty()}` +
   setting("Link to a note", inputBox("target", "", { id: "mem-link", attrs: ' list="mem-titles" placeholder="Note title"' }), { id: "mem-link", save: "Link", attrs: ' data-mact="link"' });
 
 /** The core line: the note's one line in the start context of its scope. Blank takes the note out. */
@@ -166,7 +166,7 @@ const coreForm = (n) => setting("Core line", inputBox("core", n.frontmatter?.cor
 
 /** The inspector for `it`; `n` is /api/memory/notes/:title's answer when `it` is a note, `hist` its recalls per day. */
 export function renderInspector(it, n = null, status = "", hist = []) {
-  if (!it) return empty("No memory selected.", "Select a memory to see what it says, how it reaches the agent and what can change.");
+  if (!it) return empty("Select a memory");
   const fm = n?.frontmatter ?? {};
   const head = `<p class="mtype">${dot(it.type)}${esc(typeName(it.type))} · ${esc(it.source === "memory-md" ? "MEMORY.md" : it.source)}${status ? ` · ${badge(STATUS[status])}` : ""}</p><h3>${esc(it.title)}</h3>`;
   // The claim first; the rest of the note folds, so how it reaches the agent stays in view.
@@ -181,7 +181,7 @@ export function renderInspector(it, n = null, status = "", hist = []) {
 export function renderWrites(m) {
   return (m.writes.length
     ? moreFold(m.writes, (w) => `${q(esc(when(w.at) || w.at))} ${md(w.text).replace(/^<p>|<\/p>$/g, "")}`)
-    : empty("No writes recorded.", "The vault CLI logs each write in the daily note."));
+    : empty());
 }
 
 function renderHealth(m) {
@@ -190,7 +190,7 @@ function renderHealth(m) {
   const med = m.misses;
   return (refuse.length ? sectionHead("Refusals", { count: count(refuse.length), level: 3 }) + `<ul>${refuse.map(f).join("")}</ul>` : "") +
     (warn.length ? sectionHead("Warnings", { count: count(warn.length), level: 3 }) + `<ul>${warn.map(f).join("")}</ul>` : "") +
-    (!refuse.length && !warn.length ? empty("Lint finds nothing.", "Every note passes the vault checks.") : "") +
+    (!refuse.length && !warn.length ? empty() : "") +
     (med ? `<p>${esc(`${count(med.recalls)} recalls in ${count(med.days)} days, ${count(med.empty)} empty (${pct(med.empty_share * 100)}), ${count(med.reformulated)} reformulated.`)}</p>` : "");
 }
 
@@ -213,16 +213,16 @@ function readChart(rows) {
     const w = (x) => ((x / of.length) * 100).toFixed(2);
     return barRow(esc(k), 0, `${count(week)} · ${count(older)} · ${count(never)} never`, { bar: meter([{ pct: w(week), cls: "c-use" }, { pct: w(older), cls: "c-stale" }, { pct: w(never), cls: "c-never" }], `${count(week)} in the last 7 days, ${count(older)} earlier, ${count(never)} never`) });
   }).join("");
-  return lines ? `${legendHtml([["Last 7 days", "c-use"], ["Earlier", "c-stale"], ["Never", "c-never"]])}${barList(lines)}` : empty("No notes yet.", "Notes show here once the vault holds some.");
+  return lines ? `${legendHtml([["Last 7 days", "c-use"], ["Earlier", "c-stale"], ["Never", "c-never"]])}${barList(lines)}` : empty();
 }
 
 function renderBroad(m, rows) {
   const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
-  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${count(r.refused)} refused`, r.warned && `${count(r.warned)} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.", "Every note passes the vault checks.")) +
+  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${count(r.refused)} refused`, r.warned && `${count(r.warned)} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty()) +
     fold("Every finding", renderHealth(m), { cls: "fold" }), { count: count(lint.refuse.length + lint.warn.length) });
   const reads = card("When Recall Last Returned Each Note", readChart(rows), { label: "When recall last returned each note" });
   const start = Object.entries(m.start ?? {});
-  const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${bytes(x.bytes)} / ${bytes(x.budget)}, ${count(x.core.length)} core lines${x.cut ? `, ${count(x.cut)} cut` : ""}`)).join("")) : empty("No start context.", "A scope with core lines shows its budget here."), { label: "Start context" });
+  const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${bytes(x.bytes)} / ${bytes(x.budget)}, ${count(x.core.length)} core lines${x.cut ? `, ${count(x.cut)} cut` : ""}`)).join("")) : empty(), { label: "Start context" });
   const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: count((m.writes ?? []).length), label: "Recent writes" });
   return `<div class="pair">${lintCard}${reads}</div><div class="pair">${budget}${writes}</div>`;
 }
@@ -259,7 +259,7 @@ export function renderLog(m, o = options()) {
 }
 const logRows = (rows) => rows.length
   ? pagedTable(heads(["Time", "Kind", "Note", "Why or Query"]), rows.map(logRow), STEP)
-  : empty("No events.", "Writes, recalls and misses of the last 30 days show here.");
+  : empty();
 
 function mountLog(root) {
   scope().wire(root);

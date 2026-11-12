@@ -429,7 +429,7 @@ describe("loadDiff", () => {
     stub(async () => new Response(""));
     expect(await loadDiff(el, "/x")).toBe("");
     expect(el.innerHTML).toBe(diffHtml(""));
-    expect(el.innerHTML).toContain("No changes from the merge base.");
+    expect(el.innerHTML).toContain("No changes");
   });
   test("fills a .msg line on a 404 and on a thrown error", async () => {
     stub(async () => new Response("No diff was recorded", { status: 404 }));

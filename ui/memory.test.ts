@@ -251,7 +251,7 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   expect(h).not.toContain("<i title=");
   expect(v.recallFrame(hist).by.keys[0].name).toBe("recalls");
   expect(v.recallFrame(hist).rows.map((r: any) => r.recalls)).toEqual(hist);
-  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain(empty("No recall in the last 30 days.", "A note shows here once recall returns it."));
+  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain(empty());
 });
 
 test("/api/memory lint gives no stale finding to an old note that the read log shows read lately", async () => {
@@ -382,7 +382,7 @@ test("each type has its own layout, filters keep by type and freshness, and the 
   expect(h).toContain("read never");                      // semantic: the read date
   expect(h.match(/<li class="mrow[^>]* tabindex="0"/g)?.length).toBeGreaterThan(0);
   expect(v.renderResults(rs.slice(2, 3), v.options(), status)).toMatch(/<tr class="mrow" tabindex="0"/);
-  expect(v.renderResults([], v.options(new URLSearchParams("q=zz")), status)).toContain("No memory matches “zz”.");
+  expect(v.renderResults([], v.options(new URLSearchParams("q=zz")), status)).toBe(empty());
   const many = v.renderResults(Array.from({ length: 51 }, (_, i) => it({ key: `n${i}`, title: `n${i}` })), v.options(), status);
   expect(many).toContain("50 of 51");
   expect(many.match(/<li hidden /g)).toHaveLength(1);
@@ -422,15 +422,14 @@ test("the procedural table hides its 51st row and its pager says 50 of 51", () =
 test("the inspector says how a memory reaches the agent, shows its recall history and offers the writes its source takes", () => {
   const n = { title: "N", path: "wiki/gotchas/N.md", frontmatter: { scope: "aleph", confidence: "measured", core: "the <core>" }, body: "**Claim.** x", text: "", links: [{ title: "L" }], backlinks: [{ title: "B" }] };
   const h = v.renderInspector(it({ read: "2026-11-03" }), n, "use");
-  for (const t of ["How it reaches the agent", "Reaches a session when vault recall returns it.", 'value="the &lt;core&gt;"', "Recall history", "No recall in the last 30 days.", 'data-mact="unlink" data-target="L"', 'data-mact="link"', 'data-mact="archive"', 'data-mact="delete"', "in use", "wiki/gotchas/N.md"])
+  for (const t of ["How it reaches the agent", "Reaches a session when vault recall returns it.", 'value="the &lt;core&gt;"', "Recall history", "No data", 'data-mact="unlink" data-target="L"', 'data-mact="link"', 'data-mact="archive"', 'data-mact="delete"', "in use", "wiki/gotchas/N.md"])
     expect(h).toContain(t);
   // No button of the page carries data-act, which router.js's own handler takes.
   expect(h).not.toContain("data-act=");
   expect(h).toContain(`· ${badge("in use")}`);
   expect(h).not.toMatch(/class="act[^"]* (danger|small)/);
   const bare = v.renderInspector(it({}), { ...n, links: [], backlinks: [] }, "use");
-  expect(bare).toContain(empty("No links out.", "Add one with the field below."));
-  expect(bare).toContain(empty("No note links here.", "A note links here when it names this one in double brackets."));
+  expect(bare.split(empty()).length - 1).toBeGreaterThanOrEqual(2);
   expect(bare).not.toContain("None.");
   const hand = v.renderInspector(it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }));
   for (const t of ['data-mact="edit"', 'data-mact="file-delete"']) expect(hand).toContain(t);
@@ -506,7 +505,7 @@ test("the tabs link Search, Context, Log and Processes; the log row opens a reca
   expect(v.logRow(r)).toContain("+1");
   const rows = [r, { ...r, kind: "miss", op: "miss", note: "", titles: [] }];
   expect(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss")))).not.toContain("<details>");
-  expect(v.renderLog({ project: "", rows: [] })).toContain("No events.");
+  expect(v.renderLog({ project: "", rows: [] })).toContain(empty());
 });
 
 test("the Context tab draws one parts row per part of the selected request, fixed parts est. and message parts exact", () => {
@@ -524,5 +523,5 @@ test("the Context tab draws one parts row per part of the selected request, fixe
   expect(h.match(/data-n="\d+" aria-label="request/g)?.length).toBe(2);
   expect(v.renderContextTab({ sessions, session }, new URLSearchParams("n=9"))).toContain("Fill of request 2");
   expect(v.renderContextTab({ sessions })).toContain("Loading the session");
-  expect(v.renderContextTab({ sessions: [] })).toContain("No sessions.");
+  expect(v.renderContextTab({ sessions: [] })).toContain(empty());
 });

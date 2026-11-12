@@ -62,18 +62,17 @@ test("the tiles are usage, OpenRouter spend for the window's UTC period, worker 
   const m = { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
   expect(keys(h)).toEqual(["Usage", "Spend", "Worker slots", "Backends"]);
-  for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", "OpenRouter, this week (UTC)", '<span class="event-dot fine" aria-hidden="true"></span>Local server: up', '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
+  for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", '<span class="event-dot fine" aria-hidden="true"></span>Local server: up', '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>$1.50</b>");
   const none = renderFactoryAgents(S, D);
-  expect(none).toContain("OpenRouter spend unknown");
+  expect(none).toContain('<b>–</b><span class="q m" title="OpenRouter">');
   expect(none).toContain("Local server: –");
   expect(none).toContain('<b>–</b><span class="lights">');
-  expect(none).toContain("backend state unknown");
 });
 
-test("no usage data says usage unknown; while the speed data loads the page says so", () => {
+test("no usage data shows a dash; while the speed data loads the page says so", () => {
   const h = renderFactoryAgents({ ...S, usage: undefined }, null);
-  expect(h).toContain("usage unknown");
+  expect(h).toContain('<span class="k">Usage</span></span><b>–</b>');
   expect(h).toContain(`<p class="quiet" role="status">Loading the agents…</p>`);
   expect(renderFactoryAgents(S, { error: "no data" })).toContain("no data");
 });
@@ -261,7 +260,7 @@ test("a Roles row with no outcome shows a dash in every cell, with num on the nu
 
 test("an empty Roles table shows the empty line", () => {
   const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } });
-  expect(html).toContain('<div class="empty"><p>No agent ran in this window.</p><p class="hint">Pick a longer window.</p></div>');
+  expect(html).toContain('<div class="empty"><p>No data</p></div>');
   expect(html).not.toContain("<table");
 });
 

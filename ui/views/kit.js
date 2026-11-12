@@ -153,7 +153,7 @@ function renderKit(d, query) {
       `<tr><td>${k}</td><td><code>${h}</code></td><td class="num">${xs.map((x) => f(x)).join(", ")}</td><td class="num">${none ? '<span class="quiet">none</span>' : f(null) || '<span class="quiet">empty</span>'}</td></tr>`).join(""), { fit: true }),
       "Each helper's output now, and its output for no value.") +
     spec("words", "Words", pageHead("Running", { count: 3 }) + row(badge("running"), badge("landed"), priorityBadge("critical")) +
-      empty("No job matches.", "Widen the window or clear a filter.") + error("Could not load the agents.") + loadingLine("Jobs")) +
+      empty() + error("Could not load the agents.") + loadingLine("Jobs")) +
 
     group("Structure") +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
@@ -175,15 +175,15 @@ function renderKit(d, query) {
       statCard({ k: "Lead time", v: "2.4h", trend: cardTrend(2.4, 1.8, 2, { kind: "relative", lowerIsGood: true, format: String, basis: "4-week mean" }), note: "median" }) +
       statCard({ k: "Worker slots", v: "2", v2: "5", q: ["in use", "cap"], extra: meter(40, "2 of 5 in use") }) +
       statCard({ k: "Share", v: "61%", trend: cardTrend(0.61, 0.61, 0.6, { kind: "points", lowerIsGood: null, format: String, basis: "4-week mean" }), note: "no change" }) +
-      statCard({ k: "Cost", v: "–", note: "No run recorded a cost in this window." }) +
-      statCard({ k: "Link", v: "12", note: "goes to another page", href: "#/kit" }) +
+      statCard({ k: "Cost", v: "–", note: "no cost" }) +
+      statCard({ k: "Link", v: "12", note: "link", href: "#/kit" }) +
       statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }) +
       statCard({ k: "Selector", v: "3", note: "not pressed", key: "b" }))) +
     spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: id, title, state, project, labels, numbers, then time.") +
     spec("row-cell", "Row and cell", dataTable(heads(["Role", "Title", "Runs"], ["Runs"]), trow([cell("Worker"), cell("A title that takes the spare width, with its text as its title", { wide: true }), cell("1,234", { num: true })]) +
       trow([cell("Triage"), cell("A short title", { wide: true, title: "Another title" }), cell("12", { num: true })]))) +
     spec("table-fit", "Table, fit", dataTable(heads(["Role", "Runs", "p50"], ["Runs", "p50"]), `<tr><td>Worker</td><td class="num">31</td><td class="num">6m 40s</td></tr><tr><td>Triage</td><td class="num">12</td><td class="num">38s</td></tr>`, { fit: true }), "", "") +
-    spec("table-empty", "Table, empty", empty("No job ran in this window.", "Pick a longer window."), "", "") +
+    spec("table-empty", "Table, empty", empty(), "", "") +
     spec("chart", "Chart panel", `<div class="trio">${panelOf("kit/time", FRAMES.time)}${panelOf("kit/category", FRAMES.category)}${panelOf("kit/cost", FRAMES.cost)}</div>`,
       "A level over time (Area), a category (Stacked), and a flow of one key with no legend (Columns).") +
     spec("chart-empty", "Chart panel, no data", panelOf("kit/none", FRAMES.none), "", "") +
@@ -240,7 +240,7 @@ function renderKit(d, query) {
       setting("Land after", inputBox("minutes", "0", { id: "kit-min", type: "number", attrs: ' min="0" step="1"' }), { id: "kit-min", save: "Save", hint: "0: waits for the user." })])) +
     spec("edit", "Edit toggle", `<div class="editable"><p>${editable("<b>A title</b>", inputBox("title", "A title", { attrs: ' aria-label="Title"' }))}</p><div class="actions">${actButton("Edit", { editor: "start" }, { cls: "view-only" })}` +
       `<span class="edit-only">${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true })}</span></div></div>`) +
-    spec("states", "Empty state", empty("Nothing waits for the user.", "An Ask shows here when the factory needs the user.") + loadingLine("jobs") + error("Could not load the jobs.", undefined, { detail: "GET /api/jobs: 502" }) + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
+    spec("states", "Empty state", empty() + loadingLine("jobs") + error("Could not load the jobs.", undefined, { detail: "GET /api/jobs: 502" }) + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
 
     group("States") +
     spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,

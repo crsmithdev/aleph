@@ -331,11 +331,9 @@ section { margin: 0 0 var(--sp-28); }
 .card .sh { margin: 0; padding: 0; border: 0; }
 .sh .aside { margin-left: auto; color: var(--muted); font-size: var(--fs-xs); }
 
-/* empty state, after old aleph's EmptyState: one sentence, one hint */
+/* empty state: the one "No data" line */
 .empty { padding: var(--sp-4) 0 0; }
-.empty p { margin: 0; }
-.lane .empty p { color: var(--muted); font-size: var(--fs-sm); }
-.empty .hint { color: var(--muted); font-size: var(--fs-sm); margin-top: var(--sp-2); }
+.empty p { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
 
 /* ---------- needs you ---------- */
 .need-card {
@@ -1160,7 +1158,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .gates .ph .aside { margin-left: 0; font-size: var(--fs-sm); }
 .gates .sh .aside { white-space: normal; }
 .gates .hint { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--need); }
-.gates .empty .hint, .gates .srow .hint { color: var(--muted); font-size: var(--fs-xs); }
+.gates .srow .hint { color: var(--muted); font-size: var(--fs-xs); }
 .rule code { font: var(--fs-xs) var(--mono); color: var(--muted); }
 .rule .note { margin: 0; }
 .c-rule { background: var(--ink-2); } .c-dir { background: var(--muted); } .c-user { background: var(--need); }

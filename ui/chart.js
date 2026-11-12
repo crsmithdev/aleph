@@ -9,8 +9,7 @@
 //   over: { kind: "time", window } | { kind: "category", name }
 //   by: { name, keys: [{ key, name, color? }] }   color is a token name; a key keeps its colour in every window.
 //   rows: time [{ at, [key]: n }], category [{ name, [key]: n }]; a row may carry `name` and `href`.
-//   form: the form the panel opens in, where its group offers it. note: a line under the title.
-//   empty: the line the panel shows instead of the chart when no key has a value. hint: the line under it.
+//   form: the form the panel opens in, where its group offers it.
 //   legend: false hides the legend, for a frame of one key that the title already names.
 //   error, since: the mark of data that failed to rebuild; the panel says how old it is and why.
 // The kind of `over` is the group, and the group gives the forms.
@@ -111,11 +110,11 @@ export function option(frame, form, t, hidden = []) {
 /** The panel's markup for frame `f` in `form`: the card, its form control and the chart box, or the empty line. */
 export function panel(f, form) {
   const mark = f.error && f.since ? notice(markLine(title(f), f), true) : "";
-  if (!shown(f).length) return card(title(f), mark + empty(f.empty ?? "Nothing to plot in this window.", f.hint ?? "Widen the window or clear a filter."));
+  if (!shown(f).length) return card(title(f), mark + empty());
   const forms = seg("Chart form", FORMS[f.over.kind].map((x) => ({ label: x.label, icon: x.icon, on: x.key === form, attrs: ` data-form="${esc(x.key)}"` })));
   // The canvas has no keyboard path, so a linked row is also a link in a list that shows on focus.
   const links = f.rows.filter((r) => r.href).map((r) => `<li><a href="${esc(r.href)}">${esc(r.name ?? (f.over.kind === "time" ? `${day(new Date(r.at))} ${xLabel(r.at, f.over.window)}` : ""))}</a></li>`).join("");
-  return card(title(f), mark + (f.note ? notice(f.note) : "") + `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>` + (links ? `<ul class="chartlinks sr">${links}</ul>` : ""), { aside: forms });
+  return card(title(f), mark + `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>` + (links ? `<ul class="chartlinks sr">${links}</ul>` : ""), { aside: forms });
 }
 
 /** A chart panel with its first markup, so the page reads the same before the element draws. `cls` is the panel's grid class. */

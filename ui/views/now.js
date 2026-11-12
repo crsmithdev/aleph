@@ -65,8 +65,6 @@ export const activeFrame = (d) => ({
   by: { name: "Stage", keys: [{ key: "intake", name: NAMES.intake, color: "chart-6" }, { key: "queue", name: "Queued", color: "series-4" }, { key: "running", name: "Running", color: "run" }, { key: "landed", name: "Landed", color: "done" }] },
   rows: d.active ?? [],
   form: "area",
-  empty: "No issue was active in this window.",
-  hint: "Pick a longer window.",
 });
 
 /** The Active Issues chart above the Pipeline card. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
@@ -365,7 +363,7 @@ function queuedLane(s) {
     return laneCard(`${w.repo}-${w.id}`, "queued-row", metaRow({ id, chips: (hold ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
   }).join("");
-  return lane("queued", "Queued", (s.queued ?? []).length, rows, empty("Nothing is queued.", "Issues wait here for a worker."));
+  return lane("queued", "Queued", (s.queued ?? []).length, rows, empty());
 }
 
 /** A parent that waits to close: all its parts are done. */
@@ -386,7 +384,7 @@ function runningLane(s) {
     const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
     return laneCard(j.name, `run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));
   }).join("");
-  return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, empty("Nothing is running.", "Started work shows here."), s.factory.liveCap ?? 0);
+  return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, empty(), s.factory.liveCap ?? 0);
 }
 
 /** The two lanes: Running and Queued in one row. */

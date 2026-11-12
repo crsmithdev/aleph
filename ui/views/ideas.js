@@ -19,7 +19,7 @@ function ideasTable(rows, status, q = "") {
   return shown.length
     ? dataTable(heads(["Idea", "Status", "Target", "Lenses", "Open Questions", "Spent", "Updated"], ["Open Questions", "Spent", "Updated"]),
       shown.map((r) => `<tr class="rowlink"><td class="wide" title="${esc(r.title)}"><a href="${href(r.slug)}">${esc(r.title)}</a></td><td>${badge(r.status)}</td><td>${esc(target(r.target))}</td><td>${esc(r.lenses.join(", ") || "–")}</td><td class="num">${esc(count(r.questions))}</td><td class="num">${money(r.spent)}</td><td class="time">${esc(when(local(r.last)))}</td></tr>`).join(""))
-    : empty(`No ${status} ideas.`, "Add one with <code>aleph idea add</code>.");
+    : empty();
 }
 
 export function renderIdeas(rows, status, q = "") {
@@ -58,7 +58,7 @@ export function renderIdea(d) {
     const all = d.lenses.filter((l) => l.lens === id);
     const url = (l) => `/api/ideas/${encodeURIComponent(d.slug)}/${l.file}`;
     const newest = all[0];
-    const body = !newest ? empty(`No ${label} result yet.`, "Queue a job to get one.")
+    const body = !newest ? empty()
       : newest.file.endsWith(".md") ? `<div class="md" data-src="${esc(url(newest))}">${loadingLine("the result")}</div>`
       : `<iframe class="lens-frame" sandbox title="${esc(label)}" src="${esc(url(newest))}"></iframe>`;
     const older = all.slice(1).map((l) => `<a href="${esc(url(l))}" target="_blank">${esc(when(local(l.at)))}</a>`);
@@ -66,7 +66,7 @@ export function renderIdea(d) {
   };
   const panes = {
     writeup: `<div class="md">${md(d.writeup)}</div>`,
-    log: d.log.length ? `<ul>${d.log.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : empty("No log yet.", "Add a line with <code>aleph idea note</code>."),
+    log: d.log.length ? `<ul>${d.log.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : empty(),
     ...Object.fromEntries(LENS_TABS.map((t) => [t[0], lens(t)])),
   };
   const built = (d.built ?? []).map((r) => repoIdLink(r, issueHref(r))).join(" ");

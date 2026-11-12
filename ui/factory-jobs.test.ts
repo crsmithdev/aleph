@@ -25,7 +25,7 @@ const T = { hot: "H", run: "R", done: "D", need: "N", muted: "M" };
 
 test("with no time for the stage the trend, strip and slowest panels give way to the empty line", () => {
   const none = renderFactoryJobs({ ...D, buckets: D.buckets.map((b: any) => ({ ...b, queue: null, p90: {} })), times: D.times.map((i: any) => ({ ...i, queue: null })) }, null, "queue");
-  expect(none).toContain("No time to plot in this window.");
+  expect(none).toContain('<div class="empty"><p>No data</p></div>');
   expect(none).not.toContain("chartbox");
   expect(none).toContain("<h2>Slowest 10</h2>");
   for (const k of ["trend", "strip", "slowest"]) expect(none).toContain(`<aleph-chart key="factory/jobs/${k}"`);
@@ -54,8 +54,7 @@ test("three chart panels in one row replace the old cards, each says its data fo
     "Slowest 10: Intake peak 1m 40s, Queue peak 10m 00s, Build peak 1h 06m, Land peak 3m 20s",
   ]);
   // The stage's own line sits under the trend's title; each panel keeps its own empty line.
-  expect(row).toContain('<p class="notice" role="status">From filing to the last land.</p>');
-  expect(queue).toContain('<p class="notice" role="status">From intake to the first agent job. This includes waits for a slot or for another issue.</p>');
+  expect(row).not.toContain('class=\"notice\"');
   expect(lead).not.toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
   expect(queue).toContain("Queue peak 10m 00s");
   expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
@@ -138,7 +137,7 @@ test("each slowest stage has a colour that it keeps whatever other stages the da
 
 test("each Jobs chart frame with no data shows its empty line and its hint in the empty block", () => {
   const none = renderFactoryJobs({ ...D, buckets: [], times: [] }, null, "lead");
-  const blocks = [...none.matchAll(/<div class="empty"><p>No time to plot in this window\.<\/p><p class="hint">Pick a longer window or another stage\.<\/p><\/div>/g)];
+  const blocks = [...none.matchAll(/<div class="empty"><p>No data<\/p><\/div>/g)];
   expect(blocks).toHaveLength(3);
 });
 
@@ -161,16 +160,15 @@ test("the page lists the jobs with the search, the State filter and the Project 
   expect(many.match(/<tr class="rowlink"/g)).toHaveLength(50);
   expect(many).toContain('data-page="2">Next 1<');
   expect(many).toContain("50 of 51");
-  expect(renderFactoryJobs(D, null, "lead", [], {})).toContain("No job matches.");
+  expect(renderFactoryJobs(D, null, "lead", [], {})).toContain("<div class=\"empty\"><p>No data</p></div>");
   expect(renderFactoryJobs(D, null, "lead", null, {})).toContain("Loading jobs");
 });
 
-test("the Checks and Models tables head their count Jobs, and the stage line names jobs too", () => {
+test("the Checks and Models tables head their count Jobs, and no line names a run", () => {
   const h = renderFactoryJobs(D, null, "queue");
   const heads = [...h.matchAll(/<th[^>]*>([^<]+)<\/th>/g)].map((m) => m[1].trim());
   expect(heads.filter((t) => t === "Jobs")).toHaveLength(2);
   expect(heads.filter((t) => /runs|goal|part/i.test(t))).toEqual([]);
-  expect(h).toContain("From intake to the first agent job.");
   expect(h).not.toContain("agent run");
 });
 

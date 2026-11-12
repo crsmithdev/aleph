@@ -302,7 +302,7 @@ export async function start() {
     if (!m) {
       page.show({ view: null });
       document.title = "Not found · aleph";
-      $("view").innerHTML = `<div class="page nf">${pageHead(`Nothing at ${path}`)}${empty("No view has this address.", `Go to <a href="#/">Status</a> or pick a view from the list.`)}</div>`;
+      $("view").innerHTML = `<div class="page nf">${pageHead(`Nothing at ${path}`)}${empty()}</div>`;
       $("offline").hidden = true;
       return;
     }

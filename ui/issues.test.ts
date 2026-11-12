@@ -489,7 +489,7 @@ describe("views", () => {
     for (const k of ["backlog", "close", "tests"]) expect(page).toContain(`<aleph-chart key="issues/${k}"`);
     expect(page).not.toContain("chartbox");
     expect(page.match(/class="empty"/g)!.length).toBeGreaterThanOrEqual(3);
-    expect(page.match(/Nothing to plot in this window\./g)!.length).toBe(3);
+    expect(page.match(/<p>No data<\/p>/g)!.length).toBeGreaterThanOrEqual(3);
   });
 
   test("Time to close counts from the stored times and shows hours when every value is under 2 days", () => {
@@ -501,10 +501,8 @@ describe("views", () => {
     expect(c.unit).toBe("hours");
     expect(c.p50[1]).toBe(3);
     const t = { muted: "#123456" };
-    // The frame keeps the p50 and the p90 in seconds, so the axis formats them as a duration, and its note names the unit.
+    // The frame keeps the p50 and the p90 in seconds, so the axis formats them as a duration.
     expect(option(v.closeFrame({ ...c, unit: "days" }), "grouped", t).xAxis.axisLabel.formatter(4320)).toBe("1h 12m");
-    expect(v.closeFrame({ ...c, unit: "days" }).note).toContain("Days from filed to closed");
-    expect(v.closeFrame(c).note).toContain("Hours from filed to closed");
     expect(option(v.closeFrame(c), "grouped", t).series.find((s: any) => s.name === "p90").color).toBe(t.muted);
   });
 

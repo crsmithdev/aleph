@@ -97,11 +97,12 @@ test("the Status cards show the answer's figures and trend them against its base
   expect(h).toContain("<b>3<em> / 0</em></b>");
 });
 
-test("the Usage card shows the percent off this machine next to the total, and none without it", () => {
+test("the Usage card note is the pace word, and the bar title holds the percent off this machine", () => {
   const u = { now: { seven_day: 40, seven_day_resets_at: "2026-11-07T08:00:00Z" } };
   const h = usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, off: 12 } });
   expect(h).toContain("40%");
-  expect(h).toContain("12% off this machine");
+  expect(h).toContain('title="40% used, 14% of the week gone, 12% off this machine"');
+  expect(h).toContain('<span class="q m" title="over pace">over pace</span>');
   expect(usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, off: null } })).not.toContain("off this machine");
 });
 
@@ -392,9 +393,8 @@ test("the shared formats", () => {
 
 test("the outcome bar with no hours names a job, not a run", () => {
   const h = bar({ window: "week", classes: [] }, "all");
-  expect(h).toContain("No agent job on an issue ended in the last 7 days.");
   expect(h).not.toMatch(/\bruns?\b/i);
-  expect(h).toContain('<div class="empty"><p>No agent job on an issue ended in the last 7 days.</p><p class="hint">');
+  expect(h).toContain('<div class="empty"><p>No data</p></div>');
 });
 
 test("the outcome bar's legend share has no brackets", () => {

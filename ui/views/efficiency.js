@@ -28,10 +28,10 @@ function scorecard(d, key) {
   const points = { kind: "points", format: cardPct }, flaky = d.baseline?.base?.flaky;
   const usage = d.issues.week;
   return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: windowTrend(d, "lost", f.lost, { ...points, lowerIsGood: true }), key: ALL, on: key === ALL }) +
-    statCard({ k: "Landed", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...points, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
-    statCard({ k: "Reruns", v: count(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: count }), key: FLAKES, on: key === FLAKES }) +
+    statCard({ k: "Landed", v: cardPct(f.firstPass), note: f.firstPass === null ? "" : "first pass", trend: windowTrend(d, "firstPass", f.firstPass, { ...points, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
+    statCard({ k: "Reruns", v: count(d.flaky), note: "on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: count }), key: FLAKES, on: key === FLAKES }) +
     statCard({ k: "Returned", v: count(returned?.runs ?? 0), note: `${hours(returned?.hours ?? 0)} on ${plural(returned?.issues ?? 0, "issue")}`, key: "returned", on: key === "returned" }) +
-    statCard({ k: "Usage per issue", v: usage === null ? "–" : pct(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "p50 of weekly limit", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
+    statCard({ k: "Usage per issue", v: usage === null ? "–" : pct(usage), note: usage === null ? "" : "p50 weekly", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 
 const causeBars = (s) => {
@@ -51,7 +51,7 @@ function usagePage(d, key) {
   const head = scope().bar({ value: d.window ?? "week" });
   return `<div class="page sp" id="eff">${pageHead("Flow", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined }) +
-    card("Usage per Issue, Largest First", s.top.length ? usageTable(s.top) : empty("No issue to show.", "Widen the window or clear the project."), { label: "Usage per issue, largest first" }) + `</div>`;
+    card("Usage per Issue, Largest First", s.top.length ? usageTable(s.top) : empty(), { label: "Usage per issue, largest first" }) + `</div>`;
 }
 
 /** The page body for a selection. `d` is /api/flow for the window, with its `baseline` when there is one. */
@@ -61,8 +61,8 @@ export function renderEfficiency(d, key = ALL) {
   const head = scope().bar({ value: d.window ?? "week" });
   return `<div class="page sp" id="eff">${pageHead("Flow", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined }) +
-    `<div class="pair">${card(`${s.title} Causes`, s.causes.length ? causeBars(s) : empty("No cause to show.", "Widen the window or clear the project."), { label: sentence(`${s.title} causes`) })}` +
-    (key === FLAKES ? "" : card(`${s.title} Issues`, s.top.length ? topTable(s.top) : empty("No issue to show.", "Widen the window or clear the project."), { label: sentence(`${s.title} issues`) })) + `</div></div>`;
+    `<div class="pair">${card(`${s.title} Causes`, s.causes.length ? causeBars(s) : empty(), { label: sentence(`${s.title} causes`) })}` +
+    (key === FLAKES ? "" : card(`${s.title} Issues`, s.top.length ? topTable(s.top) : empty(), { label: sentence(`${s.title} issues`) })) + `</div></div>`;
 }
 
 /** The old addresses. */

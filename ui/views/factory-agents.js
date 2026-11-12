@@ -7,12 +7,12 @@ import { flowOf, lastPeriod, usageCard } from "./speed.js";
 
 const share = (v) => pct(v == null ? v : v * 100);
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
-const SPEND = { hour: ["day", "today"], day: ["day", "today"], week: ["week", "this week"], month: ["month", "this month"] };
+const SPEND = { hour: "day", day: "day", week: "week", month: "month" };
 
 /** The Spend tile: what OpenRouter charged, read from OpenRouter, for the window's UTC period. */
 function spendCard(m, win) {
-  const [k, said] = SPEND[win] ?? SPEND.week, v = m?.spend?.[k];
-  return statCard({ k: "Spend", v: v == null ? "–" : money(v), note: v == null ? "OpenRouter spend unknown" : `OpenRouter, ${said} (UTC)` });
+  const v = m?.spend?.[SPEND[win] ?? SPEND.week];
+  return statCard({ k: "Spend", v: v == null ? "–" : money(v), note: "OpenRouter" });
 }
 
 /** The Backends tile: how many backends are up, with a light for the local server and one for OpenRouter. */
@@ -20,7 +20,7 @@ function backendsCard(m) {
   const light = (name, up) => statusLight(up == null ? "" : up ? "fine" : "alert", `${name}: ${up == null ? "–" : up ? "up" : "down"}`);
   const local = m ? m.local === "up" : null, router = m ? !m.down.includes("deepseek-v4.1-flash") : null;
   const extra = `<span class="lights">${light("Local server", local)}${light("OpenRouter", router)}</span>`;
-  if (!m) return statCard({ k: "Backends", v: "–", note: "backend state unknown", extra });
+  if (!m) return statCard({ k: "Backends", v: "–", extra });
   return statCard({ k: "Backends", v: count(Number(local) + Number(router)), v2: count(2), q: ["up", "backends"], extra });
 }
 
@@ -62,7 +62,7 @@ function roles(a, m) {
   const tierRoles = new Set(["worker", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
   const config = m ? workerRow() + Object.entries(TIERS).map(pick).join("") : "";
   const rows = config + (m ? outs.filter((o) => !tierRoles.has(o.role)) : outs).map((o) => row([cell(names[o.role] ?? o.role, { wide: true }), cell(shortModel(o.model)), stats(o)])).join("");
-  return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty("No agent ran in this window.", "Pick a longer window.");
+  return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty();
 }
 
 const timed = (a) => a.roles.filter((r) => r.hours != null);

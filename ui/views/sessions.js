@@ -84,10 +84,10 @@ const sum = (rows, f) => rows.reduce((n, r) => n + f(r), 0);
 
 function toolsCard(d, o) {
   const a = d.activity ?? {}, opts = {};
-  if (a.langfuse === "off") return card("Tools", empty("Langfuse is not configured.", codeText("Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in `~/.aleph/.env`.")), opts);
+  if (a.langfuse === "off") return card("Tools", empty("Langfuse off"), opts);
   if (a.langfuse === "error") return card("Tools", error("The tools did not load.", `${a.error}. Check that Langfuse is running, then reload.`), opts);
   const t = toolsOf(d);
-  return card("Tools", t.length ? ranked("tool", t.map((x) => ({ name: x.name, n: x.calls, errors: x.errors })), o) : empty("No tool calls in this period.", "Widen the window."),
+  return card("Tools", t.length ? ranked("tool", t.map((x) => ({ name: x.name, n: x.calls, errors: x.errors })), o) : empty(),
     { aside: legendHtml([[counted(sum(t, (x) => x.calls), "call")], [counted(sum(t, (x) => x.errors), "error"), "c-err"]]) });
 }
 
@@ -95,7 +95,7 @@ function skillsCard(d, o) {
   if (d.skills?.error) return card("Skills", error("The skills did not load.", `${d.skills.error}. Check that Langfuse is running, then reload.`));
   const s = skillsOf(d), unused = d.skills?.unused ?? [];
   return card("Skills", (d.skills?.failed ? notice(`The last reload failed: ${d.skills.failed}.`, true) : "") +
-    (s.length ? ranked("skill", s.map((x) => ({ name: x.name, n: x.uses, errors: x.errors })), o) : empty(`No skill was used in the last ${plural(Number(o.days), "day")}.`, "A use is a Skill tool call or a slash command.")) +
+    (s.length ? ranked("skill", s.map((x) => ({ name: x.name, n: x.uses, errors: x.errors })), o) : empty()) +
     (unused.length ? fold(`${count(unused.length)} unused`, chipRow(unused.map((n) => chip(n, { el: "a", attrs: ` href="${esc(skillHref(n))}"` })).join(""), "div")) : ""),
     { aside: legendHtml([[counted(sum(s, (x) => x.uses), "use")], [counted(sum(s, (x) => x.errors), "error"), "c-err"]]) });
 }
@@ -106,17 +106,17 @@ function hooksCard(d) {
   const denials = a.denials ?? { total: 0, recent: [] };
   const hooks = (a.hooks ?? []).length
     ? dataTable(heads(["Hook", "Calls", "Errors", "Last Call"], ["Calls", "Errors", "Last Call"]), a.hooks.map((h) => row([cell(h.name, { wide: true }), cell(count(h.calls), { num: true }), badCount(h.errors), `<td class="time">${esc(when(h.lastAt))}</td>`])).join(""))
-    : empty("No hook calls in this period.", "Widen the window.");
+    : empty();
   const list = denials.recent.length
     ? dataTable(heads(["Denied", "Reason"]), denials.recent.map((r) => row([`<td class="time lead">${esc(when(r.at))}</td>`, cell(r.reason, { wide: true })])).join(""))
-    : empty("The gate denied nothing in this period.", "Widen the window to see older denials.");
+    : empty();
   return `<div class="pair">${card("Hooks", hooks)}${card("Verify-Gate Denials", list, { count: count(denials.total), label: "Verify-gate denials" })}</div>`;
 }
 
 function renderSessionsTable(d, o) {
   if (d.sessions?.error) return error("The sessions did not load.", `${d.sessions.error}. Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.`);
   const all = shownSessions(d, o);
-  if (!all.length) return empty(o.pick || o.q ? "No session matches." : `No session in the last ${plural(Number(o.days), "day")}.`, o.pick || o.q ? "Clear the selection or the search." : "Sessions appear when the hooks send traces to Langfuse.");
+  if (!all.length) return empty();
   const shown = pageRows(all, o.page, STEP);
   const h = (label, key, c) => sortHead(label, key, o.sort, c);
   const rows = shown.map((s) => row([`<td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`, { title: s.id })}</td>`,

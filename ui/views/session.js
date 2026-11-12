@@ -18,7 +18,7 @@ const sessionLink = (s) =>
 /** The turn table: the session page's `?view=table`. */
 const TURN_PAGE = 50;
 function turnTable(d, page = 1) {
-  if (!d.turns.length) return empty("No turn in this session.", "Turns appear when the hooks send traces to Langfuse.");
+  if (!d.turns.length) return empty();
   // Columns: turn (id), prompt (title), output, model, numbers, time.
   const rows = pageRows(d.turns, page, TURN_PAGE).map((t) =>
     `<tr><td>${idLink(String(t.n), href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}</td>` +
@@ -90,7 +90,7 @@ export function chatTurn(id, t) {
     (system.length ? `<div class="sys">${system.map(sysChip).join("")}</div>` : "") +
     (text ? `<div class="msg user md">${clip(text, md(text))}</div>` : "") +
     work(t) +
-    (out ? `<div class="msg reply md">${clip(out, md(out))}</div>` : empty("No reply recorded.", "The turn ended before the model answered.")) + `</section>`;
+    (out ? `<div class="msg reply md">${clip(out, md(out))}</div>` : empty()) + `</section>`;
 }
 
 /** Under the chat: "Previous 20", "Next 20" and "21–40 of 73"; a button fetches its page of turns. `from` is the first turn shown. */
@@ -159,7 +159,7 @@ export function waterfall(rows, sel = null) {
 
 /** The detail pane of one row. */
 export function wfDetail(r) {
-  if (!r) return empty("No row selected.", "Select a row to see its input and output.");
+  if (!r) return empty("Select a row");
   const io = (label, text) => (text ? `<h4>${label}</h4>${clip(text, `<pre>${esc(text)}</pre>`)}` : "");
   return `<h3>${esc(r.name)}${r.args && r.kind !== "turn" ? ` <code>${esc(r.args)}</code>` : ""}</h3>` +
     facts([["Kind", esc(r.kind)], ["Started", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`], ["Took", esc(dur(r.durationMs))],
@@ -263,7 +263,7 @@ export function renderTurn(d) {
 
 /** The observations of a turn: page `page` of the top-level ones with their children, and a pager. */
 function obsTable(d, page = 1) {
-  if (!d.observations.length) return empty("No observation in this turn.", "Observations appear when the hooks send traces to Langfuse.");
+  if (!d.observations.length) return empty();
   return dataTable(heads(["Kind", "Name", "Detail", "Took"], ["Took"]), pageRows(d.observations, page, TURN_PAGE).map((o) => obsRows(o, 0)).join("")) + pager(page, d.observations.length, TURN_PAGE);
 }
 

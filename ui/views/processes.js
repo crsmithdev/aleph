@@ -30,7 +30,7 @@ function corrections(c) {
 }
 
 const screen = () => card("Contradiction screen · on each write", flow("new note", "Jev screen", "refused if p ≥ 0.7") +
-  empty("No record today.", "A refusal goes to stderr only. To show refusals here, the screen must write an event first."));
+  empty());
 
 function decay(d) {
   const rows = d.stale.slice(0, 10).map((s) => `<tr><td>${link(s.note)}</td><td class="wide">${esc(s.detail)}</td></tr>`).join("");

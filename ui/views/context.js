@@ -45,9 +45,9 @@ function parts(r) {
 
 /** The body of the tab: `m` is the /api/context body, with `session` the /api/context/:id body once loaded; `o.n` the request. */
 export function renderContext(m, o = {}) {
-  if (!m.sessions.length) return empty("No sessions.", "Claude Code writes each session's transcript under ~/.claude/projects.");
+  if (!m.sessions.length) return empty();
   if (!m.session) return `<div id="ctx-body">${loadingLine("the session")}</div>`;
-  if (!m.session.requests.length) return `<div id="ctx-body">${empty("No requests in this session.")}</div>`;
+  if (!m.session.requests.length) return `<div id="ctx-body">${empty()}</div>`;
   const r = pick(m.session.requests, o.n);
   return `<div id="ctx-body">${picker(m, m.session.id, m.session, r)}${fillBar(r)}${chart(m.session.requests, r)}${parts(r)}</div>`;
 }

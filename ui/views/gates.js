@@ -59,9 +59,9 @@ function capSetting(f, key, label, value, note) {
 export function renderNow(d) {
   const m = d.metrics;
   const tilesHtml = [
-    statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without the user", "asks"] } : { note: "no Ask decided" }) }),
-    statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed later"] }),
-    statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["in a hold", "issues"] }),
+    statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["auto", "asks"] } : {}) }),
+    statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed"] }),
+    statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["held", "issues"] }),
   ].join("");
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
 }
@@ -88,7 +88,7 @@ export function renderCaps(d) {
 /** The newest monitor report: a summary that expands to every finding and the reader's reply, or why there is no reading. */
 export function renderMonitor(d) {
   const m = d.monitor;
-  if (!m) return card("Monitor", empty("The monitor has not run.", "It reads once a day, in the tick."), { id: "monitor" });
+  if (!m) return card("Monitor", empty(), { id: "monitor" });
   const n = m.findings.length, first = n ? ` First: ${findingHtml(m.findings[0])}` : "";
   const summary = `${esc(day(localMs(m.day)))}: ${plural(n, "finding")}.${first}`;
   const body = (n ? findingsList(m.findings) : "") +
@@ -111,13 +111,13 @@ function everyForm(s) {
 /** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran. The monitor runs in the tick, once a day, so only the other two have an interval to edit. */
 export function renderSchedules(d) {
   const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${s.name === "monitor" ? esc(s.every) : everyForm(s)}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
-  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) : empty("No schedule.", "The factory lists its schedules once it runs."), { id: "gates-schedules" });
+  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) : empty(), { id: "gates-schedules" });
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */
 function renderWaiting(d) {
   const rows = d.asks.map((i) => askCard(i, d.now)).join("");
-  return card("Waiting for the User", rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for the user.", "An Ask that needs the user shows here."), { id: "gates-waiting", count: d.asks.length });
+  return card("Waiting for the User", rows ? `<div class="list">${rows}</div>` : empty(), { id: "gates-waiting", count: d.asks.length });
 }
 
 /** The units of an Ask's wait, largest first: a stored number of minutes shows in the largest unit that divides it. */
@@ -167,7 +167,7 @@ export function renderRules(d) {
       `<td>${esc(decidesText(r))}</td><td>Ask me</td><td>${esc(noAnswerText(r))}</td><td class="act-cell">${edit}</td></tr>` + (edit ? ruleForm(r) : "");
   }).join("");
   const legend = note("Decides: who acts first, Auto by a rule or by the director. If Auto cannot: where an Ask goes when that fails. If no answer: what happens when an Ask waits for the user.");
-  return card("Rules", !rows ? empty("No rule.", "A rule shows here for each kind of Ask.") :
+  return card("Rules", !rows ? empty() :
     legend + dataTable(heads(["Ask", "Fired", "Decided By", "Decides", "If Auto Cannot", "If No Answer", ""], ["Fired"]), rows, { id: "rules-table" }), { id: "rules" });
 }
 
@@ -177,7 +177,7 @@ export function renderHeld(d) {
   const paths = (list) => `<div class="held">${list.map((p) => chip(p, { el: "code" })).join("")}</div>`;
   return card("Held Paths", note("The security paths and a repo's held paths wait for the user after the reviewer passes the job. A test is never held.") +
     facts([["Every repo", paths(d.held)], ...repos.map((r) => [r.repo, paths(r.held)])]) +
-    (repos.length ? "" : empty("No repo names held paths.", "Add held globs to a repo in the registry.")), { id: "gates-held", label: "Held paths" });
+    (repos.length ? "" : empty()), { id: "gates-held", label: "Held paths" });
 }
 
 /** An ID of the log in its short form, as a link to its issue page: a job ID links to its subject's. Other text stays text. */
@@ -204,7 +204,7 @@ export function renderLog(d, by, page = 1) {
       `<td class="wide">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return card("Log", filter +
-    (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty("No entry in this window.", "Pick a longer window or clear the By filter.")), { id: "gates-log" });
+    (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty()), { id: "gates-log" });
 }
 
 /** What each settings form posts, by its `data-` key: the URL, the body and the word for an error line. */

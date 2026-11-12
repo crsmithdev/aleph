@@ -54,13 +54,6 @@ export function pace(s) {
   if (gone === null || gone === undefined) return null;
   return { used: cur.seven_day, gone, word: cur.seven_day > gone ? "over" : "under" };
 }
-/** "as of 40m ago" for a stale snapshot, else "". */
-function usageAge(s) {
-  const cur = s.usage?.now;
-  if (!cur || !s.usage.stale) return "";
-  const sec = Math.max(0, (Date.parse(s.now) - Date.parse(cur.at)) / 1000);
-  return Number.isNaN(sec) ? "" : `as of ${dur(sec)} ago`;
-}
 export const cardPct = (v) => (v == null ? "–" : pct(v * 100));
 export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
 
@@ -83,21 +76,21 @@ export function statusCards(s, d, { efficiency, performance }) {
   return lost + lead + landed + asks + usageCard(s);
 }
 
-/** The Usage card: the 7-day value, the bar with the mark for the week gone, and an optional note. `link` is `{href}` or `{key, on}`. */
+/** The Usage card: the 7-day value, the bar with the mark for the week gone, and a one- or two-word note. `link` is `{href}` or `{key, on}`. */
 export function usageCard(s, link = { href: "#/factory/agents" }) {
-  const cur = s.usage?.now, p = pace(s), off = s.usage?.off, base = usageAge(s) || (p ? `${p.word} pace, live` : "live, not the window");
-  const note = off == null ? base : `${pct(off)} off this machine, ${base}`;
-  if (!cur) return statCard({ k: "Usage", v: "–", note: "usage unknown", ...link });
+  const cur = s.usage?.now, p = pace(s), off = s.usage?.off;
+  if (!cur) return statCard({ k: "Usage", v: "–", ...link });
+  const note = s.usage.stale ? "stale" : p ? `${p.word} pace` : "live";
   const gone = weekGone(cur.seven_day_resets_at, s.now);
-  const tip = gone === null ? "" : `${pct(gone)} of the week gone`;
-  const bar = meter([{ pct: Math.min(100, cur.seven_day) }], `${pct(cur.seven_day)} used${tip && `, ${tip}`}`, { mark: gone });
+  const tip = [`${pct(cur.seven_day)} used`, gone !== null && `${pct(gone)} of the week gone`, off != null && `${pct(off)} off this machine`].filter(Boolean).join(", ");
+  const bar = meter([{ pct: Math.min(100, cur.seven_day) }], tip, { mark: gone });
   return statCard({ k: "Usage", v: pct(cur.seven_day), extra: bar, note, ...link });
 }
 
 /** The kept share of agent time, for the Status card: the share that reached main as the figure, a thin bar, and a legend of two columns, kept then lost. `d` is /api/flow for the window. */
 export function share(d) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`, "Widen the window or clear the project.");
+  if (!(total > 0)) return empty();
   const good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost), kept = good.reduce((a, c) => a + c.hours, 0);
   const seg = (c) => `<i class="seg-${esc(c.key)}" style="flex:${c.hours / total}" title="${esc(`${c.key} ${hours(c.hours)}${c.text ? `: ${c.text}` : ""}`)}"></i>`;
   const gap = good.length && lost.length ? `<i class="ogap" title="Left of the gap reached main; right of it did not"></i>` : "";
@@ -111,7 +104,7 @@ export function share(d) {
 /** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/flow for the window. */
 export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`, "Widen the window or clear the project.");
+  if (!(total > 0)) return empty();
   const said = (c) => `${hours(c.hours)} ${pct((c.hours / total) * 100)}`;
   // Flex grows are shares that sum to 1 in each row: grows summing under 1 leave the row part empty.
   const seg = (c, of) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours / of}" aria-pressed="${c.key === key}" aria-label="${esc(`${c.key} ${said(c)}`)}" title="${esc(c.text)}"></button>`;

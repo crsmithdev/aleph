@@ -10,7 +10,8 @@ The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with i
 2. **Shared helpers build the parts.** Views call `ui/lib.js`; the CSS is in `ui/app.css`. A fix in one helper fixes every page.
 3. **Meaning is a tone.** `run`, `done`, `need`, `stuck`, `quiet` or `parked`, from `tone()` in `ui/lib.js`. One state has one colour on a badge, a series and a card, so a reader learns it once. A tone comes only from `tone(state)`. A name that is not a state, such as an actor, is a `chip()`. A chart series for a state takes the colour of `tone(state)`.
 4. **Numbers are tabular.** Tabular figures, at the right, so digits line up in a column. The class is `.num` or `.tnum`; no other rule sets `font-variant-numeric`.
-5. **Plain text states.** An empty state is one sentence and a hint. A missing value is `–` from `miss(reason)`, with the reason as its title (Content, Values), never `N/A` or `0`. A zero stays `0`.
+5. **Plain text states.** An empty state is `No data` from `empty()`, the same on every page. A missing value is `–` from `miss(reason)`, with the reason as its title (Content, Values), never `N/A` or `0`. A zero stays `0`.
+6. **Be terse.** A note, a qualifier or a caption is one or two words. Do not fill a space because it is there. Do not explain what the title, the axis or a tooltip already says. A definition goes in a `title` tooltip or nowhere.
 
 ### Rules
 
@@ -286,7 +287,8 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 - Write a key of a fact list and the label of a button in sentence case.
 - Write a state, a priority and a chart key in lower case. States come from [Naming](naming.md); priorities are `critical`, `high`, `medium`, `low`.
 - Show a count as a muted number after its title, not in brackets.
-- Write an empty state as one sentence, then a hint that tells the reader what to do.
+- Write an empty state with `empty()`: `No data`, with no hint. Give it another line only for a state that is not missing data, such as `Langfuse off` or `Select a row`, in at most three words.
+- Write a note, a qualifier or a caption in one or two words: `over pace`, `p50 weekly`. Put more in a `title` tooltip.
 - Write an error line as `Could not load X.` and a hint. Put the upstream message in a Technical details fold (`error()` with `detail`).
 - Offline, the page says "The server is unreachable. Showing the last data." (`ui/index.html`).
 
@@ -296,7 +298,8 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 | `Running` with a muted `3` after it | `Running (3)` |
 | `Next 50` | `Click here to load more results` |
 | `running`, `landed`, `critical` | `Running`, `LANDED` |
-| `No job matches.` with the hint `Widen the window or clear a filter.` | `No data` |
+| `empty()`, which shows `No data` | `No agent job on an issue ended in the last hour.` with the hint `Widen the window or clear the project.` |
+| `over pace`, with the off-machine share in the bar's tooltip | `2% off this machine, under pace, live` |
 | `Could not load the agents.` with the hint `Check that aleph-ui is running, then reload.` and the upstream message in a Technical details fold | `Error: fetch failed` |
 | `Loading Jobs…` | a spinner with no text |
 
@@ -382,7 +385,7 @@ A card is one section of a list page. It has a head and a body.
 | Do | Don't |
 |---|---|
 | `card("Recent Jobs", dataTable(…), { count: 12 })` | a section head with no box (`sectionHead()` alone) |
-| `card("Recent Jobs", empty("No job ran in this window."))` | no card when the section is empty |
+| `card("Recent Jobs", empty())` | no card when the section is empty |
 
 #### Detail panel
 
@@ -578,9 +581,9 @@ A metric card shows one headline number of a list page, with its key.
 | 7 | Qualifier `q` or `note` | The names of the two values, or a note | | `--fs-xs`; one line; first name `--ink`, second `--muted` |
 
 - Write the key in two or three words. The CSS sets it in capitals.
-- When the value is unknown, write `–` and give a `note` that tells why.
+- When the value is unknown, write `–`. Give no note to explain it.
 - With `v2`, give `q` as `[first, second]`: one name for each value, in lower case, in one word or a few words.
-- With no `v2`, give a `note` in place of `q`. The tooltip shows all of the note.
+- With no `v2`, you can give a `note` in place of `q`, in one or two words. Put a definition in a tooltip, not in the note.
 - Make the trend only with `cardTrend(value, base, prev, { kind, lowerIsGood, format, basis })`. Set `kind` to `points` for a share, and to `relative` for a time or a count. Set `lowerIsGood` to `null` when no direction is good. With no baseline, `cardTrend()` shows nothing.
 - Put only a `meter()` or a column of status lights in `extra`.
 - For a link to another page, give `href`. For a card that selects the view under it, give `key`, set `on` on the selected card, and connect the cards with `onTile()`.
@@ -590,7 +593,8 @@ A metric card shows one headline number of a list page, with its key.
 | `statCard({ k: "Worker slots", v: "2", v2: "5", q: ["in use", "cap"] })` | `v2` with no `q` |
 | `q: ["in use", "cap"]` | `q: ["In Use", "Maximum Capacity"]` |
 | `k: "Worker slots"` | `k: "Worker slots in use right now"` |
-| `v: "–"` with a note that tells why | `v: "0"` for an unknown value |
+| `v: "–"` | `v: "0"` for an unknown value |
+| `note: "over pace"` | `note: "2% off this machine, under pace, live"` |
 
 #### Table
 
@@ -689,7 +693,7 @@ A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 - Keep the colour of a key the same in all windows. If a key can have no value in a window, set `color` on each key, because the keys after it move up one colour.
 - Show at most seven keys. Fold the rest into one key, `Other`.
 - Show a legend. When the frame has one key and the title names it, set `legend: false`.
-- When there is no data, the frame shows its `empty` line and its `hint`.
+- When there is no data, the panel shows `empty()`. A frame has no empty line, hint or note of its own.
 - A linked row is also a link in a list under the chart, for the keyboard. The list shows when a link has focus.
 - When the data did not rebuild, give `error` and `since`. The panel tells how old the data is.
 - Put two or three panels side by side in `.trio`, which has three columns. With two panels, give one the class `wide`: `panelOf(key, frame, "wide")`. Under 1100px, they stack.
@@ -881,7 +885,7 @@ A lane is a column of item cards under a head with a count.
 
 - Put Running and Queued side by side in `.lanes-top`, `--sp-12` apart, and Done under them, `--sp-16` below. The top row goes to one column when `.rail-main` is narrower than 480px (container query).
 - When a lane has a cap, its count is `<shown> of <cap>`.
-- Write the empty line as one sentence: `Nothing is running.`
+- The empty line is `empty()`.
 
 | Do | Don't |
 |---|---|
@@ -1473,23 +1477,22 @@ An empty state shows that there is nothing, that data loads, or that the data di
 
 | Helper | Reference |
 |---|---|
-| `empty(line, hint)`, `loadingLine(what)`, `error(line, hint)`, `notice(line, bad, id)`; `loading(title)` in the router only | `ui/views/jobs.js` |
+| `empty(line)`, `loadingLine(what)`, `error(line, hint)`, `notice(line, bad, id)`; `loading(title)` in the router only | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Line | What is not there, in one sentence | | `--ink`; an error `--stuck` |
-| 2 | Hint | What to do | yes | `--fs-sm`, `--muted` |
-| 3 | Loading | `Loading <what>…` | | `--muted` |
+| 1 | Line | `No data`; an error line is one sentence | | `--fs-sm`, `--muted`; an error `--stuck` |
+| 2 | Loading | `Loading <what>…` | | `--muted` |
 
 - The router shows `loading()` while a page loads, and `error()` when the first load fails. A view does not call them for its own data.
 - For a section that loads after the page, use `loadingLine(what)`: `Loading the diff…`.
 - Use `error(line, hint, { detail })` for a second fetch inside a card that failed. The line is `Could not load X.`; with no hint, it tells the reader to check aleph-ui and reload. The upstream message goes in `detail`, in a Technical details fold.
 - Use `notice(line, bad)` for a note above data that still shows: a stale reload (`bad`, `role="alert"`) or a partial count. Do not write a `<p>` for it by hand.
-- The `empty()` hint is HTML: escape data with `esc()`. The `error()` hint is text.
+- `empty()` takes no hint. The `error()` hint is text.
 
 | Do | Don't |
 |---|---|
-| `empty("No job matches.", "Widen the window or clear a filter.")` | `<p class="quiet">No data</p>` |
+| `empty()` | `<p class="quiet">No data</p>` by hand, or a sentence and a hint |
 | `error("Could not load the agents.", hint, { detail })` | `Error: fetch failed` |
 
 ## States

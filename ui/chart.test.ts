@@ -61,18 +61,8 @@ test("the panel has a form control for its group, or the empty line under its ti
   expect(h).toContain('data-form="lines" aria-label="Lines" title="Lines" aria-pressed="true"');
   const none = panel({ ...time, rows: [] }, "area");
   expect(none).toContain("<h2>Agents Live by Role</h2>");
-  expect(none).toContain("Nothing to plot in this window.");
+  expect(none).toContain('<div class="empty"><p>No data</p></div>');
   expect(none).not.toContain("chartbox");
-  expect(none).toMatch(/<div class="empty"><p>[^<]+<\/p><p class="hint">[^<]+<\/p><\/div>/);
-});
-
-test("a frame's own empty line replaces the default, and its note is under the title", () => {
-  const f = { ...time, rows: [], empty: "No time to plot in this window.", note: "From filing to the last land." };
-  expect(panel(f, "area")).toContain("No time to plot in this window.");
-  expect(panel(f, "area")).not.toContain("Nothing to plot in this window.");
-  const h = panel({ ...time, note: "From filing to the last land." }, "area");
-  expect(h).toContain('<p class="notice" role="status">From filing to the last land.</p>');
-  expect(h).toContain("<h2>Agents Live by Role</h2>");
 });
 
 test("the option carries the link of a row: the point of a time frame, the bar and the label of a category frame", () => {

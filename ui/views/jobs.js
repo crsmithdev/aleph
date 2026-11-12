@@ -56,7 +56,7 @@ function shownJobs(jobs, f = {}) {
 
 export function renderJobsTable(jobs, f = {}) {
   const all = shownJobs(jobs, f);
-  if (!all.length) return empty("No job matches.", "Widen the window or clear a filter.");
+  if (!all.length) return empty();
   const shown = pageRows(all, pageOf(f), PAGE), sort = sortOf(f);
   const h = (label, key, c) => sortHead(label, key, sort, c);
   // Columns: id, title, state, project, model, took, cost, then started: the Issues table's order.
@@ -98,7 +98,7 @@ export function renderTranscript(steps) {
       ? fold(`${s.error ? "error, " : ""}result (${esc(bytes(s.output.length))})`, `<pre class="trailers">${esc(s.output)}</pre>`)
       : `<pre class="trailers">${esc(s.output)}</pre>`;
     return `<div class="step"><b>${esc(s.name)}</b><pre class="trailers">${esc(input ?? "")}</pre>${out}</div>`;
-  }).join("") || empty("This run kept no steps.", "Open its logs for the raw output.");
+  }).join("") || empty();
 }
 
 /** The event of one run: its condition as the tag, then its reason, the commit of a land, its job ID and its log buttons. */
@@ -172,7 +172,7 @@ export function renderJob(j) {
   }).join("");
   const checks = j.checks?.length
     ? `<div class="dp-logs" data-logs>${pagedTable(heads(["Check", "Result", "Ran", "Passed", "Failed", "Skipped", "Took"], ["Ran", "Passed", "Failed", "Skipped", "Took"]), j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${badge(c.ok ? "passed" : "failed")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td></tr>`))}${checkLog}${failures}<div class="logbody" hidden></div></div>`
-    : empty("No check ran.", "A job runs its checks before it lands.");
+    : empty();
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +

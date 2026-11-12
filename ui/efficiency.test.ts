@@ -75,7 +75,7 @@ test("the tiles and the head come from the data", () => {
   expect(h).toContain("&lt;0.1%");
   expect(h).toContain('<span class="aside">20h counted</span>');
   expect(h).toContain('<p class="lede">11 jobs, 0.4h, have no outcome yet</p>');
-  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, "all")).toContain("needs 6 hours of usage snapshots");
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, "all")).not.toContain("p50 weekly");
   const one = renderEfficiency({ ...D, notCounted: { runs: 1, hours: 0.1 } }, "all");
   expect(one).toContain('<p class="lede">1 job, 0.1h, have no outcome yet</p>');
   expect(renderEfficiency({ ...D, notCounted: { runs: 0, hours: 0 } }, "all")).not.toContain("lede");

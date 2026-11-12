@@ -112,16 +112,16 @@ test("renderIdeas puts searchBox() before the filter bar, both inside the Ideas 
   expect(h.indexOf(box)).toBeGreaterThan(h.indexOf('<section class="card'));
   expect(h.indexOf(box) + box.length).toBe(h.indexOf(filter));
   expect(h.indexOf(filter)).toBeLessThan(h.indexOf("</section>"));
-  expect(renderIdeas([], "built")).toContain(empty("No built ideas.", "Add one with <code>aleph idea add</code>."));
+  expect(renderIdeas([], "built")).toContain(empty());
   const none = renderIdeas([row("alpha", "Alpha")], "exploring", "zzz");
-  expect(none).toContain(empty("No exploring ideas.", "Add one with <code>aleph idea add</code>."));
+  expect(none).toContain(empty());
   expect(none).toContain('value="zzz"');
 });
 
 test("renderIdea draws an empty log with empty(), built issues with repoIdLink(), a statusRow() and the renderKpis() strip", () => {
   const d = { slug: "alpha", title: "Alpha", status: "exploring", target: "aleph", writeup: "", log: [], running: [], built: ["aleph-12"], lenses: [{ lens: "prior-art", file: "lenses/p.html", at: "2026-11-02 09:00" }, { lens: "prior-art", file: "lenses/o.html", at: "2026-11-01 09:00" }] };
   const h = renderIdea(d);
-  expect(h).toContain(empty("No log yet.", "Add a line with <code>aleph idea note</code>."));
+  expect(h).toContain(empty());
   expect(h).toContain(repoIdLink("aleph-12", "#/issues/aleph/12"));
   expect(h).toContain(statusRow('<span class="badge run">exploring</span>', "", chips(["aleph"])));
   expect(h).toContain(renderKpis([{ k: "Results", v: "2" }, { k: "Running", v: "0" }, { k: "Built", v: repoIdLink("aleph-12", "#/issues/aleph/12"), text: true }]));

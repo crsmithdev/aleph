@@ -213,11 +213,10 @@ test("a failed flow load shows error() in the Agent Time card", () => {
   expect(bad.slice(bad.indexOf('id="outcome"'), bad.indexOf('id="pipeline"'))).toContain(error("x"));
 });
 
-test("an empty Queued or Running lane draws empty() with a hint", () => {
+test("an empty Queued or Running lane draws empty()", () => {
   const h = view.renderLanes({ ...state, done: [], queued: [], running: [], runningIssues: [] });
-  expect(h).toContain(empty("Nothing is queued.", "Issues wait here for a worker."));
-  expect(h).toContain(empty("Nothing is running.", "Started work shows here."));
-  expect(h.match(/<p class="hint">/g)).toHaveLength(2);
+  expect(h.split(empty()).length - 1).toBeGreaterThanOrEqual(2);
+  expect(h).not.toContain('class="hint"');
 });
 
 test("a stuck job's fold reads Technical details, and its blocker is an idLink", () => {

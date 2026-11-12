@@ -197,7 +197,7 @@ export function renderTable(rows, o = {}) {
   const ids = new Set(flat.map((r) => r.id)), parents = new Set(flat.map((r) => r.parent)), under = (r) => group && r.parent && ids.has(r.parent);
   const kids = Map.groupBy(flat.filter(under), (r) => r.parent);
   const all = group ? flat.filter((r) => !under(r)).flatMap((r) => [r, ...(open.has(r.id) ? kids.get(r.id) ?? [] : [])]) : flat;
-  if (!all.length) return empty("Nothing matches.", "Loosen the filters, or file an issue below.");
+  if (!all.length) return empty();
   const shown = pageRows(all, o.page ?? 1, PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
   const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
@@ -235,7 +235,7 @@ export function renderTiles(s, key = "open", win = "week") {
   const on = (k) => ({ key: k, on: key === k });
   return tiles("Issue numbers",
     statCard({ k: "Open", v: count(s.open), v2: count(s.total), q: ["open", "in store"], ...on("open") }) +
-    statCard({ k: "Filed", v: count(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${count(s.filedBefore)} the ${w} before`, ...on("filed") }) +
+    statCard({ k: "Filed", v: count(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${count(s.filedBefore)} prior`, ...on("filed") }) +
     statCard({ k: "Closed", v: count(s.closed), v2: count(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w, false), ...on("closed") }) +
     statCard({ k: "Open Age", v: days(s.medianAge), ...(s.oldest == null ? {} : { v2: days(s.oldest), q: ["open age", "oldest"] }), ...on("age") }) +
     statCard({ k: "Jobs", v: count(s.runs), v2: money(s.cost), q: ["jobs", "recorded cost"], ...on("runs") }));
@@ -286,7 +286,6 @@ export const backlogFrame = (b, f, win) => ({
   by: { keys: [...PRIORITY_ORDER.map((p) => ({ key: p, name: p })), { key: "filed", name: "filed" }, { key: "closed", name: "closed" }] },
   rows: b.ats.map((at, i) => ({ at, ...Object.fromEntries(PRIORITY_ORDER.map((p) => [p, b.counts[p][i]])), filed: f.filed[i], closed: f.closed[i] })),
   form: "area",
-  note: "Open issues over time, by priority, with the filed and closed counts of each bucket.",
 });
 
 /** The suite records of `tests` ({ project: records }) of `project` (all when empty) within the window: one row per run time, the test count of each project and the tests that passed only on rerun. */
@@ -306,7 +305,7 @@ export function testsFrame(tests, project = "", win = "month", now = new Date())
   }
   // A run time of one project is no run of the others: null, so their lines pass over it and do not drop to 0.
   for (const row of rows.values()) for (const k of keys) row[k.key] ??= null;
-  return { measure: { name: "Tests", unit: "count", agg: "sum" }, over: { kind: "time", window: win }, by: { keys }, rows: [...rows.values()].sort((a, b) => a.at - b.at), form: "lines", note: "Tests per suite run, and the tests that passed only on rerun." };
+  return { measure: { name: "Tests", unit: "count", agg: "sum" }, over: { kind: "time", window: win }, by: { keys }, rows: [...rows.values()].sort((a, b) => a.at - b.at), form: "lines" };
 }
 
 /** The p50 and the p90 from filed to closed, per kind, in the unit `closeTimes` chose. */
@@ -318,7 +317,6 @@ export const closeFrame = (c) => {
     by: { keys: [{ key: "p50", name: "p50" }, { key: "p90", name: "p90", color: "muted" }] },
     rows: c.kinds.map((k, i) => ({ name: k, p50: c.p50[i] == null ? null : c.p50[i] * scale, p90: c.p90[i] == null ? null : c.p90[i] * scale })),
     form: "grouped",
-    note: `${c.unit === "hours" ? "Hours" : "Days"} from filed to closed: the p50 and the p90 of each kind.`,
   };
 };
 
@@ -341,7 +339,7 @@ const TOP_RUNS = 10;
 function renderDetail(rows, o) {
   if (o.tile === "runs") {
     const top = [...rows].filter((r) => !r.part && r.runs > 0).sort((a, b) => b.runs - a.runs).slice(0, TOP_RUNS), max = top[0]?.runs ?? 1;
-    return card("Issues by Jobs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${esc(count(r.runs))} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a job.", "Jobs appear here once the factory runs an issue."), { label: "Issues by jobs" });
+    return card("Issues by Jobs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${esc(count(r.runs))} · ${esc(money(r.cost))}`)).join("")) : empty(), { label: "Issues by jobs" });
   }
   return "";
 }

@@ -227,7 +227,7 @@ test("a waterfall with no error and no tool call shows no hand 0ms, none or No e
 test("the Turn page says so when a turn has no observations", async () => {
   const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
   const h = v.renderTurn({ ...t, observations: [] });
-  expect(h).toContain("No observation in this turn.");
+  expect(h).toContain('<div class="empty"><p>No data</p></div>');
   expect(h).not.toContain("<table");
 });
 
@@ -337,8 +337,7 @@ test("the turns, hooks and denials tables show empty() with no rows; the turns t
   expect(h).toContain("Next 1");
   expect(h.match(/<tr><td><a class="idl"/g)).toHaveLength(50);
   const page = renderSessions({ window: 7, project: null, activity: { langfuse: "ok", tools: [], hooks: [], denials: { total: 0, recent: [] } }, skills: { projects: [], skills: [], unused: [] }, sessions: { projects: [], sessions: [] }, toolSessions: {} }, options(new URLSearchParams()));
-  expect(page).toContain('<div class="empty"><p>No hook calls in this period.</p>');
-  expect(page).toContain('<div class="empty"><p>The gate denied nothing in this period.</p>');
+  expect(page.split('<div class="empty"><p>No data</p></div>').length - 1).toBeGreaterThanOrEqual(2);
 });
 
 test("the Turns table and the Observations table head their duration column Took", async () => {

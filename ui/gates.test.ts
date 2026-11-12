@@ -224,7 +224,7 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   expect(card).toContain("<dt>r</dt>");
   expect(card).toContain('<code class="chip">src/auth/**</code>');
   for (const p of SECURITY_PATHS) expect(card).toContain(`<code class="chip">${p}</code>`);
-  expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No repo names held paths.</p><p class="hint">');
+  expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No data</p></div>');
 });
 
 const entry = (by: string, action = "answered", subject = "r-1") => ({ at: ago(1), by, subject, action }) as any;
@@ -335,9 +335,7 @@ test("the Gates page says the user, never you, your or Chris, in its visible tex
   const text = (h: string) => h.replace(/<[^>]*>/g, " ");
   const h = gates.renderGates({ ...d, asks: [] });
   expect(h).toContain(">Waiting for the User</h2>");
-  expect(h).toContain("Nothing waits for the user.");
-  expect(h).toContain("An Ask that needs the user shows here.");
-  expect(gates.renderGates(d)).toContain("decided without the user");
+  expect(h).toContain('<div class="empty"><p>No data</p></div>');
   expect(h).toContain("wait for the user after the reviewer passes the job");
   expect(text(h)).not.toMatch(/\b(you|your|Chris)\b/i);
 });
@@ -514,7 +512,7 @@ test("rules() takes an entry's missing reason from the run that awaited when it 
 test("the Monitor panel says the monitor has not run with no report, and holds the newest report with the findings inside the part that expands", async () => {
   const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
   expect((await body()).monitor).toBeNull();
-  expect(gates.renderMonitor(await body())).toContain("The monitor has not run.");
+  expect(gates.renderMonitor(await body())).toContain('<div class="empty"><p>No data</p></div>');
   mkdirSync(dir, { recursive: true });
   writeFileSync(file, JSON.stringify({ day: "2026-11-03", table: {}, text: "READER-TEXT", findings: ["FIRST-ONE", "SECOND-ONE"] }));
   try {

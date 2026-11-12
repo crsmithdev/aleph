@@ -133,7 +133,7 @@ describe("the Sessions page", () => {
 
   test("a failed part says so and the others still show", () => {
     const off = v.renderSessions({ ...data(), activity: { langfuse: "off", tools: [] }, skills: { error: "boom" }, sessions: { error: "down" } }, opts());
-    expect(off).toContain("Langfuse is not configured");
+    expect(off).toContain("Langfuse off");
     expect(off).not.toMatch(/(Skills|Sessions) failed:/);
     expect(off).toContain("The skills did not load.");
     expect(off).toContain("boom. Check that Langfuse is running");
