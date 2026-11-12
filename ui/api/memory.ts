@@ -7,14 +7,16 @@
  * committed and pushed; a handoff or an episode is a file. A write clears nothing: the updater's watchers see it.
  */
 import { readJsonOr } from "../../lib/json.ts";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { aleph, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
 import { handoffsDir } from "../../lib/paths.ts";
-import { episodesDir } from "../../jobs/lib/learning/episode.ts";
+import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
+import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
+import { readEvents } from "../../lib/layout.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { backlinks, coreNotes, KINDS, linkTargets, links, lintVault, loadVault, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
@@ -186,6 +188,42 @@ async function log(url: URL): Promise<Response> {
   return json({ project, rows: rows.sort((a, b) => b.at.localeCompare(a.at)) });
 }
 
+const MIN = 60_000;
+/** The local 03:00 after `at`: when the daily corrections step is next due. */
+function nextDaily(at: string): string {
+  const d = new Date(at);
+  d.setDate(d.getDate() + 1);
+  d.setHours(3, 0, 0, 0);
+  return d.toISOString();
+}
+
+/** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. The corrections
+ * store is read as a file: corrections.ts loads the factory's actions, which the server must not. */
+async function processes(): Promise<Response> {
+  const root = vaultDir(), now = Date.now();
+  const tick = readJsonOr<{ last?: Record<string, string> }>(join(factoryDir(), "tick.json"), {});
+  const store = readJsonOr<{ minedAt: string; lessons: { sentence: string; state: string }[] }>(join(factoryDir(), "corrections.json"), { minedAt: "", lessons: [] });
+  const failed = (subject: string, last: string) => readEvents(now - 2 * 86400_000).some((e) => e.subject === subject && e.action === "failed" && e.at >= last);
+  const step = (name: string, runs: string, last: string | undefined, next: string | null, does: string) =>
+    ({ name, runs, last: last ?? null, next, result: last ? (failed(name, last) ? "failed" : "ok") : null, does });
+  const steps = [
+    step("episodes", "every 30 min", tick.last?.episodes, tick.last?.episodes ? new Date(Date.parse(tick.last.episodes) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
+    step("corrections", "daily after 03:00", store.minedAt || undefined, store.minedAt ? nextDaily(store.minedAt) : null, "mines lessons from transcripts, gate denials and drop reasons"),
+  ];
+  const dir = episodesDir();
+  const mtimes = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md")).map((f) => statSync(join(dir, f)).mtimeMs) : [];
+  const days = Array.from({ length: KEEP_DAYS }, (_, i) => today(new Date(now - (KEEP_DAYS - 1 - i) * 86400_000)));
+  const perDay = days.map((date) => ({ date, pages: mtimes.filter((t) => today(new Date(t)) === date).length }));
+  const all = await allNotes(root);
+  const stale = lintVault(all, { read: readLog(root) }).warn.filter((f) => f.rule === "stale");
+  return json({
+    steps,
+    episodes: { pages: mtimes.length, keep: KEEP_DAYS, days: perDay, prunes: opLines(root).filter((l) => l.text.startsWith("prune episodes")).slice(0, 5) },
+    corrections: { states: count(store.lessons.map((l) => l.state)), waiting: store.lessons.filter((l) => l.state === "open" || l.state === "proposed").map((l) => ({ sentence: l.sentence, state: l.state })) },
+    decay: { stale: stale.map((f) => ({ note: f.note, detail: f.detail })) },
+  });
+}
+
 /** The vault's notes, or none when it has no Home.md. */
 const allNotes = async (root: string) => (existsSync(join(root, "Home.md")) ? await vaultNotes(root) : []);
 
@@ -303,6 +341,7 @@ const deleteFile: Post = async ({ source, key }) => {
 export const routes: Routes = {
   "GET /api/memory": (_req, _p, url) => overview(url),
   "GET /api/memory/log": (_req, _p, url) => log(url),
+  "GET /api/memory/processes": () => processes(),
   "GET /api/memory/search": (_req, _p, url) => search(url),
   "GET /api/memory/notes/:title": (_req, { title }, url) => note(title, url),
   "GET /api/memory/files/:source/:key": (_req, { source, key }) => file(source, key),

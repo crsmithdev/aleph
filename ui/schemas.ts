@@ -79,6 +79,12 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     lint: "object", writes: "array", notes: "array", start: "object", "misses?": "any", "cachedAt?": "time",
   },
   "/api/memory/log": { project: "string?", rows: [{ at: "string", kind: "string", op: "string", note: "string", why: "string", titles: ["string"] }] },
+  "/api/memory/processes": {
+    steps: [{ name: "string", runs: "string", last: "string?", next: "string?", result: "string?", does: "string" }],
+    episodes: { pages: "number", keep: "number", days: [{ date: "string", pages: "number" }], prunes: [{ at: "string", text: "string" }] },
+    corrections: { states: { "*": "number" }, waiting: [{ sentence: "string", state: "string" }] },
+    decay: { stale: [{ note: "string", detail: "string" }] },
+  },
   "/api/memory/search": { q: "string", results: [{ type: "string", source: "string", key: "string", title: "string" }] },
   "/api/memory/notes/:title": "object",
   "/api/memory/files/:source/:key": "text",

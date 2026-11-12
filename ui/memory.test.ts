@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, utimesSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -461,12 +461,33 @@ test("/api/memory/log lists writes and recalls newest first, one recall per call
   } finally { rmSync(log, { force: true }); rmSync(daily, { force: true }); await fresh(); }
 });
 
-test("the tabs link Search, Context and Log, and leave Processes unbuilt; the log row opens a recall to its notes", () => {
+test("/api/memory/processes reads the tick, the corrections store, the episode pages and the stale notes", async () => {
+  const tick = join(base, "factory", "tick.json"), store = join(base, "factory", "corrections.json");
+  utimesSync(join(base, "factory", "episodes", "aleph-1 Goal.md"), NOW / 1000, NOW / 1000);
+  writeFileSync(tick, JSON.stringify({ last: { episodes: "2026-11-04T11:30:00.000Z" } }));
+  writeFileSync(store, JSON.stringify({ minedAt: "2026-11-04T11:00:00.000Z", lessons: [{ sentence: "Run the checks.", state: "proposed" }, { sentence: "Old.", state: "declined" }] }));
+  try {
+    const m = await (await at("/api/memory/processes")).json() as any;
+    expect(m.steps.map((s: any) => [s.name, s.last, s.next, s.result])).toEqual([
+      ["episodes", "2026-11-04T11:30:00.000Z", "2026-11-04T12:00:00.000Z", "ok"],
+      ["corrections", "2026-11-04T11:00:00.000Z", m.steps[1].next, "ok"],
+    ]);
+    expect(m.episodes.pages).toBe(1);
+    expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1 });
+    expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ sentence: "Run the checks.", state: "proposed" }] });
+    const h = v.renderProcessesTab(m);
+    expect(h).toContain("Run the checks.");
+    expect(h).toContain("No note is stale.");
+    expect(h).toContain('<a href="#/memory?tab=processes" aria-current="page">Processes</a>');
+  } finally { rmSync(tick, { force: true }); rmSync(store, { force: true }); }
+});
+
+test("the tabs link Search, Context, Log and Processes; the log row opens a recall to its notes", () => {
   const h = v.renderTabs("log", "aleph");
   expect(h).toContain('<a href="#/memory?project=aleph">Search</a>');
   expect(h).toContain('<a href="#/memory?tab=log&project=aleph" aria-current="page">Log</a>');
   expect(h).toContain('<a href="#/memory?tab=context&project=aleph">Context</a>');
-  expect(h).toContain('<span class="soon" aria-disabled="true" title="Not built">Processes</span>');
+  expect(h).toContain('<a href="#/memory?tab=processes&project=aleph">Processes</a>');
   expect(v.renderMemory(page)).toContain('<nav class="vtabs"');
   const r = { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: ["A", "B"] };
   expect(v.logRow(r)).toContain('<details><summary>q</summary><ol><li><a href="#/memory/A">A</a></li><li><a href="#/memory/B">B</a></li></ol></details>');
