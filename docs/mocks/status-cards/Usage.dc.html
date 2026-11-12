@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Metric card vis options</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#3B5FC8}a:hover{color:#292D3E}
+.row{display:grid;grid-template-columns:230px repeat(5,minmax(0,1fr));gap:16px;align-items:center}
+.ot{font:600 14px 'Work Sans',sans-serif;color:#292D3E;margin:0 0 4px}
+.od{font:400 12px/1.4 'Work Sans',sans-serif;color:#4A4F6A;margin:0}
+.tile{position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;height:116px;box-sizing:border-box;padding:12px 14px;border-radius:12px;background:#FFFFFF;box-shadow:0 1px 2px rgb(40 36 80 / .10),0 6px 20px -8px rgb(40 36 80 / .22)}
+.tile.vis{outline:2px dashed #C9D6F3;outline-offset:3px}
+.r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.k{color:#62688A;font:600 12px 'Work Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.v{font:600 28px/1 'Work Sans',sans-serif;letter-spacing:-0.02em;color:#292D3E;font-variant-numeric:tabular-nums;white-space:nowrap}
+.v em{font:400 17px/1 'Work Sans',sans-serif;font-style:normal;color:#62688A}
+.q{font:400 12px 'Work Sans',sans-serif;color:#62688A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr{font:600 12px 'Work Sans',sans-serif;padding:1px 6px;border-radius:4px;white-space:nowrap;color:#8A5A00;background:#F3EEE6}
+.tr.good{color:#437018;background:#EDF2E8}
+.mid{display:flex;align-items:center;justify-content:space-between;gap:10px}
+</style>
+</helmet>
+<div style="width:1360px;height:1640px;box-sizing:border-box;padding:40px;background:#F4F3FA;font-family:'Work Sans',sans-serif;color:#292D3E;display:flex;flex-direction:column;gap:26px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<h1 style="margin:0;font:600 26px 'Work Sans',sans-serif;letter-spacing:-0.02em">Metric cards: one fixed height, with and without a vis</h1>
+<p class="od" style="font-size:13px">Every card is 116 px tall in every row. A card with no vis keeps its figure on top and its note at the bottom; a vis takes the space between, or a slot right of the figure. The dashed outline marks the card with the vis. Sparks and day columns show the form only, not real daily data.</p>
+</div>
+
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="10">
+<div class="row">
+<div><p class="ot">{{r.title}}</p><p class="od">{{r.text}}</p></div>
+
+<div class="tile"><div class="r1"><span class="k">Lost time</span><span class="tr good">▼ 0.2%</span></div><b class="v">30% <em>/ 19h</em></b><span class="q">lost / hours</span></div>
+<div class="tile"><div class="r1"><span class="k">Completion</span><span class="tr">▲ 29%</span></div><b class="v">23m <em>/ 3h</em></b><span class="q">p50 / p90</span></div>
+<div class="tile"><div class="r1"><span class="k">Landed</span><span class="tr">▼ 14%</span></div><b class="v">67% <em>/ 378</em></b><span class="q">clean / landed</span></div>
+<div class="tile"><div class="r1"><span class="k">Asks</span><span class="tr">▲ 448%</span></div><b class="v">126 <em>/ 52</em></b><span class="q">all / manual</span></div>
+
+<div class="tile vis">
+<sc-if value="{{r.bg}}" hint-placeholder-val="{{false}}"><svg style="position:absolute;left:0;right:0;bottom:0;width:100%;height:64px" viewBox="0 0 180 64" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,64 0,60 20,57 34,53 52,47 70,45 88,41 100,36 113,35 113,64" fill="#3B5FC8" fill-opacity=".13"></polygon><polyline points="0,60 20,57 34,53 52,47 70,45 88,41 100,36 113,35" fill="none" stroke="#3B5FC8" stroke-opacity=".5" stroke-width="1.5"></polyline><line x1="0" y1="64" x2="180" y2="4" stroke="#62688A" stroke-opacity=".35" stroke-width="1" stroke-dasharray="3 3"></line></svg></sc-if>
+<div class="r1" style="position:relative"><span class="k">Usage</span><sc-if value="{{r.chip}}" hint-placeholder-val="{{false}}"><span class="tr good">23 pts under</span></sc-if></div>
+
+<sc-if value="{{r.side}}" hint-placeholder-val="{{false}}">
+<div class="mid">
+<b class="v">40%</b>
+<sc-if value="{{r.ring}}" hint-placeholder-val="{{false}}"><svg width="44" height="44" viewBox="0 0 44 44" role="img" aria-label="40% used, pace at 63%"><circle cx="22" cy="22" r="17" fill="none" stroke="#ECEAF6" stroke-width="6"></circle><circle cx="22" cy="22" r="17" fill="none" stroke="#437018" stroke-width="6" stroke-dasharray="42.7 106.8" transform="rotate(-90 22 22)"></circle><line x1="12.3" y1="30.5" x2="6.6" y2="35.8" stroke="#292D3E" stroke-width="2"></line></svg></sc-if>
+<sc-if value="{{r.sparkSide}}" hint-placeholder-val="{{false}}"><svg width="76" height="30" viewBox="0 0 76 30" role="img" aria-label="Usage over the week against even pace"><line x1="0" y1="30" x2="76" y2="0" stroke="#DCD9EC" stroke-width="1.5" stroke-dasharray="3 3"></line><polyline points="0,30 9,28 15,26 22,24 30,23 37,21 42,19 48,18" fill="none" stroke="#3B5FC8" stroke-width="2"></polyline><circle cx="48" cy="18" r="2.5" fill="#3B5FC8"></circle></svg></sc-if>
+<sc-if value="{{r.colsSide}}" hint-placeholder-val="{{false}}"><div style="display:flex;align-items:flex-end;gap:3px;width:70px;height:30px" role="img" aria-label="Usage per day"><div style="flex:1;height:30%;background:#62688A;border-radius:1px"></div><div style="flex:1;height:55%;background:#62688A;border-radius:1px"></div><div style="flex:1;height:80%;background:#62688A;border-radius:1px"></div><div style="flex:1;height:45%;background:#62688A;border-radius:1px"></div><div style="flex:1;height:60%;background:#3B5FC8;border-radius:1px"></div><div style="flex:1;height:100%;border:1px dashed #DCD9EC;border-bottom:0;box-sizing:border-box"></div><div style="flex:1;height:100%;border:1px dashed #DCD9EC;border-bottom:0;box-sizing:border-box"></div></div></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{r.stack}}" hint-placeholder-val="{{true}}">
+<div style="display:flex;flex-direction:column;gap:7px">
+<b class="v" style="position:relative">40%</b>
+<sc-if value="{{r.meter}}" hint-placeholder-val="{{false}}"><div style="position:relative;height:10px;background:#ECEAF6;border-radius:2px"><div style="width:40%;height:100%;background:#62688A"></div><div style="position:absolute;left:63%;top:-3px;width:2px;height:16px;background:#292D3E"></div></div></sc-if>
+<sc-if value="{{r.bullet}}" hint-placeholder-val="{{false}}"><div style="position:relative;height:10px;background:#ECEAF6;border-radius:3px"><div style="position:absolute;left:0;top:0;bottom:0;width:63%;background:#DCD9EC;border-radius:3px 0 0 3px"></div><div style="position:absolute;left:0;top:2px;height:6px;width:40%;background:#437018;border-radius:2px"></div><div style="position:absolute;left:63%;top:-3px;width:2px;height:16px;background:#292D3E"></div></div></sc-if>
+<sc-if value="{{r.spark}}" hint-placeholder-val="{{false}}"><svg width="100%" height="10" viewBox="0 0 180 10" preserveAspectRatio="none" role="img" aria-label="Usage over the week against even pace" style="display:block;overflow:visible"><line x1="0" y1="10" x2="180" y2="0" stroke="#DCD9EC" stroke-width="1.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"></line><polyline points="0,10 20,9.4 34,8.8 52,8 70,7.7 88,7 100,6.2 113,6" fill="none" stroke="#3B5FC8" stroke-width="2" vector-effect="non-scaling-stroke"></polyline></svg></sc-if>
+<sc-if value="{{r.split}}" hint-placeholder-val="{{false}}"><div style="position:relative;display:flex;height:10px;background:#ECEAF6;border-radius:2px"><div style="width:37%;background:#62688A"></div><div style="width:3%;background:#7E57C2"></div><div style="position:absolute;left:63%;top:-3px;width:2px;height:16px;background:#292D3E"></div></div></sc-if>
+<sc-if value="{{r.week}}" hint-placeholder-val="{{false}}"><div style="display:flex;gap:2px;height:10px"><div style="flex:1;background:#62688A;border-radius:2px"></div><div style="flex:1;background:#62688A;border-radius:2px"></div><div style="flex:1;background:linear-gradient(90deg,#62688A 80%,#ECEAF6 80%);border-radius:2px"></div><div style="flex:1;background:#ECEAF6;border-radius:2px"></div><div style="flex:1;background:#ECEAF6;border-radius:2px;box-shadow:inset 0 0 0 1.5px #292D3E"></div><div style="flex:1;background:#ECEAF6;border-radius:2px"></div><div style="flex:1;background:#ECEAF6;border-radius:2px"></div></div></sc-if>
+</div>
+</sc-if>
+
+<span class="q" style="position:relative">{{r.note}}</span>
+</div>
+</div>
+</sc-for>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":1640}}'>
+class Component extends DCLogic {
+renderVals() {
+const row = (title, text, kind, note, more = {}) => {
+  const side = ["ring", "sparkSide", "colsSide"].includes(kind);
+  return { title, text, note, side, stack: !side, [kind]: true, ...more };
+};
+const rows = [
+  row("No vis", "The baseline: key, figure, note. Every row below keeps this height.", "none", "3% off this machine, live"),
+  row("Now · meter, pace mark", "The current card, for reference.", "meter", "3% off this machine, under pace"),
+  row("1 · Bullet bar", "A band to the pace mark; the fill turns amber or red past it.", "bullet", "pace 63% · 3% off this machine"),
+  row("3 · Burn-up strip, fixed 10 px", "The spark squeezed to a strip the height of the meter, so it fits the same slot.", "spark", "dashed = even pace", { chip: true }),
+  row("4 · Split meter", "Two sources in one bar; the note becomes the legend.", "split", "37% here · 3% elsewhere"),
+  row("5 · Ring, right of the figure", "The ring takes the slot right of the figure and adds no height.", "ring", "3% off this machine, under pace"),
+  row("New A · Spark, right of the figure", "Form 3 moved into the right slot, where it gets 30 px of height.", "sparkSide", "dashed = even pace"),
+  row("New B · Day columns, right", "Seven columns of use per day; today in blue, the days left dashed.", "colsSide", "today in blue"),
+  row("New C · Week segments", "Seven segments, one per day; the ring marks today. Use reads in days, not percent.", "week", "4.4 of 7 days gone"),
+  row("New D · Background area", "A faint burn-up behind the text: no slot at all, so it suits any card.", "bg", "3% off this machine, under pace", { bg: true, stack: true, none: true }),
+];
+return { rows };
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pipeline drill-in options</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&amp;family=Hack&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#3B5FC8;text-decoration:none}a:hover{color:#292D3E;text-decoration:underline}
+.row{display:grid;grid-template-columns:820px minmax(0,1fr);gap:40px;align-items:start}
+.ot{font:600 15px 'Work Sans',sans-serif;color:#292D3E;margin:0 0 6px}
+.od{font:400 13px/1.45 'Work Sans',sans-serif;color:#4A4F6A;margin:0 0 8px}
+.card{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:12px;background:#FFFFFF;box-shadow:0 1px 2px rgb(40 36 80 / .10),0 6px 20px -8px rgb(40 36 80 / .22);font:400 13px 'Work Sans',sans-serif}
+.sh{display:flex;justify-content:space-between;align-items:baseline}
+.sh h2{margin:0;font:600 15px 'Work Sans',sans-serif;color:#292D3E}
+.aside{font:400 12px 'Work Sans',sans-serif;color:#62688A}
+.pflow{display:flex;align-items:flex-start;gap:4px;padding:4px 0}
+.pnode{flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;width:84px;text-align:center;color:inherit}
+.ring{display:flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:999px;background:#fff;font:600 15px/1 'Work Sans',sans-serif;font-variant-numeric:tabular-nums}
+.pn{font:600 13px 'Work Sans',sans-serif;color:#292D3E}
+.pt{font:400 12px 'Work Sans',sans-serif;color:#62688A;font-variant-numeric:tabular-nums;white-space:nowrap}
+.parrow{flex:1 1 0;min-width:16px;height:4px;margin-top:28px;background:#DCD9EC}
+.mono{font:400 12px 'Hack',ui-monospace,monospace;color:#4A4F6A}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat b{font:600 20px/1 'Work Sans',sans-serif;color:#292D3E;font-variant-numeric:tabular-nums}
+.stat span{font:600 12px 'Work Sans',sans-serif;color:#62688A;letter-spacing:.06em;text-transform:uppercase}
+.h4{font:600 12px 'Work Sans',sans-serif;color:#62688A;margin:0}
+.bl{display:grid;grid-template-columns:200px minmax(0,1fr) 36px;gap:6px 10px;align-items:center;font-variant-numeric:tabular-nums}
+.id{font:500 12px 'Hack',ui-monospace,monospace;color:#3B5FC8}
+</style>
+</helmet>
+<div style="width:1360px;height:1040px;box-sizing:border-box;padding:40px;background:#F4F3FA;font-family:'Work Sans',sans-serif;color:#292D3E;display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<h1 style="margin:0;font:600 26px 'Work Sans',sans-serif;letter-spacing:-0.02em">Pipeline: three drill-in options</h1>
+<p class="od">Real numbers from the day window on 2026-11-11. Build: 177 runs on 106 issues, 71 failed. Recheck: 4 runs on 3 issues, 3 failed. Land: 109 runs on 103 issues, 8 failed.</p>
+</div>
+
+<div class="row">
+<section class="card">
+<div class="sh"><h2>Pipeline</h2><span class="aside">runs / issue in the ring · p90 time under it</span></div>
+<div class="pflow">
+<sc-for list="{{nodes}}" as="n" hint-placeholder-count="6"><sc-if value="{{n.arrow}}" hint-placeholder-val="{{true}}"><span class="parrow"></span></sc-if><a class="pnode" href="#"><span class="ring" style="{{n.ringStyle}}">{{n.ring}}</span><span class="pn">{{n.name}}</span><span class="pt">{{n.time}}</span><span class="pt" style="{{n.failStyle}}">{{n.fail}}</span></a></sc-for>
+</div>
+<div style="display:grid;grid-template-columns:90px minmax(0,1fr);gap:4px 12px;padding-top:8px;border-top:1px solid #E8E6F3">
+<span class="aside">Intake</span><span class="mono">#/factory/jobs?stage=intake</span>
+<span class="aside">Queue</span><span class="mono">#/factory/jobs?stage=queue</span>
+<span class="aside">Build</span><span class="mono">#/factory/jobs?stage=implement&amp;role=worker</span>
+<span class="aside">40% failed</span><span class="mono">#/factory/jobs?stage=implement&amp;role=worker&amp;state=failed</span>
+<span class="aside">Review</span><span class="mono">#/factory/jobs?role=reviewer</span>
+<span class="aside">Land</span><span class="mono">#/factory/jobs?stage=land</span>
+</div>
+</section>
+<div>
+<p class="ot">A · Each ring links to Jobs, filtered</p>
+<p class="od">Ring and name open the Jobs page with that stage tile pressed. The failed line opens the same list with state=failed. The window and project carry over.</p>
+<p class="od">Cost: links only. The Jobs page already reads stage, role and state from the address. Review and Recheck have no stage tile there, so they filter by role alone.</p>
+</div>
+</div>
+
+<div class="row">
+<section class="card">
+<div class="sh"><h2>Pipeline</h2><span class="aside">Build selected · <a href="#">close</a></span></div>
+<div class="pflow">
+<sc-for list="{{picked}}" as="n" hint-placeholder-count="6"><sc-if value="{{n.arrow}}" hint-placeholder-val="{{true}}"><span class="parrow"></span></sc-if><a class="pnode" href="#"><span class="ring" style="{{n.ringStyle}}">{{n.ring}}</span><span class="pn">{{n.name}}</span><span class="pt">{{n.time}}</span><span class="pt" style="{{n.failStyle}}">{{n.fail}}</span></a></sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px;padding:14px;border-radius:8px;background:#F4F3FA">
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+<div class="stat"><span>Runs</span><b>177</b></div>
+<div class="stat"><span>Issues</span><b>106</b></div>
+<div class="stat"><span>Failed</span><b style="color:#C0304C">71</b></div>
+<div class="stat"><span>p90</span><b>7m 36s</b></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<p class="h4">Why lost runs ended · all stages today</p>
+<div class="bl">
+<span>Restart loop</span><div style="height:8px;background:#C2521F;border-radius:2px;width:100%"></div><span class="aside">12</span>
+<span>Checks failed</span><div style="height:8px;background:#62688A;border-radius:2px;width:91.7%"></div><span class="aside">11</span>
+<span>Reviewer sent back</span><div style="height:8px;background:#62688A;border-radius:2px;width:50%"></div><span class="aside">6</span>
+<span>Work on main, other issue</span><div style="height:8px;background:#62688A;border-radius:2px;width:16.7%"></div><span class="aside">2</span>
+<span>Needed the user</span><div style="height:8px;background:#62688A;border-radius:2px;width:16.7%"></div><span class="aside">2</span>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<p class="h4">Slowest runs</p>
+<div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 10px;font-variant-numeric:tabular-nums">
+<a class="id" href="#">a1832</a><span class="aside">dropped</span><span>33m 11s</span>
+<a class="id" href="#">a1795</a><span class="aside">dropped</span><span>30m 5s</span>
+<a class="id" href="#">a1964</a><span class="aside">dropped</span><span>30m 4s</span>
+<a class="id" href="#">a1830</a><span class="aside">passed</span><span>28m 47s</span>
+</div>
+</div>
+</div>
+<a href="#" style="font:500 13px 'Work Sans',sans-serif">All 177 build runs on Jobs →</a>
+</div>
+</section>
+<div>
+<p class="ot">B · Click selects; a panel opens inside the card</p>
+<p class="od">The ring works like a pressed metric card. A panel under the track gives the stage's four numbers, why its runs failed, its slowest runs, and a link to the full list.</p>
+<p class="od">Cost: new data. Lost-run causes exist today only per outcome (reran, dropped, failed), not per stage, so the cause list here is all stages. A per-stage split is the new work.</p>
+</div>
+</div>
+
+<div class="row">
+<section class="card" style="position:relative;padding-bottom:24px">
+<div class="sh"><h2>Pipeline</h2><span class="aside">runs / issue in the ring · p90 time under it</span></div>
+<div class="pflow">
+<sc-for list="{{hovered}}" as="n" hint-placeholder-count="6"><sc-if value="{{n.arrow}}" hint-placeholder-val="{{true}}"><span class="parrow"></span></sc-if><a class="pnode" href="#"><span class="ring" style="{{n.ringStyle}}">{{n.ring}}</span><span class="pn">{{n.name}}</span><span class="pt">{{n.time}}</span><span class="pt" style="{{n.failStyle}}">{{n.fail}}</span></a></sc-for>
+</div>
+<div style="position:absolute;left:470px;top:150px;width:260px;padding:12px 14px;border-radius:8px;background:#FFFFFF;box-shadow:0 6px 24px rgb(0 0 0 / .25);display:flex;flex-direction:column;gap:8px;font-variant-numeric:tabular-nums">
+<span style="font:600 13px 'Work Sans',sans-serif">Recheck · day</span>
+<div style="display:grid;grid-template-columns:1fr auto;gap:2px 12px">
+<span class="aside">runs on issues</span><span>4 on 3</span>
+<span class="aside">failed</span><span style="color:#C0304C;font-weight:600">3 · 75%</span>
+<span class="aside">p90</span><span>3m 29s</span>
+</div>
+<div style="display:flex;gap:12px;font-size:12px"><a href="#">Runs →</a><a href="#">Failed runs →</a></div>
+</div>
+<div style="height:96px"></div>
+</section>
+<div>
+<p class="ot">C · Hover card with two links</p>
+<p class="od">A small card opens on hover or focus. It holds the tooltip's numbers in a readable form and links to all runs and to the failed runs.</p>
+<p class="od">Cost: one popover component and the links from A. It does not work on touch, so a phone gets the links from A alone.</p>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":1040}}'>
+class Component extends DCLogic {
+renderVals() {
+const TONE = { fine: "#437018", warning: "#8A5A00", alert: "#C0304C" };
+const base = [
+  { name: "Intake", ring: "1.1", tone: "fine", time: "1m 28s", fail: "0.0% failed" },
+  { name: "Queue", ring: "wait", tone: "wait", time: "1h 20m", fail: "" },
+  { name: "Build", ring: "1.7", tone: "alert", time: "7m 36s", fail: "40% failed" },
+  { name: "Review", ring: "1.3", tone: "fine", time: "1m 17s", fail: "0.0% failed" },
+  { name: "Recheck", ring: "1.3", tone: "alert", time: "3m 29s", fail: "75% failed" },
+  { name: "Land", ring: "1.1", tone: "fine", time: "1m 31s", fail: "7.3% failed" },
+];
+const nodesWith = (pick, how) => base.map((n, i) => {
+  const c = TONE[n.tone];
+  let ringStyle = c ? `box-shadow: inset 0 0 0 5px ${c}; color: ${c}` : "box-shadow: inset 0 0 0 5px #DCD9EC; color: #62688A; font-size: 12px; font-weight: 400";
+  if (n.name === pick) ringStyle += how === "sel" ? "; outline: 3px solid #3B5FC8; outline-offset: 3px" : "; outline: 2px dashed #3B5FC8; outline-offset: 3px";
+  const failStyle = n.tone === "alert" ? `color: ${c}; font-weight: 600` : "";
+  return { ...n, arrow: i > 0, ringStyle, failStyle };
+});
+return { nodes: nodesWith(""), picked: nodesWith("Build", "sel"), hovered: nodesWith("Recheck", "hover") };
+}
+}
+</script>
+</body>
+</html>

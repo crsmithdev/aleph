@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Time bar options</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#3B5FC8}a:hover{color:#292D3E}
+.opt{display:flex;flex-direction:column;gap:10px}
+.ot{font:600 14px 'Work Sans',sans-serif;color:#292D3E;margin:0}
+.od{font:400 13px/1.4 'Work Sans',sans-serif;color:#4A4F6A;margin:0}
+.card{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:12px;background:#FFFFFF;box-shadow:0 1px 2px rgb(40 36 80 / .10),0 6px 20px -8px rgb(40 36 80 / .22)}
+.sh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.sh h2{margin:0;font:600 15px 'Work Sans',sans-serif;color:#292D3E}
+.aside{font:400 12px 'Work Sans',sans-serif;color:#62688A;font-variant-numeric:tabular-nums}
+.leg{display:flex;flex-wrap:wrap;gap:4px 16px;font:400 12px 'Work Sans',sans-serif;color:#4A4F6A;font-variant-numeric:tabular-nums}
+.leg span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:2px}
+.leg em{font-style:normal;color:#62688A}
+.lab{display:flex;align-items:center;gap:6px;padding:0 10px;overflow:hidden;white-space:nowrap;color:#fff;font:500 12px 'Work Sans',sans-serif;font-variant-numeric:tabular-nums}
+.lab em{font-style:normal;opacity:.8}
+.cap{font:600 12px 'Work Sans',sans-serif;color:#62688A;letter-spacing:.06em;text-transform:uppercase}
+.num{font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="width:1360px;height:1180px;box-sizing:border-box;padding:40px;background:#F4F3FA;font-family:'Work Sans',sans-serif;color:#292D3E;display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<h1 style="margin:0;font:600 26px 'Work Sans',sans-serif;letter-spacing:-0.02em">Agent Time: five polish options</h1>
+<p class="od">Same data in each: day window, 14.0h of agent time. Left of the split reached main (9.9h, 71%); right did not (4.1h, 29%).</p>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:36px 40px">
+
+<div class="opt">
+<p class="ot">Now</p>
+<p class="od">Two flex groups with a gap, a 28 px bar, a legend under it.</p>
+<section class="card">
+<div class="sh"><h2>Agent Time</h2></div>
+<div style="display:flex;height:28px">
+<div style="flex:71;display:flex;gap:2px"><div style="flex:46;background:#3B4A36;border-radius:6px 0 0 6px"></div><div style="flex:25;background:#5C7052"></div></div>
+<div style="width:3px;margin:0 4px;background:#DCD9EC"></div>
+<div style="flex:29;display:flex;gap:2px"><div style="flex:9;background:#9A6347"></div><div style="flex:12;background:#BC5252"></div><div style="flex:8;background:#8A4F7A;border-radius:0 6px 6px 0"></div></div>
+</div>
+<div class="leg"><span><i style="background:#3B4A36"></i>landed <em>6.4h 46%</em></span><span><i style="background:#5C7052"></i>returned <em>3.5h 25%</em></span><span><i style="background:#9A6347"></i>failed <em>1.3h 9%</em></span><span><i style="background:#BC5252"></i>reran <em>1.7h 12%</em></span><span><i style="background:#8A4F7A"></i>dropped <em>1.1h 8%</em></span></div>
+</section>
+</div>
+
+<div class="opt">
+<p class="ot">A · Labelled segments with group brackets</p>
+<p class="od">Labels sit inside each wide segment, so the legend goes. A bracket under each group names it with its sum. The aside gives the total.</p>
+<section class="card">
+<div class="sh"><h2>Agent Time</h2><span class="aside">14.0h · 71% reached main</span></div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;height:40px;gap:2px">
+<div class="lab" style="flex:46;background:#3B4A36;border-radius:8px 0 0 8px">landed <em>6.4h</em></div>
+<div class="lab" style="flex:25;background:#5C7052">returned <em>3.5h</em></div>
+<div style="width:6px"></div>
+<div class="lab" style="flex:9;background:#9A6347;padding:0 6px" title="failed 1.3h">1.3h</div>
+<div class="lab" style="flex:12;background:#BC5252;padding:0 6px">reran <em>1.7h</em></div>
+<div class="lab" style="flex:8;background:#8A4F7A;border-radius:0 8px 8px 0;padding:0 6px" title="dropped 1.1h">1.1h</div>
+</div>
+<div style="display:flex;gap:8px">
+<div style="flex:71;border-top:2px solid #437018;padding-top:4px;font:500 12px 'Work Sans',sans-serif;color:#437018" class="num">reached main · 9.9h</div>
+<div style="flex:29;border-top:2px solid #C0304C;padding-top:4px;font:500 12px 'Work Sans',sans-serif;color:#C0304C" class="num">lost · 4.1h</div>
+</div>
+</div>
+</section>
+</div>
+
+<div class="opt">
+<p class="ot">B · Two rows on one scale</p>
+<p class="od">Kept and lost each get a row on a shared track, so the lost row reads as a length against the whole.</p>
+<section class="card">
+<div class="sh"><h2>Agent Time</h2><span class="aside">14.0h</span></div>
+<div style="display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px 12px;align-items:center">
+<div><div style="font:600 13px 'Work Sans',sans-serif">Reached main</div><div class="aside">9.9h · 71%</div></div>
+<div style="display:flex;height:22px;background:#ECEAF6;border-radius:4px;overflow:hidden;gap:2px"><div style="width:46%;background:#3B4A36"></div><div style="width:25%;background:#5C7052"></div></div>
+<div><div style="font:600 13px 'Work Sans',sans-serif">Lost</div><div class="aside">4.1h · 29%</div></div>
+<div style="display:flex;height:22px;background:#ECEAF6;border-radius:4px;overflow:hidden;gap:2px"><div style="width:9%;background:#9A6347"></div><div style="width:12%;background:#BC5252"></div><div style="width:8%;background:#8A4F7A"></div></div>
+</div>
+<div class="leg"><span><i style="background:#3B4A36"></i>landed <em>6.4h</em></span><span><i style="background:#5C7052"></i>returned <em>3.5h</em></span><span><i style="background:#9A6347"></i>failed <em>1.3h</em></span><span><i style="background:#BC5252"></i>reran <em>1.7h</em></span><span><i style="background:#8A4F7A"></i>dropped <em>1.1h</em></span></div>
+</section>
+</div>
+
+<div class="opt">
+<p class="ot">C · Diverging from a zero line</p>
+<p class="od">Kept time grows left and lost time grows right from one centre line. Both halves use the same scale.</p>
+<section class="card">
+<div class="sh"><h2>Agent Time</h2><span class="aside">14.0h</span></div>
+<div style="display:flex;justify-content:space-between" class="aside"><span>← reached main 9.9h</span><span>lost 4.1h →</span></div>
+<div style="display:flex;align-items:stretch;height:30px">
+<div style="flex:1;display:flex;justify-content:flex-end;gap:2px"><div style="width:35.2%;background:#5C7052;border-radius:6px 0 0 6px"></div><div style="width:64.8%;background:#3B4A36"></div></div>
+<div style="width:2px;margin:-6px 4px;background:#292D3E"></div>
+<div style="flex:1;display:flex;gap:2px"><div style="width:12.7%;background:#9A6347"></div><div style="width:16.9%;background:#BC5252"></div><div style="width:11.3%;background:#8A4F7A;border-radius:0 6px 6px 0"></div></div>
+</div>
+<div class="leg"><span><i style="background:#3B4A36"></i>landed <em>6.4h</em></span><span><i style="background:#5C7052"></i>returned <em>3.5h</em></span><span><i style="background:#9A6347"></i>failed <em>1.3h</em></span><span><i style="background:#BC5252"></i>reran <em>1.7h</em></span><span><i style="background:#8A4F7A"></i>dropped <em>1.1h</em></span></div>
+</section>
+</div>
+
+<div class="opt">
+<p class="ot">D · Headline share, thin bar, ledger legend</p>
+<p class="od">The kept share becomes the figure. The bar thins to 10 px, and the legend becomes a two-group table with aligned columns.</p>
+<section class="card">
+<div class="sh"><h2>Agent Time</h2><span class="aside">9.9h of 14.0h</span></div>
+<div style="display:flex;align-items:baseline;gap:8px"><b style="font:600 32px/1 'Work Sans',sans-serif;letter-spacing:-0.02em" class="num">71%</b><span class="aside">reached main</span></div>
+<div style="display:flex;height:10px;gap:2px"><div style="flex:46;background:#3B4A36;border-radius:999px 0 0 999px"></div><div style="flex:25;background:#5C7052"></div><div style="width:4px"></div><div style="flex:9;background:#9A6347"></div><div style="flex:12;background:#BC5252"></div><div style="flex:8;background:#8A4F7A;border-radius:0 999px 999px 0"></div></div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;font:400 12px 'Work Sans',sans-serif;color:#4A4F6A" class="num">
+<div style="display:grid;grid-template-columns:1fr auto auto;gap:4px 12px">
+<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3B4A36;margin-right:6px"></i>landed</span><span>6.4h</span><span style="color:#62688A">46%</span>
+<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#5C7052;margin-right:6px"></i>returned</span><span>3.5h</span><span style="color:#62688A">25%</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr auto auto;gap:4px 12px">
+<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#9A6347;margin-right:6px"></i>failed</span><span>1.3h</span><span style="color:#62688A">9%</span>
+<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#BC5252;margin-right:6px"></i>reran</span><span>1.7h</span><span style="color:#62688A">12%</span>
+<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#8A4F7A;margin-right:6px"></i>dropped</span><span>1.1h</span><span style="color:#62688A">8%</span>
+</div>
+</div>
+</section>
+</div>
+
+<div class="opt">
+<p class="ot">E · Unit squares, 15 minutes each</p>
+<p class="od">56 squares make 14.0h. Counts are easy to read, and the lost squares sit together at the end.</p>
+<section class="card">
+<div class="sh"><h2>Agent Time</h2><span class="aside">1 square = 15 min</span></div>
+<div style="display:grid;grid-template-columns:repeat(28,minmax(0,1fr));gap:3px">
+<sc-for list="{{cells}}" as="c" hint-placeholder-count="56"><div style="aspect-ratio:1;border-radius:3px;background:{{c}}"></div></sc-for>
+</div>
+<div class="leg"><span><i style="background:#3B4A36"></i>landed <em>6.4h</em></span><span><i style="background:#5C7052"></i>returned <em>3.5h</em></span><span><i style="background:#9A6347"></i>failed <em>1.3h</em></span><span><i style="background:#BC5252"></i>reran <em>1.7h</em></span><span><i style="background:#8A4F7A"></i>dropped <em>1.1h</em></span></div>
+</section>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":1180}}'>
+class Component extends DCLogic {
+renderVals() {
+const runs = [["#3B4A36", 26], ["#5C7052", 14], ["#9A6347", 5], ["#BC5252", 7], ["#8A4F7A", 4]];
+const cells = [];
+runs.forEach(([c, n]) => { for (let i = 0; i < n; i++) cells.push(c); });
+return { cells };
+}
+}
+</script>
+</body>
+</html>
