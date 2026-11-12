@@ -93,8 +93,6 @@ export const jobView = (name: string) => call(() => { const j = findJob(name); r
 export const dispatch = (extra: Record<string, string> = {}) => cli(["dispatch"], extra);
 /** `aleph run <name> -- <argv>`, from base: the started run, then the unit's exit code. */
 export const run = (name: string, argv: string[]) => cli(["run", name, "--", ...argv]);
-/** `aleph tick`: the JSON it prints. */
-export const tick = async (extra: Record<string, string> = {}): Promise<any> => (await cli(["tick"], extra)).json;
 /** `aleph report`: the text it prints. */
 export const reportText = async (): Promise<string> => (await cli(["report"])).stdout.slice(0, -1);
 
