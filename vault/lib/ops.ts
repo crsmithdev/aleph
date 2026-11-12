@@ -1,5 +1,5 @@
 /**
- * The ops of the `vault` command: vault/cli.ts passes its argv to `run`. Each op prints JSON on stdout and findings
+ * The ops of `aleph memory`: jobs/commands.ts passes its argv to `run`. Each op prints JSON on stdout and findings
  * on stderr, and ends with `Exit` for a refusal, which the CLI turns into its exit code.
  */
 import { readJsonOr } from "../../lib/json.ts";
@@ -59,7 +59,7 @@ function warn(findings: Finding[]): void {
   for (const f of findings) console.error(`warn ${f.rule} ${f.note}: ${f.detail}`);
 }
 function requireVault(): void {
-  if (!existsSync(join(root, "Home.md"))) { console.error(`no vault at ${root}; run: vault init`); exit(1); }
+  if (!existsSync(join(root, "Home.md"))) { console.error(`no vault at ${root}; run: aleph memory init`); exit(1); }
 }
 
 function appendDaily(line: string): void { writeDaily(root, line); }
@@ -158,7 +158,7 @@ async function write(): Promise<void> {
   requireVault();
   const src = positional[0];
   const why = flag("why");
-  if (!src || !why) { console.error('usage: vault write <file.md> --why "<one line>"'); exit(1); }
+  if (!src || !why) { console.error('usage: aleph memory write <file.md> --why "<one line>"'); exit(1); }
   const srcPath = resolve(src);
   if (!existsSync(srcPath)) { console.error(`no such file: ${srcPath}`); exit(1); }
   const inside = !relative(root, srcPath).startsWith("..");
@@ -272,7 +272,7 @@ async function recall(): Promise<void> {
   const args = rest.filter((a) => a !== "--episodes");
   const q = args.filter((a, i) => !a.startsWith("--") && args[i - 1]?.startsWith("--") !== true).join(" ").trim().toLowerCase();
   const scope = flag("scope");
-  if (!q && !scope) { console.error('usage: vault recall [--episodes] <query> [--scope <name>]  |  vault recall [--episodes] --scope <name>'); exit(1); }
+  if (!q && !scope) { console.error('usage: aleph memory recall [--episodes] <query> [--scope <name>]  |  aleph memory recall [--episodes] --scope <name>'); exit(1); }
   // `--scope` alone lists a project's notes: at 165 notes "what do we know
   // about cloudchamber" is a real question, and ranking every note by one word
   // could not answer it.
@@ -318,7 +318,7 @@ const noteName = (p: string) => basename(p).replace(/\.md$/, "");
 async function misses(): Promise<void> {
   const raw = flag("days");
   const days = raw === undefined ? 7 : Number(raw);
-  if (!(days > 0)) { console.error("usage: vault misses [--days N]"); exit(1); }
+  if (!(days > 0)) { console.error("usage: aleph memory misses [--days N]"); exit(1); }
   const lf = langfuse();
   if (!lf) { console.error("no Langfuse keys"); exit(1); }
   const to = new Date();
@@ -409,13 +409,13 @@ async function adopt(): Promise<void> {
   requireVault();
   const src = positional[0];
   const why = flag("why");
-  if (!src || !why) { console.error('usage: vault adopt <path-inside-the-vault> --why "<one line>"'); exit(1); }
+  if (!src || !why) { console.error('usage: aleph memory adopt <path-inside-the-vault> --why "<one line>"'); exit(1); }
   const path = resolve(src);
   if (!existsSync(path)) { console.error(`no such file: ${path}`); exit(1); }
   const rel = relative(root, path);
-  if (rel.startsWith("..")) { console.error(`${src} is outside the vault; adopt is for a note already in it — use: vault write`); exit(1); }
+  if (rel.startsWith("..")) { console.error(`${src} is outside the vault; adopt is for a note already in it — use: aleph memory write`); exit(1); }
   if (!rel.startsWith("wiki/")) { console.error(`${rel} is not a wiki note; adopt only takes one`); exit(1); }
-  if (tracked(root, path)) { console.error(`${rel} is already tracked; rewrite it with: vault write`); exit(1); }
+  if (tracked(root, path)) { console.error(`${rel} is already tracked; rewrite it with: aleph memory write`); exit(1); }
 
   const note = readNote(path, root);
   const folder = folderFor(String(note.fm.kind ?? ""));
@@ -444,7 +444,7 @@ async function renameScopeOp(): Promise<void> {
   requireVault();
   const [from, to] = positional;
   const apply = has("apply");
-  if (!from || !to) { console.error("usage: vault rename-scope <old> <new> [--apply]"); exit(1); }
+  if (!from || !to) { console.error("usage: aleph memory rename-scope <old> <new> [--apply]"); exit(1); }
   const notes = await loadVault(root);
   const scopes = [...new Set(wikiNotes(notes).map((n) => String(n.fm.scope)))].sort();
   if (!scopes.includes(from)) refuse([{ note: from, rule: "scope", detail: `no note has scope ${from}; the vault uses: ${scopes.join(", ")}` }]);
@@ -474,7 +474,7 @@ async function archive(): Promise<void> {
   requireVault();
   const title = positional.join(" ").trim();
   const why = flag("why");
-  if (!title || !why) { console.error('usage: vault archive "<title>" --why "<one line>"'); exit(1); }
+  if (!title || !why) { console.error('usage: aleph memory archive "<title>" --why "<one line>"'); exit(1); }
   const notes = await loadVault(root);
   const hit = wikiNotes(notes).find((n) => n.title.toLowerCase() === title.toLowerCase());
   if (!hit) refuse([{ note: title, rule: "archive", detail: "no live wiki note has that title" }]);
@@ -504,7 +504,7 @@ async function del(): Promise<void> {
   requireVault();
   const title = positional.join(" ").trim();
   const why = flag("why");
-  if (!title || !why) { console.error('usage: vault delete "<title>" --why "<one line>"'); exit(1); }
+  if (!title || !why) { console.error('usage: aleph memory delete "<title>" --why "<one line>"'); exit(1); }
   const notes = await loadVault(root);
   const hit = wikiNotes(notes).find((n) => n.title.toLowerCase() === title.toLowerCase());
   if (!hit) refuse([{ note: title, rule: "delete", detail: "no live wiki note has that title" }]);
@@ -520,7 +520,7 @@ async function del(): Promise<void> {
 async function compile(): Promise<void> {
   requireVault();
   const date = positional[0] ?? today();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { console.error("usage: vault compile [YYYY-MM-DD]"); exit(1); }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { console.error("usage: aleph memory compile [YYYY-MM-DD]"); exit(1); }
   const lf = langfuse();
   const traces = lf ? await traceDigest(lf, date) : { text: "", error: "no Langfuse keys" };
   const handoffs = handoffsFor(handoffsDir(), date);
@@ -554,7 +554,7 @@ export async function run(argv: string[]): Promise<void> {
     case "compile": await compile(); break;
     case "misses": await misses(); break;
     default:
-      console.error("usage: vault <init|write <file> --why <text>|recall [--episodes] <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]>");
+      console.error("usage: aleph memory <init|write <file> --why <text>|recall [--episodes] <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]>");
       exit(2);
   }
 }

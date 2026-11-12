@@ -506,7 +506,7 @@ describe("vault-context hook", () => {
     expect(ctx).toContain("- Chris, Pacific");
     const kept = ctx.split("\n").filter((l) => /^- x+ \[\[Note \d+\]\]$/.test(l));
     expect(kept.length).toBeGreaterThan(10);
-    expect(ctx).toContain(`${200 - kept.length} more core lines: vault recall --scope aleph`);
+    expect(ctx).toContain(`${200 - kept.length} more core lines: aleph memory recall --scope aleph`);
   });
   test("no vault, no output", async () => {
     expect(await start(join(vault, "missing"))).toBe("");

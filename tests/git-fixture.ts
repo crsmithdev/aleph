@@ -87,6 +87,6 @@ export const factoryRepos = (dest: string): void => fixture("factory", (dir) => 
 
 /** A new vault at `dest`, as `vault init` lays it out and commits it. */
 export const vault = (dest: string): void => fixture("vault", (dir) => {
-  const p = Bun.spawnSync(["bun", join(import.meta.dir, "..", "vault", "cli.ts"), "init"], { env: { ...process.env, ...gitEnv, ALEPH_VAULT: dir }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawnSync(["bun", join(import.meta.dir, "..", "jobs", "cli.ts"), "memory", "init"], { env: { ...process.env, ...gitEnv, ALEPH_VAULT: dir }, stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`vault init: ${p.stderr}`);
 }, dest);

@@ -10,9 +10,9 @@ const NOW = Date.parse("2026-11-04T12:00:00Z");
 beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 
-// Each op runs in-process through `run`, as vault/cli.ts runs it. A test marked as the CLI test of its op spawns
-// vault/cli.ts instead, for the op's wiring.
-const CLI = join(import.meta.dir, "..", "cli.ts");
+// Each op runs in-process through `run`, as `aleph memory` runs it. A test marked as the CLI test of its op spawns
+// `bun jobs/cli.ts memory` instead, for the op's wiring.
+const CLI = join(import.meta.dir, "..", "..", "jobs", "cli.ts");
 let base: string;
 let vault: string;
 let drafts: string;
@@ -55,9 +55,9 @@ async function run(env: Record<string, string>, ...args: string[]): Promise<Resu
   return parsed(code, stdout, stderr);
 }
 const runAsync = run;
-/** `vault <args>` as a process: the CLI test of an op. */
+/** `aleph memory <args>` as a process: the CLI test of an op. */
 async function spawnRun(env: Record<string, string>, ...args: string[]): Promise<Result> {
-  const p = Bun.spawn(["bun", CLI, ...args], { env: { ...process.env, ...testEnv, ALEPH_JUDGE: "haiku", ...env }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(["bun", CLI, "memory", ...args], { env: { ...process.env, ...testEnv, ALEPH_JUDGE: "haiku", ...env }, stdout: "pipe", stderr: "pipe" });
   const code = await p.exited;
   return parsed(code, await new Response(p.stdout).text(), await new Response(p.stderr).text());
 }
@@ -88,7 +88,7 @@ afterEach(() => rmSync(base, { recursive: true, force: true }));
 
 describe("init", () => {
   test("lays down the layout, config and first commit", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts, on a path no vault holds yet.
+    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`, on a path no vault holds yet.
     vault = join(base, "fresh");
     const r = (await spawnCli("init"));
     expect(r.code).toBe(0);
@@ -106,13 +106,15 @@ describe("init", () => {
     expect((await cli("init")).code).toBe(1);
   });
   test("other commands refuse without a vault", async () => {
-    expect((await run({ ALEPH_VAULT: join(base, "nowhere") }, "lint")).code).toBe(1);
+    const r = await run({ ALEPH_VAULT: join(base, "nowhere") }, "lint");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("run: aleph memory init");
   });
 });
 
 describe("write", () => {
   test("files by kind, logs the day, sets health, commits with the trailer", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
+    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     const r = (await spawnCli("write", note("Stop Hook Block Shape"), "--why", "measured three shapes"));
     expect(r.code).toBe(0);
     expect(r.json).toMatchObject({ op: "write", title: "Stop Hook Block Shape", path: "wiki/gotchas/Stop Hook Block Shape.md", archived: [] });
@@ -245,7 +247,7 @@ describe("write", () => {
 
 describe("lint", () => {
   test("reports warnings as JSON, exit 0 when nothing refuses, and sets health", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
+    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     const r = (await spawnCli("lint"));
     expect(r.json.refuse).toEqual([]);
     expect(r.code).toBe(0);
@@ -440,7 +442,7 @@ describe("push", () => {
 
 describe("rename-scope", () => {
   test("read-only by default; --apply moves every note and touches no other line", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
+    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     (await cli("write", note("Old Scope One", { scope: "voice-bridge-mcp" }), "--why", "x"));
     (await cli("write", note("Old Scope Two", { scope: "voice-bridge-mcp" }), "--why", "x"));
     const paths = ["Old Scope One", "Old Scope Two"].map((t) => join(vault, `wiki/gotchas/${t}.md`));
@@ -478,7 +480,7 @@ describe("rename-scope", () => {
 
 describe("adopt", () => {
   test("commits an in-vault draft, forgiving the template but not the schema", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
+    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     const rel = "wiki/decisions/Drafted In Place.md";
     const p = join(vault, rel);
     // A real note with real sources, in the looser body shape: no `as of`
@@ -517,6 +519,7 @@ describe("adopt", () => {
     const outside = (await cli("adopt", note("Outside The Vault"), "--why", "x"));
     expect(outside.code).toBe(1);
     expect(outside.stderr).toContain("outside the vault");
+    expect(outside.stderr).toContain("use: aleph memory write");
     (await cli("archive", "Drafted In Place", "--why", "test fixture"));
     expect(gitStatus()).toBe("");
   });
@@ -541,7 +544,7 @@ describe("relative dates", () => {
 
 describe("archive", () => {
   test("retires a note with no replacement, drops its Home line, names its callers", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
+    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     (await cli("write", note("Retired Subject", { kind: "decision" }), "--why", "x"));
     const home = join(vault, "Home.md");
     expect(readFileSync(home, "utf8")).toContain("- [[Retired Subject]]");
@@ -600,7 +603,7 @@ describe("archive", () => {
     const r = (await cli("lint"));
     const w = r.json.warn.find((f: any) => f.rule === "deleted" && f.note === "Deleted By Hand");
     expect(w.detail).toContain("tracked but gone from disk");
-    expect(w.detail).toContain('vault archive "Deleted By Hand"');
+    expect(w.detail).toContain('aleph memory archive "Deleted By Hand"');
     // A tracked non-markdown file is not a deleted note.
     expect(r.json.warn.filter((f: any) => f.rule === "deleted").map((f: any) => f.note)).toEqual(["Deleted By Hand"]);
     Bun.spawnSync(["git", "-C", vault, "checkout", "--", "wiki/gotchas/Deleted By Hand.md"]);
@@ -612,7 +615,7 @@ describe("archive", () => {
     writeFileSync(p, readFileSync(note("Never Written"), "utf8"));
     const w = (await cli("lint")).json.warn.find((f: any) => f.rule === "untracked" && f.note === "Never Written");
     expect(w.detail).toContain("git has never seen it");
-    expect(w.detail).toContain('vault write "wiki/gotchas/Never Written.md"');
+    expect(w.detail).toContain('aleph memory write "wiki/gotchas/Never Written.md"');
     // Putting it through the gate clears the warning.
     expect((await cli("write", p, "--why", "reconciled")).code).toBe(0);
     expect((await cli("lint")).json.warn.filter((f: any) => f.rule === "untracked")).toEqual([]);
@@ -681,7 +684,7 @@ describe("recall", () => {
     expect(lines()).toHaveLength(2);
   });
   test("ranks title, alias, contains, body; empty list otherwise", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
+    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     (await cli("write", note("Verify Gate", { aliases: "[stop gate]" }, "**Claim.** judged at Stop, as of 2026-09-04.\n\n## Details\nnested claude -p haiku\n\n## Evidence\n\n## Related\n[[Home]]\n"), "--why", "x"));
     expect((await spawnCli("recall", "verify gate")).json[0]).toMatchObject({ title: "Verify Gate", rank: 0 });
     expect((await cli("recall", "stop gate")).json[0]).toMatchObject({ title: "Verify Gate", rank: 1 });
@@ -761,7 +764,7 @@ describe("compile", () => {
   const env = (port: number | undefined) => ({ ALEPH_VAULT: vault, LANGFUSE_BASE_URL: `http://127.0.0.1:${port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
 
   test("digests turns, handoffs, daily note and cited traces", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
+    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     expect((await cli("write", note("Cites A Trace"), "--why", "x")).code).toBe(0);
     const r = await spawnRun(env(server.port), "compile", "2026-09-04");
     expect(r.code).toBe(0);
@@ -933,7 +936,7 @@ describe("docs/vault.md", () => {
     const commands = table.split("\n").filter((l) => /^\| `/.test(l)).map((l) => l.match(/^\| `([\w-]+)/)![1]);
     expect(commands).toContain("init");
     const usage = (await run({ ALEPH_VAULT: vault }, "no-such-command")).stderr;
-    const listed = usage.replace(/^usage: vault </, "").replace(/>\s*$/, "").split("|").map((s) => s.trim().split(" ")[0]);
+    const listed = usage.replace(/^usage: aleph memory </, "").replace(/>\s*$/, "").split("|").map((s) => s.trim().split(" ")[0]);
     for (const c of commands) expect(listed).toContain(c);
   });
 });

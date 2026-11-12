@@ -4,7 +4,7 @@ Maintenance ops of [vault](SKILL.md). Same script as the one SKILL.md names.
 
 ## rename-scope
 
-`cli.ts rename-scope <old> <new>` is read-only; `--apply` writes. A rename
+`aleph memory rename-scope <old> <new>` is read-only; `--apply` writes. A rename
 moves the repo and leaves every note behind, so the vault collected five
 scope names for two projects. It rewrites only the `scope:` line, one commit
 for the batch. An unknown scope refuses and names the ones that exist.
@@ -18,7 +18,7 @@ decision 180, concept and entity 365.
 
 ## archive
 
-`cli.ts archive "<title>" --why "<one line>"` retires a note when the
+`aleph memory archive "<title>" --why "<one line>"` retires a note when the
 subject is over and no replacement exists. It moves the file to `archive/`
 with a reason, regenerates Home, and names every note that links to it.
 Nothing is deleted and the note stays a link target. Use `supersedes` in a
@@ -33,7 +33,7 @@ has never seen, because it was drafted in place and never went through
 
 ## adopt
 
-`cli.ts adopt <path-inside-the-vault> --why "<one line>"` commits a note
+`aleph memory adopt <path-inside-the-vault> --why "<one line>"` commits a note
 that is already in `wiki/` but that git has never seen. Use it for a draft
 written in place, or a note Chris typed in Obsidian.
 
@@ -46,7 +46,7 @@ Use `write` instead for a new note, or to rewrite a tracked one.
 
 ## lint
 
-`cli.ts lint` prints refusals and warnings for the whole vault, regenerates
+`aleph memory lint` prints refusals and warnings for the whole vault, regenerates
 Home and sets its health line. Run it after a batch of writes or when the
 health line shows dangling links. It also warns `relative-date` for a body
 that says "yesterday" instead of a date. Refusals are structural: schema, folder,
@@ -54,7 +54,7 @@ duplicate title, dangling link, budget. A broken template warns instead,
 because a note on disk cannot be un-written; past one note the warnings
 collapse to a count, and `lint --template` names them.
 
-`cli.ts lint --fix` repairs frontmatter and never the body: it adds a
+`aleph memory lint --fix` repairs frontmatter and never the body: it adds a
 missing `supersedes: []`, wraps a list key holding a bare scalar, and fills a
 missing `updated` with the date the note entered git. It never adds a `## Evidence` heading or an
 `as of` marker; those are claims about the world, and a heading that says

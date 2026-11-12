@@ -6,8 +6,8 @@ import { withEnv, withServer } from "./test-server.ts";
 import { withAlias, withCore, withLink, withoutLink } from "./api/memory.ts";
 import { updater } from "./updater.ts";
 
-// The Memory page's search and writes against a real vault: `vault init`, then notes through `vault write`.
-const CLI = join(import.meta.dir, "..", "vault", "cli.ts");
+// The Memory page's search and writes against a real vault: `aleph memory init`, then notes through `aleph memory write`.
+const CLI = join(import.meta.dir, "..", "jobs", "cli.ts");
 const day = "2026-11-04";  // write checks only the date format, so a fixed one serves
 let base: string, vault: string, hand: string, eps: string, restore: () => void, stop: () => void;
 let at: (p: string, init?: RequestInit) => Promise<Response>;
@@ -21,7 +21,7 @@ const gitLog = () => Bun.spawnSync(["git", "-C", vault, "log", "--format=%s"], {
 function write(title: string, body: string, kind = "gotcha") {
   const f = join(base, `${title}.md`);
   writeFileSync(f, `---\nkind: ${kind}\nscope: aleph\nconfidence: measured\nupdated: ${day}\nsupersedes: []\nsources: [trace:abc123]\n---\n${body}`);
-  const p = Bun.spawnSync(["bun", CLI, "write", f, "--why", "fixture"], { env: process.env, stderr: "pipe" });
+  const p = Bun.spawnSync(["bun", CLI, "memory", "write", f, "--why", "fixture"], { env: process.env, stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(p.stderr.toString());
 }
 const body = (claim: string, related = "[[Home]]") => `**Claim.** ${claim}, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n${related}\n`;
@@ -37,7 +37,7 @@ beforeAll(async () => {
     ALEPH_SKILLS_DIR: join(base, "skills"), ALEPH_CLAUDE_SETTINGS: join(base, "settings.json"),
     LANGFUSE_BASE_URL: "http://127.0.0.1:9", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "",
     GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
-  Bun.spawnSync(["bun", CLI, "init"], { env: process.env });
+  Bun.spawnSync(["bun", CLI, "memory", "init"], { env: process.env });
   write("Land From The Main Checkout", body("A squash merge from inside the worktree lands nothing"));
   write("Worktree Serve Needs A Port", body("A worktree serve needs its own port", "[[Land From The Main Checkout]]"));
   write("Unrelated Fact", body("Bun runs the tests"), "decision");

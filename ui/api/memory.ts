@@ -22,7 +22,7 @@ import { backlinks, coreNotes, KINDS, linkTargets, links, lintVault, loadVault, 
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 
-const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
+const CLI = join(import.meta.dir, "..", "..", "jobs", "cli.ts");
 const scopeOf = (n: Note) => String(n.fm.scope ?? "");
 const inScope = (project: string | null) => (n: Note) => memoryIn(scopeOf(n), project);
 const count = (xs: string[]) => Object.fromEntries([...new Set(xs)].sort().map((x) => [x, xs.filter((y) => y === x).length]));
@@ -67,7 +67,7 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
   }).slice(0, 20);
 }
 
-/** `vault misses --days 7`'s JSON, or null when it fails (no Langfuse keys, offline). It runs in a subprocess that reads
+/** `aleph memory misses --days 7`'s JSON, or null when it fails (no Langfuse keys, offline). It runs in a subprocess that reads
  * Langfuse for about 45 s, so it declares the source `usage`: one run serves every build until the 10 min usage poll,
  * and the 30 s Langfuse poll does not hold the build Worker with it. */
 const misses = (): Promise<unknown | null> => later("memory:misses", ["usage"], runMisses, null);
@@ -76,7 +76,7 @@ const misses = (): Promise<unknown | null> => later("memory:misses", ["usage"], 
 const vaultNotes = (root: string): Promise<Note[]> => once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root));
 async function runMisses(): Promise<unknown | null> {
   try {
-    const p = Bun.spawn(["bun", CLI, "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 60_000 });
+    const p = Bun.spawn(["bun", CLI, "memory", "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 60_000 });
     const text = await new Response(p.stdout).text();
     if ((await p.exited) !== 0) return null;
     return JSON.parse(text);
@@ -264,8 +264,8 @@ async function note(raw: string, url: URL): Promise<Response> {
 
 const WHY = "edited on the Memory page";
 
-/** `vault <args>` through ui/action.ts. */
-const vault = (...args: string[]): Promise<unknown> => aleph(args, { cli: "vault" });
+/** `aleph memory <args>` through ui/action.ts. */
+const vault = (...args: string[]): Promise<unknown> => aleph(["memory", ...args]);
 
 /** A note's text, rewritten by `change`, through `vault write`. */
 async function rewrite(title: string, change: (text: string) => string, why = WHY): Promise<unknown> {

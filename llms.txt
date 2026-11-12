@@ -2,7 +2,7 @@
 
 > A personal Claude Code plugin: skills for planning, design, testing, writing and memory; hooks that trace every turn to Langfuse, guard main and judge whether a turn verified what it claims; an Obsidian memory vault; an issue store; and a factory that builds issues and lands them on main. It runs on Bun.
 
-The `aleph` CLI (jobs/cli.ts) is the entry point for issues and the factory. `aleph-ui` (ui/server.ts) serves the web UI. `bun vault/cli.ts` runs the vault. Write issues only through `aleph issue`, and vault notes only through `vault/cli.ts write`.
+The `aleph` CLI (jobs/cli.ts) is the entry point for issues and the factory. `aleph-ui` (ui/server.ts) serves the web UI. `aleph memory` runs the vault. Write issues only through `aleph issue`, and vault notes only through `aleph memory write`.
 
 ## Documentation
 

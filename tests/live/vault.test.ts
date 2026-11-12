@@ -10,13 +10,13 @@ import { join } from "node:path";
 
 const live = process.env.ALEPH_LIVE === "1";
 const describeLive = live ? describe : describe.skip;
-const CLI = join(import.meta.dir, "../../vault/cli.ts");
+const CLI = join(import.meta.dir, "../../jobs/cli.ts");
 
 describeLive("live vault", () => {
   let vault: string;
   beforeAll(() => {
     vault = join(mkdtempSync(join(tmpdir(), "aleph-livevault-")), "vault");
-    const p = Bun.spawnSync(["bun", CLI, "init"], { env: { ...process.env, ALEPH_VAULT: vault }, stdout: "pipe", stderr: "pipe" });
+    const p = Bun.spawnSync(["bun", CLI, "memory", "init"], { env: { ...process.env, ALEPH_VAULT: vault }, stdout: "pipe", stderr: "pipe" });
     if (p.exitCode !== 0) throw new Error(p.stderr.toString());
   });
   afterAll(() => rmSync(join(vault, ".."), { recursive: true, force: true }));

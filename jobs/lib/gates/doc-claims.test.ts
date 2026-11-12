@@ -53,15 +53,15 @@ describe("a doc that does not match fails, quoting the claim", () => {
   });
 
   test("a --flag of a vault command that the vault code does not read, in the Commands table or a code block", () => {
-    const doc = (a: string, b: string, c: string) => `## Commands\n\n| Command | Does |\n|---|---|\n| \`recall [${a}] query [${b} name]\` | Ranks |\n\n\`\`\`\nbun vault/cli.ts lint ${c}\n\`\`\`\n`;
+    const doc = (a: string, b: string, c: string) => `## Commands\n\n| Command | Does |\n|---|---|\n| \`recall [${a}] query [${b} name]\` | Ranks |\n\n\`\`\`\naleph memory lint ${c}\n\`\`\`\n`;
     expect(one(doc("--nosuch", "--scope", "--nosuch"))).toEqual([
       expect.stringMatching(/^docs\/x\.md:5: "recall \[--nosuch\] query \[--scope name\]" uses --nosuch, which the vault source does not define$/),
-      expect.stringMatching(/^docs\/x\.md:8: "vault\/cli\.ts lint --nosuch" uses --nosuch, which the vault source does not define$/),
+      expect.stringMatching(/^docs\/x\.md:8: "aleph memory lint --nosuch" uses --nosuch, which the vault source does not define$/),
     ]);
     expect(one(doc("--why", "--scope", "--fix"))).toEqual([]);
     expect(one("`aleph memory lint --fix`")).toEqual([]);
     expect(one("`aleph memory lint --nosuch`")).toEqual([expect.stringContaining("uses --nosuch, which the vault source does not define")]);
-    expect(one("`bun vault/cli.ts misses --days 3`; `bun vault/cli.ts lint --overlap --template`")).toEqual([]);
+    expect(one("`aleph memory misses --days 3`; `aleph memory lint --overlap --template`")).toEqual([]);
   });
 
   test("a CSS selector cited in a stylesheet that does not hold it", () => {

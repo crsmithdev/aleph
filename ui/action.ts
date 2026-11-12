@@ -4,7 +4,7 @@
  * `X-Aleph-UI: 1` and, when it has an Origin, the server's own, so a web page in the browser cannot post here; the
  * password gate in `ui/auth.ts` is what stops a LAN client.
  *
- * The page offers nothing the CLI does not: an action runs `aleph` (or `vault`) through `aleph()`, in a process of its
+ * The page offers nothing the CLI does not: an action runs `aleph` through `aleph()`, in a process of its
  * own. A non-zero exit is a 422 with what the command said, never a 200. Names and texts go after `--`, so the CLI
  * never reads one as a flag.
  */
@@ -37,15 +37,12 @@ export const post = (f: (body: any, params: Record<string, string>, url: URL) =>
   }
 };
 
-/** The argv that runs each CLI: `$ALEPH_CLI` when set (the UI tests' fake), else bun on jobs/cli.ts. */
-const CLIS = {
-  aleph: () => (cliOverride() ? [cliOverride()!] : [process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts")]),
-  vault: () => [process.execPath, join(import.meta.dir, "..", "vault", "cli.ts")],
-};
+/** The argv that runs the CLI: `$ALEPH_CLI` when set (the UI tests' fake), else bun on jobs/cli.ts. */
+const cli = () => (cliOverride() ? [cliOverride()!] : [process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts")]);
 
-/** Run `<cli> <args>`: its JSON on exit 0 (`{ output }` for text), else a Fail(422) with what it said. */
-export async function aleph(args: string[], o: { stdin?: string; cli?: keyof typeof CLIS } = {}): Promise<any> {
-  const p = Bun.spawn([...CLIS[o.cli ?? "aleph"](), ...args], { stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: "pipe", stderr: "pipe", env: { ...process.env, ALEPH_UI_PASSWORD: undefined } });
+/** Run `aleph <args>`: its JSON on exit 0 (`{ output }` for text), else a Fail(422) with what it said. */
+export async function aleph(args: string[], o: { stdin?: string } = {}): Promise<any> {
+  const p = Bun.spawn([...cli(), ...args], { stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: "pipe", stderr: "pipe", env: { ...process.env, ALEPH_UI_PASSWORD: undefined } });
   const [stdout, stderr, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
   if (code !== 0) fail(422, (stderr || stdout).trim() || `${args[0]} exited ${code}`);
   try { return JSON.parse(stdout); } catch { return { output: stdout.trim() }; }

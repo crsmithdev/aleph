@@ -1,4 +1,4 @@
-/** Files `vault init` lays down. VAULT.md is the contract; Chris owns it after init. */
+/** Files `aleph memory init` lays down. VAULT.md is the contract; Chris owns it after init. */
 
 export const VAULT_MD = `# VAULT.md — the contract
 
@@ -29,20 +29,20 @@ structure is wrong, not the agent.
    start after MEMORY.md, newest first, at most 6,000 bytes in all.
 3. The note a core line names.
 
-Only then search (\`vault recall\`). A search-first agent rediscovers the same
+Only then search (\`aleph memory recall\`). A search-first agent rediscovers the same
 facts every session and never notices the vault drifting.
 
 ## When to write
 
 When you learn how something actually behaves, decide something, or get
 corrected, write the page before the turn ends. Deliberate writes only: no
-hook extracts facts. \`vault compile\` is the safety net, run on demand.
+hook extracts facts. \`aleph memory compile\` is the safety net, run on demand.
 
 ## Layout
 
 | Path | Holds | Write rule |
 |---|---|---|
-| \`Home.md\` | map of content, generated: decisions, projects, concepts and entities by scope and kind, health line last | \`vault write\` only; never edited |
+| \`Home.md\` | map of content, generated: decisions, projects, concepts and entities by scope and kind, health line last | \`aleph memory write\` only; never edited |
 | \`MEMORY.md\` | standing context about Chris and the environment | agent, ≤150 lines, rewrite sections |
 | \`wiki/decisions/\` | what was decided and why | one note per decision |
 | \`wiki/concepts/\` | how something works | |
@@ -68,15 +68,15 @@ supersedes: []              # titles this note replaces
 sources: []                 # trace:<id>, a path, chris, a URL
 tags: []                    # optional
 core: <one line>            # optional; ≤160 characters; always on in its scope
-written_by: claude|chris    # optional, stamped by vault write
-session: <id>               # optional, the Claude Code session, stamped by vault write
+written_by: claude|chris    # optional, stamped by aleph memory write
+session: <id>               # optional, the Claude Code session, stamped by aleph memory write
 \`\`\`
 
 Body: a first paragraph \`**Claim.** … as of YYYY-MM-DD.\`, then
 \`## Details\`, \`## Evidence\`, \`## Related\`. A confident sentence with no
 date is how a vault rots.
 
-\`vault write\` refuses a note that breaks any of: schema, duplicate title or
+\`aleph memory write\` refuses a note that breaks any of: schema, duplicate title or
 alias, dangling link, folder/kind mismatch, the MEMORY.md line budget, a
 core line that puts a scope's start context over 6,000 bytes, the body
 template. It warns on stale claims, relative dates and same-scope overlap.

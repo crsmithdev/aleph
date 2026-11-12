@@ -12,7 +12,7 @@ worktree. The memory vault (`~/.aleph/vault`), the work store
 and to Chris. Report a follow-up, a lesson or a decision through the field or
 tag line the brief names for it, and the factory files it.
 
-You may read the vault. `bun ~/.claude/skills/aleph/vault/cli.ts recall "<query>"`
+You may read the vault. `aleph memory recall "<query>"`
 finds what is known about a tool, a file or a decision; the core lines below
 are the decisions in force.
 

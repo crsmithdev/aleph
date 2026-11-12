@@ -1,18 +1,18 @@
 # Vault
 
-The memory vault is an Obsidian vault at `~/.aleph/vault` (`ALEPH_VAULT` overrides the path). It is its own git repo. The agent writes it through `vault/cli.ts`, and you read and correct it in Obsidian. `VAULT.md` in the vault is the contract that you own; the agent never edits it.
+The memory vault is an Obsidian vault at `~/.aleph/vault` (`ALEPH_VAULT` overrides the path). It is its own git repo. The agent writes it through `aleph memory`, and you read and correct it in Obsidian. `VAULT.md` in the vault is the contract that you own; the agent never edits it.
 
 Each op that commits also pushes to the vault's `origin`. Each op prints JSON on stdout and findings on stderr, and exits 1 when it refuses.
 
 ## Use it
 
 ```bash
-bun vault/cli.ts init                                    # once, to create the vault
-bun vault/cli.ts recall "verify gate"                    # rank notes by title, alias and body
-bun vault/cli.ts recall --scope aleph                    # list one project's notes
-bun vault/cli.ts write "A Note.md" --why "what changed"  # file a drafted note by its kind, and commit
-bun vault/cli.ts lint --fix                              # check every note, and fix what is mechanical
-bun vault/cli.ts compile 2026-11-02                      # a digest of one day's traces, handoffs and daily note
+aleph memory init                                    # once, to create the vault
+aleph memory recall "verify gate"                    # rank notes by title, alias and body
+aleph memory recall --scope aleph                    # list one project's notes
+aleph memory write "A Note.md" --why "what changed"  # file a drafted note by its kind, and commit
+aleph memory lint --fix                              # check every note, and fix what is mechanical
+aleph memory compile 2026-11-02                      # a digest of one day's traces, handoffs and daily note
 ```
 
 In a session, the `vault` skill runs these for you.

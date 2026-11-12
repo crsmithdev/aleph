@@ -61,7 +61,7 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 |---|---|
 | `hooks/` | One script per hook; `hooks/lib/` has the judge, the secret rules and the snapshots |
 | `skills/` | One folder per skill with its `SKILL.md`; the licences of adapted skills |
-| `vault/` | `vault/cli.ts` and `vault/lib/`: notes, the FTS index, git |
+| `vault/` | `vault/lib/`, run by `aleph memory`: notes, the FTS index, git |
 | `issues/` | The work store client: `issues/lib/store.ts` (git I/O), `todo.ts` (file format), `issues.ts` (the `aleph issue` verbs) |
 | `jobs/` | `jobs/cli.ts` and `jobs/lib/`: the factory; `jobs/systemd/` and `jobs/windows/` start it |
 | `ui/` | `ui/server.ts`; `ui/api/*.ts` routes, loaded by file name; `ui/views/*.js` pages; `ui/state.ts` builds the Status state in a worker thread |
@@ -108,7 +108,7 @@ The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYE
 
 ## Invariants
 
-- **One writer per store.** `aleph issue` writes the work store; `git-guard` denies a direct edit. `vault/cli.ts` writes the vault. `record.ts` is the only module that opens a job record.
+- **One writer per store.** `aleph issue` writes the work store; `git-guard` denies a direct edit. `aleph memory` writes the vault. `record.ts` is the only module that opens a job record.
 - **Work happens in worktrees.** No edit lands on a main checkout. A worker cannot push; only the land pushes.
 - **The record is on `origin/main`.** The work store reads and writes `origin/main`. An issue is done when a commit on main names it in an `Issue:` trailer.
 - **Transitions start the next step.** No step waits for the tick. The tick's sweep reports a missed transition as a bug.

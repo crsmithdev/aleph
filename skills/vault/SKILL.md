@@ -11,7 +11,7 @@ are already in context from SessionStart. Each core line ends with its note's
 `[[title]]`: read that note before searching, and search with `recall` before
 deriving anything from scratch.
 
-Script: `bun ~/.claude/skills/aleph/vault/cli.ts <op>`. JSON on stdout,
+Script: `aleph memory <op>`. JSON on stdout,
 findings on stderr, exit 1 on refusal. Never edit `VAULT.md`.
 
 Every op that commits also pushes to `origin`, the private repo
@@ -62,7 +62,7 @@ re-derive at any price. Prefer them.
    Body: `**Claim.** <one or two sentences>, as of <date>.` then
    `## Details`, `## Evidence`, `## Related` with `[[links]]` to notes that
    exist. `[[Home]]` is always a valid link.
-2. `cli.ts write "<path>" --why "<one line>"`. The script files it by kind,
+2. `aleph memory write "<path>" --why "<one line>"`. The script files it by kind,
    appends the daily note, regenerates Home.md and commits. A refusal names
    the rule; fix the draft and rerun. Warnings are yours to judge.
 
@@ -81,7 +81,7 @@ the section, keep it under 150 lines, commit the same way.
 
 ## recall
 
-`cli.ts recall "<query>"` ranks title and alias matches and a full-text
+`aleph memory recall "<query>"` ranks title and alias matches and a full-text
 search of each note, fused. `rank` is 0 for the title, 1 for an alias, 2 for
 a title or alias that holds the query, 3 for the body only. Read the note it
 returns; do not paraphrase from memory.
@@ -93,7 +93,7 @@ project.
 
 ## compile
 
-`cli.ts compile [YYYY-MM-DD]` prints a digest of the day's Langfuse turns,
+`aleph memory compile [YYYY-MM-DD]` prints a digest of the day's Langfuse turns,
 handoffs and daily note, plus trace ids already cited. From it, propose
 notes: list title, kind and one-line claim for each and wait for approval.
 Then draft and `write` each approved note, citing `trace:<id>` in sources.
