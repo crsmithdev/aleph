@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as record from "../records/record.ts";
 import type { Entry } from "../records/ledger.ts";
 import type { Ask } from "./ask.ts";
-import { dueAt, readTimeouts, setTimeoutOf, timeoutStep } from "./timeout.ts";
+import { dueAt, issueAsks, readTimeouts, setTimeoutOf, timeoutStep } from "./timeout.ts";
 
 let dir = "";
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "timeout-")); process.env.ALEPH_FACTORY_DIR = dir; });
@@ -20,22 +20,27 @@ function waiting(ago: number, a: Ask = ask(), now = NOW): Entry {
   return { id, folder: "", run: { n, name: `job-${n}`, on, job: `a${n}`, condition: "waiting", ask: a } as any };
 }
 
-test("setTimeoutOf writes minutes for a land reason, 0 removes them, and other reasons are refused", () => {
+test("setTimeoutOf writes minutes and pick or drop for any reason in the table, 0 removes them, and other reasons are refused", () => {
   expect(setTimeoutOf("held-path", 30)).toBeNull();
-  expect(readTimeouts()).toEqual({ "held-path": 30 });
-  expect(setTimeoutOf("question", 30)).toContain("has no timeout");
+  expect(setTimeoutOf("question", 20, "drop")).toBeNull();
+  expect(setTimeoutOf("no-commit", 10, "pick")).toBeNull();
+  expect(readTimeouts()).toEqual({ "held-path": { minutes: 30, then: "pick" }, question: { minutes: 20, then: "drop" }, "no-commit": { minutes: 10, then: "pick" } });
+  expect(setTimeoutOf("question", 40)).toBeNull();
+  expect(readTimeouts().question).toEqual({ minutes: 40, then: "drop" });
+  expect(setTimeoutOf("nonsense", 30)).toContain("has no timeout");
+  expect(setTimeoutOf("question", 30, "wait")).toContain("pick or drop");
   expect(setTimeoutOf("review", -1)).toContain("whole number");
   expect(setTimeoutOf("held-path", 0)).toBeNull();
-  expect(JSON.parse(readFileSync(join(dir, "timeouts.json"), "utf8"))).toEqual({});
+  expect(JSON.parse(readFileSync(join(dir, "timeouts.json"), "utf8"))).toEqual({ question: { minutes: 40, then: "drop" }, "no-commit": { minutes: 10, then: "pick" } });
 });
 
-test("dueAt is the escalation time plus the minutes, only when the director recommends the land", () => {
+test("dueAt is the escalation time plus the minutes, only when the case text recommends an action", () => {
   const now = NOW;
   const e = waiting(10, ask(), now);
   expect(dueAt(e, {})).toBeNull();
-  expect(dueAt(e, { "held-path": 30 })).toBe(now - 10 * 60_000 + 30 * 60_000);
-  expect(dueAt(waiting(10, ask("drop")), { "held-path": 30 })).toBeNull();
-  expect(dueAt(waiting(10, { ...ask(), situation: undefined }), { "held-path": 30 })).toBeNull();
+  expect(dueAt(e, { "held-path": { minutes: 30, then: "pick" } })).toBe(now - 10 * 60_000 + 30 * 60_000);
+  expect(dueAt(waiting(10, { ...ask(), recommend: undefined }), { "held-path": { minutes: 30, then: "pick" } })).toBeNull();
+  expect(dueAt(waiting(10, { ...ask(), situation: undefined }), { "held-path": { minutes: 30, then: "pick" } })).toBeNull();
 });
 
 test("timeoutStep lands a due run once, and leaves a run that is not due", async () => {
@@ -56,4 +61,41 @@ test("timeoutStep does not try a refused land again", async () => {
   expect(await timeoutStep(start, NOW, [e])).toEqual([]);
   await timeoutStep(start, NOW, [e]);
   expect(tries).toBe(1);
+});
+
+const question = (recommend?: string): Ask => ({
+  kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "Do A." }, { label: "B", line: "Do B." }], why: [],
+  situation: "The spec leaves A or B open.", ...(recommend ? { recommend: { action: recommend, why: "w" } } : {}),
+});
+/** An issue with `a` on it, escalated `ago` minutes before now. */
+function onIssue(ago: number, a: Ask) {
+  const ref = `tmo-${++n}`;
+  record.setIssueAsk(ref, a);
+  record.addEvent(ref, { at: new Date(NOW - ago * 60_000).toISOString(), kind: "director", what: "question: escalated", data: { on: ref, outcome: "escalated" } });
+  return issueAsks([record.read(ref)!]);
+}
+const taker = (took: string[]) => async (name: string, action: string) => { took.push(`${name} ${action}`); return null; };
+
+test("timeoutStep takes the recommended decide:A on an issue's question Ask once", async () => {
+  setTimeoutOf("question", 30);
+  const asks = onIssue(31, question("decide:A")), took: string[] = [];
+  expect(await timeoutStep(taker(took), NOW, [], asks)).toEqual([asks[0].name]);
+  expect(await timeoutStep(taker(took), NOW, [], asks)).toEqual([]);
+  expect(took).toEqual([`${asks[0].name} decide:A`]);
+});
+
+test("a due drop timeout takes the reason's drop, close or deny; an Ask not due, or with no recommendation under pick, gets nothing", async () => {
+  setTimeoutOf("question", 30, "drop");
+  setTimeoutOf("no-commit", 30, "drop");
+  setTimeoutOf("held-path", 30, "drop");
+  const deny = onIssue(31, question("decide:A")), early = onIssue(5, question("decide:A"));
+  const close = onIssue(31, { kind: "input", reason: "no-commit", question: "Rerun?", options: [], why: [], situation: "No commit." });
+  const run = waiting(31);
+  const took: string[] = [];
+  await timeoutStep(taker(took), NOW, [run], [...deny, ...early, ...close]);
+  expect(took).toEqual([`${run.run.name} drop`, `${deny[0].name} deny`, `${close[0].name} close`]);
+  setTimeoutOf("rescue", 30, "pick");
+  const none = onIssue(31, { kind: "input", reason: "rescue", question: "What now?", options: [], why: [], situation: "Stuck." });
+  await timeoutStep(taker(took), NOW, [], none);
+  expect(took).toHaveLength(3);
 });

@@ -4,7 +4,7 @@
  * owns it; this file only gathers them.
  * `POST /api/automation/rules/:reason/revoke`: `aleph always revoke <reason>`, the Ask-me side of a rule.
  * `POST /api/automation/rules/:reason/grant` (`{ "action": "<action>" }`): `aleph always grant`, the Always side.
- * `POST /api/automation/rules/:reason/timeout` (`{ "minutes": <n> }`): `aleph always timeout`; 0 waits for Chris.
+ * `POST /api/automation/rules/:reason/timeout` (`{ "minutes": <n>, "then"?: "pick" | "drop" }`): `aleph always timeout`; 0 waits for Chris.
  */
 import { readJsonOr } from "../../lib/json.ts";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -66,7 +66,7 @@ export function rules(entries: LogEntry[] = [], records = record.all(), now = Da
     return {
       reason, ...reasonText(reason), kind: r.kind, mode: r.always, fired: mine.length, decided, outcome,
       granted: g ? { action: g.action, at: g.at } : null,
-      ...(TIMED.includes(reason) ? { timeout: timeouts[reason] ?? 0 } : {}),
+      ...(TIMED.includes(reason) ? { timeout: timeouts[reason]?.minutes ?? 0, noAnswer: timeouts[reason]?.then ?? "pick" } : {}),
       ...(perPlace ? { places: Object.keys(granted).filter((k) => k.startsWith(`${reason}:`)) } : {}),
     };
   });
@@ -283,7 +283,8 @@ export const routes: Routes = {
   }),
   "POST /api/automation/rules/:reason/timeout": post((body, { reason }) => {
     if (!Number.isInteger(body.minutes) || body.minutes < 0) fail(400, "send minutes, a whole number of at least 0");
-    return aleph(["always", "timeout", "--", reason, String(body.minutes)]);
+    if (body.then !== undefined && body.then !== "pick" && body.then !== "drop") fail(400, "then is pick or drop");
+    return aleph(["always", "timeout", "--", reason, String(body.minutes), ...(body.then ? [body.then] : [])]);
   }),
   "POST /api/automation/rules/:reason/revoke": post((_body, { reason }) => aleph(["always", "revoke", "--", reason])),
 };

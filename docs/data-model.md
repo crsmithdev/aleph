@@ -199,7 +199,7 @@ The tick moves each finished record into the archive folder `<records>-archive` 
 | `caps.json` | `{live?, run?, intakeTries?, jobSeconds?, fixRounds?, landBatch?, loadLimit?}` | Automation page; an env var wins |
 | `models.json` | `{<tier>: {enabled, model}}` | `aleph models` |
 | `always.json` | `{<reason>: {action, at}}` | Always button, `aleph always` |
-| `timeouts.json` | `{<reason>: minutes}` for `held-path` and `review` | Gates page, `aleph always timeout` |
+| `timeouts.json` | `{<reason>: {minutes, then}}`, `then` is `pick` or `drop`; a bare number is minutes with `pick` | Gates page, `aleph always timeout` |
 | `baseline.json` | `{<repo>: {commit, ok, failed?}}` | `aleph suite` |
 | `baseline/<repo>/` | The suite's `checks.log` | `aleph suite` |
 | `suite-history.jsonl` | One line per suite run | `aleph suite` |

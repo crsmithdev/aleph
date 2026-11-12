@@ -74,7 +74,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   report: { usage: "aleph report [--hook|--peek]", purpose: "show the runs not yet seen and the factory's health; --peek leaves the runs unseen" },
   pause: { usage: "aleph pause", purpose: "stop the factory from starting work" },
   resume: { usage: "aleph resume", purpose: "let the factory start work again" },
-  always: { usage: "aleph always <list|grant <reason> <action>|revoke <reason>|timeout [<reason> <minutes>]>", purpose: "list and change the standing permissions" },
+  always: { usage: "aleph always <list|grant <reason> <action>|revoke <reason>|timeout [<reason> <minutes> [pick|drop]]>", purpose: "list and change the standing permissions" },
   models: { usage: "aleph models [set <tier> <model> | enable <tier> | disable <tier>]", purpose: "list and change the model of each tier" },
   judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
   doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
@@ -620,13 +620,13 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "pause": setPaused(true); ctx.out({ paused: true }); break;
     case "resume": setPaused(false); ctx.out({ paused: false }); dispatchDetached(); break;
     case "always": {
-      const [sub, reason, action] = ctx.positional;
+      const [sub, reason, action, then] = ctx.positional;
       const rules = readAlways;
       if (sub === "list" || sub === undefined) ctx.out(rules());
       else if (sub === "grant") { const bad = grant(reason ?? refuse(usage("always")), action ?? refuse(usage("always"))); if (bad) refuse(bad); ctx.out(rules()); }
       else if (sub === "revoke") { revoke(reason ?? refuse(usage("always"))); ctx.out(rules()); }
       else if (sub === "timeout") {
-        if (reason !== undefined) { const bad = setTimeoutOf(reason, Number(action ?? refuse(usage("always")))); if (bad) refuse(bad); }
+        if (reason !== undefined) { const bad = setTimeoutOf(reason, Number(action ?? refuse(usage("always"))), then); if (bad) refuse(bad); }
         ctx.out(readTimeouts());
       }
       else refuse(usage("always"));

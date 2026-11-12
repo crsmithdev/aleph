@@ -158,6 +158,22 @@ test("POST /api/automation/rules/:reason/revoke runs `aleph always revoke`, and 
   expect(existsSync(calls) && readFileSync(calls, "utf8").length).toBe(n);
 });
 
+test("rules() gives each reason row its timeout minutes and no-answer action, and POST timeout passes the action on", async () => {
+  const f = join(base, "factory", "timeouts.json");
+  try {
+    writeFileSync(f, JSON.stringify({ "held-path": 30, question: { minutes: 20, then: "drop" } }));
+    const row = (reason: string) => rules().find((x) => x.reason === reason)!;
+    expect([row("held-path").timeout, row("held-path").noAnswer]).toEqual([30, "pick"]);
+    expect([row("question").timeout, row("question").noAnswer]).toEqual([20, "drop"]);
+    expect([row("no-commit").timeout, row("no-commit").noAnswer]).toEqual([0, "pick"]);
+    expect(row("proposal-check").timeout).toBeUndefined();
+    const send = (minutes: number, then?: string) => at("/api/automation/rules/question/timeout", { method: "POST", headers: { "X-Aleph-UI": "1", "Content-Type": "application/json" }, body: JSON.stringify({ minutes, then }) });
+    expect((await send(20, "drop")).status).toBe(200);
+    expect(readFileSync(calls, "utf8").trim().split("\n").at(-1)).toBe("always timeout -- question 20 drop");
+    expect((await send(20, "wait")).status).toBe(400);
+  } finally { rmSync(f, { force: true }); }
+});
+
 const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", card: "decide", label: "Decide", headline: `t ${id}`, tag: "", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
   actions: [{ act: "checked", label: "Mark it checked", hint: "Records it.", primary: true, path: `/api/issues/${id}/checked`, body: {}, recommended: false }], details: {}, repo: "r" });
 

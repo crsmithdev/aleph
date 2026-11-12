@@ -26,8 +26,10 @@ import { lock } from "../infra/locks.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
 import { monitorStep } from "../roles/monitor.ts";
 import { chatLock, endLost } from "../roles/agent-run.ts";
-import { timeoutStep } from "../asks/timeout.ts";
-import { land, refusal } from "./transitions.ts";
+import { timeoutStep, type Waiting } from "../asks/timeout.ts";
+import { drop, land, refusal } from "./transitions.ts";
+import * as verbs from "../../../issues/lib/issues.ts";
+import { parseIssueRef } from "../../../issues/lib/todo.ts";
 import { editedWaits, toRescue } from "../land/rescue.ts";
 import { smokeStep } from "../gates/smoke.ts";
 
@@ -93,6 +95,27 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   return missed;
 }
 
+/**
+ * The timeout's action on an Ask, as Chris's card takes it: a land or a drop of the run (its answer is the drop's
+ * reason), else on the issue a drop, a decision with its intake, or intake again. The refusal, or null.
+ */
+async function takeOnTimeout(name: string, action: string, w: Waiting): Promise<string | null> {
+  const said = `timeout: no answer to the ${w.ask.reason} Ask; ${w.ask.effects?.find((e) => e.action === action)?.text ?? action}`;
+  if (action === "land") return refusal(() => land(name, { lander: "timeout" }, { output: "ignore" }));
+  if (w.run && (action === "drop" || action === "answer")) return refusal(() => drop(name, { reason: action === "answer" ? `${said} (the question: "${w.ask.question}")` : said, quiet: true }));
+  const p = parseIssueRef(w.key), repo = p && loadRegistry()[p.repo];
+  if (!repo) return `no repo for ${w.key}`;
+  return refusal(async () => {
+    if (action === "drop" || action === "close" || action === "deny") verbs.close(repo, p.id, "drop", said);
+    else if (action === "retry") { const n = verbs.note(repo, p.id, said, true); if (n.answered) intakeDetached(repo, n.result.id); }
+    else {
+      const o = w.ask.options.find((x) => action === `decide:${x.label}`);
+      const d = verbs.decide(repo, p.id, o ? `timeout decided: ${o.label}: ${o.line}` : said, o?.after ? { after: [o.after] } : {});
+      intakeDetached(repo, d.item.id);
+    }
+  });
+}
+
 /** What the tick starts besides the sweep's ports: the intake of an issue the firefighter filed. */
 export interface TickPorts extends SweepPorts { intake(repo: Repo, id: number): void }
 const tickPorts: TickPorts = { ...sweepPorts, intake: intakeDetached };
@@ -136,7 +159,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
       if (f?.asked.length) directIfNew();
       if (f && (f.filed.length || f.asked.length)) out.firefighter = f;
     }
-    try { const t = await timeoutStep((name) => refusal(() => land(name, { lander: "timeout" }, { output: "ignore" })), now); if (t.length) out.timedOut = t; } catch (e: any) { logEvent({ by: "rule", subject: "timeout", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+    try { const t = await timeoutStep(takeOnTimeout, now); if (t.length) out.timedOut = t; } catch (e: any) { logEvent({ by: "rule", subject: "timeout", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
     const m = await monitorStep(new Date(now));
     if (m) out.monitor = m.day;
     await editTick((t) => ({ ...t, ...s }));
