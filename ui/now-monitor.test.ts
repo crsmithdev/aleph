@@ -22,8 +22,8 @@ test("the Pipeline card shows the 6 stages in order, each a ring of runs per iss
   const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
   expect(names).toEqual(["Intake", "Queue", "Build", "Review", "Recheck", "Land"]);
   // 2 of 9 build runs failed: 22%, amber; 0 of 3 intake runs: green.
-  expect(h).toContain('<div class="pnode warning" title="Build: 9 runs on 5 issues, 2 failed"><span class="ring">1.8</span><span class="pn">Build</span><span class="pt">13m 24s</span><span class="pf">22% failed</span>');
-  expect(h).toContain('<div class="pnode fine" title="Intake: 3 runs on 3 issues"><span class="ring">1.0</span>');
+  expect(h).toContain('<div class="pnode warning"><a class="pgo" href="#/factory/jobs?stage=implement&amp;role=worker" title="Build: 9 runs on 5 issues, 2 failed"><span class="ring">1.8</span><span class="pn">Build</span><span class="pt">13m 24s</span></a><span class="pf">22% failed</span>');
+  expect(h).toContain('<div class="pnode fine"><a class="pgo" href="#/factory/jobs?stage=intake&amp;role=intake" title="Intake: 3 runs on 3 issues"><span class="ring">1.0</span>');
   expect(h).toContain('<span class="pn">Queue</span><span class="pt">1m 19s</span>');
   // The failed share is pct()'s text: 1 of 400 is 0.3%, not a rounded 0%.
   expect(h).toContain('<span class="pf">0.3% failed</span>');
@@ -36,6 +36,18 @@ test("the Pipeline card shows the 6 stages in order, each a ring of runs per iss
   expect(h.match(/p90/g)).toHaveLength(1);
   expect(h).not.toContain(">monitor<");
   expect(view.renderPipeline(null)).toContain("Loading the pipeline…");
+});
+
+test("each Pipeline ring links to Jobs with its stage and role, in the window and project of the page; an idle stage has no link", () => {
+  const rows = [{ stage: "review", runs: 4, items: 4, unusable: 0, p90: 60 }, { stage: "recheck", runs: 2, items: 2, unusable: 1, p90: 30 }];
+  const h = view.renderPipeline({ window: "day", stages: { rows }, phases: { queue: { count: 1, p90: 5 } } }, new URLSearchParams("window=day&project=aleph"));
+  const hrefs = [...h.matchAll(/href="([^"]*)"/g)].map((m) => m[1].replaceAll("&amp;", "&"));
+  expect(hrefs).toEqual([
+    "#/factory/jobs?stage=queue&window=day&project=aleph",
+    "#/factory/jobs?role=reviewer&window=day&project=aleph",
+    "#/factory/jobs?role=worker&window=day&project=aleph",
+  ]);
+  expect(h.match(/class="pnode idle"/g)).toHaveLength(3);
 });
 
 test("the Herald shows its alerts under a Not OK badge in the worst alert's tone, then the events", () => {

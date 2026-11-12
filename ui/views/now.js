@@ -1,10 +1,10 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, count, empty, error, esc, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
+import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, count, empty, error, esc, hours, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say as sayParts } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
-import { bar, flowOf, statusCards, usable } from "./speed.js";
+import { share, flowOf, statusCards, usable } from "./speed.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
 import { verdict } from "../../lib/status-words.ts";
 
@@ -18,7 +18,7 @@ export const view = {
   refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
-  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(f), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderActive(f)}${renderPipeline(f)}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(f), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderActive(f)}${renderPipeline(f, q)}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
   more: async (s, q) => ({ ...s, flow: await flowOf(scope(q).window, q, true) }),
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
@@ -49,12 +49,13 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
   return statusCards(s, d, { efficiency: withWindow(EFFICIENCY, win), performance: withWindow(PERFORMANCE, win) });
 }
 
-/** The outcome bar. `d` is null while it loads, `{ error }` on a failed load. */
+/** The Agent Time card: the kept share, its bar and its legend, with the kept hours of all in the aside. `d` is null while it loads, `{ error }` on a failed load. */
 function renderOutcome(d) {
-  const outcome = (body) => card("Agent Time", body, { id: "outcome", label: "Agent time" });
+  const outcome = (body, aside = "") => card("Agent Time", body, { id: "outcome", label: "Agent time", aside });
   if (!d) return outcome(loadingLine("the outcomes"));
   if (d.error) return outcome(error(d.error));
-  return outcome(bar(d));
+  const cs = d.classes ?? [], sum = (xs) => xs.reduce((a, c) => a + c.hours, 0), total = sum(cs);
+  return outcome(share(d), total > 0 ? `${esc(hours(sum(cs.filter((c) => !c.lost))))} of ${esc(hours(total))}` : "");
 }
 
 /** The active-issues frame: per bucket, the issues in each stage (`d.active` of /api/flow), stacked. */
@@ -80,24 +81,34 @@ const PIPE = Object.fromEntries(["intake", "queue", "build", "review", "recheck"
 /** The health of a stage by its failed share: under 10% fine, to 25% warning, above that alert. */
 const health = (share) => (share < 0.1 ? "fine" : share <= 0.25 ? "warning" : "alert");
 /** The Pipeline card for the window: each stage a ring with its runs per issue, coloured by its failed share, and its p90 time under it. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
-export function renderPipeline(d) {
+/** The Jobs filter of each stage: its stage tile there and the role of its runs. Review and Recheck have no stage tile, so they filter by role alone; a recheck is a worker run. */
+const DRILL = { intake: { stage: "intake", role: "intake" }, queue: { stage: "queue" }, build: { stage: "implement", role: "worker" }, review: { role: "reviewer" }, recheck: { role: "worker" }, land: { stage: "land" } };
+/** The Jobs page for a stage, in the window and project of `q`. */
+export const drillHref = (k, q) => {
+  const s = scope(q), out = new URLSearchParams(DRILL[k]);
+  if (s.window !== "week") out.set("window", s.window);
+  if (s.project) out.set("project", s.project);
+  return `#/factory/jobs?${out}`;
+};
+
+export function renderPipeline(d, q = new URLSearchParams()) {
   const box = (body, aside = "") => card("Pipeline", body, { id: "pipeline", aside });
   if (!d) return box(loadingLine("the pipeline"));
   if (d.error) return box(error(d.error));
   const by = new Map((d.stages?.rows ?? []).map((r) => [r.stage, r]));
   const queue = d.phases?.queue;
+  const go = (k, tip, body) => `<a class="pgo" href="${esc(drillHref(k, q))}" title="${esc(tip)}">${body}</a>`;
   const node = ([k, name]) => {
     if (k === "queue") {
       const has = queue?.count > 0;
-      return `<div class="pnode wait${has ? "" : " idle"}"${has ? ` title="${esc(`Queue: ${plural(queue.count, "wait")}`)}"` : ""}><span class="ring">wait</span>` +
-        `<span class="pn">${esc(name)}</span><span class="pt">${has ? esc(dur(queue.p90)) : miss("Nothing waited in this window")}</span></div>`;
+      if (!has) return `<div class="pnode wait idle"><span class="ring">wait</span><span class="pn">${esc(name)}</span><span class="pt">${miss("Nothing waited in this window")}</span></div>`;
+      return `<div class="pnode wait">${go(k, `Queue: ${plural(queue.count, "wait")}`, `<span class="ring">wait</span><span class="pn">${esc(name)}</span><span class="pt">${esc(dur(queue.p90))}</span>`)}</div>`;
     }
     const r = by.get(k), n = r?.items ? r.runs / r.items : null;
     if (n === null) return `<div class="pnode idle"><span class="ring">–</span><span class="pn">${esc(name)}</span><span class="pt">${miss("Nothing ran in this window")}</span></div>`;
     const share = r.runs ? (r.unusable ?? 0) / r.runs : 0, tone = health(share);
     const tip = `${name}: ${plural(r.runs, "run")} on ${plural(r.items, "issue")}${r.unusable ? `, ${count(r.unusable)} failed` : ""}`;
-    return `<div class="pnode ${tone}" title="${esc(tip)}"><span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span>` +
-      `<span class="pt">${esc(dur(r.p90))}</span><span class="pf">${pct(share * 100)} failed</span></div>`;
+    return `<div class="pnode ${tone}">${go(k, tip, `<span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span><span class="pt">${esc(dur(r.p90))}</span>`)}<span class="pf">${pct(share * 100)} failed</span></div>`;
   };
   const nodes = Object.entries(PIPE).map(node).join(`<span class="parrow" aria-hidden="true"></span>`);
   return box(`<div class="pflow" role="group" aria-label="Stages">${nodes}</div>`, `<span class="asof">runs / issue in the ring · p90 time under it</span>`);

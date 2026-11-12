@@ -92,7 +92,7 @@ test("more fetches the week with its baseline, and the page fills the scorecard,
   expect(urls).toEqual(["/api/flow?window=week&baseline=1"]);
   const page = view.view.render(s, {}, new URLSearchParams());
   expect(page).toContain("<b>38%<em> / 6.0h</em></b>");
-  expect(page).toContain('class="obar"');
+  expect(page).toContain('class="obar thin"');
   expect(page).not.toContain("Loading the outcomes");
 });
 
@@ -145,20 +145,22 @@ test("the outcome bar sits between the scorecard and the panels and fills once m
   expect(page).toContain("Loading the outcomes");
   const { s } = await more({ ...WEEK, classes: [...WEEK.classes, { key: "idle", lost: false, hours: 0, causes: [] }] }, new URLSearchParams("window=week"));
   const filled = view.view.render(s, {}, new URLSearchParams("window=week")), h = filled.slice(filled.indexOf('id="outcome"'), filled.indexOf('id="pipeline"'));
-  expect(h).toContain('class="obar"');
+  expect(h).toContain('class="obar thin"');
   expect(h).toContain("<h2 id=\"h-outcome\">Agent Time</h2>");
   expect(h).not.toContain("by outcome");
-  const sep = h.indexOf('class="osep"');
-  expect(h).not.toContain("Reached main");
-  expect(sep).toBeGreaterThan(h.indexOf("seg-landed"));
-  expect(h).toMatch(/<div class="olegend"><span><i class="seg-landed"><\/i>[^<]+ <em>[^<]+h \d+%<\/em><\/span>/);
-  expect(h.slice(0, h.indexOf("olegend")).lastIndexOf("seg-returned")).toBeLessThan(sep);
-  expect(h.indexOf("seg-failed")).toBeGreaterThan(sep);
+  // The kept share heads the card: 10h of 16h reached main. Kept classes sit left of the gap, lost ones right of it, in the bar and in the legend's two columns.
+  expect(h).toContain('<span class="aside">10h of 16h</span>');
+  expect(h).toContain('<div class="ohead"><b class="num">63%</b><span>reached main</span></div>');
+  const bar = h.slice(h.indexOf('class="obar thin"'), h.indexOf('class="oledger')), gap = bar.indexOf('class="ogap"');
+  expect(bar.indexOf("seg-returned")).toBeLessThan(gap);
+  expect(bar.indexOf("seg-failed")).toBeGreaterThan(gap);
+  expect(h).toContain('<div class="oledger num"><div><span><i class="seg-landed"></i>landed</span><span>8.0h</span><span class="m">50%</span>');
+  expect(h).not.toContain("seg-idle");
   const needs = view.renderNeeds({ ...state, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
   expect(needs).toContain('<h2 id="h-needs">Alerts</h2>');
   expect(needs).not.toContain("<h3>");
   expect(needs).not.toContain("Awaiting the user");
-  expect(h.match(/<button /g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
+  expect(h.match(/<i class="seg-[a-z]+" style=/g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
 });
 
 test("the Status page titles a sub-issue link, with no goal and no Part", () => {

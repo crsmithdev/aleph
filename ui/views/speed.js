@@ -94,6 +94,20 @@ export function usageCard(s, link = { href: "#/factory/agents" }) {
   return statCard({ k: "Usage", v: pct(cur.seven_day), extra: bar, note, ...link });
 }
 
+/** The kept share of agent time, for the Status card: the share that reached main as the figure, a thin bar, and a legend of two columns, kept then lost. `d` is /api/flow for the window. */
+export function share(d) {
+  const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
+  if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`, "Widen the window or clear the project.");
+  const good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost), kept = good.reduce((a, c) => a + c.hours, 0);
+  const seg = (c) => `<i class="seg-${esc(c.key)}" style="flex:${c.hours / total}" title="${esc(`${c.key} ${hours(c.hours)}${c.text ? `: ${c.text}` : ""}`)}"></i>`;
+  const gap = good.length && lost.length ? `<i class="ogap" title="Left of the gap reached main; right of it did not"></i>` : "";
+  const line = (c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)}</span><span>${esc(hours(c.hours))}</span><span class="m">${esc(pct((c.hours / total) * 100))}</span>`;
+  const col = (xs) => `<div>${xs.map(line).join("")}</div>`;
+  return `<div class="ohead"><b class="num">${esc(pct((kept / total) * 100))}</b><span>reached main</span></div>` +
+    `<div class="obar thin" role="img" aria-label="${esc(cs.map((c) => `${c.key} ${hours(c.hours)}`).join(", "))}">${good.map(seg).join("")}${gap}${lost.map(seg).join("")}</div>` +
+    `<div class="oledger num">${col(good)}${col(lost)}</div>`;
+}
+
 /** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/flow for the window. */
 export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
