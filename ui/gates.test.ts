@@ -689,16 +689,31 @@ test("the Automation page names the held backend and its reason, and no line whe
   expect(gates.renderGates({ ...data(), backend: null })).not.toContain("gates-backend");
 });
 
-test("a land reason shows its timeout in the largest whole unit, and its Edit row opens on Land if recommended", () => {
-  const row = (timeout: number): any => ({ reason: "held-path", ...reasonText("held-path"), mode: "", fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: null, timeout });
-  const h = gates.renderRules({ rules: [row(120)] });
-  expect(h).toContain("<td>After 2 h: land if recommended</td>");
-  expect(h).toContain('data-was-wait="120"');
-  expect(h).toMatch(/data-value="1" aria-pressed="true">Land if recommended/);
+test("a non-land reason shows its timeout in the largest whole unit with its action, and its Edit row opens on the matching choice", () => {
+  const row = (reason: string, timeout: number, noAnswer: string): any => ({ reason, ...reasonText(reason), mode: "", fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: null, timeout, noAnswer });
+  const h = gates.renderRules({ rules: [row("question", 120, "pick")] });
+  expect(h).toContain("<td>After 2 h: take the pick</td>");
+  expect(h).toContain('data-was-wait="120" data-was-then="pick"');
+  expect(h).toMatch(/data-value="wait" aria-pressed="false">Keep waiting<\/button><button type="button" data-value="pick" aria-pressed="true">Take the pick<\/button><button type="button" data-value="drop" aria-pressed="false">Drop</);
   expect(h).toMatch(/<input name="n" type="number" value="2"[^>]*>/);
   expect(h).toContain('<option value="h" selected>hours</option>');
   expect(h).toMatch(/data-field="decide"><button type="button" data-value="" aria-pressed="true">Director<\/button><button type="button" data-value="user" aria-pressed="false">User</);
-  const off = gates.renderRules({ rules: [row(0)] });
+  expect(gates.renderRules({ rules: [row("question", 45, "drop")] })).toMatch(/data-value="drop" aria-pressed="true">Drop</);
+  const off = gates.renderRules({ rules: [row("question", 0, "pick")] });
   expect(off).toContain("<td>Keep waiting</td>");
+  expect(off).toMatch(/data-value="wait" aria-pressed="true">Keep waiting/);
   expect(off).toMatch(/<input name="n"[^>]* disabled>/);
+});
+
+test("Save posts a timeout with the action and minutes when the If No Answer choice changes, and none when it does not", () => {
+  const form = (was: { wait: string; then: string }, pressed: string, n: string, unit: string): any => ({
+    dataset: { rule: "question", wasDecide: "", wasWait: was.wait, wasThen: was.then },
+    elements: { n: { value: n }, unit: { value: unit } },
+    querySelector: (q: string) => (q.includes('data-field="wait"') ? { dataset: { value: pressed } } : { dataset: { value: "" } }),
+  });
+  const url = "/api/automation/rules/question/timeout";
+  expect(gates.rulePosts(form({ wait: "0", then: "wait" }, "drop", "2", "h"))).toEqual([[url, { minutes: 120, then: "drop" }]]);
+  expect(gates.rulePosts(form({ wait: "120", then: "pick" }, "drop", "2", "h"))).toEqual([[url, { minutes: 120, then: "drop" }]]);
+  expect(gates.rulePosts(form({ wait: "120", then: "pick" }, "wait", "2", "h"))).toEqual([[url, { minutes: 0 }]]);
+  expect(gates.rulePosts(form({ wait: "120", then: "pick" }, "pick", "2", "h"))).toEqual([]);
 });

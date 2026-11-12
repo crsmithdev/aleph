@@ -128,8 +128,8 @@ const waitText = (m) => { const { n, unit } = splitWait(m); return `${n} ${unit}
 /** Who decides a reason first: a rule's action when always.json grants one, else the director. */
 const decidesText = (r) => (r.places ? (r.places.length ? `Approve for ${r.places.map((k) => k.slice(k.indexOf(":") + 1)).join(", ")}` : "Director") : r.granted ? modeLabel(r.granted.action) : "Director");
 
-/** What happens when an escalated Ask gets no answer. Only the land reasons have a timeout. */
-const noAnswerText = (r) => (r.timeout ? `After ${waitText(r.timeout)}: land if recommended` : "Keep waiting");
+/** What happens when an escalated Ask gets no answer: it keeps waiting, or after the timeout the director's pick is taken or the Ask is dropped. */
+const noAnswerText = (r) => (r.timeout ? `After ${waitText(r.timeout)}: ${r.noAnswer === "drop" ? "drop" : "take the pick"}` : "Keep waiting");
 
 /** Who decided the reason's Asks in the window, as a bar and its line. */
 function decidedCell(d) {
@@ -148,17 +148,14 @@ function ruleForm(r) {
   const g = r.granted?.action ?? "";
   const decide = setting("Decides", seg(`Who decides ${r.name}`, [opt("", "Director", !g), ...(r.mode ? [opt(r.mode, modeLabel(r.mode), g === r.mode)] : []), ...(g && g !== r.mode && g !== "user" ? [opt(g, modeLabel(g), true)] : []), opt("user", "User", g === "user")], ' data-field="decide"'),
     { hint: "Director: the director decides and sends the rest to the user. User: the Ask goes to the user with no director run." });
-  let wait = "";
-  if (r.timeout !== undefined) {
-    const v = r.timeout ? splitWait(r.timeout) : { n: 30, unit: "min" }, off = r.timeout ? "" : " disabled";
-    wait = setting("If no answer", seg(`If ${r.name} gets no answer`, [opt("0", "Keep waiting", !r.timeout), opt("1", "Land if recommended", !!r.timeout)], ' data-field="wait"') +
-      ` after ${inputBox("n", v.n, { type: "number", attrs: ` min="1" step="1" inputmode="numeric" required aria-label="${esc(r.name)} wait"${off}` })}` +
-      selectBox(`${r.name} wait unit`, "unit", WAITS.map(([value, , label]) => ({ value, label })), v.unit, { attrs: off }),
-      { hint: "Lands only when the director recommends the land." });
-  }
+  const v = r.timeout ? splitWait(r.timeout) : { n: 30, unit: "min" }, off = r.timeout ? "" : " disabled", then = r.timeout ? r.noAnswer ?? "pick" : "wait";
+  const wait = setting("If no answer", seg(`If ${r.name} gets no answer`, [opt("wait", "Keep waiting", then === "wait"), opt("pick", "Take the pick", then === "pick"), opt("drop", "Drop", then === "drop")], ' data-field="wait"') +
+    ` after ${inputBox("n", v.n, { type: "number", attrs: ` min="1" step="1" inputmode="numeric" required aria-label="${esc(r.name)} wait"${off}` })}` +
+    selectBox(`${r.name} wait unit`, "unit", WAITS.map(([value, , label]) => ({ value, label })), v.unit, { attrs: off }),
+    { hint: "Take the pick: the action the director recommends, if it recommends one. Drop: the reason's drop, close or deny." });
   const buttons = `<span class="rule-acts"><button type="button" class="act" data-cancel>Cancel</button><button type="submit" class="act primary">Save</button></span>`;
-  return `<tr class="rule-edit" data-reason="${esc(r.reason)}" hidden><td colspan="7"><form class="rule-form" data-rule="${esc(r.reason)}" data-was-decide="${esc(g)}" data-was-wait="${r.timeout ?? ""}">` +
-    settings(`Edit ${r.name}`, [decide, wait].filter(Boolean)) + buttons + `</form></td></tr>`;
+  return `<tr class="rule-edit" data-reason="${esc(r.reason)}" hidden><td colspan="7"><form class="rule-form" data-rule="${esc(r.reason)}" data-was-decide="${esc(g)}" data-was-wait="${r.timeout ?? ""}" data-was-then="${then}">` +
+    settings(`Edit ${r.name}`, [decide, wait]) + buttons + `</form></td></tr>`;
 }
 
 /** One row per Ask reason: how often it fired, who decided it, who decides it first, and what happens when that fails. Edit opens the reason's settings under its row. */
@@ -216,16 +213,16 @@ const SAVES = {
   cap: (f) => ["/api/automation/caps", { [f.dataset.cap]: Number(f.elements[f.dataset.cap].value) }, "cap"],
 };
 
-/** The posts an Edit row's Save needs: a grant or a revoke when Decides changed, a timeout when the wait changed. */
-function rulePosts(f) {
+/** The posts an Edit row's Save needs: a grant or a revoke when Decides changed, a timeout when the wait or its action changed. */
+export function rulePosts(f) {
   const url = (what) => `/api/automation/rules/${encodeURIComponent(f.dataset.rule)}/${what}`;
   const picked = (field) => f.querySelector(`.seg[data-field="${field}"] [aria-pressed="true"]`)?.dataset.value;
   const out = [], decide = picked("decide");
   if (decide !== undefined && decide !== f.dataset.wasDecide) out.push(decide ? [url("grant"), { action: decide }] : [url("revoke"), undefined]);
   const wait = picked("wait");
   if (wait !== undefined) {
-    const k = WAITS.find(([u]) => u === f.elements.unit.value)[1], minutes = wait === "0" ? 0 : Number(f.elements.n.value) * k;
-    if (String(minutes) !== f.dataset.wasWait) out.push([url("timeout"), { minutes }]);
+    const k = WAITS.find(([u]) => u === f.elements.unit.value)[1], minutes = wait === "wait" ? 0 : Number(f.elements.n.value) * k;
+    if (String(minutes) !== f.dataset.wasWait || wait !== f.dataset.wasThen) out.push([url("timeout"), minutes ? { minutes, then: wait } : { minutes }]);
   }
   return out;
 }
@@ -288,7 +285,7 @@ export function mount(root) {
     const pick = e.target.closest?.("form.rule-form .seg button");
     if (pick) {
       for (const b of pick.parentElement.children) b.setAttribute("aria-pressed", String(b === pick));
-      if (pick.parentElement.dataset.field === "wait") for (const el of [pick.form.elements.n, pick.form.elements.unit]) el.disabled = pick.dataset.value === "0";
+      if (pick.parentElement.dataset.field === "wait") for (const el of [pick.form.elements.n, pick.form.elements.unit]) el.disabled = pick.dataset.value === "wait";
       return;
     }
     const cancel = e.target.closest?.("form.rule-form button[data-cancel]");
