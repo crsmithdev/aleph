@@ -621,6 +621,20 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(page.errors).toEqual([]);
   }, 30_000);
 
+  test("no contents entry stays current when a click elsewhere leaves no section in the band", async () => {
+    await page.width(1400);
+    await page.go("#/issues/demo/21");
+    await page.when('document.querySelector(".issue-page .toc a")');
+    await page.ev('document.querySelector(".toc a[href=\'#issue-notes\']").click()');
+    await page.when('document.querySelector(".toc a[aria-current]")?.textContent === "Notes"');
+    // The router's smooth scroll to Notes ends first, or it would carry on past the scroll to the top.
+    await page.when("scrollY > 0 && (window.last === scrollY || ((window.last = scrollY), false))");
+    await page.ev('document.querySelector(\'button[data-editor="start"]\').click(); scrollTo(0, 0)');
+    await page.when('scrollY === 0 && !document.querySelector(".toc a[aria-current]")');
+    expect(await page.ev('document.querySelectorAll(".toc a[aria-current]").length')).toBe(0);
+    expect(page.errors).toEqual([]);
+  }, 30_000);
+
   test("Log out shows only behind the password gate", async () => {
     expect(await page.ev('document.querySelector("#logout").hidden')).toBe(true);
   }, 30_000);

@@ -485,7 +485,7 @@ export const toc = (items, body) =>
   `</ol></details></nav><div class="toc-body">${body}</div></div>`;
 
 /** Marks the entry of the section at the top of the view with `aria-current` (the last entry at the end of the page, a clicked entry until
- * the next scroll by hand), and closes the contents under 1100px, where they sit above the body. Wiring again drops the last observer and listeners. */
+ * the next scroll by hand or click elsewhere; none when no section is in the band), and closes the contents under 1100px, where they sit above the body. Wiring again drops the last observer and listeners. */
 export function wireToc(root) {
   root._toc?.disconnect();
   root._tocOff?.abort();
@@ -498,8 +498,8 @@ export function wireToc(root) {
     // The last sections of a page cannot reach the band, so at the end of a page that scrolls the last entry is current.
     const end = scrollY > 0 && scrollY + innerHeight >= document.documentElement.scrollHeight - 1;
     const id = picked ?? (end ? [...links.keys()].pop() : [...links.keys()].find((k) => seen.has(k)));
-    if (!id) return;
     for (const [k, a] of links) k === id ? a.setAttribute("aria-current", "location") : a.removeAttribute("aria-current");
+    if (!id) return;
     // Scroll the rail, not the page: scrollIntoView() here would stop the router's smooth scroll.
     const a = links.get(id);
     if (a.offsetTop < nav.scrollTop || a.offsetTop + a.offsetHeight > nav.scrollTop + nav.clientHeight) nav.scrollTop = a.offsetTop - nav.clientHeight / 2;
@@ -514,6 +514,8 @@ export function wireToc(root) {
   // A clicked entry stays current while the router scrolls to it, which may stop short of the band at the end of a page.
   nav.addEventListener("click", (e) => { const a = e.target.closest?.("a"); if (a) { picked = a.getAttribute("href").slice(1); mark(); } }, { signal });
   for (const t of ["wheel", "touchstart", "keydown"]) addEventListener(t, () => { if (picked) { picked = null; mark(); } }, { passive: true, signal });
+  // A click outside the rail also drops the pick, such as one on Edit, which can leave the page at the top with no section in the band.
+  addEventListener("click", (e) => { if (picked && !nav.contains(e.target)) { picked = null; mark(); } }, { signal });
   for (const k of links.keys()) { const el = document.getElementById(k); if (el) root._toc.observe(el); }
 }
 

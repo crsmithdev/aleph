@@ -547,7 +547,7 @@ The contents are a list of links to the sections of a long page, in a rail that 
 - Label each entry with the title of its section, in the same words.
 - List the sections in page order. Leave out a section with no heading, such as the metric cards at the top.
 - A link scrolls the page in place: the router handles an `#id` link and leaves the address as it is.
-- `wireToc()` marks the current entry: the first section that crosses the band from 10% to 40% down the view. It scrolls the rail, not the page, to keep that entry in view. At the end of the page the last entry is current. A clicked entry stays current until the next scroll by hand (wheel, touch or a key).
+- `wireToc()` marks the current entry: the first section that crosses the band from 10% to 40% down the view. It scrolls the rail, not the page, to keep that entry in view. At the end of the page the last entry is current. When no section is in the band and the page is not at its end, no entry is current. A clicked entry stays current until the next scroll by hand (wheel, touch or a key) or a click outside the rail.
 - Under 1100px the contents are a fold above the body, closed by `wireToc()`. They do not stay in view.
 
 | Do | Don't |
