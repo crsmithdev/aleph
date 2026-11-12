@@ -1161,8 +1161,20 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .gates .hint { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--need); }
 .gates .empty .hint, .gates .srow .hint { color: var(--muted); font-size: var(--fs-xs); }
 .rule code { font: var(--fs-xs) var(--mono); color: var(--muted); }
-.rule .seg button[disabled] { cursor: wait; opacity: var(--dim); }
 .rule .note { margin: 0; }
+.c-rule { background: var(--ink-2); } .c-dir { background: var(--muted); } .c-user { background: var(--need); }
+#rules-table td { white-space: normal; }
+#rules-table td:nth-child(n+4) { white-space: nowrap; }
+#rules-table td.wide { min-width: 22ch; }
+#rules-table td.decided { min-width: 8rem; }
+#rules-table .split { display: block; margin-top: var(--sp-4); font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
+#rules-table td.act-cell { text-align: right; }
+.rule-edit > td { background: var(--sunk); }
+.rule-form { display: flex; flex-direction: column; gap: var(--sp-12); }
+.rule-form .settings { max-width: none; }
+.rule-form input[type="number"] { width: 9ch; }
+.rule-form :is(input, select)[disabled] { opacity: var(--dim); }
+.rule-acts { display: flex; justify-content: flex-end; gap: var(--sp-6); }
 /* A control row is one line: the label, the control, then the hint. */
 #gates-caps .settings { max-width: none; }
 #gates-caps .srow { grid-template-columns: 8rem auto minmax(0, 1fr); padding: var(--sp-6) 0; }

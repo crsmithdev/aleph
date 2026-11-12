@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
@@ -29,7 +29,7 @@ export const redirect = (hash) => {
 };
 
 /** The label of an automatic mode: what it does. */
-export const MODES = { recommended: "Recommended", retry: "Retry", start: "Start", land: "Land", approve: "Approve" };
+export const MODES = { recommended: "Take the pick", retry: "Retry", start: "Start", land: "Land", approve: "Approve" };
 const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 
 /** The log's actors, in filter order, with the badge tone of each from `tone()`. */
@@ -120,35 +120,58 @@ function renderWaiting(d) {
   return card("Waiting for the User", rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for the user.", "An Ask that needs the user shows here."), { id: "gates-waiting", count: d.asks.length });
 }
 
-/** The minutes after which the factory lands an escalated Ask of a land reason that the director recommends landing; 0 waits for Chris. */
-const timeoutRow = (r) => {
-  const id = `timeout-${r.reason}`;
-  return setting(`${r.name}: land after`, inputBox("minutes", r.timeout, { id, type: "number", attrs: ' min="0" step="1" inputmode="numeric" required' }) + " min with no answer",
-    { id, save: "Save", hint: r.timeout ? "Only when the director recommends the land." : "0: waits for the user.", attrs: ` data-timeout="${esc(r.reason)}"` });
-};
+/** The units of an Ask's wait, largest first: a stored number of minutes shows in the largest unit that divides it. */
+const WAITS = [["d", 1440, "days"], ["h", 60, "hours"], ["min", 1, "minutes"]];
+const splitWait = (m) => { const [unit, k] = WAITS.find(([, k]) => m % k === 0); return { n: m / k, unit }; };
+const waitText = (m) => { const { n, unit } = splitWait(m); return `${n} ${unit}`; };
 
-/** One row per Ask reason: how often it fired and who decided, then a settings list of who decides it. Ask me, or the reason's one automatic mode. */
+/** Who decides a reason first: a rule's action when always.json grants one, else the director. */
+const decidesText = (r) => (r.places ? (r.places.length ? `Approve for ${r.places.map((k) => k.slice(k.indexOf(":") + 1)).join(", ")}` : "Director") : r.granted ? modeLabel(r.granted.action) : "Director");
+
+/** What happens when an escalated Ask gets no answer. Only the land reasons have a timeout. */
+const noAnswerText = (r) => (r.timeout ? `After ${waitText(r.timeout)}: land if recommended` : "Keep waiting");
+
+/** Who decided the reason's Asks in the window, as a bar and its line. */
+function decidedCell(d) {
+  const all = d.rule + d.director + d.chris;
+  if (!all) return miss("none decided");
+  const line = `${d.rule} rule · ${d.director} director · ${d.chris} user`;
+  return meter([["rule", d.rule], ["dir", d.director], ["user", d.chris]].map(([k, n]) => ({ pct: (100 * n) / all, cls: `c-${k}` })), line) + `<small class="split">${esc(line)}</small>`;
+}
+
+/** A reason has an Edit row when the factory can change something on it: a rule action, a stale grant or a timeout. */
+const editable = (r) => !r.places && (!!r.mode || !!r.granted || r.timeout !== undefined);
+
+/** The Edit row of a reason, hidden until its Edit button opens it. Save posts only what changed. */
+function ruleForm(r) {
+  const opt = (value, label, on) => ({ label, on, attrs: ` data-value="${esc(value)}"` });
+  const g = r.granted?.action ?? "";
+  const decide = !r.mode && !g ? setting("Decides", "Director", { hint: "The factory has no rule for this Ask." }) : setting("Decides", seg(`Who decides ${r.name}`, [opt("", "Director", !g), ...(r.mode ? [opt(r.mode, modeLabel(r.mode), g === r.mode)] : []), ...(g && g !== r.mode ? [opt(g, modeLabel(g), true)] : [])], ' data-field="decide"'),
+    { hint: "Director: the director decides and sends the rest to the user." });
+  let wait = "";
+  if (r.timeout !== undefined) {
+    const v = r.timeout ? splitWait(r.timeout) : { n: 30, unit: "min" }, off = r.timeout ? "" : " disabled";
+    wait = setting("If no answer", seg(`If ${r.name} gets no answer`, [opt("0", "Keep waiting", !r.timeout), opt("1", "Land if recommended", !!r.timeout)], ' data-field="wait"') +
+      ` after ${inputBox("n", v.n, { type: "number", attrs: ` min="1" step="1" inputmode="numeric" required aria-label="${esc(r.name)} wait"${off}` })}` +
+      selectBox(`${r.name} wait unit`, "unit", WAITS.map(([value, , label]) => ({ value, label })), v.unit, { attrs: off }),
+      { hint: "Lands only when the director recommends the land." });
+  }
+  const buttons = `<span class="rule-acts"><button type="button" class="act" data-cancel>Cancel</button><button type="submit" class="act primary">Save</button></span>`;
+  return `<tr class="rule-edit" data-reason="${esc(r.reason)}" hidden><td colspan="7"><form class="rule-form" data-rule="${esc(r.reason)}" data-was-decide="${esc(g)}" data-was-wait="${r.timeout ?? ""}">` +
+    settings(`Edit ${r.name}`, [decide, wait].filter(Boolean)) + buttons + `</form></td></tr>`;
+}
+
+/** One row per Ask reason: how often it fired, who decided it, who decides it first, and what happens when that fails. Edit opens the reason's settings under its row. */
 export function renderRules(d) {
   const rows = d.rules.map((r) => {
-    const dec = r.decided, out = r.outcome;
+    const edit = editable(r) ? `<button type="button" class="act" data-edit-rule="${esc(r.reason)}" aria-expanded="false">Edit</button>` : "";
     return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="wide"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? note(r.line) : ""}</td>` +
-      [r.fired, dec.rule, dec.director, dec.chris, out.fixed, out.none].map((n) => cell(count(n), { num: true })).join("") + `</tr>`;
+      cell(count(r.fired), { num: true }) + `<td class="decided">${decidedCell(r.decided)}</td>` +
+      `<td>${esc(decidesText(r))}</td><td>Ask me</td><td>${esc(noAnswerText(r))}</td><td class="act-cell">${edit}</td></tr>` + (edit ? ruleForm(r) : "");
   }).join("");
-  const decide = d.rules.flatMap((r) => {
-    const g = r.granted;
-    let control, hint = "";
-    if (r.places) {
-      hint = r.places.length ? `Granted for ${r.places.join(", ")}.` : "";
-      control = "Set per target from the proposal.";
-    } else {
-      const btn = (mode, label, on) => ({ label, on, attrs: ` data-rule="${esc(r.reason)}" data-mode="${esc(mode)}"` });
-      control = seg(`Who decides ${r.name}`, [btn("", "Ask me", !g), ...(r.mode ? [btn(r.mode, modeLabel(r.mode), g?.action === r.mode)] : [])]);
-      if (!r.mode) hint = "The director decides first and sends the rest to the user.";
-      if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
-    }
-    return [setting(r.name, control, { hint }), ...(r.timeout !== undefined ? [timeoutRow(r)] : [])];
-  });
-  return card("Rules", !rows ? empty("No rule.", "A rule shows here for each kind of Ask.") : dataTable(heads(["Ask", "Fired", "Rule", "Director", "User", "Fixed", "No Change"], ["Fired", "Rule", "Director", "User", "Fixed", "No Change"]), rows, { id: "rules-table" }) + settings("Who decides", decide), { id: "rules" });
+  const legend = note("Decides: who acts first, Auto by a rule or by the director. If Auto cannot: where an Ask goes when that fails. If no answer: what happens when an Ask waits for the user.");
+  return card("Rules", !rows ? empty("No rule.", "A rule shows here for each kind of Ask.") :
+    legend + dataTable(heads(["Ask", "Fired", "Decided By", "Decides", "If Auto Cannot", "If No Answer", ""], ["Fired"]), rows, { id: "rules-table" }), { id: "rules" });
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
@@ -190,16 +213,43 @@ export function renderLog(d, by, page = 1) {
 /** What each settings form posts, by its `data-` key: the URL, the body and the word for an error line. */
 const SAVES = {
   schedule: (f) => ["/api/automation/schedules", { name: f.dataset.schedule, every: `${f.elements.n.value}${f.elements.unit.value}` }, "interval"],
-  timeout: (f) => [`/api/automation/rules/${encodeURIComponent(f.dataset.timeout)}/timeout`, { minutes: Number(f.elements.minutes.value) }, "timeout"],
   cap: (f) => ["/api/automation/caps", { [f.dataset.cap]: Number(f.elements[f.dataset.cap].value) }, "cap"],
 };
+
+/** The posts an Edit row's Save needs: a grant or a revoke when Decides changed, a timeout when the wait changed. */
+function rulePosts(f) {
+  const url = (what) => `/api/automation/rules/${encodeURIComponent(f.dataset.rule)}/${what}`;
+  const picked = (field) => f.querySelector(`.seg[data-field="${field}"] [aria-pressed="true"]`)?.dataset.value;
+  const out = [], decide = picked("decide");
+  if (decide !== undefined && decide !== f.dataset.wasDecide) out.push(decide ? [url("grant"), { action: decide }] : [url("revoke"), undefined]);
+  const wait = picked("wait");
+  if (wait !== undefined) {
+    const k = WAITS.find(([u]) => u === f.elements.unit.value)[1], minutes = wait === "0" ? 0 : Number(f.elements.n.value) * k;
+    if (String(minutes) !== f.dataset.wasWait) out.push([url("timeout"), { minutes }]);
+  }
+  return out;
+}
+
+async function saveRule(f) {
+  const btn = f.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    for (const [url, body] of rulePosts(f)) await postJson(url, body);
+  } catch (err) { btn.disabled = false; say(btn, `Could not save the rule: ${err.message}`); return; }
+  await redraw(true);
+}
 
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
 export function mount(root) {
   scope().wire(root);
   wireToc(root);
   root.onsubmit = async (e) => {
-    const form = e.target.closest?.("form[data-schedule], form[data-timeout], form[data-cap]");
+    const rule = e.target.closest?.("form.rule-form");
+    if (rule) {
+      e.preventDefault();
+      return saveRule(rule);
+    }
+    const form = e.target.closest?.("form[data-schedule], form[data-cap]");
     if (!form) return;
     e.preventDefault();
     const [url, body, what] = SAVES[Object.keys(SAVES).find((k) => k in form.dataset)](form), btn = form.querySelector("button");
@@ -228,17 +278,22 @@ export function mount(root) {
       setQuery({ page: turn.dataset.page });
       return redraw();
     }
-    const r = e.target.closest?.("button[data-rule]");
-    if (r) {
-      if (r.getAttribute("aria-pressed") === "true") return;
-      const seg = r.parentElement, buttons = [...seg.querySelectorAll("button")];
-      buttons.forEach((b) => { b.disabled = true; });
-      const { rule, mode } = r.dataset;
-      try {
-        await (mode ? postJson(`/api/automation/rules/${encodeURIComponent(rule)}/grant`, { action: mode }) : postJson(`/api/automation/rules/${encodeURIComponent(rule)}/revoke`));
-      } catch (err) { buttons.forEach((b) => { b.disabled = false; }); say(seg, `Could not change the rule: ${err.message}`); return; }
-      await redraw(true);
+    const open = e.target.closest?.("button[data-edit-rule]");
+    if (open) {
+      const row = root.querySelector(`tr.rule-edit[data-reason="${CSS.escape(open.dataset.editRule)}"]`);
+      row.hidden = !row.hidden;
+      open.setAttribute("aria-expanded", String(!row.hidden));
       return;
+    }
+    const pick = e.target.closest?.("form.rule-form .seg button");
+    if (pick) {
+      for (const b of pick.parentElement.children) b.setAttribute("aria-pressed", String(b === pick));
+      if (pick.parentElement.dataset.field === "wait") for (const el of [pick.form.elements.n, pick.form.elements.unit]) el.disabled = pick.dataset.value === "0";
+      return;
+    }
+    const cancel = e.target.closest?.("form.rule-form button[data-cancel]");
+    if (cancel) {
+      return redraw(true);
     }
   };
 }

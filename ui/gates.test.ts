@@ -175,7 +175,7 @@ const data = () => ({
   log: { days: 7, max: 200, entries: [{ at: ago(1), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" }, { at: ago(2), by: "human", subject: "rescue", action: "changed", sub: "rescue", note: "set to recommended" }] },
 });
 
-test("the view draws the sections in order, a closed gate, and the rule switches with only Ask me and the reason's mode", () => {
+test("the view draws the sections in order, a closed gate, and an Edit row with only Director and the reason's mode", () => {
   const h = gates.renderGates(data());
   const order = ["Waiting for the User", "Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
@@ -193,17 +193,15 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(h).not.toContain('data-cap="awaiting"');
   expect(h).not.toContain("Edit caps");
   for (const [reason, r] of Object.entries(ASK_REASONS)) {
-    const row = h.split('<div class="srow">').find((x: string) => x.startsWith(`<label class="sl">${reasonText(reason).name}</label>`))!;
-    const modes = [...row.matchAll(new RegExp(`data-rule="${reason}" data-mode="([^"]*)"`, "g"))].map((m) => m[1]);
-    if (reason.startsWith("proposal-")) expect(modes).toEqual([]);
-    else expect(modes).toEqual(r.always ? ["", r.always] : [""]);
-    if (!r.always && !reason.startsWith("proposal-")) {
-      expect(row).toContain("The director decides first and sends the rest to the user.");
-      expect(row).not.toContain("No automatic mode");
-    }
+    const form = h.split('<form class="rule-form"').find((x: string) => x.startsWith(` data-rule="${reason}"`));
+    const modes = form ? [...form.slice(form.indexOf('data-field="decide"')).split("</div>")[0].matchAll(/data-value="([^"]*)"/g)].map((m) => m[1]) : [];
+    // A reason with no rule, no grant and no timeout has nothing to edit, so it has no Edit row.
+    if (reason.startsWith("proposal-") || !r.always) expect(form).toBeUndefined();
+    else expect(modes).toEqual(["", r.always]);
   }
-  const rescue = h.slice(h.indexOf('data-reason="rescue"'));
-  expect(rescue).toMatch(/data-mode="recommended" aria-pressed="true">Recommended</);
+  expect(h).not.toContain("The director decides first");
+  const rescue = h.slice(h.indexOf('data-rule="rescue"'));
+  expect(rescue).toMatch(/data-value="recommended" aria-pressed="true">Take the pick</);
   expect(h.match(/<tr class="rule" data-reason=/g)).toHaveLength(Object.keys(ASK_REASONS).length);
   for (const p of SECURITY_PATHS) expect(h).toContain(`<code class="chip">${p}</code>`);
   const card = gates.renderHeld(data());
@@ -427,7 +425,7 @@ test("rules() has one row per Ask reason; renderRules is one table with a row pe
   expect(h.match(/<tr class="rule" data-reason="/g)!.length).toBe(r.length);
 });
 
-test("a stored firefighter grant for held-path is dead: rules() shows no grant and the row has only Ask me", () => {
+test("a stored firefighter grant for held-path is dead: rules() shows no grant and Decides offers only Director", () => {
   const f = join(base, "factory", "always.json");
   const saved = readFileSync(f, "utf8");
   try {
@@ -436,8 +434,7 @@ test("a stored firefighter grant for held-path is dead: rules() shows no grant a
     expect(row.granted).toBeNull();
     const h = gates.renderRules({ rules: [row] });
     expect(h).not.toContain("always.json grants");
-    expect(h.match(/<button[^>]*data-rule=/g)!.length).toBe(1);
-    expect(h).toContain(">Ask me</button>");
+    expect(h).not.toContain('data-field="decide"');
   } finally { writeFileSync(f, saved); }
 });
 
@@ -457,10 +454,11 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
   const h = gates.renderRules({ rules: [row] });
-  expect(h).toContain('<th>Ask</th><th class="num">Fired</th><th class="num">Rule</th><th class="num">Director</th><th class="num">User</th><th class="num">Fixed</th><th class="num">No Change</th>');
+  expect(h).toContain('<th>Ask</th><th class="num">Fired</th><th>Decided By</th><th>Decides</th><th>If Auto Cannot</th><th>If No Answer</th><th></th>');
   expect(h).not.toMatch(/Manual|<th>[^<]*[()/]/);
-  expect(h).toContain([5, 2, 1, 1, 1, 3].map((n) => `<td class="num">${n}</td>`).join(""));
-  expect(h).not.toContain("2 rule, 1 director, 1 Chris");
+  expect(h).toContain('<td class="num">5</td>');
+  expect(h).toContain('<small class="split">2 rule · 1 director · 1 user</small>');
+  expect(h).toMatch(/<i class="c-rule" style="width:50.0%"><\/i><i class="c-dir" style="width:25.0%"><\/i><i class="c-user" style="width:25.0%"><\/i>/);
 });
 
 test("rules() takes an entry's missing reason from the run that awaited when it was set; with no such run the entry is not counted", () => {
@@ -648,4 +646,18 @@ test("the Automation page names the held backend and its reason, and no line whe
   const held = gates.renderGates({ ...data(), backend: { via: "OpenRouter", why: "probe failed" } });
   expect(held).toContain(`id="gates-backend">Waiting for OpenRouter: probe failed</p>`);
   expect(gates.renderGates({ ...data(), backend: null })).not.toContain("gates-backend");
+});
+
+test("a land reason shows its timeout in the largest whole unit, and its Edit row opens on Land if recommended", () => {
+  const row = (timeout: number): any => ({ reason: "held-path", ...reasonText("held-path"), mode: "", fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: null, timeout });
+  const h = gates.renderRules({ rules: [row(120)] });
+  expect(h).toContain("<td>After 2 h: land if recommended</td>");
+  expect(h).toContain('data-was-wait="120"');
+  expect(h).toMatch(/data-value="1" aria-pressed="true">Land if recommended/);
+  expect(h).toMatch(/<input name="n" type="number" value="2"[^>]*>/);
+  expect(h).toContain('<option value="h" selected>hours</option>');
+  expect(h).toContain('<label class="sl">Decides</label><span class="sctl">Director</span>');
+  const off = gates.renderRules({ rules: [row(0)] });
+  expect(off).toContain("<td>Keep waiting</td>");
+  expect(off).toMatch(/<input name="n"[^>]* disabled>/);
 });
