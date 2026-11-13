@@ -11,6 +11,7 @@ import { Exit, run } from "./ops.ts";
 import { fixFrontmatter, lintVault, loadVault, readRun, recordRun, today, wikiNotes } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
+const OVERLAP_QUEUE = 10;
 type Json = Record<string, any>;
 type Commit = (subject: string, paths: string[]) => string | null;
 
@@ -82,10 +83,11 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
   const lint = lintVault(await loadVault(root), { overlap: true, read: readJsonOr(join(root, ".recall.json"), {}), tracked: [...tracked] });
   const queue = (rule: string) => lint.warn.filter((f) => f.rule === rule);
   const misses = await sub(["misses"]);
-  report.queues = { decay: queue("stale"), overlap: queue("overlap"), ...(misses.code ? {} : { misses: misses.json }) };
+  report.queues = { decay: queue("stale"), overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.code ? {} : { misses: misses.json }) };
+  const overlaps = queue("overlap").length;
   report.counts = {
     fixed: report.lint.fixed.length, adopt: untracked.length, core: cores.length, handoffs: report.handoffs.length,
-    decay: report.queues.decay.length, overlap: report.queues.overlap.length, retry: retry ? 1 : 0,
+    decay: report.queues.decay.length, overlap: overlaps, retry: retry ? 1 : 0,
   };
   report.ok = !failed.length;
   recordRun(root, "maintain", report.ok ? "ok" : "failed", failed.length ? `failed: ${failed.join(", ")}` : `${dry ? "dry: " : ""}${JSON.stringify(report.counts)}`);

@@ -987,6 +987,13 @@ describe("maintain", () => {
     expect(gitStatus()).toBe(before);
     expect(JSON.parse(readFileSync(join(vault, ".index/runs/maintain.json"), "utf8")).result).toBe("ok");
   });
+  test("--dry caps the overlap queue at 10 and counts them all", async () => {
+    for (const n of ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]) put(join(vault, "wiki/gotchas", `Shared Gear ${n}.md`), readFileSync(note(`Shared Gear ${n}`), "utf8"));
+    const r = await run(env(), "maintain", "--dry");
+    expect(r.code).toBe(0);
+    expect(r.json.queues.overlap.length).toBe(10);
+    expect(r.json.counts.overlap).toBe(15);
+  });
   test("moves the old compiled handoff, fixes the core line, commits", async () => {
     const r = await run(env(), "maintain");
     expect(r.code).toBe(0);
