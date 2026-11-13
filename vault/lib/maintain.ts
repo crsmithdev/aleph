@@ -2,15 +2,18 @@
  * `aleph memory maintain`: the mechanical pass of the memory maintainer. No model runs. With `dry` it reports each
  * step and changes nothing. Files outside git are moved to ~/.aleph/backups/maintain/<day>/, never deleted.
  */
-import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { useLog } from "../../lib/episode-use.ts";
 import { readJsonOr } from "../../lib/json.ts";
+import { layout } from "../../lib/layout.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
 import { Exit, run } from "./ops.ts";
 import { compiledDays, fixFrontmatter, lintVault, loadVault, readRun, recordRun, today, wikiNotes } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
+const SHOWN_UNOPENED = 8;
 const OVERLAP_QUEUE = 10;
 type Json = Record<string, any>;
 type Commit = (subject: string, paths: string[]) => string | null;
@@ -81,13 +84,22 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
   const compiled = compiledDays(root);
   report.handoffs = move(handoffsDir(), join(backup, "handoffs"), dry, dated, ago(HANDOFF_DAYS), (d) => compiled.includes(d));
 
+  // An episode page shown often and never opened does not help: it moves to the backup, and nothing is deleted.
+  const uses = existsSync(useLog()) ? readFileSync(useLog(), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
+  const shown = (t: string, event: string) => uses.filter((u) => u.title === t && u.event === event).length;
+  const pages = join(layout().factory, "episodes");
+  report.episodes = (existsSync(pages) ? readdirSync(pages) : []).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3))
+    .filter((t) => shown(t, "shown") >= SHOWN_UNOPENED && !shown(t, "opened"));
+  if (!dry && report.episodes.length) mkdirSync(join(backup, "episodes"), { recursive: true });
+  if (!dry) for (const t of report.episodes) renameSync(join(pages, `${t}.md`), join(backup, "episodes", `${t}.md`));
+
   const lint = lintVault(await loadVault(root), { overlap: true, read: readJsonOr(join(root, ".recall.json"), {}), tracked: [...tracked] });
   const queue = (rule: string) => lint.warn.filter((f) => f.rule === rule);
   const misses = await sub(["misses"]);
   report.queues = { decay: queue("stale"), overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.code ? {} : { misses: misses.json }) };
   const overlaps = queue("overlap").length;
   report.counts = {
-    fixed: report.lint.fixed.length, adopt: untracked.length, core: cores.length, handoffs: report.handoffs.length,
+    fixed: report.lint.fixed.length, adopt: untracked.length, core: cores.length, handoffs: report.handoffs.length, episodes: report.episodes.length,
     decay: report.queues.decay.length, overlap: overlaps, retry: retry ? 1 : 0,
   };
   report.ok = !failed.length;

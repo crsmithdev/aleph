@@ -311,7 +311,7 @@ test("a tick where an episode page fails to write records the episodes result as
 test("guard: the maintain step from 03:00 local returns the dry run's counts and records its run as ok", async () => {
   const dir = vaultHere();
   const counts = await maintainStep(NOW);
-  expect(counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, decay: 0, overlap: 0, retry: 0 });
+  expect(counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, episodes: 0, decay: 0, overlap: 0, retry: 0 });
   expect(readRun(dir, "maintain")?.result).toBe("ok");
 });
 

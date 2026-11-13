@@ -31,7 +31,7 @@ In a session, the `vault` skill runs these for you.
 | `delete <title> --why <text>` | Removes a note no live note links to; git keeps it |
 | `compile [date]` | Prints a digest of a day's Langfuse turns, handoffs and daily note, and records the day in a file outside git |
 | `misses [--days N]` | Read-only: the recall misses that Langfuse recorded |
-| `maintain [--dry]` | The mechanical pass, no model: `lint --fix`, `adopt`, repeated core links, handoffs older than 30 days whose day `compile` ran moved to `~/.aleph/backups/maintain/<day>/`, a failed push retried; reports the decay, overlap and misses queues (the overlap queue shows at most 10 entries; the count is the full number). `--dry` changes nothing |
+| `maintain [--dry]` | The mechanical pass, no model: `lint --fix`, `adopt`, repeated core links, handoffs older than 30 days whose day `compile` ran and episode pages shown 8 or more times and never opened moved to `~/.aleph/backups/maintain/<day>/`, a failed push retried; reports the decay, overlap and misses queues (the overlap queue shows at most 10 entries; the count is the full number). `--dry` changes nothing |
 
 ## Note format
 

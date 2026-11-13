@@ -1014,4 +1014,24 @@ describe("maintain", () => {
     expect(gitLog()).toContain("maintain core: 1 notes");
     expect(readFileSync(join(vault, "Home.md"), "utf8")).not.toContain("[[UI Text]] [[UI Text]]");
   });
+
+  describe("episode pages", () => {
+    const pages = () => join(base, "factory", "episodes");
+    beforeEach(() => {
+      const lines = (title: string, event: string, n: number) => Array.from({ length: n }, () => JSON.stringify({ date: day(1), title, event, session: null }) + "\n").join("");
+      for (const t of ["aleph-1 A", "aleph-2 B", "aleph-3 C"]) put(join(pages(), `${t}.md`), "---\nkind: episode\n---\n");
+      put(join(base, "factory", "episode-use.jsonl"), lines("aleph-1 A", "shown", 8) + lines("aleph-2 B", "shown", 8) + lines("aleph-2 B", "opened", 1) + lines("aleph-3 C", "shown", 7));
+    });
+    test("moves the page shown 8 times and never opened, and no other", async () => {
+      const r = await run(env(), "maintain");
+      expect(r.json).toMatchObject({ episodes: ["aleph-1 A"], counts: { episodes: 1 } });
+      expect(readdirSync(join(backups, "maintain", readdirSync(join(backups, "maintain"))[0], "episodes"))).toEqual(["aleph-1 A.md"]);
+      expect(readdirSync(pages()).sort()).toEqual(["aleph-2 B.md", "aleph-3 C.md"]);
+    });
+    test("--dry reports the same page and moves none", async () => {
+      const r = await run(env(), "maintain", "--dry");
+      expect(r.json).toMatchObject({ episodes: ["aleph-1 A"], counts: { episodes: 1 } });
+      expect(readdirSync(pages()).sort()).toEqual(["aleph-1 A.md", "aleph-2 B.md", "aleph-3 C.md"]);
+    });
+  });
 });
