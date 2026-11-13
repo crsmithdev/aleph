@@ -316,6 +316,7 @@ export async function start() {
   setInterval(page.check, 5000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) shownAt = Date.now();
+    checkOut();
     page.follow();
     if (!document.hidden && page.shown?.view?.live) page.reload();
   });

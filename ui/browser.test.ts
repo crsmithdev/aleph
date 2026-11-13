@@ -534,12 +534,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     const stale = 'document.querySelector("#view .shead .say").textContent.includes("out of date")';
     await page.ev('Object.defineProperty(document, "hidden", { configurable: true, get: () => window.away === true }); window.away = true; document.dispatchEvent(new Event("visibilitychange"))');
     await page.ev("window.skew += 4 * 60_000");
-    await Bun.sleep(1500);
-    expect(await page.ev(stale)).toBe(false);
-    // The tab shows again; its reload waits on the gate, as a slow server would.
-    await page.ev("void (window.gate = new Promise((ok) => { window.release = ok; })); window.away = false; document.dispatchEvent(new Event(\"visibilitychange\"))");
-    await Bun.sleep(1500);
-    expect(await page.ev(stale)).toBe(false);
+    // The tab shows again, and the shell checks at once; its reload waits on the gate, as a slow server would.
+    expect(await page.ev(`(() => { window.gate = new Promise((ok) => { window.release = ok; }); window.away = false; document.dispatchEvent(new Event("visibilitychange")); return ${stale}; })()`)).toBe(false);
     await page.ev("window.gate = null; window.release()");
     await page.reload();
   }, 30_000);
