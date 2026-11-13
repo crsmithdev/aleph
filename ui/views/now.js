@@ -2,7 +2,7 @@
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, undecided, when, scope } from "../lib.js";
-import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say as sayParts } from "../../lib/naming.ts";
+import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, parseId, say as sayParts } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { share, flowOf, statusCards, usable } from "./speed.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
@@ -252,7 +252,7 @@ const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
 function issueRows(events, titles = {}, runs = {}) {
   const by = new Map();
   // An issue's runs share its row; any other subject (the housekeeper) is one row per run, so a row's older events belong to one run.
-  const groupOf = (ev) => (/-\d+$/.test(ev.subject) || !jobOf(ev) ? ev.subject : `${ev.subject}:${jobOf(ev)}`);
+  const groupOf = (ev) => (parseId(ev.subject) || !jobOf(ev) ? ev.subject : `${ev.subject}:${jobOf(ev)}`);
   for (const ev of events) if (ev.subject !== "chat") by.set(groupOf(ev), [...(by.get(groupOf(ev)) ?? []), ev]);
   return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more) => eventRow(ev, titles, {}, more, runs[jobOf(ev)]), runs);
 }
