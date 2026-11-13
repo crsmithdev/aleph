@@ -364,8 +364,9 @@ export function state(now = new Date()): State {
       else {
         const k = issueKeyOf(real), on = onOf(real);
         const item = real.repo === undefined || on === undefined ? undefined : lists.item(real.repo, on);
-        // A parked issue's job waits on the work store: its next step is held, so it is not at work.
-        if (item !== undefined && status(item) === "parked") continue;
+        // A parked issue's job waits on the work store: its next step is held, so a job between steps is not at
+        // work. Parking stops new work, not a run already at it, so a running one stays.
+        if (real.condition !== "running" && item !== undefined && status(item) === "parked") continue;
         liveJobs.add(real.job);
         if (k) liveItems.add(k);
         running.push(toJob(runs));

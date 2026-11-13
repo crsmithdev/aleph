@@ -367,3 +367,19 @@ describe("a passed job whose issue is parked", () => {
     expect(names).toContain(open);
   });
 });
+
+describe("a live job on a parked issue", () => {
+  test("is running, because parking stops new work and not a run; one between steps is not", () => {
+    const id: number[] = [];
+    writeList({ key: "fac" }, "parked jobs", (doc) => {
+      for (const t of ["live run", "queued rework"]) { const it = add(doc, t); setStatus(it, "parked"); id.push(it.id); }
+      return true;
+    });
+    const [live, held] = id.map((n) => `fac-${n}`);
+    run("20261027-000092-a", { job: live, name: live, condition: "running", on: live });
+    run("20261027-000093-a", { job: held, name: held, condition: "returned", failed: "review", next: "worker", on: held });
+    const names = state(now).running.map((j) => j.name);
+    expect(names).toContain(live);
+    expect(names).not.toContain(held);
+  });
+});
