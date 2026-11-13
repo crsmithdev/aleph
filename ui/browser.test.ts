@@ -257,6 +257,28 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when('!document.querySelector(".shell.collapsed")');
   }, 30_000);
 
+  test("the Status entry takes the status tone on any page, and follows a change with no reload", async () => {
+    await page.go("#/factory/jobs");
+    const colour = () => page.ev<string>('getComputedStyle(document.querySelector("#nav a[href=\'#/\']")).color');
+    const token = (name: string) => page.ev<string>(`(() => { const e = document.createElement("i"); e.style.color = "var(${name})"; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; })()`);
+    await page.when('document.querySelector("#nav a[href=\'#/\']").dataset.tone');
+    // The tab shows again: the stream opens and its open reads /api/status, which the test answers.
+    const say = async (tone: string) => {
+      await page.ev(`(() => { window.__f ??= window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/status") ? Promise.resolve(Response.json({ tone: ${JSON.stringify(tone)} })) : window.__f(u, o); document.dispatchEvent(new Event("visibilitychange")); })()`);
+      await page.when(`document.querySelector("#nav a[href='#/']").dataset.tone === ${JSON.stringify(tone)}`);
+    };
+    await say("fine");
+    const fine = await colour();
+    await say("alert");
+    expect(await colour()).toBe(await token("--stuck"));
+    await say("ask");
+    expect(await colour()).toBe(await token("--need"));
+    await say("fine");
+    expect(await colour()).toBe(fine);
+    expect(await page.ev("location.hash")).toBe("#/factory/jobs");
+    await page.ev("window.fetch = window.__f");
+  }, 30_000);
+
   test("at phone width the nav wraps, the page does not scroll sideways, and group headers hide", async () => {
     await page.go("#/");
     await page.width(420);

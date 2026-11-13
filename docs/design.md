@@ -1520,6 +1520,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 | Part | Rule |
 |---|---|
 | Sidebar | `#nav`, 208px open, 48px when collapsed (`.shell.collapsed`); at 720px and narrower, a sticky bar at the top: one row, the links scroll sideways, and the current link scrolls into view |
+| Status entry | Its label and icon take the tone of the status sentence from `/api/status`: `alert` is `--stuck`, `warning` and `ask` are `--need`, `fine` is `--ink`, white on the dark theme |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
 | Browser | `::selection` is `--sel`; scrollbars are thin, `--rule` on transparent |
 | Grid | `.tiles` holds metric cards; `.pair` holds two cards side by side, stacked under two cards of width; `.lanes` holds lanes; `.trio` holds chart panels; `.browse` is a list with its detail beside it, one column under 1100px |

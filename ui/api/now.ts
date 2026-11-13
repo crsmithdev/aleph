@@ -3,6 +3,7 @@ import type { Routes } from "../server.ts";
 import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import { eventIn, inProject, known, repoIn, scopeOf } from "./scope.ts";
 import { state, type State } from "../state.ts";
+import { verdict } from "../../lib/status-words.ts";
 import { annotate, currentFit, summaryOff } from "../usage.ts";
 
 /** The state with only `project`'s jobs, issues, asks and Herald events; the factory and ticks stay whole. */
@@ -23,6 +24,8 @@ export async function stateBody(project: string | null) {
 }
 
 export const routes: Routes = {
+  /** `GET /api/status`: the tone of the status sentence over all projects, for the sidebar. It is the verdict the Status page draws. */
+  "GET /api/status": async () => Response.json({ tone: verdict(await stateBody(null)).tone }),
   "GET /api/factory": async (_req, _params, url) => {
     const sc = scopeOf(url);
     if (sc instanceof Response) return sc;

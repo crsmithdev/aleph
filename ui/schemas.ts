@@ -26,6 +26,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     asks: [{ key: "string", kind: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }],
     usage: "object?", proposals: "array",
   },
+  "/api/status": { tone: "string" },
   "/api/automation": {
     now: "time", capEnv: { "*": "boolean" }, settings: { "*": "number?" }, metrics: { days: "number", rate: "object?", catches: "object", held: "object" },
     schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", gated: "object?", baseline: "array", rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],

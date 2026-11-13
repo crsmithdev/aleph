@@ -209,3 +209,25 @@ test("redraw draws the shown data again for the new query, and with fresh loads 
   await fresh;
   expect([p.drawn.at(-1), p.firsts.at(-1)]).toEqual([{ n: 2 }, false]);
 });
+
+test("a view that is not live opens the stream, and a change reloads it for no key", async () => {
+  const p = page();
+  const route = { ...p.route, view: { title: "Jobs", api: "/api/jobs" } };
+  const shown = p.router.show(route);
+  p.answer(0, { n: 1 }, "/api/jobs");
+  await shown;
+  expect(FakeStream.last.url).toContain("/api/events");
+  FakeStream.last.send("change", { keys: ["/api/jobs"] });
+  expect(p.asked.length).toBe(1);
+});
+
+test("the stream calls env.opened when it opens, and the loader passes each change's keys to env.changed", async () => {
+  const seen: string[] = [];
+  const env = { opened: () => seen.push("opened"), changed: (k: string[]) => seen.push(...k) };
+  const asked: unknown[] = [];
+  const router = loader({ fetch: (u: string) => new Promise<Response>(() => asked.push(u)), EventSource: FakeStream, hidden: () => false, focused: () => false, armed: () => false, ok() {}, fail() {}, draw: async () => {}, event() {}, ...env });
+  void router.show({ view: { title: "Jobs" }, params: {}, query: new URLSearchParams() });
+  FakeStream.last.onopen();
+  FakeStream.last.send("change", { keys: ["/api/status"] });
+  expect(seen).toEqual(["opened", "/api/status"]);
+});

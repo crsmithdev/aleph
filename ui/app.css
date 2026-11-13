@@ -611,6 +611,10 @@ pre.stat b { color: var(--need); }
 #logout[hidden] { display: none; }
 #logout:hover { background: var(--sunk); color: var(--ink); }
 #nav a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: var(--fw-strong); box-shadow: inset 2px 0 0 var(--ink); }
+/* The Status entry takes the tone of the factory's status, so it shows from every page. */
+#nav a[data-tone="fine"] { color: var(--ink); }
+#nav a[data-tone="alert"] { color: var(--stuck); }
+#nav a[data-tone="warning"], #nav a[data-tone="ask"] { color: var(--need); }
 #collapse { margin-top: auto; align-self: flex-start; padding: var(--sp-6) var(--sp-8); border: 0; border-radius: var(--r-ctl); background: none; color: var(--muted); font: var(--fw-text) var(--fs-sm)/1.2 var(--mono); cursor: pointer; }
 #collapse:hover { background: var(--sunk); color: var(--ink); }
 /* A collapsed sidebar shows the mark, each link's icon and the expand button. */

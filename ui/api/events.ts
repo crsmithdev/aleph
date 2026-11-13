@@ -65,7 +65,8 @@ eventFiles.push(tail);
 function start(): void {
   const dir = eventsDir();
   for (const f of existsSync(dir) ? readdirSync(dir) : []) sent.set(f, statSync(join(dir, f)).size);
-  ping = setInterval(() => send(event("ping", JSON.stringify({ at: Date.now() }))), PING_MS);
+  // The sidebar reads /api/status on every page: asking it at each ping keeps its key built, so `change` names it.
+  ping = setInterval(() => { send(event("ping", JSON.stringify({ at: Date.now() }))); void updater.get("/api/status"); }, PING_MS);
 }
 
 /** A session that logs out loses its streams. */

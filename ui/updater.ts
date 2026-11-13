@@ -38,7 +38,7 @@ const SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 60_000;
 
 /** The GET routes whose answers the updater keeps. */
 export const KEYED = new Set([
-  "/api/factory", "/api/flow", "/api/automation", "/api/issues", "/api/issues/:id", "/api/issues/:id/jobs", "/api/jobs", "/api/jobs/:id",
+  "/api/factory", "/api/status", "/api/flow", "/api/automation", "/api/issues", "/api/issues/:id", "/api/issues/:id/jobs", "/api/jobs", "/api/jobs/:id",
   "/api/sessions", "/api/skills/:name", "/api/sessions/:id", "/api/sessions/:id/chat", "/api/sessions/:id/turns/:n",
   "/api/memory", "/api/memory/log", "/api/memory/processes", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key",
 ]);

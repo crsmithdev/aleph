@@ -122,16 +122,16 @@ export function loader(env) {
   /** A `change` names the keys the server rebuilt: reload only a view that read one of them. */
   function change(keys) {
     env.changed?.(keys);
-    if (keys.some((k) => read.has(k))) return reload();
+    if (shown?.view?.live && keys.some((k) => read.has(k))) return reload();
   }
 
-  // The stream is open only for a live view in a visible tab: a browser allows few connections to one host.
+  // The stream is open on every page in a visible tab (the sidebar follows the status tone), and only a live view reloads on it: a browser allows few connections to one host.
   // The server pings every 25 s; a stream with no message for 60 s, or one the browser gave up on (a 502 from the
   // proxy while the server restarts ends it for good), is opened again, and the view loads in full.
   function follow() {
     events?.close();
     events = null;
-    if (!shown?.view?.live || env.hidden()) return;
+    if (!shown?.view || env.hidden()) return;
     let lost = false;
     const es = events = new env.EventSource(scope(shown.query).url("/api/events"));
     heardAt = Date.now();
@@ -142,14 +142,14 @@ export function loader(env) {
     es.addEventListener("ev", (m) => { heard(); try { env.event(JSON.parse(m.data)); } catch (e) { console.error("event failed", e); } });
     es.onerror = () => {
       lost = true;
-      if (es.readyState === env.EventSource.CLOSED && es === events) setTimeout(() => { if (es === events) { follow(); reload(); } }, 2000);
+      if (es.readyState === env.EventSource.CLOSED && es === events) setTimeout(() => { if (es === events) { follow(); if (shown?.view?.live) reload(); } }, 2000);
     };
-    es.onopen = () => { heard(); if (lost) reload(); };
+    es.onopen = () => { heard(); env.opened?.(); if (lost && shown?.view?.live) reload(); };
   }
 
   /** Open the stream again when it went quiet for 60 s. */
   function check() {
-    if (events && Date.now() - heardAt > 60_000) { follow(); reload(); }
+    if (events && Date.now() - heardAt > 60_000) { follow(); if (shown?.view?.live) reload(); }
   }
 
   /** Show `route` (`{ view: null }` for an address no view has) and load it; the promise settles when the load ends. */
@@ -265,7 +265,8 @@ export async function start() {
     draw,
     event: (ev) => page.shown?.view?.event?.($("view"), ev),
     // The keys of each `change`, for code outside the views: the kit's note tool reloads on /api/annotations.
-    changed: (keys) => dispatchEvent(new CustomEvent("aleph:change", { detail: keys })),
+    changed: (keys) => { if (keys.includes("/api/status")) readTone(); dispatchEvent(new CustomEvent("aleph:change", { detail: keys })); },
+    opened: () => readTone(),
   });
 
   $("logout").addEventListener("click", async (e) => {
@@ -273,6 +274,22 @@ export async function start() {
     await postJson("/api/logout").catch(() => {});
     location.reload();
   });
+
+  // The tone of the status sentence, from /api/status, kept for the Status entry of each nav draw.
+  let tone = "fine";
+  /** Colour the Status entry by `tone`: a data attribute that app.css reads, and the tone in the title. */
+  function paintTone() {
+    const a = $("nav").querySelector?.('a[href="#/"]');
+    if (!a) return;
+    a.dataset.tone = tone;
+    a.title = tone === "fine" ? "Status" : `Status: ${tone}`;
+  }
+  async function readTone() {
+    try {
+      const t = (await (await fetch("/api/status", { cache: "no-store" })).json()).tone;
+      if (typeof t === "string" && t !== tone) { tone = t; paintTone(); }
+    } catch {}
+  }
 
   function nav(path) {
     // The entry whose path is the longest segment prefix of the route is active: #/jobs/x marks Jobs.
@@ -285,6 +302,7 @@ export async function start() {
     const items = views.filter((v) => GROUPS.includes(v.group) && !v.path.includes(":") && v.nav !== false).sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
     $("nav").innerHTML = `<ul>${items.map((v, i) =>
       `${v.group !== items[i - 1]?.group && HEADERS[v.group] ? `<li class="head">${HEADERS[v.group]}</li>` : ""}<li><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span></a></li>`).join("")}</ul>`;
+    paintTone();
     $("nav").querySelector?.('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "center" });
   }
 
