@@ -299,7 +299,7 @@ function drawTokens(root) {
     `<div class="kit-tok"><i style="width:96px;height:var(--ctl-h);border:1px solid var(--ink-2);border-radius:var(--r-ctl)"></i><code>--ctl-h ${val("--ctl-h")}</code></div>` +
     `<div class="kit-tok"><i style="width:96px;height:var(--bar-h);background:var(--series-1);border-radius:var(--r-hair)"></i><code>--bar-h ${val("--bar-h")}</code></div>` +
     `<div class="kit-tok"><i style="width:96px;height:32px;background:var(--series-1);opacity:var(--dim)"></i><code>--dim ${val("--dim")}</code></div>` +
-    ["--z-rowlink", "--z-sticky", "--z-overlay"].map((n) => `<div class="kit-tok"><code>${n} ${val(n)}</code></div>`).join(""));
+    ["--z-rowlink", "--z-sticky", "--z-overlay", "--t-fast", "--t-mid", "--t-slow", "--ease"].map((n) => `<div class="kit-tok"><code>${n} ${val(n)}</code></div>`).join(""));
 }
 
 const setTheme = (t) => (t === "system" ? delete document.documentElement.dataset.theme : (document.documentElement.dataset.theme = t));
