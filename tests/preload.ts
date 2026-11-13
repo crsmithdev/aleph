@@ -24,7 +24,7 @@ delete process.env.ALEPH_AGENT;
 const dir = mkdtempSync(join(tmpdir(), `${PREFIX}${procId(process.pid)}-`));
 const vars: Record<string, string> = {
   ALEPH_ISSUES: join(dir, "issues"), ALEPH_JOBS_DIR: join(dir, "runs"),
-  ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), ALEPH_REPOS: join(dir, "repos.json"),
+  ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), ALEPH_BACKUPS_DIR: join(dir, "backups"), ALEPH_REPOS: join(dir, "repos.json"),
   ALEPH_SKILLS_STORE: join(dir, "skills-store.json"), ALEPH_USAGE_FILE: join(dir, "usage.jsonl"),
   ALEPH_CLAUDE_CREDENTIALS: join(dir, "credentials.json"), ALEPH_SPOOL: join(dir, "spool"),
   ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_JUDGE_FILE: join(dir, "judge"), ALEPH_ANNOTATIONS: join(dir, "annotations.json"),

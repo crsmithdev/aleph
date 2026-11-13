@@ -1,12 +1,16 @@
 /**
  * `aleph tick`, from its timer every minute. It starts only periodic work, each step on its own due rule: the
- * corrections and the monitor once a day, the housekeeper once a day and after a land, the episodes, the CI read and
+ * corrections, the dry vault maintenance and the monitor once a day, the housekeeper once a day and after a land, the episodes, the CI read and
  * the firefighter on a fixed period, the probe of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
  * and an Ask each start their next step at once. The sweep is the safety net: work that should have started and did
  * not is logged as `missed: <key>`, so the cause gets fixed, and is started. A tick that finds nothing due reads
  * only local files: no agent run and no fetch.
  */
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { today } from "../../../lib/day.ts";
+import { vaultDir } from "../../../lib/paths.ts";
+import { readRun } from "../../../vault/lib/vault.ts";
 import { readJsonOr } from "../../../lib/json.ts";
 import { holdsWork } from "../infra/process.ts";
 import { reader } from "../../../issues/lib/store.ts";
@@ -55,6 +59,25 @@ export function readTick(): TickState {
 export function due(s: TickState, step: Periodic, now: number): boolean {
   const t = Date.parse(s.last[step] ?? "");
   return Number.isNaN(t) || now - t >= EVERY_MS[step];
+}
+
+/**
+ * The daily vault maintenance, dry: `aleph memory maintain --dry` in this process, from 03:00 local, once per local date
+ * (its own run record is the gate). Returns its counts, or null when it is not due or the vault is not there.
+ */
+export async function maintainStep(now = Date.now()): Promise<Record<string, number> | null> {
+  const root = resolve(vaultDir()), at = readRun(root, "maintain")?.at;
+  if (new Date(now).getHours() < 3 || !existsSync(join(root, "Home.md")) || gates({ only: ["pause"] }) || (at && today(new Date(at)) === today(new Date(now)))) return null;
+  const { run, Exit } = await import("../../../vault/lib/ops.ts");
+  const { log } = console;
+  let text = "";
+  console.log = (...a) => { text += a.join(" ") + "\n"; };
+  try { await run(["maintain", "--dry"]); }
+  catch (e) { if (!(e instanceof Exit)) throw e; }
+  finally { console.log = log; }
+  const r = JSON.parse(text);
+  if (!r.ok) throw new Error("maintain failed; see its run record");
+  return r.counts;
 }
 
 /** What the sweep starts. Tests replace them. */
@@ -163,6 +186,8 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
         : `${r.written.length} written`);
       out.episodes = e?.written ?? [];
     }
+    const mt = await step("maintain", () => maintainStep(now), (c) => c && `dry: ${Object.entries(c).map(([k, v]) => `${v} ${k}`).join(", ")}`);
+    if (mt) out.maintain = mt;
     if (due(s, "ci", now)) {
       s.last.ci = at;
       await step("ci", () => ciStep(sandboxRepos()), (r) => `${r.length} red`);

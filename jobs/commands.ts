@@ -80,7 +80,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   models: { usage: "aleph models [set <tier> <model> | enable <tier> | disable <tier>]", purpose: "list and change the model of each tier" },
   judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
   doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
-  memory: { usage: "aleph memory <init|write|adopt|recall|lint|archive|delete|compile|misses> ...", purpose: "run a vault op" },
+  memory: { usage: "aleph memory <init|write|adopt|recall|lint|archive|delete|compile|misses|maintain> ...", purpose: "run a vault op" },
   "doc-claims": { usage: "aleph doc-claims", purpose: "list each doc claim the code does not back" },
   help: { usage: "aleph help [--brief]", purpose: "list each command with its usage and purpose" },
 };

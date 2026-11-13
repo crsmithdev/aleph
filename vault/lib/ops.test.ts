@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recallQuery } from "./recall-query.ts";
+import { use } from "../../lib/langfuse.ts";
 import { Exit, run as vaultOp } from "./ops.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
@@ -953,5 +954,48 @@ describe("docs/vault.md", () => {
     const usage = (await run({ ALEPH_VAULT: vault }, "no-such-command")).stderr;
     const listed = usage.replace(/^usage: aleph memory </, "").replace(/>\s*$/, "").split("|").map((s) => s.trim().split(" ")[0]);
     for (const c of commands) expect(listed).toContain(c);
+  });
+});
+
+describe("maintain", () => {
+  let handoffs: string, backups: string;
+  const env = () => ({ ALEPH_VAULT: vault, ALEPH_HANDOFFS_DIR: handoffs, ALEPH_BACKUPS_DIR: backups, ALEPH_FACTORY_DIR: join(base, "factory") });
+  const put = (path: string, text = "x") => { mkdirSync(join(path, ".."), { recursive: true }); writeFileSync(path, text); };
+  const day = (n: number) => new Date(NOW - n * 86400_000).toISOString().slice(0, 10);
+  beforeEach(async () => {
+    handoffs = join(base, "handoffs");
+    backups = join(base, "backups");
+    // Langfuse is unreachable, so the misses queue is left out.
+    use({ observations: async () => { throw new Error("down"); } } as any);
+    expect((await cli("write", note("Core Twice", { core: "Terse [[UI Text]] [[UI Text]] always" }, undefined), "--why", "x")).code).toBe(0);
+    put(join(handoffs, `${day(40)}-101010-old.md`));
+    put(join(handoffs, `${day(41)}-101010-not-compiled.md`));
+    put(join(handoffs, `${day(5)}-101010-recent.md`));
+    put(join(vault, "daily", `${day(40)}.md`), "# d\n");
+  });
+  afterEach(() => use(null));
+
+  test("--dry reports every step and changes nothing", async () => {
+    const before = gitStatus();
+    const r = await run(env(), "maintain", "--dry");
+    expect(r.code).toBe(0);
+    expect(r.json).toMatchObject({ op: "maintain", dry: true, ok: true, handoffs: [`${day(40)}-101010-old.md`], counts: { core: 1, handoffs: 1 } });
+    expect(r.json.core.fixed[0]).toMatchObject({ note: "Core Twice", now: "Terse [[UI Text]] always" });
+    expect(r.json.queues.misses).toBeUndefined();
+    expect(readdirSync(handoffs).length).toBe(3);
+    expect(readFileSync(join(vault, "wiki/gotchas/Core Twice.md"), "utf8")).toContain("[[UI Text]] [[UI Text]]");
+    expect(gitStatus()).toBe(before);
+    expect(JSON.parse(readFileSync(join(vault, ".index/runs/maintain.json"), "utf8")).result).toBe("ok");
+  });
+  test("moves the old compiled handoff, fixes the core line, commits", async () => {
+    const r = await run(env(), "maintain");
+    expect(r.code).toBe(0);
+    expect(r.json).toMatchObject({ dry: false, ok: true, counts: { core: 1, handoffs: 1 } });
+    const out = join(backups, "maintain", readdirSync(join(backups, "maintain"))[0]);
+    expect(readdirSync(join(out, "handoffs"))).toEqual([`${day(40)}-101010-old.md`]);
+    expect(readdirSync(handoffs).sort()).toEqual([`${day(41)}-101010-not-compiled.md`, `${day(5)}-101010-recent.md`]);
+    expect(readFileSync(join(vault, "wiki/gotchas/Core Twice.md"), "utf8")).toContain("core: Terse [[UI Text]] always");
+    expect(gitLog()).toContain("maintain core: 1 notes");
+    expect(readFileSync(join(vault, "Home.md"), "utf8")).not.toContain("[[UI Text]] [[UI Text]]");
   });
 });

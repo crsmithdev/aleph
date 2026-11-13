@@ -14,6 +14,7 @@ import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "
 import { handoffsFor, traceDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
+import { maintain } from "./maintain.ts";
 import { recallQuery } from "./recall-query.ts";
 import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
@@ -560,8 +561,9 @@ export async function run(argv: string[]): Promise<void> {
     case "delete": await del(); break;
     case "compile": await compile(); break;
     case "misses": await misses(); break;
+    case "maintain": { requireVault(); const r = await maintain(root, has("dry"), commitAndPush); out(r); if (!r.ok) exit(1); break; }
     default:
-      console.error("usage: aleph memory <init|write <file> --why <text>|recall [--episodes] <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]>");
+      console.error("usage: aleph memory <init|write <file> --why <text>|recall [--episodes] <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]|maintain [--dry]>");
       exit(2);
   }
 }
