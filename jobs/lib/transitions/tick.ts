@@ -1,6 +1,6 @@
 /**
  * `aleph tick`, from its timer every minute. It starts only periodic work, each step on its own due rule: the
- * corrections, the dry vault maintenance and the monitor once a day, the housekeeper once a day and after a land, the episodes, the CI read and
+ * maintainer (dry vault maintenance, corrections, compile) and the monitor once a day, the housekeeper once a day and after a land, the episodes, the CI read and
  * the firefighter on a fixed period, the probe of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
  * and an Ask each start their next step at once. The sweep is the safety net: work that should have started and did
  * not is logged as `missed: <key>`, so the cause gets fixed, and is started. A tick that finds nothing due reads
@@ -10,13 +10,15 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { today } from "../../../lib/day.ts";
 import { vaultDir } from "../../../lib/paths.ts";
-import { readRun } from "../../../vault/lib/vault.ts";
+import { compiledDays, readRun } from "../../../vault/lib/vault.ts";
+import { sub } from "../../../vault/lib/maintain.ts";
+import { compileDay, yesterday } from "../roles/maintainer.ts";
 import { readJsonOr } from "../../../lib/json.ts";
 import { holdsWork } from "../infra/process.ts";
 import { reader } from "../../../issues/lib/store.ts";
 import { ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
-import { correctionsStep, directIfNew, episodeStep, runDispatch, stalled } from "./factory.ts";
+import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
 import { editTick } from "../gates/factory-status.ts";
 import { doneChecker } from "./filing.ts";
 import { baselines, factoryDir, sandboxRepos, gates, probeHold, readStalls, writeStalls } from "../gates/factory-status.ts";
@@ -61,23 +63,52 @@ export function due(s: TickState, step: Periodic, now: number): boolean {
   return Number.isNaN(t) || now - t >= EVERY_MS[step];
 }
 
+type Json = Record<string, any>;
+/** Which parts of the maintainer a pass runs: the mechanical `maintain`, the corrections mining, the compile of yesterday. */
+export interface Parts { mech: boolean; corr: boolean; compile: boolean }
+
+/** `run`'s result, or `{ error }` when it throws: one failed part does not stop the next. */
+const part = async <T>(run: () => Promise<T>): Promise<T | { error: string }> => {
+  try { return await run(); } catch (e: any) { return { error: String(e?.message ?? e) }; }
+};
+
 /**
- * The daily vault maintenance, dry: `aleph memory maintain --dry` in this process, from 03:00 local, once per local date
- * (its own run record is the gate). Returns its counts, or null when it is not due or the vault is not there.
+ * The whole maintainer at `root`, in order: the mechanical pass (`dry` or not), the corrections mining (always live), then
+ * the compile of yesterday unless it ran already (`dry` while the mechanical pass is dry). One report: the mechanical
+ * fields, `corrections`, `compile`, and `counts` with `lessons` and `notes` added.
  */
-export async function maintainStep(now = Date.now()): Promise<Record<string, number> | null> {
+export async function maintainAll(root: string, dry: boolean, now: number, parts: Parts): Promise<Json> {
+  const mech = parts.mech ? await sub(["maintain", ...(dry ? ["--dry"] : [])]) : null;
+  const report: Json = mech ? (mech.json ?? { op: "maintain", dry, ok: false, error: mech.err.trim() }) : { op: "maintain", dry, ok: true };
+  if (parts.corr) report.corrections = await part(() => mineCorrections(now));
+  const day = yesterday(now);
+  if (parts.compile) report.compile = compiledDays(root).includes(day) ? { day, dry, notes: [], skipped: "already compiled" } : await part(() => compileDay(root, day, dry));
+  const notes = report.compile?.notes?.filter((n: Json) => !n.refused).length;
+  report.counts = { ...report.counts, ...(report.corrections?.lessons !== undefined ? { lessons: report.corrections.lessons } : {}), ...(notes !== undefined ? { notes } : {}) };
+  return report;
+}
+
+/** The one-line result of a pass for the tick: the mechanical counts, then each other part's count or its error. */
+const summary = (r: Json): string => {
+  const c = Object.entries(r.counts as Record<string, number>).filter(([k]) => k !== "lessons" && k !== "notes").map(([k, v]) => `${v} ${k}`).join(", ");
+  const tail = (k: string, what: string) => (r[k]?.error ? [`${k} failed: ${r[k].error}`] : r.counts[what] !== undefined ? [`${r.counts[what]} ${what}`] : []);
+  return [...(c ? [`${r.dry ? "dry: " : ""}${c}`] : []), ...tail("corrections", "lessons"), ...tail("compile", "notes")].join(" · ");
+};
+
+/**
+ * The daily maintainer, from 03:00 local, once per local date, under the pause gate. The mechanical pass stays dry and
+ * its run record is its gate; the compile follows it. The corrections mining has its own gate, the store's `minedAt`.
+ * Returns the report, or null when nothing is due or the vault is not there for the mechanical part.
+ */
+export async function maintainStep(now = Date.now()): Promise<Json | null> {
   const root = resolve(vaultDir()), at = readRun(root, "maintain")?.at;
-  if (new Date(now).getHours() < 3 || !existsSync(join(root, "Home.md")) || gates({ only: ["pause"] }) || (at && today(new Date(at)) === today(new Date(now)))) return null;
-  const { run, Exit } = await import("../../../vault/lib/ops.ts");
-  const { log } = console;
-  let text = "";
-  console.log = (...a) => { text += a.join(" ") + "\n"; };
-  try { await run(["maintain", "--dry"]); }
-  catch (e) { if (!(e instanceof Exit)) throw e; }
-  finally { console.log = log; }
-  const r = JSON.parse(text);
+  if (new Date(now).getHours() < 3 || gates({ only: ["pause"] })) return null;
+  const mech = existsSync(join(root, "Home.md")) && !(at && today(new Date(at)) === today(new Date(now)));
+  const corr = correctionsDue(now);
+  if (!mech && !corr) return null;
+  const r = await maintainAll(root, true, now, { mech, corr, compile: mech });
   if (!r.ok) throw new Error("maintain failed; see its run record");
-  return r.counts;
+  return r;
 }
 
 /** What the sweep starts. Tests replace them. */
@@ -171,8 +202,6 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
         ran[key] = { at, result: `failed: ${note}` };
       }
     };
-    const c = await step("corrections", () => correctionsStep(now), (r) => r && `${r.signals} signals, ${r.lessons} lessons, ${r.proposed} proposed`);
-    if (c) out.corrections = c;
     // Before the sweep, so the issues a lifted hold frees are keys it starts this tick.
     const lifted = await step("hold", probeHold);
     if (lifted) out.hold = lifted;
@@ -186,8 +215,8 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
         : `${r.written.length} written`);
       out.episodes = e?.written ?? [];
     }
-    const mt = await step("maintain", () => maintainStep(now), (c) => c && `dry: ${Object.entries(c).map(([k, v]) => `${v} ${k}`).join(", ")}`);
-    if (mt) out.maintain = mt;
+    const mt = await step("maintain", () => maintainStep(now), (r) => r && summary(r));
+    if (mt) out.maintain = mt.counts;
     if (due(s, "ci", now)) {
       s.last.ci = at;
       await step("ci", () => ciStep(sandboxRepos()), (r) => `${r.length} red`);

@@ -20,6 +20,7 @@ test("a missing file gives both worker tiers enabled on haiku and sonnet, and me
     intake: { enabled: true, model: "claude-opus-5-5" },
     director: { enabled: true, model: "claude-opus-5-5" },
     monitor: { enabled: true, model: "deepseek-v4.1-flash" },
+    maintainer: { enabled: true, model: "sonnet" },
     title: { enabled: true, model: "haiku" },
     judge: { enabled: true, model: "haiku" },
   });

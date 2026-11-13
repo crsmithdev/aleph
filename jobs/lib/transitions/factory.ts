@@ -192,16 +192,15 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
 }
 
 /** True from 03:00 local, when the store has not been mined on this local date. */
-function correctionsDue(now = Date.now()): boolean {
+export function correctionsDue(now = Date.now()): boolean {
   if (new Date(now).getHours() < 3) return false;
   const at = readStore().minedAt;
   const t = Date.parse(at);
   return !at || Number.isNaN(t) || today(new Date(t)) !== today(new Date(now));
 }
 
-/** The tick's daily correction mining (corrections.ts), under the pause gate. The tick catches and records an error. */
-export async function correctionsStep(now = Date.now()): Promise<{ signals: number; lessons: number; proposed: number } | null> {
-  if (gates({ only: ["pause"] }) || !correctionsDue(now)) return null;
+/** The daily correction mining (corrections.ts); the maintainer's step gates it. The tick catches and records an error. */
+export async function mineCorrections(now = Date.now()): Promise<{ signals: number; lessons: number; proposed: number }> {
   const store = await mine(now, filing);
   const r = {
     signals: store.lessons.reduce((n, l) => n + l.signals.length, 0),

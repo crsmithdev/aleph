@@ -101,7 +101,7 @@ Then it asks each queued issue 7 gates, in order (`issue-decision.ts`, `factory-
 
 | Gate | Binds when | Result |
 |---|---|---|
-| Pause | `~/.aleph/factory/paused` exists | Nothing starts. Intake, director, suite, firefighter, corrections and episodes stop too. A unit's next step is kept in `paused-next` |
+| Pause | `~/.aleph/factory/paused` exists | Nothing starts. Intake, director, suite, firefighter, maintainer and episodes stop too. A unit's next step is kept in `paused-next` |
 | Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`) | Skip. Jobs on that backend do not start; jobs on other backends do |
 | Baseline | The last `aleph suite` on main failed | Skip. Issues labelled `red-main` pass, so the fix can land |
 | Not ready | The issue is done, waits on `after`, or has an open job | Skip |
@@ -278,7 +278,7 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 |---|---|---|---|
 | Firefighter | Tick, each 5 minutes | Files one `critical` `red-main` bug per failing commit of the baseline or GitHub CI; sets a `rescue` Ask on a land live for 30 minutes | The `Failing commit:` line; an `asked` event on the land's record |
 | Suite | `aleph-suite` timer, hourly; the sweep after a red main moves | Runs the full checks on `origin/main` and records the baseline | Runs only when main moved |
-| Corrections | Tick, daily from 03:00 | Groups signals into lessons and proposes a check, a rule or a skill as a `proposal-*` Ask | Signals already in a lesson are skipped |
+| Maintainer | Tick, daily from 03:00; `aleph memory maintain [--dry]` | Runs the mechanical vault pass, groups signals into lessons and proposes a check, a rule or a skill as a `proposal-*` Ask, and compiles yesterday into vault notes | Signals already in a lesson are skipped; the vault run record and `compiledDays` |
 | Episodes | Tick, each 30 minutes | Writes a page for each finished issue | `episodes-seen` |
 | Monitor | Tick, daily | Reads the day's records and writes numbered findings for the Status page | One per day |
 

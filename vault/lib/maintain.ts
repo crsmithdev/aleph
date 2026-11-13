@@ -18,16 +18,16 @@ const OVERLAP_QUEUE = 10;
 type Json = Record<string, any>;
 type Commit = (subject: string, paths: string[]) => string | null;
 
-/** An op run in this process: its exit code and its JSON, or null when it printed none. */
-async function sub(argv: string[]): Promise<{ code: number; json: Json | null }> {
+/** An op run in this process: its exit code, its JSON (null when it printed none) and its stderr lines. */
+export async function sub(argv: string[]): Promise<{ code: number; json: Json | null; err: string }> {
   const { log, error } = console;
-  let text = "", code = 0;
+  let text = "", err = "", code = 0;
   console.log = (...a) => { text += a.join(" ") + "\n"; };
-  console.error = () => {};
+  console.error = (...a) => { err += a.join(" ") + "\n"; };
   try { await run(argv); }
   catch (e) { if (!(e instanceof Exit)) throw e; code = e.code; }
   finally { console.log = log; console.error = error; }
-  try { return { code, json: JSON.parse(text) }; } catch { return { code, json: null }; }
+  try { return { code, json: JSON.parse(text), err }; } catch { return { code, json: null, err }; }
 }
 
 /** `line` with each repeated `[[link]]` removed. */

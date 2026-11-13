@@ -4,7 +4,9 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Langfuse } from "../../lib/langfuse.ts";
+import { langfuse, type Langfuse } from "../../lib/langfuse.ts";
+import { handoffsDir } from "../../lib/paths.ts";
+import { citedTraces, loadVault } from "./vault.ts";
 
 const TRACE_CAP = 12 * 1024;
 
@@ -67,4 +69,22 @@ export function handoffsFor(dir: string, date: string): string {
   if (!existsSync(dir)) return "";
   return readdirSync(dir).filter((f) => f.startsWith(date) && f.endsWith(".md")).sort()
     .map((f) => `### ${f}\n${readFileSync(join(dir, f), "utf8").slice(0, 6000)}`).join("\n\n");
+}
+
+/** The digest of `date` under the vault at `root`, as `aleph memory compile` prints it. `empty` is true when the day has no traces (and no Langfuse error), no handoff and no daily note. */
+export async function compileDigest(root: string, date: string): Promise<{ text: string; empty: boolean }> {
+  const lf = langfuse();
+  const traces = lf ? await traceDigest(lf, date) : { text: "", error: "no Langfuse keys" };
+  const handoffs = handoffsFor(handoffsDir(), date);
+  const dailyPath = join(root, "daily", `${date}.md`);
+  const daily = existsSync(dailyPath) ? readFileSync(dailyPath, "utf8") : "";
+  const cited = citedTraces(await loadVault(root));
+  const sections = [
+    `# compile ${date}`,
+    `## Traces${traces.error ? ` (Langfuse failed: ${traces.error})` : ""}\n\n${traces.text || "none"}`,
+    `## Handoffs\n\n${handoffs || "none"}`,
+    `## Daily note\n\n${daily || "none"}`,
+    `## Already cited\n\n${cited.length ? cited.map((id) => `- trace:${id}`).join("\n") : "none"}`,
+  ];
+  return { text: sections.join("\n\n"), empty: !traces.error && traces.text === "no traces on this date" && !handoffs && !daily };
 }

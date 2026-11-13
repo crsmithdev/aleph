@@ -463,19 +463,23 @@ test("/api/memory/log lists writes and recalls newest first, one recall per call
 test("/api/memory/processes reads the tick, the corrections store, the episode pages and the stale notes", async () => {
   const tick = join(base, "factory", "tick.json"), store = join(base, "factory", "corrections.json");
   utimesSync(join(base, "factory", "episodes", "aleph-1 Goal.md"), NOW / 1000, NOW / 1000);
-  writeFileSync(tick, JSON.stringify({ last: { episodes: "2026-11-04T11:30:00.000Z" }, ran: { episodes: { at: "2026-11-04T11:30:00.000Z", result: "failed: no page" } } }));
+  writeFileSync(tick, JSON.stringify({ last: { episodes: "2026-11-04T11:30:00.000Z" }, ran: { episodes: { at: "2026-11-04T11:30:00.000Z", result: "failed: no page" }, maintain: { at: "2026-11-04T10:00:00.000Z", result: "dry: 1 fixed · 0 lessons · 2 notes" } } }));
+  const runs0 = join(base, "vault", ".index", "runs");
+  mkdirSync(runs0, { recursive: true });
+  writeFileSync(join(runs0, "maintain.json"), JSON.stringify({ at: "2026-11-04T10:00:00.000Z", result: "ok", detail: `dry: ${JSON.stringify({ decay: 3, overlap: 5 })}` }));
+  writeFileSync(join(runs0, "compile.json"), JSON.stringify({ at: "2026-11-04T10:00:00.000Z", result: "ok", detail: "dry: 2026-11-03: 2 notes" }));
   writeFileSync(store, JSON.stringify({ minedAt: "2026-11-04T11:00:00.000Z", lessons: [{ sentence: "Run the checks.", state: "proposed" }, { sentence: "Old.", state: "declined" }] }));
   try {
     const m = await (await at("/api/memory/processes")).json() as any;
     expect(m.steps.map((s: any) => [s.name, s.last, s.next, s.result])).toEqual([
       ["episodes", "2026-11-04T11:30:00.000Z", "2026-11-04T12:00:00.000Z", "failed: no page"],
-      ["corrections", "2026-11-04T11:00:00.000Z", m.steps[1].next, null],
+      ["maintain", "2026-11-04T10:00:00.000Z", m.steps[1].next, "dry: 1 fixed · 0 lessons · 2 notes"],
       ["seen prune", null, null, null],
       ["recall trim", null, null, null],
       ["vault push", null, null, null],
     ]);
+    expect(m.steps[1]).toMatchObject({ name: "maintain", runs: "daily after 03:00", next: "2026-11-05T03:00:00.000Z", detail: "decay 3 · overlap 5 · 2 notes" });
     const runs = join(base, "vault", ".index", "runs");
-    mkdirSync(runs, { recursive: true });
     writeFileSync(join(runs, "seen prune.json"), JSON.stringify({ at: "2026-11-04T11:45:00.000Z", result: "ok" }));
     writeFileSync(join(runs, "vault push.json"), JSON.stringify({ at: "2026-11-04T11:50:00.000Z", result: "failed", detail: "no route" }));
     await fresh("factory");

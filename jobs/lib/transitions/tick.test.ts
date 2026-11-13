@@ -17,7 +17,8 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { archiveDir, getRun, putRun } from "../records/record.ts";
 import { chatLock } from "../roles/agent-run.ts";
-import { readRun } from "../../../vault/lib/vault.ts";
+import { compiledDays, readRun } from "../../../vault/lib/vault.ts";
+import { memory, use } from "../../../lib/langfuse.ts";
 import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 
 // The test's clock: the run that holds the live slot is `starting` against it.
@@ -39,6 +40,8 @@ esac
 
 beforeAll(() => {
   setSystemTime(NOW);
+  // No test reads the live Langfuse: the day has no traces.
+  use(memory({ traces: [], observations: [] }));
   base = mkdtempSync(join(tmpdir(), "aleph-tick-"));
   factoryRepos(base);
   writeFileSync(join(base, "fake"), FAKE);
@@ -49,7 +52,7 @@ beforeAll(() => {
     ALEPH_DISPATCH: "off", ALEPH_RESCUE: "off", XDG_RUNTIME_DIR: join(base, "run"),
   });
 });
-afterAll(() => { setSystemTime(); rmSync(base, { recursive: true, force: true }); });
+afterAll(() => { use(null); setSystemTime(); rmSync(base, { recursive: true, force: true }); });
 beforeEach(() => {
   key = `tk${++n}`;
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: join(base, "repo"), main: "main", sandbox: true } }));
@@ -310,8 +313,8 @@ test("a tick where an episode page fails to write records the episodes result as
 
 test("guard: the maintain step from 03:00 local returns the dry run's counts and records its run as ok", async () => {
   const dir = vaultHere();
-  const counts = await maintainStep(NOW);
-  expect(counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, episodes: 0, decay: 0, overlap: 0, retry: 0 });
+  const r = await maintainStep(NOW);
+  expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, episodes: 0, decay: 0, overlap: 0, retry: 0, lessons: 0, notes: 0 });
   expect(readRun(dir, "maintain")?.result).toBe("ok");
 });
 
@@ -319,11 +322,13 @@ test("guard: the maintain step returns null before 03:00, with no Home.md, and w
   const dir = vaultHere();
   // 02:00 local: too early, so nothing runs and no run record is written.
   expect(await maintainStep(Date.parse("2026-11-04T02:00:00Z"))).toBeNull();
-  // A folder that is there, with no Home.md: not a vault.
+  // A folder that is there, with no Home.md: not a vault, so only the corrections mining runs.
   const empty = join(base, "no-home");
   mkdirSync(empty, { recursive: true });
   process.env.ALEPH_VAULT = empty;
-  expect(await maintainStep(NOW)).toBeNull();
+  const r = await maintainStep(NOW);
+  expect(r!.counts).toEqual({ lessons: 0 });
+  expect(r!.compile).toBeUndefined();
   process.env.ALEPH_VAULT = dir;
   setPaused(true);
   try { expect(await maintainStep(NOW)).toBeNull(); } finally { setPaused(false); }
@@ -333,12 +338,32 @@ test("guard: the maintain step runs once per local date: the same date again is 
   vaultHere();
   const first = await maintainStep(NOW);
   expect(await maintainStep(NOW + 3600_000)).toBeNull();
-  expect(await maintainStep(NOW + 864e5)).toEqual(first);
+  expect((await maintainStep(NOW + 864e5))!.counts).toEqual(first!.counts);
 });
 
 test("guard: a tick with a vault present records the maintain step's dry result in ran", async () => {
   vaultHere();
   await runTick(NOW, quiet());
   const ran = JSON.parse(readFileSync(tickFile(), "utf8")).ran;
-  expect(ran.maintain.result).toMatch(/^dry: \d+ \w+/);
+  expect(ran.maintain.result).toMatch(/^dry: 0 fixed, .* · 0 lessons · 0 notes$/);
+  expect(ran.corrections).toBeUndefined();
+});
+
+test("guard: the maintain step's dry compile of yesterday runs the model and records no day", async () => {
+  const dir = vaultHere();
+  const handoffs = join(base, `handoffs${n}`);
+  mkdirSync(handoffs);
+  writeFileSync(join(handoffs, "2026-11-03-120000.md"), "decided: keep the digest\n");
+  writeFileSync(join(base, "maintainer"), `#!/bin/bash\ncat > /dev/null\necho '{"type":"result","is_error":false,"result":"","structured_output":{"notes":[{"title":"Keep The Digest","kind":"decision"}]}}'\n`);
+  chmodSync(join(base, "maintainer"), 0o755);
+  Object.assign(process.env, { ALEPH_HANDOFFS_DIR: handoffs, ALEPH_MAINTAINER_CMD: join(base, "maintainer") });
+  try {
+    const r = await maintainStep(NOW);
+    expect(r!.compile).toMatchObject({ day: "2026-11-03", dry: true, notes: [{ title: "Keep The Digest", kind: "decision" }] });
+    expect(r!.counts.notes).toBe(1);
+    expect(compiledDays(dir)).toEqual([]);
+  } finally {
+    delete process.env.ALEPH_HANDOFFS_DIR;
+    process.env.ALEPH_MAINTAINER_CMD = "false";
+  }
 });

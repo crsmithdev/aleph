@@ -3,7 +3,7 @@
  * on stderr, and ends with `Exit` for a refusal, which the CLI turns into its exit code.
  */
 import { readJsonOr } from "../../lib/json.ts";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
@@ -11,13 +11,12 @@ import { langfuse } from "../../lib/langfuse.ts";
 import type { Observation } from "../../lib/otlp.ts";
 import { serializeFrontmatter } from "../../lib/frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./git.ts";
-import { handoffsFor, traceDigest } from "./compile.ts";
+import { compileDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { maintain } from "./maintain.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
-import { handoffsDir } from "../../lib/paths.ts";
+import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { layout, logEvent } from "../../lib/layout.ts";
 import { logUse } from "../../lib/episode-use.ts";
 
@@ -529,21 +528,9 @@ async function compile(): Promise<void> {
   requireVault();
   const date = positional[0] ?? today();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { console.error("usage: aleph memory compile [YYYY-MM-DD]"); exit(1); }
-  const lf = langfuse();
-  const traces = lf ? await traceDigest(lf, date) : { text: "", error: "no Langfuse keys" };
-  const handoffs = handoffsFor(handoffsDir(), date);
-  const dailyPath = join(root, "daily", `${date}.md`);
-  const daily = existsSync(dailyPath) ? readFileSync(dailyPath, "utf8") : "";
-  const cited = citedTraces(await loadVault(root));
-  const sections = [
-    `# compile ${date}`,
-    `## Traces${traces.error ? ` (Langfuse failed: ${traces.error})` : ""}\n\n${traces.text || "none"}`,
-    `## Handoffs\n\n${handoffs || "none"}`,
-    `## Daily note\n\n${daily || "none"}`,
-    `## Already cited\n\n${cited.length ? cited.map((id) => `- trace:${id}`).join("\n") : "none"}`,
-  ];
+  const { text } = await compileDigest(root, date);
   recordCompiled(root, date);
-  console.log(sections.join("\n\n"));
+  console.log(text);
 }
 
 /** `vault <argv>`: one op, under the vault that $ALEPH_VAULT names now. */

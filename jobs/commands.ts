@@ -8,7 +8,7 @@
  * See docs/workflow.md and docs/factory.md.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { allRuns, loadRegistry, newsLine, type Entry, type Repo } from "./lib/records/ledger.ts";
 import { isLive } from "./lib/infra/process.ts";
 import { allJobs, findJob, isOpen, issue as issueOf, issueTitle, openJobOfIssue, readFile, view, type Job } from "./lib/records/job.ts";
@@ -27,7 +27,8 @@ import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
 import { readTimeouts, setTimeoutOf } from "./lib/asks/timeout.ts";
 import { behind, directorStep, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { dispatchAfterIssue, filing } from "./lib/transitions/filing.ts";
-import { runTick } from "./lib/transitions/tick.ts";
+import { maintainAll, runTick } from "./lib/transitions/tick.ts";
+import { vaultDir } from "../lib/paths.ts";
 import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
 import { health } from "./lib/gates/factory-status.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
@@ -587,6 +588,13 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       break;
     }
     case "memory": {
+      // `maintain` is the whole maintainer: the vault's mechanical pass, the corrections mining and the compile of yesterday. A missing vault falls to the op, which says so.
+      if (ctx.command[1] === "maintain" && existsSync(join(resolve(vaultDir()), "Home.md"))) {
+        const r = await maintainAll(resolve(vaultDir()), ctx.rest.includes("--dry"), Date.now(), { mech: true, corr: true, compile: true });
+        ctx.out(r);
+        if (!r.ok || r.corrections?.error || r.compile?.error) ctx.code = 1;
+        break;
+      }
       // The vault ops print through console and end with an Exit: its output goes to this run's stdout and stderr, its exit code is this one's.
       const { run: vault, Exit } = await import("../vault/lib/ops.ts");
       const { log, error } = console;

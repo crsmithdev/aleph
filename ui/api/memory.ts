@@ -188,7 +188,7 @@ async function log(url: URL): Promise<Response> {
 }
 
 const MIN = 60_000;
-/** The local 03:00 after `at`: when the daily corrections step is next due. */
+/** The local 03:00 after `at`: when the daily maintainer step is next due. */
 function nextDaily(at: string): string {
   const d = new Date(at);
   d.setDate(d.getDate() + 1);
@@ -196,17 +196,28 @@ function nextDaily(at: string): string {
   return d.toISOString();
 }
 
+/** The `maintain` row: the tick's last result (else the vault's run record), the queue sizes of the last mechanical pass and the notes of the last compile. */
+function maintain(root: string, ran: { at?: string; result: string } | undefined) {
+  const run = readRun(root, "maintain"), compile = readRun(root, "compile");
+  let counts: Record<string, number> = {};
+  try { counts = JSON.parse((run?.detail ?? "").replace(/^dry: /, "")); } catch { /* a failed run's detail is text */ }
+  const last = ran?.at ?? run?.at ?? null;
+  const notes = /(\d+) notes/.exec(compile?.detail ?? "")?.[1];
+  const detail = [counts.decay !== undefined && `decay ${counts.decay}`, counts.overlap !== undefined && `overlap ${counts.overlap}`, notes && `${notes} notes`].filter(Boolean).join(" · ");
+  return { name: "maintain", runs: "daily after 03:00", last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday into notes" };
+}
+
 /** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. The corrections
  * store is read as a file: corrections.ts loads the factory's actions, which the server must not. */
 async function processes(): Promise<Response> {
   const root = vaultDir(), now = Date.now();
-  const tick = readJsonOr<{ last?: Record<string, string>; ran?: Record<string, { result: string }> }>(join(factoryDir(), "tick.json"), {});
+  const tick = readJsonOr<{ last?: Record<string, string>; ran?: Record<string, { at?: string; result: string }> }>(join(factoryDir(), "tick.json"), {});
   const store = readJsonOr<{ minedAt: string; lessons: { sentence: string; state: string }[] }>(join(factoryDir(), "corrections.json"), { minedAt: "", lessons: [] });
   const step = (name: string, runs: string, last: string | undefined, next: string | null, does: string) =>
     ({ name, runs, last: last ?? null, next, result: tick.ran?.[name]?.result ?? null, detail: null, does });
   const steps = [
     step("episodes", "every 30 min", tick.last?.episodes, tick.last?.episodes ? new Date(Date.parse(tick.last.episodes) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
-    step("corrections", "daily after 03:00", store.minedAt || undefined, store.minedAt ? nextDaily(store.minedAt) : null, "mines lessons from transcripts, gate denials and drop reasons"),
+    maintain(root, tick.ran?.maintain),
     ...([["seen prune", "with each recall that injects a note", "deletes seen lists older than 7 days"], ["recall trim", "with each logged recall", "keeps 30 days of the recall log"], ["vault push", "with each vault write", "pushes the vault commit to origin"]] as const).map(([name, runs, does]) => {
       const run = readRun(root, name);
       return { name, runs, last: run?.at ?? null, next: null, result: run?.result ?? null, detail: run?.detail ?? null, does };

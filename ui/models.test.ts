@@ -26,7 +26,7 @@ test("GET /api/models answers each tier with enabled and model plus the local st
   rmSync(file(), { force: true });
   const b: any = await at("/api/models").then((r) => r.json());
   expect(b.local).toBe("up");
-  expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
+  expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "merge", "reviewer", "intake", "director", "monitor", "maintainer", "title", "judge"]);
   expect(b.tiers["worker-medium"]).toEqual({ enabled: true, model: "sonnet" });
   expect(b.spend).toEqual({ day: 1.5, week: 17.5, month: 18 });
 });

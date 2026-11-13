@@ -28,7 +28,7 @@ interface Call {
 
 /** The ledger's line for a role's run. `job` defaults to the folder's own name. The run's subject is `on`, else `monitor` for the monitor, else `name`. */
 export interface Opening extends Call {
-  role: "intake" | "director" | "monitor" | "chat" | "lens" | "housekeeper";
+  role: "intake" | "director" | "monitor" | "chat" | "lens" | "housekeeper" | "maintainer";
   name: string;
   /** The first line of command.txt. */
   command: string;

@@ -97,4 +97,6 @@ project.
 handoffs and daily note, plus trace ids already cited. From it, propose
 notes: list title, kind and one-line claim for each and wait for approval.
 Then draft and `write` each approved note, citing `trace:<id>` in sources.
-Never write from compile without approval.
+Never write from a compile you run by hand without approval. The daily maintainer
+(`aleph memory maintain`) runs its own compile and writes with `write` on its own;
+each write is a pushed, revertible vault commit.
