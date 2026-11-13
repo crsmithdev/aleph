@@ -3,13 +3,16 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
-import { vault } from "../../../tests/git-fixture.ts";
+import { storeRepos, vault } from "../../../tests/git-fixture.ts";
+import { readList } from "../../../issues/lib/store.ts";
+import { status } from "../../../issues/lib/todo.ts";
+import { askOf } from "../asks/ask.ts";
 import { decayQueue, sub } from "../../../vault/lib/maintain.ts";
 import { lintVault, loadVault, readRun, today } from "../../../vault/lib/vault.ts";
 import { render } from "./maintainer.ts";
-import { BUDGET, recheck } from "./recheck.ts";
+import { answerHeld, BUDGET, recheck } from "./recheck.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_REPOS", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base = "", root = "", saved: Record<string, string | undefined> = {};
 const OLD = "2026-01-01";
@@ -41,10 +44,12 @@ beforeEach(() => {
   chmodSync(join(base, "fake"), 0o755);
   root = join(base, "vault");
   Object.assign(process.env, GIT, {
-    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_VAULT: root, ALEPH_REPOS: join(base, "repos.json"),
+    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_VAULT: root, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"),
     ALEPH_MAINTAINER_CMD: join(base, "fake"), ALEPH_JUDGE: "haiku", FAKE_DIR: base,
   });
   vault(root);
+  storeRepos(base);
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ interview: { path: join(base, "interview"), sandbox: true }, aleph: { path: join(base, "aleph"), sandbox: true } }));
   use(memory({ traces: [], observations: [] }));
 });
 
@@ -142,6 +147,10 @@ test("correct and archive on core notes are held for Chris, change no file, and 
   expect(existsSync(join(root, "archive", "CoreA.md")) || existsSync(join(root, "archive", "CoreB.md"))).toBe(false);
   const held = JSON.parse(readFileSync(join(base, "factory", "recheck-held.json"), "utf8"));
   expect(Object.keys(held)).toEqual(["CoreA", "CoreB"]);
+  // Each held verdict is a parked issue with a core-change Ask that names the note.
+  const a = readList({ key: "aleph" })!.items.find((i) => i.id === Number(held.CoreA.issue.split("-")[1]))!;
+  expect(status(a)).toBe("parked");
+  expect(askOf(held.CoreA.issue)).toMatchObject({ kind: "approval", reason: "core-change", question: expect.stringContaining("CoreA"), why: ["moved", "New claim: A now holds."] });
   await seed("Other", 0);
   reply([]);
   await recheck(root, false);
@@ -152,4 +161,55 @@ test("no stale note makes no model call", async () => {
   const r = await recheck(root, false);
   expect(r.skipped).toBe("nothing to re-check");
   expect(existsSync(join(base, "prompt.md"))).toBe(false);
+});
+
+/** Hold a verdict on a core note, then answer the issue it filed. */
+async function held(title: string, verdict: Record<string, unknown>) {
+  await seed(title, 1, { core: `line ${title}` });
+  reply([{ title, verdict: "correct", ...verdict }]);
+  await recheck(root, false);
+  return JSON.parse(readFileSync(join(base, "factory", "recheck-held.json"), "utf8"))[title].issue as string;
+}
+const issueOf = (ref: string) => readList({ key: "aleph" })!.items.find((i) => i.id === Number(ref.split("-")[1]))!;
+
+test("approve applies a held correct and keeps the core line, or a held archive, and closes the issue as done", async () => {
+  const fix = await held("CoreA", { why: "moved", claim: "A now holds.", details: "d", evidence: "e" });
+  expect(await answerHeld(fix, true)).toBeNull();
+  expect(read("CoreA")).toContain(`**Claim.** A now holds, as of ${today()}.`);
+  expect(read("CoreA")).toContain("\ncore: line CoreA\n");
+  expect(status(issueOf(fix))).toBe("done");
+  expect(askOf(fix)).toBeNull();
+  const gone = await held("CoreB", { verdict: "archive", why: "gone" });
+  expect(await answerHeld(gone, true)).toBeNull();
+  expect(existsSync(page("CoreB"))).toBe(false);
+  expect(existsSync(join(root, "archive", "CoreB.md"))).toBe(true);
+  expect(JSON.parse(readFileSync(join(base, "factory", "recheck-held.json"), "utf8"))).toEqual({});
+});
+
+test("approve of a verdict the op refuses is a note on the issue, which stays parked; the held verdict is cleared", async () => {
+  const fix = await held("CoreA", { why: "moved" });
+  const refusal = await answerHeld(fix, true);
+  expect(refusal).toContain("no claim, details and evidence");
+  expect(status(issueOf(fix))).toBe("parked");
+  expect(issueOf(fix).notes.at(-1)).toContain(`the vault refused: ${refusal}`);
+  expect(askOf(fix)).toBeNull();
+});
+
+test("decline keeps the claim, sets updated to today and drops the issue; the note is then in no prompt", async () => {
+  const fix = await held("CoreA", { why: "moved", claim: "A now holds.", details: "d", evidence: "e" });
+  const was = read("CoreA");
+  // A verdict held while the answer runs stays held.
+  const file = join(base, "factory", "recheck-held.json");
+  const answer = answerHeld(fix, false);
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), Later: { issue: "aleph-99" } }));
+  expect(await answer).toBeNull();
+  expect(Object.keys(JSON.parse(readFileSync(file, "utf8")))).toEqual(["Later"]);
+  expect(read("CoreA")).toBe(was.replace(`updated: ${OLD}`, `updated: ${today()}`));
+  expect(status(issueOf(fix))).toBe("dropped");
+  expect(askOf(fix)).toBeNull();
+  await seed("Other", 0);
+  reply([]);
+  await recheck(root, false);
+  expect(readFileSync(join(base, "prompt.md"), "utf8")).not.toContain("# CoreA");
+  expect(await answerHeld(fix, false)).toBe(`no held verdict for ${fix}`);
 });

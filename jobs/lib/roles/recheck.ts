@@ -2,8 +2,9 @@
  * The maintainer's decay re-check: one read-only `claude -p` run per pass checks the most recalled stale notes against
  * the code and the repos' git history, and replies one verdict per note. Code applies each through the vault ops
  * in-process, so each change is a pushed, revertible vault commit and each refusal is the op's own. The model never
- * writes a file. On a note with a `core:` line only `refresh` is applied: `correct` and `archive` are held for Chris
- * in the factory dir, and the note is not re-checked while its held verdict waits.
+ * writes a file. On a note with a `core:` line only `refresh` is applied: `correct` and `archive` are held in the factory
+ * dir and put to Chris as a core-change Ask on a parked issue, and the note is not re-checked while its held verdict
+ * waits. His Approve applies the verdict through the same ops; his Decline keeps the claim and bumps `updated`.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,6 +12,10 @@ import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { layout } from "../../../lib/layout.ts";
+import { vaultDir } from "../../../lib/paths.ts";
+import { fileIssue, writeList } from "../../../issues/lib/store.ts";
+import { find, note, parseIssueRef, setStatus } from "../../../issues/lib/todo.ts";
+import { clearAsk, setAsk } from "../asks/ask.ts";
 import { decayQueue, sub } from "../../../vault/lib/maintain.ts";
 import { lintVault, loadVault, recordRun, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
 import { lock } from "../infra/locks.ts";
@@ -18,6 +23,7 @@ import { loadRegistry } from "../records/ledger.ts";
 import { readModels } from "../routing/models.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { body } from "./maintainer.ts";
+import { cutTitle } from "./title.ts";
 
 export const SECONDS = 900;
 /** Notes re-checked per run, most recalled first. */
@@ -75,14 +81,28 @@ function text(n: Note, v: Verdict, day: string): string | null {
   return serializeFrontmatter({ ...n.fm, updated: day }) + body(v, day, related);
 }
 
+type Held = Verdict & { day: string; issue: string };
+
 /** An op's result as the fields of a verdict's outcome: its commit, or its refusal with the rule. */
 export function outcome(r: { code: number; json: Record<string, any> | null; err: string }) {
   const f = r.json?.findings?.[0];
   return r.code === 0 ? { commit: r.json?.commit ?? null } : { rule: f?.rule, refused: f ? `refuse ${f.rule} ${f.note}: ${f.detail}` : r.err.trim() || `exit ${r.code}` };
 }
 
-/** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. */
-async function apply(notes: Note[], verdicts: Verdict[], day: string): Promise<Rechecked[]> {
+/** Hold the verdict of core note `n` for Chris: a parked aleph issue, with the core-change Ask on it. */
+function hold(n: Note, v: Verdict, day: string): void {
+  const repo = loadRegistry().aleph;
+  if (!repo) throw new Error("no aleph repo in the registry to file the held change in");
+  const claim = v.verdict === "correct" && v.claim ? `New claim: ${v.claim}` : "";
+  const request = [`The memory re-check of the core note ${n.title} gives the verdict ${v.verdict}.`, `Why: ${v.why}`, claim].filter(Boolean).join("\n\n");
+  const issue = fileIssue(repo, { title: cutTitle(`Apply the ${v.verdict} of core note ${n.title}`), kind: "task", source: "memory", parked: true, request }, "rule", { after: () => {} });
+  const ref = `${repo.key}-${issue.id}`;
+  setAsk(ref, { kind: "approval", reason: "core-change", question: `Apply the ${v.verdict} verdict to the core note ${n.title}?`, options: [], why: [v.why, claim].filter(Boolean) });
+  writeJson(heldFile(), { ...readJsonOr<Record<string, Held>>(heldFile(), {}), [n.title]: { ...v, day, issue: ref } });
+}
+
+/** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. `approved` applies a held core verdict. */
+async function apply(notes: Note[], verdicts: Verdict[], day: string, approved = false): Promise<Rechecked[]> {
   const dir = mkdtempSync(join(tmpdir(), "recheck-"));
   try {
     const out: Rechecked[] = [];
@@ -90,8 +110,8 @@ async function apply(notes: Note[], verdicts: Verdict[], day: string): Promise<R
       const v = verdicts.find((x) => x.title === n.title);
       if (!v) continue;
       const w: Rechecked = { title: n.title, verdict: v.verdict, why: v.why };
-      if (n.fm.core && v.verdict !== "refresh") {
-        writeJson(heldFile(), { ...readJsonOr<Record<string, Verdict & { day: string }>>(heldFile(), {}), [n.title]: { ...v, day } });
+      if (n.fm.core && v.verdict !== "refresh" && !approved) {
+        hold(n, v, day);
         out.push({ ...w, rule: "core", refused: "held for Chris" });
         continue;
       }
@@ -144,4 +164,31 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
   } finally {
     release();
   }
+}
+
+/**
+ * Chris's answer to the held verdict of the issue `ref`. Approve applies it through the vault op; decline keeps the claim and
+ * sets the note's `updated` to today. Either clears the held verdict and the Ask. A done issue (approve) or a dropped one
+ * (decline) is the result; a refusal of the op is a note on the issue, which stays parked. Why it could not answer, or null.
+ */
+export async function answerHeld(ref: string, approved: boolean): Promise<string | null> {
+  const held = readJsonOr<Record<string, Held>>(heldFile(), {});
+  const title = Object.keys(held).find((t) => held[t].issue === ref);
+  if (!title) return `no held verdict for ${ref}`;
+  const n = wikiNotes(await loadVault(vaultDir())).find((x) => x.title === title);
+  if (!n) return `no note ${title} in the vault`;
+  const [r] = await apply([n], [approved ? held[title] : { title, verdict: "refresh", why: "Chris kept the claim" }], today(), true);
+  const at = parseIssueRef(ref)!;
+  writeList({ key: at.repo }, `recheck: ${approved ? "approved" : "declined"} ${ref}`, (doc) => {
+    const item = find(doc, at.id);
+    if (!item) return null;
+    note(item, r.refused ? `the vault refused: ${r.refused}` : approved ? `Chris approved: the ${held[title].verdict} is applied` : "Chris declined: the claim stays");
+    if (!r.refused) setStatus(item, approved ? "done" : "dropped");
+    return true;
+  });
+  // Read again: a recheck may have held another verdict while the op ran.
+  const { [title]: _, ...rest } = readJsonOr<Record<string, Held>>(heldFile(), {});
+  writeJson(heldFile(), rest);
+  clearAsk(ref);
+  return r.refused ?? null;
 }

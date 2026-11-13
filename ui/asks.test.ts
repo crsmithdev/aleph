@@ -32,6 +32,7 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "intake-failed": () => ofIssues(issue({ reason: "intake-failed", question: "Intake failed: no verdict in 2 runs: failed: its process ended before a verdict" })),
   "part-dropped": () => ofIssues(issue({ reason: "part-dropped", decision: { ...decision, options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed" }, question: "A goal was dropped." })),
   rescue: () => ofIssues(issue({ reason: "rescue", decision, question: "Should it be A or B?" })),
+  "core-change": () => ofIssues(issue({ reason: "core-change", question: "Apply the archive verdict to the core note X?" })),
   "proposal-check": () => asks({ runs: [], issues: [] }, [lesson("check")]),
   "proposal-claude-md": () => asks({ runs: [], issues: [] }, [lesson("claude-md")]),
   "proposal-skill": () => asks({ runs: [], issues: [] }, [lesson("skill")]),
@@ -81,6 +82,10 @@ describe("asks", () => {
         { act: "drop", path: "/api/issues/aleph-387/drop", body: {}, confirm: true, input: undefined },
       ]);
       expect(req("intake-failed").map((a) => [a.path, a.body])).toEqual([["/api/issues/aleph-387/retriage", {}], ["/api/issues/aleph-387/drop", { reason: "Chris closed it" }]]);
+      expect(req("core-change").map(({ act, path, body }) => ({ act, path, body }))).toEqual([
+        { act: "approve", path: "/api/issues/aleph-387/approve", body: {} },
+        { act: "decline", path: "/api/issues/aleph-387/decline", body: {} },
+      ]);
       expect(req("proposal-check").map((a) => a.path)).toEqual(["/api/proposals/L1/approve", "/api/proposals/L1/decline"]);
       const deny = ofIssues(issue({ reason: "question", decision, question: "Should it be A or B?" }))[0].actions.find((a) => a.act === "deny");
       expect(deny).toMatchObject({ path: "/api/issues/aleph-387/drop", body: { reason: "Chris denied it" }, input: { name: "reason", lead: "Chris denied: " } });

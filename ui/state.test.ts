@@ -281,6 +281,19 @@ describe("an issue that acceptance failed twice", () => {
   });
 });
 
+describe("a parked issue with a core-change Ask", () => {
+  test("lists under Needs you; a parked issue with any other Ask does not", () => {
+    const id: number[] = [];
+    writeList({ key: "fac" }, "parked asks", (doc) => {
+      for (const t of ["held core note", "shelved question"]) { const it = add(doc, t); setStatus(it, "parked"); id.push(it.id); }
+      return true;
+    });
+    setAsk(`fac-${id[0]}`, { kind: "approval", reason: "core-change", question: "Apply it?", options: [], why: [] });
+    setAsk(`fac-${id[1]}`, { kind: "input", reason: "question", question: "Which?", options: [], why: [] });
+    expect(state(now).asks.filter((a) => id.some((n) => a.id === `fac-${n}`)).map((a) => [a.id, a.reason])).toEqual([[`fac-${id[0]}`, "core-change"]]);
+  });
+});
+
 describe("a returned run with its rework queued", () => {
   test("is running, not stuck, so the Herald does not call it unhealthy; one with no next stays stuck", () => {
     run("20261027-000080-a", { job: "fac-80", name: "fac-80", condition: "returned", failed: "review", next: "worker", on: "fac-80" });

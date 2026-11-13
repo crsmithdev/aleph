@@ -94,6 +94,9 @@ const REASONS = {
     get line() { return `An issue started ${RUN_CAP()} times in one hour.`; },
     get problem() { return `The factory started {id} ${RUN_CAP()} times in one hour, so it stopped starting it until you run it again.`; },
     rerun: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
+  // Held by the memory re-check on a core note; the director never decides it. Its issue is parked, so no work starts on it.
+  "core-change": { kind: "approval", actions: ["approve", "decline"], always: "", card: "approve", name: "Core note changes",
+    line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}." },
   "proposal-check": proposal("Proposed checks", "The correction memory proposes a check for a repo."),
   "proposal-claude-md": proposal("Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."),
   "proposal-skill": proposal("Proposed skill changes", "The correction memory proposes a change to a skill."),
@@ -129,6 +132,10 @@ export const ASK_REASONS: Record<string, Reason> = REASONS;
 
 /** A stored reason as a known one: a reason the table does not name reads as a plain question. */
 export const reasonOf = (given: string | undefined): string => (given && ASK_REASONS[given] ? given : "question");
+
+/** An issue whose Ask waits for Chris: open, or parked with a core-change Ask. */
+export const asking = (item: issues.Issue, ask: Ask | null): ask is Ask =>
+  !!ask && (issues.status(item) === "open" || (issues.status(item) === "parked" && ask.reason === "core-change"));
 
 /** The kind of an Ask: the ask's own, else from its reason. */
 export const kindOf = (reason: string, given?: string): Ask["kind"] =>

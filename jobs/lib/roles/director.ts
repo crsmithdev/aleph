@@ -19,7 +19,7 @@ import { afterFiling } from "../transitions/filing.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
-import { always, ASK_REASONS, askSub, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
+import { always, ASK_REASONS, askSub, asking, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
 import { allRuns, isAgentRun, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
@@ -78,7 +78,7 @@ export function pendingCases(repos: Repo[] = sandboxRepos(), runs: Entry[] = all
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
       const ask = askOf(refIn(repo.key, item));
-      if (issues.status(item) !== "open" || !ask) continue;
+      if (!asking(item, ask)) continue;
       if (empty(ask)) out.push({ at: "item", on: `${repo.key}-${issues.refOf(item)}`, repo, item, ask });
     }
   }
@@ -178,12 +178,13 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
 
 /**
  * Why this Ask is on the escalation list, or null when the director may decide it. Fixed rules, not the model's
- * judgement: a memory proposal, a land of a run that changes a security path or bun.lock (or a held run whose branch
+ * judgement: a memory proposal, a change to a core note, a land of a run that changes a security path or bun.lock (or a held run whose branch
  * cannot be read), and a second run-cap or rescue Ask on an issue the director already
  * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
  */
 function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
   if (c.at === "lesson" || c.ask.reason.startsWith("proposal-")) return { why: "a memory proposal is Chris's" };
+  if (c.ask.reason === "core-change") return { why: "a change to a core note is Chris's" };
   if (ONCE_PER_ISSUE.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
     return { why: `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris` };
   const b = actionsOf(c).includes("land") ? branchOf(c) : null;
@@ -453,7 +454,7 @@ function stillOpen(c: Case): boolean {
   if (c.at === "lesson") return proposals().some((l) => l.id === c.lesson.id && l.state === "proposed" && !l.situation?.trim());
   if (c.at === "item") {
     const item = store.reader().item(c.repo.key, idOf(c.item));
-    return !!item && issues.status(item) === "open" && sameAsk(askOf(c.on), c.ask);
+    return !!item && asking(item, askOf(c.on)) && sameAsk(askOf(c.on), c.ask);
   }
   const now = jobRecord.getRun(c.entry.id);
   return !!now && now.condition === "waiting" && sameAsk(now.ask, c.ask);
@@ -464,7 +465,7 @@ function writeCaseText(c: Case, t: Text): boolean {
   if (c.at === "item") {
     const item = store.reader().item(c.repo.key, issues.refOf(c.item));
     const now = askOf(c.on);
-    if (!item || issues.status(item) !== "open" || !now || !sameAsk(now, c.ask)) return false;
+    if (!item || !asking(item, now) || !sameAsk(now, c.ask)) return false;
     setAsk(c.on, { ...now, ...t });
     return true;
   }

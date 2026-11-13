@@ -7,6 +7,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
+import { setAsk, type Ask } from "../asks/ask.ts";
 import { BATCH, housekeep, housekeepDue, readState, review } from "./housekeeper.ts";
 import { base, branch, calls, fresh, item, key, repoPath, replyWith, sh, useDirectorFixture } from "./director.fixture.ts";
 
@@ -20,7 +21,7 @@ const act = (actions: object[]) => replyWith({ actions });
 const runs = () => allRuns().filter((e) => e.run.kind === "housekeeper");
 
 /** A fresh repo key with these issues, each parked unless `open`. */
-function seed(items: { title: string; body?: string; open?: boolean }[]): void {
+function seed(items: { title: string; body?: string; open?: boolean; ask?: Ask }[]): void {
   fresh();
   writeList({ key }, "seed", (doc) => {
     for (const i of items) {
@@ -29,10 +30,12 @@ function seed(items: { title: string; body?: string; open?: boolean }[]): void {
     }
     return true;
   }, true);
+  for (const [k, i] of items.entries()) if (i.ask) setAsk(`${key}-${k + 1}`, i.ask);
 }
 
-test("the daily run reviews every parked issue in batches of BATCH, and no open one", async () => {
-  seed([...Array.from({ length: BATCH + 2 }, (_, k) => ({ title: `Parked issue ${k + 1}` })), { title: "Open issue", open: true }]);
+test("the daily run reviews every parked issue in batches of BATCH, and no open one nor one with a core-change Ask", async () => {
+  seed([...Array.from({ length: BATCH + 2 }, (_, k) => ({ title: `Parked issue ${k + 1}` })), { title: "Open issue", open: true },
+    { title: "Core note X", ask: { kind: "approval", reason: "core-change", question: "Apply the archive verdict to the core note X?", options: [], why: [] } }]);
   act([]);
   expect(housekeepDue(NOW)).toBe(true);
   const out = await housekeep(NOW);
@@ -40,6 +43,7 @@ test("the daily run reviews every parked issue in batches of BATCH, and no open 
   expect(calls()).toBe(2);
   expect(prompt()).toContain(`### ${key}-12: Parked issue 12`);
   expect(prompt()).not.toContain(`### ${key}-13`);
+  expect(prompt()).not.toContain(`### ${key}-14`);
   expect(runs().map((e) => e.run.condition)).toEqual(["done", "done"]);
   // The daily review is done: nothing is due until a main moves or a day passes.
   expect(readState().main[key]).toBe(sh(repoPath(), "git", "rev-parse", "main"));

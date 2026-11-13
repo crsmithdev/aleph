@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
+import { writeList } from "../../../issues/lib/store.ts";
 import { grant, markAsked, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
 import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
@@ -156,6 +157,18 @@ test("a memory proposal is on the escalation list: the director's case text goes
   // The case text says approve reopens the parked issue; it does not say approve files a goal.
   expect(prompt()).toContain("reopens");
   expect(prompt()).not.toContain("files a goal");
+});
+
+test("a core-change Ask on a parked issue is escalated to Chris with case text, whatever actions the director replies, and decides nothing", async () => {
+  fresh([{ title: "Core note X", ask: { kind: "approval", reason: "core-change", question: "Apply the archive verdict to the core note X?", options: [], why: ["gone"] } }]);
+  writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
+  replyWith({ case: { situation: "The re-check says X is gone.", effects: [{ action: "approve", text: "Archives X." }, { action: "decline", text: "Keeps X." }], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
+  const [d] = await direct();
+  expect(d).toMatchObject({ ref: `${key}-1`, reason: "core-change", outcome: "escalated", why: "a change to a core note is Chris's", applied: [] });
+  expect(issues.status(item(1))).toBe("parked");
+  expect(asked(1)!.situation).toBe("The re-check says X is gone.");
+  expect(prompt()).toContain("Actions on Chris's card: approve, decline");
+  expect(readRecord().map((r) => r.outcome)).toEqual(["escalated"]);
 });
 
 test("a proposed lesson with no issue is no case", async () => {

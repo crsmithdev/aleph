@@ -27,6 +27,7 @@ import { card, row, stageOf, type Row } from "../issue.ts";
 import { issueHref, jobHref, parseId } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { filed } from "./speed.ts";
+import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
 import { readHolds, suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
 import { projectOf, repoIn } from "./scope.ts";
 
@@ -260,6 +261,14 @@ const answer = (verb: "note" | "decide" | "done", text: string) => post((_b, par
   return aleph(["issue", verb, "--", repo.key, String(n), text]);
 });
 
+/** Chris's answer to a held change of a core note, run in process (no `aleph` command does this): the refusal of the vault op is a 422. */
+const core = (approved: boolean) => post(async (_b, params) => {
+  const { repo, item } = target(params);
+  const why = await answerHeld(refIn(repo.key, item), approved);
+  if (why) fail(422, why);
+  return { status: approved ? "done" : "dropped" };
+});
+
 export const routes: Routes = {
   "POST /api/issues/:id/retriage": answer("note", "Chris: run intake again"),
   "POST /api/issues/:id/rerun": answer("decide", "Chris: run it again"),
@@ -271,6 +280,8 @@ export const routes: Routes = {
   "GET /api/issues/:id/media/:name": (_req, params) => media(params),
   "POST /api/issues/:id/drop": drop,
   "POST /api/issues/:id/decide": decide,
+  "POST /api/issues/:id/approve": core(true),
+  "POST /api/issues/:id/decline": core(false),
   "GET /api/issues": (_req, _p, url) => list(url),
   "GET /api/issues/:id": (_req, params, url) => detail(params, url),
   "POST /api/issues": create,

@@ -99,6 +99,7 @@ test("one Ask per reason: the card, its label and its tag come from the server i
     "held-path": ["approve", "Approve", "protected"], review: ["approve", "Approve", "returned"], question: ["decide", "Decide", "question"],
     "no-commit": ["unstick", "Unstick", "failed"], "part-dropped": ["decide", "Decide", "incomplete"], "intake-failed": ["unstick", "Unstick", "failed"],
     rescue: ["unstick", "Unstick", "waiting"], "run-cap": ["unstick", "Unstick", "capped"],
+    "core-change": ["approve", "Approve", "core-change"],
     "proposal-check": ["approve", "Approve", "proposal"], "proposal-claude-md": ["approve", "Approve", "proposal"], "proposal-skill": ["approve", "Approve", "proposal"],
   };
   expect(Object.keys(want).sort()).toEqual(Object.keys(ASK_REASONS).sort());

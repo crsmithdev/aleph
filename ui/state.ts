@@ -13,7 +13,7 @@ import { isWaiting, issueKeyOf, loadRegistry, runOfJob, type CheckResult, type E
 import { allJobs, isOpen, readFile, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting, jobIdOf } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
-import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
+import { askOf, asking, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
 import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
@@ -433,8 +433,10 @@ export function state(now = new Date()): State {
         const ends = mine.map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
         doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(updated(item) ?? "") || 0, repo, item, runs: mine, since: pickedUp(id) });
       }
-      if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       const ask = askOf(id);
+      // A core-change Ask sits on a parked issue, so no work starts on it.
+      if (status(item) === "parked" && asking(item, ask)) { awaitingItems.push(card(repo.key, item, "waiting", ask)); continue; }
+      if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       if (st === "waiting" && ask) awaitingItems.push(card(repo.key, item, st, ask));
       else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: updated(item) ?? created(item) ?? "" });
       // A parent shows a card in Running only while it waits to close: every part is done.

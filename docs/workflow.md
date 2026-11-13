@@ -234,6 +234,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 | `intake-failed` | input | retry, close | `retry` |
 | `rescue` | input | decide, drop | `recommended` |
 | `run-cap` | input | rerun, close | none |
+| `core-change` | approval | approve, decline | none |
 | `proposal-check`, `proposal-claude-md`, `proposal-skill` | approval | approve, decline | `approve` |
 
 **The director.** Every new Ask goes to the director first. It is one read-only Fable run per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-goal`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
@@ -246,6 +247,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 **Escalation** (`director.ts` `escalation`). The director writes case text (situation, effects, recommendation) and takes no action when:
 
 - the Ask is a memory proposal;
+- it is a `core-change` Ask: the memory re-check holds a correct or archive verdict on a core note, on a parked issue. Approve applies the verdict through the vault op and closes the issue as done, or notes the op's refusal on the issue. Decline keeps the claim, sets the note's `updated` to today and drops the issue;
 - it is a second `run-cap` or `rescue` Ask on an issue the director decided once;
 - the land changes a security path or `bun.lock`;
 - a held run's branch cannot be read.

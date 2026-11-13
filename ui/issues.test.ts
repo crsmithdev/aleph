@@ -790,6 +790,15 @@ describe("POST /api/issues/:id/retriage and rerun", () => {
 });
 
 describe("a parked issue", () => {
+  test("approve and decline answer a held core-change verdict; an issue with none is refused", async () => {
+    let n = 0;
+    writeList({ key: "oth" }, "park", (doc) => { const p = add(doc, "held core note"); setStatus(p, "parked"); n = p.id; return true; }, true);
+    for (const verb of ["approve", "decline"]) {
+      const r = await at(`/api/issues/oth-${n}/${verb}`, { method: "POST", headers: { "x-aleph-ui": "1" } });
+      expect(r.status).toBe(422);
+      expect((await r.json()).error).toBe(`no held verdict for oth-${n}`);
+    }
+  });
   test("lists as status parked; the filter offers it and narrows to it; the badge differs; it is neither open nor closed", async () => {
     let n = 0;
     writeList({ key: "oth" }, "park", (doc) => { const p = add(doc, "shelved thing"); setStatus(p, "parked"); n = p.id; return true; }, true);
