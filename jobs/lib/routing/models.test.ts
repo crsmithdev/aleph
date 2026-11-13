@@ -4,18 +4,17 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { serverArgs } from "./gpt-oss-start.ts";
 import { judge } from "../../../hooks/lib/judge.ts";
-import { writeTitle } from "../roles/title.ts";
-import { AGENT_SETTINGS, MODELS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf } from "./models.ts";
+import { writeLine } from "../roles/title.ts";
+import { AGENT_SETTINGS, MODELS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf, viaOfRun } from "./models.ts";
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "models-")); process.env.ALEPH_FACTORY_DIR = dir; });
 afterEach(() => { delete process.env.ALEPH_FACTORY_DIR; rmSync(dir, { recursive: true, force: true }); });
 
-test("a missing file gives both worker tiers enabled on haiku and sonnet, and merge, title and judge on Claude", () => {
+test("a missing file gives both worker tiers enabled on haiku and sonnet, and title and judge on Claude", () => {
   expect(readModels()).toEqual({
     "worker-low": { enabled: true, model: "haiku" },
     "worker-medium": { enabled: true, model: "sonnet" },
-    merge: { enabled: true, model: "haiku" },
     reviewer: { enabled: true, model: "claude-opus-5-5" },
     intake: { enabled: true, model: "claude-opus-5-5" },
     director: { enabled: true, model: "claude-opus-5-5" },
@@ -35,8 +34,15 @@ test("a tier set to a model it offers reads back; a model it does not offer, an 
   expect(setModel("worker-low", { model: "sonnet" })).toContain("offers");
   expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown tier");
   expect(setModel("intake", { model: "nonexistent" })).toContain("offers");
-  expect(setModel("merge", { enabled: false })).toContain("can be disabled");
+  expect(setModel("reviewer", { enabled: false })).toContain("can be disabled");
+  expect(setModel("merge", { model: "haiku" })).toContain("unknown tier");
   expect(readModels()).toEqual(m);
+});
+
+test("a merge run follows the worker tier of its model", () => {
+  expect(setModel("worker-low", { model: "deepseek-v4.1-flash" })).toBeNull();
+  expect(viaOfRun({ model: "haiku", merge: true }, readModels())).toBe("openrouter");
+  expect(viaOfRun({ model: "sonnet", merge: true }, readModels())).toBe("claude");
 });
 
 test("a Claude model adds no env; gpt-oss-20b adds the local server and takes the GPU slot; an OpenRouter model adds OpenRouter, the key and an empty API key", () => {
@@ -102,7 +108,7 @@ test("the compact window fits the server's context and leaves a usable threshold
 // Each slot that calls `claude -p` itself: its command's env var, the result its stand-in prints, and one call.
 const SLOTS = [
   { slot: "judge", cmd: "ALEPH_JUDGE_CMD", result: JSON.stringify({ verdict: "pass", reason: "ok" }), call: () => judge("TURN: x", "x") },
-  { slot: "title", cmd: "ALEPH_RULE_CMD", result: "A title", call: () => writeTitle(`Check run-42: ${"the gate drops a test that the worker changed and nobody sees it ".repeat(3).trim()}.`) },
+  { slot: "title", cmd: "ALEPH_RULE_CMD", result: "A title", call: () => writeLine("Write a rule.", "a quote", 200) },
 ] as const;
 for (const { slot, cmd, result, call } of SLOTS) {
   test(`a ${slot} slot set to local runs claude on gpt-oss-20b at the local base URL, and a claude slot on haiku`, async () => {

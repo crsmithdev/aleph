@@ -363,7 +363,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     writeFileSync(marker, "");
   }
 
-  const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
+  const tier = WORKER_TIER[run.model ?? ""];
   // A tier set to a model Claude does not serve runs on it; the run keeps its Claude model as its tier.
   const pick = tier !== undefined ? readModels()[tier].model : undefined;
   if (pick !== undefined && viaOf(pick) !== "claude") { jobRecord.patchRun(basename(folder), { model: pick, tier: run.model }); run = { ...run, model: pick }; }

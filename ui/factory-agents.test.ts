@@ -146,7 +146,6 @@ test("the title is the sidebar name, whatever the data", () => {
 const tiers = (low: string, medium: string) => ({
   "worker-low": { enabled: true, model: low },
   "worker-medium": { enabled: false, model: medium },
-  merge: { enabled: true, model: "haiku" },
   reviewer: { enabled: true, model: "opus" },
   intake: { enabled: true, model: "opus" },
   director: { enabled: true, model: "opus" },
@@ -169,7 +168,8 @@ test("the Roles table is read-only; the Models settings list holds a select per 
   expect(w("low")).toContain('type="checkbox" data-tier="worker-low" aria-label="Worker low enabled" checked');
   expect(w("medium")).toContain('type="checkbox" data-tier="worker-medium" aria-label="Worker medium enabled">');
   expect(w("medium")).toContain('<option value="gpt-oss-20b" selected>');
-  for (const n of ["Merge", "Reviewer", "Intake", "Director", "Monitor", "Title", "Judge"]) { expect(row(n)).toContain("<select"); expect(row(n)).not.toContain("checkbox"); }
+  expect(roles).not.toContain(">Merge<");
+  for (const n of ["Reviewer", "Intake", "Director", "Monitor", "Title", "Judge"]) { expect(row(n)).toContain("<select"); expect(row(n)).not.toContain("checkbox"); }
   expect(html).not.toContain(">Succeeded<");
   expect(html).not.toContain(">Failed<");
 });
@@ -177,7 +177,7 @@ test("the Roles table is read-only; the Models settings list holds a select per 
 test("the Backends tile says the local server is up or down and the Roles table disables gpt-oss-20b to match", () => {
   const down = renderFactoryAgents(S, D, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] });
   expect(down).toContain("Local server: down");
-  expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(9);
+  expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(8);
   const up = renderFactoryAgents(S, D, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(up).toContain("Local server: up");
   expect(up).not.toContain("disabled");

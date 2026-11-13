@@ -35,7 +35,7 @@ function scorecard(s, m, win) {
 const WARN_RATE = 0.7;
 
 /** Each tier's name; the models it offers come from /api/models. */
-const TIERS = Object.fromEntries(["merge", "reviewer", "intake", "director", "monitor", "title", "judge"].map((k) => [k, NAMES[k]]));
+const TIERS = Object.fromEntries(["reviewer", "intake", "director", "monitor", "title", "judge"].map((k) => [k, NAMES[k]]));
 
 function roles(a, m) {
   const num = ["Jobs", "Success", "p50", "Cost"];

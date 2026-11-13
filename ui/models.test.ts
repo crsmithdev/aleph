@@ -26,17 +26,17 @@ test("GET /api/models answers each tier with enabled and model plus the local st
   rmSync(file(), { force: true });
   const b: any = await at("/api/models").then((r) => r.json());
   expect(b.local).toBe("up");
-  expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "merge", "reviewer", "intake", "director", "monitor", "maintainer", "title", "judge"]);
+  expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "reviewer", "intake", "director", "monitor", "maintainer", "title", "judge"]);
   expect(b.tiers["worker-medium"]).toEqual({ enabled: true, model: "sonnet" });
   expect(b.spend).toEqual({ day: 1.5, week: 17.5, month: 18 });
 });
 
 test("POST /api/models writes a tier's model or enable to models.json", async () => {
   healthy = true;
-  const res = await post({ tier: "merge", model: "gpt-oss-20b" });
+  const res = await post({ tier: "reviewer", model: "gpt-oss-20b" });
   expect(res.status).toBe(200);
-  expect(JSON.parse(readFileSync(file(), "utf8")).merge).toEqual({ enabled: true, model: "gpt-oss-20b" });
-  expect(((await post({ tier: "merge", model: "haiku" }).then((r) => r.json())) as any).tiers.merge.model).toBe("haiku");
+  expect(JSON.parse(readFileSync(file(), "utf8")).reviewer).toEqual({ enabled: true, model: "gpt-oss-20b" });
+  expect(((await post({ tier: "reviewer", model: "haiku" }).then((r) => r.json())) as any).tiers.reviewer.model).toBe("haiku");
   expect(((await post({ tier: "worker-low", enabled: false }).then((r) => r.json())) as any).tiers["worker-low"]).toEqual({ enabled: false, model: "haiku" });
 });
 
@@ -46,6 +46,7 @@ test("a missing header gives 403; a bad tier, a model the tier does not offer, a
   writeFileSync(file(), kept);
   expect((await post({ tier: "title", model: "gpt-oss-20b" }, {})).status).toBe(403);
   expect((await post({ tier: "nonexistent", model: "haiku" })).status).toBe(422);
+  expect((await post({ tier: "merge", model: "haiku" })).status).toBe(422);
   expect((await post({ tier: "intake", model: "nonexistent" })).status).toBe(422);
   expect((await post({ tier: "worker-low", model: "sonnet" })).status).toBe(422);
   expect((await post({ tier: "title", enabled: false })).status).toBe(422);

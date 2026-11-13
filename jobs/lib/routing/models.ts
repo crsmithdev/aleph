@@ -53,7 +53,7 @@ export const BACKENDS: Record<Via, string> = { claude: "Claude", local: "the loc
 /** Who serves a run's calls: its own model's backend or, when its model is a Claude tier model, its tier's model's backend. */
 export function viaOfRun(run: { model?: string; merge?: true }, models: Record<Tier, Setting>): Via {
   const own = viaOf(run.model);
-  const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
+  const tier = WORKER_TIER[run.model ?? ""];
   return own === "claude" && tier !== undefined ? viaOf(models[tier].model) : own;
 }
 
@@ -155,7 +155,6 @@ const OTHERS = Object.keys(MODELS).filter((m) => MODELS[m].via !== "claude");
 export const OFFERS = {
   "worker-low": ["haiku", ...OTHERS],
   "worker-medium": ["sonnet", ...OTHERS],
-  merge: ["haiku", ...OTHERS],
   reviewer: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   intake: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   director: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],

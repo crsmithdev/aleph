@@ -178,7 +178,7 @@ describe("models", () => {
   test("set title gpt-oss-20b is printed by models; a bad tier exits non-zero", async () => {
     expect((await cli(["models", "set", "title", "gpt-oss-20b"])).code).toBe(0);
     const r = await cli(["models"]);
-    expect(r.json).toMatchObject({ title: { enabled: true, model: "gpt-oss-20b" }, merge: { enabled: true, model: "haiku" } });
+    expect(r.json).toMatchObject({ title: { enabled: true, model: "gpt-oss-20b" } });
     const bad = await cli(["models", "set", "nonexistent", "gpt-oss-20b"]);
     expect(bad.code).not.toBe(0);
     expect(bad.stderr).toContain("unknown tier");

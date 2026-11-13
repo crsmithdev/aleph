@@ -1,12 +1,11 @@
 import { afterAll, expect, setSystemTime, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { titleProblem } from "../../../issues/lib/todo.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { gpuSlot } from "../gates/factory-status.ts";
 import { setModel } from "../routing/models.ts";
-import { writeTitle } from "./title.ts";
+import { cutTitle, fit, writeLine, writeTitle } from "./title.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "aleph-title-"));
 const KEYS = ["ALEPH_RULE_CMD", "ALEPH_JOBS_DIR", "XDG_RUNTIME_DIR"];
@@ -15,43 +14,33 @@ const savedKeys = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 Object.assign(process.env, { ALEPH_JOBS_DIR: join(dir, "jobs"), XDG_RUNTIME_DIR: join(dir, "run") });
 afterAll(() => { for (const k of KEYS) if (savedKeys[k] === undefined) delete process.env[k]; else process.env[k] = savedKeys[k]; rmSync(dir, { recursive: true, force: true }); });
 
-/** A stand-in for `claude -p` that prints `line` as its result, or fails. */
-function stub(line: string | null): void {
-  const f = join(dir, `stub-${Math.random().toString(36).slice(2)}`);
-  writeFileSync(f, line === null ? "#!/bin/sh\nexit 1\n" : `#!/bin/sh\nprintf '%s' ${JSON.stringify(JSON.stringify({ type: "result", is_error: false, result: line }))}\n`, { mode: 0o755 });
-  process.env.ALEPH_RULE_CMD = f;
-}
-
 const SOURCE = `Check run-42: ${"the gate drops a test that the worker changed and nobody sees it ".repeat(3).trim()}.`;
 
-test("writeTitle gives a title that titleProblem accepts, whatever the model says", async () => {
-  for (const line of ["x".repeat(90), "Check foo: bar", null]) {
-    stub(line);
-    const t = await writeTitle(SOURCE);
-    expect(titleProblem(t)).toBeNull();
-    expect(t.length).toBeGreaterThan(0);
-  }
-  expect(SOURCE.length).toBeGreaterThanOrEqual(150);
-  stub("Fix the gate that drops a changed test");
-  expect(await writeTitle(SOURCE)).toBe("Fix the gate that drops a changed test");
-  stub(null);
+test("writeTitle and fit cut the title mechanically and never call the model", async () => {
+  const calls = join(dir, "calls");
+  const f = join(dir, "stub");
+  writeFileSync(f, `#!/bin/sh\necho call >> ${calls}\nprintf '%s' '{"type":"result","is_error":false,"result":"A title from the model"}'\n`, { mode: 0o755 });
+  process.env.ALEPH_RULE_CMD = f;
+  expect(await writeTitle(SOURCE)).toBe(cutTitle(SOURCE));
   expect(await writeTitle(SOURCE)).toBe("the gate drops a test that the worker changed and nobody");
+  expect(await fit("[G] ", SOURCE)).toBe("[G] " + cutTitle(SOURCE, 56));
+  expect(existsSync(calls)).toBe(false);
 });
 
-test("when the GPU slot stays taken past the title call's time box, the title comes from Claude and an event records the fallback", async () => {
+test("when the GPU slot stays taken past the rule writer's time box, the line comes from Claude and an event records the fallback", async () => {
   const saved = process.env.ALEPH_FACTORY_DIR;
   process.env.ALEPH_FACTORY_DIR = join(dir, "factory-busy");
   const f = join(dir, "record-busy");
-  writeFileSync(f, `#!/bin/sh\necho "$@" > ${join(dir, "args-busy")}\nprintf '%s' '{"type":"result","is_error":false,"result":"A title from Claude"}'\n`, { mode: 0o755 });
+  writeFileSync(f, `#!/bin/sh\necho "$@" > ${join(dir, "args-busy")}\nprintf '%s' '{"type":"result","is_error":false,"result":"A rule from Claude"}'\n`, { mode: 0o755 });
   process.env.ALEPH_RULE_CMD = f;
   const T0 = Date.parse("2026-11-04T00:00:00Z");
   setSystemTime(T0);
   const release = (await gpuSlot(0))!;
   try {
     expect(setModel("title", { model: "gpt-oss-20b" })).toBeNull();
-    const title = writeTitle(SOURCE);
+    const line = writeLine("Write a rule.", "a quote", 200);
     setSystemTime(T0 + 31_000); // the 30 s box ends while the slot stays taken
-    expect(await title).toBe("A title from Claude");
+    expect(await line).toBe("A rule from Claude");
     expect(readFileSync(join(dir, "args-busy"), "utf8")).toContain("--model haiku");
     expect(readEvents().find((e) => e.action === "gpu")?.note).toContain("the call falls back to Claude");
   } finally {

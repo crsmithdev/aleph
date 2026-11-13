@@ -1,9 +1,8 @@
 /**
  * The one title writer: generated text that is not yet an issue title (a worker's
- * `FOLLOWUP:` line, a lesson, a landing's manual check) becomes a title that
- * `titleProblem` accepts. The source text goes into the request, not the title.
+ * `FOLLOWUP:` line, a lesson, a landing's manual check) is cut to a title mechanically, with no model call.
+ * `writeLine` is the one-shot call that the rule writer makes.
  */
-import { titleProblem, TITLE_RULE } from "../../../issues/lib/todo.ts";
 import { ruleCmd } from "../infra/settings.ts";
 import { oneShot } from "../routing/one-shot.ts";
 
@@ -24,8 +23,6 @@ export async function writeLine(system: string, input: string, max: number): Pro
   }
 }
 
-const system = (room: number) => `You turn one piece of text into an issue title. Reply with exactly one title: ${TITLE_RULE}.${room < TITLE ? ` It must fit in ${room} characters.` : ""} No quotes, no preamble.`;
-
 /** The source with each leading `<words>: ` removed, cut to `max` characters at a word boundary, with no final period. */
 export function cutTitle(source: string, max = TITLE): string {
   let t = source.trim();
@@ -39,12 +36,8 @@ export function cutTitle(source: string, max = TITLE): string {
   return t.replace(/[.\s]+$/, "");
 }
 
-/** `group` and the model's title for `rest` in the room `group` leaves, when `titleProblem` accepts it, else `group` and `cutTitle(rest)`. */
-export async function fit(group: string, rest: string): Promise<string> {
-  const room = TITLE - group.length;
-  const t = (await writeLine(system(room), rest, 200)).trim().replace(/\.$/, "");
-  return t && !titleProblem(group + t, { part: group !== "" }) ? group + t : group + cutTitle(rest, room);
-}
+/** `group` and `cutTitle(rest)` in the room `group` leaves. */
+export const fit = async (group: string, rest: string): Promise<string> => group + cutTitle(rest, TITLE - group.length);
 
-/** The model's title for `source`, less a final period, when `titleProblem` accepts it, else `cutTitle(source)`. It never throws. */
+/** `cutTitle(source)`. */
 export const writeTitle = (source: string): Promise<string> => fit("", source);

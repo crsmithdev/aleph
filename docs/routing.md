@@ -8,11 +8,11 @@ This page states which model or command does each piece of work, with which tool
 |---|---|---|---|---|---|
 | Intake | `claude-opus-5-5` | Read, Grep, Glob | A temp clone of `origin/main` | 900 s | `INTAKE_SCHEMA`: a route |
 | Worker | The routed tier, else the CLI default | Read, Write, Edit, Bash, Grep, Glob | `<repo>/.worktrees/job-<name>` | `ALEPH_JOB_TIMEOUT` (1800 s) | `WORKER_SCHEMA` |
-| Merge worker | `haiku`, or the local `merge` tier | As the worker | As the worker | 600 s | `WORKER_SCHEMA` |
+| Merge worker | `haiku`, or the model of the `worker-low` tier | As the worker | As the worker | 600 s | `WORKER_SCHEMA` |
 | Reviewer | `claude-opus-5-5` | Read, Grep, Glob, Bash | A detached worktree at the branch tip | `ALEPH_REVIEW_TIMEOUT` (600 s) | `REVIEW_SCHEMA`: `pass` or `hold` |
 | Director | `claude-opus-5-5` | Read, Grep, Glob; read-only `git`, `ls`, `aleph jobs`, `aleph issue show\|list` | The repo's main checkout, plus the vault's decisions | 900 s | `DIRECTOR_SCHEMA`: actions and case text |
 | Monitor | `deepseek-v4.1-flash` | None | | 600 s | Numbered findings |
-| Title and rule writer | `haiku`, or the local `title` tier | None, 1 turn | | 30 s | One line |
+| Rule writer | `haiku`, or the local `title` tier | None, 1 turn | | 30 s | One line |
 | Judge | Jev, then `haiku` or the local `judge` tier | None, 1 turn | | 30 s | `{verdict, reason}` |
 
 The code: intake `jobs/lib/roles/intake.ts`, worker and reviewer `jobs/lib/roles/unit.ts`, director `jobs/lib/roles/director.ts`, monitor `jobs/lib/roles/monitor.ts`, maintainer `jobs/lib/roles/maintainer.ts`, titles `jobs/lib/roles/title.ts`, judge `hooks/lib/judge.ts`.
@@ -21,7 +21,7 @@ The maintainer's daily compile starts one read-only `claude -p` run (tier `maint
 
 ## How a run starts
 
-`callAgent` in `jobs/lib/roles/agent-call.ts` makes every role's call: the one-reply roles through `openRun` in `jobs/lib/roles/agent-run.ts`, the worker and the reviewer, and the title writer and the judge through `oneShot`:
+`callAgent` in `jobs/lib/roles/agent-call.ts` makes every role's call: the one-reply roles through `openRun` in `jobs/lib/roles/agent-run.ts`, the worker and the reviewer, and the rule writer and the judge through `oneShot`:
 
 ```bash
 claude -p --strict-mcp-config --disable-slash-commands \
@@ -78,7 +78,6 @@ The dispatch also routes when the live cap holds a goal: if a tier on the local 
 |---|---|
 | `worker-low` | `haiku` |
 | `worker-medium` | `sonnet` |
-| `merge` | `haiku` |
 | `title` | `haiku` |
 | `judge` | `haiku` |
 
@@ -123,7 +122,7 @@ Intake routes an issue, not a model. Code decides first: a `flake` issue becomes
 | The reviewer command, the worker command | `ALEPH_REVIEWER_CMD` |
 | The command and time box for `INTAKE`, `DIRECTOR`, `MONITOR` | `ALEPH_<ROLE>_CMD`, `ALEPH_<ROLE>_TIMEOUT` |
 | The judge's Haiku command | `ALEPH_JUDGE_CMD` |
-| The title and rule writer's command | `ALEPH_RULE_CMD` |
+| The rule writer's command | `ALEPH_RULE_CMD` |
 | The Jev endpoint | `ALEPH_JEV_URL` |
 
 Tests use these to put in a fake.
