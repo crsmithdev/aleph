@@ -17,6 +17,7 @@ const DAY = "2026-11-03";
 const FAKE = `#!/bin/bash
 cat > "$FAKE_DIR/prompt.md"
 echo "$*" > "$FAKE_DIR/args"
+echo "$ALEPH_BASH_ALLOW" > "$FAKE_DIR/bash-allow"
 [ -n "$FAKE_RECALL" ] && bun "$FAKE_RECALL" memory recall "keep the digest" > /dev/null
 cat "$FAKE_DIR/reply.json"
 `;
@@ -68,6 +69,7 @@ test("a real compile writes each note through the vault write op, keeps a refusa
   expect(prompt).toContain("We decided to keep the compile digest as it is.");
   expect(prompt).toContain("## Already cited");
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--allowedTools Bash(aleph memory recall:*),Read");
+  expect(JSON.parse(readFileSync(join(base, "bash-allow"), "utf8"))).toEqual(["aleph memory recall"]);
 });
 
 test("a dry compile runs the model, reports the titles, writes nothing and records nothing", async () => {

@@ -119,7 +119,10 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   const model = gpu && !release && o.fallback ? o.fallback : o.model;
   if (model !== o.model) logEvent({ by: "rule", subject: role, action: "gpu", note: `the GPU slot stayed taken for ${o.limit} s; the call falls back to ${BACKENDS[viaOf(model)]}` });
   const argv = modelArgv(o.cmd ?? roleCmd(role.toUpperCase()), model, ["--output-format", "stream-json", "--verbose", ...o.flags, ...(o.schema ? ["--json-schema", JSON.stringify(o.schema)] : [])], role === "chat");
-  const env = { ...(o.env ?? { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }), ...modelEnv(model), ALEPH_UI_PASSWORD: undefined };
+  // A run whose --allowedTools names Bash prefixes may run only those: hooks/bash-allow.ts reads them, since a user setting that allows plain Bash would let the rest through.
+  const at = o.flags.indexOf("--allowedTools");
+  const list = at < 0 ? [] : o.flags[at + 1]?.split(",").flatMap((t) => t.match(/^Bash\((.+):\*\)$/)?.[1] ?? []);
+  const env = { ...(o.env ?? { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }), ...modelEnv(model), ALEPH_UI_PASSWORD: undefined, ALEPH_BASH_ALLOW: list.length ? JSON.stringify(list) : undefined };
   const seen = statSync(o.stdout, { throwIfNoEntry: false })?.size ?? 0;
   let step: Step;
   try {

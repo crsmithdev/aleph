@@ -18,6 +18,7 @@ After you change a hook, run `/reload-plugins`.
 | `PreToolUse` | `Edit\|Write\|NotebookEdit` | `git-guard.ts` | 10 | Denies edits on `main`, in the work store and on `VAULT.md` |
 | `PreToolUse` | `Bash` | `secret-scan.ts` | 10 | Denies a commit that adds a secret or a debug leftover |
 | `PreToolUse` | `Bash` | `gh-guard.ts` | 15 | Asks before a `gh` write to a repo of another owner |
+| `PreToolUse` | `Bash` | `bash-allow.ts` | 10 | Denies a Bash command outside the run's own `Bash(...)` list |
 | `PostToolUse` | `Write` | `handoff-saved.ts` | 10 | Ends the turn after a handoff file is written |
 | `Stop` | | `verify-gate.ts` | 45 | Blocks a claim of completion that no run supports |
 | `Stop` | | `context-gate.ts` | 10 | Warns on context fill; asks for a handoff after a compaction |
@@ -27,7 +28,7 @@ After you change a hook, run `/reload-plugins`.
 
 ## Failure modes
 
-The three `PreToolUse` guards **fail closed**. `hooks.json` wraps each in `sh -c 'bun "$1" || { …; exit 2; }'`, and each script also catches its own errors and exits 2. A guard that crashes denies the tool call.
+The four `PreToolUse` guards **fail closed**. `hooks.json` wraps each in `sh -c 'bun "$1" || { …; exit 2; }'`, and each script also catches its own errors and exits 2. A guard that crashes denies the tool call.
 
 All other hooks **fail open**. An error exits without a block, or prints nothing. Without Langfuse keys, `obs.ts` exits silently. Without a vault, `vault-context.ts` prints nothing.
 
@@ -80,6 +81,12 @@ To skip the scan, put `ALEPH_SKIP_SCAN=1` in the command text.
 ### gh-guard
 
 `hooks/gh-guard.ts` finds `gh` writes: a write verb (`gh pr create`, `gh issue comment`, …) or a `gh api` call with a non-GET method, `-f`/`-F` fields or a `mutation`. It finds the owner from `-R`/`--repo`, a github.com URL, `repos/<owner>/`, or the `origin` of the directory after each `cd`. When the owner is not the user, or the guard cannot find the owner, it returns `permissionDecision: "ask"`. The user is `ALEPH_GH_USER`, else `gh api user -q .login`: the login that command prints.
+
+### bash-allow
+
+`hooks/bash-allow.ts` acts only when `ALEPH_BASH_ALLOW` is set: a JSON array of command prefixes. `callAgent` in `jobs/lib/roles/agent-call.ts` sets it from the `Bash(<prefix>:*)` entries of a run's `--allowedTools`, so the maintainer, recheck, dedupe, housekeeper and director runs get it. A run with no such entry, such as the worker or the reviewer, gets no variable, and the hook lets every command through. The hook exists because `~/.claude/settings.json` may allow plain Bash, which lets a command through that the run's list does not name.
+
+With the variable set, the hook denies a command that is not a prefix or a prefix followed by a space and arguments. It denies a command that chains (`;`, `&&`, `||`), pipes, redirects, or substitutes (`` ` ``, `$`) outside single quotes, or has a newline, because those parts are not the prefix. Without it the hook prints nothing.
 
 ## Gates
 
