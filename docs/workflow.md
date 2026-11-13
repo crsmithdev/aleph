@@ -246,6 +246,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 
 **Escalation** (`director.ts` `escalation`). The director writes case text (situation, effects, recommendation) and takes no action when:
 
+- a rule grants `user` for its reason: no director run starts, and the Ask goes to Chris at once with the fallback case text;
 - the Ask is a memory proposal;
 - it is a `core-change` Ask: the memory re-check holds a correct or archive verdict on a core note, on a parked issue. Approve applies the verdict through the vault op and closes the issue as done, or notes the op's refusal on the issue. Decline keeps the claim, sets the note's `updated` to today and drops the issue;
 - it is a second `run-cap` or `rescue` Ask on an issue the director decided once;
@@ -254,7 +255,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 
 An Ask that the actions leave open, a failed director run or a malformed reply also escalates. The Status page shows an Ask's buttons only after the director escalates it.
 
-**Always rules.** The Always button and `aleph always grant` write a rule to `~/.aleph/factory/always.json` that maps a reason to an action. Only the reasons with an Always action in the table above use it. The next Ask with that reason takes the action without Chris.
+**Always rules.** The Always button and `aleph always grant` write a rule to `~/.aleph/factory/always.json` that maps a reason to an action. `grant` takes a reason's own actions, its Always action in the table above, or `user`. Code reads only these rules: the Always actions in the table above, `close` for `intake-failed`, `decline` for the memory proposals, and `user`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason but the memory proposals (`proposal-*`) takes `user`, through `aleph always grant <reason> user` or the Gates page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
 
 **No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Gates page set, for any reason in the table above but the memory proposals, `held-path` and `core-change`, minutes and a no-answer action in `~/.aleph/factory/timeouts.json`; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none; `drop` takes the reason's drop, close or deny. A land takes `Held-by: timeout` and includes the escalation list. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card shows the time of the land.
 
