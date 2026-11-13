@@ -32,10 +32,12 @@ export const view = {
     if (streamed.length > HERALD_KEEP) streamed.shift();
     const h = root.querySelector("#herald");
     if (!h || !lastState) return;
-    const saved = recordState(h);
+    const saved = recordState(h), moved = heraldMotion(root);
     h.outerHTML = renderHerald(lastState);
     restoreState(root.querySelector("#herald"), saved);
+    moved();
   },
+  swap: (root) => heraldMotion(root),
 };
 
 let lastState = null, outOfDateNow = false;
@@ -128,14 +130,19 @@ function feedRow({ tone, at, body, by, cls = "", bodyCls = "" }) {
     `<span class="event-body${bodyCls}">${body}</span></div>`;
 }
 
+/** A short hash of a text, to key a row by its text. */
+const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString(36);
+
+/** An event's identity: the same event from the stream and from the state has the same key. */
+const eventKey = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
+
 /** The events the stream sent since the page loaded, oldest first; the Herald merges them with the state's. */
 let streamed = [];
 const HERALD_KEEP = 50;
 
 /** The events of the state and of the stream, each once, newest first. */
 export function heraldEvents(s, more = streamed) {
-  const key = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
-  const all = new Map([...(s.herald?.events ?? []), ...more].map((e) => [key(e), e]));
+  const all = new Map([...(s.herald?.events ?? []), ...more].map((e) => [eventKey(e), e]));
   return [...all.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, HERALD_KEEP);
 }
 
@@ -238,7 +245,7 @@ const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.act
 /** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones briefly behind it; `row(ev, more)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
 const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
   const older = briefs(events, runs, chats);
-  return { at: events[0].at, html: older.length ? fold(row(events[0], older.length), `<div class="herald-older">${older.map(briefRow).join("")}</div>`, { cls: "herald-group", id }) : row(events[0]) };
+  return { at: events[0].at, key: `event ${hash(eventKey(events[0]))}`, html: older.length ? fold(row(events[0], older.length), `<div class="herald-older">${older.map(briefRow).join("")}</div>`, { cls: "herald-group", id }) : row(events[0]) };
 });
 
 /** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */
@@ -298,18 +305,69 @@ export function renderHerald(s) {
   if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
 
   // A status row is the status sentence in its tone between two rules, with no label; the live row is a card that adds each error line the sentence lacks.
-  const status = history.map((ev, i) => ({ at: ev.at ?? "", html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : " status", bodyCls: ` ${esc(ev.tone)}`,
+  const status = history.map((ev, i) => ({ at: ev.at ?? "", key: `status ${hash(`${ev.tone} ${ev.text}`)}`, html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : " status", bodyCls: ` ${esc(ev.tone)}`,
     body: `${esc(statusText(ev.text))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).map(statusText).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason" title="${esc(l)}">${esc(l)}</span>`).join("")}` }) }));
   // The status changes and the events in one feed, newest first; the live status row stays on top.
+  // A status row's key is its tone and text, numbered from the oldest, so a new status on top does not rename the rows below it.
+  const seen = new Map();
+  for (const r of [...status].reverse()) { const n = (seen.get(r.key) ?? 0) + 1; seen.set(r.key, n); r.key += ` ${n}`; }
   const live = errors ? status.shift() : null;
   const events = heraldEvents(s);
   const rows = [...status, ...issueRows(events, s.herald?.titles, s.herald?.runs), ...chatRows(events, s.herald?.chats)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
-  const feed = (live ? [live, ...rows] : rows).map((r) => r.html).join("");
+  const feed = (live ? [live, ...rows] : rows).map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}"`)).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
   const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", stuck.length || errors ? "stuck" : "need") : tag("OK", "done");
 
   return card("Herald", `${sticky}${runNow(s)}<div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
+}
+
+/** The Herald's animated rows: the running jobs and the feed's top rows. */
+const heraldRows = (h) => h.querySelectorAll(".run-now[data-job], .herald-feed > [data-key]");
+const rowKey = (r) => (r.dataset.job ? `job ${r.dataset.job}` : r.dataset.key);
+
+/**
+ * Record the Herald's rows before a redraw; the function it returns animates them from there to where the redraw put them.
+ * A new feed row grows and holds a tint. A new running row grows and its parts drop in. A running row that ends fades out
+ * in place while the new feed rows fade in. Every other row glides to its new place. Nothing moves under reduced motion.
+ */
+function heraldMotion(root) {
+  const h = root.querySelector("#herald");
+  // A page with no matchMedia (the tests' DOM) has no layout to animate either.
+  if (!h || !globalThis.matchMedia || matchMedia("(prefers-reduced-motion: reduce)").matches) return () => {};
+  const was = new Map([...heraldRows(h)].map((r) => [rowKey(r), { r, box: r.getBoundingClientRect() }]));
+  return () => {
+    const now = root.querySelector("#herald");
+    if (!now) return;
+    const css = getComputedStyle(now), mid = parseFloat(css.getPropertyValue("--t-mid")), easing = css.getPropertyValue("--ease").trim();
+    const rows = [...heraldRows(now)], keys = new Set(rows.map(rowKey));
+    const ended = [...was].filter(([k]) => k.startsWith("job ") && !keys.has(k)).map(([, v]) => v);
+    const grow = (r) => r.animate([{ height: "0px", opacity: 0, paddingTop: "0px", paddingBottom: "0px" }, { height: `${r.getBoundingClientRect().height}px`, opacity: 1 }], { duration: mid, easing });
+    // The new rows start first, at height 0, so the glide below measures the rows from where the growth starts.
+    for (const r of rows.filter((r) => !was.has(rowKey(r)))) {
+      if (r.dataset.job) {
+        grow(r);
+        for (const c of r.children) c.animate([{ transform: "translateY(-8px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, delay: 60, easing, fill: "backwards" });
+      } else if (ended.length) r.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 80, easing: "ease-out", fill: "backwards" });
+      else {
+        grow(r);
+        r.animate([{ background: "var(--run-bg)" }, { background: "var(--run-bg)", offset: 0.35 }, { background: "transparent" }], { duration: 1500, easing: "ease-out" });
+      }
+    }
+    for (const r of rows) {
+      const old = was.get(rowKey(r)), dy = old ? old.box.top - r.getBoundingClientRect().top : 0;
+      if (Math.abs(dy) > 0.5) r.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: mid, easing });
+    }
+    // A ghost of each ended row fades where the row was; the card is its containing block.
+    const base = now.getBoundingClientRect();
+    for (const { r, box } of ended) {
+      const ghost = r.cloneNode(true);
+      ghost.removeAttribute("data-job");
+      Object.assign(ghost.style, { position: "absolute", left: `${box.left - base.left - now.clientLeft}px`, top: `${box.top - base.top - now.clientTop}px`, width: `${box.width}px`, margin: "0", pointerEvents: "none" });
+      now.append(ghost);
+      ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: mid, easing: "ease-out" }).finished.then(() => ghost.remove());
+    }
+  };
 }
 
 function wireHeraldJump(root) {

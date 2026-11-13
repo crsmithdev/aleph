@@ -1,7 +1,7 @@
 // The page shell: the router, the load path, the stream client and the action dispatch.
 //
 // Each module listed by /api/views exports
-// view = { path, title, group, order, icon?, render(data, params, query), mount?(root, data, query), event?(root, ev), api?, more?, refresh?, live? }, and
+// view = { path, title, group, order, icon?, render(data, params, query), mount?(root, data, query), event?(root, ev), swap?(root), api?, more?, refresh?, live? }, and
 // may export redirect(hash) -> new hash | null for an address it took over:
 // `api` is the URL its data comes from (":params" filled in from the route), `more(data, query)` the promise of the data
 // with what the view loads after it (a first load draws before it and again after it),
@@ -230,6 +230,8 @@ export async function start() {
   async function draw({ view, params, query, at }, data, first) {
     // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
     const saved = first ? null : recordState($("view"));
+    // A view's `swap` sees the page before the redraw replaces it; the function it returns runs after, as for motion.
+    const swapped = first ? null : view.swap?.($("view"));
     try {
       startDraw();
       const out = view.render(data, params, query);
@@ -239,6 +241,7 @@ export async function start() {
       else $("view").innerHTML = out;
     } catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`, "Reload the page. If it stays, this is a bug in the view.")}</div>`; return; }
     if (saved) restoreState($("view"), saved);
+    swapped?.();
     const mark = markOf(data);
     $("aged").hidden = !mark;
     $("aged").innerHTML = mark ? notice(markLine(view.title, mark), true) : "";

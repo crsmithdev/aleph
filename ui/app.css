@@ -68,6 +68,8 @@
   --r-card: 12px; --r-ctl: 6px; --r-tag: 4px; --r-hair: 2px; --r-pill: 999px;
   --sp-2: 2px; --sp-4: 4px; --sp-6: 6px; --sp-8: 8px; --sp-10: 10px; --sp-12: 12px; --sp-14: 14px; --sp-16: 16px; --sp-18: 18px; --sp-20: 20px; --sp-24: 24px; --sp-28: 28px;
   --dot-s: 6px; --dot-m: 8px; --dot-l: 12px; --measure: 76ch;
+  /* Motion: the Herald's rows (heraldMotion in views/now.js) and the run dot. */
+  --t-fast: 150ms; --t-mid: 220ms; --t-slow: 320ms; --ease: cubic-bezier(.2,.7,.2,1);
   --z-rowlink: 1; --z-sticky: 2; --z-overlay: 50; --indent-list: 18px; --dim: .6; --ctl-h: 28px; --bar-h: 10px;
   --ls-display: -0.02em;  /* tracking of the display and brand type */
   --ls-caps: .06em;       /* tracking of the uppercase keys */
@@ -822,10 +824,11 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .herald-card.pulsing { border-color: var(--run); box-shadow: 0 0 0 3px var(--run-bg); }
 .herald-sticky { position: sticky; top: 0; background: var(--surface); z-index: var(--z-sticky); border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-6); }
 .herald-sticky-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); text-transform: uppercase; letter-spacing: var(--ls-caps); }
-/* The running jobs: one line each under the alerts; the dot is static, a later change animates it. */
+/* The running jobs: one line each under the alerts, each with a breathing dot. */
 .herald-running { flex: none; max-height: 30%; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-bottom: var(--sp-6); border-bottom: 1px solid var(--rule); }
 .run-now { display: flex; align-items: baseline; gap: var(--sp-8); min-width: 0; font-size: var(--fs-xs); }
-.run-dot { width: var(--dot-s); height: var(--dot-s); border-radius: var(--r-pill); background: var(--run); flex: none; align-self: center; }
+.run-dot { width: var(--dot-s); height: var(--dot-s); border-radius: var(--r-pill); background: var(--run); flex: none; align-self: center; animation: breathe 2s var(--ease) infinite; }
+@keyframes breathe { 50% { opacity: .35; transform: scale(.8); } }
 .run-label { color: var(--run); font-size: var(--fs-2xs); font-weight: var(--fw-strong); white-space: nowrap; }
 .run-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0; padding-right: var(--sp-4); }

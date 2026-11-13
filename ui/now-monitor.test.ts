@@ -198,8 +198,8 @@ test("the Herald shows one row per chat session titled by its latest message's f
     const titles = [...h.matchAll(/<span class="(?:event-say|brief-text)"(?: title="[^"]*")?>([^<]*)</g)].map((m) => m[1]).filter(Boolean);
     // Newest session first; its earlier turn is in the details, after the row of its latest turn.
     expect(titles).toEqual(["Then the footer", "Fix the title", "Other question"]);
-    expect(h.match(/<details class="herald-group" data-fold="chat:s1">/g)).toHaveLength(1);
-    expect(h).toMatch(/<details class="herald-group" data-fold="chat:s1"><summary>[^]*?Then the footer<span class="event-more">\+1<\/span>[^]*?<\/summary>[^]*?Fix the title/);
+    expect(h.match(/<details data-key="[^"]*" class="herald-group" data-fold="chat:s1">/g)).toHaveLength(1);
+    expect(h).toMatch(/<details data-key="[^"]*" class="herald-group" data-fold="chat:s1"><summary>[^]*?Then the footer<span class="event-more">\+1<\/span>[^]*?<\/summary>[^]*?Fix the title/);
     expect(h).not.toContain("event-id");
     expect(h).not.toMatch(/>chat</);
     expect(h).not.toContain("chat#");
@@ -260,7 +260,7 @@ test("the Herald hides an older start of a run with a newer event, joins a run o
   const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatch(/brief-label" title="waits">waits<\/span><span class="brief-text" title="[^"]*"><a[^>]*>aleph-8<\/a> holds now\.js, <a[^>]*>aleph-7<\/a><\/span>/);
-  expect(h).toContain('<div class="event-row quiet sys" data-by="rule">');
+  expect(h).toMatch(/<div data-key="[^"]*" class="event-row quiet sys" data-by="rule">/);
   expect(h).toContain("worker-medium · jev-1.13 · p 0.83");
 });
 
