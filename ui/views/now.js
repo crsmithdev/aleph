@@ -251,7 +251,9 @@ const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
 /** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */
 function issueRows(events, titles = {}, runs = {}) {
   const by = new Map();
-  for (const ev of events) if (ev.subject !== "chat") by.set(ev.subject, [...(by.get(ev.subject) ?? []), ev]);
+  // An issue's runs share its row; any other subject (the housekeeper) is one row per run, so a row's older events belong to one run.
+  const groupOf = (ev) => (/-\d+$/.test(ev.subject) || !jobOf(ev) ? ev.subject : `${ev.subject}:${jobOf(ev)}`);
+  for (const ev of events) if (ev.subject !== "chat") by.set(groupOf(ev), [...(by.get(groupOf(ev)) ?? []), ev]);
   return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more) => eventRow(ev, titles, {}, more, runs[jobOf(ev)]), runs);
 }
 
@@ -304,9 +306,9 @@ export function renderHerald(s) {
   const history = [...(s.herald?.history ?? [])];
   if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
 
-  // A status row is the status sentence in its tone between two rules, with no label; the live row is a card that adds each error line the sentence lacks.
-  const status = history.map((ev, i) => ({ at: ev.at ?? "", key: `status ${hash(`${ev.tone} ${ev.text}`)}`, html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : " status", bodyCls: ` ${esc(ev.tone)}`,
-    body: `${esc(statusText(ev.text))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).map(statusText).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason" title="${esc(l)}">${esc(l)}</span>`).join("")}` }) }));
+  // A status row is an ordinary event row with the status sentence as its body; the live row is a card that adds each error line the sentence lacks.
+  const status = history.map((ev, i) => ({ at: ev.at ?? "", key: `status ${hash(`${ev.tone} ${ev.text}`)}`, html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : "", bodyCls: i === 0 && errors ? ` ${esc(ev.tone)}` : "",
+    body: `<span class="event-say">${esc(statusText(ev.text))}</span>${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).map(statusText).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason" title="${esc(l)}">${esc(l)}</span>`).join("")}` }) }));
   // The status changes and the events in one feed, newest first; the live status row stays on top.
   // A status row's key is its tone and text, numbered from the oldest, so a new status on top does not rename the rows below it.
   const seen = new Map();

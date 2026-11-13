@@ -97,8 +97,8 @@ test("the Herald panel shows weekly usage and warning tone in event history when
   const h = view.renderHerald({ ...calm, usage: { now: { seven_day: 93 } } });
   expect(h).toContain("weekly usage is at 93%");
   expect(h).not.toContain(">Warn<");
-  expect(h).toContain('class="event-row warning status"');
-  expect(h).toContain('class="event-body warning"');
+  expect(h).toContain('class="event-row warning"');
+  expect(h).toContain('<span class="event-body"><span class="event-say">');
 });
 
 test("an error is not pinned: the newest event is marked live and carries the error lines its text lacks, and no row repeats its label or a health prefix", () => {
@@ -110,7 +110,7 @@ test("an error is not pinned: the newest event is marked live and carries the er
   expect(h).toMatch(/class="event-row alert live"/);
   expect(h).not.toContain("Alert: Health:");
   // The status sentence sums up aleph's red main, so the live event lists that line; it already says koans's.
-  expect(h).toMatch(/class="event-row alert live">.*?koans main is red\.<span class="reason" title="aleph main is red">aleph main is red<\/span>/);
+  expect(h).toMatch(/class="event-row alert live">.*?koans main is red\.<\/span><span class="reason" title="aleph main is red">aleph main is red<\/span>/);
   expect(h).not.toContain('<span class="reason">koans main is red</span>');
 });
 
@@ -195,7 +195,7 @@ test("the Herald shows one row per chat session titled by its latest message's f
     const events = [1, 2, 3].map((n) => ({ at: `2026-11-09T1${n}:00:00Z`, by: "gate", subject: "chat", action: "done", on: [`chat#${n}`] }));
     const s = { ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, chats: heraldChats(events, allRuns()) } };
     const h = view.renderHerald(s);
-    const titles = [...h.matchAll(/<span class="(?:event-say|brief-text)"(?: title="[^"]*")?>([^<]*)</g)].map((m) => m[1]).filter(Boolean);
+    const titles = [...h.matchAll(/<span class="(?:event-say|brief-text)"(?: title="[^"]*")?>([^<]*)</g)].map((m) => m[1]).filter((x) => x && !x.startsWith("Alert:"));
     // Newest session first; its earlier turn is in the details, after the row of its latest turn.
     expect(titles).toEqual(["Then the footer", "Fix the title", "Other question"]);
     expect(h.match(/<details data-key="[^"]*" class="herald-group" data-fold="chat:s1">/g)).toHaveLength(1);
@@ -243,6 +243,20 @@ test("the Herald draws a routing event with fields as the issue's row: its title
   expect(h).toContain("Fix the thing");
   expect(h).toContain("→ worker-medium · sonnet · p 0.99 · $0.00003");
   expect(h).toMatch(/badge[^>]*>routed</);
+});
+
+test("the Herald folds a job subject per run and an issue across its runs", () => {
+  const e = (at: string, subject: string, action: string, job: string) => ({ at, by: "gate", subject, action, on: [job] });
+  const events = [
+    e("2026-11-09T09:00:00Z", "housekeeper", "running", "housekeeper#1"), e("2026-11-09T09:10:00Z", "housekeeper", "done", "housekeeper#1"),
+    e("2026-11-09T10:00:00Z", "housekeeper", "running", "housekeeper#2"), e("2026-11-09T10:10:00Z", "housekeeper", "done", "housekeeper#2"),
+    e("2026-11-09T11:00:00Z", "aleph-9", "done", "aleph-9#1"), e("2026-11-09T12:00:00Z", "aleph-9", "done", "aleph-9#2"),
+  ];
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: {} } });
+  expect(h).toContain('data-fold="issue:aleph-9"');
+  expect(h).not.toContain('data-fold="issue:housekeeper"');
+  // Each run is its own row: the two finished runs stay apart, and neither hides the other's events.
+  expect(h.match(/<div [^>]*class="event-row done"[^>]*>(?:(?!<\/div>).)*idp">housekeeper/g)).toHaveLength(2);
 });
 
 test("the Herald hides an older start of a run with a newer event, joins a run of waits into one row, and draws a routing event as tier, model and p", () => {

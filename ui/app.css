@@ -221,13 +221,13 @@ main { min-width: 0; }
 .page { max-width: 2400px; margin: 0 auto; padding: var(--sp-28) var(--sp-24) calc(2 * var(--gap) + var(--sp-16)); }
 .shead { align-items: center; gap: var(--sp-8) var(--sp-12); margin: 0 0 var(--sp-20); flex-wrap: wrap; }
 .shead .say { font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: var(--ls-display); flex: 1 1 20rem; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-.shead .asof { flex: none; color: inherit; font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: var(--ls-display); }
+.shead .asof { flex: none; color: var(--muted); font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: var(--ls-display); }
 .shead a { text-decoration: none; border-bottom: 1px solid var(--rule); }
 .shead a:hover { border-bottom-color: currentColor; }
 .shead .aside { flex: none; margin-left: auto; }
 .shead .fbar { flex-wrap: nowrap; gap: var(--sp-8); }
-.shead .say.error, .shead .say.error a, .shead:has(.say.error) .asof { color: var(--stuck); }
-.shead .say.warning, .shead .say.warning a, .shead:has(.say.warning) .asof { color: var(--need); }
+.shead .say.error, .shead .say.error a { color: var(--stuck); }
+.shead .say.warning, .shead .say.warning a { color: var(--need); }
 .rows { display: grid; gap: var(--sp-8); }
 .issue-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-14); padding: var(--sp-8) var(--sp-12); border: 1px solid var(--rule); border-radius: var(--r-ctl); background: var(--surface); }
 .issue-row.held, .issue-row.decide { border-color: var(--need); }
@@ -862,7 +862,7 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .event-body.fine, .event-row.fine .event-body { color: var(--ink); }
 .event-body .reason { color: var(--muted); margin-left: var(--sp-6); font-family: var(--mono); font-size: var(--fs-2xs); }
 /* Ledger rows: a tone stripe at the left, and a state chip in the tone before the sentence's ID. */
-.event-row:not(.live):not(.status) { border-left: 3px solid var(--stripe, var(--rule)); padding-left: var(--sp-8); }
+.event-row:not(.live) { border-left: 3px solid var(--stripe, var(--rule)); padding-left: var(--sp-8); }
 .event-row.done { --stripe: var(--done); } .event-row.run { --stripe: var(--run); }
 .event-row.need { --stripe: var(--need); } .event-row.stuck { --stripe: var(--stuck); }
 .event-row.need .event-body, .event-row.stuck .event-body { color: var(--ink); }
@@ -870,11 +870,6 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .done .event-state { background: var(--done-bg); color: var(--done); } .run .event-state { background: var(--run-bg); color: var(--run); }
 .need .event-state { background: var(--need-bg); color: var(--need); } .stuck .event-state { background: var(--stuck-bg); color: var(--stuck); }
 /* A status change is a divider: its sentence in its tone between two rules. */
-.event-row.status { display: flex; gap: var(--sp-8); align-items: center; padding: var(--sp-6) 0; border-bottom: none; font-size: var(--fs-xs); }
-.event-row.status .event-body { flex: none; max-width: 80%; }
-.event-row.status::before, .event-row.status::after { content: ""; flex: 1; height: 1px; background: var(--rule); order: 1; }
-.event-row.status::before { order: -1; }
-.event-row.status .event-time { order: 0; }
 /* A routing event is quiet: no stripe colour, muted text. */
 .event-row.sys { --stripe: transparent; color: var(--muted); font-size: var(--fs-xs); padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
 .event-row.sys .event-body { color: var(--muted); }

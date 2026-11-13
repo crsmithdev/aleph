@@ -353,7 +353,7 @@ The page head is the first part of a page. It shows the title, a count and the c
 - On a list page, make the controls with `scope().bar()` and put them in `aside`. The bar starts with the Project select and the window. Give the controls of the page to the bar as `after`.
 - A detail page has no Project select.
 - Keep the project and the window in the address: call `scope().wire(root)` in `mount`.
-- **Exception: the Status page.** Its head has no title and no count. It reads `<time> <status sentence>`, both in the tone of `verdict()`, with the window and Pause or Resume at the right. Keep it: the Status head is the factory's status at a glance, and a title would push that sentence down.
+- **Exception: the Status page.** Its head has no title and no count. It reads `<time> <status sentence>`, both in the tone of `verdict()`, with the window and Pause or Resume at the right. The time is muted (`--muted`) and never takes the status tone; only the sentence does. Keep it: the Status head is the factory's status at a glance, and a title would push that sentence down.
 
 | Do | Don't |
 |---|---|
@@ -854,7 +854,7 @@ A feed row shows one event in a feed. The newest event is first.
 
 | Helper | Reference |
 |---|---|
-| `eventRow(ev, titles)` in `ui/views/now.js`; the Herald's status rows use its `feedRow()` | `ui/views/now.js` |
+| `eventRow(ev, titles)` in `ui/views/now.js`; the Herald's status rows are plain event rows made with its `feedRow()`, and a non-issue subject such as the housekeeper folds per run, not per subject | `ui/views/now.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
