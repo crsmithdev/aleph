@@ -84,7 +84,7 @@ To skip the scan, put `ALEPH_SKIP_SCAN=1` in the command text.
 
 ### bash-allow
 
-`hooks/bash-allow.ts` acts only when `ALEPH_BASH_ALLOW` is set: a JSON array of command prefixes. `callAgent` in `jobs/lib/roles/agent-call.ts` sets it from the `Bash(<prefix>:*)` entries of a run's `--allowedTools`, so the maintainer, recheck, dedupe, housekeeper and director runs get it. A run with no such entry, such as the worker or the reviewer, gets no variable, and the hook lets every command through. The hook exists because `~/.claude/settings.json` may allow plain Bash, which lets a command through that the run's list does not name.
+`hooks/bash-allow.ts` acts only when `ALEPH_BASH_ALLOW` is set: a JSON array of command prefixes. `callAgent` in `jobs/lib/roles/agent-call.ts` sets it from the `Bash(<prefix>:*)` entries of a run's `--allowedTools`, so the maintainer, recheck, dedupe, alias, housekeeper and director runs get it. A run with no such entry, such as the worker or the reviewer, gets no variable, and the hook lets every command through. The hook exists because `~/.claude/settings.json` may allow plain Bash, which lets a command through that the run's list does not name.
 
 With the variable set, the hook denies a command that is not a prefix or a prefix followed by a space and arguments. It denies a command that chains (`;`, `&&`, `||`), pipes, redirects, or substitutes (`` ` ``, `$`) outside single quotes, or has a newline, because those parts are not the prefix. Without it the hook prints nothing.
 
