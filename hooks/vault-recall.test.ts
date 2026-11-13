@@ -10,6 +10,7 @@ let server: ReturnType<typeof Bun.serve>;
 let asked: any[] = [];
 let answer: (id: string) => number;
 let status = 200;
+let failAt = -1;
 let lf: ReturnType<typeof Bun.serve>;
 let posts: any[] = [];
 
@@ -29,13 +30,13 @@ beforeAll(() => {
     async fetch(req) {
       const body: any = await req.json();
       asked.push(body);
-      if (status !== 200) return Response.json({ error: { message: "down" } }, { status });
+      if (status !== 200 || asked.length - 1 === failAt) return Response.json({ error: { message: "down" } }, { status });
       return Response.json({ answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: answer(id) }])), usage: { cost: 0 } });
     },
   });
 });
 afterAll(() => { lf.stop(true); server.stop(true); rmSync(dir, { recursive: true, force: true }); });
-beforeEach(() => { posts = []; asked = []; status = 200; answer = () => 0.9; });
+beforeEach(() => { posts = []; asked = []; status = 200; failAt = -1; answer = () => 0.9; });
 
 async function run(vault: string, prompt = PROMPT, env: Record<string, string> = {}, extra: Record<string, unknown> = {}) {
   const p = Bun.spawn(["bun", HOOK], {
@@ -65,12 +66,19 @@ test("with ALEPH_JUDGE=haiku: no output and Jev is not asked", async () => {
   expect(asked).toEqual([]);
 });
 
-test("60 matching notes: at most 20 questions, at most 3 injected", async () => {
+const questionsOf = () => asked.map((b) => Object.values(b.questions).map((q: any) => q.instructions as string));
+const bigVault = (count: number) => {
   const big = mkdtempSync(join(tmpdir(), "aleph-recall-big-"));
-  for (let i = 0; i < 60; i++) note(big, `Jev Screen Number ${i}`, `Claim ${i}.`);
+  for (let i = 0; i < count; i++) note(big, `Jev Screen Number ${i}`, `Claim ${i}.`);
+  return big;
+};
+
+test("60 matching notes: 3 requests of 20 distinct questions, at most 3 injected", async () => {
+  const big = bigVault(60);
   const r = await run(big);
   rmSync(big, { recursive: true, force: true });
-  expect(Object.keys(asked[0].questions).length).toBe(20);
+  expect(questionsOf().map((q) => q.length)).toEqual([20, 20, 20]);
+  expect(new Set(questionsOf().flat()).size).toBe(60);
   expect(JSON.parse(r.out).hookSpecificOutput.additionalContext.split("\n").length).toBe(4);
 });
 
@@ -147,4 +155,35 @@ test("an injection records a seen-list prune run and deletes a seen list older t
   expect(rec.result).toBe("ok");
   expect(Date.parse(rec.at)).toBeGreaterThan(Date.parse("2026-11-01"));
   rmSync(v, { recursive: true, force: true });
+});
+
+test("150 matching notes: 100 asked in requests of at most 20, and the span says capped", async () => {
+  const big = bigVault(150);
+  await run(big, PROMPT, {}, turn());
+  rmSync(big, { recursive: true, force: true });
+  expect(Math.max(...questionsOf().map((q) => q.length))).toBe(20);
+  expect(questionsOf().flat().length).toBe(100);
+  expect(meta(spansOf()[0])).toMatchObject({ candidates: 150, asked: 100, capped: true });
+});
+
+test("one failing request loses only its notes, and the span records the error", async () => {
+  const big = bigVault(60);
+  failAt = 1;
+  const r = await run(big, PROMPT, {}, turn());
+  rmSync(big, { recursive: true, force: true });
+  expect(asked.length).toBe(3);
+  expect(injected(r.out).split("\n").length).toBe(4);
+  expect(meta(spansOf()[0]).error).toBeTruthy();
+  const failed = questionsOf()[1];
+  for (const q of failed) expect(injected(r.out)).not.toContain(q.match(/`(Jev Screen Number \d+)`/)![1] + " (");
+});
+
+test("the span lists the vault path of each asked note, injected or not", async () => {
+  const big = bigVault(30);
+  await run(big, PROMPT, {}, turn());
+  rmSync(big, { recursive: true, force: true });
+  const paths = String(meta(spansOf()[0]).askedPaths).split("\n");
+  expect(paths.length).toBe(30);
+  expect(paths).toContain("wiki/concepts/Jev Screen Number 7.md");
+  expect(paths.length).toBeGreaterThan(String(meta(spansOf()[0]).offered).split("\n").length);
 });

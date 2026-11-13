@@ -14,8 +14,10 @@ import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
 import { appendRecallLog, coreNotes, loadWiki, recordRun, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
 
 const MIN_PROMPT = 20;
-// Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout.
-const MAX_ASKED = 20;
+// Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout,
+// so the candidates go in parallel requests of at most PER_REQUEST questions.
+const PER_REQUEST = 20;
+const MAX_ASKED = 100;
 const MAX_INJECTED = 3;
 const CUT = 0.85;
 const JEV_TIMEOUT_MS = 1500;
@@ -41,7 +43,7 @@ function writeSeen(root: string, session: string | undefined, seen: Set<string>,
 }
 
 /** One `vault-recall` span on the turn's trace. A failed post changes nothing. */
-async function postSpan(input: any, start: number, meta: { candidates: number; asked: number; kept: number; capped: boolean; error?: string }, offered: string[], context: string) {
+async function postSpan(input: any, start: number, meta: { candidates: number; asked: number; kept: number; capped: boolean; error?: string }, offered: string[], context: string, askedPaths: string[] = []) {
   await postTurnSpan(input, "vault-recall", start, {
     "langfuse.observation.type": "span",
     "langfuse.observation.output": context ? truncate(context) : undefined,
@@ -50,6 +52,7 @@ async function postSpan(input: any, start: number, meta: { candidates: number; a
     "langfuse.observation.metadata.kept": meta.kept,
     "langfuse.observation.metadata.capped": meta.capped,
     "langfuse.observation.metadata.error": meta.error,
+    "langfuse.observation.metadata.askedPaths": askedPaths.length ? askedPaths.join("\n") : undefined,
     "langfuse.observation.metadata.offered": offered.length ? offered.join("\n") : undefined,
   });
 }
@@ -70,24 +73,27 @@ async function main() {
   const candidates = all.slice(0, MAX_ASKED);
   const meta: Parameters<typeof postSpan>[2] = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length > MAX_ASKED };
   if (!candidates.length) { await postSpan(input, start, meta, [], ""); return; }
-  const questions: Record<string, Noul> = {};
   const criteria = { true: "The note's subject is something the prompt asks about or depends on.", false: "The note is about something else." };
-  candidates.forEach((n, i) => {
-    questions[`n${i}`] = { type: "noul", instructions: `Does note \`${n.title}\` (its claim line: ${claimLine(n)}) bear on \`prompt\`?`, criteria };
+  const batches = Array.from({ length: Math.ceil(candidates.length / PER_REQUEST) }, (_, b) => candidates.slice(b * PER_REQUEST, (b + 1) * PER_REQUEST));
+  const settled = await Promise.allSettled(batches.map((batch) => {
+    const questions: Record<string, Noul> = {};
+    batch.forEach((n, i) => {
+      questions[`n${i}`] = { type: "noul", instructions: `Does note \`${n.title}\` (its claim line: ${claimLine(n)}) bear on \`prompt\`?`, criteria };
+    });
+    return nouls({ prompt }, questions, JEV_TIMEOUT_MS);
+  }));
+  const errors: string[] = [];
+  const scored: { n: Note; p: number }[] = [];
+  settled.forEach((s, b) => {
+    if (s.status === "rejected") { errors.push(s.reason?.message ?? String(s.reason)); return; }
+    batches[b].forEach((n, i) => scored.push({ n, p: s.value.p[`n${i}`] }));
   });
-  let picked: { n: Note; p: number }[] = [];
-  try {
-    const { p } = await nouls({ prompt }, questions, JEV_TIMEOUT_MS);
-    picked = candidates
-      .map((n, i) => ({ n, p: p[`n${i}`] }))
-      .filter((x) => x.p >= CUT)
-      .sort((a, b) => b.p - a.p)
-      .slice(0, MAX_INJECTED);
-  } catch (e: any) { meta.error = e?.message ?? String(e); }
+  if (errors.length) meta.error = errors.join("; ");
+  const picked = scored.filter((x) => x.p >= CUT).sort((a, b) => b.p - a.p).slice(0, MAX_INJECTED);
   meta.kept = picked.length;
   const lines = picked.map(({ n }) => `- ${n.title} (${join(root, n.rel)}): ${claimLine(n)}`);
   const additionalContext = picked.length ? ["Vault notes that may bear on this prompt (Jev):", ...lines].join("\n") : "";
-  await postSpan(input, start, meta, picked.map(({ n }) => n.rel), additionalContext);
+  await postSpan(input, start, meta, picked.map(({ n }) => n.rel), additionalContext, candidates.map((n) => n.rel));
   if (!picked.length) return;
   writeSeen(root, input.session_id, seen, picked.map(({ n }) => n.rel));
   try { appendRecallLog(root, picked.map(({ n }) => n.title), prompt, input.session_id ?? null, "hook"); } catch { /* the log must never block the injection */ }
