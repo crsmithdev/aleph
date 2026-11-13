@@ -705,6 +705,8 @@ describe("recall", () => {
     expect(hit).toHaveLength(1);
     expect(hit[0]).toMatchObject({ title: "aleph-1 Zebra", scope: "aleph", rank: 3, path: join(factory, "episodes", "aleph-1 Zebra.md") });
     expect(hit[0].frontmatter.kind).toBe("episode");
+    const use = readFileSync(join(factory, "episode-use.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    expect(use.map(({ title, event, query }) => ({ title, event, query }))).toEqual([{ title: "aleph-1 Zebra", event: "shown", query: "zebraquill" }]);
     expect((await run(env, "recall", "zebraquill")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "verify", "gate")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "zebraquill", "--scope", "beamline")).json).toEqual([]);

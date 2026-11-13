@@ -130,6 +130,9 @@ test(`a page older than ${KEEP_DAYS} days is deleted, and an issue whose last ru
   writeFileSync(stale, "x\n");
   const then = (NOW - (KEEP_DAYS + 1) * 86400_000) / 1000;
   utimesSync(stale, then, then);
+  const use = join(base, "factory", "episode-use.jsonl");
+  const line = (date: string) => JSON.stringify({ date, title: "t", event: "shown", session: null }) + "\n";
+  writeFileSync(use, line("2000-01-01") + line(today()));
   const r = await writeEpisodes([loadRegistry().fac]);
   expect(r).toEqual({ written: [`fac-${fresh} fresh one`], failed: [] });
   expect(pages()).toEqual([`fac-${fresh} fresh one.md`]);
@@ -137,6 +140,7 @@ test(`a page older than ${KEEP_DAYS} days is deleted, and an issue whose last ru
   const daily = readFileSync(join(v, "daily", `${today()}.md`), "utf8");
   expect(daily.split("\n").filter((l) => l.includes("prune episodes"))).toEqual([`- ${clock()} prune episodes before ${today(new Date(NOW - KEEP_DAYS * 86400_000))} — 1 pages older than ${KEEP_DAYS} days`]);
   expect(sh(v, "git", "status", "--porcelain", "--", "daily")).toBe("");
+  expect(readFileSync(use, "utf8")).toBe(line(today()));
 });
 
 /** Adds a top-level issue and `titles.length` parts under it, all done with a landed commit and a run. */

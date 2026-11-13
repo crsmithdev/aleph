@@ -18,6 +18,7 @@ import { recallQuery } from "./recall-query.ts";
 import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 import { layout, logEvent } from "../../lib/layout.ts";
+import { logUse } from "../../lib/episode-use.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
 export class Exit extends Error { constructor(readonly code: number) { super(`exit ${code}`); } }
@@ -286,7 +287,9 @@ async function recall(): Promise<void> {
       const db = openIndex(tmp, pages);
       const ranked = q ? rankNotes(db, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
       db.close();
-      return out((q ? ranked.slice(0, TOP) : ranked).map(({ n, r }) => ({ title: n.title, path: join(dir, n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
+      const shown = q ? ranked.slice(0, TOP) : ranked;
+      if (q) logUse("shown", shown.map(({ n }) => n.title), process.env.CLAUDE_CODE_SESSION_ID || null, q);
+      return out(shown.map(({ n, r }) => ({ title: n.title, path: join(dir, n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   }
   // `--scope` alone lists a project's notes: at 165 notes "what do we know

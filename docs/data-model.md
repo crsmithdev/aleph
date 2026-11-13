@@ -210,7 +210,8 @@ The tick moves each finished record into the archive folder `<records>-archive` 
 | `stalls.json`, `smoke.json` | Stall first-seen times; the smoke test | Tick |
 | `corrections.json` | Signals and lessons | Corrections |
 | `monitor/<day>.json` | The day's table and findings | Monitor |
-| `episodes/` | One page per finished issue; kept 14 days | Episodes |
+| `episodes/` | One page per finished issue; kept 90 days | Episodes |
+| `episode-use.jsonl` | `{date, title, event, session, query?}` per line; `event` is `shown` or `opened`; kept 90 days | `aleph memory recall --episodes`, the `episode-open.ts` hook |
 | `standing-retry/` | Runs an Always `retry` started | Intake |
 | `ui-sessions.json` | UI login tokens | `aleph-ui` |
 | `dispatch.log` | Output of detached dispatch, intake, director and suite | `launch.ts` |

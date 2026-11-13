@@ -17,11 +17,12 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { section } from "../../../issues/lib/todo.ts";
 import { factoryDir } from "../gates/factory-status.ts";
 import { touch } from "../../../lib/sources.ts";
+import { trimUse } from "../../../lib/episode-use.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "../records/ledger.ts";
 import { landedCommits, repoStages } from "../records/status.ts";
 
-export const KEEP_DAYS = 14;
+export const KEEP_DAYS = 90; // Chris, 2026-11-12: an episode stays in recall 90 days
 export const episodesDir = () => { touch("episodes"); return join(factoryDir(), "episodes"); };
 const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
@@ -178,6 +179,7 @@ function pruneEpisodes(now = Date.now()): void {
     const p = join(dir, f);
     if (statSync(p).mtimeMs < now - KEEP_DAYS * 86400_000) { rmSync(p); deleted++; }
   }
+  trimUse(today(new Date(now - KEEP_DAYS * 86400_000)));
   if (!deleted) return;
   appendDaily(vaultDir(), `prune episodes before ${today(new Date(now - KEEP_DAYS * 86400_000))} — ${deleted} pages older than ${KEEP_DAYS} days`);
   commitPaths(vaultDir(), "prune episodes", [join(vaultDir(), "daily", `${today()}.md`)]);
