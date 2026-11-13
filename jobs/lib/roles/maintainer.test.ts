@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git-fixture.ts";
-import { compiledDays, readRun } from "../../../vault/lib/vault.ts";
+import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { allRuns } from "../records/ledger.ts";
 import { compileDay, render, yesterday } from "./maintainer.ts";
 
@@ -91,8 +91,14 @@ test("a failed run is in the report and leaves the day uncompiled", async () => 
   const r = await compileDay(root, DAY, false);
   expect(r.error).toMatch(/exited 3/);
   expect(compiledDays(root)).toEqual([]);
+  expect(retryDays(root)).toEqual([DAY]);
   expect(notes()[0].run.condition).toBe("done");
   expect(notes()[0].run.reason).toStartWith("failed:");
+  // A compile of the day that succeeds later clears the mark.
+  writeFileSync(join(base, "fake"), FAKE);
+  reply([note("Keep The Digest")]);
+  expect((await compileDay(root, DAY, false)).error).toBeUndefined();
+  expect(retryDays(root)).toEqual([]);
 });
 
 test("render gives the frontmatter and the four body parts, and Home when no note is related", () => {

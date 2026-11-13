@@ -80,10 +80,24 @@ export function compiledDays(root: string): string[] {
   return readJsonOr<string[]>(compiledFile(root), []);
 }
 
-/** Adds `date` to the compiled days, unless it is there. */
+/** Adds `date` to the compiled days, unless it is there; a day compiled is no longer marked for retry. */
 export function recordCompiled(root: string, date: string): void {
   const days = compiledDays(root);
   if (!days.includes(date)) writeJson(compiledFile(root), [...days, date].sort());
+  markRetry(root, date, false);
+}
+
+const retryFile = (root: string) => join(root, ".index", "compile-retry.json");
+
+/** The days whose compile failed and that no compile of has succeeded since, oldest first. */
+export function retryDays(root: string): string[] {
+  return readJsonOr<string[]>(retryFile(root), []);
+}
+
+/** Marks `date` for a compile retry (`on`) or clears its mark. */
+export function markRetry(root: string, date: string, on: boolean): void {
+  const days = retryDays(root), marked = days.includes(date);
+  if (on !== marked) writeJson(retryFile(root), on ? [...days, date].sort() : days.filter((d) => d !== date));
 }
 
 /** Every logged return, one JSON line of date, title, query, session and source, for 30 days. Outside git; the CLI and the hook both append through here. */

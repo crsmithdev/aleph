@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { compileDigest } from "../../../vault/lib/compile.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
-import { recordCompiled, recordRun, today } from "../../../vault/lib/vault.ts";
+import { markRetry, recordCompiled, recordRun, today } from "../../../vault/lib/vault.ts";
 import { addDays } from "../learning/monitor-table.ts";
 import { lock } from "../infra/locks.ts";
 import { readModels } from "../routing/models.ts";
@@ -98,7 +98,7 @@ async function put(notes: Note[], day: string): Promise<Written[]> {
 
 /**
  * Compile `day` under the vault at `root`. A real compile writes the notes and records the day; a dry one does neither.
- * A day with nothing in it makes no model call. A failed run is in `error` and leaves the day uncompiled.
+ * A day with nothing in it makes no model call. A failed run is in `error`, leaves the day uncompiled and marks it for retry; a run that succeeds, dry or not, clears the mark.
  */
 export async function compileDay(root: string, day: string, dry: boolean): Promise<CompileReport> {
   const report: CompileReport = { day, dry, notes: [] };
@@ -121,11 +121,13 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
       report.error = String(e?.message ?? e);
       run.end(`failed: ${report.error}`, { cause: "unanswered" });
       recordRun(root, "compile", "failed", `${day}: ${report.error}`);
+      markRetry(root, day, true);
       return report;
     }
     const wrote = report.notes.filter((n) => !n.refused).length;
     run.end(`${dry ? "dry: " : ""}${wrote} notes${report.notes.length > wrote ? `, ${report.notes.length - wrote} refused` : ""}`);
     if (!dry) recordCompiled(root, day);
+    markRetry(root, day, false);
     recordRun(root, "compile", "ok", `${dry ? "dry: " : ""}${day}: ${wrote} notes`);
     return report;
   } finally {

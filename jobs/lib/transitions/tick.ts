@@ -10,9 +10,10 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { today } from "../../../lib/day.ts";
 import { vaultDir } from "../../../lib/paths.ts";
-import { compiledDays, readRun } from "../../../vault/lib/vault.ts";
+import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
 import { compileDay, yesterday } from "../roles/maintainer.ts";
+import { addDays } from "../learning/monitor-table.ts";
 import { readJsonOr } from "../../../lib/json.ts";
 import { holdsWork } from "../infra/process.ts";
 import { reader } from "../../../issues/lib/store.ts";
@@ -74,14 +75,22 @@ const part = async <T>(run: () => Promise<T>): Promise<T | { error: string }> =>
 
 /**
  * The whole maintainer at `root`, in order: the mechanical pass (`dry` or not), the corrections mining (always live), then
- * the compile of yesterday unless it ran already (`dry` while the mechanical pass is dry). One report: the mechanical
- * fields, `corrections`, `compile`, and `counts` with `lessons` and `notes` added.
+ * a compile again of each failed day of the 3 before yesterday (`retried`), then the compile of yesterday unless it ran
+ * already (`dry` while the mechanical pass is dry). One report: the mechanical fields, `corrections`, `retried`, `compile`, and `counts` with `lessons` and `notes` added.
  */
 export async function maintainAll(root: string, dry: boolean, now: number, parts: Parts): Promise<Json> {
   const mech = parts.mech ? await sub(["maintain", ...(dry ? ["--dry"] : [])]) : null;
   const report: Json = mech ? (mech.json ?? { op: "maintain", dry, ok: false, error: mech.err.trim() }) : { op: "maintain", dry, ok: true };
   if (parts.corr) report.corrections = await part(() => mineCorrections(now));
   const day = yesterday(now);
+  if (parts.compile) {
+    // Each day whose compile failed, within 3 days of yesterday and not compiled since, again before yesterday.
+    const retry = retryDays(root).filter((d) => d < day && d >= addDays(day, -3) && !compiledDays(root).includes(d));
+    if (retry.length) {
+      report.retried = [];
+      for (const d of retry) report.retried.push(await part(() => compileDay(root, d, dry)));
+    }
+  }
   if (parts.compile) report.compile = compiledDays(root).includes(day) ? { day, dry, notes: [], skipped: "already compiled" } : await part(() => compileDay(root, day, dry));
   const notes = report.compile?.notes?.filter((n: Json) => !n.refused).length;
   report.counts = { ...report.counts, ...(report.corrections?.lessons !== undefined ? { lessons: report.corrections.lessons } : {}), ...(notes !== undefined ? { notes } : {}) };

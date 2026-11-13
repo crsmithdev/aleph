@@ -1,7 +1,7 @@
 // The tick starts only periodic work: each transition that used to wait for it now starts its next step at once,
 // and the tick's sweep logs and starts what a transition missed.
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -17,7 +17,7 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { archiveDir, getRun, putRun } from "../records/record.ts";
 import { chatLock } from "../roles/agent-run.ts";
-import { compiledDays, readRun } from "../../../vault/lib/vault.ts";
+import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 
@@ -366,4 +366,63 @@ test("guard: the maintain step's dry compile of yesterday runs the model and rec
     delete process.env.ALEPH_HANDOFFS_DIR;
     process.env.ALEPH_MAINTAINER_CMD = "false";
   }
+});
+
+// A failed compile of a day is tried again by the passes of the next 3 dates, before yesterday's.
+
+const retrySetup = (): string => {
+  const dir = vaultHere();
+  const handoffs = join(base, `handoffs${n}`);
+  mkdirSync(handoffs);
+  for (const d of ["03", "04", "05", "06", "07", "08", "09"]) writeFileSync(join(handoffs, `2026-11-${d}-120000.md`), `decided: ${d}\n`);
+  // The command fails while the file `fail` is there, and keeps the day of each prompt it gets in `asked`.
+  writeFileSync(join(base, "maintainer"), `#!/bin/bash\ngrep -o '2026-11-[0-9][0-9]' | head -1 >> "${base}/asked"\n[ -e "${base}/fail" ] && exit 3\necho '{"type":"result","is_error":false,"result":"","structured_output":{"notes":[]}}'\n`);
+  chmodSync(join(base, "maintainer"), 0o755);
+  Object.assign(process.env, { ALEPH_HANDOFFS_DIR: handoffs, ALEPH_MAINTAINER_CMD: join(base, "maintainer") });
+  return dir;
+};
+const asked = (): string[] => (existsSync(join(base, "asked")) ? readFileSync(join(base, "asked"), "utf8").split("\n").filter(Boolean) : []);
+const endRetry = () => { delete process.env.ALEPH_HANDOFFS_DIR; process.env.ALEPH_MAINTAINER_CMD = "false"; };
+
+test("the maintain step compiles a day whose compile failed again on the next date, before yesterday, and reports both", async () => {
+  const dir = retrySetup();
+  try {
+    writeFileSync(join(base, "fail"), "");
+    const first = await maintainStep(NOW);
+    expect(first!.compile.error).toMatch(/exited 3/);
+    expect(first!.retried).toBeUndefined();
+    expect(retryDays(dir)).toEqual(["2026-11-03"]);
+    rmSync(join(base, "fail"));
+    rmSync(join(base, "asked"), { force: true });
+    const r = await maintainStep(NOW + 864e5);
+    expect(asked()).toHaveLength(2);
+    expect(r!.retried).toMatchObject([{ day: "2026-11-03", dry: true, notes: [] }]);
+    expect(r!.retried[0].error).toBeUndefined();
+    expect(r!.compile).toMatchObject({ day: "2026-11-04", dry: true, notes: [] });
+    expect(retryDays(dir)).toEqual([]);
+  } finally { endRetry(); }
+});
+
+test("the maintain step makes no second compile of a failed day once a compile of it succeeded, or past 3 days before yesterday", async () => {
+  const dir = retrySetup();
+  const days = (r: any) => r.retried?.map((x: any) => x.day);
+  try {
+    writeFileSync(join(base, "fail"), "");
+    // Every compile fails: the day of each pass is marked, and a day is retried on the 3 passes after the one that failed.
+    expect(days(await maintainStep(NOW))).toBeUndefined();
+    expect(days(await maintainStep(NOW + 864e5))).toEqual(["2026-11-03"]);
+    await maintainStep(NOW + 2 * 864e5);
+    await maintainStep(NOW + 3 * 864e5);
+    // On the fifth date (yesterday 11-07) the 03rd is 4 days older than yesterday: not retried.
+    expect(days(await maintainStep(NOW + 4 * 864e5))).toEqual(["2026-11-04", "2026-11-05", "2026-11-06"]);
+    expect(retryDays(dir)).toEqual(["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"]);
+    // The command works now: the three retried days and yesterday compile, and the 03rd and 04th stay uncompiled.
+    rmSync(join(base, "fail"));
+    expect(days(await maintainStep(NOW + 5 * 864e5))).toEqual(["2026-11-05", "2026-11-06", "2026-11-07"]);
+    expect(retryDays(dir)).toEqual(["2026-11-03", "2026-11-04"]);
+    // Nothing marked is in range any more: only yesterday compiles.
+    rmSync(join(base, "asked"), { force: true });
+    expect(days(await maintainStep(NOW + 6 * 864e5))).toBeUndefined();
+    expect(asked()).toEqual(["2026-11-09"]);
+  } finally { endRetry(); }
 });
