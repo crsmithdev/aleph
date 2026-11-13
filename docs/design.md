@@ -1568,9 +1568,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
 | Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/speed.js`, `ui/views/session.js` | allowed |
-| The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
 | A lens result is a hand `iframe.lens-frame`, sandboxed: no helper for a result page; the Log pane's lines are a hand `ul` | `renderIdea()` in `ui/views/ideas.js` | follow-up |
-| The Ideas Updated time is a date from `git log --date=short`, so `when()` shows it as `00:00` | `renderIdeas()` in `ui/views/ideas.js` | follow-up |
 | Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/cards.js` | follow-up |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |

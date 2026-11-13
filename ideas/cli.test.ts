@@ -106,7 +106,7 @@ test("list prints the exploring ideas with their target, and --status the built 
   await aleph(["idea", "add", "Old idea"]);
   expect((await aleph(["idea", "built", "issue-history", "aleph-1", "aleph-2"])).code).toBe(0);
   expect((await aleph(["idea", "drop", "old-idea"])).code).toBe(0);
-  const day = "2026-11-10";
+  const day = "2026-11-10 12:00";
   expect((await aleph(["idea", "list"])).out).toBe(`a-new-tool  new project  -  ${day}\n`);
   expect((await aleph(["idea", "list", "--status", "built"])).out).toBe(`issue-history  aleph  -  ${day}\n`);
   expect((await aleph(["idea", "list", "--status", "dropped"])).out).toBe(`old-idea  new project  -  ${day}\n`);

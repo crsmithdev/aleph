@@ -54,6 +54,7 @@ test("the list has the exploring ideas with Spent and open questions, and ?statu
   expect(rows[0].lenses).toEqual(["prior-art"]);
   expect(rows[1]).toMatchObject({ questions: 0, spent: 0 });
   expect(rows[1].target).toBeUndefined();
+  expect(rows[0].last).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d$/);
   expect((await json("/api/ideas?status=dropped")).map((r: any) => r.slug)).toEqual(["gamma"]);
 });
 
@@ -94,7 +95,7 @@ test("a .md lens result loads behind loadingLine(), and a failed fetch puts erro
   expect(el.innerHTML).toBe(error("/x.md answered 404"));
 });
 
-const row = (slug: string, title: string) => ({ slug, title, last: "2026-01-02", status: "exploring", target: "aleph", lenses: [], questions: 1234, spent: 0.5 });
+const row = (slug: string, title: string) => ({ slug, title, last: "2026-01-02 09:30", status: "exploring", target: "aleph", lenses: [], questions: 1234, spent: 0.5 });
 
 test("renderIdeas rows are rowlink rows with the link in the wide cell, Updated through when() and the count through count()", () => {
   const h = renderIdeas([row("alpha", "Alpha"), row("beta", "Beta")], "exploring");
@@ -102,7 +103,7 @@ test("renderIdeas rows are rowlink rows with the link in the wide cell, Updated 
   expect(h).toContain('<tr class="rowlink"><td class="wide" title="Alpha"><a href="#/ideas/alpha">Alpha</a></td><td>');
   expect(h).toContain('<tr class="rowlink"><td class="wide" title="Beta"><a href="#/ideas/beta">Beta</a></td><td>');
   expect(h).toContain(`<td class="num">${count(1234)}</td>`);
-  expect(h).toContain(`<td class="time">${when("2026-01-02T00:00")}</td>`);
+  expect(h).toContain(`<td class="time">${when("2026-01-02T09:30")}</td>`);
 });
 
 test("renderIdeas puts searchBox() before the filter bar, both inside the Ideas card, and empty() when no row shows", () => {
@@ -139,4 +140,25 @@ test("a queue that fails says the act name, then failed:, then the reason", asyn
     await root.onclick({ target: { closest: (sel: string) => (sel === "button[data-lens]" ? btn : null) } });
   } finally { globalThis.fetch = was; }
   expect(msg.textContent).toBe("Queue job failed: no lens named x");
+});
+
+test("the Updated cell shows the time of the last commit from /api/ideas, not 00:00", async () => {
+  const rows = await json("/api/ideas");
+  const h = renderIdeas(rows, "exploring");
+  expect(h).toContain(`<td class="time">${when(rows[0].last.replace(" ", "T"))}</td>`);
+  expect(h).not.toContain(when(`${rows[0].last.slice(0, 10)}T00:00`));
+});
+
+test("renderIdeas has the Project select in the page head and no Window control, and a chosen project shows only its ideas", () => {
+  const rows = [row("alpha", "Alpha"), { ...row("beta", "Beta"), target: undefined }, { ...row("gamma", "Gamma"), target: "other" }];
+  const h = renderIdeas(rows, "exploring", "", "aleph");
+  const head = h.slice(0, h.indexOf('<section class="card'));
+  expect(head).toContain('<select name="project" aria-label="Project">');
+  expect(head).toContain('<option value="aleph" selected>aleph</option>');
+  expect(h).not.toContain("Window");
+  expect(h).toContain('href="#/ideas/alpha"');
+  expect(h).not.toContain('href="#/ideas/beta"');
+  expect(h).not.toContain('href="#/ideas/gamma"');
+  expect(renderIdeas(rows, "exploring", "", "nope")).toContain(empty());
+  expect(renderIdeas(rows, "exploring")).toContain('href="#/ideas/gamma"');
 });

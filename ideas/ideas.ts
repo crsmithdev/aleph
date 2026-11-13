@@ -71,12 +71,12 @@ export function lenses(slug: string): { lens: string; at: string; file: string }
   });
 }
 
-/** The ideas with `status`, each with its lens names and the date of its last commit. */
+/** The ideas with `status`, each with its lens names and the local time of its last commit. */
 export function list(status = "exploring"): { idea: Idea; lenses: string[]; last: string }[] {
   const dir = ideasDir();
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((d) => existsSync(file(d))).sort().map(read).filter((i) => i.fm.status === status)
-    .map((idea) => ({ idea, lenses: [...new Set(lenses(idea.slug).map((l) => l.lens))], last: git(dir, "log", "-1", "--format=%cd", "--date=short", "--", idea.slug).out }));
+    .map((idea) => ({ idea, lenses: [...new Set(lenses(idea.slug).map((l) => l.lens))], last: git(dir, "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M", "--", idea.slug).out }));
 }
 
 /** Copy `from`, an .html or .md result, to `lenses/<lens>-<YYYY-MM-DD-HHMM>.<ext>` and log it; its path in the idea and the push warning. */

@@ -1,6 +1,6 @@
 // The Ideas views: the list at #/ideas (/api/ideas) and one idea at #/ideas/:slug (/api/ideas/:slug) with a tab for
 // the write-up, one per lens and the log. A lens result is shown from the lens file route in a sandboxed iframe.
-import { actButton, badge, card, chips, count, crumb, dataTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, kept, keep, list, loadingLine, md, money, pageHead, postJson, repoIdLink, say, searchBox, statusRow, subHead, tabs, when, wireTable, wireTabs } from "../lib.js";
+import { actButton, badge, card, chips, count, crumb, dataTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, kept, keep, list, loadingLine, md, money, pageHead, postJson, repoIdLink, say, scope, searchBox, statusRow, subHead, tabs, when, wireScope, wireTable, wireTabs } from "../lib.js";
 import { issueHref } from "../../lib/naming.ts";
 import { redraw } from "../router.js";
 import { renderKpis } from "../timeline.js";
@@ -9,22 +9,23 @@ const STATUSES = ["exploring", "built", "dropped"];
 const LENS_TABS = [["prior-art", "Prior art"], ["red-team", "Red team"], ["explainer", "Explainer"]];
 const href = (slug) => `#/ideas/${encodeURIComponent(slug)}`;
 const target = (t) => t ?? "new project";
-/** A local `YYYY-MM-DD` or `YYYY-MM-DD HH:MM` from the store, as a local time. */
-const local = (s) => `${s.replace(" ", "T")}${s.length === 10 ? "T00:00" : ""}`;
+/** A local `YYYY-MM-DD HH:MM` from the store, as a local time. */
+const local = (s) => s.replace(" ", "T");
 
-/** The table of the ideas whose title or target has the search text `q`, or the empty line. */
-function ideasTable(rows, status, q = "") {
+/** The table of the ideas aimed at `project` (all when empty) whose title or target has the search text `q`, or the empty line. */
+function ideasTable(rows, status, q = "", project = "") {
   const text = q.trim().toLowerCase();
-  const shown = rows.filter((r) => !text || `${r.title} ${target(r.target)}`.toLowerCase().includes(text));
+  const shown = rows.filter((r) => (!project || r.target === project) && (!text || `${r.title} ${target(r.target)}`.toLowerCase().includes(text)));
   return shown.length
     ? dataTable(heads(["Idea", "Status", "Target", "Lenses", "Open Questions", "Spent", "Updated"], ["Open Questions", "Spent", "Updated"]),
       shown.map((r) => `<tr class="rowlink"><td class="wide" title="${esc(r.title)}"><a href="${href(r.slug)}">${esc(r.title)}</a></td><td>${badge(r.status)}</td><td>${esc(target(r.target))}</td><td>${esc(r.lenses.join(", ") || "–")}</td><td class="num">${esc(count(r.questions))}</td><td class="num">${money(r.spent)}</td><td class="time">${esc(when(local(r.last)))}</td></tr>`).join(""))
     : empty();
 }
 
-export function renderIdeas(rows, status, q = "") {
-  const body = searchBox("ideas-search", q, "Search titles and targets") + filterBar([{ label: "Status", name: "status", options: STATUSES, value: status }]) + `<div id="ideas-table">${ideasTable(rows, status, q)}</div>`;
-  return `<div class="page">${pageHead("Ideas", { count: rows.length })}${card("Ideas", body, { count: rows.length })}</div>`;
+export function renderIdeas(rows, status, q = "", project = "") {
+  const body = searchBox("ideas-search", q, "Search titles and targets") + filterBar([{ label: "Status", name: "status", options: STATUSES, value: status }]) + `<div id="ideas-table">${ideasTable(rows, status, q, project)}</div>`;
+  const aside = filterBar([{ html: `<select name="project" aria-label="Project"><option value="">All Projects</option>${project ? `<option value="${esc(project)}" selected>${esc(project)}</option>` : ""}</select>` }]);
+  return `<div class="page">${pageHead("Ideas", { count: rows.length, aside })}${card("Ideas", body, { count: rows.length })}</div>`;
 }
 
 export const view = {
@@ -35,9 +36,10 @@ export const view = {
   order: -0.5,
   api: (_params, q = new URLSearchParams()) => `/api/ideas?status=${encodeURIComponent(q.get("status") || "exploring")}`,
   live: true,
-  render: (d, _params, q) => renderIdeas(d, q?.get("status") || "exploring", q?.get("q") || ""),
+  render: (d, _params, q) => renderIdeas(d, q?.get("status") || "exploring", q?.get("q") || "", scope(q).project),
   mount: (root, d, q) => {
-    wireTable(root, { redraw: () => { root.querySelector("#ideas-table").innerHTML = ideasTable(d, q?.get("status") || "exploring", hashQuery().get("q") || ""); }, search: "ideas-search" });
+    wireTable(root, { redraw: () => { root.querySelector("#ideas-table").innerHTML = ideasTable(d, q?.get("status") || "exploring", hashQuery().get("q") || "", scope(q).project); }, search: "ideas-search" });
+    wireScope(root);
     root.onclick = (e) => {
       const b = e.target.closest("[data-name=status] button");
       if (b) goQuery({ status: b.dataset.value === "exploring" ? "" : b.dataset.value });
