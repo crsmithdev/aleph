@@ -294,6 +294,21 @@ describe("a parked issue with a core-change Ask", () => {
   });
 });
 
+describe("a passed job whose issue is parked", () => {
+  test("is not running, so the Herald's Running does not show it; reopening the issue runs it again", () => {
+    let id = 0;
+    writeList({ key: "fac" }, "parked land", (doc) => { const it = add(doc, "held land"); setStatus(it, "parked"); id = it.id; return true; });
+    run("20261027-000090-a", { job: `fac-${id}`, name: `fac-${id}`, condition: "passed", next: "land", on: `fac-${id}` });
+    const names = (l: { name: string }[]) => l.map((j) => j.name);
+    const set = (to: "parked" | "open" | "dropped") => writeList({ key: "fac" }, `fac-${id} ${to}`, (doc) => { setStatus(doc.items.find((i) => i.id === id)!, to); return true; }, true);
+    try {
+      expect(names(state(now).running)).not.toContain(`fac-${id}`);
+      set("open");
+      expect(names(state(now).running)).toContain(`fac-${id}`);
+    } finally { set("dropped"); }
+  });
+});
+
 describe("a returned run with its rework queued", () => {
   test("is running, not stuck, so the Herald does not call it unhealthy; one with no next stays stuck", () => {
     run("20261027-000080-a", { job: "fac-80", name: "fac-80", condition: "returned", failed: "review", next: "worker", on: "fac-80" });

@@ -9,7 +9,7 @@ import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, waitsOf, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { isWaiting, issueKeyOf, loadRegistry, runOfJob, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
+import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, readFile, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting, jobIdOf } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
@@ -362,8 +362,11 @@ export function state(now = new Date()): State {
       // A passed job whose issue is parked holds its land until the issue reopens: no agent runs.
       else if (real.condition === "passed" && issueStatus(toJob(runs)) === "parked") continue;
       else {
+        const k = issueKeyOf(real), on = onOf(real);
+        const item = real.repo === undefined || on === undefined ? undefined : lists.item(real.repo, on);
+        // A parked issue's job waits on the work store: its next step is held, so it is not at work.
+        if (item !== undefined && status(item) === "parked") continue;
         liveJobs.add(real.job);
-        const k = issueKeyOf(real);
         if (k) liveItems.add(k);
         running.push(toJob(runs));
       }
