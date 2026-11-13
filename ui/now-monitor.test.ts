@@ -20,9 +20,9 @@ test("the Pipeline card shows the 6 stages in order, each a ring of runs per iss
   ];
   const h = view.renderPipeline({ window: "week", stages: { rows }, phases: { queue: { count: 4, p90: 79 } } });
   const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
-  expect(names).toEqual(["Intake", "Queue", "Build", "Review", "Recheck", "Land"]);
+  expect(names).toEqual(["Intake", "Queue", "Implement", "Review", "Recheck", "Land"]);
   // 2 of 9 build runs failed: 22%, amber; 0 of 3 intake runs: green.
-  expect(h).toContain('<div class="pnode warning"><a class="pgo" href="#/factory/jobs?stage=implement&amp;role=worker" title="Build: 9 runs on 5 issues, 2 failed"><span class="ring">1.8</span><span class="pn">Build</span><span class="pt">13m 24s</span></a><a class="pf" href="#/factory/jobs?stage=implement&amp;role=worker&amp;unusable=1">22% failed</a>');
+  expect(h).toContain('<div class="pnode warning"><a class="pgo" href="#/factory/jobs?stage=implement&amp;role=worker" title="Implement: 9 runs on 5 issues, 2 failed"><span class="ring">1.8</span><span class="pn">Implement</span><span class="pt">13m 24s</span></a><a class="pf" href="#/factory/jobs?stage=implement&amp;role=worker&amp;unusable=1">22% failed</a>');
   expect(h).toContain('<div class="pnode fine"><a class="pgo" href="#/factory/jobs?stage=intake&amp;role=intake" title="Intake: 3 runs on 3 issues"><span class="ring">1.0</span>');
   expect(h).toContain('<span class="pn">Queue</span><span class="pt">1m 19s</span>');
   // The failed share is pct()'s text: 1 of 400 is 0.3%, not a rounded 0%.
@@ -79,7 +79,7 @@ test("the Herald lists each running job as a compact row between the alerts and 
   expect(h.match(/class="run-now"/g)).toHaveLength(2);
   expect(h).toContain('data-job="aleph-7#1"');
   // The row names the job and its tier; the model is in the label's title.
-  expect(h).toMatch(/<a class="idl" href="#\/jobs\/aleph-7%231">aleph-7#1<\/a><span class="run-label" title="deepseek-v4.1-flash">worker · low<\/span>/);
+  expect(h).toMatch(/<a class="idl" href="#\/jobs\/aleph-7%231">aleph-7#1<\/a><span class="run-label" title="deepseek-v4.1-flash">implement · low<\/span>/);
   expect(h).not.toContain("intake-aleph-7");
   expect(h).toContain('data-job="aleph-9"');
   expect(h).toContain("Fix the thing");
@@ -209,7 +209,7 @@ test("the Herald shows one row per chat session titled by its latest message's f
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
 });
 
-test("the Herald's older rows under an issue are labelled by their run's role with a mark, by the chip for an event with no run, and the top row keeps the issue's title", () => {
+test("the Herald's older rows under an issue are labelled by their run's kind with the linked job and a mark, by the chip for an event with no run, and the top row keeps the issue's title", () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-herald-runs-")), restore = withEnv({ ALEPH_JOBS_DIR: base });
   try {
     const kinds = ["intake", "build"];
@@ -233,8 +233,8 @@ test("the Herald's older rows under an issue are labelled by their run's role wi
     const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
     expect(rows).toHaveLength(3);
     // Newest first: the build run, the intake run, then the start, which has no run.
-    expect(rows[0]).toContain('<span class="brief-label" title="worker">worker</span><span class="brief-text" title="#2 ✓">#2 <span class="brief-mark">✓</span></span>');
-    expect(rows[1]).toContain('<span class="brief-label" title="intake">intake</span><span class="brief-text" title="#1 ✓">#1 <span class="brief-mark">✓</span></span>');
+    expect(rows[0]).toContain('<span class="brief-label" title="implement">implement</span><span class="brief-text" title="aleph-9#2 ✓"><a class="idl" href="#/jobs/aleph-9%232">aleph-9#2</a> <span class="brief-mark">✓</span></span>');
+    expect(rows[1]).toContain('<span class="brief-label" title="intake">intake</span><span class="brief-text" title="aleph-9#1 ✓"><a class="idl" href="#/jobs/aleph-9%231">aleph-9#1</a> <span class="brief-mark">✓</span></span>');
     expect(rows[2]).toContain('<span class="brief-label" title="started">started</span>');
     expect(rows.join("")).not.toContain("event-title");
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
@@ -272,7 +272,7 @@ test("the Herald hides an older start of a run with a newer event, leaves out th
     { at: "2026-11-09T10:00:00Z", by: "rule", subject: "route", action: "routed", note: "cost 0.00004 model typesafe/jev-1.13-20260917 tier worker-medium p 0.83" },
   ];
   const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: { "aleph-9#2": "build" } } });
-  expect(h).toMatch(/<span class="badge done">passed<\/span> worker <a[^>]*>aleph-9#2<\/a>/);
+  expect(h).toMatch(/<span class="badge done">passed<\/span> implement <a[^>]*>aleph-9#2<\/a>/);
   expect(h).not.toContain("herald-older");
   expect(h).not.toContain("aleph-8");
   expect(h).toMatch(/<div data-key="[^"]*" class="event-row quiet sys" data-by="rule">/);
@@ -297,4 +297,48 @@ test("the Herald folds a housekeeper's changes under its row, one sub-item per i
   expect(older.match(/event-change/g)).toHaveLength(2);
   expect(older).toMatch(/<a[^>]*href="[^"]*1978"[^>]*>aleph-1978<\/a><\/span><span class="brief-text">commented · reprioritized<\/span>/);
   expect(older).toMatch(/<a[^>]*href="[^"]*2125"[^>]*>aleph-2125<\/a><\/span><span class="brief-text">closed<\/span>/);
+});
+
+// aleph-2136's events on 2026-11-13, newest first: filed, intake, routed, started, implement, closed, land.
+const a2136 = [
+  { at: "2026-11-13T19:55:05.677Z", by: "gate", subject: "aleph-2136", action: "landed", on: ["a2136#3"], commit: "08127b81a8a6a9780253d799d82b1c38bd4b5f58" },
+  { at: "2026-11-13T19:54:46.016Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#3"] },
+  { at: "2026-11-13T19:54:42.483Z", by: "gate", subject: "aleph-2136", action: "passed", on: ["a2136#2"], cost: 0.16095063369608836 },
+  { at: "2026-11-13T19:53:20.008Z", by: "claude", subject: "aleph-2136", action: "done" },
+  { at: "2026-11-13T19:51:00.787Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#2"] },
+  { at: "2026-11-13T19:50:59.573Z", by: "rule", subject: "aleph-2136", action: "started", note: "model haiku" },
+  { at: "2026-11-13T19:50:59.497Z", by: "rule", subject: "aleph-2136", action: "routed", note: "classifier jev-1.13-20260917", cost: 0.000036414, tier: "worker-low", model: "haiku", p: 0.9 },
+  { at: "2026-11-13T19:50:53.298Z", by: "gate", subject: "aleph-2136", action: "done", on: ["a2136#1"], cost: 0.2916336 },
+  { at: "2026-11-13T19:50:19.563Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#1"] },
+  { at: "2026-11-13T19:50:13.738Z", by: "claude", subject: "aleph-2136", action: "filed" },
+];
+const a2136Runs = { "a2136#1": "intake", "a2136#2": "build", "a2136#3": "land" };
+const olderText = (events: object[]) => {
+  const h = view.renderHerald({ ...calm, now: "2026-11-13T20:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: a2136Runs } });
+  return h.split('<div class="herald-older">')[1].split("</details>")[0].split('<div class="event-brief').slice(1)
+    .map((r: string) => r.match(/title="([^"]*)">[^<]*<\/span><span class="brief-text" title="([^"]*)"/)!.slice(1).join(" | "));
+};
+
+test("the Herald's older rows give each job its facts and fold the routing and the start into the implement row", () => {
+  expect(olderText(a2136)).toEqual([
+    "implement | a2136#2 ✓ worker-low · haiku · 3m 42s · $0.16",
+    "closed | by Claude Code",
+    "intake | a2136#1 ✓ 34s · $0.29",
+    "filed | by Claude Code",
+  ]);
+});
+
+test("the Herald's implement row shows a raised model as the routed one ↑ the one it ran on", () => {
+  const raised = a2136.map((e) => (e.action === "started" ? { ...e, note: "model sonnet" } : e));
+  expect(olderText(raised)[0]).toBe("implement | a2136#2 ✓ worker-low · haiku↑sonnet · 3m 42s · $0.16");
+});
+
+test("the Herald's job row takes its time from the job's first start, not one the gate logs after its result", () => {
+  const again = [{ at: "2026-11-13T19:54:50.000Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#2"] }, ...a2136];
+  expect(olderText(again)[0]).toBe("implement | a2136#2 ✓ worker-low · haiku · 3m 42s · $0.16");
+});
+
+test("the Herald's head row of a land gives its commit and its time", () => {
+  const h = view.renderHerald({ ...calm, now: "2026-11-13T20:00:00Z", herald: { history: [], events: a2136, titles: {}, chats: {}, runs: a2136Runs } });
+  expect(h).toMatch(/<span class="badge done">landed<\/span> land <a[^>]*>a2136#3<\/a> · 08127b8 · 20s/);
 });

@@ -51,7 +51,7 @@ test("three chart panels in one row replace the old cards, each says its data fo
   expect([...row.matchAll(/class="chartbox"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual([
     "Lead Time by Day: p90 peak 50m 00s, p50 peak 16m 40s",
     "Lead Time: Time per Issue: landed peak 18m 20s",
-    "Slowest 10: Intake peak 1m 40s, Queue peak 10m 00s, Build peak 1h 06m, Land peak 3m 20s",
+    "Slowest 10: Intake peak 1m 40s, Queue peak 10m 00s, Implement peak 1h 06m, Land peak 3m 20s",
   ]);
   // The stage's own line sits under the trend's title; each panel keeps its own empty line.
   expect(row).not.toContain('class=\"notice\"');
@@ -92,11 +92,11 @@ test("the strip panel draws one point per issue, in filing order", () => {
 test("Slowest 10 holds the 10 slowest stages, by stage then by issue; for Lead Time an issue has a row per slow stage", () => {
   const many = { ...D, times: Array.from({ length: 12 }, (_, i) => ({ id: `fx-${i}`, href: `#/issues/fx/${i}`, outcome: "landed", intake: 1, queue: i === 3 ? 500 : 2, implement: 100 + i, land: 3, lead: 106 + i })) };
   const f = slowestFrame(many, "lead"), o = option(f, "stacked", T);
-  expect(f.rows.map((r: any) => r.name)).toEqual(["fx-3 Queue", "fx-3 Build", "fx-4 Build", "fx-5 Build", "fx-6 Build", "fx-7 Build", "fx-8 Build", "fx-9 Build", "fx-10 Build", "fx-11 Build"]);
-  expect(o.yAxis.data).toEqual(["fx-3 Queue", "fx-3 Build", "fx-4 Build", "fx-5 Build", "fx-6 Build", "fx-7 Build", "fx-8 Build", "fx-9 Build", "fx-10 Build", "fx-11 Build"]);
+  expect(f.rows.map((r: any) => r.name)).toEqual(["fx-3 Queue", "fx-3 Implement", "fx-4 Implement", "fx-5 Implement", "fx-6 Implement", "fx-7 Implement", "fx-8 Implement", "fx-9 Implement", "fx-10 Implement", "fx-11 Implement"]);
+  expect(o.yAxis.data).toEqual(["fx-3 Queue", "fx-3 Implement", "fx-4 Implement", "fx-5 Implement", "fx-6 Implement", "fx-7 Implement", "fx-8 Implement", "fx-9 Implement", "fx-10 Implement", "fx-11 Implement"]);
   // A linked row is named on the axis and its label is its own link, so every label shows.
   expect([o.yAxis.triggerEvent, o.yAxis.axisLabel.interval]).toEqual([true, 0]);
-  expect(o.series.map((s: any) => [s.name, s.stack])).toEqual([["Queue", "all"], ["Build", "all"]]);
+  expect(o.series.map((s: any) => [s.name, s.stack])).toEqual([["Queue", "all"], ["Implement", "all"]]);
   expect(o.series[0].data[0]).toEqual({ value: 500, href: "#/issues/fx/3" });
   expect(o.series[1].data[0]).toEqual({ value: 0, href: "#/issues/fx/3" });
   expect(o.series[1].data[1]).toEqual({ value: 103, href: "#/issues/fx/3" });

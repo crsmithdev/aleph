@@ -22,7 +22,7 @@ export const ISSUE_KINDS = ["task", "bug", "check", "flake", "acceptance"] as co
 export const KINDS = ["build", "recheck", "land", "intake", "director", "monitor", "chat", "lens", "housekeeper", "maintainer"];
 /** One display name for each pipeline step and agent role. */
 export const NAMES: Record<string, string> = {
-  lead: "Lead Time", intake: "Intake", queue: "Queue", triage: "Triage", plan: "Plan", "spec-check": "Spec Check", build: "Build",
+  lead: "Lead Time", intake: "Intake", queue: "Queue", triage: "Triage", plan: "Plan", "spec-check": "Spec Check", build: "Implement",
   review: "Review", recheck: "Recheck", land: "Land", worker: "Worker", planner: "Planner", merge: "Merge", reviewer: "Reviewer",
   director: "Director", monitor: "Monitor", chat: "Chat", lens: "Lens", housekeeper: "Housekeeper", maintainer: "Maintainer", title: "Title", judge: "Judge",
 };
@@ -162,6 +162,8 @@ const BECAUSE: Record<string, string> = {
   question: "a question", intake: "intake", capped: "run cap", override: "override", error: "an error", rescue: "rescue", local: "", starts: "",
 };
 const WHO: Record<string, string> = { human: "you", rule: "a rule", gate: "the gate", worker: "a worker", reviewer: "review", director: "the director", firefighter: "the firefighter", claude: "Claude Code" };
+/** The name of an event's actor, `claude` as "Claude Code". */
+export const whoOf = (by: string): string => WHO[by] ?? by;
 
 /** A piece of a sentence: text, or an ID the page links. */
 export type Said = string | { id: string };

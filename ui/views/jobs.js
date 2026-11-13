@@ -129,7 +129,7 @@ function jobSegments(j, now = Date.now()) {
   if (work.length) segments.push({
     title: "Work", aside: j.condition === "landed" ? "to the land" : "",
     rows: [laneRow({
-      head: `<span class="quiet">${esc([builds ? plural(builds, "build") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "job"))}</span>`,
+      head: `<span class="quiet">${esc([builds ? plural(builds, "implement") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "job"))}</span>`,
       runs: work, from: work[0].start, result: badge(j.condition), cost: true, holds: j.holds ?? [], runEvents: () => events,
       events: [...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: codeText(d) })),
         ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: codeText(f) }))],
@@ -144,7 +144,7 @@ function jobKpis(j, now = Date.now()) {
   const bad = builds.filter((x) => ["returned", "failed"].includes(x.r.condition)).length, last = builds.at(-1)?.r.condition;
   const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j.stat);
   return renderKpis([
-    { k: "Builds", v: esc(count(builds.length)), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
+    { k: "Implements", v: esc(count(builds.length)), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
     { k: "Elapsed", v: esc(dur(runs.length ? (end - runs[0].start) / 1000 : undefined)), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
     { k: "Cost", v: esc(money(j.cost)), sub: j.wk ? esc(wkText(j.wk)) : "" },
     { k: "Change", v: c ? esc(c.lines) : miss("no change recorded"), sub: [c ? esc(c.files) : "", j.commit ? shaLink(j.commit, j.commitUrl) : ""].filter(Boolean).join(", ") },

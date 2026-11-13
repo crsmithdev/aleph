@@ -34,7 +34,7 @@ describe("the issue timeline", () => {
   test("without parts it is one Work row: a bar per run, the waits, and the notes as events", () => {
     const [row] = rowsOf({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: triage: asked"].map(noteOf) });
     expect(issueSegments(issue({ timeline: { filed: new Date(0).toISOString(), runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
-    expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["intake", "aux"], ["build", "build"], ["land", "land"]]);
+    expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["intake", "aux"], ["implement", "build"], ["land", "land"]]);
     expect(row.bars[1].href).toBe("#/jobs/fac-1%231");
     expect(row.waits.map((w: any) => w.chris)).toEqual([false, true]);
     expect(row.events.map((e: any) => e.tag)).toEqual(["waiting", "waiting", "triage"]);
@@ -67,8 +67,8 @@ describe("the issue timeline", () => {
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;
     expect(before.bars.map((b: any) => b.label)).toEqual(["intake"]);
     expect(before.events.map((e: any) => e.tag)).toEqual(["waiting", "planner"]);
-    expect(one.bars.map((b: any) => [b.label, b.tone])).toEqual([["build 1", "bad"], ["build 2", "build"]]);
-    expect(one.events.find((e: any) => e.tag === "failed").html).toBe("build 1 · it broke");
+    expect(one.bars.map((b: any) => [b.label, b.tone])).toEqual([["implement 1", "bad"], ["implement 2", "build"]]);
+    expect(one.events.find((e: any) => e.tag === "failed").html).toBe("implement 1 · it broke");
     expect(one.head).toContain('href="#/jobs/fac-1.1%232"');
     expect(two.head).toContain('href="#/issues/fac/1.2"');
     // fac-1.2 waited from the split to its run: 10 min.
@@ -136,7 +136,7 @@ describe("the bar tips", () => {
   test("a tip keeps the label, the state word and the time, and drops the reason", () => {
     const iso = (m: number) => new Date(Date.parse("2026-11-01T10:00:00Z") + m * 60_000).toISOString();
     const [b] = barsOf(spans([run("worker", iso(0), iso(5), { condition: "returned", failed: "review", reason: "checks failed" })]));
-    expect(b.tip).toBe("build · returned · 5m 00s");
+    expect(b.tip).toBe("implement · returned · 5m 00s");
   });
 });
 
@@ -178,9 +178,9 @@ describe("the timeline panel", () => {
     const bars = renderTimeline([{ title: "Work", aside: "to the <land>", rows: [row] }]).match(/<(?:a|span) class="dp-bar[^>]*>.*?<\/(?:a|span)>/g) as string[];
     expect(bars).toHaveLength(2);
     expect(bars[0]).not.toContain("tabindex");
-    expect(bars[0]).toContain('<span class="sr">build 1 · failed · 5m 00s</span>');
+    expect(bars[0]).toContain('<span class="sr">implement 1 · failed · 5m 00s</span>');
     expect(bars[1]).toContain('tabindex="0"');
-    expect(bars[1]).toContain('<span class="sr">build 2 · landed · 5m 00s</span>');
+    expect(bars[1]).toContain('<span class="sr">implement 2 · landed · 5m 00s</span>');
     expect(renderTimeline([{ title: "Work", aside: "to the <land>", rows: [row] }])).toContain('<span class="aside">to the &lt;land&gt;</span>');
   });
 

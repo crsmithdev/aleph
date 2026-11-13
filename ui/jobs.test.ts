@@ -326,7 +326,7 @@ describe("render", () => {
     const h = v.renderJob(job);
     // The review runs inside its build, so it is no bar of its own.
     expect(h.match(/class="dp-bar /g)).toHaveLength(3);
-    for (const t of ["build 1 · $0.50", "build 2 · $0.25", ">land<", "fixed it", "Looks right.", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-job="fac-9#3"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
+    for (const t of ["implement 1 · $0.50", "implement 2 · $0.25", ">land<", "fixed it", "Looks right.", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-job="fac-9#3"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
     for (const t of [">failed<", ">passed<", ">landed<", ">Default<", ">Follow-up<", "a? -&gt; b", "tidy"]) expect(h).toContain(t);
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
@@ -451,7 +451,7 @@ describe("render", () => {
     const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });
     const ev = h.match(/<div class="dp-ev">.*?<\/div><\/div><\/div>/)?.[0] ?? "";
     expect(ev).toContain('<span class="badge stuck">failed</span>');
-    expect(ev).toContain("build · opus · checks failed in <code>a.ts</code>");
+    expect(ev).toContain("implement · opus · checks failed in <code>a.ts</code>");
     expect(ev).toContain('data-log="1" data-job="fac-9#1" data-file="output.log" data-as="transcript"');
     expect(ev).toContain('data-file="checks.log" title="checks.log, 2.0KiB">checks</button>');
     expect(h).toContain("$1.03");

@@ -1,8 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, undecided, when, scope } from "../lib.js";
-import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, parseId, say as sayParts } from "../../lib/naming.ts";
+import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, money, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, undecided, when, scope } from "../lib.js";
+import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, parseId, say as sayParts, whoOf } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { share, flowOf, statusCards, usable } from "./speed.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
@@ -157,8 +157,8 @@ const saidHtml = (p) => {
 const WAITS = new Set(["waiting", "paused", "red", "after", "full", "gpu", "busy", "parent", "credit"]);
 /** An issue's subject (`aleph-2118`), not a routine's (`housekeeper`). */
 const isIssue = (subject) => Boolean(parseId(subject));
-/** The role of a run kind in a row's line: a build is the worker's job. */
-const role = (kind) => (kind === "build" ? "worker" : kind);
+/** The word for a run kind in a row's line: a build run implements the issue. */
+const role = (kind) => (kind === "build" ? "implement" : kind);
 /** The mark of a run's result in an older row. */
 const MARK = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returned: "✗", dropped: "✗" };
 /** The leading verb of a sentence after its ID, with the words that only join it to the rest. */
@@ -214,40 +214,63 @@ const CHIP_TONES = { filed: "quiet", ended: "quiet", closed: "done", started: "r
 const chipTone = (word) => CHIP_TONES[word] ?? tone(word);
 
 /** An event's row: the time, then the issue's title, and under it the state, the ID and what the sentence adds. A chat turn's line is its message; a routing event's is its tier and model. `more` is the count of older rows folded behind it; `run` is the kind of the event's run. */
-export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
+export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "", all = [ev]) {
   const chat = ev.subject === "chat", route = ev.action === "routed" && !ev.tier;
   const title = chat || route ? "" : titles[ev.subject] ?? "";
   const { lead, rest } = chat || route ? { lead: "", rest: "" } : parts(ev);
   const word = stateWord(ev), who = run && isIssue(ev.subject) ? `${esc(role(run))} ` : "";
   const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "")
     : route ? esc(routeText(ev))
-    : `${tag(word, chipTone(word))} ${[lead && who + lead, rest !== ev.action && rest, detail(ev)].filter(Boolean).join(" · ")}`;
+    : `${tag(word, chipTone(word))} ${[lead && who + lead, rest !== ev.action && rest, detail(ev), run && isIssue(ev.subject) && jobFacts(ev, jobOf(ev), run, all)].filter(Boolean).join(" · ")}`;
   return feedRow({ tone: chipTone(word), at: ev.at, by: ev.by, cls: route ? " sys" : "",
     body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
       `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason" title="${esc(ev.note)}">${esc(ev.note)}</span>` : ""}` });
 }
 
-/** An older event as a label and a short text: a run's role and "#2 ✓", or the chip word and what the sentence adds. */
-function brief(ev, runs = {}, chats = {}) {
-  const job = jobOf(ev), run = runs[job], n = job?.match(/#\d+$/)?.[0] ?? "";
+/** The newest event of `all` (newest first) at or before `at` that `ok` takes. */
+const lastBefore = (all, at, ok) => all.find((e) => e.at <= at && ok(e));
+
+/** A job's facts after its mark: for a build, the tier it was routed to and the model it ran on (routed one ↑ raised one), then a land's commit, its time and its cost. */
+function jobFacts(ev, job, run, all) {
+  // The job's first start: the gate logs it again as the run moves on after its result.
+  const start = all.findLast((e) => e.action === "running" && jobOf(e) === job && e.at <= ev.at);
+  const route = start && run === "build" ? lastBefore(all, start.at, (e) => e.action === "routed" && e.tier) : undefined;
+  const ran = start && run === "build" ? lastBefore(all, start.at, (e) => e.action === "started" && /^model /.test(e.note ?? ""))?.note.slice(6) : undefined;
+  const model = route?.model && ran && ran !== route.model ? `${route.model}↑${ran}` : ran ?? route?.model;
+  const took = start && ev !== start ? dur((Date.parse(ev.at) - Date.parse(start.at)) / 1000) : "";
+  return [route?.tier, model, ev.commit && String(ev.commit).slice(0, 7), took, ev.cost !== undefined && money(ev.cost)].filter(Boolean).map(esc).join(" · ");
+}
+
+/** An older event as a label and a short text: a run's kind, then its linked job ID, its mark and its facts; or the chip word and what the sentence adds. `all` is the group's events, newest first. */
+function brief(ev, runs = {}, chats = {}, all = [ev]) {
+  const job = jobOf(ev), run = runs[job];
   const cut = (s) => esc(s ?? "");
   if (ev.subject === "chat") return { ev, label: "", text: cut(chats[ev.on?.[0]]?.title) };
   if (ev.action === "routed") return { ev, label: "routed", text: cut(routeText(ev)) };
   const { lead, rest } = parts(ev), more = detail(ev) && ` ${detail(ev)}`, note = ev.note ? ` <span class="reason" title="${cut(ev.note)}">${cut(ev.note)}</span>` : "";
-  if (run) return { ev, label: role(run), text: `${n} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${more}${note}` };
-  return { ev, label: stateWord(ev), text: (rest || lead) + more + note };
+  if (run) {
+    const fx = jobFacts(ev, job, run, all);
+    return { ev, label: role(run), text: `${idLink(shownId(job), jobHref(job))} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${fx ? ` ${fx}` : ""}${more}${note}` };
+  }
+  // The group already names its issue, so a row whose sentence adds only the actor says who did it.
+  const by = ev.by && whoOf(ev.by);
+  const said = isIssue(ev.subject) && by && (!rest || rest === esc(by)) ? `by ${esc(by)}` : rest || lead;
+  return { ev, label: stateWord(ev), text: said + more + note };
 }
 
-/** The older rows of a group, newest first: no start of a job with another event, nor of a run kind with a newer one. */
+/** The older rows of a group, newest first: no start of a job with another event, nor of a run kind with a newer one, and no routing or start of an issue that a later job start draws as that job's facts. */
 function briefs([latest, ...earlier], runs = {}, chats = {}) {
+  const all = [latest, ...earlier];
+  const drawn = (ev) => (ev.action === "routed" || ev.action === "started") && all.some((e) => e.action === "running" && jobOf(e) && e.at >= ev.at);
   // The gate can log a job's start after its result, so any other event of the job hides the start.
   const ended = new Set([latest, ...earlier].filter((ev) => ev.action !== "running").map(jobOf));
   const seen = new Set([runs[jobOf(latest)]]), out = [];
   for (const ev of earlier) {
     const job = jobOf(ev), run = runs[job];
     if (ev.action === "running" && (ended.has(job) || (run && seen.has(run)))) continue;
+    if (drawn(ev)) continue;
     seen.add(run);
-    out.push(brief(ev, runs, chats));
+    out.push(brief(ev, runs, chats, all));
   }
   return out;
 }
@@ -256,10 +279,10 @@ function briefs([latest, ...earlier], runs = {}, chats = {}) {
 const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.action)}"><span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
   `<span class="brief-label" title="${esc(label)}">${esc(label)}</span><span class="brief-text" title="${text.replace(/<[^>]*>/g, "")}">${text}</span></div>`;
 
-/** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones briefly behind it; `row(ev, more)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
+/** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones briefly behind it; `row(ev, more, events)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
 const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
   const inner = [...changeRows(events[0]), ...briefs(events, runs, chats).map(briefRow)];
-  return { at: events[0].at, key: `event ${hash(eventKey(events[0]))}`, html: inner.length ? fold(row(events[0], inner.length), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(events[0]) };
+  return { at: events[0].at, key: `event ${hash(eventKey(events[0]))}`, html: inner.length ? fold(row(events[0], inner.length, events), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(events[0], 0, events) };
 });
 
 /** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */
@@ -268,7 +291,7 @@ function issueRows(events, titles = {}, runs = {}) {
   // An issue's runs share its row; any other subject (the housekeeper) is one row per run, so a row's older events belong to one run.
   const groupOf = (ev) => (isIssue(ev.subject) || !jobOf(ev) ? ev.subject : `${ev.subject}:${jobOf(ev)}`);
   for (const ev of events) if (ev.subject !== "chat" && !WAITS.has(ev.action)) by.set(groupOf(ev), [...(by.get(groupOf(ev)) ?? []), ev]);
-  return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more) => eventRow(ev, titles, {}, more, runs[jobOf(ev)]), runs);
+  return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more, all) => eventRow(ev, titles, {}, more, runs[jobOf(ev)], all), runs);
 }
 
 /** The rows of the chat events, newest first: one per session, its latest turn's newest event, with the earlier turns' behind an expand control. */
@@ -296,7 +319,7 @@ function runNow(s) {
     const run = j.run ?? { kind: "build", started: j.started };
     // A job's tier is the Claude model it asked for: its model, or, when another backend served it, its recorded tier.
     const tier = TIERS[j.tier ?? shortModel(j.model)];
-    const label = run.kind === "build" ? ["worker", tier].filter(Boolean).join(" · ") : run.kind;
+    const label = run.kind === "build" ? [role("build"), tier].filter(Boolean).join(" · ") : run.kind;
     return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), label, j.item?.title || j.name, run.started ?? j.started, j.model);
   }));
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";

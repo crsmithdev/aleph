@@ -534,7 +534,7 @@ function filedAt(d, runs) {
 }
 
 const ends = (runs) => (runs.length ? Math.max(...runs.map((x) => x.end)) : NaN);
-const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "build" : x.r.kind)))].join(", ");
+const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "implement" : x.r.kind)))].join(", ");
 
 /**
  * The Timeline's segments for an issue. With sub-issues: Before the split (the issue's own jobs before its sub-issues start),

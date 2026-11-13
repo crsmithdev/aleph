@@ -874,7 +874,7 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .event-row.sys { --stripe: transparent; color: var(--muted); font-size: var(--fs-xs); padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
 .event-row.sys .event-body { color: var(--muted); }
 /* The older events of a group: one short line each, the time, then a label and a text. */
-.event-brief { display: grid; grid-template-columns: 44px 56px minmax(0, 1fr); gap: var(--sp-8); align-items: baseline; padding: var(--sp-2) 0; font-size: var(--fs-xs); color: var(--ink-2); }
+.event-brief { display: grid; grid-template-columns: 44px 64px minmax(0, 1fr); gap: var(--sp-8); align-items: baseline; padding: var(--sp-2) 0; font-size: var(--fs-xs); color: var(--ink-2); }
 .brief-label { font-size: var(--fs-2xs); font-weight: var(--fw-strong); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brief-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .brief-text .reason { color: var(--muted); font-family: var(--mono); font-size: var(--fs-2xs); }

@@ -107,7 +107,7 @@ export function waitEvent(w, holds = []) {
 
 /** A label: the kind, a number when the lane has more than one of that kind, the model (not on a bar) and, with `cost`, the cost. */
 export function barLabel(r, nth, { cost = false, model = true } = {}) {
-  const kind = r.kind === "worker" ? "build" : r.kind;
+  const kind = r.kind === "worker" || r.kind === "build" ? "implement" : r.kind;
   return [nth ? `${kind} ${nth}` : kind, model ? shortModel(r.model) : "", cost && r.cost ? money(r.cost) : ""].filter(Boolean).join(" · ");
 }
 
@@ -123,7 +123,7 @@ export function barsOf(runs, { cost = false } = {}) {
 }
 
 
-const LEGEND = { wait: "waiting", chris: "awaiting the user", aux: "intake, facts", build: "build", bad: "failed or stuck", land: "land", made: "filed", done: "closed or accepted" };
+const LEGEND = { wait: "waiting", chris: "awaiting the user", aux: "intake, facts", build: "implement", bad: "failed or stuck", land: "land", made: "filed", done: "closed or accepted" };
 const pct = (f) => (f * 100).toFixed(3);
 /** The time on the page: "11/02 08:11". */
 const timeOf = (at) => (Number.isFinite(at) ? when(new Date(at)) : "");
