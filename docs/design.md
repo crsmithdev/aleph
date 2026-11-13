@@ -121,6 +121,7 @@ The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` te
 | `--fs-2xl` | 20px | brand mark, KPI value |
 | `--fs-xl` | 26px | page title |
 | `--fs-metric` | 32px | metric value |
+| `--fs-metric-min` | 16px | the smallest metric value, on a narrow card |
 
 #### Weights and families
 
@@ -573,9 +574,9 @@ A metric card shows one headline number of a list page, with its key.
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Box | The card | | `--surface`, shadow `--card-lift`, no visible border, radius `--r-card`, padding `--sp-12` `--sp-14` |
-| 2 | Key `k` | The measure | | `--sans` `--fs-xs` `--fw-strong`, capitals, `--muted`; breaks only between words, and moves the trend to the next line when the two do not fit |
+| 2 | Key `k` | The measure | | `--sans` `--fs-xs` `--fw-strong`, capitals, `--muted`; breaks only between words, on up to two lines; the trend stays at the right and the row keeps two lines of height |
 | 3 | Trend | The change from the baseline | yes | `--fs-sm` `--fw-strong`, a pill (radius `--r-pill`); `--good` on `--done-bg` when good, `--need` on `--need-bg` when bad, else `--muted` on `--sunk` |
-| 4 | Value `v` | The number | | `--metric` `--fw-strong`, `-0.025em`, up to `--fs-metric`, tabular, `--ink`; one line |
+| 4 | Value `v` | The number | | `--metric` `--fw-strong`, `-0.025em`, from `--fs-metric-min` up to `--fs-metric`, tabular, `--ink`; one line |
 | 5 | Second value `v2` | A second number after ` / `, such as the cap | yes | `--metric` at .62em, `--muted` |
 | 6 | Bar `extra` | A meter | yes | the meter |
 | 7 | Qualifier `q` or `note` | The names of the two values, or a note | | `--fs-xs`; one line; first name `--ink`, second `--muted` |
@@ -1023,7 +1024,7 @@ A button starts an action on the server.
 |---|---|---|---|---|
 | 1 | Button | A verb | | `--sans` `--fs-sm` `--fw-mid`, `--ink` on `--surface`, border `--rule`; `--ctl-h` high; radius `--r-ctl`; border `--ink-2` on hover |
 | 2 | Primary | The main action | yes | `--surface` on `--ink` |
-| 3 | Warn | An action that stops or drops work | yes | `--need` on `--need-bg`, border `--need` (Status page head only, Deviations) |
+| 3 | Warn | An action that stops or drops work | yes | `--need` on `--need-bg`, border `--need` |
 | 4 | Danger | An action that cannot be undone | yes | `--stuck` text |
 | 5 | Small | An action in a row | yes | padding `--sp-6`, `--fs-2xs` |
 | 6 | Always | An action that a card marks as always allowed | yes | border and text in the colour `--k` of the card, else `--ink-2` |
@@ -1560,9 +1561,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Time column names differ | Tables | aleph-1360 (pending) |
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
-| `.act.warn` has a style only in the Status page head, so a warn button elsewhere looks like any other | `ui/app.css` | review on `#/kit` |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Health in `ui/views/memory.js`; the Status Alerts and lanes in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
-| Two box systems: the card pads with `--gap-in`, the detail panel with `--sp-14` and `--sp-18` | `ui/app.css` | review on `#/kit` |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
 | Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`), the feed's rows (`div.event-row`, `div.event-brief`) and the lane card's face (`article.lane-card`) | `renderPipeline()`, `feedRow()`, `briefRow()`, `laneCard()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
@@ -1574,13 +1573,11 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | A lens result is a hand `iframe.lens-frame`, sandboxed: no helper for a result page; the Log pane's lines are a hand `ul` | `renderIdea()` in `ui/views/ideas.js` | follow-up |
 | The Ideas Updated time is a date from `git log --date=short`, so `when()` shows it as `00:00` | `renderIdeas()` in `ui/views/ideas.js` | follow-up |
 | Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/cards.js` | follow-up |
-| A metric key on two lines pushes its value below the values of the cards beside it | `ui/app.css` | review on `#/kit` |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |
 | Not every text that can end in an ellipsis has its full text in `title`; not audited | views | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
 | The `@container` queries at 560px (`pipeline`) and 420px (a card) have no breakpoint token: a container query cannot read a custom property | `ui/app.css` | allowed |
 | The `@media (min-width: 721px)` query for the collapsed sidebar has no breakpoint token: a media query cannot read a custom property | `ui/app.css` | allowed |
-| The 16px floor in the `.tile b` `clamp()` has no size token | `.tile b` in `ui/app.css` | follow-up |
 | The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |
 | The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/chart.js` | follow-up |
 | The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/kit.js` | allowed |

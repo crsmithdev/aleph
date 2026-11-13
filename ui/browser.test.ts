@@ -769,6 +769,49 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
   }, 30_000);
 
+  test("Kit: a warn button outside the page head has the warn style", async () => {
+    await page.go("#/kit");
+    await page.when('document.querySelector("#kit-button .act.warn")');
+    const r = await page.ev<any>(`(() => {
+      const probe = document.createElement("i");
+      document.body.append(probe);
+      const val = (prop, v) => { probe.style.cssText = prop + ":" + v; return getComputedStyle(probe)[prop]; };
+      const s = getComputedStyle(document.querySelector("#kit-button .act.warn"));
+      const r = { in: !!document.querySelector("#kit-button .act.warn").closest(".shead"), got: [s.backgroundColor, s.color, s.borderTopColor], want: [val("background-color", "var(--need-bg)"), val("color", "var(--need)"), val("border-top-color", "var(--need)")] };
+      probe.remove();
+      return r;
+    })()`);
+    expect(r.in).toBe(false);
+    expect(r.got).toEqual(r.want);
+  }, 30_000);
+
+  test("Kit: at 390 px a key on two lines keeps the values of a metric row level, and the smallest value is the size floor", async () => {
+    await page.width(390);
+    await page.go("#/kit");
+    await page.when('document.querySelector("#kit-metric .tile b")');
+    const r = await page.ev<any>(`(() => {
+      const tiles = [...document.querySelectorAll("#kit-metric .tile")];
+      const rows = {};
+      for (const t of tiles) (rows[Math.round(t.getBoundingClientRect().top)] ??= []).push(t);
+      const probe = document.createElement("i");
+      probe.style.fontSize = "var(--fs-metric-min)";
+      document.body.append(probe);
+      const floor = parseFloat(getComputedStyle(probe).fontSize);
+      probe.remove();
+      return {
+        wrapped: tiles.some((t) => t.querySelector(".k").getBoundingClientRect().height > 1.5 * parseFloat(getComputedStyle(t.querySelector(".k")).fontSize)),
+        tops: Object.values(rows).map((ts) => new Set(ts.map((t) => t.querySelector("b").getBoundingClientRect().top)).size),
+        smallest: Math.min(...[...document.querySelectorAll(".tile b")].map((b) => parseFloat(getComputedStyle(b).fontSize))),
+        floor,
+      };
+    })()`);
+    expect(r.wrapped).toBe(true);
+    expect(r.tops.every((n: number) => n === 1)).toBe(true);
+    expect(r.floor).toBe(16);
+    expect(r.smallest).toBe(r.floor);
+    await page.width(1200);
+  }, 30_000);
+
   test("the font picker, the annotations and the chat mount in the dock and work", async () => {
     await page.width(1200);
     await page.go("#/");

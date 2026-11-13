@@ -172,7 +172,7 @@ function renderKit(d, query) {
     group("Data") +
     spec("metric", "Metric card", tiles("Metric cards",
       statCard({ k: "Runs", v: "198", trend: cardTrend(198, 160, 171, { kind: "relative", lowerIsGood: false, format: String, basis: "4-week mean" }), note: "today" }) +
-      statCard({ k: "Lead time", v: "2.4h", trend: cardTrend(2.4, 1.8, 2, { kind: "relative", lowerIsGood: true, format: String, basis: "4-week mean" }), note: "median" }) +
+      statCard({ k: "Time to land", v: "2.4h", trend: cardTrend(2.4, 1.8, 2, { kind: "relative", lowerIsGood: true, format: String, basis: "4-week mean" }), note: "median" }) +
       statCard({ k: "Worker slots", v: "2", v2: "5", q: ["in use", "cap"], extra: meter(40, "2 of 5 in use") }) +
       statCard({ k: "Share", v: "61%", trend: cardTrend(0.61, 0.61, 0.6, { kind: "points", lowerIsGood: null, format: String, basis: "4-week mean" }), note: "no change" }) +
       statCard({ k: "Cost", v: "–", note: "no cost" }) +
