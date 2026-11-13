@@ -51,6 +51,13 @@ test("a run that ends logs its cost, a run that lands also its commit, and an As
   ]);
 });
 
+test("a run that fails a check logs the reason as the event note", () => {
+  record.putRun("r33", run({ on: "aleph-33", name: "aleph-33", n: 1 }));
+  record.patchRun("r33", { condition: "failed", cause: "check", checkName: "bun test", reason: "bun test failed: 3 fail (a.test.ts)" });
+  const failed = readEvents().find((e) => e.subject === "aleph-33" && e.action === "failed");
+  expect(failed).toMatchObject({ sub: "check", note: "bun test failed: 3 fail (a.test.ts)" });
+});
+
 test("a run keys by its issue, else by its job id", () => {
   expect(record.keyOf({ on: "aleph-7", job: "j1" })).toBe("aleph-7");
   expect(record.keyOf({ job: "20260925-192116-aleph-vault-date-agent" })).toBe("20260925-192116-aleph-vault-date-agent");

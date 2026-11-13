@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addedLines, failedTests, keepGate, mutants, newCases, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { addedLines, failedTests, failureLine, keepGate, mutants, newCases, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
 import type { CheckResult, Repo } from "../records/ledger.ts";
 
@@ -132,7 +132,7 @@ describe("outer", () => { describe("inner", () => { test("fails <&>", () => { ex
 
   test("records the counts and each failed test with its describe names and its failure", async () => {
     const { failed, results } = await real("bun test", { "a.test.ts": suite });
-    expect(failed).toMatchObject({ checkName: "unit tests", reason: "unit tests failed" });
+    expect(failed).toMatchObject({ checkName: "unit tests", reason: "unit tests failed: 1 fail (outer > inner > fails <&>)" });
     const tests = results[0].tests!;
     expect({ ...tests, failures: [] }).toEqual({ ran: 2, passed: 1, failed: 1, skipped: 1, failures: [] });
     expect(tests.failures).toMatchObject([{ file: "a.test.ts", name: "outer > inner > fails <&>" }]);
@@ -298,3 +298,10 @@ test("addedLines and mutants: the new-side lines of a diff, and one mutant a cha
   expect(mutants([{ path: "a.ts", lines: [2, 3, 4, 5, 6], text }], 2).map((m) => m.line)).toEqual([2, 4]);
 });
 
+
+test("failureLine gives one short line on why a check failed", () => {
+  expect(failureLine("x.test.ts:\n(fail) suite > one [1.0ms]\n(fail) two\n")).toBe("2 fail (suite > one)");
+  expect(failureLine("\x1b[31merror: Cannot find module 'x'\x1b[0m\nat y\n")).toBe("error: Cannot find module 'x'");
+  expect(failureLine("lint ran\nbad thing")).toBe("bad thing");
+  expect(failureLine("error: " + "x".repeat(200))).toHaveLength(80);
+});

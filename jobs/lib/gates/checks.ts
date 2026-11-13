@@ -38,6 +38,14 @@ export type CheckExec = (check: Check, out: string, limit: number) => Promise<{ 
 /** The names on bun's `(fail)` lines, each one once: its summary repeats them. */
 export const failedTests = (log: string): string[] => [...new Set(log.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm).map((m) => m[1]))];
 
+/** One line, at most 80 characters, on why a check failed: bun's failed tests, else the first error line, else the last line. */
+export function failureLine(log: string): string {
+  const text = log.replace(/\x1b\[[0-9;]*m/g, ""), fails = failedTests(text);
+  const line = fails.length ? `${fails.length} fail (${fails[0]})`
+    : text.split("\n").map((l) => l.trim()).find((l) => /error|fail/i.test(l)) ?? text.trimEnd().split("\n").at(-1)?.trim() ?? "";
+  return line.length > 80 ? `${line.slice(0, 79)}…` : line;
+}
+
 const tail = (file: string, n: number) => existsSync(file) ? readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "";
 
 /** The repo's checks with no `when`, and those whose globs match a changed file. */
@@ -106,7 +114,10 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
     t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}), ...(lost ? { noVerdict: true as const } : {}), ...(record ? { tests: record } : {}), ...(failedFirst.length ? { rerunPassed: failedFirst.length } : {}) });
     log(`## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : r.killed ? " (killed)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
     if (lost) return { cause: "infra", checkName: check.name, reason: `no verdict: check ${check.name} ${r.timedOut ? "timed out" : "was killed"}`, timedOut: r.timedOut };
-    if (r.code !== 0) return { cause: "check", checkName: check.name, reason: `${check.name} failed` };
+    if (r.code !== 0) {
+      const why = failureLine(readFileSync(out, "utf8"));
+      return { cause: "check", checkName: check.name, reason: why ? `${check.name} failed: ${why}` : `${check.name} failed` };
+    }
     if (none) return { cause: "check", checkName: check.name, reason: `ran 0 tests: check ${check.name}` };
   }
   return null;

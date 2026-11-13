@@ -78,7 +78,7 @@ test("checksAt hands each check's process to onSpawn, so a drop can kill a runni
 test("checksAt runs the checks in a detached worktree at the commit, and checkEnv gives them TZ=UTC; the worktree goes after", async () => {
   const { repo, sha } = committed([], [{ name: "a", run: "cat f.txt; echo tz=[$TZ]; git status --porcelain --branch | head -1; exit 3" }]);
   const why = await checksAt({ folder: base, repo, changed: [], phase: () => {} }, sha, checkEnv());
-  expect(why).toEqual({ cause: "check", checkName: "a", reason: "a failed" });
+  expect(why).toEqual({ cause: "check", checkName: "a", reason: "a failed: ## HEAD (no branch)" });
   const log = await Bun.file(join(base, "checks.log")).text();
   expect(log).toContain("x\ntz=[UTC]\n## HEAD (no branch)");
   expect(extraTrees(repo.path)).toBe(0);
