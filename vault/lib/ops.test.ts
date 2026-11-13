@@ -799,6 +799,13 @@ describe("compile", () => {
     expect(r.stdout).toContain("Langfuse failed: 503");
     expect(r.stdout).toContain("### 2026-09-04-101001.md");
   });
+  test("records each compiled day once", async () => {
+    await runAsync(env(failing.port), "compile", "2026-09-04");
+    await runAsync(env(failing.port), "compile", "2026-09-04");
+    await runAsync(env(failing.port), "compile", "2026-09-05");
+    expect(JSON.parse(readFileSync(join(vault, ".index/compiled.json"), "utf8"))).toEqual(["2026-09-04", "2026-09-05"]);
+    expect(gitStatus()).not.toContain("compiled.json");
+  });
   test("symlinked vault: reads handoffs beside the link, not beside its target", async () => {
     const home = mkdtempSync(join(tmpdir(), "aleph-home-"));
     symlinkSync(vault, join(home, "vault"));
@@ -972,6 +979,8 @@ describe("maintain", () => {
     put(join(handoffs, `${day(41)}-101010-not-compiled.md`));
     put(join(handoffs, `${day(5)}-101010-recent.md`));
     put(join(vault, "daily", `${day(40)}.md`), "# d\n");
+    put(join(vault, "daily", `${day(41)}.md`), "# d\n");
+    put(join(vault, ".index/compiled.json"), JSON.stringify([day(40)]));
   });
   afterEach(() => use(null));
 

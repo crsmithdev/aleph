@@ -16,7 +16,7 @@ import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { maintain } from "./maintain.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
+import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, citedTraces, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 import { layout, logEvent } from "../../lib/layout.ts";
 import { logUse } from "../../lib/episode-use.ts";
@@ -542,6 +542,7 @@ async function compile(): Promise<void> {
     `## Daily note\n\n${daily || "none"}`,
     `## Already cited\n\n${cited.length ? cited.map((id) => `- trace:${id}`).join("\n") : "none"}`,
   ];
+  recordCompiled(root, date);
   console.log(sections.join("\n\n"));
 }
 

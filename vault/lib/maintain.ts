@@ -8,7 +8,7 @@ import { readJsonOr } from "../../lib/json.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
 import { Exit, run } from "./ops.ts";
-import { fixFrontmatter, lintVault, loadVault, readRun, recordRun, today, wikiNotes } from "./vault.ts";
+import { compiledDays, fixFrontmatter, lintVault, loadVault, readRun, recordRun, today, wikiNotes } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
 const OVERLAP_QUEUE = 10;
@@ -76,9 +76,10 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
   }
   report.core = { ...report.core, fixed: cores.map((c) => ({ note: c.n.title, was: c.was, now: c.now })) };
 
-  // A handoff counts as compiled when the vault has its day's note.
+  // A handoff counts as compiled when `aleph memory compile` ran for its day.
   const dated = (f: string) => f.match(/^(\d{4}-\d{2}-\d{2})-\d{6}(-.*)?\.md$/)?.[1] ?? null;
-  report.handoffs = move(handoffsDir(), join(backup, "handoffs"), dry, dated, ago(HANDOFF_DAYS), (d) => existsSync(join(root, "daily", `${d}.md`)));
+  const compiled = compiledDays(root);
+  report.handoffs = move(handoffsDir(), join(backup, "handoffs"), dry, dated, ago(HANDOFF_DAYS), (d) => compiled.includes(d));
 
   const lint = lintVault(await loadVault(root), { overlap: true, read: readJsonOr(join(root, ".recall.json"), {}), tracked: [...tracked] });
   const queue = (rule: string) => lint.warn.filter((f) => f.rule === rule);

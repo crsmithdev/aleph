@@ -73,6 +73,19 @@ export function readRun(root: string, name: string): Run | null {
   try { return readJsonOr<Run | null>(runFile(root, name), null); } catch { return null; }
 }
 
+const compiledFile = (root: string) => join(root, ".index", "compiled.json");
+
+/** The days `aleph memory compile` ran, oldest first, each once. The file sits in `.index` (outside git). */
+export function compiledDays(root: string): string[] {
+  return readJsonOr<string[]>(compiledFile(root), []);
+}
+
+/** Adds `date` to the compiled days, unless it is there. */
+export function recordCompiled(root: string, date: string): void {
+  const days = compiledDays(root);
+  if (!days.includes(date)) writeJson(compiledFile(root), [...days, date].sort());
+}
+
 /** Every logged return, one JSON line of date, title, query, session and source, for 30 days. Outside git; the CLI and the hook both append through here. */
 export function appendRecallLog(root: string, titles: string[], query: string, session: string | null, source: "cli" | "hook"): void {
   const file = join(root, ".recall-log.jsonl");
