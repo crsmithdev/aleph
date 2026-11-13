@@ -79,6 +79,23 @@ assume a shared server is serving your code. Headless checks run as
 `claude -p` with `CLAUDECODE` unset.
 Verify each status claim against the tool output that produced it, and name each task by its ID before reporting what that task did.
 
+## Mocks
+
+A mock is a design draft Chris looks at: HTML pages, images, a canvas. Keep
+it in the repo at `docs/mocks/<name>/`, never in `/tmp` or the scratchpad,
+and commit it with a `README.md` that names the request and each decision.
+When the mock is ready, serve that directory in the background with
+`python3 -m http.server <port> -d docs/mocks/<name>` on a free port at or
+above 3002. Then open the page in Chris's browser:
+
+```bash
+cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "http://localhost:<port>/<page>"
+```
+
+Do not use `wslview`. It looks for `WSLInterop`, but this WSL registers
+`WSLInterop-late`, so it fails. Keep the server up until Chris is done with
+the mock.
+
 ## Memory
 
 The vault at `~/.aleph/vault` is memory; `MEMORY.md` and the core lines of
