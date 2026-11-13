@@ -42,14 +42,14 @@ test("the scorecard before the data arrives: a spinner in the three flow cards, 
   expect(h).not.toContain('class="tr');
 });
 
-test("the Jobs card shows live runs and queued, trends the runs against the baseline's mean live runs with no tone, and there is no Asks card", () => {
+test("the Jobs card shows live runs and queued with no trend, and there is no Asks card", () => {
   const s = { ...state, usage: USAGE, factory: { ...state.factory, liveRuns: 3 }, queued: [{}, {}, {}, {}, {}] };
-  const d = { ...WEEK, figures: { ...WEEK.figures, live: 2 }, baseline: { ...BASE, base: { ...BASE.base, live: 2 } } };
-  const h = view.renderTiles(s, d, "week");
+  const h = view.renderTiles(s, { ...WEEK, baseline: BASE }, "week");
   expect(h).not.toContain("Asks");
   expect(h).toContain("<b>3<em> / 5</em></b>");
   expect(h).toContain('<span>running</span><span class="m"> / queued</span>');
-  expect(h).toMatch(/<span class="tr" title="[^"]*baseline 2, the previous 7 days">▲ 50%<\/span>/);
+  expect(h).toContain('class="tr');
+  expect(h.split('class="tile sc"').find((t: string) => t.includes(">Jobs<"))).not.toContain('class="tr');
   expect(view.renderTiles({ ...s, queued: [] }, null, "week")).toContain("<b>3<em> / 0</em></b>");
 });
 
