@@ -27,7 +27,7 @@ test("parse gives each request's fill, each message as the usage difference, and
   const r = parse(transcript).requests;
   expect(r.map((x) => x.fill)).toEqual([1002, 1503, 1804]);
   expect(r.map((x) => x.usage.output)).toEqual([7, 7, 7]);
-  expect(r[0].parts.map((p) => p.name)).toEqual(["System prompt", "Tools · 1", "Instructions · 1 files", "Memory start context"]);
+  expect(r[0].parts.map((p) => p.name)).toEqual(["System prompt", "Tools · 1", "Instructions · 1 file", "Memory start context"]);
   expect(r[0].parts.reduce((s, p) => s + p.tokens, 0)).toBe(1002);
   expect(r[0].parts.every((p) => p.how === "est")).toBe(true);
   // each later request holds the fixed parts, then the message parts so far: the output of the request before as an
@@ -44,6 +44,12 @@ test("parse gives each request's fill, each message as the usage difference, and
     { name: "Recall offers · 1", rec: "hook UserPromptSubmit", tokens: 245, how: "est" },
   ]);
   expect(r.map((x) => x.parts.reduce((s, p) => s + p.tokens, 0))).toEqual([1002, 1503, 1804]);
+});
+
+test("the Instructions part names one file in the singular and more in the plural", () => {
+  const two = JSON.stringify({ attachment: { type: "instructions", files: [{ content: "j" }] } }) + "\n" + transcript;
+  expect(parse(two).requests[0].parts[2].name).toBe("Instructions · 2 files");
+  expect(parse(transcript).requests[0].parts[2].name).toBe("Instructions · 1 file");
 });
 
 test("after a compaction the summary is the fill minus request 1's, exact, and the message parts start again", () => {

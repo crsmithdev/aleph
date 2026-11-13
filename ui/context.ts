@@ -154,7 +154,7 @@ function scan(jsonl: string): Scan {
   }
   return { out, model, defs: tools, calls, fixed: [
     ["System prompt", "prompt_snapshot", system], [`Tools · ${tools.length}`, "prompt_snapshot.tools", tools],
-    [`Instructions · ${instructions.length} files`, "attachment instructions", instructions.join("")], ["Memory start context", "hook_additional_context", memory],
+    [`Instructions · ${instructions.length} file${instructions.length === 1 ? "" : "s"}`, "attachment instructions", instructions.join("")], ["Memory start context", "hook_additional_context", memory],
   ] };
 }
 
