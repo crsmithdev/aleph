@@ -12,10 +12,10 @@ beforeAll(async () => {
   factory = join(base, "factory");
   for (const d of [join(base, "runs"), factory, join(base, "issues", ".git", "refs", "remotes", "origin")]) mkdirSync(d, { recursive: true });
   writeFileSync(join(base, "repos.json"), JSON.stringify({ p: { path: join(base, "p") } }));
-  // A systemctl whose tick timer next fires in 2100, so the tone does not hang on the host's own timer: a CI runner has none.
-  const ctl = join(base, "systemctl");
-  writeFileSync(ctl, `#!/bin/sh\necho '[{"unit":"aleph-tick.timer","next":4102444800000000}]'\n`, { mode: 0o755 });
-  restoreEnv = withEnv({ ALEPH_SYSTEMCTL: ctl, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_ISSUES: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
+  // systemctl answers the tick timer with a next run a minute out: the tone is the factory's, not the host's timers, and a CI runner has no tick timer.
+  const systemctl = join(base, "systemctl");
+  writeFileSync(systemctl, `#!/bin/sh\ncase "$2" in list-timers) echo '[{"unit":"aleph-tick.timer","next":'$(( ($(date +%s) + 60) * 1000000 ))'}]';; esac\n`, { mode: 0o755 });
+  restoreEnv = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_ISSUES: join(base, "issues"), ALEPH_FACTORY_DIR: factory, ALEPH_SYSTEMCTL: systemctl });
   ({ server, stop } = await withServer({ warm: false }));
 });
 afterAll(() => { stop(); restoreEnv(); rmSync(base, { recursive: true, force: true }); });
