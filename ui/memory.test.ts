@@ -516,7 +516,7 @@ test("the Context tab draws one parts row per part of the selected request, fixe
   const part = (name: string, tokens: number, how: string) => ({ name, rec: "r", tokens, how });
   const parts = [part("System prompt", 600, "est"), part("Tools · 2", 300, "est"), part("Your messages · 1", 100, "exact")];
   const usage = { input: 2, cacheRead: 900, cacheWrite: 98, output: 7 };
-  const session = { id: "s1", requests: [{ n: 1, fill: 1000, usage, parts: parts.slice(0, 2) }, { n: 2, fill: 1000, usage, parts }] };
+  const session = { id: "s1", requests: [{ n: 1, fill: 1000, usage, parts: parts.slice(0, 2) }, { n: 2, fill: 1000, usage, parts }], items: [], summaries: [] };
   const sessions = [{ id: "s1aaaaaaaa", project: "aleph", updated: "2026-11-10T10:00:00Z" }];
   const h = v.renderContextTab({ sessions, session }, new URLSearchParams("tab=context&n=2"));
   expect(h).toContain('<a href="#/memory?tab=context" aria-current="page">Context</a>');
@@ -533,7 +533,7 @@ test("the Context tab draws one parts row per part of the selected request, fixe
 test("the Context tab scales the fill line, the part segments and the chart bars to the session's window", () => {
   const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
   const parts = [{ name: "Tools · 1", rec: "r", tokens: 250_000, how: "est" }];
-  const session = { id: "s1", window: 1_000_000, requests: [{ n: 1, fill: 500_000, usage, parts, since: 0 }] };
+  const session = { id: "s1", window: 1_000_000, requests: [{ n: 1, fill: 500_000, usage, parts, since: 0 }], items: [], summaries: [] };
   const h = v.renderContextTab({ sessions: [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }], session }, new URLSearchParams("n=1"));
   expect(h).toContain("of 1,000,000 tokens · 50.0%");
   expect(h).toContain("width:25.00%");

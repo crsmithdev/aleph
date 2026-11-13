@@ -1,7 +1,8 @@
 // The Context tab of the Memory page, on /api/context: a picker for the session and its request, the fill of the
 // selected request as a bar, the fill of every request as a chart, and the parts the request holds. A part is exact
 // when the endpoint says so (from API usage) and est. otherwise (chars ÷ 4). The Tools and Tool results rows unfold
-// into each tool and each call; a call's input loads its result text.
+// into each tool and each call; a call's input loads its result text. Every other part unfolds into its items, and
+// the compact summary into its text.
 import { get } from "../router.js";
 import { card, count, dataTable, empty, error, esc, goQuery, hashQuery, heads, loadingLine, setQuery, tag } from "../lib.js";
 
@@ -33,6 +34,31 @@ function byCall(calls, r, total) {
   }).join("");
 }
 
+/** What each part's items are, by the part's record. */
+const BY = {
+  prompt_snapshot: "By heading", "attachment instructions": "By file", hook_additional_context: "By hook", "rest of request 1": "By kind",
+  user: "By kind", assistant: "By block", attachment: "By type", "hook UserPromptSubmit": "By offer",
+};
+
+/** A part's items that the request holds, by name: fixed items (n 1) always, message items after its `since`. */
+function byItem(items, r, p) {
+  const groups = new Map();
+  for (const i of items) {
+    if (i.rec !== p.rec || i.n !== 1 && (i.n <= r.since || i.n > r.n)) continue;
+    const g = groups.get(i.name) ?? { count: 0, tokens: 0 };
+    groups.set(i.name, { count: g.count + 1, tokens: g.tokens + i.tokens });
+  }
+  if (!groups.size) return "";
+  const rows = [...groups].sort((a, b) => b[1].tokens - a[1].tokens).map(([name, g]) =>
+    `<tr><td class="wide" title="${esc(name)}">${esc(name)}</td><td class="num">${count(g.count)}</td><td class="num">${count(g.tokens)}</td><td class="num">${share(g.tokens, p.tokens)}</td></tr>`);
+  return fold(`items:${p.rec}`, BY[p.rec] ?? "By item", dataTable(heads(["Item", "Count", "Tokens", "Share"], ["Count", "Tokens", "Share"]), rows.join("")));
+}
+
+function summary(summaries, r) {
+  const s = summaries.find((x) => x.n === r.since);
+  return s ? fold("summary", "Text", `<pre class="stat" style="max-height:360px;overflow:auto;white-space:pre-wrap">${esc(s.text)}</pre>`) : "";
+}
+
 function picker(m, id, session, r) {
   const last = session.requests.length;
   const opts = m.sessions.map((s) => `<option value="${esc(s.id)}"${s.id === id ? " selected" : ""}>${esc(`${s.id.slice(0, 8)} · ${s.updated.slice(0, 10)} · ${s.project}`)}</option>`).join("");
@@ -60,12 +86,13 @@ function chart(requests, r, limit) {
 }
 
 function parts(r, s) {
-  const more = (p) => p.rec === "prompt_snapshot.tools" && s.tools.length ? byTool(s.tools, p.tokens) : p.rec === "tool_result" ? byCall(s.calls, r, p.tokens) : "";
+  const more = (p) => p.rec === "prompt_snapshot.tools" ? (s.tools.length ? byTool(s.tools, p.tokens) : "") : p.rec === "tool_result" ? byCall(s.calls, r, p.tokens)
+    : p.rec === "isCompactSummary" ? summary(s.summaries, r) : byItem(s.items, r, p);
   const rows = r.parts.map((p) => [p, more(p)]).map(([p, m]) => `<tr><td>${esc(p.name)}</td><td class="mono">${esc(p.rec)}</td><td class="num">${count(p.tokens)}</td><td>${how(p.how)}</td></tr>` +
     (m ? `<tr><td colspan="4">${m}</td></tr>` : ""));
   rows.push(`<tr><td><strong>Total</strong></td><td class="mono">message.usage</td><td class="num"><strong>${count(r.fill)}</strong></td><td>${how("exact")}</td></tr>`);
   return card(`What is in request ${r.n}`, dataTable(heads(["Part", "Record", "Tokens", "How"], ["Tokens"]), rows.join("")) +
-    `<p class="quiet">The fixed parts sum to the fill of request 1. With an Anthropic key, count_tokens counts each one and Other holds the rest. Without a key, the split is est. Each tool is its share of Tools by chars, est. A message part is the usage of its request minus the usage of the request before it, exact unless one gap held more than one kind of record.</p>`);
+    `<p class="quiet">The fixed parts sum to the fill of request 1. With an Anthropic key, count_tokens counts each one and Other holds the rest. Without a key, the split is est. Each tool, and each item of a part, is its share of the part by chars, est. A message part is the usage of its request minus the usage of the request before it, exact unless one gap held more than one kind of record.</p>`);
 }
 
 /** The body of the tab: `m` is the /api/context body, with `session` the /api/context/:id body once loaded; `o.n` the request. */

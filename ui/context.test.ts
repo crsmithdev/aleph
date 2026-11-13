@@ -84,6 +84,50 @@ test("a gap of one later attachment gives the assistant turn the output and the 
   expect(r[3].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[3].fill);
 });
 
+test("each fixed part splits into items by chars: the system prompt by heading, instructions by file, memory by hook", () => {
+  const fixed = [
+    { attachment: { type: "instructions", files: [{ path: "/a/CLAUDE.md", content: "a".repeat(300) }, { path: "/b/CLAUDE.md", content: "b".repeat(100) }] } },
+    { attachment: { type: "hook_additional_context", hookName: "SessionStart", content: ["m".repeat(100)] } },
+    { attachment: { type: "hook_additional_context", hookName: "UserPromptSubmit", content: ["n".repeat(100)] } },
+    { attachment: { type: "prompt_snapshot", systemPrompt: [`top\n# One\n${"o".repeat(200)}\n## Two\n${"w".repeat(100)}`], tools: [] } },
+    req("r1", 0, 0, 1000),
+  ];
+  const s = parse(fixed.map((o) => JSON.stringify(o)).join("\n"));
+  const of = (rec: string) => s.items.filter((i) => i.rec === rec).map((i) => [i.name, i.tokens, i.n]);
+  for (const p of s.requests[0].parts.filter((p) => p.rec !== "prompt_snapshot.tools")) expect(s.items.filter((i) => i.rec === p.rec).reduce((n, i) => n + i.tokens, 0)).toBe(p.tokens);
+  expect(of("prompt_snapshot").map(([name]) => name)).toEqual(["Opening", "One", "Two"]);
+  expect(of("attachment instructions")).toEqual([["/a/CLAUDE.md", 326, 1], ["/b/CLAUDE.md", 109, 1]]);
+  expect(of("hook_additional_context")).toEqual([["SessionStart", 109, 1], ["UserPromptSubmit", 108, 1]]);
+});
+
+test("message parts split into items: an assistant turn by block, messages by prompt or injected, offers by notes, attachments by type", () => {
+  const more = [
+    { type: "assistant", requestId: "r3", message: { content: [{ type: "thinking", thinking: "", signature: "g".repeat(900) }] } },
+    { type: "assistant", requestId: "r3", message: { content: [{ type: "text", text: "x".repeat(6) }] } },
+    { type: "user", message: { content: "p".repeat(98) } },
+    { type: "user", isMeta: true, message: { content: "q".repeat(298) } },
+    { attachment: { type: "hook_additional_context", hookName: "UserPromptSubmit", content: ["Notes:\n- Alpha (a.md): x\n- Beta (b.md): y"] } },
+    { attachment: { type: "skill_listing", content: "s" } },
+    req("r4", 5, 1800, 1000),
+  ];
+  const s = parse([...lines, ...more].map((o) => JSON.stringify(o)).join("\n"));
+  const at = (rec: string) => s.items.filter((i) => i.rec === rec && i.n === 4).map((i) => [i.name, i.tokens]);
+  // the output of r3 (7): the text is 8 chars with its quotes, 2 tokens; thinking, whose text the transcript drops, is the rest
+  expect(at("assistant")).toEqual([["Text", 2], ["Thinking", 5]]);
+  const user = s.requests[3].parts.find((p) => p.rec === "user")!.tokens - s.requests[2].parts.find((p) => p.rec === "user")!.tokens;
+  expect(at("user").map(([name]) => name)).toEqual(["Prompts", "Injected"]);
+  expect(at("user").reduce((n, [, t]) => n + (t as number), 0)).toBe(user);
+  expect(at("hook UserPromptSubmit").map(([name]) => name)).toEqual(["Alpha, Beta"]);
+  expect(at("attachment").map(([name]) => name)).toEqual(["skill_listing"]);
+});
+
+test("a compact summary keeps its text and the request whose fill first held it", () => {
+  const compacted = [...lines, { type: "user", isCompactSummary: true, message: { content: "summary" } }, req("r4", 5, 1000, 200)];
+  const s = parse(compacted.map((o) => JSON.stringify(o)).join("\n"));
+  expect(s.summaries).toEqual([{ n: 4, text: "summary" }]);
+  expect(s.requests[3].since).toBe(4);
+});
+
 test("an image in a tool result weighs by its pixels, 4 chars per token, not by its base64 length", () => {
   // a 300 × 250 PNG header padded to 30 kB: 100 tokens by pixels, 400 chars
   const png = Buffer.alloc(30000);
@@ -218,6 +262,17 @@ describe("parseExact", () => {
     expect(bodies.map((b) => b.model)).toEqual(Array(4).fill("claude-test-1"));
     expect(bodies.find((b) => b.tools).tools[0].input_schema).toEqual({ type: "object" });
     expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  test("with the key, Other splits into the records before request 1 by kind", async () => {
+    const restore = withEnv({ ALEPH_ENV_FILE: envFile("ANTHROPIC_API_KEY=sk-test\n") });
+    const pre = JSON.stringify({ attachment: { type: "skill_listing", content: "k".repeat(500) } }) + "\n" + withModel;
+    const s = await parseExact(pre, fake);
+    restore();
+    const other = s.requests[0].parts.find((p) => p.rec === "rest of request 1")!;
+    const items = s.items.filter((i) => i.rec === "rest of request 1");
+    expect(items.map((i) => i.name)).toEqual(["skill_listing", "Prompts"]);
+    expect(items.reduce((n, i) => n + i.tokens, 0)).toBe(other.tokens);
   });
 
   test("with no key it keeps chars ÷ 4 estimates and makes no call", async () => {

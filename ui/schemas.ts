@@ -60,6 +60,8 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     requests: [{ n: "number", fill: "number", since: "number", usage: { input: "number", cacheRead: "number", cacheWrite: "number", output: "number" }, parts: [{ name: "string", rec: "string", tokens: "number", how: "string" }] }],
     tools: [{ name: "string", tokens: "number" }],
     calls: [{ id: "string", tool: "string", input: "string", n: "number", tokens: "number", how: "string" }],
+    items: [{ rec: "string", name: "string", n: "number", tokens: "number" }],
+    summaries: [{ n: "number", text: "string" }],
   },
   "/api/context/:id/calls/:call": { tool: "string", input: "any", text: "string" },
   "/api/projects": { "*": { code: "string?", issues: "number", onboarded: "boolean" } },

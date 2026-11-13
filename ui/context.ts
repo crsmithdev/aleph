@@ -16,7 +16,11 @@ export interface Request {
 export interface Call { id: string; tool: string; input: string; n: number; tokens: number; how: "exact" | "est" }
 /** One tool definition's share of the Tools part, by chars: always est. */
 export interface Tool { name: string; tokens: number }
-export interface Session { requests: Request[]; tools: Tool[]; calls: Call[] }
+/** One item of a part (a heading, a file, a hook, a kind of record): its share of the part by chars, always est. `n` is 1 for a fixed part, else the request whose fill first held it. */
+export interface Item { rec: string; name: string; n: number; tokens: number }
+/** A compact summary's text and the request whose fill first held it. */
+export interface Summary { n: number; text: string }
+export interface Session { requests: Request[]; tools: Tool[]; calls: Call[]; items: Item[]; summaries: Summary[] }
 
 /** The message parts in the mock's order: the record each comes from, and its name. */
 const MESSAGES: [string, string][] = [
@@ -36,7 +40,30 @@ export function parse(jsonl: string): Session {
 }
 
 /** The fixed parts of a transcript: its text (the tools as the array) and the model of its first request. */
-interface Scan { out: Request[]; fixed: [string, string, string | unknown[]][]; model: string; defs: unknown[]; calls: Call[] }
+interface Scan {
+  out: Request[]; fixed: [string, string, string | unknown[]][]; model: string; defs: unknown[]; calls: Call[];
+  /** Per fixed part, by its record: its items and their chars. */
+  parts: Map<string, Map<string, number>>; items: Item[]; summaries: Summary[];
+}
+
+/** Splits `tokens` among the weights by their share; the last takes the rest, so the shares sum to `tokens`. */
+function apportion<T>(tokens: number, weights: [T, number][]): [T, number][] {
+  const total = weights.reduce((s, [, w]) => s + w, 0) || 1;
+  let left = tokens;
+  return weights.map(([k, w], i) => {
+    const t = i === weights.length - 1 ? left : Math.round(tokens * w / total);
+    left -= t;
+    return [k, t];
+  });
+}
+
+const add = (m: Map<string, number>, k: string, n: number) => m.set(k, (m.get(k) ?? 0) + n);
+const BLOCKS: Record<string, string> = { tool_use: "Tool calls", text: "Text" };
+/** The system prompt by its level-1 and level-2 headings; the text before the first is "Opening". */
+const headings = (system: string): [string, number][] =>
+  system.split(/^(?=##? )/m).filter(Boolean).map((t) => [/^##? /.test(t) ? t.split("\n")[0].replace(/^##? /, "").trim() : "Opening", t.length]);
+/** A recall offer by the titles of its notes, its lines of the form "- Title (path): claim". */
+const offer = (text: string) => [...text.matchAll(/^- (.+?) \(/gm)].map((m) => m[1]).join(", ") || "No notes";
 
 /** The size of a record's content in chars, with each image as its tokens × 4 in place of its base64. */
 function weigh(v: any): number {
@@ -77,13 +104,18 @@ function scan(jsonl: string): Scan {
   const seen = new Set<string>();
   const uses = new Map<string, { tool: string; input: unknown }>(), calls: Call[] = [];
   let pending: { id: string; w: number }[] = [], since = 1;
-  let system = "", model = "", tools: unknown[] = [], instructions: string[] = [], memory = "";
-  let gap = new Map<string, { chars: number; count: number }>();
+  let system = "", model = "", tools: unknown[] = [], instructions: { path: string; content: string }[] = [], memory = "";
+  const hooks = new Map<string, number>(), before = new Map<string, number>(), items: Item[] = [], summaries: Summary[] = [];
+  /** The chars of the last response's text and tool call blocks, and whether it thought: they split its assistant turn. */
+  let reply = new Map<string, number>(), thought = false;
+  let gap = new Map<string, { chars: number; count: number; subs: Map<string, number> }>();
   let held = new Map<string, { tokens: number; count: number; est: boolean }>();
-  const note = (rec: string, chars: number, count: number) => {
-    const g = gap.get(rec) ?? { chars: 0, count: 0 };
-    gap.set(rec, { chars: g.chars + chars, count: g.count + count });
+  const note = (rec: string, chars: number, count: number, sub?: string) => {
+    const g = gap.get(rec) ?? { chars: 0, count: 0, subs: new Map() };
+    gap.set(rec, { chars: g.chars + chars, count: g.count + count, subs: sub ? add(g.subs, sub, chars) : g.subs });
   };
+  const itemize = (rec: string, tokens: number, subs: Map<string, number>) =>
+    apportion(tokens, [...subs]).forEach(([name, t]) => items.push({ rec, name, n: out.length + 1, tokens: t }));
   const hold = (rec: string, tokens: number, count: number, est: boolean) => {
     const h = held.get(rec) ?? { tokens: 0, count: 0, est: false };
     held.set(rec, { tokens: h.tokens + tokens, count: h.count + count, est: h.est || est });
@@ -93,23 +125,33 @@ function scan(jsonl: string): Scan {
     const o = JSON.parse(line);
     const a = o.attachment;
     if (a?.type === "prompt_snapshot") { system = [a.systemPrompt ?? system].flat().join(""); tools = a.tools ?? tools; }
-    else if (a?.type === "instructions" && !out.length) instructions.push(...(a.files ?? []).map((f: any) => f.content));
+    else if (a?.type === "instructions" && !out.length) instructions.push(...(a.files ?? []).map((f: any) => ({ path: f.path ?? "?", content: f.content })));
     else if (a?.type === "hook_additional_context" && (!out.length || a.hookName === "UserPromptSubmit")) {
       const text = [a.content].flat().join("");
-      if (!out.length) memory += text;
-      else note("hook UserPromptSubmit", text.length, 1);
-    } else if (a && out.length) note("attachment", weigh(a), 1);
-    else if (o.type === "user" && !o.isSidechain) {
+      if (out.length) note("hook UserPromptSubmit", text.length, 1, offer(text));
+      else { memory += text; add(hooks, a.hookName ?? "?", text.length); }
+    } else if (a) {
+      if (out.length) note("attachment", weigh(a), 1, a.type ?? "?");
+      else add(before, a.type ?? "?", weigh(a));
+    } else if (o.type === "user" && !o.isSidechain) {
       const c = o.message?.content;
       const results = Array.isArray(c) ? c.filter((b: any) => b.type === "tool_result") : [];
       pending.push(...results.map((b: any) => ({ id: b.tool_use_id, w: weigh(b) })));
-      note(o.isCompactSummary ? "isCompactSummary" : results.length ? "tool_result" : "user", weigh(c ?? ""), results.length || 1);
+      const kind = o.isMeta ? "Injected" : "Prompts";
+      if (o.isCompactSummary) summaries.push({ n: out.length + 1, text: [c ?? ""].flat().map((b: any) => typeof b === "string" ? b : b.text ?? "").join("") });
+      else if (!out.length) add(before, results.length ? "Tool results" : kind, weigh(c ?? ""));
+      note(o.isCompactSummary ? "isCompactSummary" : results.length ? "tool_result" : "user", weigh(c ?? ""), results.length || 1, results.length ? undefined : kind);
     } else if (o.type === "assistant" && !o.isSidechain) {
-      for (const b of [o.message?.content].flat()) if (b?.type === "tool_use") uses.set(b.id, { tool: b.name, input: b.input });
-      if (!o.message?.usage) continue;
+      const blocks = [o.message?.content].flat();
+      for (const b of blocks) if (b?.type === "tool_use") uses.set(b.id, { tool: b.name, input: b.input });
+      const answer = () => {
+        for (const b of blocks) if (BLOCKS[b?.type]) add(reply, BLOCKS[b.type], weigh(b.text ?? b.input ?? ""));
+        thought ||= blocks.some((b) => b?.type === "thinking" || b?.type === "redacted_thinking");
+      };
+      if (!o.message?.usage) { answer(); continue; }
       const id = o.requestId ?? o.message.id;
       model ||= o.message.model ?? "";
-      if (seen.has(id)) continue;
+      if (seen.has(id)) { answer(); continue; }
       seen.add(id);
       const u = o.message.usage;
       const usage = { input: u.input_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0, output: u.output_tokens ?? 0 };
@@ -123,17 +165,21 @@ function scan(jsonl: string): Scan {
         const delta = fill - prev.fill, kinds = [...gap];
         const turn = kinds.length ? Math.min(prev.usage.output, delta) : delta;
         hold("assistant", turn, 1, false);
-        const chars = kinds.reduce((s, [, g]) => s + g.chars, 0) || 1;
-        let left = delta - turn;
-        kinds.forEach(([rec, g], i) => {
-          const tokens = i === kinds.length - 1 ? left : Math.round((delta - turn) * g.chars / chars);
-          left -= tokens;
-          hold(rec, tokens, g.count, kinds.length > 1);
+        // The transcript keeps a thinking block's signature, not its text: thinking is the turn less its other blocks at chars ÷ 4.
+        const thinking = thought ? Math.max(0, turn - Math.round([...reply.values()].reduce((s, n) => s + n, 0) / 4)) : 0;
+        itemize("assistant", turn - thinking, reply);
+        if (thinking) items.push({ rec: "assistant", name: "Thinking", n: out.length + 1, tokens: thinking });
+        apportion(delta - turn, kinds.map(([rec, g]) => [rec, g.chars] as [string, number])).forEach(([rec, tokens], i) => {
+          hold(rec, tokens, kinds[i][1].count, kinds.length > 1);
           if (rec === "tool_result") split(tokens, kinds.length > 1);
+          else itemize(rec, tokens, kinds[i][1].subs);
         });
       }
       gap = new Map();
       pending = [];
+      reply = new Map();
+      thought = false;
+      answer();
       const parts: Part[] = MESSAGES.filter(([rec]) => held.has(rec)).map(([rec, name]) => {
         const h = held.get(rec)!;
         return { name: rec === "isCompactSummary" ? name : `${name} · ${h.count}`, rec, tokens: h.tokens, how: h.est ? "est" : "exact" };
@@ -143,24 +189,24 @@ function scan(jsonl: string): Scan {
   }
   /** Splits the tool result tokens of the gap among its results by weight. */
   function split(tokens: number, mixed: boolean) {
-    const total = pending.reduce((s, p) => s + p.w, 0) || 1;
-    let left = tokens;
-    pending.forEach((p, i) => {
-      const t = i === pending.length - 1 ? left : Math.round(tokens * p.w / total);
-      left -= t;
+    apportion(tokens, pending.map((p) => [p, p.w] as [typeof p, number])).forEach(([p, t]) => {
       const u = uses.get(p.id);
       calls.push({ id: p.id, tool: u?.tool ?? "?", input: brief(u?.input), n: out.length + 1, tokens: t, how: mixed || pending.length > 1 ? "est" : "exact" });
     });
   }
-  return { out, model, defs: tools, calls, fixed: [
+  return { out, model, defs: tools, calls, items, summaries, fixed: [
     ["System prompt", "prompt_snapshot", system], [`Tools · ${tools.length}`, "prompt_snapshot.tools", tools],
-    [`Instructions · ${instructions.length} file${instructions.length === 1 ? "" : "s"}`, "attachment instructions", instructions.join("")], ["Memory start context", "hook_additional_context", memory],
-  ] };
+    [`Instructions · ${instructions.length} file${instructions.length === 1 ? "" : "s"}`, "attachment instructions", instructions.map((f) => f.content).join("")], ["Memory start context", "hook_additional_context", memory],
+  ], parts: new Map([
+    ["prompt_snapshot", new Map(headings(system))], ["attachment instructions", instructions.reduce((m, f) => add(m, f.path, f.content.length), new Map<string, number>())],
+    ["hook_additional_context", hooks], ["rest of request 1", before],
+  ]) };
 }
 
 /** Puts the fixed parts before each request's parts: `counts` (exact) per fixed part, else chars ÷ 4 scaled to request 1's fill (estimates). */
-function withFixed({ out, fixed, defs, calls }: Scan, counts: number[] | null): Session {
+function withFixed({ out, fixed, defs, calls, parts: subs, items, summaries }: Scan, counts: number[] | null): Session {
   let tools: Tool[] = [];
+  const fixedItems: Item[] = [];
   if (out.length) {
     const chars = fixed.map(([, , t]) => (typeof t === "string" ? t : JSON.stringify(t)).length);
     const total = Math.max(chars.reduce((s, n) => s + n, 0), 1);
@@ -174,15 +220,11 @@ function withFixed({ out, fixed, defs, calls }: Scan, counts: number[] | null): 
     // Counted parts miss what request 1 holds besides them (skill and deferred-tool lists, reminders); the rest keeps the sum at the fill.
     if (counts) parts.push({ name: "Other", rec: "rest of request 1", tokens: out[0].fill - counts.reduce((s, n) => s + n, 0), how: "exact" });
     for (const r of out) r.parts = [...parts, ...r.parts];
-    const size = defs.map((d) => JSON.stringify(d).length), sum = Math.max(size.reduce((s, n) => s + n, 0), 1);
-    let rest = parts[1].tokens;
-    tools = defs.map((d: any, i) => {
-      const t = i === defs.length - 1 ? rest : Math.round(parts[1].tokens * size[i] / sum);
-      rest -= t;
-      return { name: d.schema?.name ?? d.name ?? "?", tokens: t };
-    });
+    tools = apportion(parts[1].tokens, defs.map((d: any) => [d, JSON.stringify(d).length] as [any, number]))
+      .map(([d, t]) => ({ name: d.schema?.name ?? d.name ?? "?", tokens: t }));
+    for (const p of parts) for (const [name, t] of apportion(p.tokens, [...subs.get(p.rec) ?? []])) fixedItems.push({ rec: p.rec, name, n: 1, tokens: t });
   }
-  return { requests: out, tools, calls };
+  return { requests: out, tools, calls, items: [...fixedItems, ...items], summaries };
 }
 
 /** One call's input and its result as text, with each image as a line that gives its tokens. */
