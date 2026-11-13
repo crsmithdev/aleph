@@ -55,7 +55,13 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/jobs/:id/diff": "text",
   "/api/jobs/:id/logs/:file": "text",
   "/api/context": { sessions: [{ id: "string", project: "string", updated: "time" }] },
-  "/api/context/:id": { id: "string", requests: [{ n: "number", fill: "number", usage: { input: "number", cacheRead: "number", cacheWrite: "number", output: "number" }, parts: [{ name: "string", rec: "string", tokens: "number", how: "string" }] }] },
+  "/api/context/:id": {
+    id: "string",
+    requests: [{ n: "number", fill: "number", since: "number", usage: { input: "number", cacheRead: "number", cacheWrite: "number", output: "number" }, parts: [{ name: "string", rec: "string", tokens: "number", how: "string" }] }],
+    tools: [{ name: "string", tokens: "number" }],
+    calls: [{ id: "string", tool: "string", input: "string", n: "number", tokens: "number", how: "string" }],
+  },
+  "/api/context/:id/calls/:call": { tool: "string", input: "any", text: "string" },
   "/api/projects": { "*": { code: "string?", issues: "number", onboarded: "boolean" } },
   "/api/models": { tiers: { "*": { enabled: "boolean", model: "string" } }, offers: { "*": ["string"] }, down: ["string"], local: "string", spend: "object?" },
   "/api/sessions": {

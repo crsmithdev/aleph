@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parse, parseExact } from "./context.ts";
+import { call, parse, parseExact } from "./context.ts";
 import { withEnv, withServer } from "./test-server.ts";
 
 const req = (id: string, input: number, cacheRead: number, cacheWrite: number) => ({ type: "assistant", requestId: id, message: { usage: { input_tokens: input, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: cacheWrite, output_tokens: 7 } } });
@@ -24,7 +24,7 @@ const lines = [
 const transcript = lines.map((o) => JSON.stringify(o)).join("\n");
 
 test("parse gives each request's fill, each message as the usage difference, and fixed parts that sum to request 1", () => {
-  const r = parse(transcript);
+  const r = parse(transcript).requests;
   expect(r.map((x) => x.fill)).toEqual([1002, 1503, 1804]);
   expect(r.map((x) => x.usage.output)).toEqual([7, 7, 7]);
   expect(r[0].parts.map((p) => p.name)).toEqual(["System prompt", "Tools · 1", "Instructions · 1 files", "Memory start context"]);
@@ -48,7 +48,7 @@ test("parse gives each request's fill, each message as the usage difference, and
 
 test("after a compaction the summary is the fill minus request 1's, exact, and the message parts start again", () => {
   const compacted = [...lines, { type: "user", isCompactSummary: true, message: { content: "summary" } }, req("r4", 5, 1000, 200)];
-  const r = parse(compacted.map((o) => JSON.stringify(o)).join("\n"));
+  const r = parse(compacted.map((o) => JSON.stringify(o)).join("\n")).requests;
   expect(r[3].fill).toBe(1205);
   expect(r[3].parts.slice(4)).toEqual([{ name: "Compact summary", rec: "isCompactSummary", tokens: 203, how: "exact" }]);
 });
@@ -61,10 +61,50 @@ test("an image in a tool result weighs by its pixels, 4 chars per token, not by 
   png.writeUInt32BE(250, 20);
   const image = { type: "image", source: { type: "base64", media_type: "image/png", data: png.toString("base64") } };
   const toolResult = { type: "user", message: { content: [{ type: "tool_result", content: [image] }] } };
-  const r = parse([req("r1", 2, 0, 1000), toolResult, { type: "user", message: { content: "u".repeat(398) } }, req("r2", 3, 1000, 600)].map((o) => JSON.stringify(o)).join("\n"));
+  const r = parse([req("r1", 2, 0, 1000), toolResult, { type: "user", message: { content: "u".repeat(398) } }, req("r2", 3, 1000, 600)].map((o) => JSON.stringify(o)).join("\n")).requests;
   // the tool result is 400 chars of image plus 114 of JSON around it; the message is 398 + 2 quotes
   expect(r[1].parts.slice(4).map((p) => [p.rec, p.tokens])).toEqual([["user", 260], ["assistant", 7], ["tool_result", 334]]);
   expect(r[1].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[1].fill);
+});
+
+// A PNG of 300 × 250: its header gives the size, the rest is padding that a split by base64 chars would count.
+const png = (() => { const b = Buffer.alloc(40_000); Buffer.from("89504e470d0a1a0a0000000d49484452", "hex").copy(b); b.writeUInt32BE(300, 16); b.writeUInt32BE(250, 20); return b.toString("base64"); })();
+const use = (id: string, name: string, input: object) => ({ type: "assistant", message: { content: [{ type: "tool_use", id, name, input }] } });
+const res = (id: string, content: unknown) => ({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, content }] } });
+const drill = [
+  ...lines.slice(0, 5),
+  use("u1", "Read", { file_path: "/a.png" }), use("u2", "Bash", { command: "ls" }),
+  res("u1", [{ type: "image", source: { type: "base64", media_type: "image/png", data: png } }]), res("u2", "x".repeat(400)),
+  req("r2", 3, 1000, 500),
+  use("u3", "Grep", { pattern: "p" }), res("u3", "y"),
+  req("r3", 4, 1500, 100),
+  { type: "user", isCompactSummary: true, message: { content: "summary" } }, req("r4", 5, 1000, 200),
+].map((o) => JSON.stringify(o)).join("\n");
+
+test("each tool result is a call with its input, and parallel results split the tool result part by weight", () => {
+  const s = parse(drill);
+  // the image weighs its tokens (300 × 250 ÷ 750 = 100) × 4 = 400 chars plus its JSON, not its base64
+  expect(s.calls).toEqual([
+    { id: "u1", tool: "Read", input: "/a.png", n: 2, tokens: 267, how: "est" },
+    { id: "u2", tool: "Bash", input: "ls", n: 2, tokens: 227, how: "est" },
+    { id: "u3", tool: "Grep", input: "p", n: 3, tokens: 94, how: "exact" },
+  ]);
+  const part = s.requests[1].parts.find((p) => p.rec === "tool_result")!;
+  expect(s.calls.filter((c) => c.n === 2).reduce((n, c) => n + c.tokens, 0)).toBe(part.tokens);
+  expect(s.requests.map((r) => r.since)).toEqual([1, 1, 1, 4]);
+});
+
+test("the tools split the Tools part by chars and sum to it", () => {
+  const two = transcript.replace('"tools":[', '"tools":[{"name":"b","schema":{"name":"b"}},');
+  const s = parse(two);
+  expect(s.tools.map((t) => t.name)).toEqual(["b", "t".repeat(60)]);
+  expect(s.tools.reduce((n, t) => n + t.tokens, 0)).toBe(s.requests[0].parts[1].tokens);
+});
+
+test("call gives a call's input and its result as text, with an image as its tokens", () => {
+  expect(call(drill, "u1")).toEqual({ tool: "Read", input: { file_path: "/a.png" }, text: "[image, about 100 tokens]" });
+  expect(call(drill, "u2")!.text).toBe("x".repeat(400));
+  expect(call(drill, "nope")).toBeNull();
 });
 
 let base: string, stop: () => void, restoreEnv: () => void, at: (path: string) => Promise<Response>;
@@ -86,6 +126,12 @@ test("GET /api/context lists the newer session first and /api/context/:id return
   const one: any = await at("/api/context/new").then((r) => r.json());
   expect(one.requests.map((x: any) => [x.n, x.fill])).toEqual([[1, 1002], [2, 1503], [3, 1804]]);
   expect((await at("/api/context/nope")).status).toBe(404);
+});
+
+test("GET /api/context/:id/calls/:call returns one call, and 404 for an unknown call or session", async () => {
+  writeFileSync(join(base, "-p", "drill.jsonl"), drill);
+  expect(await at("/api/context/drill/calls/u2").then((r) => r.json())).toEqual({ tool: "Bash", input: { command: "ls" }, text: "x".repeat(400) });
+  expect(await Promise.all(["/api/context/drill/calls/nope", "/api/context/nope/calls/u2"].map(async (u) => (await at(u)).status))).toEqual([404, 404]);
 });
 
 test("GET /api/context/:id counts the fixed parts with count_tokens when the dotenv has the key", async () => {
@@ -119,7 +165,7 @@ describe("parseExact", () => {
   test("counts each fixed part with the session's model and marks it exact, without the key reaching process.env", async () => {
     const restore = withEnv({ ALEPH_ENV_FILE: envFile("ANTHROPIC_API_KEY=sk-test\n") });
     delete process.env.ANTHROPIC_API_KEY;
-    const r = await parseExact(withModel, fake);
+    const r = (await parseExact(withModel, fake)).requests;
     restore();
     expect(r[0].parts.slice(0, 4).map((p) => [p.tokens, p.how])).toEqual([[11, "exact"], [22, "exact"], [33, "exact"], [44, "exact"]]);
     expect(r[0].parts.slice(0, 5).reduce((s, p) => s + p.tokens, 0)).toBe(r[0].fill);
@@ -131,16 +177,16 @@ describe("parseExact", () => {
   test("with no key it keeps chars ÷ 4 estimates and makes no call", async () => {
     const restore = withEnv({ ALEPH_ENV_FILE: envFile("OTHER=1\n") });
     let calls = 0;
-    const r = await parseExact(withModel, (async () => { calls++; return Response.json({}); }) as unknown as typeof fetch);
+    const r = (await parseExact(withModel, (async () => { calls++; return Response.json({}); }) as unknown as typeof fetch)).requests;
     restore();
     expect(calls).toBe(0);
-    expect(r[0].parts.slice(0, 4)).toEqual(parse(transcript)[0].parts.slice(0, 4));
+    expect(r[0].parts.slice(0, 4)).toEqual(parse(transcript).requests[0].parts.slice(0, 4));
     expect(r[0].parts.every((p) => p.how === "est")).toBe(true);
   });
 
   test("when a call fails it keeps the estimates", async () => {
     const restore = withEnv({ ALEPH_ENV_FILE: envFile("ANTHROPIC_API_KEY=sk-test\n") });
-    const r = await parseExact(withModel, (async () => new Response("no", { status: 500 })) as unknown as typeof fetch);
+    const r = (await parseExact(withModel, (async () => new Response("no", { status: 500 })) as unknown as typeof fetch)).requests;
     restore();
     expect(r[0].parts.slice(0, 4).every((p) => p.how === "est")).toBe(true);
   });

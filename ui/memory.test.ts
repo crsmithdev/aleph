@@ -529,3 +529,22 @@ test("the Context tab draws one parts row per part of the selected request, fixe
   expect(v.renderContextTab({ sessions })).toContain("Loading the session");
   expect(v.renderContextTab({ sessions: [] })).toContain(empty());
 });
+
+test("the Context tab unfolds Tools into each tool and Tool results into each tool's calls the request holds", () => {
+  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+  const parts = [{ name: "Tools · 2", rec: "prompt_snapshot.tools", tokens: 400, how: "est" }, { name: "Tool results · 3", rec: "tool_result", tokens: 90, how: "exact" }];
+  const call = (id: string, tool: string, n: number, tokens: number) => ({ id, tool, input: `in-${id}`, n, tokens, how: "est" });
+  const session = {
+    id: "s1", requests: [{ n: 3, fill: 1000, usage, parts, since: 1 }],
+    tools: [{ name: "Bash", tokens: 100 }, { name: "mcp__chrome__navigate", tokens: 300 }],
+    calls: [call("a", "Read", 2, 30), call("b", "Bash", 2, 50), call("c", "Bash", 3, 10), call("d", "Bash", 4, 99)],
+  };
+  const h = v.renderContextTab({ sessions: [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }], session }, new URLSearchParams("n=3"));
+  const text = (x: string) => x.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const tools = h.slice(h.indexOf("By tool"), h.indexOf("</details>"));
+  expect(tools.split("<tr>").slice(2).map(text)).toEqual(["mcp__chrome__navigate chrome 300 75.0%", "Bash built-in 100 25.0%"]);
+  // request 4's call is not in request 3; the groups go by tokens
+  expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 66.7%", "Read 1 calls · 30 · 33.3%"]);
+  expect(h).toContain('data-call="b"');
+  expect(h).not.toContain('data-call="d"');
+});

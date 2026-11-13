@@ -9,7 +9,14 @@ export interface Request {
   usage: { input: number; cacheRead: number; cacheWrite: number; output: number };
   /** The rows of the Context mock's table: the fixed parts of request 1, then the message parts since request 1 or the last compaction. They sum to the fill. */
   parts: Part[];
+  /** The request whose fill starts the message parts: 1, or the request after the last compaction. */
+  since: number;
 }
+/** One tool call's result: the request whose fill first held it, and its share of that request's tool results. */
+export interface Call { id: string; tool: string; input: string; n: number; tokens: number; how: "exact" | "est" }
+/** One tool definition's share of the Tools part, by chars: always est. */
+export interface Tool { name: string; tokens: number }
+export interface Session { requests: Request[]; tools: Tool[]; calls: Call[] }
 
 /** The message parts in the mock's order: the record each comes from, and its name. */
 const MESSAGES: [string, string][] = [
@@ -24,12 +31,26 @@ const MESSAGES: [string, string][] = [
  * the rest splits by chars and those parts are estimates. After a compaction, the compact summary is the fill minus
  * request 1's fill, and the message parts start again.
  */
-export function parse(jsonl: string): Request[] {
+export function parse(jsonl: string): Session {
   return withFixed(scan(jsonl), null);
 }
 
 /** The fixed parts of a transcript: its text (the tools as the array) and the model of its first request. */
-interface Scan { out: Request[]; fixed: [string, string, string | unknown[]][]; model: string }
+interface Scan { out: Request[]; fixed: [string, string, string | unknown[]][]; model: string; defs: unknown[]; calls: Call[] }
+
+/** The size of a record's content in chars, with each image as its tokens × 4 in place of its base64. */
+function weigh(v: any): number {
+  const images = (x: any): any[] => Array.isArray(x) ? x.flatMap(images) : x?.type === "image" && x.source?.data ? [x] : Array.isArray(x?.content) ? images(x.content) : [];
+  return images(v).reduce((n, b) => n + imageTokens(b.source.data) * 4 - b.source.data.length, JSON.stringify(v ?? "").length);
+}
+
+const KEYS = ["file_path", "command", "pattern", "url", "query", "description", "skill", "prompt"];
+/** The one input field that names a call (a path, a command, a URL), else the input as JSON, cut to 120 chars. */
+function brief(input: any): string {
+  const k = KEYS.find((k) => typeof input?.[k] === "string");
+  const s = k ? input[k] : JSON.stringify(input ?? {});
+  return s.length > 120 ? `${s.slice(0, 119)}…` : s;
+}
 
 /** Tokens of a base64 image: width × height ÷ 750 from its header (PNG, JPEG, GIF, WebP), at most 1,600; 1,600 when the header gives no size. */
 function imageTokens(base64: string): number {
@@ -54,6 +75,8 @@ function imageTokens(base64: string): number {
 function scan(jsonl: string): Scan {
   const out: Request[] = [];
   const seen = new Set<string>();
+  const uses = new Map<string, { tool: string; input: unknown }>(), calls: Call[] = [];
+  let pending: { id: string; w: number }[] = [], since = 1;
   let system = "", model = "", tools: unknown[] = [], instructions: string[] = [], memory = "";
   let gap = new Map<string, { chars: number; count: number }>();
   let held = new Map<string, { tokens: number; count: number; est: boolean }>();
@@ -77,12 +100,12 @@ function scan(jsonl: string): Scan {
       else if (a.hookName === "UserPromptSubmit") note("hook UserPromptSubmit", text.length, 1);
     } else if (o.type === "user" && !o.isSidechain) {
       const c = o.message?.content;
-      const results = Array.isArray(c) ? c.filter((b: any) => b.type === "tool_result").length : 0;
-      // An image in a tool result weighs by its pixels (4 chars per token), not by its base64 text.
-      const images = (Array.isArray(c) ? c : []).filter((b: any) => b.type === "tool_result").flatMap((b: any) => [b.content].flat()).filter((b: any) => b?.type === "image" && b.source?.data);
-      const chars = images.reduce((n: number, b: any) => n + imageTokens(b.source.data) * 4 - b.source.data.length, JSON.stringify(c ?? "").length);
-      note(o.isCompactSummary ? "isCompactSummary" : results ? "tool_result" : "user", chars, results || 1);
-    } else if (o.type === "assistant" && !o.isSidechain && o.message?.usage) {
+      const results = Array.isArray(c) ? c.filter((b: any) => b.type === "tool_result") : [];
+      pending.push(...results.map((b: any) => ({ id: b.tool_use_id, w: weigh(b) })));
+      note(o.isCompactSummary ? "isCompactSummary" : results.length ? "tool_result" : "user", weigh(c ?? ""), results.length || 1);
+    } else if (o.type === "assistant" && !o.isSidechain) {
+      for (const b of [o.message?.content].flat()) if (b?.type === "tool_use") uses.set(b.id, { tool: b.name, input: b.input });
+      if (!o.message?.usage) continue;
       const id = o.requestId ?? o.message.id;
       model ||= o.message.model ?? "";
       if (seen.has(id)) continue;
@@ -91,7 +114,10 @@ function scan(jsonl: string): Scan {
       const usage = { input: u.input_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0, output: u.output_tokens ?? 0 };
       const fill = usage.input + usage.cacheRead + usage.cacheWrite;
       const prev = out.at(-1);
-      if (prev && gap.has("isCompactSummary")) held = new Map([["isCompactSummary", { tokens: fill - out[0].fill, count: 1, est: false }]]);
+      if (prev && gap.has("isCompactSummary")) {
+        held = new Map([["isCompactSummary", { tokens: fill - out[0].fill, count: 1, est: false }]]);
+        since = out.length + 1;
+      }
       else if (prev) {
         const delta = fill - prev.fill, kinds = [...gap];
         const turn = kinds.length ? Math.min(prev.usage.output, delta) : delta;
@@ -102,24 +128,38 @@ function scan(jsonl: string): Scan {
           const tokens = i === kinds.length - 1 ? left : Math.round((delta - turn) * g.chars / chars);
           left -= tokens;
           hold(rec, tokens, g.count, kinds.length > 1);
+          if (rec === "tool_result") split(tokens, kinds.length > 1);
         });
       }
       gap = new Map();
+      pending = [];
       const parts: Part[] = MESSAGES.filter(([rec]) => held.has(rec)).map(([rec, name]) => {
         const h = held.get(rec)!;
         return { name: rec === "isCompactSummary" ? name : `${name} · ${h.count}`, rec, tokens: h.tokens, how: h.est ? "est" : "exact" };
       });
-      out.push({ n: out.length + 1, fill, usage, parts });
+      out.push({ n: out.length + 1, fill, usage, parts, since });
     }
   }
-  return { out, model, fixed: [
+  /** Splits the tool result tokens of the gap among its results by weight. */
+  function split(tokens: number, mixed: boolean) {
+    const total = pending.reduce((s, p) => s + p.w, 0) || 1;
+    let left = tokens;
+    pending.forEach((p, i) => {
+      const t = i === pending.length - 1 ? left : Math.round(tokens * p.w / total);
+      left -= t;
+      const u = uses.get(p.id);
+      calls.push({ id: p.id, tool: u?.tool ?? "?", input: brief(u?.input), n: out.length + 1, tokens: t, how: mixed || pending.length > 1 ? "est" : "exact" });
+    });
+  }
+  return { out, model, defs: tools, calls, fixed: [
     ["System prompt", "prompt_snapshot", system], [`Tools · ${tools.length}`, "prompt_snapshot.tools", tools],
     [`Instructions · ${instructions.length} files`, "attachment instructions", instructions.join("")], ["Memory start context", "hook_additional_context", memory],
   ] };
 }
 
 /** Puts the fixed parts before each request's parts: `counts` (exact) per fixed part, else chars ÷ 4 scaled to request 1's fill (estimates). */
-function withFixed({ out, fixed }: Scan, counts: number[] | null): Request[] {
+function withFixed({ out, fixed, defs, calls }: Scan, counts: number[] | null): Session {
+  let tools: Tool[] = [];
   if (out.length) {
     const chars = fixed.map(([, , t]) => (typeof t === "string" ? t : JSON.stringify(t)).length);
     const total = Math.max(chars.reduce((s, n) => s + n, 0), 1);
@@ -133,8 +173,31 @@ function withFixed({ out, fixed }: Scan, counts: number[] | null): Request[] {
     // Counted parts miss what request 1 holds besides them (skill and deferred-tool lists, reminders); the rest keeps the sum at the fill.
     if (counts) parts.push({ name: "Other", rec: "rest of request 1", tokens: out[0].fill - counts.reduce((s, n) => s + n, 0), how: "exact" });
     for (const r of out) r.parts = [...parts, ...r.parts];
+    const size = defs.map((d) => JSON.stringify(d).length), sum = Math.max(size.reduce((s, n) => s + n, 0), 1);
+    let rest = parts[1].tokens;
+    tools = defs.map((d: any, i) => {
+      const t = i === defs.length - 1 ? rest : Math.round(parts[1].tokens * size[i] / sum);
+      rest -= t;
+      return { name: d.schema?.name ?? d.name ?? "?", tokens: t };
+    });
   }
-  return out;
+  return { requests: out, tools, calls };
+}
+
+/** One call's input and its result as text, with each image as a line that gives its tokens. */
+export function call(jsonl: string, id: string): { tool: string; input: unknown; text: string } | null {
+  let use: any, res: any;
+  for (const line of jsonl.split("\n")) {
+    if (!line.includes(id)) continue;
+    for (const b of [JSON.parse(line).message?.content].flat()) {
+      if (b?.type === "tool_use" && b.id === id) use = b;
+      if (b?.type === "tool_result" && b.tool_use_id === id) res = b;
+    }
+  }
+  if (!use && !res) return null;
+  const text = [res?.content ?? ""].flat().map((b: any) =>
+    typeof b === "string" ? b : b.type === "text" ? b.text : b.type === "image" ? `[image, about ${imageTokens(b.source?.data ?? "")} tokens]` : JSON.stringify(b)).join("\n");
+  return { tool: use?.name ?? "?", input: use?.input ?? null, text };
 }
 
 const COUNT_URL = "https://api.anthropic.com/v1/messages/count_tokens";
@@ -143,7 +206,7 @@ const COUNT_URL = "https://api.anthropic.com/v1/messages/count_tokens";
  * `parse`, with each fixed part counted by the Anthropic count_tokens endpoint for the session's model and marked exact.
  * The key comes from the dotenv file. With no key, no model, or any call failing, the fixed parts stay estimates.
  */
-export async function parseExact(jsonl: string, fetchFn: typeof fetch = fetch): Promise<Request[]> {
+export async function parseExact(jsonl: string, fetchFn: typeof fetch = fetch): Promise<Session> {
   const s = scan(jsonl), key = anthropicKey();
   if (!key || !s.model || !s.out.length) return withFixed(s, null);
   const field = ["system", "tools"];
