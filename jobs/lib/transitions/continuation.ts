@@ -85,7 +85,11 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
     const n = onOf(run);
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
-  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${jobSpec(folder, run)}`];
+  const spec = jobSpec(folder, run);
+  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${spec}`];
+  // An issue's spec opens with `# <title>` (issueBrief).
+  const title = /^# (.+)$/m.exec(spec)?.[1].trim();
+  if (title) parts.push(`## Past work\n\nBefore you plan, run \`aleph memory recall --episodes '${title.replace(/'/g, "'\\''")}'\`. It lists the pages of earlier factory work that match. Read each page about the same goal or files, and do not repeat an approach that failed there.`);
   const n = onOf(run);
   const media = run.repo && n !== undefined ? runMedia(run.repo, n) : [];
   if (media.length) parts.push(`## Media\n\nChris attached these files to the issue: screenshots, mockups or documents. Read each one with Read before you start, and make the change match what they show.\n\n${media.map((f) => `- ${f}`).join("\n")}`);

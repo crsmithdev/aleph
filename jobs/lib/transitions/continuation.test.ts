@@ -213,6 +213,14 @@ describe("the worker brief", () => {
     expect(brief("rb1", f, r, repo)).not.toContain("code-change");
   });
 
+  test("an issue's brief has the worker search past work for its title; a spec with no title gets no search", () => {
+    folder("jp", { "spec.md": "# Retry the land push\n\n## Goal\n\nx\n" });
+    const b = brief("rp1", folder("rp1"), run({ job: "jp" }), repo);
+    expect(b).toContain("## Past work\n\nBefore you plan, run `aleph memory recall --episodes 'Retry the land push'`.");
+    folder("jq", { "spec.md": "## Goal\n\nx\n" });
+    expect(brief("rp2", folder("rp2"), run({ job: "jq" }), repo)).not.toContain("## Past work");
+  });
+
   test("a merge run's brief lets the worker update the branch's change where main moved what it cites", () => {
     const r = run({ job: "jm", merge: true, conflicts: ["a.ts"] });
     const b = brief("rm1", folder("rm1"), r, { ...repo, path: dir });
