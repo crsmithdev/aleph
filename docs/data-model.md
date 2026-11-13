@@ -130,7 +130,7 @@ The run state. `jobs/lib/records/record.ts` is the only module that opens a reco
 | `rounds`, `cost` | Derived on each write |
 | `ci` | A CI failure that filed the issue: `{url, commit, failure, landed?}` |
 
-Event kinds: `hold` (with `data.gate`), `started`, `asked` (with the spec version), `streak`, `cap`, `cap-cleared`, `rerun`, `rerun-cleared`, `rescued`, `director`. The dispatch's gate holds are `hold` events. `record.next()` reads the record and gives the job's next step.
+Event kinds: `hold` (with `data.gate`), `started`, `asked` (with the spec version), `streak`, `cap`, `cap-cleared`, `rerun`, `rerun-cleared`, `rescued`, `director`, `timeout` (an Ask with no answer in its time limit, and the action taken). The dispatch's gate holds are `hold` events. `record.next()` reads the record and gives the job's next step.
 
 ### Run
 
@@ -206,7 +206,7 @@ The tick moves each finished record into the archive folder `<records>-archive` 
 | `flaky.json` | `[{repo, check, run, at, tests?}]` | Checks that passed on the rerun |
 | `ci.json` | GitHub CI state per repo | Tick |
 | `tick.json` | Last due times, missed keys, `ran`: `{at, result}` of each tick step, of each suite and of the monitor; a result is `ok`, a short summary or `failed: <error>` | Tick and every step |
-| `events/<day>.jsonl` | The event log: one event as JSON per line, by UTC day | `logEvent`, each run state change, each Ask set or cleared, each new hold and each issue filed or closed |
+| `events/<day>.jsonl` | The event log: one event as JSON per line, by UTC day | Every `logEvent` call: each run state change, each Ask set or cleared, each new hold, each issue filed or closed, each routing choice, each vault refusal, and the steps and failures of the firefighter, the director and the tick. [Observability](observability.md) lists each one |
 | `stalls.json`, `smoke.json` | Stall first-seen times; the smoke test | Tick |
 | `corrections.json` | Signals and lessons | Corrections |
 | `monitor/<day>.json` | The day's table and findings | Monitor |
