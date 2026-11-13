@@ -16,7 +16,7 @@ type Kind = (typeof KINDS)[number];
 const FOLDERS: Record<Kind, string> = { decision: "decisions", concept: "concepts", entity: "entities", project: "projects", gotcha: "gotchas" };
 const CONFIDENCE = ["measured", "reported", "inferred"] as const;
 const REQUIRED = ["kind", "scope", "confidence", "updated", "supersedes", "sources"] as const;
-const LISTS = ["aliases", "supersedes", "consistent_with", "sources", "tags"] as const;
+const LISTS = ["aliases", "supersedes", "consistent_with", "distinct", "sources", "tags"] as const;
 const LINE_BUDGET = 150;
 
 /**
@@ -56,7 +56,8 @@ export interface Note {
   archived: boolean; // lives under archive/; a link target, never linted or recalled
 }
 
-export interface Finding { note: string; rule: string; detail: string }
+/** `other` is the second note of an `overlap` pair. */
+export interface Finding { note: string; rule: string; detail: string; other?: string }
 
 export { today };
 
@@ -280,7 +281,7 @@ const MAX_CANDIDATES = 20;
 /** Live wiki notes in the draft's scope that share a title or alias word with it, minus those it supersedes or says it is consistent with, at most `MAX_CANDIDATES`. */
 export function screenCandidates(draft: Note, notes: Note[]): Note[] {
   const want = new Set(screenWords([draft.title, ...list(draft.fm, "aliases")].join(" ")));
-  const sup = new Set([...list(draft.fm, "supersedes"), ...list(draft.fm, "consistent_with")].map((t) => t.toLowerCase()));
+  const sup = new Set([...list(draft.fm, "supersedes"), ...list(draft.fm, "consistent_with"), ...list(draft.fm, "distinct")].map((t) => t.toLowerCase()));
   return wikiNotes(notes)
     .filter((n) => n.fm.scope === draft.fm.scope && !sup.has(n.title.toLowerCase()))
     .filter((n) => screenWords([n.title, ...list(n.fm, "aliases")].join(" ")).some((w) => want.has(w)))
@@ -382,17 +383,21 @@ export function lintVault(notes: Note[], { overlap = false, now = new Date(), tr
   // that uses embeddings plus fuzzy matching and still needs a labelled corpus
   // to set the threshold. The code stays until a rule exists that finds
   // something: turn it on with `lint --overlap`.
+  const pairs: (Finding & { score: number })[] = [];
   if (overlap) for (let i = 0; i < wiki.length; i++) for (let j = i + 1; j < wiki.length; j++) {
     const a = wiki[i], b = wiki[j];
     if (a.fm.scope !== b.fm.scope) continue;
     const sup = (x: Note, y: Note) => list(x.fm, "supersedes").some((t) => t.toLowerCase() === y.title.toLowerCase());
     const agree = (x: Note, y: Note) => list(x.fm, "consistent_with").some((t) => t.toLowerCase() === y.title.toLowerCase());
-    if (sup(a, b) || sup(b, a) || agree(a, b) || agree(b, a)) continue;
+    const dist = (x: Note, y: Note) => list(x.fm, "distinct").some((t) => t.toLowerCase() === y.title.toLowerCase());
+    if (sup(a, b) || sup(b, a) || agree(a, b) || agree(b, a) || dist(a, b) || dist(b, a)) continue;
     const wa = words([a.title, ...list(a.fm, "aliases")].join(" "));
     const wb = words([b.title, ...list(b.fm, "aliases")].join(" "));
     const shared = [...wa].filter((w) => wb.has(w));
-    if (shared.length >= 2) warn.push({ note: a.title, rule: "overlap", detail: `shares "${shared.join('", "')}" with ${b.title} in scope ${a.fm.scope}; neither supersedes the other` });
+    if (shared.length >= 2) pairs.push({ note: a.title, rule: "overlap", other: b.title, detail: `shares "${shared.join('", "')}" with ${b.title} in scope ${a.fm.scope}; neither supersedes the other`, score: shared.length / new Set([...wa, ...wb]).size });
   }
+  // Most similar first (Jaccard of the word sets); the sort is stable, so ties keep note order.
+  warn.push(...pairs.sort((x, y) => y.score - x.score).map(({ score, ...f }) => f));
   return { refuse, warn };
 }
 

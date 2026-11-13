@@ -29,7 +29,8 @@ decide something (`decision`), learn what something is (`entity`, `concept`),
 or change a project's state (`project`). One page per fact. Rewrite the
 existing page rather than writing a second one about the same thing; set
 `supersedes` when the old page is now wrong; list a related page the
-screen flags but that you agree with in `consistent_with: [<title>]`.
+screen flags but that you agree with in `consistent_with: [<title>]`. List a
+page that only looks like a duplicate in `distinct: [<title>]`.
 
 **A gotcha has to earn its page.** Write one when the behaviour cost you a
 debugging session and the next session would pay again. Do not write one for

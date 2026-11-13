@@ -19,13 +19,13 @@ import { readModels } from "../routing/models.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { body } from "./maintainer.ts";
 
-const SECONDS = 900;
+export const SECONDS = 900;
 /** Notes re-checked per run, most recalled first. */
 export const BUDGET = 5;
-const MODEL = () => readModels().maintainer?.model ?? "sonnet";
+export const MODEL = () => readModels().maintainer?.model ?? "sonnet";
 /** Read-only: the files, git history and the vault's recall. */
 const ALLOWED = ["Read", "Grep", "Glob", "Bash(git log:*)", "Bash(aleph memory recall:*)"];
-const TEXT = { type: "string" } as const;
+export const TEXT = { type: "string" } as const;
 /** The verdicts held for Chris, by note title: outside the vault, so no vault op or commit touches them. */
 const heldFile = () => join(layout().factory, "recheck-held.json");
 
@@ -75,6 +75,12 @@ function text(n: Note, v: Verdict, day: string): string | null {
   return serializeFrontmatter({ ...n.fm, updated: day }) + body(v, day, related);
 }
 
+/** An op's result as the fields of a verdict's outcome: its commit, or its refusal with the rule. */
+export function outcome(r: { code: number; json: Record<string, any> | null; err: string }) {
+  const f = r.json?.findings?.[0];
+  return r.code === 0 ? { commit: r.json?.commit ?? null } : { rule: f?.rule, refused: f ? `refuse ${f.rule} ${f.note}: ${f.detail}` : r.err.trim() || `exit ${r.code}` };
+}
+
 /** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. */
 async function apply(notes: Note[], verdicts: Verdict[], day: string): Promise<Rechecked[]> {
   const dir = mkdtempSync(join(tmpdir(), "recheck-"));
@@ -95,8 +101,7 @@ async function apply(notes: Note[], verdicts: Verdict[], day: string): Promise<R
       if (t === null) { out.push({ ...w, rule: "reply", refused: `${v.verdict} verdict has no claim, details and evidence` }); continue; }
       writeFileSync(file, t);
       const r = await sub(v.verdict === "archive" ? ["archive", n.title, "--why", why] : ["write", file, "--why", why]);
-      const f = r.json?.findings?.[0];
-      out.push(r.code === 0 ? { ...w, commit: r.json?.commit ?? null } : { ...w, rule: f?.rule, refused: f ? `refuse ${f.rule} ${f.note}: ${f.detail}` : r.err.trim() || `exit ${r.code}` });
+      out.push({ ...w, ...outcome(r) });
     }
     return out;
   } finally {

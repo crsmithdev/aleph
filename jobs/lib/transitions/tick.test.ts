@@ -314,7 +314,7 @@ test("a tick where an episode page fails to write records the episodes result as
 test("guard: the maintain step from 03:00 local returns the dry run's counts and records its run as ok", async () => {
   const dir = vaultHere();
   const r = await maintainStep(NOW);
-  expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, episodes: 0, decay: 0, overlap: 0, retry: 0, lessons: 0, notes: 0, rechecked: 0 });
+  expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, episodes: 0, decay: 0, overlap: 0, retry: 0, lessons: 0, notes: 0, rechecked: 0, resolved: 0 });
   expect(readRun(dir, "maintain")?.result).toBe("ok");
 });
 
@@ -345,7 +345,7 @@ test("guard: a tick with a vault present records the maintain step's dry result 
   vaultHere();
   await runTick(NOW, quiet());
   const ran = JSON.parse(readFileSync(tickFile(), "utf8")).ran;
-  expect(ran.maintain.result).toMatch(/^dry: 0 fixed, .* · 0 lessons · 0 notes · 0 rechecked$/);
+  expect(ran.maintain.result).toMatch(/^dry: 0 fixed, .* · 0 lessons · 0 notes · 0 rechecked · 0 resolved$/);
   expect(ran.corrections).toBeUndefined();
 });
 

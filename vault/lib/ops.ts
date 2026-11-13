@@ -202,6 +202,9 @@ async function write(): Promise<void> {
   for (const title of Array.isArray(draft.fm.consistent_with) ? draft.fm.consistent_with : []) {
     if (!wikiNotes(notes).some((n) => n.title.toLowerCase() === String(title).toLowerCase())) findings.push({ note: draft.title, rule: "consistent_with", detail: `consistent_with [${title}] but no live wiki note has that title` });
   }
+  for (const title of Array.isArray(draft.fm.distinct) ? draft.fm.distinct : []) {
+    if (!wikiNotes(notes).some((n) => n.title.toLowerCase() === String(title).toLowerCase())) findings.push({ note: draft.title, rule: "distinct", detail: `distinct [${title}] but no live wiki note has that title` });
+  }
   // A draft that already sits at its destination and that no write has ever
   // accepted is invisible to git but not to lint or to [[links]]. Name it; do
   // not delete it. It may be Chris's own note, typed in Obsidian, and b089def

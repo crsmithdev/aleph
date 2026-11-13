@@ -56,3 +56,16 @@ test("appendRecallLog records a recall trim run and drops a line older than 30 d
   rmSync(r, { recursive: true, force: true });
   setSystemTime();
 });
+
+test("lint skips a pair when a note lists the other in distinct, and orders the rest by Jaccard", async () => {
+  const r = mkdtempSync(join(tmpdir(), "vault-dist-"));
+  mkdirSync(join(r, "wiki", "concepts"), { recursive: true });
+  const w = (t: string, extra = "") => writeFileSync(join(r, "wiki", "concepts", `${t}.md`), `---\nkind: concept\nscope: global\n${extra}updated: 2026-10-01\n---\n# ${t}\n\n**Claim.** as of 2026-10-01 x\n`);
+  w("Pipeline Gate Rules"); w("Pipeline Gate Draft"); w("Pipeline Gate Extra Words Here");
+  const pairs = async () => lintVault(await loadVault(r), { overlap: true }).warn.filter((f) => f.rule === "overlap").map((f) => [f.note, f.other].sort());
+  // Jaccard: Rules/Draft 2 of 4 words, Rules/Extra 2 of 5, Draft/Extra 2 of 5, so the closer pair is first.
+  expect(await pairs()).toEqual([["Pipeline Gate Draft", "Pipeline Gate Rules"], ["Pipeline Gate Draft", "Pipeline Gate Extra Words Here"].sort(), ["Pipeline Gate Rules", "Pipeline Gate Extra Words Here"].sort()]);
+  w("Pipeline Gate Rules", "distinct: [Pipeline Gate Draft]\n");
+  expect(await pairs()).toEqual([["Pipeline Gate Draft", "Pipeline Gate Extra Words Here"].sort(), ["Pipeline Gate Rules", "Pipeline Gate Extra Words Here"].sort()]);
+  rmSync(r, { recursive: true, force: true });
+});

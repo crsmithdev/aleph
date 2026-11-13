@@ -925,6 +925,14 @@ describe("provenance and the contradiction screen", () => {
     expect(r.stderr).toContain("No Such Note");
     expect(snapshot()).toBe(before);
   });
+  test("distinct naming no live note is refused and changes nothing", async () => {
+    reset(0.9);
+    const before = snapshot();
+    const r = await write(note("Widget Registry Third", { scope: "screen", distinct: "[No Such Note]" }));
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("No Such Note");
+    expect(snapshot()).toBe(before);
+  });
   test("a dead Jev writes with a warning", async () => {
     await live("Sprocket Ledger");
     reset(0.9);

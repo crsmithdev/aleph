@@ -196,16 +196,17 @@ function nextDaily(at: string): string {
   return d.toISOString();
 }
 
-/** The `maintain` row: the tick's last result (else the vault's run record), the queue sizes of the last mechanical pass and the notes of the last compile and the notes of the last re-check. */
+/** The `maintain` row: the tick's last result (else the vault's run record), the queue sizes of the last mechanical pass and the notes of the last compile, the notes of the last re-check and the pairs of the last overlap pass. */
 function maintain(root: string, ran: { at?: string; result: string } | undefined) {
-  const run = readRun(root, "maintain"), compile = readRun(root, "compile"), recheck = readRun(root, "recheck");
+  const run = readRun(root, "maintain"), compile = readRun(root, "compile"), recheck = readRun(root, "recheck"), dedupe = readRun(root, "dedupe");
   let counts: Record<string, number> = {};
   try { counts = JSON.parse((run?.detail ?? "").replace(/^dry: /, "")); } catch { /* a failed run's detail is text */ }
   const last = ran?.at ?? run?.at ?? null;
   const notes = /(\d+) notes/.exec(compile?.detail ?? "")?.[1];
   const rechecked = /(\d+) rechecked/.exec(recheck?.detail ?? "")?.[1];
-  const detail = [counts.decay !== undefined && `decay ${counts.decay}`, counts.overlap !== undefined && `overlap ${counts.overlap}`, notes && `${notes} notes`, rechecked && `${rechecked} rechecked`].filter(Boolean).join(" · ");
-  return { name: "maintain", runs: "daily after 03:00", last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday, re-checks stale notes" };
+  const resolved = /(\d+) resolved/.exec(dedupe?.detail ?? "")?.[1];
+  const detail = [counts.decay !== undefined && `decay ${counts.decay}`, counts.overlap !== undefined && `overlap ${counts.overlap}`, notes && `${notes} notes`, rechecked && `${rechecked} rechecked`, resolved && `${resolved} resolved`].filter(Boolean).join(" · ");
+  return { name: "maintain", runs: "daily after 03:00", last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday, re-checks stale notes, resolves overlaps" };
 }
 
 /** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. The corrections
