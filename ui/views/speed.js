@@ -68,12 +68,14 @@ export function windowTrend(d, figure, value, o) {
 export function statusCards(s, d, { efficiency, performance }) {
   const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
   const f = d && !d.error ? d.figures : null;
-  const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
+  const t = (key, o, v = f?.[key]) => (f && base ? cardTrend(v, base[key], prev?.[key], { basis, ...o }) : "");
   const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
   const lead = statCard({ k: "Completion", v: dur(f?.leadP50), v2: dur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance });
   const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
-  const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : count(f.asks), ...(f ? { v2: count(d.asks?.manual ?? 0) } : {}), q: ["all", "manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: count }), href: performance });
-  return lost + lead + landed + asks + usageCard(s);
+  const live = s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length;
+  // The trend compares the live runs with the mean live runs of the baseline's spans; the queue has no history, so it has no trend. Neutral: more or fewer runs is not good or bad.
+  const jobs = statCard({ k: "Jobs", v: count(live), v2: count((s.queued ?? []).length), q: ["running", "queued"], trend: t("live", { kind: "relative", lowerIsGood: null, format: (n) => String(Math.round(n * 10) / 10) }, live), href: "#/factory/jobs" });
+  return lost + lead + landed + jobs + usageCard(s);
 }
 
 /** The Usage card: the 7-day value, the bar with the mark for the week gone, and a one- or two-word note. `link` is `{href}` or `{key, on}`. */

@@ -213,7 +213,7 @@ A current item (the sidebar link, the contents entry) has an inset 2px `--ink` b
 | Rule | Value |
 |---|---|
 | Breakpoints | 720px and 1100px, literal, as `@media` takes no tokens |
-| Container widths | three `@container` widths, literal: 560px (`pipeline`), 480px (`rail-main`) and 420px (`.tile`, `.lane-card`, `.issue-row`) |
+| Container widths | two `@container` widths, literal: 560px (`pipeline`) and 420px (`.tile`, `.issue-row`) |
 | Motion | `.15s ease-out` on borders and backgrounds; no animation; ECharts `animation: false` |
 
 ### The kit bridge
@@ -353,6 +353,7 @@ The page head is the first part of a page. It shows the title, a count and the c
 - On a list page, make the controls with `scope().bar()` and put them in `aside`. The bar starts with the Project select and the window. Give the controls of the page to the bar as `after`.
 - A detail page has no Project select.
 - Keep the project and the window in the address: call `scope().wire(root)` in `mount`.
+- **Exception: the Status page.** Its head has no title and no count. It reads `<time> <status sentence>`, both in the tone of `verdict()`, with the window and Pause or Resume at the right. Keep it: the Status head is the factory's status at a glance, and a title would push that sentence down.
 
 | Do | Don't |
 |---|---|
@@ -816,29 +817,6 @@ The timeline shows the runs of an issue or a job over time, with their events.
 
 ### Lists of items
 
-#### Item card
-
-An item card shows one issue or one job in a lane.
-
-**Use:** in a lane on the Status page. **Not for:** a list page; use a table.
-
-| Helper | Reference |
-|---|---|
-| `renderLanes(s)` in `ui/views/now.js`, which makes the lanes and their cards; `metaRow()` in `ui/views/cards.js` | `ui/views/now.js` |
-
-| # | Part | Holds | Optional | Style |
-|---|---|---|---|---|
-| 1 | Box | The item | | `--surface`, border `--rule`, radius `--r-ctl`, padding `--sp-10` `--sp-12` |
-| 2 | Meta row | Id, state, kind, part, time, duration | | `--fs-2xs`; 22px high; one line; badges `--fs-2xs` |
-| 3 | Title | The title of the item: a link when the item has a page, else text | | `--sans` `--fw-strong`; one line, ends in an ellipsis |
-| 4 | Hold | Why the item waits, and what blocks it | yes | `--fs-xs`, `--muted` |
-
-- Put the short id of the item in `data-annotate`, so that a note stays on the item.
-
-| Do | Don't |
-|---|---|
-| `data-annotate="a1700"` | a `data-annotate` that changes on each redraw |
-
 #### Ask card
 
 An ask card asks Chris a question. It shows the question, the choices and the buttons that answer it.
@@ -867,30 +845,6 @@ An ask card asks Chris a question. It shows the question, the choices and the bu
 |---|---|
 | the recommended choice marked | two choices marked |
 | technical details in a closed fold at the end | logs in the question |
-
-#### Lane
-
-A lane is a column of item cards under a head with a count.
-
-**Use:** for the Running, Queued and Done columns of the Status page. **Not for:** a list page; use a table.
-
-| Helper | Reference |
-|---|---|
-| `renderLanes(s)` in `ui/views/now.js` | `ui/views/now.js` |
-
-| # | Part | Holds | Optional | Style |
-|---|---|---|---|---|
-| 1 | Head | The state dot, the name of the lane and its count | | the card title and count; an 8px dot: Running `--run`, Done `--done`, Queued `--muted` |
-| 2 | Cards | The item cards | | one column, `--sp-12` apart |
-| 3 | Empty line | The line when the lane has no items | | `--fs-sm`, `--muted` |
-
-- Put Running and Queued side by side in `.lanes-top`, `--sp-12` apart, and Done under them, `--sp-16` below. The top row goes to one column when `.rail-main` is narrower than 480px (container query).
-- When a lane has a cap, its count is `<shown> of <cap>`.
-- The empty line is `empty()`.
-
-| Do | Don't |
-|---|---|
-| `Running` with a muted `3` | `Running (3)` |
 
 #### Feed row
 
@@ -1523,7 +1477,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 | Status entry | Its label and icon take the tone of the status sentence from `/api/status`: `alert` is `--stuck`, `warning` and `ask` are `--need`, `fine` is `--ink`, white on the dark theme |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
 | Browser | `::selection` is `--sel`; scrollbars are thin, `--rule` on transparent |
-| Grid | `.tiles` holds metric cards; `.pair` holds two cards side by side, stacked under two cards of width; `.lanes` holds lanes; `.trio` holds chart panels; `.browse` is a list with its detail beside it, one column under 1100px |
+| Grid | `.tiles` holds metric cards; `.pair` holds two cards side by side, stacked under two cards of width; `.trio` holds chart panels; `.browse` is a list with its detail beside it, one column under 1100px |
 
 - **List page:** page head, metric cards, then cards.
 - **Detail page:** crumb, page head, status row, KPI strip, then detail panels.
@@ -1562,9 +1516,9 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Time column names differ | Tables | aleph-1360 (pending) |
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
-| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Health in `ui/views/memory.js`; the Status Alerts and lanes in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
+| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Health in `ui/views/memory.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
-| Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`), the feed's rows (`div.event-row`, `div.event-brief`) and the lane card's face (`article.lane-card`) | `renderPipeline()`, `feedRow()`, `briefRow()`, `laneCard()` in `ui/views/now.js` | follow-up |
+| Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`) and the feed's rows (`div.event-row`, `div.event-brief`) | `renderPipeline()`, `feedRow()`, `briefRow()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |

@@ -205,18 +205,6 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .mark { display: flex; align-items: center; gap: var(--sp-8); text-decoration: none; font: 700 var(--fs-2xl)/1 var(--brand); letter-spacing: var(--ls-display); margin-right: var(--sp-4); }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
-/* ---------- Now: lanes ---------- */
-.lanes { display: flex; flex-direction: column; gap: var(--sp-16); }
-.lane { min-width: 0; }
-/* Running and Queued share a row; an empty lane shrinks to a dashed box of 220px. */
-.lanes-top { display: flex; gap: var(--sp-12); align-items: stretch; }
-.lanes-top > .lane { flex: 1 1 0; }
-.lanes-top > .lane.none { flex: 0 0 220px; display: flex; flex-direction: column; }
-.lanes-top > .lane.none .empty { flex: 1; padding: var(--sp-8) var(--sp-10); border: 1px dashed var(--rule); border-radius: var(--r-ctl); background: var(--sunk); }
-/* Each lane head carries its state's dot: running, queued. */
-.lane .sh h2::before { content: ""; display: inline-block; width: var(--dot-m); height: var(--dot-m); border-radius: var(--r-pill); margin-right: var(--sp-8); vertical-align: middle; background: var(--run); }
-#lane-queued .sh h2::before { background: var(--muted); }
-.lane-card .ih { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8); }
 /* ---------- Now: blockers and needs ---------- */
 .blockers { flex-basis: 100%; display: grid; gap: var(--sp-4); }
 .blocker { overflow-wrap: anywhere; }
@@ -231,13 +219,13 @@ main { min-width: 0; }
 .page { max-width: 2400px; margin: 0 auto; padding: var(--sp-28) var(--sp-24) calc(2 * var(--gap) + var(--sp-16)); }
 .shead { align-items: center; gap: var(--sp-8) var(--sp-12); margin: 0 0 var(--sp-20); flex-wrap: wrap; }
 .shead .say { font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: var(--ls-display); flex: 1 1 20rem; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-.shead .asof { flex: none; font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: var(--ls-display); }
+.shead .asof { flex: none; color: inherit; font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: var(--ls-display); }
 .shead a { text-decoration: none; border-bottom: 1px solid var(--rule); }
 .shead a:hover { border-bottom-color: currentColor; }
 .shead .aside { flex: none; margin-left: auto; }
 .shead .fbar { flex-wrap: nowrap; gap: var(--sp-8); }
-.shead .say.error, .shead .say.error a { color: var(--stuck); }
-.shead .say.warning, .shead .say.warning a { color: var(--need); }
+.shead .say.error, .shead .say.error a, .shead:has(.say.error) .asof { color: var(--stuck); }
+.shead .say.warning, .shead .say.warning a, .shead:has(.say.warning) .asof { color: var(--need); }
 .rows { display: grid; gap: var(--sp-8); }
 .issue-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-14); padding: var(--sp-8) var(--sp-12); border: 1px solid var(--rule); border-radius: var(--r-ctl); background: var(--surface); }
 .issue-row.held, .issue-row.decide { border-color: var(--need); }
@@ -445,9 +433,6 @@ summary .peek { color: var(--muted); margin-left: var(--sp-6); }
 .body code { background: var(--sunk); padding: 0 var(--sp-4); border-radius: var(--r-hair); }
 
 /* ---------- rail: running, waiting, ticks ---------- */
-.run-row { padding: var(--sp-10) 0; border-bottom: 1px solid var(--rule-2); }
-.run-row:last-child { border-bottom: 0; }
-.run-row .t { font: var(--fw-strong) var(--fs-sm)/1.4 var(--sans); margin: 0; min-width: 0; }
 .run-meta { font-size: var(--fs-xs); color: var(--muted); margin-top: var(--sp-4); }
 
 .ticks { list-style: none; margin: 0; padding: 0; font-size: var(--fs-sm); }
@@ -748,8 +733,6 @@ pre.stat b { color: var(--need); }
 /* Status: the main column, and the Herald as a rail at the right that stays in view, the viewport tall. */
 .rail { display: grid; grid-template-columns: minmax(0, 1fr) clamp(480px, 38%, 600px); gap: var(--gap); align-items: start; }
 .rail-main { container: rail-main / inline-size; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
-/* Under 480px Queued goes under Running. */
-@container rail-main (max-width: 480px) { .rail-main .lanes-top { flex-direction: column; } .rail-main .lanes-top > .lane.none { flex-basis: auto; } }
 /* contain: size takes the card out of the row's height, so the row is as tall as .rail-main and the card stretches to it, never past the viewport. */
 .rail > .herald-card { position: sticky; top: var(--sp-16); align-self: stretch; contain: size; max-height: calc(100vh - 2 * var(--sp-16)); }
 @media (max-width: 1100px) { .rail { grid-template-columns: minmax(0, 1fr); } .rail > .herald-card { position: static; contain: none; max-height: none; } .rail .herald-feed { max-height: 380px; } }
@@ -1108,22 +1091,17 @@ ul.logs .step { margin: var(--sp-6) 0; }
 
 /* ---------- Status cards: the 3-line face ---------- */
 /* Line 1 is the meta row; lines 2 and 3 are the title. The "why it waits" text gives up space first: it truncates, its tooltip holds the whole text. The date and the duration never shrink. */
-.lane-card, .issue-row { container-type: inline-size; }
+.issue-row { container-type: inline-size; }
 .job-card.small .ih { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-6); min-width: 0; overflow: hidden; }
 .job-card.small .ih > .idl, .job-card.small .ih > .id { flex: none; white-space: nowrap; }
 .job-card.small .ih > .badge { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-card.small .ih > .kind-tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-card.small .ih > .part { flex: none; font: var(--fw-strong) var(--fs-xs) var(--mono); white-space: nowrap; }
 .job-card.small .ih > .num { flex: none; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
-.lane-card > .t, .issue-row > .t {
+.issue-row > .t {
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
   margin: var(--sp-4) 0 0; font-family: var(--sans); font-size: 1em; font-weight: var(--fw-strong); line-height: 1.35; min-height: 1.35em; text-decoration: none; color: inherit; overflow-wrap: anywhere;
 }
-/* The meta row has one fixed height whatever it holds; the container query below does not change it. */
-.lane-card > .ih { box-sizing: border-box; height: 22px; min-height: 22px; max-height: 22px; flex-wrap: nowrap; align-items: center; overflow: hidden; white-space: nowrap; }
-.lane-card > .ih > * { line-height: 1; align-self: center; }
-.lane-card .blockers { margin-top: var(--sp-6); font-size: var(--fs-sm); }
-.job-card.small .ih > .blocked { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 @container (max-width: 420px) {
   .job-card.small .ih { gap: var(--sp-4); }
   .job-card.small .ih > .badge, .job-card.small .ih > .kind-tag { padding: 1px var(--sp-6); font-size: var(--fs-2xs); }

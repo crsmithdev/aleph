@@ -1,16 +1,10 @@
 import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
-import { awaitingHeld, job, state } from "./fixtures/status-state.ts";
+import { awaitingHeld, state } from "./fixtures/status-state.ts";
 // @ts-ignore
 import { actMessages, openDiffs } from "./lib.js";
 import { asksOf, withAttn } from "./test-now.ts";
-
-test("a build run is a worker, with no why text", () => {
-  const h = withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T15:00:00Z", run: { kind: "build", started: "2026-10-27T16:00:00Z" } })] });
-  expect(h).toContain("worker");
-  expect(h).not.toContain("past the time box");
-});
 
 test("an awaiting row does not show checks as facts", () => {
   expect(withAttn(state)).not.toContain("s ✓");

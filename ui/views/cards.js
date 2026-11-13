@@ -39,9 +39,9 @@ export function statLines(stat) {
 /** The "3/4" link of a part to its parent; "" for a card that is no part. */
 const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Sub-issue ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
 
-/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, the hold. `chips` is HTML. */
-export function metaRow({ id, chips, part, at, since, now, end, hold }) {
-  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at))}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${hold ? `<span class="blocked" title="${esc(hold)}">${esc(hold)}</span>` : ""}</div>`;
+/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration. `chips` is HTML. */
+export function metaRow({ id, chips, part, at, since, now, end }) {
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at))}</span><span class="num dur">${esc(span(since, end ?? now))}</span></div>`;
 }
 
 /** The Ask card structure: the article with `cls` and `attrs`, then the box with `meta`, the fold of `label`, `title` and `tag` over `desc`, and `rest`. */

@@ -54,5 +54,5 @@ test("the Container widths row of the design doc lists exactly the @container wi
   const widths = (s: string) => [...new Set([...s.matchAll(/(\d+)px/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
   const queries = [...css.matchAll(/@container[^{]*\(\s*(?:max|min)-width:\s*(\d+)px/g)].map((m) => `${m[1]}px`).join(" ");
   expect(widths(row)).toEqual(widths(queries));
-  expect(widths(row)).toEqual([420, 480, 560]);
+  expect(widths(row)).toEqual([420, 560]);
 });

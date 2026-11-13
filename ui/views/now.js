@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, count, empty, error, esc, hours, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
+import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say as sayParts } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { share, flowOf, statusCards, usable } from "./speed.js";
@@ -18,7 +18,7 @@ export const view = {
   refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
-  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(f), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderActive(f)}${renderPipeline(f, q)}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(f), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}</div>${renderHerald(s)}</div></div>`; },
   more: async (s, q) => ({ ...s, flow: await flowOf(scope(q).window, q, true) }),
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
@@ -314,10 +314,10 @@ function wireHeraldJump(root) {
   });
 }
 
-/** The page head: the title, the time and the status sentence, then the window control with Pause or Resume next to it. */
+/** The page head: the time and the status sentence in the status tone, then the window control with Pause or Resume next to it. It has no title: the head is the factory's status at a glance. */
 function renderStatusLine(s, stale = false, w = "day") {
   const bar = scope().bar({ value: w, after: renderControls(s) });
-  return pageHead("Status", { head: "shead", after: `<span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}`, aside: bar });
+  return pageHead("", { head: "shead", after: `<span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}`, aside: bar });
 }
 
 /** The status sentence of `verdict`, each part a link to its card but the plain ones. */
@@ -350,61 +350,7 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 const holdLine = (ev) => (ev ? [ev.action, contentText(ev)].filter(Boolean).join(" ") : "");
 
 
-/** The count of a section: `N of cap` where a cap applies. */
-const section = (id, title, n, body, cap) =>
-  sectionHead(title, { id, count: n === null ? null : `${n}${cap > 0 ? ` of ${cap}` : ""}` }) + body;
-
-const cards = (html, cls = "") => `<div class="cards${cls ? " " + cls : ""}">${html}</div>`;
-
-/** The title of a card: one line, an ellipsis after that. */
-const titleOf = (title, href) => (href ? `<a href="${esc(href)}" class="t" title="${esc(title)}">${esc(title)}</a>` : `<span class="t" title="${esc(title)}">${esc(title)}</span>`);
-
-/** An item card of a lane: the 2-line face (the meta row, then the title on 1 line); `below` is HTML after the face. */
-function laneCard(id, cls, row, title, href, below = "") {
-  return `<article class="job-card small lane-card ${cls}" data-annotate="${esc(shortId(id))}">${row}${titleOf(title, href)}${below}</article>`;
-}
-
-/** A lane: header with the count, its cards or one quiet line; an empty lane is marked `none`. */
-const lane = (id, title, n, rows, none, cap = 0) =>
-  `<section id="lane-${id}" class="lane${rows ? "" : " none"}" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : none, cap)}</section>`;
-
-function queuedLane(s) {
-  const rows = (s.queued ?? []).map((w) => {
-    const dead = (w.waits ?? []).filter((b) => b.dead);
-    const id = repoIdLink(`${w.repo}-${w.id}`, issueHref(`${w.repo}-${w.id}`), w.repo);
-    const hold = holdLine(w.ev);
-    return laneCard(`${w.repo}-${w.id}`, "queued-row", metaRow({ id, chips: (hold ? "" : tag(w.stage ?? "queued", tone(w.stage ?? "queued"), w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
-      dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
-  }).join("");
-  return lane("queued", "Queued", (s.queued ?? []).length, rows, empty());
-}
-
-/** A parent that waits to close: all its parts are done. */
-function runningIssue(i, now) {
-  return laneCard(i.id, "run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: tag(i.stage, tone(i.stage), i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
-}
-
 const TIERS = { haiku: "low", sonnet: "medium", opus: "high" };
-
-/** The Running lane's rows: intake, land and agent runs. The count is the live agent runs, as the cap counts them. */
-function runningLane(s) {
-  const issues = (s.runningIssues ?? []).map((i) => runningIssue(i, s.now)).join("");
-  const rows = issues + (s.running ?? []).map((j) => {
-    const run = j.run ?? { kind: "build", started: j.started };
-    const worker = run.kind === "build";
-    const kind = worker ? "worker" : run.kind;
-    const tier = TIERS[j.tier ?? shortModel(j.model)];
-    const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
-    return laneCard(j.name, `run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase ? `${label} · ${j.phase}` : label)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));
-  }).join("");
-  return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, empty(), s.factory.liveCap ?? 0);
-}
-
-/** The two lanes: Running and Queued in one row. */
-export function renderLanes(s) {
-  return `<div class="lanes"><div class="lanes-top">${runningLane(s)}${queuedLane(s)}</div></div>`;
-}
-
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */
 export function renderNeeds(s) {

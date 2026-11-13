@@ -412,26 +412,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.width(1200);
   }, 30_000);
 
-  test("at 390 px a queued card's hold text truncates inside the card, and the priority badge, the date and the duration keep their width", async () => {
-    await page.go("#/");
-    await page.width(390);
-    const r = await page.ev<any>(`import("/views/cards.js").then(({ metaRow }) => {
-      const card = document.createElement("article");
-      card.className = "job-card small lane-card";
-      card.innerHTML = metaRow({ id: '<a class="id">a1234</a>', chips: '<span class="badge high">critical</span>', at: "2026-11-02T11:00:00Z", since: "2026-11-02T11:00:00Z", now: "2026-11-02T13:00:00Z", hold: "busy r7 → a-very-long-directory-name/another-long-directory/a-long-file-name.ts" });
-      document.body.append(card);
-      const q = (s) => card.querySelector(s), b = q(".blocked");
-      const r = { over: b.getBoundingClientRect().right - card.getBoundingClientRect().right, cut: b.scrollWidth > b.clientWidth, title: b.title, badge: q(".badge").scrollWidth - q(".badge").clientWidth, date: q(".num.date").scrollWidth - q(".num.date").clientWidth, dur: q(".num.dur").scrollWidth - q(".num.dur").clientWidth };
-      card.remove();
-      return r;
-    })`);
-    await page.width(1200);
-    expect(r.over).toBeLessThanOrEqual(0);
-    expect(r.cut).toBe(true);
-    expect(r.title).toContain("a-long-file-name.ts");
-    expect([r.badge, r.date, r.dur]).toEqual([0, 0, 0]);
-  }, 30_000);
-
   test("at 390 px each text cut by an ellipsis has its full text in a title, on itself or on an ancestor", async () => {
     await page.go("#/");
     const hrefs = ["#/kit", "#/issues/demo/21", "#/memory?tab=processes", "#/memory?tab=log", ...await page.ev<string[]>('[...document.querySelectorAll("#nav li a")].map((a) => a.getAttribute("href"))')];
@@ -464,39 +444,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(r.over).toBeLessThanOrEqual(0);
     expect(r.wide).toBeLessThanOrEqual(0);
     expect(r.label).toContain(project);
-  }, 30_000);
-
-  test("an empty Queued lane keeps its head and rule level with Running's, and only its empty block is the dashed box", async () => {
-    await page.go("#/");
-    const measure = () => page.ev<any>(`import("/views/now.js").then(({ renderLanes }) => {
-      const main = document.createElement("div");
-      main.className = "rail-main";
-      main.innerHTML = renderLanes({ now: "2026-11-02T13:00:00Z", factory: {}, running: [{ name: "a1-1", started: "2026-11-02T12:00:00Z", item: { title: "One running job" } }], queued: [], done: [] });
-      document.body.append(main);
-      const r = (e) => e.getBoundingClientRect(), q = (s) => main.querySelector(s);
-      const run = q("#lane-running"), que = q("#lane-queued"), box = que.querySelector(".empty"), cards = run.querySelectorAll(".lane-card");
-      const out = {
-        head: [r(run.querySelector(".sh")).top - r(q("#lane-queued .sh")).top, r(run.querySelector(".sh")).bottom - r(que.querySelector(".sh")).bottom],
-        laneBorder: getComputedStyle(que).borderTopWidth, boxBorder: getComputedStyle(box).borderTopStyle, width: r(que).width,
-        top: r(box).top - r(cards[0]).top, bottom: r(box).bottom - r(cards[cards.length - 1]).bottom,
-        under: r(box).top - r(que.querySelector(".sh")).bottom, inside: [r(box).left - r(que).left, r(que).right - r(box).right],
-        wide: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      };
-      main.remove();
-      return out;
-    })`);
-    const wide = await measure();
-    expect(Math.abs(wide.head[0])).toBeLessThanOrEqual(1);
-    expect(Math.abs(wide.head[1])).toBeLessThanOrEqual(1);
-    expect([wide.laneBorder, wide.boxBorder, wide.width]).toEqual(["0px", "dashed", 220]);
-    expect(Math.abs(wide.top)).toBeLessThanOrEqual(1);
-    expect(Math.abs(wide.bottom)).toBeLessThanOrEqual(1);
-    await page.width(390);
-    const narrow = await measure();
-    await page.width(1200);
-    expect(narrow.under).toBeGreaterThanOrEqual(0);
-    expect(Math.min(...narrow.inside)).toBeGreaterThanOrEqual(0);
-    expect(narrow.wide).toBeLessThanOrEqual(0);
   }, 30_000);
 
   /**

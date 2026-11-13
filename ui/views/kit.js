@@ -6,7 +6,7 @@ import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
-import { eventRow, findingsList, renderLanes } from "./now.js";
+import { eventRow, findingsList } from "./now.js";
 import { bar } from "./speed.js";
 
 const THEMES = ["system", "light", "dark"];
@@ -95,12 +95,6 @@ const TIMELINE = [{ title: "Runs", rows: [
   { head: "<span class=\"t\" title=\"build 2\">build 2</span>", bars: [{ start: H(9, 2), end: H(9, 20), tone: "build", label: "build" }, { start: H(9, 20), end: H(9, 24), tone: "land", label: "land" }], waits: [], marks: [{ at: H(9, 24), tone: "done", tip: "landed" }], result: badge("landed"), time: dur(1320), cost: money(1.82), events: [{ at: H(9, 24), tag: "landed", tone: "done", html: "Landed on main." }] },
 ] }];
 const NOW = "2026-11-10T17:00:00Z";
-const STATUS = {
-  now: NOW, factory: { liveRuns: 1, liveCap: 5 },
-  running: [{ name: "aleph-1700", repo: "aleph", item: { id: 1700, title: "Give each component in design.md a live render", priority: "high" }, run: { kind: "agent", started: "2026-11-10T16:40:00Z" }, model: "claude-sonnet-5-5", started: "2026-11-10T16:40:00Z" }],
-  queued: [{ repo: "aleph", id: 1701, title: "Fail CI on a new hard-coded colour in ui/", priority: "medium", stage: "queued", at: "2026-11-10T16:00:00Z" }],
-  done: [{ id: "aleph-1702", href: "#/kit", title: "Show the cost of each run on its job page", priority: "low", finished: "2026-11-10T15:30:00Z" }],
-};
 const ASK = {
   id: "aleph-41", href: "#/kit", repo: "aleph", key: "issue:aleph-41", kind: "input", card: "decide", reason: "question", label: "Decide", tag: "question",
   title: "Pick the time format for a day with no time", headline: "Pick the time format for a day with no time", priority: "high", at: "2026-11-10T16:00:00Z",
@@ -194,8 +188,7 @@ function renderKit(d, query) {
     spec("timeline", "Timeline", renderTimeline(TIMELINE)) +
 
     group("Lists of items") +
-    spec("lanes", "Item card and lane", renderLanes(STATUS), "", ["Item card", "Lane"]) +
-    spec("ask", "Ask card", askCard(ASK, STATUS.now)) +
+    spec("ask", "Ask card", askCard(ASK, NOW)) +
     spec("feed", "Feed row", FEED.map((e) => eventRow(e)).join("")) +
     spec("findings", "Findings list", findingsList(["Two jobs ran over the cap at `09:12`.", "No check failed."])) +
 

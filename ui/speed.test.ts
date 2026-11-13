@@ -91,11 +91,10 @@ test("GET /api/flow takes a window (default week) and answers JSON", async () =>
 test("the Status cards show the answer's figures and trend them against its baseline", () => {
   // The raw fields disagree with `figures`, so a card that read them would show 90% and 9.0h.
   const d = { classes: [{ hours: 9 }], lost: { share: 0.9, hours: 9 }, asks: { count: 1, manual: 0 }, figures: { lost: 0.2, hours: 2, leadP50: null, leadP90: null, asks: 3, landed: null, firstPass: null }, baseline: { prev: { lost: 0.4 }, base: { lost: 0.4 }, basis: "the previous 7 days" } };
-  const h = statusCards({ now: "2026-11-01T08:00:00Z" }, d, {});
+  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: {} }, d, {});
   expect(h).toContain("<b>20%<em> / 2.0h</em></b>");
   expect(h).toContain("baseline 40%, the previous 7 days");
-  expect(h).toContain("<b>3<em> / 0</em></b>");
-});
+  });
 
 test("the Usage card note is the pace word, and the bar title holds the percent off this machine", () => {
   const u = { now: { seven_day: 40, seven_day_resets_at: "2026-11-07T08:00:00Z" } };
@@ -107,7 +106,7 @@ test("the Usage card note is the pace word, and the bar title holds the percent 
 });
 
 test("the Status Usage meter fill takes the default fill", () => {
-  const h = statusCards({ now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } }, null, {});
+  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: {}, usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } }, null, {});
   expect(h).toContain('<span class="meter" role="img"');
   expect(h).not.toContain("c-use");
 });
@@ -522,8 +521,8 @@ test("a bucket's cost per model is the recorded cost of the agent runs that star
 
 test("every Status card with a second value has a qualifier, Lost time too, and none prints undefined", () => {
   const d = { asks: { count: 4, manual: 1 }, figures: { lost: 0.3, hours: 6, leadP50: 60, leadP90: 600, asks: 4, landed: 5, firstPass: 0.8 } };
-  const s = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } };
-  for (const html of [statusCards(s, d, {}), statusCards({ now: s.now }, null, {})]) {
+  const s = { now: "2026-11-01T08:00:00Z", factory: {}, usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } };
+  for (const html of [statusCards(s, d, {}), statusCards({ now: s.now, factory: {} }, null, {})]) {
     expect(html).not.toContain("undefined");
     const cards = html.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/);
     for (const c of cards) if (c.includes("<em>")) expect(c).toContain('<span class="q">');
