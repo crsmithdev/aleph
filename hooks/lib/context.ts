@@ -56,16 +56,17 @@ export function read(transcriptPath: string): Reading {
 /** Claude Code's settings file: ALEPH_CLAUDE_SETTINGS, else ~/.claude/settings.json. */
 export const claudeSettings = (): string => process.env.ALEPH_CLAUDE_SETTINGS ?? join(homedir(), ".claude", "settings.json");
 
+/** The context window Claude Code runs with. */
+export function window(settingsPath = claudeSettings()): number {
+  const env = Number(process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
+  if (Number.isFinite(env) && env > 0) return env;
+  const configured = Number(readJsonOr<any>(settingsPath, {}).autoCompactWindow);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_WINDOW;
+}
+
 /** Tokens the session can hold before Claude Code compacts it. */
 export function threshold(settingsPath = claudeSettings()): number {
-  const env = Number(process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
-  let window = Number.isFinite(env) && env > 0 ? env : 0;
-  if (!window) {
-    const configured = Number(readJsonOr<any>(settingsPath, {}).autoCompactWindow);
-    if (Number.isFinite(configured) && configured > 0) window = configured;
-  }
-  if (!window) window = DEFAULT_WINDOW;
-  return Math.max(1000, window - HEADROOM);
+  return Math.max(1000, window(settingsPath) - HEADROOM);
 }
 
 export type Verdict =

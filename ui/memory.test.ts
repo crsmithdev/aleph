@@ -530,6 +530,16 @@ test("the Context tab draws one parts row per part of the selected request, fixe
   expect(v.renderContextTab({ sessions: [] })).toContain(empty());
 });
 
+test("the Context tab scales the fill line, the part segments and the chart bars to the session's window", () => {
+  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+  const parts = [{ name: "Tools · 1", rec: "r", tokens: 250_000, how: "est" }];
+  const session = { id: "s1", window: 1_000_000, requests: [{ n: 1, fill: 500_000, usage, parts, since: 0 }] };
+  const h = v.renderContextTab({ sessions: [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }], session }, new URLSearchParams("n=1"));
+  expect(h).toContain("of 1,000,000 tokens · 50.0%");
+  expect(h).toContain("width:25.00%");
+  expect(h).toContain("height:50%");
+});
+
 test("the Context tab unfolds Tools into each tool and Tool results into each tool's calls the request holds", () => {
   const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
   const parts = [{ name: "Tools · 2", rec: "prompt_snapshot.tools", tokens: 400, how: "est" }, { name: "Tool results · 3", rec: "tool_result", tokens: 90, how: "exact" }];

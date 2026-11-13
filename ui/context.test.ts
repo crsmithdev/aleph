@@ -159,6 +159,21 @@ test("GET /api/context lists the newer session first and /api/context/:id return
   expect((await at("/api/context/nope")).status).toBe(404);
 });
 
+test("GET /api/context/:id returns the window the context gate reads: the default, then the autoCompactWindow setting", async () => {
+  const settings = join(base, "settings.json");
+  const restore = withEnv({ ALEPH_CLAUDE_SETTINGS: settings });
+  const env = process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+  delete process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+  try {
+    expect((await at("/api/context/new").then((r) => r.json()) as any).window).toBe(1_000_000);
+    writeFileSync(settings, JSON.stringify({ autoCompactWindow: 400_000 }));
+    expect((await at("/api/context/new").then((r) => r.json()) as any).window).toBe(400_000);
+  } finally {
+    restore();
+    if (env !== undefined) process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = env;
+  }
+});
+
 test("GET /api/context/:id/calls/:call returns one call, and 404 for an unknown call or session", async () => {
   writeFileSync(join(base, "-p", "drill.jsonl"), drill);
   expect(await at("/api/context/drill/calls/u2").then((r) => r.json())).toEqual({ tool: "Bash", input: { command: "ls" }, text: "x".repeat(400) });

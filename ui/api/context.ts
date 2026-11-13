@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { window } from "../../hooks/lib/context.ts";
 import { call, parseExact } from "../context.ts";
 import type { Routes } from "../server.ts";
 
@@ -19,7 +20,7 @@ export const routes: Routes = {
   }),
   "GET /api/context/:id": async (_req, params) => {
     const f = file(params.id);
-    return f ? Response.json({ id: params.id, ...await parseExact(readFileSync(f, "utf8")) }) : missing("session");
+    return f ? Response.json({ id: params.id, window: window(), ...await parseExact(readFileSync(f, "utf8")) }) : missing("session");
   },
   "GET /api/context/:id/calls/:call": (_req, params) => {
     const f = file(params.id), c = f && call(readFileSync(f, "utf8"), params.call);
