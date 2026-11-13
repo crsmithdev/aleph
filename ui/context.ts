@@ -21,7 +21,7 @@ export interface Session { requests: Request[]; tools: Tool[]; calls: Call[] }
 /** The message parts in the mock's order: the record each comes from, and its name. */
 const MESSAGES: [string, string][] = [
   ["isCompactSummary", "Compact summary"], ["user", "Your messages"], ["assistant", "Assistant turns"],
-  ["tool_result", "Tool results"], ["hook UserPromptSubmit", "Recall offers"],
+  ["tool_result", "Tool results"], ["hook UserPromptSubmit", "Recall offers"], ["attachment", "Attachments"],
 ];
 
 /**
@@ -94,11 +94,12 @@ function scan(jsonl: string): Scan {
     const a = o.attachment;
     if (a?.type === "prompt_snapshot") { system = [a.systemPrompt ?? system].flat().join(""); tools = a.tools ?? tools; }
     else if (a?.type === "instructions" && !out.length) instructions.push(...(a.files ?? []).map((f: any) => f.content));
-    else if (a?.type === "hook_additional_context") {
+    else if (a?.type === "hook_additional_context" && (!out.length || a.hookName === "UserPromptSubmit")) {
       const text = [a.content].flat().join("");
       if (!out.length) memory += text;
-      else if (a.hookName === "UserPromptSubmit") note("hook UserPromptSubmit", text.length, 1);
-    } else if (o.type === "user" && !o.isSidechain) {
+      else note("hook UserPromptSubmit", text.length, 1);
+    } else if (a && out.length) note("attachment", weigh(a), 1);
+    else if (o.type === "user" && !o.isSidechain) {
       const c = o.message?.content;
       const results = Array.isArray(c) ? c.filter((b: any) => b.type === "tool_result") : [];
       pending.push(...results.map((b: any) => ({ id: b.tool_use_id, w: weigh(b) })));

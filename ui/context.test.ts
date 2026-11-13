@@ -53,6 +53,31 @@ test("after a compaction the summary is the fill minus request 1's, exact, and t
   expect(r[3].parts.slice(4)).toEqual([{ name: "Compact summary", rec: "isCompactSummary", tokens: 203, how: "exact" }]);
 });
 
+test("a later attachment is its own part, weighed by its chars beside the other records of the gap", () => {
+  // the attachment is 152 chars of JSON, the message 150 + 2 quotes
+  const later = { attachment: { type: "instructions", files: [{ content: "a".repeat(104) }] } };
+  const r = parse([...lines, { type: "user", message: { content: "u".repeat(150) } }, later, req("r4", 5, 1800, 500)].map((o) => JSON.stringify(o)).join("\n")).requests;
+  expect(r[3].parts.slice(4)).toEqual([
+    { name: "Your messages · 2", rec: "user", tokens: 296, how: "est" },
+    { name: "Assistant turns · 3", rec: "assistant", tokens: 21, how: "exact" },
+    { name: "Tool results · 1", rec: "tool_result", tokens: 494, how: "exact" },
+    { name: "Recall offers · 1", rec: "hook UserPromptSubmit", tokens: 245, how: "est" },
+    { name: "Attachments · 1", rec: "attachment", tokens: 247, how: "est" },
+  ]);
+  expect(r[3].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[3].fill);
+});
+
+test("a gap of one later attachment gives the assistant turn the output and the rest to the attachment, exact", () => {
+  const hook = { attachment: { type: "hook_additional_context", hookName: "SessionStart", content: ["c".repeat(40)] } };
+  const r = parse([...lines, hook, req("r4", 5, 1800, 100)].map((o) => JSON.stringify(o)).join("\n")).requests;
+  expect(r[3].parts.slice(-2)).toEqual([
+    { name: "Recall offers · 1", rec: "hook UserPromptSubmit", tokens: 245, how: "est" },
+    { name: "Attachments · 1", rec: "attachment", tokens: 94, how: "exact" },
+  ]);
+  expect(r[3].parts.find((p) => p.rec === "assistant")!.tokens).toBe(21);
+  expect(r[3].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[3].fill);
+});
+
 test("an image in a tool result weighs by its pixels, 4 chars per token, not by its base64 length", () => {
   // a 300 × 250 PNG header padded to 30 kB: 100 tokens by pixels, 400 chars
   const png = Buffer.alloc(30000);
