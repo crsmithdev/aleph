@@ -105,6 +105,6 @@ export function askCard(i, now = new Date().toISOString()) {
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
   const desc = `<p class="situation">${esc(shortText(i.situation ?? i.problem))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to the user with its case text.</span>' : ""}${i.due ? ` <span class="muted">Lands at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
-  return askShell(esc(i.reason), `data-annotate="${esc(shortId(i.id))}" data-kind="${esc(i.kind)}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, shortText(i.headline || i.title), i.tag, desc,
+  return askShell(esc(i.reason), `data-ask="${esc(i.id)}" data-annotate="${esc(shortId(i.id))}" data-kind="${esc(i.kind)}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, shortText(i.headline || i.title), i.tag, desc,
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
 }

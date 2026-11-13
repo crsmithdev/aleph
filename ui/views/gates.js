@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, undecided, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
@@ -116,8 +116,8 @@ export function renderSchedules(d) {
 
 /** The Asks routed to Chris, as the Status page's cards. */
 function renderWaiting(d) {
-  const rows = d.asks.map((i) => askCard(i, d.now)).join("");
-  return card("Waiting for the User", rows ? `<div class="list">${rows}</div>` : empty(), { id: "gates-waiting", count: d.asks.length });
+  const asks = undecided(d.asks), rows = asks.map((i) => askCard(i, d.now)).join("");
+  return card("Waiting for the User", rows ? `<div class="list">${rows}</div>` : empty(), { id: "gates-waiting", count: asks.length });
 }
 
 /** The units of an Ask's wait, largest first: a stored number of minutes shows in the largest unit that divides it. */

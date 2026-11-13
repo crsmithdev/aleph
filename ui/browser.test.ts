@@ -640,6 +640,31 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 
+  test("a decided Ask stays off the Status page when the Herald draws again from its last state", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#herald")');
+    // The Herald's last state lists the Ask; a stream event draws it again. After the POST every other fetch hangs.
+    await page.ev(`Promise.all([import("/views/now.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, s]) => {
+      s.asks = [{ id: "tools-5", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a third input file",
+        situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", path: "/api/issues/tools-5/drop", body: {}, input: { name: "reason", lead: "" } }] }];
+      view.render(s, {}, new URLSearchParams());
+      window.beat = () => view.event(document.querySelector("#view"), { at: "2026-11-13T12:00:00Z", text: "x" });
+      window.beat();
+      const f = window.fetch;
+      window.posts = [];
+      window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push(u), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
+      const b = document.querySelector('#herald article[data-ask="tools-5"] button.act[data-act="deny"]');
+      b.click();
+      const inp = b.closest(".choice").querySelector("input.reason");
+      inp.value = "not now";
+      inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    })`);
+    await page.when('window.posts.length && !document.querySelector("#view article[data-ask=\'tools-5\']")');
+    await page.ev("window.beat()");
+    expect(await page.ev<number>('document.querySelectorAll("#view article.issue-row[data-ask=\'tools-5\']").length')).toBe(0);
+    await page.reload(); // Takes the patched fetch away.
+  }, 30_000);
+
   test("a dead blocker shows on the Issue page, and Stop waiting removes it", async () => {
     await page.go("#/issues/demo/21");
     await page.when(`document.querySelector('.dp-blocked [data-act="unblock"]')`);

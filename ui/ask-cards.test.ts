@@ -8,10 +8,10 @@ import * as view from "./views/now.js";
 // @ts-ignore cards.js is plain JS, shared with the page
 import { askCard } from "./views/cards.js";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { denyReasons, when } from "./lib.js";
+import { decided, denyReasons, endDraw, startDraw, when } from "./lib.js";
 import { shortId } from "../lib/naming.ts";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
-import { asksOf, prop } from "./test-now.ts";
+import { asksOf, prop, withFactory } from "./test-now.ts";
 import { job } from "./fixtures/status-state.ts";
 
 const CASE = (actions: string[], rec: string) => ({
@@ -161,4 +161,19 @@ test("the reason box is an inputBox() with its attributes and the reason kept in
   const input = row.match(/<input [^>]*>/)![0];
   expect(input.startsWith('<input name="reason" type="text" value="not now"')).toBe(true);
   for (const a of ['aria-label="Reason to deny tools-4"', 'data-repo="tools"', 'data-id="4"', 'data-lead="Chris denied: "', "hidden", 'maxlength="200"']) expect(input).toContain(a);
+});
+
+test("a decided ask has no card in the Herald while a state still lists it, and shows again once a state loaded after the decision drops it and a later one lists it", () => {
+  const [a, b] = four(), s = { ...withFactory({}), asks: [a, b], stuck: [] };
+  const draw = (state: object, at = 2) => { startDraw(); const h = view.renderHerald(state); endDraw(at); return h; };
+  decided.set(a.id, 1);
+  const h = draw(s);
+  expect(h).not.toContain(`data-ask="${a.id}"`);
+  expect(h).toContain(`data-ask="${b.id}"`);
+  // A draw of a view that lists no asks, and a state loaded before the decision that drops it, keep the decision.
+  startDraw(); endDraw(2);
+  draw({ ...s, asks: [b] }, 0);
+  expect(draw(s)).not.toContain(`data-ask="${a.id}"`);
+  draw({ ...s, asks: [b] });
+  expect(draw(s)).toContain(`data-ask="${a.id}"`);
 });

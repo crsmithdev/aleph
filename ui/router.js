@@ -11,7 +11,7 @@
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
 import { setCodes } from "../lib/naming.ts";
-import { arm, cmd, notice, pageHead, postJson, say, actMessages, denyReasons, loadDiff, error, linkButton, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
+import { arm, cmd, notice, pageHead, postJson, say, actMessages, decided, denyReasons, endDraw, loadDiff, error, linkButton, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope, startDraw } from "./lib.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
@@ -61,12 +61,13 @@ export function loader(env) {
   }
 
   /** Draw `data` for the load numbered `mine`, after the draw before it ends; false when a newer load or route came. */
-  async function put(route, mine, data, first) {
+  async function put(route, mine, data, first, at) {
     await drawn;
     if (route !== shown || mine !== seq) return false; // the reader moved on, or a newer load started, while this loaded
     // The reader armed a button while this loaded: the caller's check came too early, and the next reload catches up.
     if (!first && env.armed()) return false;
     route.data = data; // what `redraw` draws again
+    route.at = at; // when its load started
     drawn = env.draw(route, data, first);
     await drawn;
     return true;
@@ -75,7 +76,7 @@ export function loader(env) {
   // Each load takes a number; an answer that finds a newer number is dropped, so an old load never draws over a new one.
   // `drawn` is the last mount: the next draw waits for it.
   async function load(route, first) {
-    const mine = ++seq, more = route.view.more;
+    const mine = ++seq, more = route.view.more, at = Date.now();
     let data = null;
     if (route.view.api) {
       try {
@@ -88,9 +89,9 @@ export function loader(env) {
       }
     }
     // A first load draws its data before `more` ends, so the page shows at once; a reload draws once, with all of it.
-    if (more && first && !(await put(route, mine, data, true))) return;
+    if (more && first && !(await put(route, mine, data, true, at))) return;
     if (more) data = await more(data, route.query);
-    await put(route, mine, data, first && !more);
+    await put(route, mine, data, first && !more, at);
   }
 
   /** Draw the shown view again for the address's `query`: with its data, or with data loaded again when `fresh`. */
@@ -224,11 +225,13 @@ export async function start() {
   }
 
   /** Render the view, put back what the reader set, and mount it; the promise settles when the mount ends. */
-  async function draw({ view, params, query }, data, first) {
+  async function draw({ view, params, query, at }, data, first) {
     // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
     const saved = first ? null : recordState($("view"));
     try {
+      startDraw();
       const out = view.render(data, params, query);
+      endDraw(at);
       // Spike: a refresh of a view whose path is in `morph` is merged into the page by idiomorph, which keeps the elements that match.
       if (morph.has(view.path) && !first) (await import("./vendor/idiomorph.js")).Idiomorph.morph($("view"), out, { morphStyle: "innerHTML" });
       else $("view").innerHTML = out;
@@ -449,6 +452,8 @@ async function dispatch(e) {
     await postJson(b.dataset.path, body);
     if (box?.dataset.id) denyReasons.delete(`${box.dataset.repo}-${box.dataset.id}`);
   } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
-  b.closest("article.issue-row")?.remove();
+  const row = b.closest("article.issue-row");
+  if (row?.dataset.ask) decided.set(row.dataset.ask, Date.now());
+  row?.remove();
   page.reload();
 }
