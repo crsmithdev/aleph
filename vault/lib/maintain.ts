@@ -5,12 +5,11 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { useLog } from "../../lib/episode-use.ts";
-import { readJsonOr } from "../../lib/json.ts";
 import { layout } from "../../lib/layout.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
 import { Exit, run } from "./ops.ts";
-import { compiledDays, fixFrontmatter, lintVault, loadVault, readRun, recordRun, today, wikiNotes } from "./vault.ts";
+import { compiledDays, fixFrontmatter, lintVault, loadVault, readRun, recordRun, today, wikiNotes, type Finding } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
 const SHOWN_UNOPENED = 8;
@@ -42,6 +41,14 @@ function move(dir: string, to: string, dry: boolean, day: (f: string) => string 
   if (!dry && old.length) mkdirSync(to, { recursive: true });
   if (!dry) for (const f of old) renameSync(join(dir, f), join(to, f));
   return old;
+}
+
+/** The stale findings, most recalled first, each with its count in the recall log (30 days); ties keep lint order. */
+export function decayQueue(root: string, stale: Finding[]): (Finding & { count: number })[] {
+  const file = join(root, ".recall-log.jsonl");
+  const n = new Map<string, number>();
+  for (const l of existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean) : []) { const t = JSON.parse(l).title; n.set(t, (n.get(t) ?? 0) + 1); }
+  return stale.map((f) => ({ ...f, count: n.get(f.note) ?? 0 })).sort((a, b) => b.count - a.count);
 }
 
 /** The pass over the vault at `root`. The report, with `ok` false when a step that changes something failed. */
@@ -93,10 +100,10 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
   if (!dry && report.episodes.length) mkdirSync(join(backup, "episodes"), { recursive: true });
   if (!dry) for (const t of report.episodes) renameSync(join(pages, `${t}.md`), join(backup, "episodes", `${t}.md`));
 
-  const lint = lintVault(await loadVault(root), { overlap: true, read: readJsonOr(join(root, ".recall.json"), {}), tracked: [...tracked] });
+  const lint = lintVault(await loadVault(root), { overlap: true, tracked: [...tracked] });
   const queue = (rule: string) => lint.warn.filter((f) => f.rule === rule);
   const misses = await sub(["misses"]);
-  report.queues = { decay: queue("stale"), overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.code ? {} : { misses: misses.json }) };
+  report.queues = { decay: decayQueue(root, queue("stale")), overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.code ? {} : { misses: misses.json }) };
   const overlaps = queue("overlap").length;
   report.counts = {
     fixed: report.lint.fixed.length, adopt: untracked.length, core: cores.length, handoffs: report.handoffs.length, episodes: report.episodes.length,

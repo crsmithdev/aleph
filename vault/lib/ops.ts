@@ -87,12 +87,12 @@ function rollback(paths: string[]): void {
 }
 
 /**
- * When `recall` last returned each note, by title. A retention curve resets on
- * use, so staleness reads this beside `updated`.
+ * When `recall` last returned each note, by title. The Memory page shows it as use;
+ * staleness does not read it.
  *
  * It lives outside git: a read is not a change to memory, and committing one
  * on every recall would bury the writes that matter. Losing the file only
- * costs the reset, so every access here is best-effort.
+ * costs the Memory page's read dates, so every access here is best-effort.
  */
 const READ_LOG = () => join(root, ".recall.json");
 function readLog(): Record<string, string> {
@@ -113,7 +113,7 @@ function noteRead(titles: string[], query: string): void {
 /** Write Home.md, generated from the notes, with the health line last. */
 async function writeHome(): Promise<void> {
   const notes = await loadVault(root);
-  writeFileSync(join(root, "Home.md"), homeText(notes, healthLine(health(notes, readLog()))));
+  writeFileSync(join(root, "Home.md"), homeText(notes, healthLine(health(notes))));
 }
 
 /**
@@ -391,7 +391,7 @@ async function lint(): Promise<void> {
   }
   await writeHome();
   const notes = await loadVault(root);
-  const result = lintVault(notes, { read: readLog(), overlap: has("overlap"), templates: has("template"), tracked: trackedFiles(root, "wiki") });
+  const result = lintVault(notes, { overlap: has("overlap"), templates: has("template"), tracked: trackedFiles(root, "wiki") });
   result.warn.push(...relativeDates(notes));
   const touched = [join(root, "Home.md"), ...fixed.map((f) => join(root, f.path))];
   const commit = commitAndPush(fixed.length ? `lint --fix: ${fixed.length} notes` : `lint: ${today()}`, touched);

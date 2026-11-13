@@ -304,27 +304,23 @@ function words(s: string): Set<string> {
  * How stale a note's claim is, or null when it is inside its window.
  *
  * The window is the kind's decay budget, widened or narrowed by confidence,
- * and it runs from the later of `updated` and the last time `recall` returned
- * the note. A retention curve resets on reinforcement: a note read every week
- * is in use, whatever its `updated` line says, and the old rule could not tell
- * that from one nobody had opened.
+ * and it runs from `updated` only. A recall proves a note is used, not that it
+ * is true, so a read does not reset the window; the maintainer's re-check does.
  */
-function staleness(note: Note, read: Record<string, string> = {}, now = new Date()): string | null {
+function staleness(note: Note, now = new Date()): string | null {
   const kind = String(note.fm.kind ?? "");
   if (!(KINDS as readonly string[]).includes(kind)) return null;
   const updated = String(note.fm.updated ?? "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(updated)) return null;
   const window = Math.round(DECAY_DAYS[kind as Kind] * (CONFIDENCE_FACTOR[String(note.fm.confidence)] ?? 1));
-  const last = [updated, read[note.title] ?? ""].sort().at(-1)!;
-  const days = Math.floor((now.getTime() - Date.parse(last)) / 86400_000);
+  const days = Math.floor((now.getTime() - Date.parse(updated)) / 86400_000);
   if (days <= window) return null;
-  const since = last === updated ? `updated ${updated}` : `last read ${last}`;
-  return `${kind}/${note.fm.confidence} wants a re-check every ${window} days; ${since}, ${days} days ago`;
+  return `${kind}/${note.fm.confidence} wants a re-check every ${window} days; updated ${updated}, ${days} days ago`;
 }
 
-export interface LintOptions { read?: Record<string, string>; overlap?: boolean; now?: Date; tracked?: string[]; templates?: boolean }
+export interface LintOptions { overlap?: boolean; now?: Date; tracked?: string[]; templates?: boolean }
 
-export function lintVault(notes: Note[], { read = {}, overlap = false, now = new Date(), tracked = [], templates = false }: LintOptions = {}): { refuse: Finding[]; warn: Finding[] } {
+export function lintVault(notes: Note[], { overlap = false, now = new Date(), tracked = [], templates = false }: LintOptions = {}): { refuse: Finding[]; warn: Finding[] } {
   const refuse: Finding[] = [];
   const warn: Finding[] = [];
   const wiki = wikiNotes(notes);
@@ -373,7 +369,7 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
   }
 
   for (const n of wiki) {
-    const s = staleness(n, read, now);
+    const s = staleness(n, now);
     if (s) warn.push({ note: n.title, rule: "stale", detail: s });
   }
 
@@ -408,8 +404,8 @@ export interface Health { notes: number; dangling: number; stale: number; date: 
  * `stale` is here because nothing else shows it. A decay window that nobody
  * reads is a window that closes quietly, and no hook reports it.
  */
-export function health(notes: Note[], read: Record<string, string> = {}): Health {
-  const { refuse, warn } = lintVault(notes, { read });
+export function health(notes: Note[]): Health {
+  const { refuse, warn } = lintVault(notes);
   const count = (rule: string) => warn.filter((f) => f.rule === rule).length;
   return { notes: wikiNotes(notes).length, dangling: refuse.filter((f) => f.rule === "dangling").length, stale: count("stale"), date: today() };
 }

@@ -647,12 +647,12 @@ describe("health", () => {
     (await cli("write", note("Long Past Its Window", { confidence: "inferred", updated: "2026-01-01" }), "--why", "x"));
     expect(await staleCount()).toBe(before + 1);
     (await cli("recall", "long past its window"));
-    expect(await staleCount()).toBe(before);
+    expect(await staleCount()).toBe(before + 1);
   });
 });
 
 describe("decay", () => {
-  test("the window is per kind and confidence, and a recall resets it", async () => {
+  test("the window is per kind and confidence, and a recall does not reset it", async () => {
     // One date, two verdicts: past a gotcha/inferred window of 30 days, inside a
     // decision/measured window of 270. Relative to today, because a fixed date
     // crosses the wider window as the calendar moves and the test then fails on
@@ -670,7 +670,7 @@ describe("decay", () => {
       .toContain("gotcha/inferred wants a re-check every 30 days");
 
     (await cli("recall", "rots fast"));
-    expect(stale((await cli("lint")))).not.toContain("Rots Fast");
+    expect(stale((await cli("lint")))).toContain("Rots Fast");
     expect(existsSync(join(vault, ".recall.json"))).toBe(true);
     expect(gitStatus()).toBe("");
   });

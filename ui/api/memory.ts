@@ -127,7 +127,7 @@ async function overview(url: URL): Promise<Response> {
   const keep = inScope(project);
   const wiki = wikiNotes(all).filter(keep);
   const names = new Set(wiki.map((n) => n.title));
-  const lint = lintVault(all, { read: readLog(root), tracked: trackedFiles(root, "wiki") });
+  const lint = lintVault(all, { tracked: trackedFiles(root, "wiki") });
   lint.warn.push(...relativeDates(all));
   const mine = (f: { note: string }) => !project || names.has(f.note);
   const body: Record<string, unknown> = {
@@ -196,15 +196,16 @@ function nextDaily(at: string): string {
   return d.toISOString();
 }
 
-/** The `maintain` row: the tick's last result (else the vault's run record), the queue sizes of the last mechanical pass and the notes of the last compile. */
+/** The `maintain` row: the tick's last result (else the vault's run record), the queue sizes of the last mechanical pass and the notes of the last compile and the notes of the last re-check. */
 function maintain(root: string, ran: { at?: string; result: string } | undefined) {
-  const run = readRun(root, "maintain"), compile = readRun(root, "compile");
+  const run = readRun(root, "maintain"), compile = readRun(root, "compile"), recheck = readRun(root, "recheck");
   let counts: Record<string, number> = {};
   try { counts = JSON.parse((run?.detail ?? "").replace(/^dry: /, "")); } catch { /* a failed run's detail is text */ }
   const last = ran?.at ?? run?.at ?? null;
   const notes = /(\d+) notes/.exec(compile?.detail ?? "")?.[1];
-  const detail = [counts.decay !== undefined && `decay ${counts.decay}`, counts.overlap !== undefined && `overlap ${counts.overlap}`, notes && `${notes} notes`].filter(Boolean).join(" · ");
-  return { name: "maintain", runs: "daily after 03:00", last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday into notes" };
+  const rechecked = /(\d+) rechecked/.exec(recheck?.detail ?? "")?.[1];
+  const detail = [counts.decay !== undefined && `decay ${counts.decay}`, counts.overlap !== undefined && `overlap ${counts.overlap}`, notes && `${notes} notes`, rechecked && `${rechecked} rechecked`].filter(Boolean).join(" · ");
+  return { name: "maintain", runs: "daily after 03:00", last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday, re-checks stale notes" };
 }
 
 /** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. The corrections
@@ -228,7 +229,7 @@ async function processes(): Promise<Response> {
   const days = Array.from({ length: KEEP_DAYS }, (_, i) => today(new Date(now - (KEEP_DAYS - 1 - i) * 86400_000)));
   const perDay = days.map((date) => ({ date, pages: mtimes.filter((t) => today(new Date(t)) === date).length }));
   const all = await allNotes(root);
-  const stale = lintVault(all, { read: readLog(root) }).warn.filter((f) => f.rule === "stale");
+  const stale = lintVault(all).warn.filter((f) => f.rule === "stale");
   return json({
     steps,
     episodes: { pages: mtimes.length, keep: KEEP_DAYS, days: perDay, prunes: opLines(root).filter((l) => l.text.startsWith("prune episodes")).slice(0, 5) },

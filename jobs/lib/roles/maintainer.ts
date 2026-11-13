@@ -67,13 +67,17 @@ export function prompt(day: string, digest: string): string {
   ].join("\n");
 }
 
+/** The note's body from its fields; `related` is the Related section's text. */
+export function body(n: Note, day: string, related: string): string {
+  // The write op refuses a claim with no date marker, so code adds it.
+  const claim = /as of \d{4}-\d\d-\d\d/.test(n.claim) ? n.claim : n.claim.replace(/\.?\s*$/, `, as of ${day}.`);
+  return `\n**Claim.** ${claim}\n\n## Details\n\n${n.details}\n\n## Evidence\n\n${n.evidence}\n\n## Related\n\n${related}\n`;
+}
+
 /** The note's file text: frontmatter from its fields, then the body. */
 export function render(n: Note, day: string): string {
   const fm = { aliases: n.aliases ?? [], kind: n.kind, scope: n.scope, confidence: n.confidence, updated: day, supersedes: [], sources: n.sources ?? [], tags: n.tags ?? [] };
-  const related = (n.related?.length ? n.related : ["Home"]).map((t: string) => `- [[${t}]]`).join("\n");
-  // The write op refuses a claim with no date marker, so code adds it.
-  const claim = /as of \d{4}-\d\d-\d\d/.test(n.claim) ? n.claim : n.claim.replace(/\.?\s*$/, `, as of ${day}.`);
-  return `${serializeFrontmatter(fm)}\n**Claim.** ${claim}\n\n## Details\n\n${n.details}\n\n## Evidence\n\n${n.evidence}\n\n## Related\n\n${related}\n`;
+  return serializeFrontmatter(fm) + body(n, day, (n.related?.length ? n.related : ["Home"]).map((t: string) => `- [[${t}]]`).join("\n"));
 }
 
 /** Write each note through the vault `write` op; a refusal is kept with its rule and the rest go on. */

@@ -590,9 +590,9 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "memory": {
       // `maintain` is the whole maintainer: the vault's mechanical pass, the corrections mining and the compile of yesterday. A missing vault falls to the op, which says so.
       if (ctx.command[1] === "maintain" && existsSync(join(resolve(vaultDir()), "Home.md"))) {
-        const r = await maintainAll(resolve(vaultDir()), ctx.rest.includes("--dry"), Date.now(), { mech: true, corr: true, compile: true });
+        const r = await maintainAll(resolve(vaultDir()), ctx.rest.includes("--dry"), Date.now(), { mech: true, corr: true, compile: true, decay: true });
         ctx.out(r);
-        if (!r.ok || r.corrections?.error || r.compile?.error) ctx.code = 1;
+        if (!r.ok || r.corrections?.error || r.compile?.error || r.recheck?.error) ctx.code = 1;
         break;
       }
       // The vault ops print through console and end with an Exit: its output goes to this run's stdout and stderr, its exit code is this one's.

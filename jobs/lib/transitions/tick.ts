@@ -13,6 +13,7 @@ import { vaultDir } from "../../../lib/paths.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
 import { compileDay, yesterday } from "../roles/maintainer.ts";
+import { recheck } from "../roles/recheck.ts";
 import { addDays } from "../learning/monitor-table.ts";
 import { readJsonOr } from "../../../lib/json.ts";
 import { holdsWork } from "../infra/process.ts";
@@ -65,8 +66,8 @@ export function due(s: TickState, step: Periodic, now: number): boolean {
 }
 
 type Json = Record<string, any>;
-/** Which parts of the maintainer a pass runs: the mechanical `maintain`, the corrections mining, the compile of yesterday. */
-export interface Parts { mech: boolean; corr: boolean; compile: boolean }
+/** Which parts of the maintainer a pass runs: the mechanical `maintain`, the corrections mining, the compile of yesterday, the re-check of the stale notes. */
+export interface Parts { mech: boolean; corr: boolean; compile: boolean; decay: boolean }
 
 /** `run`'s result, or `{ error }` when it throws: one failed part does not stop the next. */
 const part = async <T>(run: () => Promise<T>): Promise<T | { error: string }> => {
@@ -76,7 +77,7 @@ const part = async <T>(run: () => Promise<T>): Promise<T | { error: string }> =>
 /**
  * The whole maintainer at `root`, in order: the mechanical pass (`dry` or not), the corrections mining (always live), then
  * a compile again of each failed day of the 3 before yesterday (`retried`), then the compile of yesterday unless it ran
- * already (`dry` while the mechanical pass is dry). One report: the mechanical fields, `corrections`, `retried`, `compile`, and `counts` with `lessons` and `notes` added.
+ * already (`dry` while the mechanical pass is dry), then the re-check of the stale notes. One report: the mechanical fields, `corrections`, `retried`, `compile`, `recheck`, and `counts` with `lessons`, `notes` and `rechecked` added.
  */
 export async function maintainAll(root: string, dry: boolean, now: number, parts: Parts): Promise<Json> {
   const mech = parts.mech ? await sub(["maintain", ...(dry ? ["--dry"] : [])]) : null;
@@ -92,16 +93,18 @@ export async function maintainAll(root: string, dry: boolean, now: number, parts
     }
   }
   if (parts.compile) report.compile = compiledDays(root).includes(day) ? { day, dry, notes: [], skipped: "already compiled" } : await part(() => compileDay(root, day, dry));
+  if (parts.decay) report.recheck = await part(() => recheck(root, dry));
   const notes = report.compile?.notes?.filter((n: Json) => !n.refused).length;
-  report.counts = { ...report.counts, ...(report.corrections?.lessons !== undefined ? { lessons: report.corrections.lessons } : {}), ...(notes !== undefined ? { notes } : {}) };
+  const rechecked = report.recheck?.notes?.filter((n: Json) => !n.refused).length;
+  report.counts = { ...report.counts, ...(report.corrections?.lessons !== undefined ? { lessons: report.corrections.lessons } : {}), ...(notes !== undefined ? { notes } : {}), ...(rechecked !== undefined ? { rechecked } : {}) };
   return report;
 }
 
 /** The one-line result of a pass for the tick: the mechanical counts, then each other part's count or its error. */
 const summary = (r: Json): string => {
-  const c = Object.entries(r.counts as Record<string, number>).filter(([k]) => k !== "lessons" && k !== "notes").map(([k, v]) => `${v} ${k}`).join(", ");
+  const c = Object.entries(r.counts as Record<string, number>).filter(([k]) => k !== "lessons" && k !== "notes" && k !== "rechecked").map(([k, v]) => `${v} ${k}`).join(", ");
   const tail = (k: string, what: string) => (r[k]?.error ? [`${k} failed: ${r[k].error}`] : r.counts[what] !== undefined ? [`${r.counts[what]} ${what}`] : []);
-  return [...(c ? [`${r.dry ? "dry: " : ""}${c}`] : []), ...tail("corrections", "lessons"), ...tail("compile", "notes")].join(" · ");
+  return [...(c ? [`${r.dry ? "dry: " : ""}${c}`] : []), ...tail("corrections", "lessons"), ...tail("compile", "notes"), ...tail("recheck", "rechecked")].join(" · ");
 };
 
 /**
@@ -115,7 +118,7 @@ export async function maintainStep(now = Date.now()): Promise<Json | null> {
   const mech = existsSync(join(root, "Home.md")) && !(at && today(new Date(at)) === today(new Date(now)));
   const corr = correctionsDue(now);
   if (!mech && !corr) return null;
-  const r = await maintainAll(root, true, now, { mech, corr, compile: mech });
+  const r = await maintainAll(root, true, now, { mech, corr, compile: mech, decay: mech });
   if (!r.ok) throw new Error("maintain failed; see its run record");
   return r;
 }
