@@ -177,14 +177,20 @@ function detail(ev) {
   if (ev.tier) return `→ ${esc(routeText(ev))}`;
   if (!ev.tally) return "";
   const ids = (ev.on ?? []).filter((x) => !x.includes("#")).map((x) => idLink(shownId(x), issueHref(x)));
-  return [esc(Object.entries(ev.tally).map(([k, n]) => `${k} ${n}`).join(" · ")), ids.join(" ")].filter(Boolean).join(" ");
+  return [esc(Object.entries(ev.tally).map(([k, n]) => `${TALLY[k] ?? k} ${n}`).join(" · ")), ids.join(" ")].filter(Boolean).join(" ");
 }
 
-/** The past word of a housekeeper action. */
-const DID = { close: "closed", drop: "dropped", retitle: "retitled", reprioritize: "reprioritized", note: "noted", unpark: "unparked" };
+/** The past word of a housekeeper action. A note reads "commented", in the tally too. */
+const DID = { close: "closed", drop: "dropped", retitle: "retitled", reprioritize: "reprioritized", note: "commented", unpark: "unparked" };
+const TALLY = { noted: "commented" };
 
-/** A run's changes as sub-items under its row: the action's past word and the linked issue. */
-const changesHtml = (ev) => (ev.changes ?? []).map((c) => `<span class="event-change">${esc(DID[c.do] ?? c.do)} ${idLink(shownId(c.id), issueHref(c.id))}</span>`).join("");
+/** A run's changes as sub-items for its fold, one per issue: the linked issue, then its actions' past words in the order they ran. */
+function changeRows(ev) {
+  const by = new Map();
+  for (const c of ev.changes ?? []) by.set(c.id, [...(by.get(c.id) ?? []), DID[c.do] ?? c.do]);
+  return [...by].map(([id, did]) => `<div class="event-brief event-change"><span class="event-time"></span>` +
+    `<span class="brief-label">${idLink(shownId(id), issueHref(id))}</span><span class="brief-text">${esc(did.join(" · "))}</span></div>`);
+}
 
 /** An event's sentence in two parts of HTML: its leading ID, and what follows the verb ("the factory is paused", "past its time box"). */
 function parts(ev) {
@@ -218,7 +224,7 @@ export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
     : `${tag(word, chipTone(word))} ${[lead && who + lead, rest !== ev.action && rest, detail(ev)].filter(Boolean).join(" · ")}`;
   return feedRow({ tone: chipTone(word), at: ev.at, by: ev.by, cls: route ? " sys" : "",
     body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
-      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${changesHtml(ev)}${!chat && !route && ev.note ? `<span class="reason" title="${esc(ev.note)}">${esc(ev.note)}</span>` : ""}` });
+      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason" title="${esc(ev.note)}">${esc(ev.note)}</span>` : ""}` });
 }
 
 /** An older event as a label and a short text: a run's role and "#2 ✓", or the chip word and what the sentence adds. */
@@ -252,8 +258,8 @@ const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.act
 
 /** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones briefly behind it; `row(ev, more)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
 const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
-  const older = briefs(events, runs, chats);
-  return { at: events[0].at, key: `event ${hash(eventKey(events[0]))}`, html: older.length ? fold(row(events[0], older.length), `<div class="herald-older">${older.map(briefRow).join("")}</div>`, { cls: "herald-group", id }) : row(events[0]) };
+  const inner = [...changeRows(events[0]), ...briefs(events, runs, chats).map(briefRow)];
+  return { at: events[0].at, key: `event ${hash(eventKey(events[0]))}`, html: inner.length ? fold(row(events[0], inner.length), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(events[0]) };
 });
 
 /** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */

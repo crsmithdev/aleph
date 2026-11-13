@@ -860,7 +860,6 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .event-body.alert, .event-body.error, .event-row.alert .event-body, .event-row.error .event-body, .event-row.stuck .event-body { color: var(--stuck); }
 .event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body, .event-row.need .event-body { color: var(--need); }
 .event-body.fine, .event-row.fine .event-body { color: var(--ink); }
-.event-body .event-change { display: block; margin-left: var(--sp-12); color: var(--muted); font-size: var(--fs-xs); }
 .event-body .reason { color: var(--muted); margin-left: var(--sp-6); font-family: var(--mono); font-size: var(--fs-2xs); }
 /* Ledger rows: a tone stripe at the left, and a state chip in the tone before the sentence's ID. */
 .event-row:not(.live) { border-left: 3px solid var(--stripe, var(--rule)); padding-left: var(--sp-8); }
