@@ -33,6 +33,7 @@ turn                    root: input = the prompt, output = the last assistant
 ├─ <model id>           one generation per API request, with usage and cost
 ├─ <tool name>          real start and end, from a Pre→Post handshake file
 ├─ <agent type>         a subagent, with its own tool spans below it
+├─ text                 one event per assistant text block, in transcript order
 └─ verify-gate          guardrail: verdict and reason
 ```
 
