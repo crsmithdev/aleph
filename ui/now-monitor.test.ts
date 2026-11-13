@@ -72,6 +72,19 @@ test("the Herald shows its alerts under a Not OK badge in the worst alert's tone
   expect(red).toContain('<span class="badge stuck">Not OK</span>');
 });
 
+test("the Herald lists each running job as a compact row between the alerts and the feed, and no section with none", () => {
+  const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
+  const running = [{ id: "a7#1", name: "a7#1", model: "anthropic/claude-opus-4", started: "2026-11-09T11:00:00Z", item: { title: "Fix the thing" } }];
+  const h = view.renderHerald({ ...calm, asks: [ask], running, runningIssues: [{ id: "aleph-9", stage: "intake", title: "Sort it", at: "2026-11-09T11:30:00Z" }] });
+  expect(h.match(/class="run-now"/g)).toHaveLength(2);
+  expect(h).toContain('data-job="a7#1"');
+  expect(h).toContain('data-job="aleph-9"');
+  expect(h).toContain("Fix the thing");
+  expect(h.indexOf('id="awaiting"')).toBeLessThan(h.indexOf('class="herald-running"'));
+  expect(h.indexOf('class="herald-running"')).toBeLessThan(h.indexOf('class="herald-feed"'));
+  expect(view.renderHerald({ ...calm, running: [], runningIssues: [] })).not.toContain("herald-running");
+});
+
 test("the Herald panel shows an OK badge with no alerts and no alert row", () => {
   const h = view.renderHerald(calm);
   expect(h).not.toContain("No active alerts");

@@ -254,6 +254,19 @@ function chatRows(events, chats = {}) {
 /** A status text without the "health: " of each health line, which older history entries carry. */
 const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
+/** The running jobs as compact rows under the alerts, each keyed by `data-job` so a job that ends leaves the section. A job leaves the state when it ends, so the rows are the state's. */
+function runNow(s) {
+  const at = (t) => esc(clock(t) || when(t));
+  const row = (id, who, label, title, t) => `<div class="run-now" data-job="${esc(id)}"><span class="run-dot"></span>${who}<span class="run-label">${esc(label)}</span>` +
+    `<span class="run-title" title="${esc(title)}">${esc(title)}</span><span class="event-time">${at(t)}</span></div>`;
+  const rows = (s.runningIssues ?? []).map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat((s.running ?? []).map((j) => {
+    const run = j.run ?? { kind: "build", started: j.started }, tier = TIERS[j.tier ?? shortModel(j.model)];
+    const label = run.kind === "build" ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : run.kind;
+    return row(j.id ?? j.name, itemId(j), label, j.item?.title || j.name, run.started ?? j.started);
+  }));
+  return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
+}
+
 /** The Herald panel: sticky alerts on top, rolling event history stream below. */
 export function renderHerald(s) {
   const cur = verdict(s, outOfDateNow);
@@ -286,7 +299,7 @@ export function renderHerald(s) {
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
   const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", stuck.length || errors ? "stuck" : "need") : tag("OK", "done");
 
-  return card("Herald", `${sticky}<div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
+  return card("Herald", `${sticky}${runNow(s)}<div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
 }
 
 function wireHeraldJump(root) {

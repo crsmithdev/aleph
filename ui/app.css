@@ -746,8 +746,9 @@ pre.stat b { color: var(--need); }
 .rail-main { container: rail-main / inline-size; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 /* Under 480px Queued goes under Running. */
 @container rail-main (max-width: 480px) { .rail-main .lanes-top { flex-direction: column; } .rail-main .lanes-top > .lane.none { flex-basis: auto; } }
-.rail > .herald-card { position: sticky; top: var(--sp-16); height: calc(100vh - 2 * var(--sp-16)); }
-@media (max-width: 1100px) { .rail { grid-template-columns: minmax(0, 1fr); } .rail > .herald-card { position: static; height: auto; } .rail .herald-feed { max-height: 380px; } }
+/* contain: size takes the card out of the row's height, so the row is as tall as .rail-main and the card stretches to it, never past the viewport. */
+.rail > .herald-card { position: sticky; top: var(--sp-16); align-self: stretch; contain: size; max-height: calc(100vh - 2 * var(--sp-16)); }
+@media (max-width: 1100px) { .rail { grid-template-columns: minmax(0, 1fr); } .rail > .herald-card { position: static; contain: none; max-height: none; } .rail .herald-feed { max-height: 380px; } }
 /* Pipeline: each stage a ring on one track, a bold arrow between; the ring's colour is the stage's failed share. */
 #pipeline { container: pipeline / inline-size; }
 .pflow { display: flex; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-4) 0; }
@@ -826,12 +827,18 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 #monitor .reader { white-space: pre-wrap; color: var(--ink-2); }
 #monitor .findings li + li { margin-top: var(--sp-4); }
 /* ---------- Herald ---------- */
-.herald-card { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; padding: var(--gap-in); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); font-size: var(--fs-sm); position: relative; transition: box-shadow .15s ease-out, border-color .15s ease-out; }
+.herald-card { display: flex; flex-direction: column; gap: var(--sp-8); min-width: 0; padding: var(--gap-in); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); font-size: var(--fs-sm); position: relative; transition: box-shadow .15s ease-out, border-color .15s ease-out; }
 .herald-card.pulsing { border-color: var(--run); box-shadow: 0 0 0 3px var(--run-bg); }
-.herald-sticky { position: sticky; top: 0; background: var(--surface); z-index: var(--z-sticky); border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-10); margin-bottom: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-8); }
+.herald-sticky { position: sticky; top: 0; background: var(--surface); z-index: var(--z-sticky); border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-6); }
 .herald-sticky-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); text-transform: uppercase; letter-spacing: var(--ls-caps); }
-.herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-4); padding-right: var(--sp-4); }
-.event-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: baseline; gap: var(--sp-10); padding: var(--sp-8) var(--sp-10) var(--sp-8) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-sm); }
+/* The running jobs: one line each under the alerts; the dot is static, a later change animates it. */
+.herald-running { flex: none; max-height: 30%; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-bottom: var(--sp-6); border-bottom: 1px solid var(--rule); }
+.run-now { display: flex; align-items: baseline; gap: var(--sp-8); min-width: 0; font-size: var(--fs-xs); }
+.run-dot { width: var(--dot-s); height: var(--dot-s); border-radius: var(--r-pill); background: var(--run); flex: none; align-self: center; }
+.run-label { color: var(--run); font-size: var(--fs-2xs); font-weight: var(--fw-strong); white-space: nowrap; }
+.run-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0; padding-right: var(--sp-4); }
+.event-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: baseline; gap: var(--sp-8); padding: var(--sp-6) var(--sp-8) var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-sm); }
 .event-row:last-child { border-bottom: none; }
 /* A group's +N chip is its expand control, so its row lines up with the plain rows: no fold marker. */
 details.herald-group { margin: 0; padding: 0; border: 0; }
@@ -839,10 +846,10 @@ details.herald-group > summary { display: flex; align-items: baseline; padding: 
 details.herald-group > summary::before { content: none; }
 details.herald-group[open] .event-more { color: var(--ink); background: var(--rule); }
 .herald-group > summary .event-row { flex: 1; min-width: 0; }
-.herald-older { margin: 0 0 var(--sp-6) var(--sp-12); padding: var(--sp-4) var(--sp-10); background: var(--sunk); border-radius: var(--r-card); }
+.herald-older { margin: 0 0 var(--sp-4) var(--sp-12); padding: var(--sp-2) var(--sp-8); background: var(--sunk); border-radius: var(--r-card); }
 .event-more { margin-left: var(--sp-8); font-size: var(--fs-2xs); font-weight: var(--fw-strong); color: var(--muted); padding: 0 var(--sp-6); border-radius: var(--r-tag); background: var(--sunk); }
 /* The event of an alert that still holds: tinted and ringed like an Ask card, as the Herald pins no copy of it. */
-.event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-8) var(--sp-10); margin-bottom: var(--sp-6); }
+.event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-6) var(--sp-8); margin-bottom: var(--sp-4); }
 .event-time { font-family: var(--mono); font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .event-dot { width: var(--dot-s); height: var(--dot-s); border-radius: var(--r-pill); background: var(--muted); flex: none; }
 .event-dot.alert, .event-dot.error { background: var(--stuck); }
