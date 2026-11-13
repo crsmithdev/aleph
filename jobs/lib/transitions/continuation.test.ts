@@ -216,7 +216,7 @@ describe("the worker brief", () => {
   test("an issue's brief has the worker search past work for its title; a spec with no title gets no search", () => {
     folder("jp", { "spec.md": "# Retry the land push\n\n## Goal\n\nx\n" });
     const b = brief("rp1", folder("rp1"), run({ job: "jp" }), repo);
-    expect(b).toContain("## Past work\n\nBefore you plan, run `aleph memory recall --episodes 'Retry the land push'`.");
+    expect(b).toContain("## Past work\n\nBefore you plan, run `aleph memory recall --episodes 'Retry the land push'` as it stands, with no pipe.");
     folder("jq", { "spec.md": "## Goal\n\nx\n" });
     expect(brief("rp2", folder("rp2"), run({ job: "jq" }), repo)).not.toContain("## Past work");
   });

@@ -320,6 +320,11 @@ test("the prompt keeps the spec close to the request and how-to-build questions 
   expect(p).toContain("do not chain parts in a line by habit");
 });
 
+test("the prompt has intake search past work for the issue's title, quoted for the shell", () => {
+  const p = prompt(repo, { id: 1, title: "Fix Chris's land", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
+  expect(p).toContain("# Past work\n\nBefore you plan, run `aleph memory recall --episodes 'Fix Chris'\\''s land'` as it stands, with no pipe.");
+});
+
 const factory = () => process.env.ALEPH_FACTORY_DIR!;
 const grant = (reason: string, action: string) => {
   mkdirSync(factory(), { recursive: true });

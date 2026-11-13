@@ -78,6 +78,10 @@ For each code change, follow the code-change method at the end of this brief. ${
 End with a summary of what you did and what you ran in \`summary\`, each thing said once:
 at most 120 words of prose, plus a list only for separate items.`;
 
+
+/** The text that has an agent search past factory work for `title` before it plans: the worker brief and the intake prompt. */
+export const pastWork = (title: string): string =>
+  `Before you plan, run \`aleph memory recall --episodes '${title.replace(/'/g, "'\\''")}'\` as it stands, with no pipe. It lists the pages of earlier factory work that match. Read each page about the same goal or files, and do not repeat an approach that failed there.`;
 /** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
 export function brief(id: string, folder: string, run: Run, repo: Repo): string {
   if (run.merge) {
@@ -89,7 +93,7 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
   const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${spec}`];
   // An issue's spec opens with `# <title>` (issueBrief).
   const title = /^# (.+)$/m.exec(spec)?.[1].trim();
-  if (title) parts.push(`## Past work\n\nBefore you plan, run \`aleph memory recall --episodes '${title.replace(/'/g, "'\\''")}'\`. It lists the pages of earlier factory work that match. Read each page about the same goal or files, and do not repeat an approach that failed there.`);
+  if (title) parts.push(`## Past work\n\n${pastWork(title)}`);
   const n = onOf(run);
   const media = run.repo && n !== undefined ? runMedia(run.repo, n) : [];
   if (media.length) parts.push(`## Media\n\nChris attached these files to the issue: screenshots, mockups or documents. Read each one with Read before you start, and make the change match what they show.\n\n${media.map((f) => `- ${f}`).join("\n")}`);

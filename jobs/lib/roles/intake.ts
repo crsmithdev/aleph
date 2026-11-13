@@ -9,6 +9,7 @@
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { FULL } from "../../../lib/naming.ts";
+import { pastWork } from "../transitions/continuation.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { areasOf, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
 import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
@@ -287,6 +288,10 @@ ${openIssues(repo, item)}
 
 ${mainSince(repo, item)}
 
+# Past work
+
+${pastWork(item.title)}
+
 # Your reply
 
 One "verdict", with a "reason": one sentence that says why.
@@ -470,7 +475,7 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
       return;
     }
     // `shown`: the tick's own line reports an intake, so the report has no line for the run.
-    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", ...(mediaOf(item).length ? ["--add-dir", mediaDir()] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
+    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(aleph memory recall:*)", ...(mediaOf(item).length ? ["--add-dir", mediaDir()] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
     const noAnswer = (reason: string) => run.end(reason, { cause: "unanswered" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.
