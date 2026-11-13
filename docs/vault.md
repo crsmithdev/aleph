@@ -23,7 +23,7 @@ In a session, the `vault` skill runs these for you.
 |---|---|
 | `init` | Creates the vault |
 | `write <file> --why <text>` | Files a note by its `kind`, adds a line to the daily note, and commits |
-| `recall [--episodes] <query> [--scope <name>]` | Ranks notes by title, alias, contains and body; `--scope` alone lists a scope's notes; `--episodes` adds the matching pages of the factory's `episodes` folder, in the same shape |
+| `recall [--episodes] <query> [--scope <name>]` | Ranks notes by title, alias, contains and body; `--scope` alone lists a scope's notes; `--episodes` searches only the pages of the factory's `episodes` folder, in the same shape |
 | `lint [--fix] [--overlap] [--template]` | Checks every note; `--fix` repairs what is mechanical |
 | `adopt <path> --why <text>` | Takes in a note that was written in the vault by hand |
 | `rename-scope <old> <new> [--apply]` | Renames a scope on every note |

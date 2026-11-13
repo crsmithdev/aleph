@@ -273,6 +273,18 @@ async function recall(): Promise<void> {
   const q = args.filter((a, i) => !a.startsWith("--") && args[i - 1]?.startsWith("--") !== true).join(" ").trim().toLowerCase();
   const scope = flag("scope");
   if (!q && !scope) { console.error('usage: aleph memory recall [--episodes] <query> [--scope <name>]  |  aleph memory recall [--episodes] --scope <name>'); exit(1); }
+  // The episode pages are the factory's, not the vault's: they get a throwaway index and no read log.
+  // They are searched alone, because a vault match list runs to thousands of lines and hides them.
+  if (has("episodes")) {
+    const pages = (await loadVault(join(layout().factory, "episodes"))).filter((n) => scope === undefined || String(n.fm.scope) === scope);
+    const tmp = mkdtempSync(join(tmpdir(), "aleph-episodes-"));
+    try {
+      const db = openIndex(tmp, pages);
+      const ranked = q ? rankNotes(db, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
+      db.close();
+      return out(ranked.map(({ n, r }) => ({ title: n.title, path: join("episodes", n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  }
   // `--scope` alone lists a project's notes: at 165 notes "what do we know
   // about cloudchamber" is a real question, and ranking every note by one word
   // could not answer it.
@@ -289,18 +301,6 @@ async function recall(): Promise<void> {
     console.error(`no note has scope ${scope}; the vault uses: ${known.join(", ")}`);
   }
   const found = hits.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, scope: String(n.fm.scope), frontmatter: n.fm }));
-  // The episode pages are the factory's, not the vault's: they get a throwaway index and no read log.
-  if (has("episodes")) {
-    const dir = join(layout().factory, "episodes");
-    const pages = (await loadVault(dir)).filter((n) => scope === undefined || String(n.fm.scope) === scope);
-    const tmp = mkdtempSync(join(tmpdir(), "aleph-episodes-"));
-    try {
-      const db = openIndex(tmp, pages);
-      const ranked = q ? rankNotes(db, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
-      db.close();
-      found.push(...ranked.map(({ n, r }) => ({ title: n.title, path: join("episodes", n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
-    } finally { rmSync(tmp, { recursive: true, force: true }); }
-  }
   out(found);
 }
 

@@ -695,7 +695,7 @@ describe("recall", () => {
     expect(none.code).toBe(0);
     expect(none.json).toEqual([]);
   });
-  test("--episodes adds the episode pages, keeps the next word in the query, and --scope filters them", async () => {
+  test("--episodes searches only the episode pages, keeps the next word in the query, and --scope filters them", async () => {
     const factory = join(base, "factory");
     mkdirSync(join(factory, "episodes"), { recursive: true });
     writeFileSync(join(factory, "episodes", "aleph-1 Zebra.md"), "---\nkind: episode\nscope: aleph\nupdated: 2026-11-04\n---\n\nThe zebraquill page.\n");
@@ -706,7 +706,7 @@ describe("recall", () => {
     expect(hit[0]).toMatchObject({ title: "aleph-1 Zebra", scope: "aleph", rank: 3, path: "episodes/aleph-1 Zebra.md" });
     expect(hit[0].frontmatter.kind).toBe("episode");
     expect((await run(env, "recall", "zebraquill")).json).toEqual([]);
-    expect((await run(env, "recall", "--episodes", "verify", "gate")).json[0]).toMatchObject({ title: "Verify Gate", rank: 0 });
+    expect((await run(env, "recall", "--episodes", "verify", "gate")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "zebraquill", "--scope", "beamline")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "zebraquill", "--scope", "aleph")).json).toHaveLength(1);
   });
