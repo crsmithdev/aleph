@@ -216,11 +216,13 @@ export async function start() {
   }
 
   // Out-of-date check for a view with `outOfDate`: the browser's clock, from the last good response (or the route's start).
-  let goodAt = Date.now(), failed = false, wasOut = false;
+  // A hidden tab loads nothing, so its time does not count: the clock starts again when the tab shows, and the reload
+  // that the tab's return starts has the full span to land.
+  let goodAt = Date.now(), shownAt = Date.now(), failed = false, wasOut = false;
   function checkOut() {
     const v = page.shown?.view;
-    if (!v?.outOfDate) return;
-    const out = failed || Date.now() - goodAt > 3 * 60 * 1000;
+    if (!v?.outOfDate || document.hidden) return;
+    const out = failed || Date.now() - Math.max(goodAt, shownAt) > 3 * 60 * 1000;
     if (out !== wasOut) { wasOut = out; v.outOfDate($("view"), out); }
   }
 
@@ -312,7 +314,11 @@ export async function start() {
   // Focus moves after `focusout`, so look once it has settled.
   document.addEventListener("focusout", () => setTimeout(page.blur));
   setInterval(page.check, 5000);
-  document.addEventListener("visibilitychange", () => { page.follow(); if (!document.hidden && page.shown?.view?.live) page.reload(); });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) shownAt = Date.now();
+    page.follow();
+    if (!document.hidden && page.shown?.view?.live) page.reload();
+  });
 
   function route() {
     // A view may take over an old address (a view exports `redirect(hash)`).

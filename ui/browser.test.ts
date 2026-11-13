@@ -529,6 +529,21 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.reload();
   }, 30_000);
 
+  test("a tab hidden past the out-of-date span does not say so while the reload on its return runs", async () => {
+    await refreshRig();
+    const stale = 'document.querySelector("#view .shead .say").textContent.includes("out of date")';
+    await page.ev('Object.defineProperty(document, "hidden", { configurable: true, get: () => window.away === true }); window.away = true; document.dispatchEvent(new Event("visibilitychange"))');
+    await page.ev("window.skew += 4 * 60_000");
+    await Bun.sleep(1500);
+    expect(await page.ev(stale)).toBe(false);
+    // The tab shows again; its reload waits on the gate, as a slow server would.
+    await page.ev("void (window.gate = new Promise((ok) => { window.release = ok; })); window.away = false; document.dispatchEvent(new Event(\"visibilitychange\"))");
+    await Bun.sleep(1500);
+    expect(await page.ev(stale)).toBe(false);
+    await page.ev("window.gate = null; window.release()");
+    await page.reload();
+  }, 30_000);
+
   test("a change in the factory folder reloads a live page that used to poll", async () => {
     // The page fetches /api/factory again only on a change: its quiet timer waits a minute.
     const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/factory")).length';
