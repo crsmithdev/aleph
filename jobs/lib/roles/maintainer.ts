@@ -87,8 +87,8 @@ async function put(notes: Note[], day: string): Promise<Written[]> {
       const file = join(dir, `${n.title}.md`);
       writeFileSync(file, render(n, day));
       const r = await sub(["write", file, "--why", `maintainer compile ${day}`]);
-      const first = /^refuse (\S+) .*$/m.exec(r.err);
-      out.push(r.code === 0 ? { ...w, commit: r.json?.commit ?? null } : { ...w, rule: first?.[1], refused: (first?.[0] ?? r.err.trim()) || `exit ${r.code}` });
+      const f = r.json?.findings?.[0];
+      out.push(r.code === 0 ? { ...w, commit: r.json?.commit ?? null } : { ...w, rule: f?.rule, refused: f ? `refuse ${f.rule} ${f.note}: ${f.detail}` : r.err.trim() || `exit ${r.code}` });
     }
     return out;
   } finally {

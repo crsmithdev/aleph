@@ -190,6 +190,12 @@ describe("write", () => {
     expect(r.stderr).toContain("[[Nowhere]] resolves to nothing");
     expect(r.stderr).toContain("[[Also Nowhere]] resolves to nothing");
   });
+  test("a refused write prints its findings as JSON on stdout", async () => {
+    const body = "**Claim.** x as of 2026-09-04.\n\n## Details\n\n## Evidence\n\n## Related\n[[Nowhere]]\n";
+    const r = (await cli("write", note("Dangling Json", {}, body), "--why", "x"));
+    expect(r.code).toBe(1);
+    expect(r.json.findings).toContainEqual(expect.objectContaining({ note: "Dangling Json", rule: "dangling", detail: expect.any(String) }));
+  });
   test("links inside code are not links", async () => {
     const body = "**Claim.** x as of 2026-09-04.\n\n## Details\nuse `[[Title]]` and\n```\n[[Fenced]]\n```\n\n## Evidence\n\n## Related\n[[Home]]\n";
     expect((await cli("write", note("Code Links", {}, body), "--why", "x")).code).toBe(0);

@@ -53,6 +53,7 @@ function commitAndPush(subject: string, paths: string[]): string | null {
 function refuse(findings: Finding[], hint?: string): never {
   for (const f of findings) console.error(`refuse ${f.rule} ${f.note}: ${f.detail}`);
   if (hint) console.error(hint);
+  out({ findings });
   exit(1);
 }
 

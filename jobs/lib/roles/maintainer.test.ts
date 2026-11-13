@@ -54,8 +54,8 @@ const notes = () => allRuns().filter((e) => e.run.kind === "maintainer");
 test("a real compile writes each note through the vault write op, keeps a refusal with its rule, drops core and records the day", async () => {
   reply([note("Keep The Digest"), note("Bad Link", { related: ["No Such Note"] }), note("Core Try", { core: "always on" })]);
   const r = await compileDay(root, DAY, false);
-  expect(r.notes.map((n) => [n.title, !!n.commit, n.rule])).toEqual([["Keep The Digest", true, undefined], ["Bad Link", false, expect.any(String)], ["Core Try", true, undefined]]);
-  expect(r.notes[1].refused).toMatch(/^refuse /);
+  expect(r.notes.map((n) => [n.title, !!n.commit, n.rule])).toEqual([["Keep The Digest", true, undefined], ["Bad Link", false, "dangling"], ["Core Try", true, undefined]]);
+  expect(r.notes[1].refused).toMatch(/^refuse dangling Bad Link/);
   expect(existsSync(join(root, "wiki", "decisions", "Keep The Digest.md"))).toBe(true);
   expect(existsSync(join(root, "wiki", "decisions", "Bad Link.md"))).toBe(false);
   expect(readFileSync(join(root, "wiki", "decisions", "Core Try.md"), "utf8")).not.toContain("core:");
