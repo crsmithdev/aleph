@@ -266,6 +266,9 @@ async function write(): Promise<void> {
   out({ op: archived.length ? "supersede" : "write", title: draft.title, path: relative(root, dest), archived, commit });
 }
 
+// A query returns the best few: an agent reads the top of the list, and a full match list ran to 10,323 lines.
+const TOP = 10;
+
 async function recall(): Promise<void> {
   requireVault();
   // `--episodes` takes no value, so the word after it stays in the query.
@@ -276,13 +279,14 @@ async function recall(): Promise<void> {
   // The episode pages are the factory's, not the vault's: they get a throwaway index and no read log.
   // They are searched alone, because a vault match list runs to thousands of lines and hides them.
   if (has("episodes")) {
-    const pages = (await loadVault(join(layout().factory, "episodes"))).filter((n) => scope === undefined || String(n.fm.scope) === scope);
+    const dir = join(layout().factory, "episodes");
+    const pages = (await loadVault(dir)).filter((n) => scope === undefined || String(n.fm.scope) === scope);
     const tmp = mkdtempSync(join(tmpdir(), "aleph-episodes-"));
     try {
       const db = openIndex(tmp, pages);
       const ranked = q ? rankNotes(db, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
       db.close();
-      return out(ranked.map(({ n, r }) => ({ title: n.title, path: join("episodes", n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
+      return out((q ? ranked.slice(0, TOP) : ranked).map(({ n, r }) => ({ title: n.title, path: join(dir, n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   }
   // `--scope` alone lists a project's notes: at 165 notes "what do we know
@@ -291,7 +295,7 @@ async function recall(): Promise<void> {
   const notes = wikiNotes(await loadVault(root));
   const scoped = notes.filter((n) => scope === undefined || String(n.fm.scope) === scope);
   const hits = q
-    ? rankNotes(openIndex(root, notes), scoped, q, scope).map(({ note, rank }) => ({ n: note, r: rank }))
+    ? rankNotes(openIndex(root, notes), scoped, q, scope).slice(0, TOP).map(({ note, rank }) => ({ n: note, r: rank }))
     : scoped.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
   noteRead(hits.map(({ n }) => n.title), q);
   // A scope nobody uses is almost always a misspelling of one that exists, and

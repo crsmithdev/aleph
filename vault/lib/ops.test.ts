@@ -703,12 +703,25 @@ describe("recall", () => {
     const env = { ALEPH_VAULT: vault, ALEPH_FACTORY_DIR: factory };
     const hit = (await run(env, "recall", "--episodes", "zebraquill")).json;
     expect(hit).toHaveLength(1);
-    expect(hit[0]).toMatchObject({ title: "aleph-1 Zebra", scope: "aleph", rank: 3, path: "episodes/aleph-1 Zebra.md" });
+    expect(hit[0]).toMatchObject({ title: "aleph-1 Zebra", scope: "aleph", rank: 3, path: join(factory, "episodes", "aleph-1 Zebra.md") });
     expect(hit[0].frontmatter.kind).toBe("episode");
     expect((await run(env, "recall", "zebraquill")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "verify", "gate")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "zebraquill", "--scope", "beamline")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "zebraquill", "--scope", "aleph")).json).toHaveLength(1);
+  });
+  test("a query returns the top 10 matches, and --scope alone lists every note", async () => {
+    const factory = join(base, "factory");
+    mkdirSync(join(factory, "episodes"), { recursive: true });
+    mkdirSync(join(vault, "wiki", "gotchas"), { recursive: true });
+    for (let i = 0; i < 12; i++) {
+      writeFileSync(join(factory, "episodes", `aleph-${i} Page.md`), `---\nkind: episode\nscope: aleph\nupdated: 2026-11-04\n---\n\nThe quokkaflux page.\n`);
+      writeFileSync(join(vault, "wiki", "gotchas", `Quokka ${i}.md`), readFileSync(note(`Quokka ${i}`), "utf8"));
+    }
+    const env = { ALEPH_VAULT: vault, ALEPH_FACTORY_DIR: factory };
+    expect((await run(env, "recall", "--episodes", "quokkaflux")).json).toHaveLength(10);
+    expect((await run(env, "recall", "quokka")).json).toHaveLength(10);
+    expect((await run(env, "recall", "--episodes", "--scope", "aleph")).json).toHaveLength(12);
   });
   test("--scope narrows the search, and alone it lists the scope", async () => {
     (await cli("write", note("Scoped To Beamline", { scope: "beamline" }), "--why", "x"));
