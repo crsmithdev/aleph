@@ -355,7 +355,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
  * `ALEPH_START_CMD` is text from another process, so it names no gate.
  */
 export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<Refused | null> {
-  const picked = tier !== undefined ? tier : await route(spec);
+  const picked = tier !== undefined ? tier : await route(spec, name);
   // A rerun of an issue whose build run failed takes the next level up; a run that did no work (credit) or hit the host (infra) does not count.
   const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.kind) && e.run.condition === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
   const routed = picked && failed ? raise(picked) : picked;

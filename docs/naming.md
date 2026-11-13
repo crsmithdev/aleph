@@ -49,7 +49,11 @@ Every event has these fields: a log row, a job's end, a Status card line, a repo
 | `count` | `<n> / <limit or window>` | `3 / 1h` |
 | `result` | the state of the `on` job | `dropped` |
 | `to` | who decides next: `human` or `director` | `director` |
-| `cost` | dollars of the run that ended, number | `1.5` |
+| `cost` | dollars of the run or call that ended, number | `1.5` |
+| `tier` | the tier a `routed` event chose | `worker-medium` |
+| `model` | the worker model of that tier | `sonnet` |
+| `p` | the router's confidence in the tier, number | `0.99` |
+| `tally` | counts of what a run did, by word | `{reviewed: 6, dropped: 2}` |
 | `commit` | the commit a landed run made | `abc1234` |
 | `note` | free text | |
 
@@ -78,7 +82,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
 | Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered, refused |
 | Sub | yes | no-commit, timeout, stalled, infra, locked, credit, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, contradiction, other |
-| Actor | yes | human, rule, gate, worker, reviewer, check, intake, director, monitor, firefighter |
+| Actor | yes | human, rule, gate, worker, reviewer, check, intake, director, monitor, firefighter, claude |
 | Kind | yes, never shown | build, recheck, land, intake, director, monitor, chat |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |

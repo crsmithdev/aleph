@@ -146,6 +146,8 @@ test("sayText says an event in the active voice, its job or issue first, the sub
     [{ subject: "aleph-3", action: "waiting", to: "human" }, "a3 waits for you"],
     [{ subject: "aleph-3", action: "after", on: ["aleph-2"] }, "a3 waits for a2"],
     [{ subject: "aleph-3", action: "filed", by: "human" }, "a3 filed by you"],
+    [{ subject: "aleph-3", action: "filed", by: "claude" }, "a3 filed by Claude Code"],
+    [{ subject: "aleph-3", action: "filed", by: "worker" }, "a3 filed by a worker"],
   ];
   for (const [ev, text] of cases) expect(n.sayText(ev)).toBe(text);
 });

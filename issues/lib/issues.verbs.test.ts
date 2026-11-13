@@ -244,7 +244,7 @@ test("add files through writeFiling: one filed event and one after per new issue
   const before = readEvents().length;
   const n = (await add("Start the dispatch on a filing")).result.added;
   expect(started).toEqual([`proj-${n}`]);
-  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["rule", `proj-${n}`]]);
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["human", `proj-${n}`]]);
   expect((await code(() => add("Fix: the title has a prefix"))).code).toBe(1);
   expect(started).toEqual([`proj-${n}`]);
 });

@@ -153,11 +153,21 @@ const MARK = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returne
 /** The leading verb of a sentence after its ID, with the words that only join it to the rest. */
 const VERB = /^ ?(?:(?:is|has|asks|proposes|hit) |\S+(?: up| its checks)?(?: by| for| to)?(?::|$| ))\s*/;
 
-/** A routing note, "cost … model M tier T p P", as "T · M · p P"; any other note as it is. */
-const routeText = (note = "") => {
+/** What a routing event chose, "worker-medium · sonnet · p 0.99 · $0.00003", from its fields. An event from before the fields has a note, "cost … model M tier T p P", read as "T · M · p P"; any other note as it is. */
+const routeText = (ev) => {
+  if (ev.tier) return [ev.tier, ev.model, `p ${ev.p}`, ev.cost !== undefined && `$${Number(ev.cost.toFixed(5))}`].filter(Boolean).join(" · ");
+  const note = ev.note ?? "";
   const m = Object.fromEntries([...note.matchAll(/(\w+) (\S+)/g)].map(([, k, v]) => [k, v]));
   return m.tier ? `${m.tier} · ${shortModel(m.model?.split("/").pop())} · p ${m.p}` : note;
 };
+
+/** What an event's own fields add to its row, as HTML: a routing event's choice, a tally's counts with the issues it changed linked. */
+function detail(ev) {
+  if (ev.tier) return `→ ${esc(routeText(ev))}`;
+  if (!ev.tally) return "";
+  const ids = (ev.on ?? []).filter((x) => !x.includes("#")).map((x) => idLink(shownId(x), issueHref(x)));
+  return [esc(Object.entries(ev.tally).map(([k, n]) => `${k} ${n}`).join(" · ")), ids.join(" ")].filter(Boolean).join(" ");
+}
 
 /** An event's sentence in two parts of HTML: its leading ID, and what follows the verb ("the factory is paused", "past its time box"). */
 function parts(ev) {
@@ -181,13 +191,13 @@ function stateWord(ev, run) {
 
 /** An event's row: the time, then the issue's title, and under it the state, the ID and what the sentence adds. A chat turn's line is its message; a routing event's is its tier and model. `more` is the count of older rows folded behind it; `run` is the kind of the event's run. */
 export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
-  const chat = ev.subject === "chat", route = ev.action === "routed";
+  const chat = ev.subject === "chat", route = ev.action === "routed" && !ev.tier;
   const title = chat || route ? "" : titles[ev.subject] ?? "";
   const { lead, rest } = chat || route ? { lead: "", rest: "" } : parts(ev);
   const word = stateWord(ev, run);
   const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "")
-    : route ? esc(routeText(ev.note))
-    : `${tag(word, tone(ev.action))} ${[lead, rest !== word && rest].filter(Boolean).join(" · ")}`;
+    : route ? esc(routeText(ev))
+    : `${tag(word, tone(ev.action))} ${[lead, rest !== word && rest, detail(ev)].filter(Boolean).join(" · ")}`;
   return feedRow({ tone: tone(ev.action), at: ev.at, by: ev.by, cls: route ? " sys" : "",
     body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
       `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason" title="${esc(ev.note)}">${esc(ev.note)}</span>` : ""}` });
@@ -198,11 +208,11 @@ function brief(ev, runs = {}, chats = {}) {
   const job = jobOf(ev), run = runs[job], n = job?.match(/#\d+$/)?.[0] ?? "";
   const cut = (s) => esc(s ?? "");
   if (ev.subject === "chat") return { ev, label: "", text: cut(chats[ev.on?.[0]]?.title) };
-  if (ev.action === "routed") return { ev, label: "routed", text: cut(routeText(ev.note)) };
-  const { lead, rest } = parts(ev), note = ev.note ? ` <span class="reason" title="${cut(ev.note)}">${cut(ev.note)}</span>` : "";
+  if (ev.action === "routed") return { ev, label: "routed", text: cut(routeText(ev)) };
+  const { lead, rest } = parts(ev), more = detail(ev) && ` ${detail(ev)}`, note = ev.note ? ` <span class="reason" title="${cut(ev.note)}">${cut(ev.note)}</span>` : "";
   if (WAITS.has(ev.action)) return { ev, label: "waits", text: (rest || lead) + note };
-  if (run) return { ev, label: run, text: `${n} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${note}` };
-  return { ev, label: ev.action === "started" ? "picked" : ev.action, text: (rest || lead) + note };
+  if (run) return { ev, label: run, text: `${n} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${more}${note}` };
+  return { ev, label: ev.action === "started" ? "picked" : ev.action, text: (rest || lead) + more + note };
 }
 
 /** The older rows of a group, newest first: no start of a job with another event, nor of a run kind with a newer one, and a run of waits as one row. */

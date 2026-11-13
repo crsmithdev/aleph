@@ -31,8 +31,8 @@ test("a Jev 500 gives no model and logs no event", async () => {
 
 test("a low pick at p >= 0.6 gives worker-low, worker-medium when worker-low is disabled, and opus when both are disabled", async () => {
   reply = { status: 200, body: { answers: { tier: { type: "choice", choice: "worker-low", probabilities: { "worker-low": 0.7 } } }, cost: 0, model: "m" } };
-  expect(await route("x")).toBe("worker-low");
-  expect(readEvents().find((e) => e.action === "routed")?.note).toBe("cost 0 model m tier worker-low p 0.7");
+  expect(await route("x", "aleph-5")).toBe("worker-low");
+  expect(readEvents().find((e) => e.action === "routed")).toMatchObject({ subject: "aleph-5", tier: "worker-low", model: "haiku", p: 0.7, cost: 0, note: "classifier m" });
   expect(setModel("worker-low", { enabled: false })).toBeNull();
   expect(await route("x")).toBe("worker-medium");
   expect(setModel("worker-medium", { enabled: false })).toBeNull();

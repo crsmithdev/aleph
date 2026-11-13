@@ -237,6 +237,14 @@ test("the Herald's older rows under an issue are labelled by their run's kind wi
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
 });
 
+test("the Herald draws a routing event with fields as the issue's row: its title, the tier, the worker model, p and the cost", () => {
+  const events = [{ at: "2026-11-09T10:00:00Z", by: "rule", subject: "aleph-9", action: "routed", tier: "worker-medium", model: "sonnet", p: 0.99, cost: 0.00003, note: "classifier jev-1.13" }];
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the thing" }, chats: {}, runs: {} } });
+  expect(h).toContain("Fix the thing");
+  expect(h).toContain("→ worker-medium · sonnet · p 0.99 · $0.00003");
+  expect(h).toMatch(/badge[^>]*>routed</);
+});
+
 test("the Herald hides an older start of a run with a newer event, joins a run of waits into one row, and draws a routing event as tier, model and p", () => {
   const events = [
     { at: "2026-11-09T13:00:00Z", by: "gate", subject: "aleph-9", action: "passed", on: ["aleph-9#2"] },
@@ -254,4 +262,11 @@ test("the Herald hides an older start of a run with a newer event, joins a run o
   expect(rows[0]).toMatch(/brief-label" title="waits">waits<\/span><span class="brief-text" title="[^"]*"><a[^>]*>aleph-8<\/a> holds now\.js, <a[^>]*>aleph-7<\/a><\/span>/);
   expect(h).toContain('<div class="event-row quiet sys" data-by="rule">');
   expect(h).toContain("worker-medium · jev-1.13 · p 0.83");
+});
+
+test("the Herald draws a housekeeper's done event with its tally and the issues it changed linked", () => {
+  const events = [{ at: "2026-11-09T10:00:00Z", by: "gate", subject: "housekeeper", action: "done", on: ["housekeeper#24", "aleph-7", "aleph-9"], cost: 0.33, tally: { reviewed: 6, unparked: 1, dropped: 2 } }];
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: {} } });
+  expect(h).toContain("reviewed 6 · unparked 1 · dropped 2");
+  expect(h).toMatch(/dropped 2 <a[^>]*>aleph-7<\/a> <a[^>]*>aleph-9<\/a>/);
 });

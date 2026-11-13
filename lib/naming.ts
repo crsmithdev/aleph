@@ -16,7 +16,7 @@ export const SUBS = [
   "duplicate", "met", "manual", "protected", "question", "intake", "capped", "override", "error", "rescue",
   "local", "starts", "contradiction",
 ];
-export const ACTORS = ["human", "rule", "gate", "worker", "reviewer", "check", "intake", "director", "monitor", "firefighter"];
+export const ACTORS = ["human", "rule", "gate", "worker", "reviewer", "check", "intake", "director", "monitor", "firefighter", "claude"];
 /** The kinds of an issue. */
 export const ISSUE_KINDS = ["task", "bug", "check", "flake", "acceptance"] as const;
 export const KINDS = ["build", "recheck", "land", "intake", "director", "monitor", "chat", "lens", "housekeeper", "maintainer"];
@@ -110,13 +110,13 @@ export const shortText = (text: unknown): string => String(text ?? "").replace(F
 /** An event with its words checked; throws on a word outside its set. */
 export interface Event {
   at: string; by: string; subject: string; action: string; sub?: string; on?: string[]; file?: string; count?: string;
-  result?: string; to?: string; note?: string; cost?: number; commit?: string;
+  result?: string; to?: string; note?: string; cost?: number; commit?: string; tier?: string; model?: string; p?: number; tally?: Record<string, number>;
 }
-export function event({ at, by, subject, action, sub, on, file, count, result, to, note, cost, commit }: Omit<Event, "at"> & { at?: string }): Event {
+export function event({ at, by, subject, action, sub, on, file, count, result, to, note, cost, commit, tier, model, p, tally }: Omit<Event, "at"> & { at?: string }): Event {
   const bad = ([["by", by, ACTORS], ["action", action, ACTIONS], ["sub", sub, SUBS], ["result", result, STATES], ["to", to, ["human", "director"]],
   ] as [string, string | undefined, string[]][]).find(([, v, set]) => v !== undefined && !set.includes(v));
   if (bad) throw new Error(`naming: ${bad[0]} "${bad[1]}" is not in its set`);
-  const e = { at: at ?? new Date().toISOString(), by, subject, action, sub, on, file, count, result, to, note, cost, commit };
+  const e = { at: at ?? new Date().toISOString(), by, subject, action, sub, on, file, count, result, to, note, cost, commit, tier, model, p, tally };
   return Object.fromEntries(Object.entries(e).filter(([, v]) => v !== undefined && !(Array.isArray(v) && !v.length))) as unknown as Event;
 }
 
@@ -152,7 +152,7 @@ const SAY: Record<string, string> = {
   protected: "{issue} asks to change a protected file", question: "{issue} asks a question", incomplete: "{issue} has a dropped part",
   capped: "{issue} hit its run cap", proposal: "{issue} proposes a change",
   reran: "{id} reran", started: "{issue} picked up", missed: "{issue} missed", skipped: "{issue} skipped", filed: "{issue} filed by {by}",
-  escalated: "{issue} escalated to you", changed: "{issue} changed", answered: "{issue} answered by {by}", routed: "Routing chose a model",
+  escalated: "{issue} escalated to you", changed: "{issue} changed", answered: "{issue} answered by {by}", routed: "{issue} routed",
 };
 /** What a `sub` adds after a colon when no `action.sub` sentence exists; "" adds nothing. */
 const BECAUSE: Record<string, string> = {
@@ -161,7 +161,7 @@ const BECAUSE: Record<string, string> = {
   unanswered: "no answer", other: "", duplicate: "a duplicate", met: "goal met", manual: "by hand", protected: "a protected file",
   question: "a question", intake: "intake", capped: "run cap", override: "override", error: "an error", rescue: "rescue", local: "", starts: "",
 };
-const WHO: Record<string, string> = { human: "you", rule: "a rule", gate: "the gate", worker: "a worker", reviewer: "review", director: "the director", firefighter: "the firefighter" };
+const WHO: Record<string, string> = { human: "you", rule: "a rule", gate: "the gate", worker: "a worker", reviewer: "review", director: "the director", firefighter: "the firefighter", claude: "Claude Code" };
 
 /** A piece of a sentence: text, or an ID the page links. */
 export type Said = string | { id: string };

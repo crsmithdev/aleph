@@ -179,7 +179,7 @@ function logChanges(was: Map<string, string>, runs: RunRecord[]): void {
   for (const x of runs) {
     if (was.get(x.id) === x.condition) continue;
     const sub = x.condition === "running" ? undefined : x.cause ?? x.fate;
-    try { logEvent({ by: "gate", subject: subjectOf(x), action: x.condition, sub, on: [jobIdOf({ id: x.id, run: x })], ...(x.condition === "running" ? {} : { cost: x.cost }), ...(x.condition === "landed" ? { commit: x.commit } : {}) }); }
+    try { logEvent({ by: "gate", subject: subjectOf(x), action: x.condition, sub, on: [jobIdOf({ id: x.id, run: x }), ...(x.touched ?? [])], ...(x.tally ? { tally: x.tally } : {}), ...(x.condition === "running" ? {} : { cost: x.cost }), ...(x.condition === "landed" ? { commit: x.commit } : {}) }); }
     catch (e) { console.error(`record: no event for ${x.id}: ${(e as Error).message}`); }
   }
 }

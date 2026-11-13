@@ -206,6 +206,9 @@ async function applyOne(b: Batch, a: Action): Promise<string | null> {
   return refusal(async () => dispatchAfterIssue(repo, verbs.edit(repo, idArg(a.id), { status: "open" }, said(a.why)).item));
 }
 
+/** The tally word of each action. */
+const WORD = [["close", "closed"], ["drop", "dropped"], ["retitle", "retitled"], ["reprioritize", "reprioritized"], ["note", "noted"], ["unpark", "unparked"]] as const;
+
 export interface Outcome { repo: string; ids: string[]; applied: string[]; refused: string[]; error?: string }
 
 /** One run on one batch: its reply's actions, each applied or refused. A failed run applies nothing. */
@@ -228,12 +231,18 @@ export async function review(b: Batch, now: number): Promise<Outcome> {
     run.end(`failed: ${out.error}`, { cause: "unanswered" });
     return out;
   }
+  const did: Action[] = [];
   for (const a of reply.actions as Action[]) {
     const why = await applyOne(b, a);
+    if (!why) did.push(a);
     (why ? out.refused : out.applied).push(why ? `${describe(a)}: refused: ${why}` : describe(a));
   }
   writeFileSync(runFile(run.folder, "result.md"), [`# Applied`, ...out.applied.map((l) => `- ${l}`), "", `# Refused`, ...out.refused.map((l) => `- ${l}`), ""].join("\n"));
-  run.end(`${out.applied.length} applied, ${out.refused.length} refused`);
+  const tally = { reviewed: ids.length, ...Object.fromEntries(WORD.map(([k, w]) => [w, did.filter((a) => a.do === k).length])), refused: out.refused.length };
+  run.end(`${out.applied.length} applied, ${out.refused.length} refused`, {
+    tally: Object.fromEntries(Object.entries(tally).filter(([, n]) => n)),
+    touched: [...new Set(did.map((a) => `${b.repo.key}-${a.id}`))],
+  });
   return out;
 }
 

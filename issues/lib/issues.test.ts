@@ -7,6 +7,7 @@ import * as store from "./store.ts";
 import * as issueOps from "./issues.ts";
 import { Refusal } from "../../lib/refusal.ts";
 import { askOf, setAsk, refIn } from "../../jobs/lib/asks/ask.ts";
+import { readEvents } from "../../lib/layout.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -87,6 +88,25 @@ describe("issue verbs without argv", () => {
     expect(issueOps.edit(r, 1, { status: "open" }).result.status).toBe("open");
     const a = await issueOps.add(r, "filed parked", { status: "parked" }, quiet);
     expect(issues.status(item(r, a.result.added))).toBe("parked");
+  });
+
+  test("the filed event names who filed: Chris, a Claude Code session or a factory agent", async () => {
+    const saved = { agent: process.env.ALEPH_AGENT, code: process.env.CLAUDECODE };
+    const by = async (env: Record<string, string | undefined>) => {
+      const r = repo();
+      delete process.env.ALEPH_AGENT;
+      delete process.env.CLAUDECODE;
+      Object.assign(process.env, env);
+      const a = await issueOps.add(r, "who filed", {}, quiet);
+      return readEvents(0).find((e) => e.action === "filed" && e.subject === `${r.key}-${a.result.added}`)?.by;
+    };
+    try {
+      expect(await by({})).toBe("human");
+      expect(await by({ CLAUDECODE: "1" })).toBe("claude");
+      expect(await by({ CLAUDECODE: "1", ALEPH_AGENT: "1" })).toBe("worker");
+    } finally {
+      for (const [k, v] of [["ALEPH_AGENT", saved.agent], ["CLAUDECODE", saved.code]] as const) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
   });
 
   test("edit with nothing to change is refused", () => {

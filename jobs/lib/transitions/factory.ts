@@ -118,7 +118,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
       const item = open ? listed : buildableIssue(repo, ref);
       if (!item) { skip(name, "not-ready", "not a goal", { action: "parent" }); continue; }
       // A pass that began before a pause must not start a run after it.
-      const d = await decideStart(repo, { ...issueFacts(repo, item, jobs), done, red }, jobs, () => route(issueBrief(item, name, jobs).spec));
+      const d = await decideStart(repo, { ...issueFacts(repo, item, jobs), done, red }, jobs, () => route(issueBrief(item, name, jobs).spec, name));
       if (d.kind !== "ready" && d.kind !== "loop-guard") { held(name, repo, d); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);

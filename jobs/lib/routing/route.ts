@@ -20,14 +20,14 @@ const TIER_QUESTION = {
 };
 
 /** The tier for a spec, or null (no --model) when Jev is off, errs, or is not sure enough. A disabled tier gives the next enabled tier up. */
-export async function route(spec: string): Promise<Tier | null> {
+export async function route(spec: string, subject = "route"): Promise<Tier | null> {
   if (judgeChoice() === "haiku") return null;
   try {
     const d = await decide({ goal: spec }, { tier: TIER_QUESTION });
     const a = d.answers.tier;
     if (a.type !== "choice") return null;
     const p = a.probabilities?.[a.choice] ?? a.confidence ?? 0;
-    try { logEvent({ by: "rule", subject: "route", action: "routed", note: `cost ${d.cost} model ${d.model} tier ${a.choice} p ${p}` }); } catch { /* the cost event is a note; it never changes the tier */ }
+    try { logEvent({ by: "rule", subject, action: "routed", tier: a.choice, model: TIER_MODEL[a.choice as Tier], p, cost: d.cost, note: `classifier ${d.model.split("/").pop()}` }); } catch { /* the cost event is a note; it never changes the tier */ }
     if (!(TIERS as readonly string[]).includes(a.choice) || p < CUT) return null;
     const models = readModels();
     return TIERS.slice(TIERS.indexOf(a.choice as Tier)).find((t) => t === "opus" || models[t].enabled)!;

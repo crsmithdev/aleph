@@ -125,6 +125,9 @@ function checkAfter(after: string[]): void {
   for (const r of after) if (!FULL.test(r)) refuse(`--after takes ids like <repo>-<n> or <repo>-<n>.<k>: ${r}`);
 }
 
+/** Who runs this command: a factory agent (`ALEPH_AGENT`), a Claude Code session (`CLAUDECODE`), else Chris at a shell. */
+const actor = (): string => (process.env.ALEPH_AGENT ? "worker" : process.env.CLAUDECODE ? "claude" : "human");
+
 /**
  * Add an issue, with its areas from the triage unless `fields.labels` is given. With `fields.spec` it is buildable as filed;
  * `fields.after` is what it waits for. `item` is the stored issue, `follow` a store warning. It is filed through
@@ -141,7 +144,7 @@ export async function add(repo: store.Place, title: string, fields: Fields, effe
   const files = readMedia(fields.media ?? []);
   const blobs: Record<string, Uint8Array> = {};
   const t = await triage(store.reader().list(repo.key), title, fields.request ?? spec ?? "");
-  const w = refusing(() => store.writeFiling(repo, "todo: add an item", "rule", effects, (doc, file) => {
+  const w = refusing(() => store.writeFiling(repo, "todo: add an item", actor(), effects, (doc, file) => {
     const labels = fields.labels ?? t.labels;
     // Claude Code sets CLAUDECODE in its shells; a label that implies a source still wins over it.
     const implied = labels.some((l) => ["followup", "memory"].includes(l));
@@ -250,7 +253,7 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
     return i;
   })!;
   if (how === "drop") clearAsk(refIn(repo.key, w.value));
-  logEvent({ by: "rule", subject: refIn(repo.key, w.value), action: how === "done" ? "done" : "dropped" });
+  logEvent({ by: actor(), subject: refIn(repo.key, w.value), action: how === "done" ? "done" : "dropped" });
   return { result: { repo: repo.key, id: w.value.id, status: issues.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };
 }
 
