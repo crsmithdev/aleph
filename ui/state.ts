@@ -338,6 +338,7 @@ export function state(now = new Date()): State {
   const { lists, toJob, stagesOf, isDone, blocker } = jobProjector(registry, jobs);
 
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
+  const issueStatus = (j: Job) => { const it = j.item !== null ? lists.item(j.repo, j.item.id) : undefined; return it && status(it); };
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   for (const runs of jobs) {
     const last = counting(runs).run;
@@ -358,6 +359,8 @@ export function state(now = new Date()): State {
       if (isWaiting(real.condition)) needs.push(toJob(runs));
       // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not stuck.
       else if ((real.condition === "returned" || real.condition === "failed") && !real.next) stuck.push(toJob(runs));
+      // A passed job whose issue is parked holds its land until the issue reopens: no agent runs.
+      else if (real.condition === "passed" && issueStatus(toJob(runs)) === "parked") continue;
       else {
         liveJobs.add(real.job);
         const k = issueKeyOf(real);
@@ -368,7 +371,7 @@ export function state(now = new Date()): State {
   }
 
   // A dropped issue holds no Ask and no stuck run.
-  const droppedJob = (j: Job) => { const it = j.item !== null ? lists.item(j.repo, j.item.id) : undefined; return it !== undefined && status(it) === "dropped"; };
+  const droppedJob = (j: Job) => issueStatus(j) === "dropped";
   for (const list of [needs, stuck]) list.splice(0, list.length, ...list.filter((j) => !droppedJob(j)));
 
   for (const j of [...needs, ...stuck]) {

@@ -335,3 +335,20 @@ describe("a returned run whose rework is queued", () => {
     }
   });
 });
+
+describe("a passed job whose issue is parked", () => {
+  test("is not running, because its land waits for the issue to reopen; one whose issue is open is", () => {
+    const id: number[] = [];
+    writeList({ key: "fac" }, "held lands", (doc) => {
+      for (const t of ["parked land", "open land"]) id.push(add(doc, t).id);
+      setStatus(doc.items.find((i) => i.id === id[0])!, "parked");
+      return true;
+    });
+    const [held, open] = id.map((n) => `fac-${n}`);
+    run("20261027-000090-a", { job: held, name: held, condition: "passed", next: "land", reason: `issue ${held} is parked`, on: held });
+    run("20261027-000091-a", { job: open, name: open, condition: "passed", next: "land", on: open });
+    const names = state(now).running.map((j) => j.name);
+    expect(names).not.toContain(held);
+    expect(names).toContain(open);
+  });
+});
