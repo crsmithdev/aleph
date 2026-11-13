@@ -31,6 +31,26 @@ export function parse(jsonl: string): Request[] {
 /** The fixed parts of a transcript: its text (the tools as the array) and the model of its first request. */
 interface Scan { out: Request[]; fixed: [string, string, string | unknown[]][]; model: string }
 
+/** Tokens of a base64 image: width × height ÷ 750 from its header (PNG, JPEG, GIF, WebP), at most 1,600; 1,600 when the header gives no size. */
+function imageTokens(base64: string): number {
+  const b = Buffer.from(base64, "base64");
+  let size: [number, number] | undefined;
+  if (b.toString("latin1", 1, 4) === "PNG" && b.length >= 24) size = [b.readUInt32BE(16), b.readUInt32BE(20)];
+  else if (b.toString("latin1", 0, 3) === "GIF" && b.length >= 10) size = [b.readUInt16LE(6), b.readUInt16LE(8)];
+  else if (b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP" && b.length >= 30) {
+    const kind = b.toString("latin1", 12, 16);
+    if (kind === "VP8 ") size = [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff];
+    else if (kind === "VP8L") { const v = b.readUInt32LE(21); size = [(v & 0x3fff) + 1, ((v >> 14) & 0x3fff) + 1]; }
+    else if (kind === "VP8X") size = [b.readUIntLE(24, 3) + 1, b.readUIntLE(27, 3) + 1];
+  } else if (b[0] === 0xff && b[1] === 0xd8) {
+    // walk the segments to the first start-of-frame marker
+    for (let i = 2; i + 9 <= b.length && b[i] === 0xff; i += 2 + b.readUInt16BE(i + 2)) {
+      if (b[i + 1] >= 0xc0 && b[i + 1] <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(b[i + 1])) { size = [b.readUInt16BE(i + 7), b.readUInt16BE(i + 5)]; break; }
+    }
+  }
+  return size?.[0] && size[1] ? Math.min(1600, Math.round(size[0] * size[1] / 750)) : 1600;
+}
+
 function scan(jsonl: string): Scan {
   const out: Request[] = [];
   const seen = new Set<string>();
@@ -58,7 +78,10 @@ function scan(jsonl: string): Scan {
     } else if (o.type === "user" && !o.isSidechain) {
       const c = o.message?.content;
       const results = Array.isArray(c) ? c.filter((b: any) => b.type === "tool_result").length : 0;
-      note(o.isCompactSummary ? "isCompactSummary" : results ? "tool_result" : "user", JSON.stringify(c ?? "").length, results || 1);
+      // An image in a tool result weighs by its pixels (4 chars per token), not by its base64 text.
+      const images = (Array.isArray(c) ? c : []).filter((b: any) => b.type === "tool_result").flatMap((b: any) => [b.content].flat()).filter((b: any) => b?.type === "image" && b.source?.data);
+      const chars = images.reduce((n: number, b: any) => n + imageTokens(b.source.data) * 4 - b.source.data.length, JSON.stringify(c ?? "").length);
+      note(o.isCompactSummary ? "isCompactSummary" : results ? "tool_result" : "user", chars, results || 1);
     } else if (o.type === "assistant" && !o.isSidechain && o.message?.usage) {
       const id = o.requestId ?? o.message.id;
       model ||= o.message.model ?? "";

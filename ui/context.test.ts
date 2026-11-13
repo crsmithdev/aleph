@@ -53,6 +53,20 @@ test("after a compaction the summary is the fill minus request 1's, exact, and t
   expect(r[3].parts.slice(4)).toEqual([{ name: "Compact summary", rec: "isCompactSummary", tokens: 203, how: "exact" }]);
 });
 
+test("an image in a tool result weighs by its pixels, 4 chars per token, not by its base64 length", () => {
+  // a 300 × 250 PNG header padded to 30 kB: 100 tokens by pixels, 400 chars
+  const png = Buffer.alloc(30000);
+  Buffer.from("89504e470d0a1a0a0000000d49484452", "hex").copy(png);
+  png.writeUInt32BE(300, 16);
+  png.writeUInt32BE(250, 20);
+  const image = { type: "image", source: { type: "base64", media_type: "image/png", data: png.toString("base64") } };
+  const toolResult = { type: "user", message: { content: [{ type: "tool_result", content: [image] }] } };
+  const r = parse([req("r1", 2, 0, 1000), toolResult, { type: "user", message: { content: "u".repeat(398) } }, req("r2", 3, 1000, 600)].map((o) => JSON.stringify(o)).join("\n"));
+  // the tool result is 400 chars of image plus 114 of JSON around it; the message is 398 + 2 quotes
+  expect(r[1].parts.slice(4).map((p) => [p.rec, p.tokens])).toEqual([["user", 260], ["assistant", 7], ["tool_result", 334]]);
+  expect(r[1].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[1].fill);
+});
+
 let base: string, stop: () => void, restoreEnv: () => void, at: (path: string) => Promise<Response>;
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-context-"));
