@@ -2,7 +2,7 @@
 name: mode
 description: >
   Work mode: set how this session does work, factory (file every piece of
-  work as an open issue, build none of it) or solo (file nothing, do trivial
+  work as an open issue, build none of it) or solo (file no new issues, do trivial
   items inline, run all other work as parallel background agents). Use only
   when Chris types /aleph:mode factory or /aleph:mode solo.
 disable-model-invocation: true
@@ -33,8 +33,9 @@ The factory does every piece of work. You file each one and do not build it.
 
 You do all the work, and the factory gets none of it.
 
-- Write no issues. Do not run `aleph issue add`, `note`, `edit` or `done`. Put follow-ups in the summary, under a
-  line `Not filed:`.
+- File no new issues. Do not run `aleph issue add` or `done`. Put new follow-ups in the summary, under a line
+  `Not filed:`.
+- If the work changes an existing issue, update it with `aleph issue note` or `aleph issue edit`.
 - If an item is trivial, do it yourself in a worktree. Trivial means one file, a few lines, and a check that runs
   in under a minute.
 - Split any other request into independent pieces. Start one background agent per piece, all in one message,
