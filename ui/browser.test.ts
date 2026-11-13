@@ -1,12 +1,17 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } from "bun:test";
 import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
+
+/** The last test to start, and whether it ran to its end: one that threw or timed out leaves `ok` false, and the next test gets a clean page. */
+let last = { ok: true };
+const test = (name: string, fn: () => unknown, timeout?: number) => bunTest(name, async () => { const run = { ok: false }; last = run; await fn(); run.ok = true; }, timeout);
 
 describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   let rig: Rig, page: Page, env: Record<string, string>;
   beforeAll(async () => { rig = await startRig((e) => { env = e; }); page = await rig.open(); }, 150_000);
   afterAll(() => rig?.stop());
+  afterEach(async () => { if (!last.ok) page = await rig.reset(); });
 
   const hash = () => page.ev<string>("location.hash");
   const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
@@ -697,6 +702,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   let rig: Rig, page: Page;
   beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 150_000);
   afterAll(() => rig?.stop());
+  afterEach(async () => { if (!last.ok) page = await rig.reset(); });
 
   for (const w of [1100, 420]) {
     test(`at ${w} px the outcome bar shows the whole label of a 2% segment and the page does not scroll sideways`, async () => {
@@ -1031,6 +1037,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     page = await rig.open("#/ideas");
   }, 150_000);
   afterAll(() => rig?.stop());
+  afterEach(async () => { if (!last.ok) page = await rig.reset(); });
 
   test("the list shows an idea after Issues in the nav, and the idea page shows its tabs and the newest prior art", async () => {
     await page.when('document.querySelector("#view tbody tr")');
@@ -1068,4 +1075,38 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
   }, 60_000);
 
   const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
+});
+
+describe.skipIf(!chromeUsable)("Resetting the page", () => {
+  let rig: Rig, page: Page, width: number;
+  beforeAll(async () => { rig = await startRig(); page = await rig.open(); width = await page.ev<number>("innerWidth"); }, 150_000);
+  afterAll(() => rig?.stop());
+
+  /** The reset page answers, sits at the start address, has the default width and an empty error list. */
+  const clean = async () => {
+    page = await rig.reset();
+    expect(await page.ev("1 + 1")).toBe(2);
+    expect(await page.ev("location.hash")).toBe("#/");
+    expect(await page.ev("innerWidth")).toBe(width);
+    expect(page.errors).toEqual([]);
+  };
+
+  test("after a test leaves a wait that never ends, a width, a hash and an error, the reset gives a clean page", async () => {
+    void page.when("false");
+    await page.width(333);
+    await page.go("#/issues");
+    await page.ev('queueMicrotask(() => { throw new Error("boom"); })');
+    await clean();
+  });
+
+  test("after a test hangs the renderer, the reset gives a clean page", async () => {
+    void page.ev("for (;;) {}");
+    await clean();
+  });
+
+  test("when Chrome and the server are gone, as after a timeout, the reset starts them again and opens the page there, and the command the test left waiting adds no error", async () => {
+    void page.ev("for (;;) {}");
+    await rig.kill();
+    await clean();
+  });
 });

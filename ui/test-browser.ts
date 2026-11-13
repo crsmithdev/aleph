@@ -19,12 +19,12 @@ function chromeArgv(profileDir: string): string[] {
 /** A CDP connection over Chrome's pipe: commands on fd 3, answers and events on fd 4, each message ended by a NUL. */
 class Pipe {
   private next = 1;
-  private waiting = new Map<number, { ok: (v: any) => void; no: (e: Error) => void }>();
+  private waiting = new Map<number, { ok: (v: any) => void; no: (e: Error) => void; page: boolean }>();
   private listeners: ((m: any) => void)[] = [];
   private buf = "";
   closed = false;
   constructor(private out: NodeJS.WritableStream, input: NodeJS.ReadableStream) {
-    // A write to a Chrome that has exited fails with EPIPE: the waiting commands fail, nothing throws.
+    // A write to a Chrome that has exited fails with EPIPE: the waiting commands of the rig fail, nothing throws.
     out.on("error", () => this.close(new Error("Chrome closed its pipe")));
     input.on("data", (d: Buffer) => {
       this.buf += d.toString("utf8");
@@ -44,16 +44,17 @@ class Pipe {
     input.on("close", () => this.close(new Error("Chrome closed its pipe")));
     input.on("error", () => this.close(new Error("Chrome closed its pipe")));
   }
+  /** A page's command still waiting never settles: Bun kills Chrome after a test times out, and a rejection then would add a second error. A command of the rig fails, so a reset can restart Chrome. */
   close(e: Error) {
     this.closed = true;
-    for (const w of this.waiting.values()) w.no(e);
+    for (const w of this.waiting.values()) if (!w.page) w.no(e);
     this.waiting.clear();
   }
   send(method: string, params: object = {}, sessionId?: string): Promise<any> {
     if (this.closed) return Promise.reject(new Error("Chrome closed its pipe"));
     const id = this.next++;
     return new Promise((ok, no) => {
-      this.waiting.set(id, { ok, no });
+      this.waiting.set(id, { ok, no, page: !!sessionId });
       this.out.write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + "\0");
     });
   }
@@ -73,8 +74,7 @@ interface Chrome { cdp: Pipe; kill(): void }
 async function launchChrome(base: string): Promise<Chrome> {
   const waits: string[] = [];
   for (let n = 1; ; n++) {
-    const profile = join(base, `profile${n}`);
-    mkdirSync(profile);
+    const profile = mkdtempSync(join(base, `profile${n}-`));
     const argv = chromeArgv(profile);
     const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
       env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
@@ -110,7 +110,15 @@ export interface Page {
   shot(path: string): Promise<void>;
 }
 
-export interface Rig { url: string; open(hash?: string): Promise<Page>; stop(): void }
+export interface Rig {
+  url: string;
+  open(hash?: string): Promise<Page>;
+  /** Closes the page `open` made last and opens a clean one at the same address. When Chrome cannot do that, it restarts Chrome first; a server that has exited restarts too. */
+  reset(): Promise<Page>;
+  /** Kills the Chrome and the server of the rig, as Bun does to the child processes of a test that times out. */
+  kill(): Promise<void>;
+  stop(): void;
+}
 
 /** `prepare` runs after the fixture is built and before the server starts, with the fixture's ALEPH_* variables: a test adds its own state to the store there. */
 export async function startRig(prepare?: (env: Record<string, string>) => void | Promise<void>): Promise<Rig> {
@@ -122,17 +130,23 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
     ALEPH_DISPATCH: "off" };
   for (const l of build.stdout.toString().trim().split("\n")) env[l.slice(0, l.indexOf("="))] = l.slice(l.indexOf("=") + 1);
   if (prepare) await prepare(env);
-  const server = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", "0"], { env, stdout: "pipe", stderr: "ignore" });
-  const line = new TextDecoder().decode((await (server.stdout as ReadableStream<Uint8Array>).getReader().read()).value);
-  const url = line.trim();
+  const serve = async (port: string) => {
+    const proc = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", port], { env, stdout: "pipe", stderr: "ignore" });
+    const line = new TextDecoder().decode((await (proc.stdout as ReadableStream<Uint8Array>).getReader().read()).value);
+    return { proc, url: line.trim() };
+  };
+  let server = await serve("0");
+  const url = server.url;
 
   let chrome: Chrome;
-  try { chrome = await launchChrome(base); } catch (e) { server.kill(); rmSync(base, { recursive: true, force: true }); throw e; }
-  const cdp = chrome.cdp;
+  try { chrome = await launchChrome(base); } catch (e) { server.proc.kill(); rmSync(base, { recursive: true, force: true }); throw e; }
+  let cdp = chrome.cdp, current = "", start = "#/";
 
   const open = async (hash = "#/"): Promise<Page> => {
     const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+    current = targetId;
+    start = hash;
     const errors: string[] = [];
     cdp.on((m) => { if (m.sessionId === sessionId && m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails?.exception?.description?.split("\n")[0] ?? m.params.exceptionDetails?.text); });
     await cdp.send("Page.enable", {}, sessionId);
@@ -174,5 +188,15 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
       reload: async () => { const [done, off] = load(); await cdp.send("Page.reload", {}, sessionId); await done; off(); await when(loaded); },
     };
   };
-  return { url, open, stop: () => { chrome.kill(); server.kill(); rmSync(base, { recursive: true, force: true }); } };
+  const reset = async (): Promise<Page> => {
+    // Bun kills the child processes of a test that times out: the server comes back on the same port, so `url` holds.
+    await fetch(url).then(() => {}, async () => { server = await serve(new URL(url).port); });
+    try { await cdp.send("Target.closeTarget", { targetId: current }); return await open(start); } catch {
+      chrome.kill();
+      chrome = await launchChrome(base);
+      cdp = chrome.cdp;
+      return open(start);
+    }
+  };
+  return { url, open, reset, kill: async () => { chrome.kill(); server.proc.kill(); await server.proc.exited; }, stop: () => { chrome.kill(); server.proc.kill(); rmSync(base, { recursive: true, force: true }); } };
 }
