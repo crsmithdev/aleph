@@ -77,10 +77,12 @@ export function failMessage(url, status, body) {
   return `${head}: ${msg}`;
 }
 
-/** An inline loading line: "Loading <what>…". */
-export const loadingLine = (what) => `<p class="quiet" role="status">Loading ${esc(what)}…</p>`;
+/** The loading spinner: one CSS mark, which stands still under prefers-reduced-motion. Only the loading helpers draw it. */
+const spin = `<i class="spin" aria-hidden="true"></i>`;
+/** An inline loading line: a spinner and "Loading <what>…". Use it for any data that has not returned its first answer; a missing answer after that is empty() or error(). */
+export const loadingLine = (what) => `<p class="quiet" role="status">${spin}Loading ${esc(what)}…</p>`;
 /** The first-load state of a view, shown until its API answers. */
-export const loading = (title) => `<div class="page"><p class="quiet loading" role="status">Loading ${esc(title)}…</p></div>`;
+export const loading = (title) => `<div class="page"><p class="quiet loading" role="status">${spin}Loading ${esc(title)}…</p></div>`;
 
 /** The error state: what failed, and what to try. */
 export const error = (line, hint = "Check that aleph-ui is running, then reload.", { detail = "" } = {}) =>
@@ -735,12 +737,12 @@ export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis,
  * `trend` is HTML from `cardTrend`; `extra` is HTML (a bar) between the value and row 3.
  * With `key` it selects the detail below it (a button with `data-tile` and `aria-pressed`); with `href` it goes to another page.
  */
-export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key, on = false }) {
+export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key, on = false, loading = false }) {
   const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
   const row3 = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>`
     : note ? `<span class="q m" title="${esc(note)}">${esc(note)}</span>` : "";
   const title = ` title="${esc([`${k} ${v}${v2 === undefined ? "" : ` / ${v2}`}`, q && `${q[0]} / ${q[1]}`].filter(Boolean).join(", "))}"`;
-  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${trend}</span><b>${esc(v)}${second}</b>${extra}${row3}`;
+  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${trend}</span>${loading ? `<b role="status">${spin}<span class="sr">Loading</span></b>` : `<b>${esc(v)}${second}</b>`}${extra}${row3}`;
   if (key) return `<button type="button" class="tile sc"${title} data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
   return href ? `<a class="tile sc"${title} href="${esc(href)}">${inner}</a>` : `<div class="tile sc"${title}>${inner}</div>`;
 }

@@ -330,7 +330,7 @@ describe("render", () => {
     for (const t of [">failed<", ">passed<", ">landed<", ">Default<", ">Follow-up<", "a? -&gt; b", "tidy"]) expect(h).toContain(t);
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
-    expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9#3"><p class="quiet" role="status">Loading the diff…</p></div>');
+    expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9#3"><p class="quiet" role="status"><i class="spin" aria-hidden="true"></i>Loading the diff…</p></div>');
   });
   test("the head is pageHead with the title and the nav links as aside", () => {
     const aside = '<a class="act" href="#/issues/fac/9">Issue</a><a class="act" href="http://lf/sessions/s">Trace</a>';

@@ -11,6 +11,7 @@ const SPEND = { hour: "day", day: "day", week: "week", month: "month" };
 
 /** The Spend tile: what OpenRouter charged, read from OpenRouter, for the window's UTC period. */
 function spendCard(m, win) {
+  if (m === undefined) return statCard({ k: "Spend", v: "–", note: "OpenRouter", loading: true });
   const v = m?.spend?.[SPEND[win] ?? SPEND.week];
   return statCard({ k: "Spend", v: v == null ? "–" : money(v), note: "OpenRouter" });
 }
@@ -20,7 +21,7 @@ function backendsCard(m) {
   const light = (name, up) => statusLight(up == null ? "" : up ? "fine" : "alert", `${name}: ${up == null ? "–" : up ? "up" : "down"}`);
   const local = m ? m.local === "up" : null, router = m ? !m.down.includes("deepseek-v4.1-flash") : null;
   const extra = `<span class="lights">${light("Local server", local)}${light("OpenRouter", router)}</span>`;
-  if (!m) return statCard({ k: "Backends", v: "–", extra });
+  if (!m) return statCard({ k: "Backends", v: "–", extra, loading: m === undefined });
   return statCard({ k: "Backends", v: count(Number(local) + Number(router)), v2: count(2), q: ["up", "backends"], extra });
 }
 
@@ -117,14 +118,14 @@ export function costFrame(d) {
 const FRAMES = { live: liveFrame, outcomes: outcomesFrame, cost: costFrame };
 const key = (k) => `factory/agents/${k}`;
 
-/** The page body. `d` is /api/flow for the window, or null while it loads. */
-export function renderFactoryAgents(s, d, _key = "live", window = "week", m = null) {
+/** The page body. `d` is /api/flow for the window, or null while it loads. `m` is /api/models: undefined while it loads, null when it failed. */
+export function renderFactoryAgents(s, d, _key = "live", window = "week", m) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
   const head = scope().bar({ value: win });
   return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${tiles("Scorecard", scorecard(s, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
-    card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + (m ? card("Models", models(m), { id: "models" }) : "") + `</div>`;
+    card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + (m === undefined ? card("Models", loadingLine("the models"), { id: "models" }) : m ? card("Models", models(m), { id: "models" }) : "") + `</div>`;
 }
 
 /** The old address. */
@@ -140,7 +141,7 @@ export const view = {
   live: true,
   refresh: 60,
   // `s.flow` is /api/flow for the window and `s.models` is /api/models, which `more` adds; the page draws without them first.
-  render: (s, _params, q) => renderFactoryAgents(s, s.flow ?? null, "live", scope(q).window, s.models ?? null),
+  render: (s, _params, q) => renderFactoryAgents(s, s.flow ?? null, "live", scope(q).window, s.models),
   more: async (s, q) => {
     const [flow, models] = await Promise.all([flowOf(scope(q).window, q), get("/api/models").then((r) => r.json()).catch(() => null)]);
     return { ...s, flow, models };

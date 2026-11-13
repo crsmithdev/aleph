@@ -302,7 +302,7 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 | `empty()`, which shows `No data` | `No agent job on an issue ended in the last hour.` with the hint `Widen the window or clear the project.` |
 | `over pace`, with the off-machine share in the bar's tooltip | `2% off this machine, under pace, live` |
 | `Could not load the agents.` with the hint `Check that aleph-ui is running, then reload.` and the upstream message in a Technical details fold | `Error: fetch failed` |
-| `Loading Jobs…` | a spinner with no text |
+| `Loading Jobs…` with the spinner before it | a spinner with no text, or `No data` before the first fetch returns |
 
 ## Components
 
@@ -1437,10 +1437,13 @@ An empty state shows that there is nothing, that data loads, or that the data di
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Line | `No data`; an error line is one sentence | | `--fs-sm`, `--muted`; an error `--stuck` |
-| 2 | Loading | `Loading <what>…` | | `--muted` |
+| 2 | Loading | the spinner, then `Loading <what>…` | | `--muted`; the spinner is `--dot-l` wide, a `--rule` ring with one `--muted` arc |
 
 - The router shows `loading()` while a page loads, and `error()` when the first load fails. A view does not call them for its own data.
-- For a section that loads after the page, use `loadingLine(what)`: `Loading the diff…`.
+- For a section that loads after the page, use `loadingLine(what)`: `Loading the diff…`. It is the only helper that draws the spinner; `loading(title)` and the metric card use the same mark.
+- Every component that shows data draws `loadingLine` until its first fetch returns: a chart panel, a table, a panel. After the fetch, no data is `empty()` and a failed fetch is `error()`. The spinner never stands for either.
+- A metric card whose figure waits for a fetch takes `loading: true` in `statCard`: the spinner replaces the value, and the card keeps its key and its link.
+- Under `prefers-reduced-motion` the spinner does not turn; the ring stays as a static marker.
 - Use `error(line, hint, { detail })` for a second fetch inside a card that failed. The line is `Could not load X.`; with no hint, it tells the reader to check aleph-ui and reload. The upstream message goes in `detail`, in a Technical details fold.
 - Use `notice(line, bad)` for a note above data that still shows: a stale reload (`bad`, `role="alert"`) or a partial count. Do not write a `<p>` for it by hand.
 - `empty()` takes no hint. The `error()` hint is text.

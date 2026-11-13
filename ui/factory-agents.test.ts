@@ -64,16 +64,21 @@ test("the tiles are usage, OpenRouter spend for the window's UTC period, worker 
   expect(keys(h)).toEqual(["Usage", "Spend", "Worker slots", "Backends"]);
   for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", '<span class="event-dot fine" aria-hidden="true"></span>Local server: up', '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>$1.50</b>");
-  const none = renderFactoryAgents(S, D);
-  expect(none).toContain('<b>–</b><span class="q m" title="OpenRouter">');
-  expect(none).toContain("Local server: –");
-  expect(none).toContain('<b>–</b><span class="lights">');
+  const loading = renderFactoryAgents(S, D);
+  expect(loading).toContain('<span class="sr">Loading</span></b><span class="q m" title="OpenRouter">');
+  expect(loading).toContain('<span class="sr">Loading</span></b><span class="lights">');
+  expect(loading).toContain("Loading the models…");
+  // A failed models fetch is null, not a spinner.
+  const failed = renderFactoryAgents(S, D, "live", "week", null);
+  expect(failed).toContain('<b>–</b><span class="q m" title="OpenRouter">');
+  expect(failed).toContain("Local server: –");
+  expect(failed).not.toContain("Loading the models");
 });
 
 test("no usage data shows a dash; while the speed data loads the page says so", () => {
   const h = renderFactoryAgents({ ...S, usage: undefined }, null);
   expect(h).toContain('<span class="k">Usage</span></span><b>–</b>');
-  expect(h).toContain(`<p class="quiet" role="status">Loading the agents…</p>`);
+  expect(h).toContain(`<p class="quiet" role="status"><i class="spin" aria-hidden="true"></i>Loading the agents…</p>`);
   expect(renderFactoryAgents(S, { error: "no data" })).toContain("no data");
 });
 

@@ -35,9 +35,10 @@ test("a card has no trend without a baseline or with a zero baseline of a count"
   expect(z).not.toContain("Previous 5;");
 });
 
-test("the scorecard before the data arrives: dashes, and usage unknown with no usage", () => {
+test("the scorecard before the data arrives: a spinner in the three flow cards, a count in Jobs, a dash for usage with no usage", () => {
   const h = view.renderTiles({ ...state, usage: undefined }, null);
-  expect(h.match(/<b>–/g)?.length).toBe(4);
+  expect(h.match(/<b role="status"><i class="spin"/g)?.length).toBe(3);
+  expect(h.match(/<b>–/g)?.length).toBe(1);
   expect(h).not.toContain('class="tr');
 });
 

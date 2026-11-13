@@ -592,3 +592,14 @@ test("tabs() opens one pane, setting() is a form only with a Save, statusLight()
   expect(lib.statusLight("fine", "A: up")).toContain('class="event-dot fine"');
   expect(lib.statusLight("unknown", "A: –")).toContain('class="event-dot "');
 });
+
+test("loadingLine, loading() and a loading statCard draw the one spinner; a card with a value draws none", () => {
+  const spin = '<i class="spin" aria-hidden="true"></i>';
+  expect(lib.loadingLine("jobs")).toBe(`<p class="quiet" role="status">${spin}Loading jobs…</p>`);
+  expect(loading("Jobs")).toContain(`${spin}Loading Jobs…`);
+  const c = lib.statCard({ k: "Asks", v: "–", loading: true });
+  expect(c).toContain(`<b role="status">${spin}<span class="sr">Loading</span></b>`);
+  expect(lib.statCard({ k: "Asks", v: "3" })).not.toContain("spin");
+  // An empty state is not a loading state.
+  expect(empty()).not.toContain("spin");
+});

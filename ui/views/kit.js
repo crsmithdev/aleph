@@ -233,7 +233,7 @@ function renderKit(d, query) {
       setting("Land after", inputBox("minutes", "0", { id: "kit-min", type: "number", attrs: ' min="0" step="1"' }), { id: "kit-min", save: "Save", hint: "0: waits for the user." })])) +
     spec("edit", "Edit toggle", `<div class="editable"><p>${editable("<b>A title</b>", inputBox("title", "A title", { attrs: ' aria-label="Title"' }))}</p><div class="actions">${actButton("Edit", { editor: "start" }, { cls: "view-only" })}` +
       `<span class="edit-only">${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true })}</span></div></div>`) +
-    spec("states", "Empty state", empty() + loadingLine("jobs") + error("Could not load the jobs.", undefined, { detail: "GET /api/jobs: 502" }) + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
+    spec("states", "Empty state", empty() + loadingLine("jobs") + tiles("Loading card", statCard({ k: "Asks", v: "–", loading: true })) + error("Could not load the jobs.", undefined, { detail: "GET /api/jobs: 502" }) + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
 
     group("States") +
     spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,

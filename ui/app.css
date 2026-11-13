@@ -442,6 +442,9 @@ summary .peek { color: var(--muted); margin-left: var(--sp-6); }
 .ticks .idle { color: var(--muted); }
 
 .quiet { color: var(--muted); }
+/* The loading spinner (spin() in lib.js): a ring with one arc. Under prefers-reduced-motion the rule at the end stops the turn, so it stays a static marker. */
+.spin { display: inline-block; flex: none; box-sizing: border-box; width: var(--dot-l); height: var(--dot-l); margin-right: var(--sp-6); vertical-align: -1px; border: var(--sp-2) solid var(--rule); border-top-color: var(--muted); border-radius: var(--r-pill); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 /* ---------- compact lists: Jobs, Issues, Sessions ---------- */
 .list .ih { flex: 1 1 360px; min-width: 0; flex-wrap: nowrap; gap: var(--sp-8); }
 .list .ih .id, ul.issues li .id { flex: none; white-space: nowrap; }
