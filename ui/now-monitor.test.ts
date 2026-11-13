@@ -74,10 +74,13 @@ test("the Herald shows its alerts under a Not OK badge in the worst alert's tone
 
 test("the Herald lists each running job as a compact row between the alerts and the feed, and no section with none", () => {
   const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
-  const running = [{ id: "a7#1", name: "a7#1", model: "anthropic/claude-opus-4", started: "2026-11-09T11:00:00Z", item: { title: "Fix the thing" } }];
+  const running = [{ id: "aleph-7#1", name: "intake-aleph-7", tier: "haiku", model: "deepseek-v4.1-flash", started: "2026-11-09T11:00:00Z", item: { title: "Fix the thing" } }];
   const h = view.renderHerald({ ...calm, asks: [ask], running, runningIssues: [{ id: "aleph-9", stage: "intake", title: "Sort it", at: "2026-11-09T11:30:00Z" }] });
   expect(h.match(/class="run-now"/g)).toHaveLength(2);
-  expect(h).toContain('data-job="a7#1"');
+  expect(h).toContain('data-job="aleph-7#1"');
+  // The row names the job and its tier; the model is in the label's title.
+  expect(h).toMatch(/<a class="idl" href="#\/jobs\/aleph-7%231">aleph-7#1<\/a><span class="run-label" title="deepseek-v4.1-flash">worker · low<\/span>/);
+  expect(h).not.toContain("intake-aleph-7");
   expect(h).toContain('data-job="aleph-9"');
   expect(h).toContain("Fix the thing");
   expect(h.indexOf('id="awaiting"')).toBeLessThan(h.indexOf('class="herald-running"'));
@@ -206,7 +209,7 @@ test("the Herald shows one row per chat session titled by its latest message's f
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
 });
 
-test("the Herald's older rows under an issue are labelled by their run's kind with a mark, by the action for an event with no run, and the top row keeps the issue's title", () => {
+test("the Herald's older rows under an issue are labelled by their run's role with a mark, by the chip for an event with no run, and the top row keeps the issue's title", () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-herald-runs-")), restore = withEnv({ ALEPH_JOBS_DIR: base });
   try {
     const kinds = ["intake", "build"];
@@ -226,13 +229,13 @@ test("the Herald's older rows under an issue are labelled by their run's kind wi
     const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the footer" }, chats: {}, runs } });
     const [top, older] = h.split('<div class="herald-older">');
     expect(top).toContain('<span class="event-title" title="Fix the footer">Fix the footer</span>');
-    expect(top).toContain('<span class="badge done">done</span>');
+    expect(top).toContain('<span class="badge done">closed</span>');
     const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
     expect(rows).toHaveLength(3);
-    // Newest first: the build run, the intake run, then the "picked up" event, which has no run.
-    expect(rows[0]).toContain('<span class="brief-label" title="build">build</span><span class="brief-text" title="#2 ✓">#2 <span class="brief-mark">✓</span></span>');
+    // Newest first: the build run, the intake run, then the start, which has no run.
+    expect(rows[0]).toContain('<span class="brief-label" title="worker">worker</span><span class="brief-text" title="#2 ✓">#2 <span class="brief-mark">✓</span></span>');
     expect(rows[1]).toContain('<span class="brief-label" title="intake">intake</span><span class="brief-text" title="#1 ✓">#1 <span class="brief-mark">✓</span></span>');
-    expect(rows[2]).toContain('<span class="brief-label" title="picked">picked</span>');
+    expect(rows[2]).toContain('<span class="brief-label" title="started">started</span>');
     expect(rows.join("")).not.toContain("event-title");
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
 });
@@ -255,11 +258,12 @@ test("the Herald folds a job subject per run and an issue across its runs", () =
   const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: {} } });
   expect(h).toContain('data-fold="issue:aleph-9"');
   expect(h).not.toContain('data-fold="issue:housekeeper"');
-  // Each run is its own row: the two finished runs stay apart, and neither hides the other's events.
-  expect(h.match(/<div [^>]*class="event-row done"[^>]*>(?:(?!<\/div>).)*idp">housekeeper/g)).toHaveLength(2);
+  // Each run is its own row: the two finished runs stay apart, and neither hides the other's events. A routine's run ends, quiet.
+  expect(h.match(/<span class="badge quiet">ended<\/span>/g)).toHaveLength(2);
+  expect(h.match(/<div [^>]*class="event-row quiet"[^>]*>(?:(?!<\/div>).)*idp">housekeeper/g)).toHaveLength(2);
 });
 
-test("the Herald hides an older start of a run with a newer event, joins a run of waits into one row, and draws a routing event as tier, model and p", () => {
+test("the Herald hides an older start of a run with a newer event, leaves out the holds, and draws a routing event as tier, model and p", () => {
   const events = [
     { at: "2026-11-09T13:00:00Z", by: "gate", subject: "aleph-9", action: "passed", on: ["aleph-9#2"] },
     { at: "2026-11-09T12:00:00Z", by: "gate", subject: "aleph-9", action: "running", on: ["aleph-9#2"] },
@@ -268,12 +272,9 @@ test("the Herald hides an older start of a run with a newer event, joins a run o
     { at: "2026-11-09T10:00:00Z", by: "rule", subject: "route", action: "routed", note: "cost 0.00004 model typesafe/jev-1.13-20260917 tier worker-medium p 0.83" },
   ];
   const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: { "aleph-9#2": "build" } } });
-  const [top, older] = h.split('<div class="herald-older">');
-  expect(top).toContain('<span class="badge done">build passed</span>');
-  expect(top).toContain('<span class="event-more">+1</span>');
-  const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
-  expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatch(/brief-label" title="waits">waits<\/span><span class="brief-text" title="[^"]*"><a[^>]*>aleph-8<\/a> holds now\.js, <a[^>]*>aleph-7<\/a><\/span>/);
+  expect(h).toMatch(/<span class="badge done">passed<\/span> worker <a[^>]*>aleph-9#2<\/a>/);
+  expect(h).not.toContain("herald-older");
+  expect(h).not.toContain("aleph-8");
   expect(h).toMatch(/<div data-key="[^"]*" class="event-row quiet sys" data-by="rule">/);
   expect(h).toContain("worker-medium · jev-1.13 · p 0.83");
 });
