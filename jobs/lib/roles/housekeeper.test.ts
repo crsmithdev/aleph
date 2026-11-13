@@ -96,12 +96,32 @@ test("a land reviews only the parked issues that name a changed file, with the l
   await housekeep(NOW);
   branch(`land-${key}`, "src/parse.ts");
   sh(repoPath(), "git", "merge", "-q", "--ff-only", `land-${key}`);
-  expect(housekeepDue(NOW + 60_000)).toBe(true);
-  const [o] = (await housekeep(NOW + 60_000))!;
+  expect(housekeepDue(NOW + 3_600_000)).toBe(true);
+  const [o] = (await housekeep(NOW + 3_600_000))!;
   expect(o.ids).toEqual(["1"]);
   expect(prompt()).toContain("## The land");
   expect(prompt()).toContain("src/parse.ts");
-  expect(housekeepDue(NOW + 120_000)).toBe(false);
+  expect(housekeepDue(NOW + 3_660_000)).toBe(false);
+});
+
+test("lands within the hour of the last run wait for it, then one sweep covers them all", async () => {
+  seed([{ title: "Fix the lexer", body: "The bug is in `src/lex.ts` and `src/emit.ts`." }]);
+  act([]);
+  await housekeep(NOW);
+  const first = sh(repoPath(), "git", "rev-parse", "main");
+  for (const f of ["lex", "emit"]) {
+    branch(`land-${f}`, `src/${f}.ts`, `${f}\n`);
+    sh(repoPath(), "git", "merge", "-q", "--ff-only", `land-${f}`);
+  }
+  const head = sh(repoPath(), "git", "rev-parse", "main");
+  expect(housekeepDue(NOW + 3_599_000)).toBe(false);
+  expect(housekeepDue(NOW + 3_600_000)).toBe(true);
+  expect(await housekeep(NOW + 3_600_000)).toHaveLength(1);
+  expect(calls()).toBe(2);
+  expect(prompt()).toContain(`Main moved from ${first.slice(0, 7)} to ${head.slice(0, 7)}`);
+  expect(prompt()).toContain("src/lex.ts");
+  expect(prompt()).toContain("src/emit.ts");
+  expect(housekeepDue(NOW + 7_200_000)).toBe(false);
 });
 
 test("a held lock stops both triggers, and a reply with no actions list applies nothing", async () => {

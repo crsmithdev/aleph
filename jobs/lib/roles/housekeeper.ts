@@ -1,7 +1,8 @@
 /**
  * The housekeeper: it keeps the parked issues of every registry repo current. The tick starts `aleph housekeep` on two
- * triggers: a main that moved since the last sweep (a land, by the factory or by hand), which reviews the parked issues
- * that name a changed file, and once a day a review of every parked issue. Each batch of up to BATCH issues of one repo
+ * triggers: a main that moved since the last sweep (a land, by the factory or by hand) and an hour has passed since the
+ * last sweep or daily review started, which reviews the parked issues that name a changed file across all the lands since
+ * that sweep, and once a day a review of every parked issue. Each batch of up to BATCH issues of one repo
  * is one read-only `claude -p` run, kind `housekeeper`, in the repo's checkout. Its reply is typed actions; code checks
  * each one and applies it through the issue verbs. It asks nobody: where it would ask, it notes the issue and moves on.
  */
@@ -27,6 +28,7 @@ export const BATCH = 10;
 /** One batch's time box, in seconds. */
 const SECONDS = 1800;
 const DAY = 86_400_000;
+const HOUR = 3_600_000;
 /** The lock that both triggers share. */
 const LOCK = "housekeeper";
 /** Read-only: Read, Grep, Glob, git's read commands and `ls`. */
@@ -34,8 +36,8 @@ const ALLOWED = ["Read", "Grep", "Glob", ...["log", "show", "diff", "ls-files", 
 /** A file name in free text, with or without its directories: `tick.ts`, `jobs/lib/transitions/tick.ts`. */
 const PATH = /(?:[\w.-]+\/)*[\w-]+\.[a-z]{1,4}\b/g;
 
-/** When the daily review last started, and the main commit of each repo at its last sweep. */
-export interface State { daily?: string; main: Record<string, string> }
+/** When the daily review last started, when the last sweep or daily review started, and the main commit of each repo at its last sweep. */
+export interface State { daily?: string; last?: string; main: Record<string, string> }
 const stateFile = () => join(factoryDir(), "housekeeper.json");
 export const readState = (): State => ({ main: {}, ...readJsonOr<Partial<State>>(stateFile(), {}) });
 
@@ -64,11 +66,11 @@ function moved(s: State): { repo: Repo; from: string; to: string }[] {
 
 const dailyDue = (s: State, now: number): boolean => !s.daily || now - Date.parse(s.daily) >= DAY;
 
-/** Whether the tick should start `aleph housekeep`: not paused, not running, and the daily review or a sweep is due. */
+/** Whether the tick should start `aleph housekeep`: not paused, not running, and the daily review is due, or a main moved and the last run started an hour ago. */
 export function housekeepDue(now: number): boolean {
   if (gates({ only: ["pause"] }) || held(LOCK)) return false;
   const s = readState();
-  return dailyDue(s, now) || moved(s).length > 0;
+  return dailyDue(s, now) || ((!s.last || now - Date.parse(s.last) >= HOUR) && moved(s).length > 0);
 }
 
 /** The batches of a land: the parked issues of each moved repo that name a changed file. */
@@ -259,7 +261,7 @@ export async function housekeep(now: number): Promise<Outcome[] | null> {
     const s = readState();
     const daily = dailyDue(s, now);
     const batches = daily ? repos().flatMap((repo) => chunks(parked(repo), BATCH).map((items) => ({ repo, items }))) : landBatches(s);
-    writeJson(stateFile(), { daily: daily ? new Date(now).toISOString() : s.daily, main: { ...s.main, ...Object.fromEntries(repos().map((r) => [r.key, headOf(r)])) } });
+    writeJson(stateFile(), { daily: daily ? new Date(now).toISOString() : s.daily, last: new Date(now).toISOString(), main: { ...s.main, ...Object.fromEntries(repos().map((r) => [r.key, headOf(r)])) } });
     const out: Outcome[] = [];
     for (const b of batches) out.push(await review(b, now));
     return out;
