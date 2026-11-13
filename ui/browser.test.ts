@@ -340,7 +340,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     })`);
     expect(r).toMatchObject({ theme: "dark", error: false, charts: 3 });
     // Each specimen shows its rules from docs/design.md; the variants of a component have none.
-    expect(r.noRules).toEqual(["Table, fit", "Table, empty", "Chart panel, no data"]);
+    expect(r.noRules).toEqual(["Current page in the sidebar (mock)", "Table, fit", "Table, empty", "Chart panel, no data"]);
     expect(r).toMatchObject({ values: 22, contrast: 13 });
     // The new specimens each have an id, the buttons their three kinds, the row action a last td.acts, and the Failed series is the Stuck colour.
     expect(await page.ev(`({

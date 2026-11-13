@@ -1221,6 +1221,23 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .kit-swatch i b { flex: 1; }
 .kit-swatch .quiet { overflow-wrap: anywhere; }
 .kit-tok { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); font-size: var(--fs-xs); }
+/* Mock: ways to mark the current sidebar link. Each copy repeats the #nav base rules. */
+.navmocks { align-items: flex-start; gap: var(--sp-20); }
+.navmocks figure { margin: 0; }
+.navmocks figcaption { margin-top: var(--sp-8); font-size: var(--fs-xs); color: var(--muted); }
+.navmock { width: 208px; padding: var(--sp-12) var(--sp-16); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--bg); }
+.navmock ul { list-style: none; margin: 0; padding: 0; }
+.navmock a { position: relative; display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-6) var(--sp-8); border-radius: var(--r-tag); text-decoration: none; color: var(--ink-2); font-size: var(--fs-sm); }
+.navmock li.head { margin: var(--sp-14) 0 var(--sp-4); padding: 0 var(--sp-8); font-size: var(--fs-xs); font-weight: var(--fw-strong); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); }
+.navmock wa-icon { flex: none; width: 1.25em; font-size: var(--fs-sm); }
+.navmock a.on { color: var(--ink); font-weight: var(--fw-strong); }
+.navmock[data-v="1"] a.on { background: var(--sunk); border-radius: var(--r-pill); }
+.navmock[data-v="2"] a.on { background: var(--run-bg); color: var(--run); }
+.navmock[data-v="3"] a.on::before { content: ""; position: absolute; left: calc(-1 * var(--sp-8)); width: var(--sp-6); height: var(--sp-6); border-radius: var(--r-pill); background: var(--ink); }
+.navmock[data-v="4"] a.on { background: var(--sunk); }
+.navmock[data-v="4"] a.on::before { content: ""; position: absolute; left: calc(-1 * var(--sp-16)); top: 0; bottom: 0; width: var(--sp-2); background: var(--ink); }
+.navmock[data-v="5"] a { color: var(--muted); }
+.navmock[data-v="5"] a.on { color: var(--ink); }
 .kit-row .meter { flex: 1 1 160px; }
 
 /* Browser surfaces take the palette. */

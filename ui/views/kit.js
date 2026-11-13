@@ -31,6 +31,10 @@ const spec = (id, title, body, note = "", rules = title) => {
 };
 /** A group heading of the page, and its entry in the contents. */
 const group = (name) => { const id = `kit-g-${name.toLowerCase().replace(/\W+/g, "-")}`; items.push([id, name]); return `<h2 class="kit-h" id="${id}">${name}</h2>`; };
+/** The sidebar's markup, copied, once per way of marking the current page (mock). */
+const NAV_VARIANTS = ["Filled pill, no bar", "Accent tint and text", "Dot before the label", "Straight bar outside box", "Bold text, others muted"];
+const navMock = (n) => `<div class="navmock" data-v="${n}"><ul>` + [["Factory"], ["gauge-high", "Now"], ["stopwatch", "Jobs", true], ["robot", "Agents"], ["Claude"], ["comments", "Sessions"], ["brain", "Memory"]].map(([a, b, on]) =>
+  b ? `<li><a href="#/kit"${on ? ' class="on"' : ""}><wa-icon name="${a}" aria-hidden="true"></wa-icon><span class="lbl">${b}</span></a></li>` : `<li class="head">${a}</li>`).join("") + `</ul></div>`;
 const row = (...xs) => `<div class="kit-row">${xs.join("")}</div>`;
 
 const FRAMES = {
@@ -161,6 +165,8 @@ function renderKit(d, query) {
     spec("pair", "Pair", `<div class="pair">${card("First", "<p>Two cards side by side.</p>")}${card("Second", "<p>Each is at least 320px wide, so they stack on a phone.</p>")}</div>`) +
     spec("contents", "Contents", toc([["kit-card", "Card"], ["kit-pair", "Pair"], ["kit-contents", "Contents", true]], "<p>The body of a page, beside its contents.</p>"),
       "A small copy. The contents of this page, at the right, are the live ones.") +
+    spec("nav-current", "Current page in the sidebar (mock)", `<div class="kit-row navmocks">${NAV_VARIANTS.map((t, i) => `<figure>${navMock(i + 1)}<figcaption>${i + 1}. ${t}</figcaption></figure>`).join("")}</div>`,
+      "Five ways to mark the current link, each a copy of the sidebar with Jobs current. The live sidebar is unchanged.", "") +
     spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/kit-page</code>"]])) +
 
     group("Data") +
