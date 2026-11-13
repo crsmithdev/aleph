@@ -588,19 +588,27 @@ describe("views", () => {
     expect(v.ageText({ status: "done", createdTime: iso("2026-10-01"), closedTime: iso("2026-10-11") })).toBe("10d");
   });
 
-  test("the Status filter defaults to Open, newest first; Any shows every status", async () => {
+  test("the Status filter defaults to All, newest first; a status shows only it", async () => {
     const d = await getJson("/api/issues");
-    expect(v.hashOptions(new URLSearchParams()).status).toBe("open");
+    expect(v.hashOptions(new URLSearchParams()).status).toBe("");
     expect(v.hashOptions(new URLSearchParams("status=any")).status).toBe("");
     expect(v.hashOptions(new URLSearchParams("status=done")).status).toBe("done");
+    expect(v.hashOptions(new URLSearchParams("status=open")).status).toBe("open");
     const def = v.view.render(d, {}, new URLSearchParams());
-    const issues = section(def, "issues-table");
-    expect(issues).not.toContain("plain task");
-    expect(def).toContain('data-value="open" aria-pressed="true"');
-    expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain(">done</span>");
-    expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain('data-value="any" aria-pressed="true"');
+    expect(section(def, "issues-table")).toContain("plain task");
+    expect(def).toContain(">done</span>");
+    expect(def).toContain('data-value="any" aria-pressed="true"');
     const t = [...v.sortRows(v.filterRows(v.issueRows(d), { status: "open" }))].map((r: any) => Date.parse(r.at) || 0);
     expect(t).toEqual([...t].sort((x, y) => y - x));
+  });
+
+  test("the Open and Open Age tiles set a filter that leaves only open rows", async () => {
+    const rows = v.issueRows(await getJson("/api/issues"));
+    for (const tile of ["open", "age"]) {
+      const kept = v.filterRows(rows, v.TILE_FILTER[tile]);
+      expect(kept.length).toBeGreaterThan(0);
+      expect(kept.every((r: any) => r.status === "open")).toBe(true);
+    }
   });
 
   test("the header sorts: a query key and direction order the rows", async () => {

@@ -30,18 +30,17 @@ export function redirect(hash) {
 /** The Issues table shows this many rows, and this many more for each press of the pager's button. */
 export const PAGE = 50;
 
-/** The Status filter's default is Open; "any" (the All option) shows every status. */
 /** The statuses that close an issue; a parked one is neither open nor closed. */
 const CLOSED = ["done", "dropped"];
-const DEFAULT_STATUS = "open";
-const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
+/** The Status filter: with no status in the query the table opens on every status, and "any" (the All option) is the same. */
+const statusOf = (s) => (s == null || s === "any" ? "" : s);
 
 /** The filters and the sort, from the route's query: ?status=open&project=x&stage=x&priority=x&label=x&q=text&sort=title&dir=asc&page=2. With a search and no sort, the best match comes first. */
 export function hashOptions(q = new URLSearchParams()) {
   const s = scope(q);
   return {
     page: pageOf(q),
-    status: statusOf(q.get("status")), project: s.project, stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open", window: s.window,
+    status: statusOf(q.get("status")), project: s.project, stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") ?? "", window: s.window,
     sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
   };
 }
@@ -326,11 +325,11 @@ export const FRAMES = { backlog: backlogFrame, close: closeFrame, tests: testsFr
 export const chartKey = (k) => `issues/${k}`;
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
-const TILE_FILTER = {
-  open: { tile: "", status: "", sort: "", dir: "", page: "" },
+export const TILE_FILTER = {
+  open: { tile: "open", status: "open", sort: "", dir: "", page: "" },
   filed: { tile: "filed", status: "any", sort: "", dir: "", page: "" },
   closed: { tile: "closed", status: "any", sort: "", dir: "", page: "" },
-  age: { tile: "age", status: "", sort: "age", dir: "desc", page: "" },
+  age: { tile: "age", status: "open", sort: "age", dir: "desc", page: "" },
   runs: { tile: "runs", status: "any", sort: "runs", dir: "desc", page: "" },
 };
 
