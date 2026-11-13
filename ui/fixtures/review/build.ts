@@ -69,8 +69,9 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
   const shift = clock().getTime() - 2 * 3600_000 - ANCHOR;
   copyPlain(join(src, "jobs"), join(dest, "jobs"));
   // The fixture keeps each run as a state.json; the copy keeps it in its job record, where the ledger reads it.
-  const records = process.env.ALEPH_RECORDS_DIR;
-  process.env.ALEPH_RECORDS_DIR = join(dest, "jobs", ".records");
+  // The gate events putRun logs go to the fixture's own factory folder.
+  const before = { ALEPH_RECORDS_DIR: process.env.ALEPH_RECORDS_DIR, ALEPH_FACTORY_DIR: process.env.ALEPH_FACTORY_DIR };
+  Object.assign(process.env, { ALEPH_RECORDS_DIR: join(dest, "jobs", ".records"), ALEPH_FACTORY_DIR: join(dest, "factory") });
   const seen: Record<string, number> = {};
   try {
     for (const id of readdirSync(join(dest, "jobs"))) {
@@ -85,7 +86,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
       rmSync(file);
     }
   } finally {
-    if (records === undefined) delete process.env.ALEPH_RECORDS_DIR; else process.env.ALEPH_RECORDS_DIR = records;
+    for (const [k, v] of Object.entries(before)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
   }
   mkdirSync(join(dest, "vault"), { recursive: true });
   if (lstatSync(join(src, "vault"), { throwIfNoEntry: false })?.isDirectory()) copyPlain(join(src, "vault"), join(dest, "vault"));
