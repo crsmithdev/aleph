@@ -3,8 +3,12 @@ name: pickup
 description: >
   Pick up a saved handoff in a fresh context. Use when the user asks to pick
   up or resume where they left off, or when the session start says a handoff
-  waits for this project.
+  waits for this project. With the argument sweep, go through the open items
+  of every handoff of this repo, explain them and ask Chris.
+argument-hint: "[<name> | sweep]"
 ---
+
+If the argument is `sweep`, read [SWEEP.md](SWEEP.md) and follow it, not this page.
 
 Find the handoff file, where `<handoffs dir>` is `$ALEPH_HANDOFFS_DIR` if set, else `~/.aleph/handoffs`:
 
