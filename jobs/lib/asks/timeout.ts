@@ -3,7 +3,8 @@
  * tick takes the reason's no-answer action once, on a waiting run's Ask or an issue's: `pick` takes the action the
  * director's case text recommends (it keeps waiting when there is none), `drop` takes the reason's drop, close or deny.
  * A land acts on the escalation list too: Chris sets the minutes, so the land is his. A held-path Ask has no timeout,
- * so a timeout never lands a held change.
+ * so a timeout never lands a held change, and a core-change Ask has none, so a timeout never applies or declines a
+ * core note change.
  *
  * `timeouts.json` in the factory dir maps a reason to `{ minutes, then }`; a bare number is minutes with `pick`. A
  * reason with no entry waits for Chris.
@@ -22,8 +23,8 @@ const THEN: NoAnswer[] = ["pick", "drop"];
 /** The actions that end an Ask with no work done, one per reason. */
 const DROPS = ["drop", "close", "deny"];
 
-/** The reasons a timeout may act on: every Ask reason but the memory proposals, which are Chris's, and held-path, which never times out. */
-export const TIMED = Object.keys(ASK_REASONS).filter((r) => !r.startsWith("proposal-") && r !== "held-path");
+/** The reasons a timeout may act on: every Ask reason but the memory proposals, which are Chris's, and held-path and core-change, which never time out. */
+export const TIMED = Object.keys(ASK_REASONS).filter((r) => !r.startsWith("proposal-") && r !== "held-path" && r !== "core-change");
 
 const file = () => join(layout().factory, "timeouts.json");
 

@@ -161,9 +161,10 @@ test("POST /api/automation/rules/:reason/revoke runs `aleph always revoke`, and 
 test("rules() gives each reason row its timeout minutes and no-answer action, and POST timeout passes the action on", async () => {
   const f = join(base, "factory", "timeouts.json");
   try {
-    writeFileSync(f, JSON.stringify({ "held-path": 30, question: { minutes: 20, then: "drop" } }));
+    writeFileSync(f, JSON.stringify({ "held-path": 30, "core-change": 30, question: { minutes: 20, then: "drop" } }));
     const row = (reason: string) => rules().find((x) => x.reason === reason)!;
     expect(row("held-path").timeout).toBeUndefined();
+    expect(row("core-change").timeout).toBeUndefined();
     const held = gates.renderRules({ rules: [row("held-path")] });
     expect(held).not.toContain('data-field="wait"');
     expect(held).toContain("Keep waiting");

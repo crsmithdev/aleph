@@ -108,3 +108,12 @@ test("held-path has no timeout: setTimeoutOf refuses it, readTimeouts ignores a 
   expect(await timeoutStep(taker(took), NOW, [held])).toEqual([]);
   expect(took).toEqual([]);
 });
+
+test("core-change has no timeout: setTimeoutOf refuses it, readTimeouts ignores a stored entry, and a due core-change Ask that recommends approve is left waiting", async () => {
+  expect(setTimeoutOf("core-change", 30)).toContain("has no timeout");
+  writeFileSync(join(dir, "timeouts.json"), JSON.stringify({ "core-change": 30, question: 20 }));
+  expect(readTimeouts()).toEqual({ question: { minutes: 20, then: "pick" } });
+  const core = onIssue(31, { ...ask("approve"), reason: "core-change" }), took: string[] = [];
+  expect(await timeoutStep(taker(took), NOW, [], core)).toEqual([]);
+  expect(took).toEqual([]);
+});
