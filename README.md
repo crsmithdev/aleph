@@ -63,6 +63,7 @@ A change to a `SKILL.md` applies at once. After you change a hook, run `/reload-
 - [Architecture](docs/architecture.md): the processes, folders and main flows
 - [Workflow](docs/workflow.md): how an issue gets to `main`, and where it can stop or go back
 - [Data model](docs/data-model.md): each file and store under `~/.aleph`
+- [Observability](docs/observability.md): the event log, job record events and traces: what writes each and who reads it
 - [Hooks](docs/hooks.md): each hook and what it allows or blocks
 - [Routing](docs/routing.md): which model does each job
 - [Factory](docs/factory.md): set-up, commands and settings
