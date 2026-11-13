@@ -111,7 +111,7 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
   const release = await lock("maintainer", 0);
   if (!release) return { ...report, skipped: "another maintainer holds the lock" };
   try {
-    const run = openRun({ role: "maintainer", who: "the maintainer", model: MODEL(), seconds: SECONDS, flags: ["--tools", "Bash,Read", "--allowedTools", ALLOWED.join(",")], schema: MAINTAINER_SCHEMA, name: `maintainer-${day}`, command: `maintainer ${day}${dry ? " --dry" : ""}`, shown: false });
+    const run = openRun({ role: "maintainer", who: "the maintainer", model: MODEL(), seconds: SECONDS, flags: ["--tools", "Bash,Read", "--allowedTools", ALLOWED.join(",")], schema: MAINTAINER_SCHEMA, env: dry ? { ALEPH_RECALL_UNLOGGED: "1" } : undefined, name: `maintainer-${day}`, command: `maintainer ${day}${dry ? " --dry" : ""}`, shown: false });
     report.run = run.folder;
     try {
       const reply = (await run.askData(prompt(day, digest.text))) as { notes?: Note[] } | undefined;

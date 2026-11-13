@@ -8,7 +8,7 @@ import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { allRuns } from "../records/ledger.ts";
 import { compileDay, render, yesterday } from "./maintainer.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR", "FAKE_RECALL", "ALEPH_RECALL_UNLOGGED"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base = "", root = "", saved: Record<string, string | undefined> = {};
 const DAY = "2026-11-03";
@@ -17,6 +17,7 @@ const DAY = "2026-11-03";
 const FAKE = `#!/bin/bash
 cat > "$FAKE_DIR/prompt.md"
 echo "$*" > "$FAKE_DIR/args"
+[ -n "$FAKE_RECALL" ] && bun "$FAKE_RECALL" memory recall "keep the digest" > /dev/null
 cat "$FAKE_DIR/reply.json"
 `;
 
@@ -76,6 +77,24 @@ test("a dry compile runs the model, reports the titles, writes nothing and recor
   expect(existsSync(join(root, "wiki", "decisions", "Keep The Digest.md"))).toBe(false);
   expect(compiledDays(root)).toEqual([]);
   expect(notes()[0].run.reason).toBe("dry: 1 notes");
+});
+
+// The fake runs a vault recall that returns a note the vault already holds.
+const recallOf = (dry: boolean) => {
+  process.env.FAKE_RECALL = join(import.meta.dir, "../../cli.ts");
+  mkdirSync(join(root, "wiki", "decisions"), { recursive: true });
+  writeFileSync(join(root, "wiki", "decisions", "Keep The Digest.md"), render(note("Keep The Digest"), DAY));
+  reply([]);
+  return compileDay(root, DAY, dry);
+};
+
+test("a dry compile's recall leaves the read log and the recall log alone, and a real compile's recall is logged in both", async () => {
+  await recallOf(true);
+  expect(existsSync(join(root, ".recall.json"))).toBe(false);
+  expect(existsSync(join(root, ".recall-log.jsonl"))).toBe(false);
+  await recallOf(false);
+  expect(Object.keys(JSON.parse(readFileSync(join(root, ".recall.json"), "utf8")))).toEqual(["Keep The Digest"]);
+  expect(readFileSync(join(root, ".recall-log.jsonl"), "utf8").trim().split("\n")).toHaveLength(1);
 });
 
 test("a day with nothing in it makes no model call", async () => {

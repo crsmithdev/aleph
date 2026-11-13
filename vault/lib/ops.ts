@@ -100,7 +100,8 @@ function readLog(): Record<string, string> {
 }
 function noteRead(titles: string[], query: string): void {
   // `--unlogged`: a person browsing is not a read by an agent, and the Memory page shows the log as use.
-  if (!titles.length || rest.includes("--unlogged")) return;
+  // `ALEPH_RECALL_UNLOGGED`: a dry compile's model recalls without a flag it could leave out.
+  if (!titles.length || rest.includes("--unlogged") || process.env.ALEPH_RECALL_UNLOGGED) return;
   try {
     const log = readLog();
     for (const t of titles) log[t] = today();

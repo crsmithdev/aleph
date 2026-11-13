@@ -22,6 +22,8 @@ interface Call {
   /** The arguments after the model: the role's tools and what they may do. */
   flags: string[];
   cwd?: string;
+  /** Variables added to this process's env for the call. */
+  env?: Record<string, string>;
   /** The JSON schema of the reply: the call then gives the reply's `structured_output` as `data`. */
   schema?: object;
 }
@@ -83,6 +85,7 @@ export function openRun(o: Opening): AgentRun {
     if (!again) writeFileSync(log, "");
     const r = await callAgent(o.role, sent, {
       model: o.model, flags: resume ? [...o.flags, "--resume", resume] : o.flags, schema: o.schema, cwd: cwd ?? o.cwd,
+      env: o.env && { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...o.env },
       stdout: log, stderr: runFile(folder, "stderr.log"), limit: roleSeconds(o.role.toUpperCase(), o.seconds),
     });
     prev = { input: sent, session: r.session };
