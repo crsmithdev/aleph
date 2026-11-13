@@ -298,6 +298,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("Kit: every specimen draws, the charts draw from fixtures, and its theme pick stays on the kit page", async () => {
+    await page.width(1200);
     await page.go("#/kit?theme=dark");
     await page.when('document.querySelector(".kit-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 3');
     const r = await page.ev<any>(`({
@@ -327,6 +328,18 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     })`)).toEqual({ ids: [true, true], list: 2, gap: "16px", lede: "One sentence that sums up the card.", cell: "A title that takes the spare width, with its text as its title", kinds: [true, true, true], acts: true, failed: ["stuck", "stuck"] });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
+    // Every :root token (the --wa- and --kit- bridges aside) is named by a code element of a specimen, not of its rules.
+    expect(await page.ev(`(() => {
+      const named = new Set([...document.querySelectorAll(".kit-specimen code")].flatMap((c) => c.textContent.match(/--[\\w-]+/g) ?? [])), bare = new Set();
+      for (const sheet of document.styleSheets) for (const r of (() => { try { return sheet.cssRules; } catch { return []; } })()) if (r.selectorText === ":root") for (const p of r.style) if (p.startsWith("--") && !/^--(wa|kit)-/.test(p)) bare.add(p);
+      return [...bare].filter((p) => !named.has(p));
+    })()`)).toEqual([]);
+    // Every heading of docs/design.md has a specimen, a group or a place in a specimen's rules, but the prose-only sections and the containers of specimens.
+    const exempt = ["Principles", "Rules", "The kit bridge", "Layout", "Views", "Accessibility", "Deviations", "Appendix", "What could not be determined", "Bypasses that stay", "Inventory", "Colour", "Components"];
+    expect(await page.ev(`fetch("/api/design").then((r) => r.json()).then((d) => {
+      const have = new Set([...document.querySelectorAll(".kit-spec h3, h2.kit-h, .kit-rules h4")].map((h) => h.textContent));
+      return d.body.split("\\n").filter((l) => /^#{2,4} /.test(l)).map((l) => l.replace(/^#+ /, "")).filter((h) => !${JSON.stringify(exempt)}.includes(h) && !have.has(h));
+    })`)).toEqual([]);
     // The contents: one link per group and per specimen, each to an id on the page; a click scrolls, keeps the route and marks its entry.
     expect(await page.ev(`(() => { const nav = document.querySelector(".toc"), ids = [...nav.querySelectorAll("a")].map((a) => a.getAttribute("href").slice(1)), want = document.querySelectorAll("h2.kit-h, .kit-spec[id]");
       return { n: ids.length === want.length, ok: ids.every((i) => document.getElementById(i)), groups: [...nav.querySelectorAll("li:not(.sub) a")].map((a) => a.textContent) }; })()`)).toEqual({

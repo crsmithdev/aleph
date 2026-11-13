@@ -113,7 +113,7 @@ const FEED = [
 ];
 const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }] };
 
-const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill)$/],
+const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill|sel)$/],
   ["tones", "Tones", /^--(run|done|need|stuck|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/],
   ["data", "Data colours", /^--(series|chart|seg|fill)-/]];
 // The pairs of the doc's Contrast table.
@@ -290,17 +290,23 @@ function drawTokens(root) {
     `<tr><td><code>${f}</code> on <code>${b}</code></td>${cell(ratio(t[f].light, t[b].light))}${cell(ratio(t[f].dark, t[b].dark))}</tr>`).join(""), { fit: true }));
   fill("type", names.filter((n) => n.startsWith("--fs-")).map((n) =>
     `<p style="font-size:var(${n})"><code>${n}</code> ${val(n)}: The factory landed 12 issues.</p>`).join("") +
-    ["--display", "--sans", "--mono", "--num"].map((n) => `<p style="font-family:var(${n})"><code>${n}</code> ` +
+    `<p>${["--fw-text", "--fw-mid", "--fw-strong"].map((w) => `<span style="font-weight:var(${w})"><code>${w}</code> ${val(w)}</span>`).join(" · ")} · <code>--chart-scale</code> ${val("--chart-scale")} · <code>--chart-weight</code> ${val("--chart-weight")}</p>` +
+    ["--ls-display", "--ls-caps"].map((n) => `<p style="letter-spacing:var(${n});${n === "--ls-caps" ? "text-transform:uppercase" : "font-family:var(--display)"}"><code>${n}</code> ${val(n)}: The factory landed 12 issues.</p>`).join("") +
+    ["--display", "--sans", "--mono", "--num", "--metric", "--brand", "--chart"].map((n) => `<p style="font-family:var(${n})"><code>${n}</code> ` +
       ["--fw-text", "--fw-mid", "--fw-strong"].map((w) => `<span style="font-weight:var(${w})">The factory landed 12 issues, 0123456789.</span>`).join(" · ") + "</p>").join(""));
   fill("space", names.filter((n) => n.startsWith("--sp-") || n === "--gap" || n === "--gap-in").map((n) =>
-    `<div class="kit-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1)"></i><code>${n}</code></div>`).join(""));
+    `<div class="kit-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1)"></i><code>${n}</code></div>`).join("") +
+    ["--dot-s", "--dot-m", "--dot-l"].map((n) => `<div class="kit-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1);border-radius:var(--r-pill)"></i><code>${n}</code></div>`).join("") +
+    `<div class="kit-tok"><i style="width:var(--indent-list);height:var(--sp-8);background:var(--series-1)"></i><code>--indent-list ${val("--indent-list")}</code></div>` +
+    `<div class="kit-tok"><i style="width:var(--measure);max-width:100%;height:var(--sp-8);background:var(--series-1)"></i><code>--measure ${val("--measure")}</code></div>`);
   fill("radius", names.filter((n) => n.startsWith("--r-")).map((n) =>
     `<div class="kit-tok"><i style="width:48px;height:32px;border:1px solid var(--ink-2);border-radius:var(${n})"></i><code>${n}</code></div>`).join(""));
   fill("layers", ["--lift", "--card-lift", "--float"].map((n) =>
     `<div class="kit-tok"><i style="width:96px;height:48px;background:var(--surface);border-radius:var(--r-ctl);box-shadow:var(${n})"></i><code>${n}</code></div>`).join("") +
     `<div class="kit-tok"><i style="width:96px;height:var(--ctl-h);border:1px solid var(--ink-2);border-radius:var(--r-ctl)"></i><code>--ctl-h ${val("--ctl-h")}</code></div>` +
     `<div class="kit-tok"><i style="width:96px;height:var(--bar-h);background:var(--series-1);border-radius:var(--r-hair)"></i><code>--bar-h ${val("--bar-h")}</code></div>` +
-    `<div class="kit-tok"><i style="width:96px;height:32px;background:var(--series-1);opacity:var(--dim)"></i><code>--dim ${val("--dim")}</code></div>`);
+    `<div class="kit-tok"><i style="width:96px;height:32px;background:var(--series-1);opacity:var(--dim)"></i><code>--dim ${val("--dim")}</code></div>` +
+    ["--z-rowlink", "--z-sticky", "--z-overlay"].map((n) => `<div class="kit-tok"><code>${n} ${val(n)}</code></div>`).join(""));
 }
 
 const setTheme = (t) => (t === "system" ? delete document.documentElement.dataset.theme : (document.documentElement.dataset.theme = t));
