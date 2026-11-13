@@ -981,5 +981,23 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     expect(page.errors).toEqual([]);
   }, 60_000);
 
+  // The row is marked, the view redrawn, and the row looked up again: `old` is still set only on the same element.
+  const redrawn = async () => {
+    await page.go("#/ideas");
+    await page.when('document.querySelector("#view tbody tr")');
+    await page.ev('window.row = document.querySelector("#view tbody tr")');
+    await page.ev('import("/router.js").then((m) => m.redraw())');
+    await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Issue history")');
+    return page.ev<[boolean, boolean]>('[document.querySelector("#view tbody tr") === window.row, window.row.isConnected]');
+  };
+
+  test("a redraw replaces the row by default, and keeps the same element when the view is in the morph set", async () => {
+    expect(await redrawn()).toEqual([false, false]);
+    await page.ev('import("/router.js").then((m) => m.morph.add("/ideas"))');
+    expect(await redrawn()).toEqual([true, true]);
+    await page.ev('import("/router.js").then((m) => m.morph.delete("/ideas"))');
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
   const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
 });

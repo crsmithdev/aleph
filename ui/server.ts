@@ -145,6 +145,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
       }
       if (path === "/app.css") return new Response(Bun.file(join(dir, "app.css")), { headers: { "content-type": "text/css; charset=utf-8", "cache-control": "no-cache" } });
       if (path === "/vendor/echarts.min.js") return new Response(Bun.file(join(dir, "vendor", "echarts.min.js")), { headers: JS });
+      if (path === "/vendor/idiomorph.js") return new Response(Bun.file(join(dir, "vendor", "idiomorph.js")), { headers: JS });
       const kit = path.match(/^\/vendor\/kit\/([a-z-]+\.js)$/);
       if (kit && existsSync(join(dir, "vendor", "kit", kit[1]))) return new Response(Bun.file(join(dir, "vendor", "kit", kit[1])), { headers: JS });
       if (SHARED.has(path)) {

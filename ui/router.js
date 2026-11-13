@@ -15,6 +15,9 @@ import { arm, cmd, notice, pageHead, postJson, say, actMessages, denyReasons, lo
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
+/** The paths of the views drawn by morphing, not by innerHTML. Empty: no view is on. */
+export const morph = new Set();
+
 /** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
 export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);
 
@@ -224,8 +227,12 @@ export async function start() {
   async function draw({ view, params, query }, data, first) {
     // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
     const saved = first ? null : recordState($("view"));
-    try { $("view").innerHTML = view.render(data, params, query); }
-    catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`, "Reload the page. If it stays, this is a bug in the view.")}</div>`; return; }
+    try {
+      const out = view.render(data, params, query);
+      // Spike: a refresh of a view whose path is in `morph` is merged into the page by idiomorph, which keeps the elements that match.
+      if (morph.has(view.path) && !first) (await import("./vendor/idiomorph.js")).Idiomorph.morph($("view"), out, { morphStyle: "innerHTML" });
+      else $("view").innerHTML = out;
+    } catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`, "Reload the page. If it stays, this is a bug in the view.")}</div>`; return; }
     if (saved) restoreState($("view"), saved);
     const mark = markOf(data);
     $("aged").hidden = !mark;
