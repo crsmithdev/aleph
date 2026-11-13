@@ -276,11 +276,11 @@ test("the chat is the default: messages in Markdown, folded tool calls, one turn
   const h = v.renderSession(d, { id: "s1" }, new URLSearchParams());
   expect(h).toContain('<button type="button" data-tab="chat" aria-pressed="true">Chat</button>');
   expect(h).toContain('<header class="ph"><h1>Session s1</h1><span class="count">2</span>');
-  expect(h).toContain('<details class="sysc"><summary><span class="chip">task-notification</span><span class="peek">Agent done</span>');
+  expect(h).toContain('<details class="sysc"><summary><span class="chip">task-notification</span><span class="peek" title="Agent done">Agent done</span>');
   expect(h).not.toContain('<div class="msg user md"><p>&lt;task');
   expect(h).toContain('<div class="msg user md"><p>prompt t2 second line</p></div>');
   expect(h).toContain("<strong>bold</strong> and <code>code</code>");
-  expect(h).toContain('<details class="tool"><summary><span class="tn">Bash</span><code class="ta">ls</code>');
+  expect(h).toContain('<details class="tool"><summary><span class="tn">Bash</span><code class="ta" title="ls">ls</code>');
   expect(h).toContain('<details class="tool err"><summary><span class="tn">Read</span><span class="terr">Error</span>');
   expect(h).toContain('<dl class="facts"><div><dt>Turn</dt><dd><a class="idl" href="#/sessions/s1/turns/1">1</a></dd></div><div><dt>Model</dt><dd>opus</dd></div><div><dt>Took</dt><dd>12.0s</dd></div><div><dt>Cost</dt><dd>$0.50');
   expect(h).toContain(`<dt>Started</dt><dd>${when(d.turns[0].start)}</dd>`);
@@ -358,7 +358,7 @@ test("the Turn page pages observations at 50 and gives the Name cell td.wide, in
   expect(h).toContain("50 of 51");
   expect(h).toContain("Next 1");
   expect(h).toContain('<td>Error: boom</td>');
-  expect(h).toContain('<td class="wide" style="padding-left:calc(0 * var(--sp-14))"><strong>T0</strong>');
+  expect(h).toContain('<td class="wide" style="padding-left:calc(0 * var(--sp-14))" title="T0"><strong>T0</strong>');
   expect(h).not.toContain("14px");
   expect(h).not.toContain("<strong>T50</strong>");
 });

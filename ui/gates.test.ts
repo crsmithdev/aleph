@@ -135,7 +135,7 @@ test("a hold writes its event, and the log shows it as busy with the job and the
     const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
     expect(h).toContain('</td><td><a class="idl" title="aleph-1420" href="#/issues/aleph/1420">a1420</a></td><td>');
     expect(h).toContain('<tr><td class="time lead">');
-    expect(h).toContain('</td><td>busy</td><td><span title="no sub">–</span></td><td class="wide"><a class="idl" title="aleph-1372" href="#/issues/aleph/1372">a1372</a> → <code title="ui/views/issues.js">issues.js</code></td>');
+    expect(h).toContain('</td><td>busy</td><td><span title="no sub">–</span></td><td class="wide" title="a1372 → issues.js"><a class="idl" title="aleph-1372" href="#/issues/aleph/1372">a1372</a> → <code title="ui/views/issues.js">issues.js</code></td>');
   } finally { setHolds(was); }
 });
 
@@ -200,7 +200,7 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   const order = ["Waiting for the User", "Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
-  const tiles = [...h.matchAll(/<div class="tile sc"><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
+  const tiles = [...h.matchAll(/<div class="tile sc"[^>]*><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
   expect(tiles).toEqual(["Automation rate", "Gate catches", "Held time"]);
   expect(h).toContain('<section class="tiles" aria-label="Metrics">');
   expect(h).not.toContain("gtile");

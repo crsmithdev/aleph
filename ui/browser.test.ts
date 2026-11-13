@@ -410,6 +410,19 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect([r.badge, r.date, r.dur]).toEqual([0, 0, 0]);
   }, 30_000);
 
+  test("at 390 px each text cut by an ellipsis has its full text in a title, on itself or on an ancestor", async () => {
+    await page.go("#/");
+    const hrefs = ["#/kit", "#/issues/demo/21", "#/memory?tab=processes", "#/memory?tab=log", ...await page.ev<string[]>('[...document.querySelectorAll("#nav li a")].map((a) => a.getAttribute("href"))')];
+    await page.width(390);
+    const cut = `[...document.querySelectorAll("#view *")].filter((e) => getComputedStyle(e).textOverflow === "ellipsis" && e.scrollWidth > e.clientWidth).filter((e) => { const t = e.innerText.replace(/\\s+/g, " ").trim(); for (let a = e; a && a.id !== "view"; a = a.parentElement) if (typeof a.title === "string" && a.title.replace(/\\s+/g, " ").includes(t)) return false; return true; }).map((e) => e.className + ": " + e.textContent.trim().slice(0, 40))`;
+    for (const href of hrefs) {
+      await page.go(href);
+      await page.when('!/^\\s*Loading/.test(document.querySelector("#view").textContent)');
+      expect([href, await page.ev<string[]>(`(() => ${cut})()`)]).toEqual([href, []]);
+    }
+    await page.width(1200);
+  }, 90_000);
+
   test("at 390 px the Context session select stays inside the page width and keeps each option's full label", async () => {
     await page.go("#/");
     await page.width(390);

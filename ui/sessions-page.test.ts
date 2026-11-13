@@ -68,7 +68,7 @@ describe("the Sessions page", () => {
     expect(h).toContain('<td class="wide" title="dear one">dear one</td>');
     expect(h).toContain('<td class="wide" title="no &lt;run&gt;">no &lt;run&gt;</td>');
     expect(h).toContain('<td title="debug, plan, review">');
-    expect(h).toContain('<span class="chip">+1</span>');
+    expect(h).toContain('<span class="chip" title="+1">+1</span>');
     expect(h).not.toContain('class="quiet"');
   });
 

@@ -298,7 +298,7 @@ describe("views", () => {
     const closed = rows.filter((r: string) => r.includes("plain task"));
     expect(closed).toHaveLength(1);
     expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(false);
-    expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide">.*?<\/td><td class="time">/.test(r))).toBe(true);
+    expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide"[^>]*>.*?<\/td><td class="time">/.test(r))).toBe(true);
     expect(closed[0]).toContain(">done</span>");
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
@@ -343,7 +343,7 @@ describe("views", () => {
       { id: 2, repo: "fac", title: "status of the land", status: "open", labels: [], updatedTime: iso("2026-10-01") },
       { id: 3, repo: "fac", title: "Set up a tiny ultra stack", status: "open", labels: [], updatedTime: iso("2026-10-31") },
     ] });
-    const titles = (o: object) => [...v.renderTable(rows, { status: "open", ...o }).matchAll(/<td class="wide"><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1].replace(/<\/?mark>/g, ""));
+    const titles = (o: object) => [...v.renderTable(rows, { status: "open", ...o }).matchAll(/<td class="wide"[^>]*><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1].replace(/<\/?mark>/g, ""));
     expect(titles({ q: "status" })[0]).toBe("status of the land");
     expect(titles({ q: "status" })).not.toContain("Set up a tiny ultra stack");
     expect(titles({ q: "status", sort: { key: "id", dir: -1 } })).toEqual(["status of the land", "Workstatus page"]);
@@ -363,7 +363,7 @@ describe("views", () => {
       (globalThis as any).localStorage = { getItem: (k: string) => m[k] ?? null, setItem: (k: string, x: string) => { m[k] = x; } };
     };
     afterAll(() => { delete (globalThis as any).localStorage; });
-    const titles = (html: string) => [...html.matchAll(/<td class="wide">(?:<button.*?<\/button> )?<a[^>]*>(.*?)<\/a>/g)].map((m) => m[1]);
+    const titles = (html: string) => [...html.matchAll(/<td class="wide"[^>]*>(?:<button.*?<\/button> )?<a[^>]*>(.*?)<\/a>/g)].map((m) => m[1]);
     const subs = (html: string) => (html.match(/class="rowlink sub-row"/g) ?? []).length;
 
     test("off, the table is a flat list in sort order with no indent", () => {
@@ -922,7 +922,7 @@ describe("priority badges", () => {
     expect(rows.find((r: string) => r.includes("hot part"))).toContain(">critical<");
     expect(rows.find((r: string) => r.includes("plain part"))).not.toContain(">medium<");
     const row = v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "critical", labels: [], notes: 0, runs: 0, cost: 0, at: null });
-    expect(row).toContain('<td><span class="badge stuck">critical</span></td>');
+    expect(row).toContain('<td><span class="badge stuck" title="critical">critical</span></td>');
   });
 });
 

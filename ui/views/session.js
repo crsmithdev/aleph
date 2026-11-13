@@ -36,7 +36,7 @@ const clip = (text, html) => (text.length > CLIP_CHARS || text.split("\n").lengt
 /** A system part as a one-line chip: the tag, and its summary or first line; it opens to the whole text. */
 function sysChip({ tag, body }) {
   const peek = (body.match(/<summary>([\s\S]*?)<\/summary>/)?.[1] ?? body.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 100);
-  return fold(`${chip(tag)}<span class="peek">${esc(peek)}</span>`, `<pre>${esc(body)}</pre>`, { cls: "sysc" });
+  return fold(`${chip(tag)}<span class="peek" title="${esc(peek)}">${esc(peek)}</span>`, `<pre>${esc(body)}</pre>`, { cls: "sysc" });
 }
 
 /** Ms from the seconds of an answer, and that as a duration. */
@@ -46,7 +46,7 @@ const msOf = (s) => (s == null ? null : s * 1000), sdur = (s) => dur(msOf(s));
 function toolLine(c) {
   const io = (label, text) => (text ? `<h4>${label}</h4><pre>${esc(text)}</pre>` : "");
   return fold(`<span class="tn">${esc(c.name)}</span>` +
-    `${c.args ? `<code class="ta">${esc(c.args)}</code>` : ""}${c.error ? `<span class="terr">Error</span>` : ""}` +
+    `${c.args ? `<code class="ta" title="${esc(c.args)}">${esc(c.args)}</code>` : ""}${c.error ? `<span class="terr">Error</span>` : ""}` +
     `<span class="td">${esc(sdur(c.seconds))}</span>`,
     `<div class="tio">${io("Input", c.input)}${c.error ? io("Error", c.error) : ""}${io("Output", c.output)}</div>` +
     `${c.children?.length ? `<div class="tools sub">${c.children.map(toolLine).join("")}</div>` : ""}`, { cls: `tool${c.error ? " err" : ""}` });
@@ -142,7 +142,7 @@ function wfSummary(rows) {
 function wfRow(r, max, sel) {
   const left = (r.startMs / max) * 100;
   const width = Math.max(0.2, ((r.endMs - r.startMs) / max) * 100);
-  const label = r.kind === "turn" ? `<span class="tn">${esc(r.name)}</span>${r.args ? `<span class="ta">${esc(r.args)}</span>` : ""}` : `<span class="tn">${esc(r.name)}</span>${r.args ? `<code class="ta">${esc(r.args)}</code>` : ""}`;
+  const label = r.kind === "turn" ? `<span class="tn">${esc(r.name)}</span>${r.args ? `<span class="ta" title="${esc(r.args)}">${esc(r.args)}</span>` : ""}` : `<span class="tn">${esc(r.name)}</span>${r.args ? `<code class="ta" title="${esc(r.args)}">${esc(r.args)}</code>` : ""}`;
   return `<div class="wf-row k-${r.kind}${r.error ? " err" : ""}${r.id === sel ? " sel" : ""}" role="row" tabindex="0" data-id="${esc(r.id)}" aria-selected="${r.id === sel}">` +
     `<div class="wf-l" style="padding-left:calc(${r.depth} * var(--sp-14))" title="${esc(r.name + " " + (r.args ?? ""))}">${label}</div>` +
     `<div class="wf-r"><span class="wf-bar" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%"></span><span class="wf-d">${esc(dur(r.durationMs))}</span></div></div>`;
@@ -245,7 +245,7 @@ function obsRows(o, depth) {
   ].filter(Boolean).join("; ");
   const ioFold = (label, text) => (text ? fold(label, `<pre>${esc(text)}</pre>`) : "");
   return `<tr><td>${tag(o.kind, tone(o.error ? "failed" : o.kind))}</td>` +
-    `<td class="wide" style="padding-left:calc(${depth} * var(--sp-14))"><strong>${esc(o.name)}</strong>${ioFold("Input", o.input)}${ioFold("Output", o.output)}</td>` +
+    `<td class="wide" style="padding-left:calc(${depth} * var(--sp-14))" title="${esc(o.name)}"><strong>${esc(o.name)}</strong>${ioFold("Input", o.input)}${ioFold("Output", o.output)}</td>` +
     `<td>${detail}</td><td class="num">${esc(sdur(o.seconds))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
 }
 

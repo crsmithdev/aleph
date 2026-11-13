@@ -162,7 +162,7 @@ function ruleForm(r) {
 export function renderRules(d) {
   const rows = d.rules.map((r) => {
     const edit = editable(r) ? `<button type="button" class="act" data-edit-rule="${esc(r.reason)}" aria-expanded="false">Edit</button>` : "";
-    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="wide"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? note(r.line) : ""}</td>` +
+    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="wide" title="${esc([r.name, r.reason, r.line].filter(Boolean).join(" "))}"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? note(r.line) : ""}</td>` +
       cell(count(r.fired), { num: true }) + `<td class="decided">${decidedCell(r.decided)}</td>` +
       `<td>${esc(decidesText(r))}</td><td>Ask me</td><td>${esc(noAnswerText(r))}</td><td class="act-cell">${edit}</td></tr>` + (edit ? ruleForm(r) : "");
   }).join("");
@@ -201,7 +201,7 @@ export function renderLog(d, by, page = 1) {
   const rows = pageRows(entries, page, PAGE).map((e) => {
     const subject = e.action === "changed" && !parseId(e.subject) ? `<a href="#rules">${esc(e.subject)}</a>` : idHtml(e.subject);
     return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${subject}</td><td>${tag(e.by, tone(e.by))}</td><td>${e.action ? esc(e.action) : miss("no action")}</td><td>${e.sub ? esc(e.sub) : miss("no sub")}</td>` +
-      `<td class="wide">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
+      `<td class="wide"${contentText(e) ? ` title="${esc(contentText(e))}"` : ""}>${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return card("Log", filter +
     (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty()), { id: "gates-log" });

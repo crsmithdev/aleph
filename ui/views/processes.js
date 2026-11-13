@@ -7,7 +7,7 @@ const flow = (...boxes) => `<p class="quiet" style="display:flex;flex-wrap:wrap;
 const time = (ts) => (ts ? esc(when(ts)) : '<span class="quiet">none</span>');
 
 const stepRow = (s) => `<tr><td><strong>${esc(s.name)}</strong></td><td>${esc(s.runs)}</td><td class="time">${time(s.last)}</td><td class="time">${time(s.next)}</td>` +
-  `<td>${s.result ? tag(s.result, s.result.startsWith("failed") ? "stuck" : "done") : ""}${s.detail ? ` <span class="quiet">${esc(s.detail)}</span>` : ""}</td><td class="wide">${esc(s.does)}</td></tr>`;
+  `<td>${s.result ? tag(s.result, s.result.startsWith("failed") ? "stuck" : "done") : ""}${s.detail ? ` <span class="quiet">${esc(s.detail)}</span>` : ""}</td><td class="wide" title="${esc(s.does)}">${esc(s.does)}</td></tr>`;
 
 function episodes(e) {
   const top = Math.max(1, ...e.days.map((d) => d.pages));
@@ -33,7 +33,7 @@ const screen = () => card("Contradiction screen · on each write", flow("new not
   empty());
 
 function decay(d) {
-  const rows = d.stale.slice(0, 10).map((s) => `<tr><td>${link(s.note)}</td><td class="wide">${esc(s.detail)}</td></tr>`).join("");
+  const rows = d.stale.slice(0, 10).map((s) => `<tr><td>${link(s.note)}</td><td class="wide" title="${esc(s.detail)}">${esc(s.detail)}</td></tr>`).join("");
   return card("Decay · lint, run by hand", flow("note age", "over its kind's window × confidence", "stale") +
     (rows ? dataTable("", rows) + (d.stale.length > 10 ? `<p class="quiet">${d.stale.length - 10} more in lint.</p>` : "") : `<p class="quiet">No note is stale.</p>`), { count: d.stale.length });
 }

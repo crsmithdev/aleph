@@ -92,7 +92,7 @@ const noteRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${
   `<p>${codeText(it.text)}</p><p class="mm">${it.at ? `written ${esc(shortDay(it.at))}` : ""}${it.source === "note" ? ` · read ${it.read ? esc(shortDay(it.read)) : "never"}` : ""}${it.core ? ` · <span class="core">core line</span>` : ""}</p></li>`;
 
 /** A rule, a skill, a hook or a lesson: what it says and when it is loaded. */
-export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide" title="${esc(it.text)}">${codeText(it.text)}</td><td class="eff">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
+export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide" title="${esc(it.text.replaceAll("`", ""))}">${codeText(it.text)}</td><td class="eff">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
 
 /** An event in time: when first, then what. */
 const eventRow = (it, o) => `<li class="mrow mev" ${sel(it, o)}><span class="time">${shortDay(it.at) ? esc(shortDay(it.at)) : miss("No date")}</span><div><b>${titleLink(it)}</b>${it.scope ? ` ${q(esc(it.scope))}` : ""}<p>${codeText(it.text)}</p></div></li>`;
@@ -247,7 +247,7 @@ export function logRow(r) {
     ? `<details><summary>${esc(r.why)}</summary><ol>${r.titles.map((t) => `<li>${link(t)}</li>`).join("")}</ol></details>`
     : esc(r.why);
   return `<tr><td class="time">${esc(logTime(r.at))}</td><td>${tag(r.op, TONE[r.kind])}</td>` +
-    `<td>${r.note ? link(r.note) : q("none")}${r.titles.length > 1 ? ` ${q(`+${r.titles.length - 1}`)}` : ""}</td><td class="wide">${why}</td></tr>`;
+    `<td>${r.note ? link(r.note) : q("none")}${r.titles.length > 1 ? ` ${q(`+${r.titles.length - 1}`)}` : ""}</td><td class="wide" title="${esc(r.why)}">${why}</td></tr>`;
 }
 
 /** The Log tab: every write, recall and miss of the last 30 days, newest first, 50 to a page. */

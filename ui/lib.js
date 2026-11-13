@@ -416,7 +416,7 @@ export const badge = (state) => tag(state, tone(state));
 const PRIORITY_TONES = { critical: "stuck", high: "need", medium: "quiet", low: "quiet" };
 export function priorityBadge(p) {
   const k = Object.hasOwn(PRIORITY_TONES, p) ? p : "medium";
-  return tag(k, PRIORITY_TONES[k]);
+  return tag(k, PRIORITY_TONES[k], k);
 }
 
 /** The status row of a detail page around its built parts: the state, the priority, then the labels. */
@@ -429,7 +429,7 @@ export const chip = (text, { el = "span", cls = "", attrs = "", html } = {}) => 
 export const chipRow = (html, el = "span") => `<${el} class="chips">${html}</${el}>`;
 
 /** Labels as small rounded chips; "" for none. */
-export const chips = (labels) => (labels?.length ? chipRow(labels.map((l) => chip(l)).join("")) : "");
+export const chips = (labels) => (labels?.length ? chipRow(labels.map((l) => chip(l, { attrs: ` title="${esc(l)}"` })).join("")) : "");
 
 /** A segmented control. `label` names the group for assistive tech; `items` are `{label, on, attrs, icon?}`, `attrs` the button's own attributes. An `icon` button shows the icon, and its label is the name and the tooltip. */
 export const seg = (label, items, attrs = "") =>
@@ -739,9 +739,10 @@ export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key,
   const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
   const row3 = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>`
     : note ? `<span class="q m" title="${esc(note)}">${esc(note)}</span>` : "";
+  const title = ` title="${esc([`${k} ${v}${v2 === undefined ? "" : ` / ${v2}`}`, q && `${q[0]} / ${q[1]}`].filter(Boolean).join(", "))}"`;
   const inner = `<span class="r1"><span class="k">${esc(k)}</span>${trend}</span><b>${esc(v)}${second}</b>${extra}${row3}`;
-  if (key) return `<button type="button" class="tile sc" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
-  return href ? `<a class="tile sc" href="${esc(href)}">${inner}</a>` : `<div class="tile sc">${inner}</div>`;
+  if (key) return `<button type="button" class="tile sc"${title} data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
+  return href ? `<a class="tile sc"${title} href="${esc(href)}">${inner}</a>` : `<div class="tile sc"${title}>${inner}</div>`;
 }
 export const tiles = (label, html, id) => `<section class="tiles"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${html}</section>`;
 /** Call `fn(key)` when a tile or another selector with `data-tile` under `el` is clicked. */

@@ -143,7 +143,7 @@ test("an issue with no link shows its id as text, and a run with no reason says 
 
 test("a click on a card selects its class", () => {
   const h = renderEfficiency(D, "all");
-  expect(h).toMatch(/<button type="button" class="tile sc" data-tile="all" aria-pressed="true"><span class="r1"><span class="k">Lost time/);
+  expect(h).toMatch(/<button type="button" class="tile sc"[^>]* data-tile="all" aria-pressed="true"><span class="r1"><span class="k">Lost time/);
   expect(h).toMatch(/data-tile="landed" aria-pressed="false"><span class="r1"><span class="k">Landed/);
   let handler: any;
   const picked: string[] = [];

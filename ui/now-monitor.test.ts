@@ -97,7 +97,7 @@ test("an error is not pinned: the newest event is marked live and carries the er
   expect(h).toMatch(/class="event-row alert live"/);
   expect(h).not.toContain("Alert: Health:");
   // The status sentence sums up aleph's red main, so the live event lists that line; it already says koans's.
-  expect(h).toMatch(/class="event-row alert live">.*?koans main is red\.<span class="reason">aleph main is red<\/span>/);
+  expect(h).toMatch(/class="event-row alert live">.*?koans main is red\.<span class="reason" title="aleph main is red">aleph main is red<\/span>/);
   expect(h).not.toContain('<span class="reason">koans main is red</span>');
 });
 
@@ -125,7 +125,7 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   expect(row).toContain('<div class="event-row stuck" data-by="gate"><span class="event-time">');
   expect(row).toContain('<span class="event-say"><span class="badge stuck">failed</span> <a class="idl" href="#/jobs/aleph-5%231">aleph-5#1</a> · past its time box</span>');
   expect(row).toContain('<span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span><span class="event-say">');
-  expect(row).toContain("</span><span class=\"reason\">timed out</span>");
+  expect(row).toContain("</span><span class=\"reason\" title=\"timed out\">timed out</span>");
   expect(row.indexOf("event-title")).toBeLessThan(row.indexOf("event-say"));
   // A row with no title keeps the sentence as its only line.
   const bare = view.eventRow(merged[0], {});
@@ -182,7 +182,7 @@ test("the Herald shows one row per chat session titled by its latest message's f
     const events = [1, 2, 3].map((n) => ({ at: `2026-11-09T1${n}:00:00Z`, by: "gate", subject: "chat", action: "done", on: [`chat#${n}`] }));
     const s = { ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, chats: heraldChats(events, allRuns()) } };
     const h = view.renderHerald(s);
-    const titles = [...h.matchAll(/<span class="(?:event-say|brief-text)">([^<]*)</g)].map((m) => m[1]).filter(Boolean);
+    const titles = [...h.matchAll(/<span class="(?:event-say|brief-text)"(?: title="[^"]*")?>([^<]*)</g)].map((m) => m[1]).filter(Boolean);
     // Newest session first; its earlier turn is in the details, after the row of its latest turn.
     expect(titles).toEqual(["Then the footer", "Fix the title", "Other question"]);
     expect(h.match(/<details class="herald-group" data-fold="chat:s1">/g)).toHaveLength(1);
@@ -217,9 +217,9 @@ test("the Herald's older rows under an issue are labelled by their run's kind wi
     const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
     expect(rows).toHaveLength(3);
     // Newest first: the build run, the intake run, then the "picked up" event, which has no run.
-    expect(rows[0]).toContain('<span class="brief-label">build</span><span class="brief-text">#2 <span class="brief-mark">✓</span></span>');
-    expect(rows[1]).toContain('<span class="brief-label">intake</span><span class="brief-text">#1 <span class="brief-mark">✓</span></span>');
-    expect(rows[2]).toContain('<span class="brief-label">picked</span>');
+    expect(rows[0]).toContain('<span class="brief-label" title="build">build</span><span class="brief-text" title="#2 ✓">#2 <span class="brief-mark">✓</span></span>');
+    expect(rows[1]).toContain('<span class="brief-label" title="intake">intake</span><span class="brief-text" title="#1 ✓">#1 <span class="brief-mark">✓</span></span>');
+    expect(rows[2]).toContain('<span class="brief-label" title="picked">picked</span>');
     expect(rows.join("")).not.toContain("event-title");
   } finally { restore(); rmSync(base, { recursive: true, force: true }); }
 });
@@ -238,7 +238,7 @@ test("the Herald hides an older start of a run with a newer event, joins a run o
   expect(top).toContain('<span class="event-more">+1</span>');
   const rows = older.split("</details>")[0].split('<div class="event-brief').slice(1);
   expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatch(/brief-label">waits<\/span><span class="brief-text"><a[^>]*>aleph-8<\/a> holds now\.js, <a[^>]*>aleph-7<\/a><\/span>/);
+  expect(rows[0]).toMatch(/brief-label" title="waits">waits<\/span><span class="brief-text" title="[^"]*"><a[^>]*>aleph-8<\/a> holds now\.js, <a[^>]*>aleph-7<\/a><\/span>/);
   expect(h).toContain('<div class="event-row quiet sys" data-by="rule">');
   expect(h).toContain("worker-medium · jev-1.13 · p 0.83");
 });

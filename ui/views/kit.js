@@ -66,7 +66,7 @@ const ISSUES = Array.from({ length: 8 }, (_, i) => ({
   title: ["Give each component in design.md a live render", "Fail CI on a new hard-coded colour in ui/", "Show the cost of each run on its job page"][i % 3],
   state: ["open", "landed", "failed", "waiting", "parked"][i % 5], project: i % 4 ? "aleph" : "sidetone", labels: i % 2 ? ["ui"] : ["ui", "design"], cost: (i * 1.37) % 9,
 }));
-const issueRow = (x) => `<tr><td>${idLink(x.id, "#/kit")}</td><td class="wide">${x.title}</td><td>${badge(x.state)}</td>` +
+const issueRow = (x) => `<tr><td>${idLink(x.id, "#/kit")}</td><td class="wide" title="${x.title}">${x.title}</td><td>${badge(x.state)}</td>` +
   `<td>${x.project}</td><td>${chips(x.labels)}</td><td class="num">${money(x.cost)}</td><td class="time">${when(x.at)}</td></tr>`;
 const ISSUE_HEAD = (sort) => [sortHead("Issue", "id", sort), sortHead("Title", "title", sort), "<th>State</th>", "<th>Project</th>", "<th>Labels</th>", sortHead("Cost", "cost", sort, { num: true }), sortHead("Updated", "at", sort, { num: true })].join("");
 
@@ -91,8 +91,8 @@ const DIFF = `diff --git a/ui/app.css b/ui/app.css
 
 const H = (h, m = 0) => new Date(2026, 10, 10, h, m).getTime();
 const TIMELINE = [{ title: "Runs", rows: [
-  { head: "<span class=\"t\">build 1</span>", bars: [{ start: H(8, 10), end: H(8, 30), tone: "build", label: "build" }, { start: H(8, 30), end: H(8, 34), tone: "bad", label: "checks" }], waits: [{ start: H(8, 34), end: H(9, 2), chris: true }], marks: [], result: badge("returned"), time: dur(1440), cost: money(2.3), events: [{ at: H(8, 34), tag: "returned", tone: "stuck", html: "Checks failed: <code>ui/page.test.ts</code>." }] },
-  { head: "<span class=\"t\">build 2</span>", bars: [{ start: H(9, 2), end: H(9, 20), tone: "build", label: "build" }, { start: H(9, 20), end: H(9, 24), tone: "land", label: "land" }], waits: [], marks: [{ at: H(9, 24), tone: "done", tip: "landed" }], result: badge("landed"), time: dur(1320), cost: money(1.82), events: [{ at: H(9, 24), tag: "landed", tone: "done", html: "Landed on main." }] },
+  { head: "<span class=\"t\" title=\"build 1\">build 1</span>", bars: [{ start: H(8, 10), end: H(8, 30), tone: "build", label: "build" }, { start: H(8, 30), end: H(8, 34), tone: "bad", label: "checks" }], waits: [{ start: H(8, 34), end: H(9, 2), chris: true }], marks: [], result: badge("returned"), time: dur(1440), cost: money(2.3), events: [{ at: H(8, 34), tag: "returned", tone: "stuck", html: "Checks failed: <code>ui/page.test.ts</code>." }] },
+  { head: "<span class=\"t\" title=\"build 2\">build 2</span>", bars: [{ start: H(9, 2), end: H(9, 20), tone: "build", label: "build" }, { start: H(9, 20), end: H(9, 24), tone: "land", label: "land" }], waits: [], marks: [{ at: H(9, 24), tone: "done", tip: "landed" }], result: badge("landed"), time: dur(1320), cost: money(1.82), events: [{ at: H(9, 24), tag: "landed", tone: "done", html: "Landed on main." }] },
 ] }];
 const NOW = "2026-11-10T17:00:00Z";
 const STATUS = {
@@ -208,7 +208,7 @@ function renderKit(d, query) {
     spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`) +
       row(actButton("Danger", {}, { kind: "danger" }), actButton("Small", {}, { kind: "small" }), actButton("Always", {}, { kind: "always" }))) +
     spec("link-button", "Link button", row(linkButton("Issue", "#/kit"), linkButton("Next sub-issue: a1701", "#/kit"))) +
-    spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide"><a href="#/kit">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
+    spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide" title="A row that goes to its item"><a href="#/kit">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
     spec("command", "Command", row(cmd("aleph issue list aleph"), cmd("bun test", { primary: true, hint: "in the worktree" }))) +
     spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>` +
       dataTable(heads(["Job", "State", "Action"]), `<tr><td>${idLink("a1700", "#/kit")}</td><td>${badge("failed")}</td><td class="acts">${actButton("Retry", {}, { kind: "small" })}</td></tr>`)) +

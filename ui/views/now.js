@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, count, empty, error, esc, hours, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
+import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, card, sectionHead, meter, dataTable, blockersHtml, dur, costHtml, count, empty, error, esc, hours, idLink, mean, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, when, scope } from "../lib.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, say as sayParts } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { share, flowOf, statusCards, usable } from "./speed.js";
@@ -190,7 +190,7 @@ export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
     : `${tag(word, tone(ev.action))} ${[lead, rest !== word && rest].filter(Boolean).join(" · ")}`;
   return feedRow({ tone: tone(ev.action), at: ev.at, by: ev.by, cls: route ? " sys" : "",
     body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
-      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}` });
+      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason" title="${esc(ev.note)}">${esc(ev.note)}</span>` : ""}` });
 }
 
 /** An older event as a label and a short text: a run's kind and "#2 ✓", "waits" and what it waits for, or the action and what the sentence adds. */
@@ -199,7 +199,7 @@ function brief(ev, runs = {}, chats = {}) {
   const cut = (s) => esc(s ?? "");
   if (ev.subject === "chat") return { ev, label: "", text: cut(chats[ev.on?.[0]]?.title) };
   if (ev.action === "routed") return { ev, label: "routed", text: cut(routeText(ev.note)) };
-  const { lead, rest } = parts(ev), note = ev.note ? ` <span class="reason">${cut(ev.note)}</span>` : "";
+  const { lead, rest } = parts(ev), note = ev.note ? ` <span class="reason" title="${cut(ev.note)}">${cut(ev.note)}</span>` : "";
   if (WAITS.has(ev.action)) return { ev, label: "waits", text: (rest || lead) + note };
   if (run) return { ev, label: run, text: `${n} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${note}` };
   return { ev, label: ev.action === "started" ? "picked" : ev.action, text: (rest || lead) + note };
@@ -223,7 +223,7 @@ function briefs([latest, ...earlier], runs = {}, chats = {}) {
 
 /** An older row: the time, the label and the text, in the event's tone. */
 const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.action)}"><span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
-  `<span class="brief-label">${esc(label)}</span><span class="brief-text">${text}</span></div>`;
+  `<span class="brief-label" title="${esc(label)}">${esc(label)}</span><span class="brief-text" title="${text.replace(/<[^>]*>/g, "")}">${text}</span></div>`;
 
 /** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones briefly behind it; `row(ev, more)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
 const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
@@ -276,7 +276,7 @@ export function renderHerald(s) {
 
   // A status row is the status sentence in its tone between two rules, with no label; the live row is a card that adds each error line the sentence lacks.
   const status = history.map((ev, i) => ({ at: ev.at ?? "", html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : " status", bodyCls: ` ${esc(ev.tone)}`,
-    body: `${esc(statusText(ev.text))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).map(statusText).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}` }) }));
+    body: `${esc(statusText(ev.text))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).map(statusText).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason" title="${esc(l)}">${esc(l)}</span>`).join("")}` }) }));
   // The status changes and the events in one feed, newest first; the live status row stays on top.
   const live = errors ? status.shift() : null;
   const events = heraldEvents(s);
@@ -360,7 +360,7 @@ function queuedLane(s) {
     const dead = (w.waits ?? []).filter((b) => b.dead);
     const id = repoIdLink(`${w.repo}-${w.id}`, issueHref(`${w.repo}-${w.id}`), w.repo);
     const hold = holdLine(w.ev);
-    return laneCard(`${w.repo}-${w.id}`, "queued-row", metaRow({ id, chips: (hold ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
+    return laneCard(`${w.repo}-${w.id}`, "queued-row", metaRow({ id, chips: (hold ? "" : tag(w.stage ?? "queued", tone(w.stage ?? "queued"), w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
   }).join("");
   return lane("queued", "Queued", (s.queued ?? []).length, rows, empty());
@@ -368,7 +368,7 @@ function queuedLane(s) {
 
 /** A parent that waits to close: all its parts are done. */
 function runningIssue(i, now) {
-  return laneCard(i.id, "run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: badge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
+  return laneCard(i.id, "run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: tag(i.stage, tone(i.stage), i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
 }
 
 const TIERS = { haiku: "low", sonnet: "medium", opus: "high" };
@@ -382,7 +382,7 @@ function runningLane(s) {
     const kind = worker ? "worker" : run.kind;
     const tier = TIERS[j.tier ?? shortModel(j.model)];
     const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
-    return laneCard(j.name, `run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));
+    return laneCard(j.name, `run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase ? `${label} · ${j.phase}` : label)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j.id));
   }).join("");
   return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, empty(), s.factory.liveCap ?? 0);
 }

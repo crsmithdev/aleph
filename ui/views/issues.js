@@ -187,7 +187,7 @@ export function ageText(r, now = Date.now()) {
 export function renderRow(r, { fold, sub } = {}) {
   const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
   return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td>${idLink(shortText(`${r.repo}-${r.n}`), r.href)}</td>` +
-    `<td class="wide">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
+    `<td class="wide" title="${esc(r.title)}">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
     `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td>${cell(r.project)}<td>${chips(r.labels)}</td>` +
     `${cell(count(r.notes), { num: true })}${cell(count(r.runs), { num: true })}${cell(money(r.cost), { num: true })}${cell(ageText(r), { num: true })}<td class="time">${esc(updatedText(r))}</td></tr>`;
 }
@@ -550,7 +550,7 @@ export function issueSegments(d, now = Date.now()) {
   const marks = [...(Number.isFinite(filed) ? [{ at: filed, tone: "made", tip: "filed" }] : []), ...(Number.isFinite(closed) ? [{ at: closed, tone: "done", tip: d.status }] : [])];
   // The issue's own job, when one has its name, is where its id links.
   const job = (d.jobs ?? []).find((j) => j.name === id);
-  const headOf = (text) => `${job ? idLink(shortText(id), jobHref(job.id)) : idLink(shortText(id))}<span class="quiet t">${esc(text)}</span>`;
+  const headOf = (text) => `${job ? idLink(shortText(id), jobHref(job.id)) : idLink(shortText(id))}<span class="quiet t" title="${esc(text)}">${esc(text)}</span>`;
   const state = d.derived?.stage ?? d.status;
   // The hold records of a job name: why its waits waited.
   const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);

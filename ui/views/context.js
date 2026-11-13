@@ -29,7 +29,7 @@ function byCall(calls, r, total) {
   return [...groups].sort((a, b) => sum(b[1]) - sum(a[1])).map(([tool, cs]) => {
     const rows = cs.sort((a, b) => b.tokens - a.tokens).map((c) =>
       `<tr><td class="num">${c.n}</td><td class="mono wide" title="${esc(c.input)}"><button type="button" class="link" data-call="${esc(c.id)}">${esc(c.input)}</button></td><td class="num">${count(c.tokens)}</td><td>${how(c.how)}</td></tr>`);
-    return fold(`calls:${tool}`, `${esc(tool)}<span class="peek">${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}</span>`,
+    return fold(`calls:${tool}`, `${esc(tool)}<span class="peek" title="${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}">${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}</span>`,
       dataTable(heads(["Request", "Input", "Tokens", "How"], ["Request", "Tokens"]), rows.join("")) + `<pre class="stat" data-result hidden style="max-height:360px;overflow:auto"></pre>`);
   }).join("");
 }
