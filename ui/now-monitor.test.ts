@@ -285,3 +285,10 @@ test("the Herald draws a housekeeper's done event with its tally and the issues 
   expect(h).toContain("reviewed 6 · unparked 1 · dropped 2");
   expect(h).toMatch(/dropped 2 <a[^>]*>aleph-7<\/a> <a[^>]*>aleph-9<\/a>/);
 });
+
+test("the Herald draws a housekeeper's changes as sub-items, each with the action's past word and the linked issue", () => {
+  const events = [{ at: "2026-11-09T10:00:00Z", by: "gate", subject: "housekeeper", action: "done", on: ["housekeeper#24", "aleph-1978", "aleph-2125"], cost: 0.33, tally: { reviewed: 2, noted: 1, closed: 1 }, changes: [{ id: "aleph-1978", do: "note" }, { id: "aleph-2125", do: "close" }] }];
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: {} } });
+  expect(h).toMatch(/event-change">noted <a[^>]*href="[^"]*1978"[^>]*>aleph-1978<\/a><\/span>/);
+  expect(h).toMatch(/event-change">closed <a[^>]*href="[^"]*2125"[^>]*>aleph-2125<\/a><\/span>/);
+});

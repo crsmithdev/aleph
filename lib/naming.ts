@@ -110,13 +110,13 @@ export const shortText = (text: unknown): string => String(text ?? "").replace(F
 /** An event with its words checked; throws on a word outside its set. */
 export interface Event {
   at: string; by: string; subject: string; action: string; sub?: string; on?: string[]; file?: string; count?: string;
-  result?: string; to?: string; note?: string; cost?: number; commit?: string; tier?: string; model?: string; p?: number; tally?: Record<string, number>;
+  result?: string; to?: string; note?: string; cost?: number; commit?: string; tier?: string; model?: string; p?: number; tally?: Record<string, number>; changes?: { id: string; do: string }[];
 }
-export function event({ at, by, subject, action, sub, on, file, count, result, to, note, cost, commit, tier, model, p, tally }: Omit<Event, "at"> & { at?: string }): Event {
+export function event({ at, by, subject, action, sub, on, file, count, result, to, note, cost, commit, tier, model, p, tally, changes }: Omit<Event, "at"> & { at?: string }): Event {
   const bad = ([["by", by, ACTORS], ["action", action, ACTIONS], ["sub", sub, SUBS], ["result", result, STATES], ["to", to, ["human", "director"]],
   ] as [string, string | undefined, string[]][]).find(([, v, set]) => v !== undefined && !set.includes(v));
   if (bad) throw new Error(`naming: ${bad[0]} "${bad[1]}" is not in its set`);
-  const e = { at: at ?? new Date().toISOString(), by, subject, action, sub, on, file, count, result, to, note, cost, commit, tier, model, p, tally };
+  const e = { at: at ?? new Date().toISOString(), by, subject, action, sub, on, file, count, result, to, note, cost, commit, tier, model, p, tally, changes };
   return Object.fromEntries(Object.entries(e).filter(([, v]) => v !== undefined && !(Array.isArray(v) && !v.length))) as unknown as Event;
 }
 

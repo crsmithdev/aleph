@@ -180,6 +180,12 @@ function detail(ev) {
   return [esc(Object.entries(ev.tally).map(([k, n]) => `${k} ${n}`).join(" · ")), ids.join(" ")].filter(Boolean).join(" ");
 }
 
+/** The past word of a housekeeper action. */
+const DID = { close: "closed", drop: "dropped", retitle: "retitled", reprioritize: "reprioritized", note: "noted", unpark: "unparked" };
+
+/** A run's changes as sub-items under its row: the action's past word and the linked issue. */
+const changesHtml = (ev) => (ev.changes ?? []).map((c) => `<span class="event-change">${esc(DID[c.do] ?? c.do)} ${idLink(shownId(c.id), issueHref(c.id))}</span>`).join("");
+
 /** An event's sentence in two parts of HTML: its leading ID, and what follows the verb ("the factory is paused", "past its time box"). */
 function parts(ev) {
   // Adjacent text pieces as one, so the verb's colon and the reason after it ("failed", ": past its time box") read as one.
@@ -212,7 +218,7 @@ export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "") {
     : `${tag(word, chipTone(word))} ${[lead && who + lead, rest !== ev.action && rest, detail(ev)].filter(Boolean).join(" · ")}`;
   return feedRow({ tone: chipTone(word), at: ev.at, by: ev.by, cls: route ? " sys" : "",
     body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
-      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason" title="${esc(ev.note)}">${esc(ev.note)}</span>` : ""}` });
+      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${changesHtml(ev)}${!chat && !route && ev.note ? `<span class="reason" title="${esc(ev.note)}">${esc(ev.note)}</span>` : ""}` });
 }
 
 /** An older event as a label and a short text: a run's role and "#2 ✓", or the chip word and what the sentence adds. */

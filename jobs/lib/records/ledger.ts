@@ -54,8 +54,8 @@ export interface Run {
   /** A run from before `cause`: a drop set this when the run had ended with no commit. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;
-  /** A housekeeper run: counts of what it did by word (`reviewed`, `dropped`, ...), and the issues it changed in full form; its `done` event carries both. */
-  tally?: Record<string, number>; touched?: string[];
+  /** A housekeeper run: counts of what it did by word (`reviewed`, `dropped`, ...), and the issues it changed in full form; `changes` lists each applied action as `{id, do}`; its `done` event carries all three. */
+  tally?: Record<string, number>; touched?: string[]; changes?: { id: string; do: string }[];
   /** The worker tier (haiku or sonnet) of a run whose model the local backend replaced. */
   tier?: string;
   /** A land run of a job with a manual check: "open" until `aleph checked` makes it "done". */

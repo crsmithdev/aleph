@@ -76,6 +76,8 @@ test("code applies each action and refuses one with no evidence, a bad title, or
   expect(ran.tally).toEqual(tally);
   expect(ran.touched).toEqual([1, 2, 4, 5, 6, 7].map((n) => `${key}-${n}`));
   expect(readEvents().findLast((e) => e.action === "done" && e.subject === "housekeeper")).toMatchObject({ tally, on: [expect.stringMatching(/^housekeeper#\d+$/), ...ran.touched!] });
+  expect(readEvents().findLast((e) => e.action === "done" && e.subject === "housekeeper")!.changes).toEqual(
+    ([[1, "close"], [2, "drop"], [4, "retitle"], [5, "reprioritize"], [6, "note"], [7, "unpark"]] as [number, string][]).map(([n, d]) => ({ id: `${key}-${n}`, do: d })));
   expect(o.refused.map((r) => r.split(": refused: ")[1])).toEqual([
     "no longer parked", expect.stringContaining("ends with a period"), `no commit or path deadbeef in ${key}`, "not an issue of this batch",
   ]);
