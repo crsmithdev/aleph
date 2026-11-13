@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
+import { readHolds } from "../gates/factory-status.ts";
 import { newIssue, change, mk, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
@@ -19,6 +20,22 @@ test("an issue waiting on a factory item the store says done, with no commit nam
   const out = await dispatch(f);
   expect(out.started).toEqual([`fac-${waiter}`]);
   expect(out.skipped).toEqual([]);
+});
+
+// The status gap is between the read of the list and an issue's lock: an earlier issue's start closes it.
+test("an issue set to done while an earlier issue starts is skipped as done", async () => {
+  const first = newIssue();
+  const second = newIssue();
+  const calls: string[] = [];
+  const out = await dispatchIssues(async (_repo, name) => {
+    calls.push(name);
+    if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
+    return null;
+  }, undefined, undefined);
+  expect(calls).toEqual([`fac-${first}`]);
+  expect(out.started).toEqual([`fac-${first}`]);
+  expect(out.skipped).toEqual([`fac-${second}: the item is done`]);
+  expect(readHolds([`fac-${second}`])).toMatchObject([{ kind: "not-ready", text: "the item is done" }]);
 });
 
 // The label gap is between the read of the list and an issue's lock: an earlier issue's start removes it.

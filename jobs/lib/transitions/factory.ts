@@ -89,6 +89,14 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
   const ready = openIssues();
   /** Records the hold and the skip line of an issue no start reached. */
   const skip = (name: string, kind: Gate, why: string, ev: Hold) => { recordHold(name, kind, why, ev); skipped.push(`${name}: ${why}`); };
+  /** Skips an issue the store no longer has open, with its status; true when it did, so the caller stops. */
+  const closed = (name: string, repo: Repo, ref: number | string): boolean => {
+    const latest = reader().item(repo.key, ref);
+    const status = latest ? issues.status(latest) : "dropped";
+    if (status === "open") return false;
+    skip(name, "not-ready", `the item is ${latest ? status : "gone"}`, { action: status });
+    return true;
+  };
   /** Skips an issue that a gate holds; a red main's event names its commit, and the note its failed checks. */
   const held = (name: string, repo: Repo, d: IssueDecision) => {
     const b = d.kind === "baseline" ? baselines()[repo.key] : undefined;
@@ -116,17 +124,13 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
       const open = openJob(name, null, jobs);
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
       const item = open ? listed : buildableIssue(repo, ref);
-      if (!item) { skip(name, "not-ready", "not a goal", { action: "parent" }); continue; }
+      // An item closed, dropped or parked since the pass listed it is skipped with that status; one still open is a plain issue.
+      if (!item) { if (closed(name, repo, ref)) continue; skip(name, "not-ready", "not a goal", { action: "parent" }); continue; }
       // A pass that began before a pause must not start a run after it.
       const d = await decideStart(repo, { ...issueFacts(repo, item, jobs), done, red }, jobs, () => route(issueBrief(item, name, jobs).spec, name));
       if (d.kind !== "ready" && d.kind !== "loop-guard") { held(name, repo, d); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
-      const latest = reader().item(repo.key, ref);
-      if (!latest || issues.status(latest) !== "open") {
-        const status = latest ? issues.status(latest) : "dropped";
-        skip(name, "not-ready", `the item is ${latest ? status : "gone"}`, { action: status });
-        continue;
-      }
+      if (closed(name, repo, ref)) continue;
       if (d.kind === "loop-guard") {
         // The Ask goes to the director, as every Ask does.
         recordHold(name, d.kind, d.why, d.ev);
