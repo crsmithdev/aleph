@@ -425,6 +425,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.width(1200);
   }, 90_000);
 
+  test("the number of an Issues Id cell starts at the same x for a 1-letter and a 2-letter project code", async () => {
+    await page.go("#/");
+    const x = await page.ev<number[]>(`Promise.all([import("/lib/naming.ts"), import("/views/issues.js")]).then(([{ setCodes }, { renderRow }]) => {
+      setCodes({ fac: "f", lb: "lb" });
+      const t = document.createElement("table");
+      t.className = "tbl";
+      t.innerHTML = ["fac", "lb"].map((repo) => renderRow({ repo, n: 12, id: repo + "-12", href: "#/issues/" + repo + "/12", title: "t", stage: "new", project: repo, priority: "medium", labels: [] })).join("");
+      document.body.append(t);
+      const out = [...t.querySelectorAll("a.idl")].map((a) => { const w = document.createTreeWalker(a, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode()) && !/\\d/.test(n.data)); const i = n.data.search(/\\d/); const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1); return r.getBoundingClientRect().left; });
+      t.remove();
+      setCodes({});
+      return out;
+    })`);
+    expect(x).toHaveLength(2);
+    expect(Math.abs(x[0] - x[1])).toBeLessThanOrEqual(1);
+  }, 30_000);
+
   test("at 390 px the Context session select stays inside the page width and keeps each option's full label", async () => {
     await page.go("#/");
     await page.width(390);

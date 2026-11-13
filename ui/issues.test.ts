@@ -298,7 +298,7 @@ describe("views", () => {
     const closed = rows.filter((r: string) => r.includes("plain task"));
     expect(closed).toHaveLength(1);
     expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(false);
-    expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide"[^>]*>.*?<\/td><td class="time">/.test(r))).toBe(true);
+    expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>(<span class="idc">[^<]*<\/span>)?[^<]*<\/a><\/td><td class="wide"[^>]*>.*?<\/td><td class="time">/.test(r))).toBe(true);
     expect(closed[0]).toContain(">done</span>");
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
@@ -613,7 +613,7 @@ describe("views", () => {
 
   test("the header sorts: a query key and direction order the rows", async () => {
     const d = await getJson("/api/issues");
-    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">([^<]+)</g)].map((m) => m[1].replace(/^\D+/, ""));
+    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">(?:<span class="idc">[^<]*<\/span>)?([^<]+)</g)].map((m) => m[1].replace(/^\D+/, ""));
     expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
     expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
@@ -995,7 +995,11 @@ describe("the Updated time", () => {
 test("the Issues row, the issue's id and its Work head show the short id, and the links keep the full id", () => {
   setCodes({ fac: "f" });
   try {
-    expect(v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [] })).toContain('<a class="idl" href="#/issues/fac/1">f1</a>');
+    expect(v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [] })).toContain('<a class="idl" href="#/issues/fac/1"><span class="idc">f</span>1</a>');
+    setCodes({ fac: "f", lb: "lb" });
+    const row = (repo: string) => v.renderRow({ repo, n: 12, id: `${repo}-12`, href: `#/issues/${repo}/12`, title: "t", stage: "new", project: repo, priority: "medium", labels: [] });
+    expect(row("fac")).toContain('data-annotate="f12"><td><a class="idl" href="#/issues/fac/12"><span class="idc">f</span>12</a></td>');
+    expect(row("lb")).toContain('data-annotate="lb12"><td><a class="idl" href="#/issues/lb/12"><span class="idc">lb</span>12</a></td>');
     const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { runs: [] } };
     expect(v.renderIssue(d)).toContain('<span class="idp">f1</span></div>');
     expect(v.issueSegments(d)[0].rows[0].head).toContain('<span class="idp">f1</span>');

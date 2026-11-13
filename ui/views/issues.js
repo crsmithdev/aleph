@@ -185,7 +185,8 @@ export function ageText(r, now = Date.now()) {
 /** One issue row. `fold` is "open" or "closed" for a parent with parts, which gets a chevron; `sub` indents a part shown under its parent. */
 export function renderRow(r, { fold, sub } = {}) {
   const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
-  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td>${idLink(shortText(`${r.repo}-${r.n}`), r.href)}</td>` +
+  const [, code, num] = /^(\D*)(.*)$/.exec(shortText(`${r.repo}-${r.n}`));
+  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td><a class="idl" href="${esc(r.href)}"><span class="idc">${esc(code)}</span>${esc(num)}</a></td>` +
     `<td class="wide" title="${esc(r.title)}">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
     `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td>${cell(r.project)}<td>${chips(r.labels)}</td>` +
     `${cell(count(r.notes), { num: true })}${cell(count(r.runs), { num: true })}${cell(money(r.cost), { num: true })}${cell(ageText(r), { num: true })}<td class="time">${esc(updatedText(r))}</td></tr>`;
