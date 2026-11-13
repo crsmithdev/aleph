@@ -21,6 +21,9 @@
  *   replies  [{ by, text, at }]
  * A v 1 annotation has no status, by or replies: it reads as open, by you, with none.
  *
+ * When the page has the chat tool (chat.js), the list's Send button sends the open notes of the page to the agent as one
+ * message. When the agent's turn ends without an error, a "Clear N sent" button drops the notes it got.
+ *
  * Other tools reach the notes through `document.getElementById("kit-annotate").annotate`: `notes()` gives the notes of
  * this page in pin order, and `pick()` turns pick mode on for one element and resolves with the saved note, or with
  * null when the pick or the note is cancelled.
@@ -68,7 +71,8 @@ const BAR = `
 .on .count, .count[aria-expanded="true"] { background: var(--ink); }
 .pop { display: grid; gap: 8px; }
 .pop[hidden] { display: none; }
-.head { display: flex; gap: 6px; align-items: center; }
+.head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.head button { white-space: nowrap; }
 .head b { flex: 1; }
 ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 li { display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; align-items: start; padding: 6px; border-radius: 6px; background: var(--sunk); cursor: pointer; }
@@ -109,6 +113,10 @@ const draft = { read: () => { try { return JSON.parse(localStorage.getItem(DRAFT
 export function annotate({ store = local() } = {}) {
   if (document.getElementById("kit-annotate")) return;
   let all = [], picking = false, editing = null, wanted = null;
+  /** True while the agent works on sent notes; the ids of sent notes whose turn ended without an error. */
+  let sending = false, sent = [];
+  /** The chat tool's API when the page has the tool, else undefined. */
+  const agent = () => document.getElementById("kit-chat")?.chat;
   /** Gives `a` to the pick() that waits for a note, if one does. */
   const give = (a) => { const f = wanted; wanted = null; f?.(a); };
   // A hash that starts with "#/" or "#!/" is a route of a single-page app, so it names a page; any other hash is an anchor.
@@ -117,9 +125,9 @@ export function annotate({ store = local() } = {}) {
 
   const bar = host("kit-annotate", BAR, `<div class="bar"><button type="button" class="fab pick" title="Annotate: pick an element" aria-pressed="false">&#9998;</button>` +
     `<button type="button" class="count" title="Annotations on this page" aria-expanded="false">0</button></div>` +
-    `<div class="card pop" hidden><div class="head"><b>Annotations</b><button type="button" class="copy">Copy</button><button type="button" class="clear">Clear</button></div><ol></ol></div>`);
+    `<div class="card pop" hidden><div class="head"><b>Annotations</b><button type="button" class="send" title="Send the open notes to the agent" hidden>Send</button><button type="button" class="sent" title="The agent's turn ended: clear the notes it got" hidden></button><button type="button" class="copy">Copy</button><button type="button" class="clear">Clear</button></div><ol></ol></div>`);
   const ui = bar.shadowRoot;
-  const [pickBtn, countBtn, list] = ["pick", "count", "pop"].map((c) => ui.querySelector(`.${c}`));
+  const [pickBtn, countBtn, list, sendBtn, sentBtn] = ["pick", "count", "pop", "send", "sent"].map((c) => ui.querySelector(`.${c}`));
 
   const top = host("kit-annotate-layer", LAYER, `<div class="layer"><div class="glow"></div><div class="pins"></div></div>`);
   const lay = top.shadowRoot;
@@ -131,6 +139,10 @@ export function annotate({ store = local() } = {}) {
     const notes = here();
     countBtn.textContent = notes.length;
     countBtn.hidden = !notes.length;
+    sendBtn.hidden = sending || !agent() || !notes.some((a) => a.status !== "resolved");
+    sent = sent.filter((id) => all.some((a) => a.id === id));
+    sentBtn.hidden = !sent.length;
+    sentBtn.textContent = `Clear ${sent.length} sent`;
     pins.innerHTML = notes.map((a, i) => `<button type="button" class="pin${a.by === "agent" ? " agent" : ""}${a.status === "resolved" ? " resolved" : ""}" data-id="${a.id}" title="${esc(a.note)}">${i + 1}</button>`).join("");
     place();
     ui.querySelector("ol").innerHTML = notes.map((a, i) => `<li data-id="${a.id}"${a.status === "resolved" ? ` class="resolved"` : ""}><span class="no">${i + 1}</span>` +
@@ -258,11 +270,26 @@ export function annotate({ store = local() } = {}) {
   });
 
   pickBtn.onclick = () => mode(!picking);
-  countBtn.onclick = () => {
-    list.hidden = !list.hidden;
-    countBtn.setAttribute("aria-expanded", String(!list.hidden));
+  // An open list sits above the chat panel, which shares the dock's corner.
+  const show = (on) => {
+    list.hidden = !on;
+    bar.style.zIndex = on ? "1" : "";
+    countBtn.setAttribute("aria-expanded", String(on));
   };
+  countBtn.onclick = () => show(list.hidden);
   ui.querySelector(".copy").onclick = (e) => copy(markdown(here().filter((a) => a.status !== "resolved"), find)).then((ok) => flash(e.target, ok ? "Copied" : "Copy failed"));
+  // Send gives the open notes to the chat agent; once its turn ends without an error, "Clear N sent" drops them.
+  sendBtn.onclick = async () => {
+    const ids = here().filter((a) => a.status !== "resolved").map((a) => a.id);
+    sending = true;
+    show(false);
+    draw();
+    const error = await agent().send("Work on the open annotations of this page.", ids);
+    sending = false;
+    if (!error) { sent = [...new Set([...sent, ...ids])]; show(true); }
+    draw();
+  };
+  sentBtn.onclick = async () => { const ids = sent; sent = []; for (const id of ids) await drop(id); };
   // Clear asks twice: the first click arms it for three seconds.
   ui.querySelector(".clear").onclick = async (e) => {
     if (!e.target.dataset.armed) {

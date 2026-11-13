@@ -19,6 +19,9 @@
  * An image pasted or dropped on the panel goes with the next message as `images`, each `{ name, data }` with `data` in
  * base64. The transcript keeps only the count of the images.
  *
+ * Other tools reach the panel through `document.getElementById("kit-chat").chat`: `send(text, ids)` sends a message
+ * pointed at annotations `ids` and resolves when its turn ends, with the error or null.
+ *
  * A message sent while the agent works waits in a queue and goes when the turn ends, one per turn. The queue lives only
  * in the page, so a reload drops it.
  */
@@ -74,7 +77,7 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   const el = host("kit-chat", CSS, `<button type="button" class="fab" title="${esc(title)}" aria-expanded="false">&#10022;</button>` +
     `<div class="card pop" hidden><div class="head"><b>${esc(title)}</b><button type="button" class="new">New</button></div>` +
     `<div class="log" aria-live="polite"></div><div class="menu" hidden></div><div class="points"></div>` +
-    `<form><textarea rows="1" placeholder="Ask, or paste a screenshot."></textarea><button type="button" class="point" title="Point at an annotation" hidden>@</button><button type="submit">Send</button></form></div>`);
+    `<form><textarea rows="1" placeholder="Ask, or tell it to do something. Paste a screenshot to send it."></textarea><button type="button" class="point" title="Point at an annotation" hidden>@</button><button type="submit">Send</button></form></div>`);
   const ui = el.shadowRoot;
   const [fab, pop, log, menu, chips, form, box, point] = [".fab", ".pop", ".log", ".menu", ".points", "form", "textarea", ".point"].map((s) => ui.querySelector(s));
   /** The annotate tool's API when the page has the tool, else undefined. */
@@ -133,11 +136,12 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
     return m;
   }
 
-  /** Runs the turn of message `m`, then the turn of the next queued message, if any. */
-  async function send({ text, ids, labels, images }) {
+  /** Runs the turn of message `m`, gives `m.done` its error or null, then runs the next queued message, if any. */
+  async function send({ text, ids, labels, images, done }) {
     add("you", text, labels, images.length);
     busy = true;
     draw();
+    let error = null;
     try {
       const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ text, session: state.session, ...(ids.length ? { annotations: ids } : {}), ...(images.length ? { images } : {}), ...context() }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `${r.status}`);
@@ -155,13 +159,14 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
           if (!data) continue;
           let v;
           try { v = JSON.parse(data); } catch { continue; }
-          if (name === "end") { if (v.error) add("error", v.error); }
-          else take(v);
+          if (name === "end") { if (v.error) add("error", error = v.error); }
+          else { if (v.type === "result" && v.is_error) error = v.result || "The agent failed."; take(v); }
         }
       }
     } catch (e) {
-      add("error", `The message failed: ${e.message}`);
+      add("error", error = `The message failed: ${e.message}`);
     }
+    done?.(error);
     if (queue.length) return send(queue.shift());
     busy = false;
     save();
@@ -222,6 +227,14 @@ export function chat({ url = "/api/chat", headers = {}, context = () => ({}), ke
   pop.addEventListener("paste", (e) => { const fs = e.clipboardData?.files; if (fs?.length) { e.preventDefault(); attachFiles(fs); } });
   pop.addEventListener("dragover", (e) => e.preventDefault());
   pop.addEventListener("drop", (e) => { e.preventDefault(); attachFiles(e.dataTransfer?.files ?? []); });
+  el.chat = {
+    /** Sends `text` pointed at annotations `ids`, or queues it, and resolves with the turn's error, or null. */
+    send: (text, ids = []) => new Promise((done) => {
+      const m = { text, ids, labels: [], images: [], done };
+      show(true);
+      if (busy) { queue.push(m); draw(); } else send(m);
+    }),
+  };
   dock().append(el);
   draw();
 }
