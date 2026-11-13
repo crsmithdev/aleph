@@ -878,6 +878,14 @@ describe("misses", () => {
     expect(recallQuery('grep "cli.ts recall" f')).toBeNull();
     expect(recallQuery("cat <<EOF\nvault recall q\nEOF")).toBeNull();
   });
+  test("recallQuery drops shell redirects and their targets", async () => {
+    expect(recallQuery('aleph memory recall "btcx transcript" 2>/dev/null')).toBe("btcx transcript");
+    expect(recallQuery('vault recall "a b" 2>&1')).toBe("a b");
+    expect(recallQuery("vault recall a > out")).toBe("a");
+    expect(recallQuery("vault recall a <in")).toBe("a");
+    expect(recallQuery("vault recall 2>/dev/null btcx")).toBe("btcx");
+    expect(recallQuery('vault recall a >> "out file" b')).toBe("a b");
+  });
 });
 
 describe("provenance and the contradiction screen", () => {

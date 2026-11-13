@@ -1,7 +1,8 @@
 /**
  * The query of a Bash command that runs the vault CLI's recall (`vault recall …`, `bun …/cli.ts recall …`, `aleph memory recall …`),
  * as a command word after an optional `cd …;` or `&&`; null for anything else. Heredoc bodies are skipped,
- * and a grep or echo that only mentions the text is not a command word. Flags and their values are dropped.
+ * and a grep or echo that only mentions the text is not a command word. Flags and their values are dropped,
+ * and so are redirects and their targets (`2>/dev/null`, `> out`, `2>&1`, `<in`).
  */
 export function recallQuery(cmd: string): string | null {
   const lines: string[] = [];
@@ -13,14 +14,16 @@ export function recallQuery(cmd: string): string | null {
     if (h) end = h[1] ?? h[2] ?? h[3];
   }
   for (const line of lines) {
-    // Quote-aware split into words; ; & | end a command.
-    let words: string[] = [], cur = "", has = false, quote = "";
+    // Quote-aware split into words; ; & | end a command, and a redirect and its target are dropped.
+    let words: string[] = [], cur = "", has = false, quote = "", skip = false;
     const cmds: string[][] = [];
-    const endWord = () => { if (has) words.push(cur); cur = ""; has = false; };
+    const endWord = () => { if (has) { if (skip) skip = false; else words.push(cur); } cur = ""; has = false; };
     const endCmd = () => { endWord(); if (words.length) cmds.push(words); words = []; };
     for (const c of line) {
       if (quote) { if (c === quote) quote = ""; else cur += c; }
       else if (c === '"' || c === "'") { quote = c; has = true; }
+      else if (c === "<" || c === ">") { if (/^\d+$/.test(cur)) { cur = ""; has = false; } else endWord(); skip = true; }
+      else if (skip && !has && (c === "&" || c === "|")) continue;
       else if (/\s/.test(c)) endWord();
       else if (c === ";" || c === "&" || c === "|") endCmd();
       else { cur += c; has = true; }
