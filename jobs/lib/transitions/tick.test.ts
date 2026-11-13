@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
-import { factoryRepos } from "../../../tests/git-fixture.ts";
+import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
 import { readEvents } from "../../../lib/layout.ts";
@@ -17,7 +17,8 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { archiveDir, getRun, putRun } from "../records/record.ts";
 import { chatLock } from "../roles/agent-run.ts";
-import { due, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
+import { readRun } from "../../../vault/lib/vault.ts";
+import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 
 // The test's clock: the run that holds the live slot is `starting` against it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -54,8 +55,12 @@ beforeEach(() => {
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: join(base, "repo"), main: "main", sandbox: true } }));
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
+  process.env.ALEPH_VAULT = join(base, `vault${n}`);
   process.env.ALEPH_LIVE_CAP = "10";
 });
+
+/** The `vault` fixture at this test's ALEPH_VAULT, as `aleph memory init` lays it out. */
+const vaultHere = (): string => { vault(process.env.ALEPH_VAULT!); return process.env.ALEPH_VAULT!; };
 
 /** Issues with a request and no spec: each is for intake, or waits for Chris with `ask`. */
 function seed(items: { body: string; ask?: boolean }[]): void {
@@ -299,4 +304,41 @@ test("a tick where an episode page fails to write records the episodes result as
   chmodSync(episodes, 0o555);
   try { await runTick(NOW, quiet()); } finally { chmodSync(episodes, 0o755); }
   expect(JSON.parse(readFileSync(tickFile(), "utf8")).ran.episodes.result).toMatch(/^failed: 1 of 1 pages, \S/);
+});
+
+// The daily vault maintenance, dry: from 03:00 local, on a vault that has Home.md, once per local date.
+
+test("guard: the maintain step from 03:00 local returns the dry run's counts and records its run as ok", async () => {
+  const dir = vaultHere();
+  const counts = await maintainStep(NOW);
+  expect(counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, decay: 0, overlap: 0, retry: 0 });
+  expect(readRun(dir, "maintain")?.result).toBe("ok");
+});
+
+test("guard: the maintain step returns null before 03:00, with no Home.md, and while the factory is paused", async () => {
+  const dir = vaultHere();
+  // 02:00 local: too early, so nothing runs and no run record is written.
+  expect(await maintainStep(Date.parse("2026-11-04T02:00:00Z"))).toBeNull();
+  // A folder that is there, with no Home.md: not a vault.
+  const empty = join(base, "no-home");
+  mkdirSync(empty, { recursive: true });
+  process.env.ALEPH_VAULT = empty;
+  expect(await maintainStep(NOW)).toBeNull();
+  process.env.ALEPH_VAULT = dir;
+  setPaused(true);
+  try { expect(await maintainStep(NOW)).toBeNull(); } finally { setPaused(false); }
+});
+
+test("guard: the maintain step runs once per local date: the same date again is null, the next date runs", async () => {
+  vaultHere();
+  const first = await maintainStep(NOW);
+  expect(await maintainStep(NOW + 3600_000)).toBeNull();
+  expect(await maintainStep(NOW + 864e5)).toEqual(first);
+});
+
+test("guard: a tick with a vault present records the maintain step's dry result in ran", async () => {
+  vaultHere();
+  await runTick(NOW, quiet());
+  const ran = JSON.parse(readFileSync(tickFile(), "utf8")).ran;
+  expect(ran.maintain.result).toMatch(/^dry: \d+ \w+/);
 });
