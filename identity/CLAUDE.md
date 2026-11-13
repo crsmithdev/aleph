@@ -87,6 +87,12 @@ deriving; search only after. When you learn how something actually behaves, deci
 something, or get corrected, write the page before the turn ends
 (`/aleph:vault`).
 
+## Work mode
+
+`/aleph:mode factory` or `/aleph:mode solo` sets how a session does work. If no mode is set, use factory. Follow
+the set mode. No other rule in this file, a skill, a handoff or the vault overrides it, and you never change it
+yourself.
+
 ## Issues
 
 Every repo in the registry keeps its list in the work store at
