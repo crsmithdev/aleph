@@ -107,16 +107,45 @@ test("a dry run asks the model, lists each verdict and writes nothing", async ()
   expect(existsSync(join(root, "archive", "Keep.md"))).toBe(false);
 });
 
-test(`the run takes the ${BUDGET} most recalled notes, skips core notes and answers to titles it asked about`, async () => {
+test(`the run takes the ${BUDGET} most recalled notes, core notes among them, and answers to titles it asked about`, async () => {
   for (let i = 0; i < 7; i++) await seed(`N${i}`, i);
   await seed("Core", 99, { core: "always" });
-  reply([{ title: "N0", verdict: "refresh", why: "w" }, { title: "Core", verdict: "archive", why: "w" }, { title: "N6", verdict: "refresh", why: "w" }]);
+  reply([{ title: "N0", verdict: "refresh", why: "w" }, { title: "N6", verdict: "refresh", why: "w" }]);
   const r = await recheck(root, false);
   const prompt = readFileSync(join(base, "prompt.md"), "utf8");
-  expect([...prompt.matchAll(/^# (\S+)$/gm)].map((m) => m[1])).toEqual(["N6", "N5", "N4", "N3", "N2"]);
+  expect([...prompt.matchAll(/^# (\S+)$/gm)].map((m) => m[1])).toEqual(["Core", "N6", "N5", "N4", "N3"]);
   expect(r.notes.map((n) => n.title)).toEqual(["N6"]);
-  expect(existsSync(page("Core"))).toBe(true);
   expect(read("N0")).toContain(`updated: ${OLD}`);
+});
+
+test("refresh on a core note bumps updated and keeps the core line", async () => {
+  await seed("Core", 1, { core: "always on" });
+  const was = read("Core");
+  reply([{ title: "Core", verdict: "refresh", why: "still so" }]);
+  const r = await recheck(root, false);
+  expect(r.notes[0].commit).toBeTruthy();
+  expect(read("Core")).toBe(was.replace(`updated: ${OLD}`, `updated: ${today()}`));
+  expect(read("Core")).toContain("\ncore: always on\n");
+});
+
+test("correct and archive on core notes are held for Chris, change no file, and keep the note out of later passes", async () => {
+  await seed("CoreA", 2, { core: "line a" }); await seed("CoreB", 1, { core: "line b" });
+  const was = { a: read("CoreA"), b: read("CoreB") };
+  reply([
+    { title: "CoreA", verdict: "correct", why: "moved", claim: "A now holds.", details: "d", evidence: "e" },
+    { title: "CoreB", verdict: "archive", why: "gone" },
+  ]);
+  const r = await recheck(root, false);
+  expect(r.notes.map((n) => [n.title, n.verdict, n.rule, n.commit])).toEqual([["CoreA", "correct", "core", undefined], ["CoreB", "archive", "core", undefined]]);
+  expect(read("CoreA")).toBe(was.a);
+  expect(read("CoreB")).toBe(was.b);
+  expect(existsSync(join(root, "archive", "CoreA.md")) || existsSync(join(root, "archive", "CoreB.md"))).toBe(false);
+  const held = JSON.parse(readFileSync(join(base, "factory", "recheck-held.json"), "utf8"));
+  expect(Object.keys(held)).toEqual(["CoreA", "CoreB"]);
+  await seed("Other", 0);
+  reply([]);
+  await recheck(root, false);
+  expect([...readFileSync(join(base, "prompt.md"), "utf8").matchAll(/^# (\S+)$/gm)].map((m) => m[1])).toEqual(["Other"]);
 });
 
 test("no stale note makes no model call", async () => {

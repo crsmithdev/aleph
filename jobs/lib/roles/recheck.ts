@@ -2,12 +2,15 @@
  * The maintainer's decay re-check: one read-only `claude -p` run per pass checks the most recalled stale notes against
  * the code and the repos' git history, and replies one verdict per note. Code applies each through the vault ops
  * in-process, so each change is a pushed, revertible vault commit and each refusal is the op's own. The model never
- * writes a file, and a note with a `core:` line is never touched.
+ * writes a file. On a note with a `core:` line only `refresh` is applied: `correct` and `archive` are held for Chris
+ * in the factory dir, and the note is not re-checked while its held verdict waits.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
+import { readJsonOr, writeJson } from "../../../lib/json.ts";
+import { layout } from "../../../lib/layout.ts";
 import { decayQueue, sub } from "../../../vault/lib/maintain.ts";
 import { lintVault, loadVault, recordRun, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
 import { lock } from "../infra/locks.ts";
@@ -23,6 +26,8 @@ const MODEL = () => readModels().maintainer?.model ?? "sonnet";
 /** Read-only: the files, git history and the vault's recall. */
 const ALLOWED = ["Read", "Grep", "Glob", "Bash(git log:*)", "Bash(aleph memory recall:*)"];
 const TEXT = { type: "string" } as const;
+/** The verdicts held for Chris, by note title: outside the vault, so no vault op or commit touches them. */
+const heldFile = () => join(layout().factory, "recheck-held.json");
 
 export const RECHECK_SCHEMA = {
   type: "object",
@@ -79,6 +84,11 @@ async function apply(notes: Note[], verdicts: Verdict[], day: string): Promise<R
       const v = verdicts.find((x) => x.title === n.title);
       if (!v) continue;
       const w: Rechecked = { title: n.title, verdict: v.verdict, why: v.why };
+      if (n.fm.core && v.verdict !== "refresh") {
+        writeJson(heldFile(), { ...readJsonOr<Record<string, Verdict & { day: string }>>(heldFile(), {}), [n.title]: { ...v, day } });
+        out.push({ ...w, rule: "core", refused: "held for Chris" });
+        continue;
+      }
       const why = `maintainer recheck ${day}: ${v.why.replace(/\s+/g, " ")}`;
       const file = join(dir, `${n.title}.md`);
       const t = v.verdict === "archive" ? "" : text(n, v, day);
@@ -103,7 +113,8 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
   const all = wikiNotes(await loadVault(root));
   const byTitle = new Map(all.map((n) => [n.title, n]));
   const stale = decayQueue(root, lintVault(all).warn.filter((f) => f.rule === "stale"));
-  const queue = stale.map((f) => byTitle.get(f.note)!).filter((n) => !n.fm.core).slice(0, BUDGET);
+  const held = readJsonOr<Record<string, unknown>>(heldFile(), {});
+  const queue = stale.map((f) => byTitle.get(f.note)!).filter((n) => !held[n.title]).slice(0, BUDGET);
   if (!queue.length) return { ...report, skipped: "nothing to re-check" };
   await endLost("maintainer", () => "maintainer", "a reply");
   const release = await lock("maintainer", 0);
