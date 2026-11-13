@@ -385,7 +385,8 @@ export function lintVault(notes: Note[], { overlap = false, now = new Date(), tr
   // something: turn it on with `lint --overlap`.
   const pairs: (Finding & { score: number })[] = [];
   if (overlap) for (let i = 0; i < wiki.length; i++) for (let j = i + 1; j < wiki.length; j++) {
-    const a = wiki[i], b = wiki[j];
+    // By title, so which note of a pair is `note` does not depend on the order readdir gave them.
+    const [a, b] = wiki[i].title < wiki[j].title ? [wiki[i], wiki[j]] : [wiki[j], wiki[i]];
     if (a.fm.scope !== b.fm.scope) continue;
     const sup = (x: Note, y: Note) => list(x.fm, "supersedes").some((t) => t.toLowerCase() === y.title.toLowerCase());
     const agree = (x: Note, y: Note) => list(x.fm, "consistent_with").some((t) => t.toLowerCase() === y.title.toLowerCase());
@@ -396,8 +397,9 @@ export function lintVault(notes: Note[], { overlap = false, now = new Date(), tr
     const shared = [...wa].filter((w) => wb.has(w));
     if (shared.length >= 2) pairs.push({ note: a.title, rule: "overlap", other: b.title, detail: `shares "${shared.join('", "')}" with ${b.title} in scope ${a.fm.scope}; neither supersedes the other`, score: shared.length / new Set([...wa, ...wb]).size });
   }
-  // Most similar first (Jaccard of the word sets); the sort is stable, so ties keep note order.
-  warn.push(...pairs.sort((x, y) => y.score - x.score).map(({ score, ...f }) => f));
+  // Most similar first (Jaccard of the word sets), ties by title, so a tied pair keeps one place and one
+  // direction however the filesystem lists the notes.
+  warn.push(...pairs.sort((x, y) => y.score - x.score || x.note.localeCompare(y.note) || x.other!.localeCompare(y.other!)).map(({ score, ...f }) => f));
   return { refuse, warn };
 }
 

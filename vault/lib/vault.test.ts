@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendRecallLog, lintVault, loadVault, loadWiki, readRun, screenCandidates, wikiNotes } from "./vault.ts";
+import { appendRecallLog, lintVault, loadVault, loadWiki, readRun, screenCandidates, wikiNotes, type Note } from "./vault.ts";
 
 let root: string;
 const N = 300;
@@ -67,5 +67,21 @@ test("lint skips a pair when a note lists the other in distinct, and orders the 
   expect(await pairs()).toEqual([["Pipeline Gate Draft", "Pipeline Gate Rules"], ["Pipeline Gate Draft", "Pipeline Gate Extra Words Here"].sort(), ["Pipeline Gate Rules", "Pipeline Gate Extra Words Here"].sort()]);
   w("Pipeline Gate Rules", "distinct: [Pipeline Gate Draft]\n");
   expect(await pairs()).toEqual([["Pipeline Gate Draft", "Pipeline Gate Extra Words Here"].sort(), ["Pipeline Gate Rules", "Pipeline Gate Extra Words Here"].sort()]);
+  rmSync(r, { recursive: true, force: true });
+});
+
+test("overlap pairs tie on Jaccard and break the tie by title, whatever order the notes come in", async () => {
+  const r = mkdtempSync(join(tmpdir(), "vault-tie-"));
+  mkdirSync(join(r, "wiki", "concepts"), { recursive: true });
+  const w = (t: string) => writeFileSync(join(r, "wiki", "concepts", `${t}.md`), `---\nkind: concept\nscope: global\nupdated: 2026-10-01\n---\n# ${t}\n\n**Claim.** as of 2026-10-01 x\n`);
+  for (const t of ["Queue Order Draft", "Queue Order Extra", "Queue Order Gate", "Queue Order Shape"]) w(t);
+  const pairs = (ns: Note[]) => lintVault(ns, { overlap: true }).warn.filter((f) => f.rule === "overlap").map((f) => [f.note, f.other]);
+  // Every pair shares Queue and Order of four words, so all six tie and only the titles order them.
+  const notes = await loadVault(r);
+  expect(pairs(notes)).toEqual([
+    ["Queue Order Draft", "Queue Order Extra"], ["Queue Order Draft", "Queue Order Gate"], ["Queue Order Draft", "Queue Order Shape"],
+    ["Queue Order Extra", "Queue Order Gate"], ["Queue Order Extra", "Queue Order Shape"], ["Queue Order Gate", "Queue Order Shape"],
+  ]);
+  expect(pairs([...notes].reverse())).toEqual(pairs(notes));
   rmSync(r, { recursive: true, force: true });
 });
