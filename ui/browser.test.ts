@@ -373,6 +373,18 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.width(1200);
   }, 60_000);
 
+  test("Kit: no two axis labels of the Timeline specimen intersect, at 390 px and at 1280 px", async () => {
+    for (const w of [390, 1280]) {
+      await page.width(w);
+      await page.go("#/kit");
+      await page.when('document.querySelector("#kit-timeline .dp-ticks span")');
+      const r = await page.ev<number[][]>('[...document.querySelectorAll("#kit-timeline .dp-ticks span")].map((s) => { const b = s.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; })');
+      expect(r.length).toBeGreaterThan(1);
+      for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) expect({ w, i, j, hit: r[i][0] < r[j][1] && r[j][0] < r[i][1] && r[i][2] < r[j][3] && r[j][2] < r[i][3] }).toEqual({ w, i, j, hit: false });
+    }
+    await page.width(1200);
+  }, 30_000);
+
   test("at 390 px a queued card's hold text truncates inside the card, and the priority badge, the date and the duration keep their width", async () => {
     await page.go("#/");
     await page.width(390);

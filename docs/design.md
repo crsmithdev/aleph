@@ -1568,7 +1568,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
 | Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/speed.js`, `ui/views/session.js` | allowed |
-| Timeline axis labels overlap when two ticks are close | `renderTimeline()` in `ui/timeline.js` | review on `#/kit` |
 | The Ideas page head has no Project select | `ui/views/ideas.js` | follow-up |
 | A lens result is a hand `iframe.lens-frame`, sandboxed: no helper for a result page; the Log pane's lines are a hand `ul` | `renderIdea()` in `ui/views/ideas.js` | follow-up |
 | The Ideas Updated time is a date from `git log --date=short`, so `when()` shows it as `00:00` | `renderIdeas()` in `ui/views/ideas.js` | follow-up |

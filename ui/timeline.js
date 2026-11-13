@@ -27,11 +27,18 @@ export function compactScale(times) {
   };
 }
 
-/** Up to `max` axis labels, each at least 24% from the one before. */
+/** A label at or past this share of the axis is drawn right-aligned, so it stays inside the axis. */
+const END = 0.9;
+
+/**
+ * Up to `max` axis labels. A label is about 24% wide and sits centred on its time, so each is at least 24% from
+ * the one before; the first is drawn from its time and the last ones end at theirs, which takes 12% more each.
+ */
 export function axisTimes(times, x, max = 5) {
   const out = [];
   for (const t of [...new Set(times)].sort((a, b) => a - b)) {
-    if (!out.length || x(t) - x(out.at(-1)) >= 0.24) out.push(t);
+    const gap = 0.24 + (out.length === 1 ? 0.12 : 0) + (x(t) > END && x(out.at(-1)) <= END ? 0.12 : 0);
+    if (!out.length || x(t) - x(out.at(-1)) >= gap) out.push(t);
   }
   return out.slice(0, max);
 }
@@ -140,7 +147,7 @@ export function renderTimeline(segments) {
   const used = new Set(rows.flatMap((r) => [...r.bars.map((b) => b.tone), ...r.waits.map((w) => (w.chris ? "chris" : "wait")), ...(r.marks ?? []).map((m) => m.tone)]));
   const key = Object.entries(LEGEND).filter(([k]) => used.has(k)).map(([k, v]) => [v, `t-${k}`]);
   // A tick near the end ends at its time, so it stays inside the axis.
-  const ticks = axisTimes(times, x).map((t) => `<span${x(t) > 0.9 ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(timeOf(t))}</span>`).join("");
+  const ticks = axisTimes(times, x).map((t) => `<span${x(t) > END ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(timeOf(t))}</span>`).join("");
   const at = (a, b) => `left:${pct(x(a))}%;width:${pct(Math.max(0.004, x(b) - x(a)))}%`;
   // A bar too narrow for its label (about 600px of lane, 7px a letter) shows the first letter, as the land bar's clip did.
   const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);

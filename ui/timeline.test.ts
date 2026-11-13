@@ -160,6 +160,18 @@ describe("the compact scale", () => {
 });
 
 describe("the timeline panel", () => {
+  test("the axis labels it draws keep apart, also when the first is close to the second and a label ends at its time", () => {
+    // Each label is 24% wide: it starts at its time (the first), is centred on it, or ends at it (class "end").
+    const T0 = Date.UTC(2026, 10, 1);
+    for (const offsets of [[0, 1e6, 6.44e6], [0, 4e6, 5e6], [0, 1000, 4e6, 5e6]]) {
+      const rows = [{ head: "h", bars: [], waits: [], marks: offsets.map((o) => ({ at: T0 + o, tone: "made", tip: "" })), events: [] }];
+      const ticks = [...renderTimeline([{ title: "t", rows }]).matchAll(/<span( class="end")? style="left:([\d.]+)%">\d\d\/\d\d \d\d:\d\d<\/span>/g)];
+      const boxes = ticks.map(([, end, left], i) => { const at = +left; return end ? [at - 24, at] : i === 0 ? [at, at + 24] : [at - 12, at + 12]; });
+      expect(boxes.length).toBeGreaterThan(1);
+      for (let i = 1; i < boxes.length; i++) expect(boxes[i][0]).toBeGreaterThanOrEqual(boxes[i - 1][1]);
+    }
+  });
+
   test("a bar with no link takes focus, and every bar names its state outside title; a segment aside is the kit's aside", () => {
     const [a, b] = spans([run("worker", "2026-11-01T10:00:00Z", "2026-11-01T10:05:00Z", { condition: "failed" }), run("worker", "2026-11-01T10:10:00Z", "2026-11-01T10:15:00Z", { condition: "landed", href: undefined })]);
     const row = laneRow({ head: "h", runs: [a, b] });
