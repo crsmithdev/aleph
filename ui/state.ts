@@ -359,8 +359,6 @@ export function state(now = new Date()): State {
       if (isWaiting(real.condition)) needs.push(toJob(runs));
       // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not stuck.
       else if ((real.condition === "returned" || real.condition === "failed") && !real.next) stuck.push(toJob(runs));
-      // A passed job whose issue is parked holds its land until the issue reopens: no agent runs.
-      else if (real.condition === "passed" && issueStatus(toJob(runs)) === "parked") continue;
       else {
         const k = issueKeyOf(real), on = onOf(real);
         const item = real.repo === undefined || on === undefined ? undefined : lists.item(real.repo, on);
