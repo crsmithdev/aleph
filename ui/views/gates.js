@@ -155,7 +155,7 @@ function ruleForm(r) {
     { hint: "Take the pick: the action the director recommends, if it recommends one. Drop: the reason's drop, close or deny." });
   const buttons = `<span class="rule-acts"><button type="button" class="act" data-cancel>Cancel</button><button type="submit" class="act primary">Save</button></span>`;
   return `<tr class="rule-edit" data-reason="${esc(r.reason)}" hidden><td colspan="7"><form class="rule-form" data-rule="${esc(r.reason)}" data-was-decide="${esc(g)}" data-was-wait="${r.timeout ?? ""}" data-was-then="${then}">` +
-    settings(`Edit ${r.name}`, [decide, wait]) + buttons + `</form></td></tr>`;
+    settings(`Edit ${r.name}`, r.timeout === undefined ? [decide] : [decide, wait]) + buttons + `</form></td></tr>`;
 }
 
 /** One row per Ask reason: how often it fired, who decided it, who decides it first, and what happens when that fails. Edit opens the reason's settings under its row. */

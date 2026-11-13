@@ -17,8 +17,11 @@ describe("always", () => {
     const bad = await aleph(["always", "grant", "nonsense", "land"]);
     expect(bad.code).toBe(1);
     expect(bad.stderr).toContain("unknown reason nonsense; known: ");
-    expect((await aleph(["always", "timeout", "held-path", "30"])).json).toEqual({ "held-path": { minutes: 30, then: "pick" } });
-    expect((await aleph(["always", "timeout"])).json).toEqual({ "held-path": { minutes: 30, then: "pick" } });
+    const held = await aleph(["always", "timeout", "held-path", "30"]);
+    expect(held.code).toBe(1);
+    expect(held.stderr).toContain("held-path has no timeout");
+    expect((await aleph(["always", "timeout", "question", "30"])).json).toEqual({ question: { minutes: 30, then: "pick" } });
+    expect((await aleph(["always", "timeout"])).json).toEqual({ question: { minutes: 30, then: "pick" } });
     const late = await aleph(["always", "timeout", "review", "-1"]);
     expect(late.code).toBe(1);
     expect(late.stderr).toContain("minutes must be a whole number of at least 0, not -1");

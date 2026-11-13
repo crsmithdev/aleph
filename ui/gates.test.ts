@@ -163,7 +163,11 @@ test("rules() gives each reason row its timeout minutes and no-answer action, an
   try {
     writeFileSync(f, JSON.stringify({ "held-path": 30, question: { minutes: 20, then: "drop" } }));
     const row = (reason: string) => rules().find((x) => x.reason === reason)!;
-    expect([row("held-path").timeout, row("held-path").noAnswer]).toEqual([30, "pick"]);
+    expect(row("held-path").timeout).toBeUndefined();
+    const held = gates.renderRules({ rules: [row("held-path")] });
+    expect(held).not.toContain('data-field="wait"');
+    expect(held).toContain("Keep waiting");
+    expect(gates.renderRules({ rules: [row("question")] })).toContain('data-field="wait"');
     expect([row("question").timeout, row("question").noAnswer]).toEqual([20, "drop"]);
     expect([row("no-commit").timeout, row("no-commit").noAnswer]).toEqual([0, "pick"]);
     expect(row("proposal-check").timeout).toBeUndefined();
