@@ -3,8 +3,7 @@ name: pickup
 description: >
   Pick up a saved handoff in a fresh context. Use when the user asks to pick
   up or resume where they left off, or when the session start says a handoff
-  waits for this project. With the argument sweep, go through the open items
-  of every handoff of this repo, explain them and ask Chris.
+  waits for this project.
 argument-hint: "[<name> | sweep]"
 ---
 
