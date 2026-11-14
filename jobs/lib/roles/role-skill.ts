@@ -9,8 +9,9 @@ import { join } from "node:path";
 /** The flag on every agent role's `claude -p`: no skills and no slash commands. */
 export const NO_SKILLS = "--disable-slash-commands";
 
-/** The body of `skills/<name>/SKILL.md`, without its frontmatter, as a prompt section. */
+/** The body of `skills/<name>/SKILL.md`, without its frontmatter, as a prompt section. A relative link becomes an absolute path, so the agent can Read the file it names. */
 export function skillSection(name: string, title: string): string {
-  const text = readFileSync(join(import.meta.dir, "..", "..", "..", "skills", name, "SKILL.md"), "utf8");
-  return `## ${title}\n\n${text.replace(/^---\n[\s\S]*?\n---\n/, "").trim()}`;
+  const dir = join(import.meta.dir, "..", "..", "..", "skills", name);
+  const body = readFileSync(join(dir, "SKILL.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n/, "").trim().replace(/\]\((\.\.?\/[^)]+)\)/g, (_, rel) => `](${join(dir, rel)})`);
+  return `## ${title}\n\n${body}`;
 }

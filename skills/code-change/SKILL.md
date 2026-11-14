@@ -44,11 +44,19 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
 - Remove the imports, variables and functions that your change made unused.
 - Record pre-existing dead code, a bug or a slow path that you find as a follow-up (in the `followups` field when your brief defines it), and leave that code as it is.
 
+### Tests
+
+- Before you write a test, name the code change that would make it fail. If you cannot name one, the test checks nothing.
+- Run a new test before the fix, and see it fail for the reason you expect: not a typo, an import error or a missing fixture.
+- A run in which no test ran proves nothing. Check the count in the output.
+- Assert on what the code returns or leaves behind, not on which calls it made. Prefer the real code, then a fake, then a stub, then a mock.
+- For test-first work, follow [tdd](../tdd/SKILL.md). For a bug whose cause you do not know, follow [diagnosing-bugs](../diagnosing-bugs/SKILL.md) before you change code.
+
 ### Interfaces
 
 These rules apply only when the goal adds a module or changes a module's interface: its signature, invariants, error modes or configuration. Otherwise the Scope rules win, and you restructure nothing.
 
-- Load `/aleph:codebase-design` and use its words: module, interface, depth, seam, adapter.
+- Use the words of [codebase-design](../codebase-design/SKILL.md): module, interface, depth, seam, adapter.
 - **Deletion test**: picture the module deleted. If its complexity reappears across its callers, it earns its keep; if the complexity vanishes, it is a pass-through, so inline it.
 - **One adapter is a hypothetical seam; two adapters are a real one.** Add a seam only where something varies across it.
 - **The interface is the test surface.** Test through it. A test that must reach past it says the module has the wrong shape.

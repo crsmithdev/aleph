@@ -210,6 +210,8 @@ describe("the worker brief", () => {
     expect(sandboxed).toContain("## Code-change method\n\nAdapted from karpathy-guidelines");
     expect(sandboxed).not.toContain("name: code-change");
     expect(sandboxed).not.toContain("Skill tool");
+    expect(sandboxed).toMatch(/\]\(\/[^)]*\/skills\/diagnosing-bugs\/SKILL\.md\)/);
+    expect(sandboxed).not.toContain("](../");
     expect(brief("rb1", f, r, repo)).not.toContain("code-change");
   });
 
