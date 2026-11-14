@@ -292,10 +292,13 @@ export async function start() {
     a.dataset.tone = tone;
     a.title = tone === "fine" ? "Status" : `Status: ${tone}`;
   }
+  let reads = 0;
   async function readTone() {
+    const mine = ++reads;
     try {
       const t = (await (await fetch("/api/status", { cache: "no-store" })).json()).tone;
-      if (typeof t === "string" && t !== tone) { tone = t; paintTone(); }
+      // An answer that a later read has overtaken is stale: it must not overwrite the newer tone.
+      if (mine === reads && typeof t === "string" && t !== tone) { tone = t; paintTone(); }
     } catch {}
   }
 

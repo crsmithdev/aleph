@@ -263,8 +263,9 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     const token = (name: string) => page.ev<string>(`(() => { const e = document.createElement("i"); e.style.color = "var(${name})"; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; })()`);
     await page.when('document.querySelector("#nav a[href=\'#/\']").dataset.tone');
     // The tab shows again: the stream opens and its open reads /api/status, which the test answers.
+    // The stream is a stub that opens at once, so the tone does not wait on a real /api/events open.
     const say = async (tone: string) => {
-      await page.ev(`(() => { window.__f ??= window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/status") ? Promise.resolve(Response.json({ tone: ${JSON.stringify(tone)} })) : window.__f(u, o); document.dispatchEvent(new Event("visibilitychange")); })()`);
+      await page.ev(`(() => { window.__E ??= window.EventSource; window.EventSource = class { constructor() { queueMicrotask(() => this.onopen?.()); } addEventListener() {} close() {} }; window.__f ??= window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/status") ? Promise.resolve(Response.json({ tone: ${JSON.stringify(tone)} })) : window.__f(u, o); document.dispatchEvent(new Event("visibilitychange")); })()`);
       await page.when(`document.querySelector("#nav a[href='#/']").dataset.tone === ${JSON.stringify(tone)}`);
     };
     await say("fine");
@@ -276,7 +277,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await say("fine");
     expect(await colour()).toBe(fine);
     expect(await page.ev("location.hash")).toBe("#/factory/jobs");
-    await page.ev("window.fetch = window.__f");
+    await page.ev("window.fetch = window.__f; window.EventSource = window.__E");
+  }, 30_000);
+
+  test("a late /api/status answer does not overwrite the tone of a newer one", async () => {
+    await page.go("#/factory/jobs");
+    const tone = 'document.querySelector("#nav a[href=\'#/\']").dataset.tone';
+    await page.when(tone);
+    // Two stream opens each read /api/status; the test holds each answer and gives the second before the first.
+    await page.ev(`(() => { window.__E = window.EventSource; window.EventSource = class { constructor() { queueMicrotask(() => this.onopen?.()); } addEventListener() {} close() {} }; window.__f = window.fetch; window.__held = []; window.fetch = (u, o) => String(u) === "/api/status" ? new Promise((ok) => window.__held.push(ok)) : window.__f(u, o); document.dispatchEvent(new Event("visibilitychange")); })()`);
+    await page.when("window.__held.length === 1");
+    await page.ev('document.dispatchEvent(new Event("visibilitychange"))');
+    await page.when("window.__held.length === 2");
+    await page.ev('window.__held[1]({ json: async () => ({ tone: "ask" }) })');
+    await page.when(`${tone} === "ask"`);
+    await page.ev('(async () => { window.__held[0]({ json: async () => ({ tone: "alert" }) }); await new Promise((ok) => setTimeout(ok)); })()');
+    expect(await page.ev(tone)).toBe("ask");
+    await page.ev("window.fetch = window.__f; window.EventSource = window.__E");
   }, 30_000);
 
   test("at phone width the nav wraps, the page does not scroll sideways, and group headers hide", async () => {
