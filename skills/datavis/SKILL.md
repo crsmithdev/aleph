@@ -1,13 +1,13 @@
 ---
-name: metrics
+name: datavis
 description: >
-  Metrics: choose which numbers a page, chart, card or table column shows,
+  Datavis: choose which numbers a page, chart, card or table column shows,
   how each is defined and what it is compared to, before anything is drawn.
   Use when adding a metric, chart, KPI or numeric column to any page,
   designing a dashboard, or reviewing numbers that nobody acts on.
 ---
 
-# Metrics
+# Datavis
 
 A metric is good when its reader can **act** on it: they know what it means, whether it is good or bad, and what to do when it moves. This holds for every number in the UI: a dashboard headline, a chart on a detail page, a fact in a KPI strip, a column in a table. This skill decides which numbers to show, how each is defined, what each is compared to and where it sits. The repo's design language decides how it looks (step 6).
 

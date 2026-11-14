@@ -436,7 +436,7 @@ The KPI strip shows the headline facts of a detail page.
 - `v` and `sub` are HTML: escape text with `esc()`.
 - Set `text: true` when the value is words, not a number.
 - Give at most 6 cells. The cells wrap at every width, 150px minimum each.
-- A detail page opens with `statusRow()` and a KPI strip. The issue that builds a page chooses its KPIs with `aleph:metrics`.
+- A detail page opens with `statusRow()` and a KPI strip. The issue that builds a page chooses its KPIs with `aleph:datavis`.
 
 | Do | Don't |
 |---|---|
