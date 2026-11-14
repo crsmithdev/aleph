@@ -23,6 +23,16 @@ describe("a doc that does not match fails, quoting the claim", () => {
     expect(bad("`ALEPH_SPOOL`, else `~/.aleph/spool`; `ALEPH_RUN_CAP` (3); `ALEPH_JUDGE`, else `jev`; `ALEPH_DISPATCH`, else `on`; `ALEPH_ENV`, else `interactive`; `ALEPH_CONTEXT_WARN` (0.75)")).toEqual([]);
   });
 
+  test("a Word sets row with a missing or an extra value", () => {
+    const naming = (...rows: string[]) => docProblems([{ file: "docs/naming.md", text: ["## Word sets", "", "| Set | Stored | Values |", "|---|---|---|", ...rows].join("\n") }], repoTruth());
+    expect(naming("| Kind | yes | build, recheck, land, intake, director, monitor, chat, lens, housekeeper, maintainer |", "| Flow class | derived | landed, returned, failed, reran, dropped |")).toEqual([]);
+    expect(naming("| Report lane | derived | landed, waiting, other |", "| Flow class | derived | landed, returned, failed, reran, dropped, lost |")).toEqual([
+      "docs/naming.md:5: the Report lane row of the Word sets table lacks failed, against lib/naming.ts",
+      "docs/naming.md:6: the Flow class row of the Word sets table adds lost, against lib/naming.ts",
+    ]);
+    expect(naming("| Action | yes | the job states; paused |")[0]).toMatch(/^docs\/naming\.md:5: the Action row of the Word sets table lacks red, after,.* started, missed, skipped,.* routed.*, against lib\/naming\.ts$/);
+  });
+
   test("a file:line past the end of the file, or a bare name no file has", () => {
     expect(one("`jobs/lib/infra/settings.ts:99999`, `settings.ts:1`, `jobs/lib/infra/settings.ts:2-3`, `nosuchfile.ts:5`")).toEqual([
       expect.stringMatching(/^docs\/x\.md:1: "`jobs\/lib\/infra\/settings\.ts:99999`" cites line 99999 of jobs\/lib\/infra\/settings\.ts, which has \d+ lines$/),

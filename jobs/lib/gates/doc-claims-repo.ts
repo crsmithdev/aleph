@@ -14,6 +14,7 @@ import { spoolDir } from "../../../hooks/lib/handshake.ts";
 import { classifyEnvironment, GH_USER_CMD } from "../../../lib/env.ts";
 import { DEFAULT_WARN } from "../../../hooks/lib/context.ts";
 import { homedir, tmpdir } from "node:os";
+import * as n from "../../../lib/naming.ts";
 import { probe } from "../../../lib/git.ts";
 
 export const ROOT = resolve(import.meta.dir, "..", "..", "..");
@@ -91,6 +92,7 @@ export function repoTruth(root = ROOT): Truth {
   const code = (f: string) => /^(hooks|jobs|issues|ui|vault|lib|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
   return {
     defaults: DEFAULTS,
+    wordSets: { "Issue status": n.STATUSES, "Job state": n.STATES, Action: n.ACTIONS, Sub: n.SUBS, Actor: n.ACTORS, Kind: n.KINDS, Stage: n.STAGES, "Report lane": n.LANES, "Flow class": n.SPEEDS },
     root,
     files,
     source: read(files.filter((f) => (code(f) || f === "package.json" || /^compose\/[^/]+$/.test(f) || f === ".env.example") && !f.startsWith("jobs/lib/gates/doc-claims"))),

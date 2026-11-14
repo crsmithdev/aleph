@@ -80,10 +80,10 @@ Every value is lower case, in storage and on the page. A word means one thing in
 |---|---|---|
 | Issue status | yes | open, parked, done, dropped |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered, refused |
+| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, refused |
 | Sub | yes | no-commit, timeout, stalled, infra, locked, credit, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, contradiction, other |
 | Actor | yes | human, rule, gate, worker, reviewer, check, intake, director, monitor, firefighter, claude |
-| Kind | yes, never shown | build, recheck, land, intake, director, monitor, chat |
+| Kind | yes, never shown | build, recheck, land, intake, director, monitor, chat, lens, housekeeper, maintainer |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |
 | Flow class | derived | landed, returned, failed, reran, dropped |

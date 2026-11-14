@@ -14,6 +14,7 @@
  * - each `` `.selector` in `path.css` `` (also `from`, `of`) against the text of that file;
  * - each `` `path` imports only `a` and `b` `` against the imports of that file;
  * - each `--flag` of an `aleph` or `aleph-ui` command against the CLI source;
+ * - each row of the "Word sets" table of docs/naming.md (the values, or "the job states" for that set) against the array in lib/naming.ts, as sets: each value the doc lacks and each value it adds;
  * - each `--flag` of an `aleph memory` command, and of an op row of the vault Commands table, against the `flag("name")` and `has("name")` reads of the vault code.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -35,6 +36,8 @@ export interface Truth {
   cliSource: string;
   /** The vault code's text: its ops are the `case "op":` lines, its flags the `flag("name")` and `has("name")` reads. */
   vaultSource: string;
+  /** The values of each word set, by its row label in the "Word sets" table of docs/naming.md. */
+  wordSets: Record<string, readonly string[]>;
   /** The repo root, for paths. */
   root: string;
   /** The repo's files, repo-relative, for a bare file name in a `file:line`. Empty: bare names are not checked. */
@@ -287,6 +290,19 @@ export function docProblems(docs: Doc[], truth: Truth): string[] {
     if (extra.length || missing.length) {
       problems.push(`${c.file}:${c.line}: "${c.quote}": ${c.path} imports ${has.length ? has.join(", ") : "nothing"}${missing.length ? `; not ${missing.join(", ")}` : ""}`);
     }
+  }
+  for (const d of docs.filter((x) => x.file === "docs/naming.md")) {
+    let inTable = false;
+    d.text.split("\n").forEach((text, i) => {
+      if (/^## /.test(text)) inTable = text === "## Word sets";
+      const row = inTable ? text.match(/^\|\s*([^|]+?)\s*\|[^|]*\|\s*([^|]+?)\s*\|$/) : null;
+      const want = row && truth.wordSets[row[1]];
+      if (!row || !want) return;
+      const has = new Set(row[2].split(/[,;]/).map((v) => v.trim()).flatMap((v) => v === "the job states" ? truth.wordSets["Job state"] : [v]));
+      const missing = want.filter((v) => !has.has(v));
+      const extra = [...has].filter((v) => !want.includes(v));
+      if (missing.length || extra.length) problems.push(`${d.file}:${i + 1}: the ${row[1]} row of the Word sets table ${[missing.length && `lacks ${missing.join(", ")}`, extra.length && `adds ${extra.join(", ")}`].filter(Boolean).join(" and ")}, against lib/naming.ts`);
+    });
   }
   const ops = new Set([...truth.vaultSource.matchAll(/\bcase "([a-z-]+)":/g)].map((m) => m[1]));
   const vaultFlags = new Set([...truth.vaultSource.matchAll(/\b(?:flag|has)\("([a-z-]+)"\)/g)].map((m) => `--${m[1]}`));
