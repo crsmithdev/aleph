@@ -207,6 +207,20 @@
         "jobs/lib/migrate.ts:14-19"
       ],
       "reason": "Both are import lines, not logic."
+    },
+    {
+      "copies": [
+        "jobs/lib/land/rescue.ts:67-76",
+        "jobs/lib/land/rescue.ts:64-73"
+      ],
+      "reason": "killed, lost and stuckJobs are three different filters over factoryJobs that share a one-line shape."
+    },
+    {
+      "copies": [
+        "ui/api/issues.ts:11-18",
+        "jobs/lib/roles/intake.ts:16-22"
+      ],
+      "reason": "Both are import lines, not logic."
     }
   ]
 }
