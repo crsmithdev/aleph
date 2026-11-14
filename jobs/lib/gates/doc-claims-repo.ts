@@ -68,7 +68,8 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_CONTEXT_WARN: () => DEFAULT_WARN,
   ALEPH_GH_USER: () => GH_USER_CMD.join(" "),
   ALEPH_JUDGE: () => bare("ALEPH_JUDGE", judgeChoice, { ALEPH_JUDGE_FILE: join(tmpdir(), "no-such-judge-file") }),
-  ALEPH_SPOOL: () => bare("ALEPH_SPOOL", spoolDir).replace(homedir(), "~"),
+  // A stand-in HOME: the default is a path in the live store, which a test may not resolve (lib/paths.ts).
+  ALEPH_SPOOL: () => bare("ALEPH_SPOOL", spoolDir, { HOME: "/doc-home" }).replace("/doc-home", "~"),
   ALEPH_ENV: () => bare("ALEPH_ENV", () => classifyEnvironment([])),
   ALEPH_DISPATCH: () => bare("ALEPH_DISPATCH", s.dispatchOn) ? "on" : "off",
   ALEPH_MONITOR: () => bare("ALEPH_MONITOR", s.monitorOn) ? "on" : "off",
@@ -81,7 +82,7 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_WINDOWS_TIME_CMD: () => bare("ALEPH_WINDOWS_TIME_CMD", s.windowsTimeCmd) ?? "none",
   ALEPH_USAGE_URL: plain("ALEPH_USAGE_URL", s.usageUrl),
   ALEPH_CLAUDE_CREDENTIALS: () => bare("ALEPH_CLAUDE_CREDENTIALS", s.credentialsFile).replace(homedir(), "~"),
-  ALEPH_USAGE_FILE: () => bare("ALEPH_USAGE_FILE", s.usageFile).replace(homedir(), "~"),
+  ALEPH_USAGE_FILE: () => bare("ALEPH_USAGE_FILE", s.usageFile, { HOME: "/doc-home" }).replace("/doc-home", "~"),
   ALEPH_SKILLS_DIR: () => bare("ALEPH_SKILLS_DIR", s.skillsDir) === join(ROOT, "skills") ? "the `skills` directory of the repo" : "other",
 };
 
