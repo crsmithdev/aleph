@@ -1,89 +1,81 @@
 ---
 name: domain-modeling
 description: >
-  Domain model: change a project's glossary and decisions. Use when resolving
-  a term, writing or editing GLOSSARY.md, or recording or editing an ADR.
+  Domain model: change a project's glossary, entity model and decisions.
+  Use when resolving a term, an entity's identity, states or owner, or a
+  decision.
 ---
 
 Adapted from Matt Pocock's `domain-modeling` skill (github.com/mattpocock/skills @4ae2317).
 
 # Domain Modeling
 
-Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
+Build and sharpen the project's domain model as you design. This is the active discipline: challenge terms, invent edge cases, and write the glossary, the model and the decisions down the moment they settle. Only reading the glossary is not this skill. This skill is for changing the model.
 
-## File structure
+## Where things live
 
-Most repos have a single context:
-
-```
-/
-├── GLOSSARY.md
-├── docs/
-│   └── adr/
-│       ├── 0001-event-sourced-orders.md
-│       └── 0002-postgres-for-write-model.md
-└── src/
-```
-
-If a `GLOSSARY-MAP.md` exists at the root, the repo has multiple contexts. The map points to where each one lives:
-
-```
-/
-├── GLOSSARY-MAP.md
-├── docs/
-│   └── adr/                          ← system-wide decisions
-├── src/
-│   ├── ordering/
-│   │   ├── GLOSSARY.md
-│   │   └── docs/adr/                 ← context-specific decisions
-│   └── billing/
-│       ├── GLOSSARY.md
-│       └── docs/adr/
-```
-
-Create files lazily: only when you have something to write. If no `GLOSSARY.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+- **Glossary**: the first file that exists of `GLOSSARY.md`, `GLOSSARY-MAP.md`, `docs/naming.md`. Create `GLOSSARY.md` only when none exists. Layout and the multi-context map: [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
+- **Model block**: next to a group of related terms in the glossary. Format: [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
+- **Decisions**: vault notes of kind `decision`, written with `aleph memory write`. Format: [DECISION-FORMAT.md](./DECISION-FORMAT.md).
 
 ## During the session
 
 ### Challenge against the glossary
 
-When the user uses a term that conflicts with the existing language in `GLOSSARY.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y. Which is it?"
+When the user uses a term that conflicts with the glossary, say so at once. "The glossary defines 'cancellation' as X, but you seem to mean Y. Which is it?"
 
 ### Sharpen fuzzy language
 
-When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'account': do you mean the Customer or the User? Those are different things."
+When a term is vague or overloaded, propose one precise term. "You say 'account'. Do you mean the Customer or the User?"
 
 ### Discuss concrete scenarios
 
-When domain relationships are being discussed, stress-test them with specific scenarios. Invent scenarios that probe edge cases and force the user to be precise about the boundaries between concepts.
+Stress-test each relationship with a specific edge case. Force the user to say where one concept ends and the next begins.
+
+### Ask the model questions
+
+For each entity under discussion, ask three questions:
+
+1. **Identity**: what makes two of these the same one? What is its ID?
+2. **Lifecycle**: what states does it have, and which moves between them are legal?
+3. **Owner**: which one module or role writes it? Who reads it?
+
+Then ask for the invariants (what is always true) and the relations (to which entities, one or many).
 
 ### Cross-reference with code
 
-When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible. Which is right?"
+Check every answer against the code before you record it. Cite `path:line`. Surface each contradiction: "The code cancels whole Orders, but you said partial cancellation is possible. Which is right?"
 
-### Update GLOSSARY.md inline
+Flag every place where the code has two answers:
 
-When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up: capture them as they happen. Use the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
+- two writers for one entity
+- two names for one thing
+- one word with two meanings
+- fields that drifted apart in name or type
 
-`GLOSSARY.md` should be totally devoid of implementation details. Do not treat `GLOSSARY.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
+### Update the glossary inline
 
-### Offer ADRs sparingly
+When a term or a model fact settles, edit the glossary right then. Do not batch. Keep implementation detail out of definitions. The model block is the only place for code facts.
 
-Only offer to create an ADR when all three are true:
+### Record decisions sparingly
 
-1. **Hard to reverse**: the cost of changing your mind later is meaningful
-2. **Surprising without context**: a future reader will wonder "why did they do it this way?"
-3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
+Write a decision note only when all three are true:
 
-If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
+1. **Hard to reverse**: changing your mind later costs a lot.
+2. **Surprising without context**: a future reader will ask why.
+3. **A real trade-off**: there were genuine alternatives.
+
+If one is false, skip the note. A decision that replaces an older one sets `supersedes`. Link each term that came from a decision with `(decision: <Title>)`.
 
 ## Done when
 
 Each step is done when its check passes:
 
-- **Challenge**: every term in the user's message that conflicts with `GLOSSARY.md` has been named, and the user has chosen one meaning.
-- **Sharpen**: every vague term has one canonical name, and the user has agreed to it.
-- **Scenarios**: every relationship under discussion has at least one edge-case scenario, and the user has answered it.
-- **Cross-reference**: every claim about how the system works has been checked against the code, and each contradiction has been shown to the user.
-- **Update**: every resolved term is in `GLOSSARY.md` before you reply to the next message.
-- **ADR**: each decision is either recorded in `docs/adr/` or fails one of the three tests, and you can name which one.
+- **Challenge**: every term that conflicts with the glossary has been named, and the user chose one meaning.
+- **Sharpen**: every vague term has one canonical name, and the user agreed.
+- **Scenarios**: every relationship under discussion has an edge case, and the user answered it.
+- **Model questions**: every entity under discussion has an identity, a lifecycle and an owner answer from the user.
+- **Cross-reference**: every claim about the system is checked against the code, and each contradiction and each two-answer case was shown to the user.
+- **Update**: every resolved term is in the glossary before you reply to the next message.
+- **Model block**: every entity discussed has all five lines. Each code fact cites a `path:line` that you read, and each unresolved two-answer case is marked `(conflict: ...)`.
+- **Decisions**: each decision is a vault note that `aleph memory write` accepted (with `supersedes` set where it replaces one), or it fails one of the three tests and you can name which. Each term from a decision names the note's exact title.

@@ -1,39 +1,69 @@
-# GLOSSARY.md Format
+# Glossary Format
 
-## Structure
+## Which file is the glossary
+
+Use the first of these that exists:
+
+1. `GLOSSARY.md`
+2. `GLOSSARY-MAP.md` (multiple contexts, see below)
+3. `docs/naming.md`
+
+Edit that file in its own layout. In aleph it is `docs/naming.md`, a table of `Term | Definition`. Create `GLOSSARY.md` only when none of the three exists, and only when the first term is resolved.
+
+## Terms
+
+In a new `GLOSSARY.md`:
 
 ```md
 # {Context Name}
 
-{One or two sentence description of what this context is and why it exists.}
+{One or two sentences: what this context is and why it exists.}
 
 ## Language
 
 **Order**:
-{A one or two sentence description of the term}
+{One or two sentences.}
 _Avoid_: Purchase, transaction
-
-**Invoice**:
-A request for payment sent to a customer after delivery.
-_Avoid_: Bill, payment request
-
-**Customer**:
-A person or organization that places orders.
-_Avoid_: Client, buyer, account
 ```
 
-## Rules
+In a table glossary, one row per term: `| Order | {definition} |`. Put the avoided words in the definition ("Not a purchase.") or in the doc's old-words line, as the doc already does.
 
-- **Be opinionated.** When multiple words exist for the same concept, pick the best one and list the others under `_Avoid_`.
-- **Keep definitions tight.** One or two sentences max. Define what it IS, not what it does.
-- **Only include terms specific to this project's context.** General programming concepts (timeouts, error types, utility patterns) don't belong even if the project uses them extensively. Before adding a term, ask: is this a concept unique to this context, or a general programming concept? Only the former belongs.
-- **Group terms under subheadings** when natural clusters emerge. If all terms belong to a single cohesive area, a flat list is fine.
+Rules:
+
+- **Be opinionated.** Pick one word per concept and list the others as avoided.
+- **Keep definitions tight.** One or two sentences. Define what it is, not what it does.
+- **Only project terms.** General programming concepts do not belong.
+- **Group terms** under subheadings when clusters form.
+- **No implementation detail** in a definition. The model block carries code facts.
+- **Name the decision.** A term that came from a decision ends its definition with `(decision: <Title>)`. `<Title>` is the exact title of the vault note ([DECISION-FORMAT.md](./DECISION-FORMAT.md)). This works in a list, a table cell, or a table with a trailing `Decision` column if the doc already has one.
+
+## Model block
+
+Terms say what a word means. The model says how the thing behaves. Put one block directly after the terms of a group of related entities, under a line `**Model: {group}**`. In a table glossary, put it after that table.
+
+```md
+**Model: Job**
+- **Job**
+  - Identity: one attempt on a subject. ID `<subject>#<n>`, built at `lib/naming.ts:88`.
+  - Lifecycle: queued, running, done, dropped. Legal moves: queued to running, running to done or dropped. `lib/jobs.ts:140`.
+  - Owner: writer `factory/run.ts` only (`factory/run.ts:52`). Readers: UI, report.
+  - Invariants: a done job has a cost. A subject has at most one running job. `lib/jobs.ts:171`.
+  - Relations: belongs to one Subject. A Subject has many Jobs.
+```
+
+Rules:
+
+- Write one entry per entity, with all five lines. Write "none" for an invariant list that is empty. Do not leave a line out.
+- Cite `path:line` for every fact that comes from the code. Check the line before you write it.
+- A fact the code does not show is a claim of intent. Mark it `(intended)` and ask the user to confirm it.
+- Where the code gives two answers, do not pick one. Write `(conflict: <path:line> vs <path:line>)` and raise it with the user.
+- Keep a state, a field or a rule only when a person could break it. Skip the rest.
 
 ## Single vs multi-context repos
 
-**Single context (most repos):** One `GLOSSARY.md` at the repo root.
+**Single context:** one glossary file, as chosen above.
 
-**Multiple contexts:** A `GLOSSARY-MAP.md` at the repo root lists the contexts, where they live, and how they relate to each other:
+**Multiple contexts:** a `GLOSSARY-MAP.md` at the repo root lists the contexts, where they live and how they relate:
 
 ```md
 # Glossary Map
@@ -42,19 +72,11 @@ _Avoid_: Client, buyer, account
 
 - [Ordering](./src/ordering/GLOSSARY.md): receives and tracks customer orders
 - [Billing](./src/billing/GLOSSARY.md): generates invoices and processes payments
-- [Fulfillment](./src/fulfillment/GLOSSARY.md): manages warehouse picking and shipping
 
 ## Relationships
 
-- **Ordering → Fulfillment**: Ordering emits `OrderPlaced` events; Fulfillment consumes them to start picking
-- **Fulfillment → Billing**: Fulfillment emits `ShipmentDispatched` events; Billing consumes them to generate invoices
-- **Ordering ↔ Billing**: Shared types for `CustomerId` and `Money`
+- **Ordering to Billing**: Ordering emits `OrderPlaced`. Billing consumes it to create invoices.
+- **Ordering and Billing**: share the types `CustomerId` and `Money`.
 ```
 
-The skill infers which structure applies:
-
-- If `GLOSSARY-MAP.md` exists, read it to find contexts
-- If only a root `GLOSSARY.md` exists, single context
-- If neither exists, create a root `GLOSSARY.md` lazily when the first term is resolved
-
-When multiple contexts exist, infer which one the current topic relates to. If unclear, ask.
+If `GLOSSARY-MAP.md` exists, read it to find the contexts, and infer which one the topic belongs to. If unclear, ask. Decisions are not per context. Set the vault note's `scope` to the repo.
