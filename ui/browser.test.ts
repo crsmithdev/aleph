@@ -676,7 +676,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       s.asks = [{ id: "tools-5", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a third input file",
         situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", path: "/api/issues/tools-5/drop", body: {}, input: { name: "reason", lead: "" } }] }];
       view.render(s, {}, new URLSearchParams());
-      window.beat = () => view.event(document.querySelector("#view"), { at: "2026-11-13T12:00:00Z", text: "x" });
+      window.beat = () => view.event(document.querySelector("#view"), { time: "2026-11-13T12:00:00Z", subject: "gate", action: "waiting", object: "issue.1" });
       window.beat();
       const f = window.fetch;
       window.posts = [];
@@ -1018,15 +1018,15 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       return page.ev<{ idea?: string; session?: string }>("sent.at(-1)");
     };
     expect((await say("zero")).idea).toBeUndefined();
-    await page.go("#/ideas/issue-history");
+    await page.go("#/ideas/1");
     const mine = await say("one");
-    expect([mine.idea, mine.session]).toEqual(["issue-history", undefined]);
-    expect(await page.ev('JSON.parse(localStorage.getItem("chat:idea:issue-history")).session')).toBe("s-issue-history");
+    expect([mine.idea, mine.session]).toEqual(["1", undefined]);
+    expect(await page.ev('JSON.parse(localStorage.getItem("chat:idea:1")).session')).toBe("s-1");
     await page.go("#/");
     const general = await say("two");
     expect(general.idea).toBeUndefined();
     expect(general.session).toBe("s-general");
-    await page.ev(`window.fetch = realFetch; ${chat}.querySelector(".new").click(); localStorage.removeItem("chat:idea:issue-history")`);
+    await page.ev(`window.fetch = realFetch; ${chat}.querySelector(".new").click(); localStorage.removeItem("chat:idea:1")`);
   }, 30_000);
 
   test("every indented list takes its left padding from --indent-list", async () => {
@@ -1081,10 +1081,10 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
   let rig: Rig, page: Page;
   beforeAll(async () => {
     rig = await startRig((e) => {
-      e.ALEPH_IDEAS = join(e.HOME, "ideas");
-      mkdirSync(join(e.ALEPH_IDEAS, "issue-history", "lenses"), { recursive: true });
-      writeFileSync(join(e.ALEPH_IDEAS, "issue-history", "idea.md"), "---\ntitle: Issue history\nstatus: exploring\nbuilt: []\n---\nA sketch.\n\n## Log\n");
-      for (const f of ["prior-art-2026-11-01-0900.html", "prior-art-2026-11-02-1000.html"]) writeFileSync(join(e.ALEPH_IDEAS, "issue-history", "lenses", f), `<p>${f}</p>`);
+      const idea = join(e.ALEPH_ITEMS, "ideas", "1");
+      mkdirSync(idea, { recursive: true });
+      writeFileSync(join(idea, "idea.md"), "---\ntitle: Issue history\nstatus: exploring\nbuilt: []\n---\nA sketch.\n\n## Log\n");
+      for (const f of ["prior-art-2026-11-01-0900.html", "prior-art-2026-11-02-1000.html"]) writeFileSync(join(idea, f), `<p>${f}</p>`);
     });
     page = await rig.open("#/ideas");
   }, 150_000);
@@ -1096,13 +1096,13 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     expect(await page.ev<string>('document.querySelector("#view tbody tr").textContent')).toContain("Issue historyexploringnew project");
     
     expect(await page.ev<boolean>('(() => { const n = [...document.querySelectorAll("#nav li a")].map((a) => a.textContent); return n.indexOf("Ideas") === n.indexOf("Issues") + 1; })()')).toBe(true);
-    await page.go("#/ideas/issue-history");
+    await page.go("#/ideas/1");
     await page.when('document.querySelector("#view [data-tab]")');
     expect(await page.ev<string[]>('[...document.querySelectorAll("#view [data-tab]")].map((b) => b.textContent)')).toEqual(["Write-up", "Prior art", "Red team", "Explainer", "Log"]);
     await click('#view [data-tab="prior-art"]');
     await page.when('document.querySelector("#view section[data-pane=prior-art]:not([hidden]) iframe")');
     const frame = 'document.querySelector("#view section[data-pane=prior-art] iframe")';
-    expect(await page.ev<string>(`${frame}.getAttribute("src")`)).toBe("/api/ideas/issue-history/lenses/prior-art-2026-11-02-1000.html");
+    expect(await page.ev<string>(`${frame}.getAttribute("src")`)).toBe("/api/ideas/1/lenses/prior-art-2026-11-02-1000.html");
     expect(await page.ev<boolean>(`${frame}.hasAttribute("sandbox")`)).toBe(true);
     expect(await page.ev<string>('document.querySelector("#view section[data-pane=prior-art] .list").textContent')).toMatch(/^(11\/01 09:00|2026-11-01)$/);
     expect(page.errors).toEqual([]);

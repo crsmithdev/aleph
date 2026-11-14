@@ -116,8 +116,8 @@ yourself.
 
 ## Issues
 
-Every repo in the registry keeps its list in the work store at
-`~/.aleph/issues`, and `aleph issue` owns it. Every issue goes there, whoever names it: an ask from Chris, a
+Every project in the registry keeps its issues in the items repo at
+`~/.aleph/items`, and `aleph issue` owns it. Every issue goes there, whoever names it: an ask from Chris, a
 follow-up you name in a summary, a `TODO` you meet in the code. File it in the
 same turn you name it, and quote the issue number after that.
 

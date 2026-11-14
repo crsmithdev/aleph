@@ -25,15 +25,14 @@ test("a 2xx passes; a bad status and a closed port each give a reason", async ()
 });
 
 test("the health line needs two failures in a row, and a pass clears it", async () => {
-  const file = join(dir, "sub", "smoke.json");
   status = 500;
-  await smokeStep(file, base, Date.parse("2026-11-01T10:00:00Z"));
-  expect(smokeLine(file)).toBeNull();
-  await smokeStep(file, base, Date.parse("2026-11-01T10:05:00Z"));
-  expect(smokeLine(file)).toBe("health: aleph-ui has failed its smoke test since 2026-11-01T10:00:00.000Z: / answered 500");
+  await smokeStep(base, Date.parse("2026-11-01T10:00:00Z"));
+  expect(smokeLine()).toBeNull();
+  await smokeStep(base, Date.parse("2026-11-01T10:05:00Z"));
+  expect(smokeLine()).toBe("health: aleph-ui has failed its smoke test since 2026-11-01T10:00:00.000Z: / answered 500");
   status = 200;
-  await smokeStep(file, base);
-  expect(smokeLine(file)).toBeNull();
+  await smokeStep(base);
+  expect(smokeLine()).toBeNull();
 });
 
 test("the smoke test sends the factory token and adds it to ui-sessions.json", async () => {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { aleph, base, issueRuns, jobsDir, now, startScript, stateNow as state, state as record, setup, teardown, idle, when, addOld, seedItem } from "./cli.helpers";
 import { dispatch, drop, issueClose } from "./flow.testkit.ts";
 import { hookLines } from "./lib/transitions/factory.ts";
-import { patchRun } from "./lib/records/record.ts";
+import { setState } from "./lib/records/record.ts";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -51,7 +51,7 @@ describe("every transition dispatches at once", () => {
       expect((await issueClose("fac", id, "drop", "test over")).code).toBe(0);
       // A job that passed, landed or was dropped has no open job to drop. Any other refusal leaves it open,
       // and a stuck or failed one holds every later dispatch.
-      const d = await drop(`fac-${id}`);
+      const d = await drop(`issue.${id}`);
       if (d.code !== 0) expect(d.stderr).toContain("no open job");
       await idle(startLog);
     }
@@ -67,7 +67,7 @@ describe("every transition dispatches at once", () => {
     await idle(startLog);
     expect(started()).toEqual([]);
     expect((await aleph(["issue", "edit", "fac", String(x), "--status", "open"], on())).code).toBe(0);
-    await when(() => started().includes(`fac-${x}`));
+    await when(() => started().includes(`issue.${x}`));
   }, 60_000);
 
   test("a stuck run holds only its own issue: the next issue starts beside it", async () => {
@@ -77,10 +77,10 @@ describe("every transition dispatches at once", () => {
     try {
       const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
       await idle(startLog);
-      expect(runs(s).some((r) => ["stuck", "failed"].includes(state(r).condition))).toBe(true);
+      expect(runs(s).some((r) => ["stuck", "failed"].includes(state(r).state))).toBe(true);
       const b = track(await add("starts beside it", open("hold-b"), ["--labels", "goal"]));
-      await when(() => started().includes(`fac-${b}`));
-      expect(started()).toEqual([`fac-${s}`, `fac-${b}`]);
+      await when(() => started().includes(`issue.${b}`));
+      expect(started()).toEqual([`issue.${s}`, `issue.${b}`]);
     } finally {
       if (rescue === undefined) delete process.env.ALEPH_RESCUE;
       else process.env.ALEPH_RESCUE = rescue;
@@ -89,17 +89,17 @@ describe("every transition dispatches at once", () => {
 
   test("dropping an issue drops its open job, so its Ask stops waiting for Chris", async () => {
     const x = track(await seed("dropped with its job", open("drop-with"), { kind: "goal" }));
-    await when(() => started().includes(`fac-${x}`));
+    await when(() => started().includes(`issue.${x}`));
     // The held run waits on an Ask, as a job that needs Chris does.
     const [run] = runs(x);
-    patchRun(run, { condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a" }], recommended: "A", why: ["w"] } });
-    expect(hookLines().join("\n")).toContain(`fac-${x}`);
+    setState(`job.${run}`, "waiting", { ask: { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a" }], recommended: "A", why: ["w"] } });
+    expect(hookLines().join("\n")).toContain(`issue.${x}`);
     expect((await issueClose("fac", x, "drop", "not needed")).code).toBe(0);
-    expect(state(run).condition).toBe("dropped");
+    expect(state(run).state).toBe("dropped");
     expect(record(run).reason).toBe(`issue fac-${x} was dropped`);
-    const again = await drop(`fac-${x}`);
+    const again = await drop(`issue.${x}`);
     expect(again.code).not.toBe(0);
     expect(again.stderr).toContain("no open job");
-    expect(hookLines().join("\n")).not.toContain(`fac-${x}`);
+    expect(hookLines().join("\n")).not.toContain(`issue.${x}`);
   }, 60_000);
 });

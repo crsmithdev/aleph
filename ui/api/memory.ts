@@ -6,6 +6,7 @@
  * The POST routes are its writes: a note goes through `vault write`, `archive` or `delete`, so each is validated,
  * committed and pushed; a handoff or an episode is a file. A write clears nothing: the updater's watchers see it.
  */
+import { getJson } from "../../lib/db.ts";
 import { readJsonOr } from "../../lib/json.ts";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +16,7 @@ import { aleph, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
-import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
+import { tickRows, type TickRow } from "../../jobs/lib/gates/factory-status.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { backlinks, coreNotes, KINDS, linkTargets, links, lintVault, loadVault, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
@@ -197,11 +198,11 @@ function nextDaily(at: string): string {
 }
 
 /** The `maintain` row: the tick's last result (else the vault's run record), the queue sizes of the last mechanical pass and the notes of the last compile, the notes of the last re-check and the pairs of the last overlap pass. */
-function maintain(root: string, ran: { at?: string; result: string } | undefined) {
+function maintain(root: string, ran: TickRow | undefined) {
   const run = readRun(root, "maintain"), compile = readRun(root, "compile"), recheck = readRun(root, "recheck"), dedupe = readRun(root, "dedupe");
   let counts: Record<string, number> = {};
   try { counts = JSON.parse((run?.detail ?? "").replace(/^dry: /, "")); } catch { /* a failed run's detail is text */ }
-  const last = ran?.at ?? run?.at ?? null;
+  const last = ran?.last ?? run?.at ?? null;
   const notes = /(\d+) notes/.exec(compile?.detail ?? "")?.[1];
   const rechecked = /(\d+) rechecked/.exec(recheck?.detail ?? "")?.[1];
   const resolved = /(\d+) resolved/.exec(dedupe?.detail ?? "")?.[1];
@@ -210,16 +211,16 @@ function maintain(root: string, ran: { at?: string; result: string } | undefined
 }
 
 /** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. The corrections
- * store is read as a file: corrections.ts loads the factory's actions, which the server must not. */
+ * store is read as a row: corrections.ts loads the factory's actions, which the server must not. */
 async function processes(): Promise<Response> {
   const root = vaultDir(), now = Date.now();
-  const tick = readJsonOr<{ last?: Record<string, string>; ran?: Record<string, { at?: string; result: string }> }>(join(factoryDir(), "tick.json"), {});
-  const store = readJsonOr<{ minedAt: string; lessons: { sentence: string; state: string }[] }>(join(factoryDir(), "corrections.json"), { minedAt: "", lessons: [] });
+  const tick = tickRows();
+  const store = getJson<{ minedAt: string; lessons: { sentence: string; state: string }[] }>("state", "corrections", { minedAt: "", lessons: [] });
   const step = (name: string, runs: string, last: string | undefined, next: string | null, does: string) =>
-    ({ name, runs, last: last ?? null, next, result: tick.ran?.[name]?.result ?? null, detail: null, does });
+    ({ name, runs, last: last ?? null, next, result: tick[name]?.result ?? null, detail: null, does });
   const steps = [
-    step("episodes", "every 30 min", tick.last?.episodes, tick.last?.episodes ? new Date(Date.parse(tick.last.episodes) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
-    maintain(root, tick.ran?.maintain),
+    step("episodes", "every 30 min", tick.episodes?.last ?? undefined, tick.episodes?.last ? new Date(Date.parse(tick.episodes.last) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
+    maintain(root, tick.maintain),
     ...([["seen prune", "with each recall that injects a note", "deletes seen lists older than 7 days"], ["recall trim", "with each logged recall", "keeps 30 days of the recall log"], ["vault push", "with each vault write", "pushes the vault commit to origin"]] as const).map(([name, runs, does]) => {
       const run = readRun(root, name);
       return { name, runs, last: run?.at ?? null, next: null, result: run?.result ?? null, detail: run?.detail ?? null, does };

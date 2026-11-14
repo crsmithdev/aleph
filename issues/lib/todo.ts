@@ -1,23 +1,21 @@
 /**
- * One work store file: an issue. Flat frontmatter, then three parts, each
- * opened by a marker line: the request, the spec and the notes. See
+ * One item file: an issue, `issues/<n>/issue.md`. The path is its key (`issue.<n>`), so the file holds no id. Flat
+ * frontmatter, then three parts, each opened by a heading line: `# Request`, `# Spec` and `# Notes`. See
  * docs/data-model.md.
  *
- * An issue is closed by its `closed_as` field. A child is an issue with a `from`
- * field that names its parent. An old part is an issue whose id has a `.k`; its
- * parent comes from its id.
+ * An issue is closed by its `closed_as` field. A child is an issue with a `from` field that names its parent.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { today } from "../../lib/day.ts";
-import { FULL, ISSUE_KINDS, parseId, shortText, STATUSES } from "../../lib/naming.ts";
+import { next } from "../../lib/db.ts";
+import { ISSUE_KINDS, parseId, parseKey, shortText, STATUSES } from "../../lib/naming.ts";
 
 export type Status = (typeof STATUSES)[number];
-const REQUIRED = ["id", "created_time", "updated_time"] as const;
+const REQUIRED = ["project", "created"] as const;
 
 export interface Issue {
+  /** The number in its path: `issues/<id>/issue.md`. */
   id: number;
-  /** The part's number under issue `id`: `proj-5.1` is id 5, sub 1. Absent on a top-level issue. */
-  sub?: number;
   title: string;
   fm: Frontmatter;
   /** What was asked. Verbatim. Empty on a part intake wrote. */
@@ -30,31 +28,19 @@ export interface Issue {
 
 export interface Doc {
   items: Issue[];
-  /** The registry key the store read the list for. */
+  /** The registry name of the project the store read the list for. */
   repo?: string;
-  /** The numbers issues of closed work had: a new issue or part goes above them. */
-  floor?: Floor;
+  /** Its key, `project.<n>`: what a new issue holds in `project`. */
+  project?: string;
+  /** The highest issue number in the store at the commit read: a new issue takes a number above it. */
+  floor?: number;
 }
-
-/** The highest number used by work no longer in the list: `next` for the repo, `parts` by issue number. */
-export interface Floor { next: number; parts: Record<string, number> }
 
 export { today };
 
 /** A time as ISO 8601 UTC, the form every issue time and note stamp has. */
 export const minute = (now = new Date()): string => now.toISOString();
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
-/** A note line with the old local `YYYY-MM-DD HH:MM` stamp. */
-const OLD_STAMP = /^- (\d{4}-\d{2}-\d{2} \d{2}:\d{2}): /;
-/** Mark an item changed at `now`. */
-export function touch(item: { fm: Record<string, unknown> }, now = new Date()): void {
-  item.fm.updated_time = minute(now);
-}
-/** An old local `YYYY-MM-DD HH:MM` or `YYYY-MM-DD` as ISO UTC; a date is that day's local midnight. Undefined for any other text. */
-const isoOf = (v: unknown): string | undefined => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(String(v ?? ""));
-  return m ? new Date(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0)).toISOString() : undefined;
-};
 
 /** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
 export const clock = (): Date => (process.env.ALEPH_NOW ? new Date(process.env.ALEPH_NOW) : new Date());
@@ -88,79 +74,76 @@ export const kindOf = (item: Issue): string => String(item.fm.kind || "task");
 /** Main's head when the issue was reopened, or undefined. */
 export const sinceOf = (item: Issue): string | undefined => (item.fm.since ? String(item.fm.since) : undefined);
 
-/** A stored time as ISO UTC: an old local time converts. Undefined for none. */
-const timeOf = (v: unknown): string | undefined => (typeof v === "string" && ISO.test(v) ? v : isoOf(v));
-// The old `created`, `updated` and `closed_at` dates stay until `aleph issue lint --fix` rewrites every store (aleph-1657).
 /** When the issue was made, as ISO UTC. */
-export const created = (item: Issue): string | undefined => timeOf(item.fm.created_time) ?? isoOf(item.fm.created);
-/** When the issue last changed, as ISO UTC. */
-export const updated = (item: Issue): string | undefined => timeOf(item.fm.updated_time) ?? isoOf(item.fm.updated);
+export const created = (item: Issue): string | undefined => (item.fm.created ? String(item.fm.created) : undefined);
 /** When the issue closed, as ISO UTC; undefined while it is open. */
-export const closed = (item: Issue): string | undefined => (item.fm.closed_as ? timeOf(item.fm.closed_time) ?? isoOf(item.fm.closed_at) : undefined);
+export const closed = (item: Issue): string | undefined => (item.fm.closed_as && item.fm.closed_at ? String(item.fm.closed_at) : undefined);
 
-const MARK = { request: "<!-- request -->", spec: "<!-- spec -->", notes: "<!-- notes -->" } as const;
-const MARKS: string[] = Object.values(MARK);
+/** When the issue last changed, as ISO UTC: the latest of its creation, its close and its last note. The file holds no such field; git holds the history. */
+export const updated = (item: Issue): string | undefined => [created(item), closed(item), ...item.notes.slice(-1).map((n) => noteOf(n).at ?? undefined)].filter((t): t is string => !!t).sort().at(-1);
 
-/** A line of text that reads as a marker gets a leading backslash, so text cannot open a part. A line with backslashes before a marker gets one more. */
-const escapeMarks = (text: string): string => text.split("\n").map((l) => (MARKS.includes(l.replace(/^\\+/, "")) ? `\\${l}` : l)).join("\n");
-const unescapeMarks = (text: string): string => text.split("\n").map((l) => (MARKS.includes(l.replace(/^\\+/, "")) ? l.slice(1) : l)).join("\n");
+const HEADS = { request: "# Request", spec: "# Spec", notes: "# Notes" } as const;
+const HEADINGS: string[] = Object.values(HEADS);
+
+/** A line of text that reads as a part heading gets a leading backslash, so text cannot open a part. A line with backslashes before a heading gets one more. */
+const escapeHeads = (text: string): string => text.split("\n").map((l) => (HEADINGS.includes(l.replace(/^\\+/, "")) ? `\\${l}` : l)).join("\n");
+const unescapeHeads = (text: string): string => text.split("\n").map((l) => (HEADINGS.includes(l.replace(/^\\+/, "")) ? l.slice(1) : l)).join("\n");
 
 const trimmed = (text: string): string => text.replace(/^\n+/, "").replace(/\n+$/, "");
 
-/**
- * One issue as a work store file: the frontmatter carries `id: <repo>-<n>` and `title` beside the
- * item's own fields. Each part that has text follows under its marker.
- */
-export function renderItem(repo: string, item: Issue): string {
-  const { id: _, ...fields } = item.fm;
-  const fm = serializeFrontmatter({ id: `${repo}-${refOf(item)}`, title: item.title, ...fields });
+/** The frontmatter fields in the order a file lists them; any other field follows. */
+const ORDER = ["project", "title", "kind", "priority", "source", "created", "closed_as", "closed_at", "closed_why", "from", "after"];
+
+/** One issue as its file: the frontmatter, then each part that has text under its heading. */
+export function renderItem(item: Issue): string {
+  const { title: _, ...fields } = item.fm;
+  const all: Frontmatter = { title: item.title, ...fields };
+  const ordered: Frontmatter = Object.fromEntries([...ORDER.filter((k) => k in all), ...Object.keys(all).filter((k) => !ORDER.includes(k))].map((k) => [k, all[k]]));
   const block: string[] = [];
-  if (item.request.trim()) block.push(`${MARK.request}\n${escapeMarks(trimmed(item.request))}`);
-  if (item.spec.trim()) block.push(`${MARK.spec}\n${escapeMarks(trimmed(item.spec))}`);
-  if (item.notes.length) block.push(`${MARK.notes}\n${item.notes.map((n) => n.replace(/\n/g, " ")).join("\n")}`);
-  return fm + (block.length ? block.join("\n") + "\n" : "");
+  if (item.request.trim()) block.push(`${HEADS.request}\n\n${escapeHeads(trimmed(item.request))}\n`);
+  if (item.spec.trim()) block.push(`${HEADS.spec}\n\n${escapeHeads(trimmed(item.spec))}\n`);
+  if (item.notes.length) block.push(`${HEADS.notes}\n\n${item.notes.map((n) => n.replace(/\n/g, " ")).join("\n")}\n`);
+  return serializeFrontmatter(ordered) + (block.length ? `\n${block.join("\n")}` : "");
 }
 
-export function parseItem(text: string): Issue {
+/** The issue `id` from its file text. */
+export function parseItem(id: number, text: string): Issue {
   const { frontmatter, body: rest } = splitFrontmatter(text);
-  const { title, id: full, ...fields } = parseFrontmatter(frontmatter ?? "");
-  const p = parseId(full);
-  const id = Number(p?.n);
-  const sub = p?.sub;
+  const { title, ...fields } = parseFrontmatter(frontmatter ?? "");
   const parts: Record<string, string[]> = { request: [], spec: [], notes: [] };
   let at: string[] | null = null;
   for (const line of rest.split("\n")) {
-    const opened = Object.entries(MARK).find(([, mark]) => mark === line);
+    const opened = Object.entries(HEADS).find(([, head]) => head === line);
     if (opened) at = parts[opened[0]];
     else at?.push(line);
   }
   return {
     id,
-    ...(sub === undefined ? {} : { sub }),
     title: String(title ?? ""),
-    fm: { id: sub === undefined ? String(id) : `${id}.${sub}`, ...fields },
-    request: trimmed(unescapeMarks(parts.request.join("\n"))),
-    spec: trimmed(unescapeMarks(parts.spec.join("\n"))),
+    fm: fields,
+    request: trimmed(unescapeHeads(parts.request.join("\n"))),
+    spec: trimmed(unescapeHeads(parts.spec.join("\n"))),
     notes: parts.notes.filter((l) => l.trim().startsWith("- ")),
   };
 }
 
-/** The list a repo gets on its first `issue add`. */
-export const blank = (repo?: string): Doc => ({ items: [], ...(repo ? { repo } : {}) });
+/** An empty list, for a project that has no issue yet. */
+export const blank = (repo?: string, project?: string): Doc => ({ items: [], ...(repo ? { repo } : {}), ...(project ? { project } : {}) });
 
-/** `"5"` for a top-level issue, `"5.1"` for a part. */
-export const refOf = (item: Issue): string => (item.sub === undefined ? String(item.id) : `${item.id}.${item.sub}`);
+/** The number of the issue as text: `"5"`. */
+export const refOf = (item: Issue): string => String(item.id);
 /** The text with each id as its short id (docs/naming.md); an id of a project with no code stays whole. `key` is the repo the text is about. */
 export const localRefs = (_key: string, text: string): string => shortText(text);
-/** The ref of the parent: `"5"` for an old part `5.1` and for a child with `from: <repo>-5`. Undefined for a top-level issue. */
-export const parentRef = (item: Issue): string | undefined =>
-  item.sub !== undefined ? String(item.id) : item.fm.from ? parseRef(String(item.fm.from))?.id.toString() : undefined;
-/** The id that finds the item: its number for a top-level issue, `"5.1"` for a part. */
-export const idOf = (item: Issue): number | string => (item.sub === undefined ? item.id : refOf(item));
-/** A number resolves to the top-level issue, never to a part under it; a string like `"5.1"` to the part. */
-export const find = (doc: Doc, id: number | string): Issue | undefined => doc.items.find((i) => refOf(i) === String(id));
-// The max of `id` ignores `sub` on purpose: a part's id is its parent's number, so a part never takes a new issue number.
-const nextId = (doc: Doc): number => Math.max(doc.items.reduce((m, i) => Math.max(m, i.id), 0), (doc.floor?.next ?? 1) - 1) + 1;
+/** The number of the parent, as text, from `from: issue.<n>`. Undefined for an issue with no parent. */
+export const parentRef = (item: Issue): string | undefined => { const p = item.fm.from ? parseKey(item.fm.from) : null; return p?.kind === "issue" ? String(p.n) : undefined; };
+/** The id that finds the item: its number. */
+export const idOf = (item: Issue): number => item.id;
+/** The issue with number `id`: a number, its text, or a key such as `issue.5`. */
+export const find = (doc: Doc, id: number | string): Issue | undefined => {
+  const n = typeof id === "number" ? id : parseKey(id)?.n ?? Number(id);
+  return doc.items.find((i) => i.id === n);
+};
+const nextId = (doc: Doc): number => next("issue", Math.max(doc.floor ?? 0, ...doc.items.map((i) => i.id)));
 
 const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;
 export type Source = (typeof SOURCES)[number];
@@ -191,7 +174,7 @@ export function titleProblem(title: string, o: { part?: boolean } = {}): string 
 /** Null for a kind the store knows, else the message that names them. */
 export const kindProblem = (kind: string): string | null => ((KINDS as readonly string[]).includes(kind) ? null : `unknown kind "${kind}": use ${KINDS.join(", ")}`);
 
-/** `from` is the full id of the issue this one was split from; `after` the refs it waits for. */
+/** `from` is the key of the issue this one was split from (`issue.5`); `after` the keys it waits for. The number comes from the counter at once, so a write that fails leaves a gap. */
 export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; from?: string; after?: string[]; now?: Date } = {}): Issue {
   const kind = o.kind ?? "task";
   const bad = kindProblem(kind) ?? titleProblem(title, { part: !!o.from });
@@ -202,7 +185,7 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   const item: Issue = {
     id: nextId(doc),
     title,
-    fm: { id: String(nextId(doc)), created_time: minute(o.now), updated_time: minute(o.now), kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}), ...(o.from ? { from: o.from } : {}), ...(o.after?.length ? { after: o.after } : {}) },
+    fm: { ...(doc.project ? { project: doc.project } : {}), created: minute(o.now), kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}), ...(o.from ? { from: o.from } : {}), ...(o.after?.length ? { after: o.after } : {}) },
     request: o.request ?? "",
     spec: o.spec ?? "",
     notes: [],
@@ -219,16 +202,15 @@ export function noteOf(line: string): { at: string | null; text: string } {
   return m ? { at: m[1], text: m[3] } : { at: null, text: line.replace(/^\s*-\s*/, "") };
 }
 
-/** Append-only: an existing note line is never rewritten, which is the lost update this format exists to stop. */
+/** Append-only: an existing note line is never rewritten, which is the lost update this format exists to stop. A note holds what a person or an agent said; code writes none. */
 export function note(item: Issue, text: string, now = new Date()): string {
   const line = `- ${minute(now)}: ${text}`;
   item.notes.push(line);
-  touch(item, now);
   return line;
 }
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
-export function edit(item: Issue, change: { kind?: string; title?: string; request?: string; spec?: string; priority?: string; areas?: string[] }, now = new Date()): void {
+export function edit(item: Issue, change: { kind?: string; title?: string; request?: string; spec?: string; priority?: string; areas?: string[] }): void {
   const bad = change.title === undefined || change.title === item.title ? null : titleProblem(change.title, { part: parentRef(item) !== undefined });
   if (bad) throw new Error(bad);
   if (change.kind !== undefined) item.fm.kind = change.kind;
@@ -237,10 +219,9 @@ export function edit(item: Issue, change: { kind?: string; title?: string; reque
   if (change.spec !== undefined) item.spec = change.spec;
   if (change.priority !== undefined) item.fm.priority = change.priority;
   if (change.areas !== undefined) item.fm.areas = change.areas;
-  touch(item, now);
 }
 
-/** Close the issue as `next`, with why; `open` takes the closure off. A reopen also sets `since`: see `store.reopen`. */
+/** Close the issue as `next`, with why; `open` takes the closure off. A reopen also sets `since`: see `store.reopen`. The caller logs the close (`store.logClosed`). */
 export function setStatus(item: Issue, next: Status, now = new Date(), why?: string): void {
   if (next === "parked") {
     item.fm.parked = "true";
@@ -248,18 +229,16 @@ export function setStatus(item: Issue, next: Status, now = new Date(), why?: str
     delete item.fm.parked;
     delete item.fm.closed_as;
     delete item.fm.closed_why;
-    delete item.fm.closed_time;
+    delete item.fm.closed_at;
   } else {
     delete item.fm.parked;
     item.fm.closed_as = next;
-    item.fm.closed_time = minute(now);
+    item.fm.closed_at = minute(now);
     if (why) item.fm.closed_why = why;
   }
-  touch(item, now);
 }
 
-const refParts = (r: string): [number, number] => { const [n, k] = r.split("."); return [Number(n), k === undefined ? -1 : Number(k)]; };
-const byRef = (a: Finding, b: Finding) => { const [an, ak] = refParts(a.id), [bn, bk] = refParts(b.id); return an - bn || ak - bk; };
+const byRef = (a: Finding, b: Finding) => Number(a.id) - Number(b.id);
 
 export interface Finding {
   id: string;
@@ -267,43 +246,43 @@ export interface Finding {
   fixable: boolean;
 }
 
-/** Fields of the old store shape: a file with one was not rewritten. `ask` moved to the job record (jobs/lib/records/record.ts). */
-const RETIRED = ["status", "goals", "issue", "labels", "waiting_on", "due", "route", "created_date", "updated_date", "ask"];
+/** Fields of an older store shape: a file with one was not rewritten. `ask` moved to the job record (jobs/lib/records/record.ts). `id` and `was` go because the path is the key. */
+const RETIRED = ["status", "goals", "issue", "labels", "waiting_on", "due", "route", "created_date", "updated_date", "ask", "id", "was", "updated", "updated_time", "created_time", "closed_time"];
+/** The retired fields that `fix` drops: an old time, or a field the path or the history holds. */
+const DROPPED = ["id", "was", "updated", "updated_time"];
+const FIXABLE = [...DROPPED, "created_time", "closed_time"];
+const KEYS = /^issue\.\d+$/;
 
 export function lint(doc: Doc): Finding[] {
   const findings: Finding[] = [];
-  const seen = new Map<string, number>();
   for (const item of doc.items) {
-    seen.set(refOf(item), (seen.get(refOf(item)) ?? 0) + 1);
+    const id = refOf(item);
     for (const key of REQUIRED) {
       if (item.fm[key] === undefined || item.fm[key] === "") {
-        findings.push({ id: refOf(item), problem: `${key} is missing`, fixable: true });
+        findings.push({ id, problem: `${key} is missing`, fixable: key === "project" ? doc.project !== undefined : item.fm.created_time !== undefined });
       }
     }
     const s = item.fm.closed_as;
-    if (s !== undefined && s !== "done" && s !== "dropped") findings.push({ id: refOf(item), problem: `closed_as "${s}" is not done or dropped`, fixable: false });
-    for (const key of ["created_time", "updated_time", "closed_time"] as const) {
+    if (s !== undefined && s !== "done" && s !== "dropped") findings.push({ id, problem: `closed_as "${s}" is not done or dropped`, fixable: false });
+    for (const key of ["created", "closed_at"] as const) {
       const v = item.fm[key];
-      if (typeof v === "string" && v && !ISO.test(v)) findings.push({ id: refOf(item), problem: `${key} "${v}" is not an ISO UTC time`, fixable: isoOf(v) !== undefined });
+      if (typeof v === "string" && v && !ISO.test(v)) findings.push({ id, problem: `${key} "${v}" is not an ISO UTC time`, fixable: false });
     }
-    if (item.notes.some((l) => OLD_STAMP.test(l))) findings.push({ id: refOf(item), problem: "a note stamp is not an ISO UTC time", fixable: true });
     const after = item.fm.after;
     if (after !== undefined) {
       const refs = Array.isArray(after) ? after : [after];
-      if (refs.some((r) => !FULL.test(String(r)))) findings.push({ id: refOf(item), problem: `after: ${refs.join(", ")} is not <repo>-<n>[.<k>]`, fixable: false });
+      if (refs.some((r) => !KEYS.test(String(r)))) findings.push({ id, problem: `after: ${refs.join(", ")} is not issue.<n>`, fixable: false });
     }
-    if (item.fm.from !== undefined && (!parseId(item.fm.from) || parseId(item.fm.from)!.sub !== undefined)) findings.push({ id: refOf(item), problem: `from: ${item.fm.from} is not <repo>-<n>`, fixable: false });
+    if (item.fm.from !== undefined && !KEYS.test(String(item.fm.from))) findings.push({ id, problem: `from: ${item.fm.from} is not issue.<n>`, fixable: false });
     const source = item.fm.source;
-    if (source !== undefined && !(SOURCES as readonly string[]).includes(source as string)) findings.push({ id: refOf(item), problem: `source "${source}" is not one of ${SOURCES.join(", ")}`, fixable: false });
-    for (const key of RETIRED) if (item.fm[key] !== undefined) findings.push({ id: refOf(item), problem: `${key} is retired`, fixable: false });
-    if (item.fm.id !== undefined && String(item.fm.id) !== refOf(item)) findings.push({ id: refOf(item), problem: `id says ${item.fm.id} but the file says ${refOf(item)}`, fixable: true });
+    if (source !== undefined && !(SOURCES as readonly string[]).includes(source as string)) findings.push({ id, problem: `source "${source}" is not one of ${SOURCES.join(", ")}`, fixable: false });
+    for (const key of RETIRED) if (item.fm[key] !== undefined) findings.push({ id, problem: `${key} is retired`, fixable: FIXABLE.includes(key) });
     const kind = item.fm.kind;
-    if (kind === undefined || kind === "") findings.push({ id: refOf(item), problem: "kind is missing", fixable: true });
-    else if (kindProblem(String(kind))) findings.push({ id: refOf(item), problem: kindProblem(String(kind))!, fixable: true });
+    if (kind === undefined || kind === "") findings.push({ id, problem: "kind is missing", fixable: true });
+    else if (kindProblem(String(kind))) findings.push({ id, problem: kindProblem(String(kind))!, fixable: true });
     const title = ["open", "parked"].includes(status(item)) ? titleProblem(item.title, { part: parentRef(item) !== undefined }) : null;
-    if (title) findings.push({ id: refOf(item), problem: title, fixable: false });
+    if (title) findings.push({ id, problem: title, fixable: false });
   }
-  for (const [ref, count] of seen) if (count > 1) findings.push({ id: ref, problem: `${count} items share id ${ref}`, fixable: false });
   return findings.sort(byRef);
 }
 
@@ -315,29 +294,24 @@ const MOVED_AREAS = ["bug", "flakes", "check", "deps", "proposal"];
 const areaList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 
 /** Repair what is mechanically repairable. Returns what it changed. */
-export function fix(doc: Doc, now = new Date()): string[] {
+export function fix(doc: Doc): string[] {
   const fixed: string[] = [];
-  // A part with no kind area takes its parent's kind, as an old part holds it; so parents go first.
-  for (const item of [...doc.items].sort((a, b) => (a.sub === undefined ? 0 : 1) - (b.sub === undefined ? 0 : 1))) {
+  // A child with no kind area takes its parent's kind; so parents go first.
+  for (const item of [...doc.items].sort((a, b) => (parentRef(a) === undefined ? 0 : 1) - (parentRef(b) === undefined ? 0 : 1))) {
+    const id = refOf(item);
     const areas = areaList(item.fm.areas);
     if (!item.fm.kind || kindProblem(String(item.fm.kind))) {
-      const parent = item.sub === undefined ? undefined : doc.items.find((p) => p.id === item.id && p.sub === undefined);
+      const up = parentRef(item), parent = up === undefined ? undefined : find(doc, up);
       item.fm.kind = item.fm.kind === "goal" ? "task" : KIND_AREAS.find(([a]) => areas.includes(a))?.[1] ?? (parent?.fm.kind as Kind | undefined) ?? "task";
-      fixed.push(`${refOf(item)}: kind set to ${item.fm.kind}`);
+      fixed.push(`${id}: kind set to ${item.fm.kind}`);
     }
     const kept = areas.filter((a) => !MOVED_AREAS.includes(a));
-    if (kept.length < areas.length) { item.fm.areas = kept; fixed.push(`${refOf(item)}: areas ${areas.filter((a) => MOVED_AREAS.includes(a)).join(", ")} removed`); }
-    if (item.fm.id === undefined || String(item.fm.id) !== refOf(item)) { item.fm.id = refOf(item); fixed.push(`${refOf(item)}: id set to ${refOf(item)}`); }
-    const was = JSON.stringify([item.fm, item.notes]);
-    for (const key of ["created_time", "updated_time", "closed_time"]) if (item.fm[key] !== undefined) item.fm[key] = isoOf(item.fm[key]) ?? item.fm[key]!;
-    item.fm.created_time ||= isoOf(item.fm.created) ?? isoOf(item.fm.updated) ?? minute(now);
-    item.fm.updated_time ||= isoOf(item.fm.updated) ?? item.fm.created_time;
-    const closed = isoOf(item.fm.closed_at);
-    if (closed) item.fm.closed_time ||= closed;
-    for (const key of ["created", "updated", "closed_at"]) delete item.fm[key];
-    item.notes = item.notes.map((l) => l.replace(OLD_STAMP, (_, t) => `- ${isoOf(t)}: `));
-    if (JSON.stringify([item.fm, item.notes]) !== was) fixed.push(`${refOf(item)}: times set to ISO UTC`);
-    if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) { item.fm.labels = [String(item.fm.labels)]; fixed.push(`${refOf(item)}: labels wrapped in a list`); }
+    if (kept.length < areas.length) { item.fm.areas = kept; fixed.push(`${id}: areas ${areas.filter((a) => MOVED_AREAS.includes(a)).join(", ")} removed`); }
+    if (!item.fm.project && doc.project) { item.fm.project = doc.project; fixed.push(`${id}: project set to ${doc.project}`); }
+    for (const key of DROPPED) if (item.fm[key] !== undefined) { delete item.fm[key]; fixed.push(`${id}: ${key} removed`); }
+    if (item.fm.created_time !== undefined) { item.fm.created ||= item.fm.created_time; delete item.fm.created_time; fixed.push(`${id}: created_time is created`); }
+    if (item.fm.closed_time !== undefined) { item.fm.closed_at ||= item.fm.closed_time; delete item.fm.closed_time; fixed.push(`${id}: closed_time is closed_at`); }
+    if (item.fm.labels !== undefined && !Array.isArray(item.fm.labels)) { item.fm.labels = [String(item.fm.labels)]; fixed.push(`${id}: labels wrapped in a list`); }
   }
   return fixed;
 }

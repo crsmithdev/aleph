@@ -9,6 +9,7 @@ import { withEnv, withServer } from "./test-server.ts";
 import { updater } from "./updater.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/skills.js";
+import { writeRepos } from "../tests/projects.ts";
 
 const today = "2026-11-09";
 const NOW = Date.parse(`${today}T12:00:00.000Z`);
@@ -61,7 +62,7 @@ beforeAll(async () => {
   mkdirSync(join(tmp, "skills", "retro"), { recursive: true });
   mkdirSync(join(tmp, "skills", "dormant"), { recursive: true });
   for (const s of ["pickup", "retro", "dormant"]) writeFileSync(join(tmp, "skills", s, "SKILL.md"), `# ${s}\n`);
-  writeFileSync(join(tmp, "repos.json"), JSON.stringify({ aleph: { path: "/work/aleph" }, other: { path: "/work/other" } }));
+  writeRepos({ aleph: { path: "/work/aleph" }, other: { path: "/work/other" } });
   use(mem);
   // The server's builds run in its Worker, which reads Langfuse over HTTP: this fake answers them in one page.
   lf = Bun.serve({
@@ -76,7 +77,7 @@ beforeAll(async () => {
       return new Response("not found", { status: 404 });
     },
   });
-  restoreEnv = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SKILLS_DIR: join(tmp, "skills"), ALEPH_SKILLS_STORE: join(tmp, "store.json"), ALEPH_REPOS: join(tmp, "repos.json") });
+  restoreEnv = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SKILLS_DIR: join(tmp, "skills"), ALEPH_SKILLS_STORE: join(tmp, "store.json"), });
   ({ stop: stopApp, at: appAt } = await withServer({ warm: false }));
 });
 afterAll(() => {

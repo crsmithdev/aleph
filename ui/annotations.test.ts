@@ -9,7 +9,7 @@ let base: string, at: Awaited<ReturnType<typeof withServer>>["at"], stop: () => 
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-annotations-"));
-  restoreEnv = withEnv({ ALEPH_ANNOTATIONS: join(base, "notes", "annotations.json"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "issues") });
+  restoreEnv = withEnv({ ALEPH_ANNOTATIONS: join(base, "notes", "annotations.json"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "issues") });
   ({ at, stop } = await withServer({ warm: false }));
 });
 

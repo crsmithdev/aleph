@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findingsOf, monitorDue, monitorStep, readerPrompt } from "./monitor.ts";
 import { monitorPanel, reportFile, reportLine, type Report } from "../learning/monitor-table.ts";
 import { allRuns } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
-import { setPaused } from "../gates/factory-status.ts";
+import { setPaused, setTick, tickRows } from "../gates/factory-status.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_VAULT", "ALEPH_MONITOR_CMD", "ALEPH_MONITOR", "FAKE_DIR"] as const;
+const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_ITEMS", "ALEPH_VAULT", "ALEPH_MONITOR_CMD", "ALEPH_MONITOR", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base = "", saved: Record<string, string | undefined> = {};
 
@@ -28,8 +27,8 @@ beforeEach(() => {
   writeFileSync(join(base, "fake"), FAKE);
   chmodSync(join(base, "fake"), 0o755);
   Object.assign(process.env, {
-    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_REPOS: join(base, "repos.json"),
-    ALEPH_ISSUES: join(base, "issues"), ALEPH_VAULT: join(base, "vault"), ALEPH_MONITOR_CMD: join(base, "fake"), FAKE_DIR: base,
+    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_DB: join(base, "aleph.db"),
+    ALEPH_ITEMS: join(base, "issues"), ALEPH_VAULT: join(base, "vault"), ALEPH_MONITOR_CMD: join(base, "fake"), FAKE_DIR: base,
   });
   delete process.env.ALEPH_MONITOR;
 });
@@ -55,37 +54,27 @@ test("the tick's step reads yesterday's table with a tool-less reader once a day
   expect(prompt).toContain("# Factory monitor 2026-10-20");
   expect(prompt).toContain("## Stages");
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--model deepseek/deepseek-v4.1-flash --output-format stream-json --verbose --tools ");
-  const runs = allRuns().filter((e) => e.run.kind === "monitor");
+  const runs = allRuns().filter((e) => e.run.role === "monitor");
   expect(runs).toHaveLength(1);
-  expect(runs[0].run).toMatchObject({ condition: "done", reason: "2 findings", name: "monitor-2026-10-20" });
+  expect(runs[0].run).toMatchObject({ state: "done", reason: "2 findings", name: "monitor-2026-10-20" });
   const kept: Report = JSON.parse(readFileSync(reportFile("2026-10-20"), "utf8"));
   expect(kept.findings).toEqual(r.findings);
-  const ran = JSON.parse(readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.json"), "utf8")).ran.monitor;
+  const ran = tickRows().monitor;
   expect(ran.result).toBe("2 findings");
-  expect(new Date(ran.at).toISOString()).toBe(ran.at);
+  expect(new Date(ran.last!).toISOString()).toBe(ran.last!);
   expect(kept.note).toBeUndefined();
   expect(existsSync(join(base, "vault", "wiki", "gotchas", "Factory Monitor 2026-10-20.md"))).toBe(false);
   // Once a day: the report of yesterday is there.
   expect(monitorDue(now)).toBeNull();
   expect(await monitorStep(now)).toBeNull();
-  expect(allRuns().filter((e) => e.run.kind === "monitor")).toHaveLength(1);
+  expect(allRuns().filter((e) => e.run.role === "monitor")).toHaveLength(1);
 });
 
-test("monitorStep writes tick.json only under its lock, and keeps the keys the tick wrote", async () => {
-  const file = join(process.env.ALEPH_FACTORY_DIR!, "tick.json");
-  mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
-  writeFileSync(file, JSON.stringify({ last: { ci: "2026-10-21T07:00:00.000Z" }, missed: ["stalled:x"], suite: {} }));
-  const release = (await lock("tick-file"))!;
-  const step = monitorStep(now);
-  // The step waits for the lock once its own claim on it is in the lock folder.
-  const locks = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "aleph");
-  while (!readdirSync(locks).some((f) => f.startsWith(`tick-file.new.${process.pid}.`))) await new Promise((r) => setImmediate(r));
-  expect(JSON.parse(readFileSync(file, "utf8")).ran).toBeUndefined();
-  release();
-  await step;
-  const s = JSON.parse(readFileSync(file, "utf8"));
-  expect(s).toMatchObject({ last: { ci: "2026-10-21T07:00:00.000Z" }, missed: ["stalled:x"] });
-  expect(s.ran.monitor.result).toBe("2 findings");
+test("monitorStep writes its own tick row and keeps the rows the tick wrote", async () => {
+  setTick("ci", { last: "2026-10-21T07:00:00.000Z" });
+  await monitorStep(now);
+  expect(tickRows().ci.last).toBe("2026-10-21T07:00:00.000Z");
+  expect(tickRows().monitor.result).toBe("2 findings");
 });
 
 test("a reader that fails leaves a report with the table and the error, and the run states no-answer", async () => {
@@ -93,7 +82,7 @@ test("a reader that fails leaves a report with the table and the error, and the 
   const r = (await monitorStep(now))!;
   expect(r.error).toBe("the monitor reader exited 1");
   expect(r.findings).toEqual([]);
-  expect(allRuns().find((e) => e.run.kind === "monitor")!.run).toMatchObject({ condition: "done", cause: "unanswered" });
+  expect(allRuns().find((e) => e.run.role === "monitor")!.run).toMatchObject({ state: "done", cause: "unanswered" });
   expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 has no reading: the monitor reader exited 1");
 });
 

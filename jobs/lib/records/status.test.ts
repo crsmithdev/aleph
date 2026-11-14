@@ -1,10 +1,10 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { facts, onMain, repoStages } from "./status.ts";
-import type { Repo, Run } from "./ledger.ts";
-import { putRun } from "./record.ts";
+import type { Repo } from "./ledger.ts";
+import { seed } from "../../job.testkit.ts";
 import type { Doc, Issue } from "../../../issues/lib/todo.ts";
 
 // The test's clock: the recent-runs window reads it.
@@ -27,6 +27,7 @@ const commit = (cwd: string, msg: string) => { writeFileSync(join(cwd, msg.repla
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "status-"));
   process.env.ALEPH_JOBS_DIR = join(base, "jobs");
+  process.env.ALEPH_DB = join(base, "aleph.db");
   remote = join(base, "remote.git");
   clone = join(base, "clone");
   sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
@@ -34,7 +35,7 @@ beforeAll(() => {
   commit(clone, "first");
   sh(clone, "git", "push", "-q", "origin", "HEAD:main");
   sh(clone, "git", "fetch", "-q");
-  repo = { key: "demo", path: clone, main: "main", setup: [], checks: [], manual: [], autoland: true, sandbox: false, held: [] };
+  repo = { key: "demo", n: 1, path: clone, main: "main", setup: [], checks: [], manual: [], autoland: true, sandbox: false, held: [] };
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
@@ -42,16 +43,14 @@ test("a touched item the store closed is done without a fresh trailer commit, un
   const sandbox: Repo = { ...repo, sandbox: true };
   const closed: Doc = { items: [item(11, "done"), item(12, "done"), item(13, "done")] };
   for (const n of [11, 12, 13]) {
-    const folder = join(base, "jobs", `20261028-0001${n}-demo-${n}-agent`);
-    mkdirSync(folder, { recursive: true });
-    putRun(basename(folder), { kind: "build", job: `j${n}`, name: `j${n}`, repo: "demo", on: `demo-${n}`, n: 1, condition: "done", told: true, shown: true, started: STARTED });
+    seed({ role: "build", name: `issue.${n}`, repo: "demo", target: `issue.${n}`, state: "done", shown: true, started: STARTED });
   }
   // 12: landed.
   sh(clone, "git", "fetch", "-q");
   sh(clone, "git", "reset", "-q", "--hard", "origin/main");
-  commit(clone, "land 12\n\nIssue: demo-12");
+  commit(clone, "land 12\n\nIssue: issue.12");
   // 13: landed, then reverted.
-  commit(clone, "land 13\n\nIssue: demo-13");
+  commit(clone, "land 13\n\nIssue: issue.13");
   sh(clone, "git", "revert", "--no-edit", "HEAD");
   sh(clone, "git", "push", "-q", "origin", "HEAD:main");
   const states = (items?: number[]) => repoStages(sandbox, { fetch: true, doc: closed, items }).map((s) => [s.id, s.stage]);
@@ -62,51 +61,46 @@ test("a touched item the store closed is done without a fresh trailer commit, un
 
 test("facts carry what stage() needs: status, spec, after, parts, ask kind and each job's last run", () => {
   const doc: Doc = { items: [
-    { ...item(21, "open"), spec: "s", fm: { after: ["demo-22"] } },
+    { ...item(21, "open"), spec: "s", fm: { after: ["issue.22"] } },
     { ...item(22, "open"), fm: {} },
-    { id: 22, sub: 1, title: "p", fm: {}, request: "", spec: "s", notes: [] },
+    { id: 23, title: "p", fm: { from: "issue.22" }, request: "", spec: "s", notes: [] },
   ] };
-  const folder = join(base, "jobs", "20261028-000021-demo-21-build");
-  mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", n: 1, condition: "waiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: STARTED });
+  const built = seed({ role: "build", name: "issue.21", repo: "demo", target: "issue.21", state: "waiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, shown: true, started: STARTED });
   const f = facts(repo, doc);
   // The run owns the issue's one Ask, so the issue has none of its own.
   expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [] });
   expect(f.items[21].ask).toBeUndefined();
-  expect(f.items[22]).toMatchObject({ parts: ["demo-22.1"], after: [] });
-  expect(f.runs[21]).toEqual([{ id: "demo-21#1", kind: "build", condition: "waiting", open: true, ask: { kind: "input", reason: "question" } }]);
+  expect(f.items[22]).toMatchObject({ parts: ["demo-23"], after: [] });
+  expect(f.runs[21]).toEqual([{ id: built.id, kind: "build", state: "waiting", open: true, ask: { kind: "input", reason: "question" } }]);
 });
 
-test("a dotted ref in after, parts and on resolves to the issue, its runs and its status", () => {
-  const part = (sub: number, fm: Record<string, unknown>) => ({ id: 5, sub, title: `g${sub}`, fm: { ...fm } as Issue["fm"], request: "", spec: "s", notes: [] });
+test("a child's from and after resolve to the issues, their runs and their status", () => {
+  const child = (id: number, fm: Record<string, unknown>) => ({ id, title: `g${id}`, fm: { from: "issue.5", ...fm } as Issue["fm"], request: "", spec: "s", notes: [] });
   const mk = (g1: string): Doc => ({
     items: [
       { ...item(5, "open"), fm: {} },
-      part(1, closed(g1)),
-      part(2, { after: ["demo-5.1"] }),
+      child(6, closed(g1)),
+      child(7, { after: ["issue.6"] }),
     ],
   });
-  const folder = join(base, "jobs", "20261030-000001-demo-5.1-build");
-  mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { kind: "build", job: "dotted-build", name: "dotted-build", repo: "demo", on: "demo-5.1", n: 1, condition: "running", told: true, shown: true, started: STARTED } as Run);
+  const built = seed({ role: "build", name: "issue.6", repo: "demo", target: "issue.6", state: "running", shown: true, started: STARTED });
 
   const open = mk("open");
   const f = facts(repo, open);
-  expect(f.items["5.1"]).toMatchObject({ id: "demo-5.1", status: "open" });
-  expect(f.runs["5.1"]).toEqual([{ id: "demo-5.1#1", kind: "build", condition: "running", open: true }]);
-  const st = (items: (number | string)[], doc = open) => repoStages(repo, { fetch: false, doc, items });
-  expect(st(["5.1"]).map((s) => ({ id: s.id, stage: s.stage }))).toEqual([{ id: "demo-5.1", stage: "working" }]);
-  const blocked = st(["5.2"])[0];
+  expect(f.items[6]).toMatchObject({ id: "demo-6", status: "open" });
+  expect(f.runs[6]).toEqual([{ id: built.id, kind: "build", state: "running", open: true }]);
+  const st = (items: number[], doc = open) => repoStages(repo, { fetch: false, doc, items });
+  expect(st([6]).map((s) => ({ id: s.id, stage: s.stage }))).toEqual([{ id: "demo-6", stage: "working" }]);
+  const blocked = st([7])[0];
   expect(blocked.stage).toBe("held");
-  expect(blocked.why).toContain("demo-5.1");
+  expect(blocked.why).toContain("demo-6");
   const issue = st([5])[0];
   expect(issue.stage).toBe("working");
   expect(issue.of).toEqual({ n: 0, m: 2 });
-  // the default lists plain items only
-  expect(repoStages(repo, { fetch: false, doc: open }).map((s) => s.id)).toEqual(["demo-5", "demo-5.1", "demo-5.2"]);
+  expect(repoStages(repo, { fetch: false, doc: open }).map((s) => s.id)).toEqual(["demo-5", "demo-6", "demo-7"]);
 
   const done = mk("done");
-  expect(st(["5.2"], done)[0].stage).toBe("queued");
+  expect(st([7], done)[0].stage).toBe("queued");
   expect(st([5], done)[0].of).toEqual({ n: 1, m: 2 });
 });
 
@@ -123,15 +117,15 @@ test("onMain finds a Job trailer, an Issue trailer and a branch's content, and f
     // A branch with new work is not on main.
     sh(me, "git", "checkout", "-q", "-b", "work");
     commit(me, "new work");
-    expect(onMain(r, { job: "j-new", item: 7, branch: "work", fetch: false })).toBeNull();
+    expect(onMain(r, { jobs: ["job.99"], item: 7, branch: "work", fetch: false })).toBeNull();
     // A commit pushed after the last fetch is seen only with fetch.
-    commit(other, "by job\n\nJob: j-1");
+    commit(other, "by job\n\nJob: job.1");
     sh(other, "git", "push", "-q", "origin", "HEAD:main");
-    expect(onMain(r, { job: "j-1", fetch: false })).toBeNull();
-    const byJob = onMain(r, { job: "j-1", fetch: true });
+    expect(onMain(r, { jobs: ["job.1"], fetch: false })).toBeNull();
+    const byJob = onMain(r, { jobs: ["job.1"], fetch: true });
     expect(byJob?.how).toBe("Job trailer");
     expect(byJob?.commit).toBe(sh(other, "git", "rev-parse", "HEAD"));
-    commit(other, "by item\n\nIssue: demo-5");
+    commit(other, "by item\n\nIssue: issue.5");
     sh(other, "git", "push", "-q", "origin", "HEAD:main");
     const byItem = onMain(r, { item: 5, fetch: true });
     expect(byItem).toEqual({ commit: sh(other, "git", "rev-parse", "--short=7", "HEAD"), how: "Issue trailer" });

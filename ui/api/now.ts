@@ -11,7 +11,7 @@ export function forProject(s: State, project: string | null): State {
   if (!project) return s;
   const mine = <T extends { repo?: string }>(a: T[]) => a.filter((x) => repoIn(x.repo, project));
   const ours = <T extends { id: string }>(a: T[]) => a.filter((x) => inProject(x.id, project));
-  const herald = s.herald && { ...s.herald, events: s.herald.events.filter((e) => eventIn(e.subject, project)) };
+  const herald = s.herald && { ...s.herald, events: s.herald.events.filter((e) => eventIn(e.object, project, e.project)) };
   return { ...s, stuck: mine(s.stuck), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
 }
 

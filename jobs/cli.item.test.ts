@@ -27,8 +27,8 @@ describe("fate from git", () => {
     sh(other, "git", "cherry-pick", tip);
     sh(other, "git", "push", "-q", "origin", "main");
     const picked = remoteGit("rev-parse", "main");
-    expect(await listed("ported")).toMatchObject({ condition: "landed" });
-    expect(state(j.json.run)).toMatchObject({ condition: "landed", reason: "found on main (Job trailer)", commit: picked });
+    expect(await listed("ported")).toMatchObject({ state: "landed" });
+    expect(state(j.json.run)).toMatchObject({ state: "landed", reason: "found on main (Job trailer)", commit: picked });
     expect(existsSync(worktree("ported"))).toBe(false);
     expect((await show("demo", id)).status).toBe("done");
   });
@@ -40,23 +40,23 @@ describe("fate from git", () => {
     sh(other, "git", "add", "twice.txt");
     sh(other, "git", "commit", "-qm", "the same change, by hand");
     sh(other, "git", "push", "-q", "origin", "main");
-    expect(await listed("twice")).toMatchObject({ condition: "landed" });
-    expect(state(j.json.run)).toMatchObject({ condition: "landed", reason: "found on main (content)" });
+    expect(await listed("twice")).toMatchObject({ state: "landed" });
+    expect(state(j.json.run)).toMatchObject({ state: "landed", reason: "found on main (content)" });
   });
 
   test("a job with no branch and no worktree reads as gone, and land says the branch is gone", async () => {
     await actionJob("vanished", "commit vanished.txt");
     sh(repo, "git", "worktree", "remove", "--force", worktree("vanished"));
     sh(repo, "git", "branch", "-D", "job/vanished");
-    expect(await listed("vanished")).toMatchObject({ condition: "passed", fate: "gone" });
+    expect(await listed("vanished")).toMatchObject({ state: "passed", fate: "gone" });
     const r = await land("vanished");
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "branch gone: job/vanished" });
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "branch gone: job/vanished" });
     await drop("vanished");
   });
 
   test("an open job with its branch reads as unlanded", async () => {
     await actionJob("waiting", "commit waiting.txt");
-    expect(await listed("waiting")).toMatchObject({ condition: "passed", fate: "unlanded" });
+    expect(await listed("waiting")).toMatchObject({ state: "passed", fate: "unlanded" });
     await drop("waiting");
   });
 });

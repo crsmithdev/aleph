@@ -57,8 +57,8 @@ test("detached logs a failed systemd-run with its stderr", async () => {
       writeFileSync(join(dir, "systemd-run"), `#!/bin/sh\necho "no bus for you" >&2\nexit 1\n`);
       detached(["plan", "aleph-1"], join(dir, "logs", "plan.log"));
     });
-    const ev = readEvents().find((e) => e.action === "failed" && e.note?.includes("systemd-run failed"));
-    expect(ev?.note).toContain("no bus for you");
+    const ev = readEvents().find((e) => e.action === "failed" && e.detail?.includes("systemd-run failed"));
+    expect(ev?.detail).toContain("no bus for you");
   } finally {
     if (savedDir === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = savedDir;
     rmSync(fac, { recursive: true, force: true });

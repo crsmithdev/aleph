@@ -1,18 +1,17 @@
 /**
  * `GET /api/events`: a server-sent stream. It sends `change` with `{ keys }` when the updater (ui/updater.ts) has
  * built those keys again and their answers changed; a page then loads again the keys it reads. It sends an `ev`
- * event for each line added to the event log, with the event as JSON, at once, and a `ping` every 25 s, so that the
+ * event for each event added to the event table, with the row as JSON, at once, and a `ping` every 25 s, so that the
  * page can tell a quiet stream from a dead one. With `?project=<key>` the `ev` events are only those of an issue or
  * job of that project and those whose subject names no project (a routine), and none for a key that is not in the
  * registry; `change` and `ping` go to every client.
  */
-import { existsSync, closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { eventsDir } from "../../lib/layout.ts";
+import { eventsAfter, lastSeq } from "../../lib/layout.ts";
+import type { EventRow } from "../../lib/naming.ts";
 import { eventIn, projectOf } from "./scope.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
-import { eventFiles, updater } from "../updater.ts";
+import { eventTails, updater } from "../updater.ts";
 
 /** Under the server's idle timeout, so that it keeps a quiet stream open. */
 const PING_MS = 25_000;
@@ -26,45 +25,32 @@ const clients = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
 const tokens = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
 let ping: Timer | undefined;
 
-function send(bytes: Uint8Array, subject?: string): void {
+function send(bytes: Uint8Array, row?: EventRow): void {
   for (const [c, project] of clients) {
-    if (subject !== undefined && !eventIn(subject, project)) continue;
+    if (row && !eventIn(row.object, project, row.project)) continue;
     try { c.enqueue(bytes); } catch { clients.delete(c); }
   }
 }
 
 updater.onChange((keys) => send(event("change", JSON.stringify({ keys }))));
 
-/** How far into each day file of the event log the stream has sent, by file name. */
-const sent = new Map<string, number>();
+/** The `seq` of the last event the stream sent. */
+let sent = 0;
 
-/** Send the whole lines a day file gained since the last send, each as an `ev` event. */
-function tail(file: string): void {
+/** Send the events added since the last send, each as an `ev` event. */
+function tail(): void {
   if (!clients.size) return;
-  const path = join(eventsDir(), file);
-  let size: number;
-  try { size = statSync(path).size; } catch { return; }
-  const from = sent.get(file) ?? 0;
-  if (size <= from) return;
-  const buf = Buffer.alloc(size - from), fd = openSync(path, "r");
-  try { readSync(fd, buf, 0, buf.length, from); } finally { closeSync(fd); }
-  const text = buf.toString("utf8"), end = text.lastIndexOf("\n");
-  if (end < 0) return;
-  sent.set(file, from + Buffer.byteLength(text.slice(0, end + 1)));
-  for (const line of text.slice(0, end).split("\n")) {
-    if (!line) continue;
-    let subject = "";
-    try { subject = String(JSON.parse(line).subject ?? ""); } catch {}
-    send(encoder.encode(`event: ev\ndata: ${line}\n\n`), subject);
+  for (const row of eventsAfter(sent)) {
+    sent = row.seq!;
+    send(encoder.encode(`event: ev\ndata: ${JSON.stringify(row)}\n\n`), row);
   }
 }
 
-eventFiles.push(tail);
+eventTails.push(tail);
 
 /** The stream sends only what is added after it starts: the page has the earlier events from /api/factory. */
 function start(): void {
-  const dir = eventsDir();
-  for (const f of existsSync(dir) ? readdirSync(dir) : []) sent.set(f, statSync(join(dir, f)).size);
+  sent = lastSeq();
   // The sidebar reads /api/status on every page: asking it at each ping keeps its key built, so `change` names it.
   ping = setInterval(() => { send(event("ping", JSON.stringify({ at: Date.now() }))); void updater.get("/api/status"); }, PING_MS);
 }
@@ -81,7 +67,6 @@ onLogout.push((token) => {
 });
 
 function stop(): void {
-  sent.clear();
   clearInterval(ping);
 }
 

@@ -1,60 +1,64 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { addNote, allJobs, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, openJobOfIssue, readFile, tailOf } from "./job.ts";
 import { type Run } from "./ledger.ts";
-import { putRun } from "./record.ts";
+import { seed, type Seed } from "../../job.testkit.ts";
+import { logTo } from "./run-files.ts";
 import { asked, markAsked, waitsForSpecEdit } from "../asks/ask.ts";
 import { markRescued, rescued } from "../transitions/continuation.ts";
 
 let base: string;
-let saved: string | undefined;
+let saved: Record<string, string | undefined>;
 
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-job-"));
-  saved = process.env.ALEPH_JOBS_DIR;
+  saved = { ALEPH_JOBS_DIR: process.env.ALEPH_JOBS_DIR, ALEPH_DB: process.env.ALEPH_DB };
   process.env.ALEPH_JOBS_DIR = base;
+  process.env.ALEPH_DB = join(base, "aleph.db");
+  last.clear();
 });
 
 afterEach(() => {
-  if (saved === undefined) delete process.env.ALEPH_JOBS_DIR;
-  else process.env.ALEPH_JOBS_DIR = saved;
+  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
   rmSync(base, { recursive: true, force: true });
 });
 
-/** A run folder `id` of job `job`, with `files` in it. Folder names sort in the order runs are made. */
-function run(id: string, job: string, extra: Partial<Run> = {}, files: Record<string, string> = {}): string {
-  const folder = join(base, id);
-  mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { n: 1, kind: "build", job, name: job.replace(/^\d+-\d+-/, ""), repo: "fac", condition: "passed", told: true, started: `2026-10-28T00:00:${id.slice(-2)}Z`, ...extra } as Run);
+const last = new Map<string, string>();
+/** A job of the work `work` (it follows the work's last job), with `files` in its folder. Returns its folder. */
+function run(work: string, extra: Partial<Run> = {}, files: Record<string, string> = {}): string {
+  const { folder, id } = seed({ role: "build", name: work, repo: "fac", state: "passed", prev: last.get(work), ...extra } as Seed);
+  last.set(work, id);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }
 
 describe("run-folder files", () => {
   test("reads, the latest run that has one, tails, marks, batch and notes", () => {
-    run("20261028-000001-a01", "j", { name: "n" }, { "spec.md": "Do it\n\nmore", "result.md": "one", "checks.log": "a\nb\nc\n" });
-    run("20261028-000002-a02", "j", { name: "n", kind: "land", condition: "running" }, { "result.md": "land", "batch.json": JSON.stringify({ verdict: "landed", code: 0 }) });
+    const first = run("n", {}, { "spec.md": "Do it\n\nmore", "result.md": "one" }), last2 = run("n", { role: "land", state: "running" }, { "result.md": "land", "batch.json": JSON.stringify({ verdict: "landed", code: 0 }) });
+    logTo(first, "checks", "a\nb\nc\n");
     const j = latestJob("n")!;
-    const [first, last] = j;
-    expect(readFile(first, "result.md")).toBe("one");
-    expect(readFile(first, "stderr.log")).toBeUndefined();
+    const [one, two] = j;
+    expect(one.folder).toBe(first);
+    expect(readFile(one, "result.md")).toBe("one");
+    expect(readFile(one, "stderr")).toBeUndefined();
     expect(latestFile(j, "result.md")!.text).toBe("land");
-    expect(latestFile(j, "result.md", (e) => e.run.kind === "build")!.entry.id).toBe(first.id);
-    expect(latestFile(j, "review.md")).toBeUndefined();
-    expect(tailOf(first, "checks.log", 2)).toBe("b\nc");
-    expect(tailOf(first, "review.md", 2)).toBe("");
-    expect(hasFile(last, "batch.json")).toBe(true);
+    expect(latestFile(j, "result.md", (e) => e.run.role === "build")!.entry.id).toBe(j[0].id);
+    expect(latestFile(j, "review.json")).toBeUndefined();
+    expect(tailOf(one, "checks", 2)).toBe("b\nc");
+    expect(tailOf(one, "review.json", 2)).toBe("");
+    expect(hasFile(two, "batch.json")).toBe(true);
+    expect(two.folder).toBe(last2);
     expect(issueTitle(j)).toBe("Do it");
 
-    expect(asked(first)).toBe(false);
-    markAsked(first, "drop it?");
-    expect(asked(first)).toBe(true);
-    expect(waitsForSpecEdit(first)).toBeNull();
-    expect(rescued(first)).toBe("");
-    markRescued(first, "infra");
-    expect(rescued(first)).toBe("infra");
+    expect(asked(one)).toBe(false);
+    markAsked(one, "drop it?");
+    expect(asked(one)).toBe(true);
+    expect(waitsForSpecEdit(one)).toBeNull();
+    expect(rescued(one)).toBe("");
+    markRescued(one, "infra");
+    expect(rescued(allJobs()[0][0])).toBe("infra");
 
     expect(notes(j)).toEqual([]);
     addNote(j, "first note");
@@ -64,12 +68,13 @@ describe("run-folder files", () => {
 });
 
 describe("the evidence of a delivery", () => {
-  test("checkedBy names the checks that passed and the reviewers that left a file", () => {
-    run("20261101-000001-a", "20261101-000001-a", { checks: [{ name: "tests", ok: true, seconds: 1 }, { name: "types", ok: false, seconds: 1 }] }, { "review.md": "land" });
+  test("checkedBy names the checks that passed and the reviewers that left a job", () => {
+    run("a", { checks: [{ name: "tests", ok: true, seconds: 1 }, { name: "types", ok: false, seconds: 1 }] });
+    run("a", { role: "review", state: "done" });
     expect(checkedBy(allJobs()[0])).toEqual(["tests", "reviewer"]);
   });
   test("a job with nothing recorded has no evidence", () => {
-    run("20261101-000002-b", "20261101-000002-b");
+    run("b");
     expect(checkedBy(allJobs()[0])).toEqual([]);
   });
   test("lookMinutes grows with the diff", () => {
@@ -82,9 +87,9 @@ describe("the evidence of a delivery", () => {
 
 describe("the open job of an issue", () => {
   test("is the open job on the issue in the repo, not a closed one or another issue's", () => {
-    run("20261101-000003-b", "b", { name: "b", on: "fac-7", condition: "landed" });
-    run("20261101-000004-a", "a", { name: "a", on: "fac-7", condition: "running" });
-    run("20261101-000005-c", "c", { name: "c", on: "fac-8", condition: "running" });
+    run("b", { target: "issue.7", state: "landed" });
+    run("a", { target: "issue.7", state: "running" });
+    run("c", { target: "issue.8", state: "running" });
     expect(openJobOfIssue("fac", 7)![0].run.name).toBe("a");
     expect(openJobOfIssue("fac", 9)).toBeUndefined();
   });

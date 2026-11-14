@@ -6,17 +6,15 @@
  * `runViewOf` read the store's and the ledger's accessors, which give an old-shape
  * item or run and a new-shape one alike.
  */
-import { askOf, waitOf } from "../asks/ask.ts";
+import { askOf, refIn, waitOf } from "../asks/ask.ts";
 import { isWaiting, type Run, type State } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { isOpen } from "./job.ts";
-import { counting, jobIdOf } from "./record.ts";
+import { counting } from "./record.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { contentText, parseId, sayText, tail } from "../../../lib/naming.ts";
+import { parseId, parseKey, sayText, tail, type StageName } from "../../../lib/naming.ts";
 
-/** The stages of docs/naming.md. */
-type StageName = "new" | "queued" | "held" | "working" | "waiting" | "failed" | "landing" | "done" | "dropped" | "parked";
 
 /** Why an item stands where it does: the event fields of docs/naming.md. A field the naming sets have no word for is left out. */
 interface Reason {
@@ -49,7 +47,7 @@ export interface Subject {
 }
 
 /** What stage() needs of one job of an item: its ID and its last real run. */
-export interface RunView { id: string; kind: Run["kind"]; condition: State; open: boolean; ask?: AskFact }
+export interface RunView { id: string; kind: Run["role"]; state: State; open: boolean; ask?: AskFact }
 
 export interface Ctx {
   /** The repo is a factory repo (`sandbox: true`): intake reads it, so an issue with no spec gets sorted. */
@@ -65,10 +63,10 @@ export interface Ctx {
 }
 
 export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Subject {
-  const a = askOf(`${key}-${issues.refOf(item)}`);
+  const a = askOf(refIn(key, item));
   return {
     id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
-    after: store.afterOf(item), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
+    after: store.afterOf(item).map((r) => r.replace(/^issue\./, `${key}-`)), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
     ...(a ? { ask: { kind: a.kind, reason: a.reason } } : {}),
     spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item), ...(issues.sinceOf(item) ? { since: issues.sinceOf(item) } : {}),
   };
@@ -76,12 +74,12 @@ export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Sub
 
 export function runViewOf(job: Job): RunView {
   const last = counting(job), run = last.run;
-    return { id: jobIdOf(last), kind: run.kind, condition: run.condition, open: isOpen(job), ...(isWaiting(run.condition) ? { ask: waitOf(run.ask) } : {}) };
+    return { id: last.id, kind: run.role, state: run.state, open: isOpen(job), ...(isWaiting(run.state) ? { ask: waitOf(run.ask) } : {}) };
 }
 
 /** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */
 const partOf = (ref: string): string | undefined => { const p = parseId(ref); return p ? tail(p) : undefined; };
-const SORTING: Run["kind"][] = ["intake"];
+const SORTING: Run["role"][] = ["intake"];
 
 /** The item is done: the store says so, or a not-reverted trailer commit on main names it. Returns the reason. */
 function doneWhy(item: Subject, ctx: Ctx): Reason | null {
@@ -97,7 +95,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const id = item.id;
   /** The stage with its reason: `why` is the reason's sentence, as the Herald says it; a reason with no action is its fields as text. */
   const out = (s: StageName, r: Reason = {}, of?: Stage["of"]): Stage =>
-    ({ id, stage: s, ...r, why: r.action ? sayText({ subject: id, ...r }) : [r.sub, contentText(r)].filter(Boolean).join(" "), ...(of ? { of } : {}) });
+    ({ id, stage: s, ...r, why: r.action ? sayText(r.action === "after" ? { subject: "rule", action: r.action, object: id, detail: r.on?.join(" ") } : { subject: "rule", action: r.action, object: r.on?.find((x) => parseKey(x)?.kind === "job") ?? id }) : [r.sub, r.count].filter(Boolean).join(" "), ...(of ? { of } : {}) });
   if (item.status === "dropped") return out("dropped", { action: "dropped" });
   // An open item that asks is waiting, even when a trailer commit on main names it (a reopened issue can have one).
   if (item.status === "open" && item.ask) return out("waiting", { action: "waiting", to: "human" });
@@ -109,11 +107,11 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const parts = item.parts.map((ref) => ctx.item(ref)).filter((p): p is Subject => p !== undefined && !seen.has(p.id)).map((p) => stage(p, ctx, new Set([...seen, id])));
   if (item.ask) return out("waiting", { action: "waiting", to: "human" });
   const mine = live.at(-1);
-  if (mine && isWaiting(mine.condition)) return out("waiting", { action: "waiting", on: [mine.id], to: "human" });
+  if (mine && isWaiting(mine.state)) return out("waiting", { action: "waiting", on: [mine.id], to: "human" });
   const waiting = parts.find((p) => p.stage === "waiting");
   if (waiting) return out("waiting", { action: "waiting", on: [waiting.id] });
   // A failed job that the director or Chris has carries an Ask, so it is `waiting` above.
-  if (mine && (mine.condition === "returned" || mine.condition === "failed")) return out("failed", { action: mine.condition, on: [mine.id] });
+  if (mine && (mine.state === "returned" || mine.state === "failed")) return out("failed", { action: mine.state, on: [mine.id] });
   const failed = parts.find((p) => p.stage === "failed");
   if (failed) return out("failed", { action: "failed", on: [failed.id] });
   if (item.parts.length) {
@@ -122,8 +120,8 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
     return out("working", { count: `${n} / ${item.parts.length}` }, { n, m: item.parts.length });
   }
   const last = work.at(-1);
-  if (last?.kind === "land") return out("landing", { action: last.condition, on: [last.id] });
-  if (last) return out("working", { action: last.condition, on: [last.id] });
+  if (last?.kind === "land") return out("landing", { action: last.state, on: [last.id] });
+  if (last) return out("working", { action: last.state, on: [last.id] });
   const blockers = item.after.filter((ref) => {
     const s = ctx.item(ref);
     return s !== undefined && (s.status === "dropped" || (s.status === "open" && !doneWhy(s, ctx)));

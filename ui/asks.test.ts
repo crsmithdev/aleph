@@ -9,9 +9,9 @@ import type { Job, NewIssue } from "./state.ts";
 /** Stored case text the fixtures put on their Ask while a test sets it. */
 let STORE: Partial<Ask> | undefined;
 const run = (reason: string, extra: Partial<Job> = {}): Job => ({
-  name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, condition: "waiting", started: "2026-10-28T00:00:00Z",
+  name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, state: "waiting", started: "2026-10-28T00:00:00Z",
   ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason, ...STORE },
-  run: { kind: "build", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
+  run: { role: "build", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
 } as Job);
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra,
   ...(STORE ? { ask: { kind: "input", reason: extra.reason ?? "question", question: "q", options: [], why: [], ...STORE } as Ask } : {}) });
@@ -154,7 +154,7 @@ describe("asks", () => {
 });
 
 describe("stuck rows", () => {
-  const stuck = run("held-path", { condition: "failed", reason: "no commit" });
+  const stuck = run("held-path", { state: "failed", reason: "no commit" });
   const open = new Map([["aleph-12", { title: "Land the base", href: "#/issues/aleph/12" }]]);
   test("an item waiting on an open issue gets its id and title", () => {
     const b = stuckBlocker(stuck, "aleph-12", open);

@@ -14,12 +14,12 @@ afterEach(() => { setSystemTime(); teardown(); });
 test("no commit, the item on main by its Item trailer: the open item is closed with a note naming the commit", async () => {
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit" });
-  sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: fac-${id}\nJob: other`);
+  sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: issue.${id}\nJob: job.99`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
   const sha = Bun.spawnSync(["git", "rev-parse", "--short=7", "HEAD"], { cwd: join(ctx.base, "repo") }).stdout.toString().trim();
   const f = fakes();
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`]);
+  expect(f.calls).toEqual([`drop issue.${id}`]);
   expect(notes(id)).toContain(`on main as ${sha}: dropped as a duplicate`);
   expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
   expect(f.specs).toEqual([]);
@@ -42,7 +42,7 @@ test("a fourth no-commit run in a row is not dispatched; the item gets an Ask", 
 const noCommitRuns = (id: number, n: number, back: number) => {
   for (let i = 0; i < n; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: ago((back - i) * 1000) });
 };
-const unlabel = async (id: number) => clearAsk(`fac-${id}`);
+const unlabel = async (id: number) => clearAsk(`issue.${id}`);
 const chrisNotes = (id: number) => notes(id).split("asks Chris:").length - 1;
 
 test("answering the Ask restarts the no-commit streak; three more no-commit runs give it another Ask", async () => {
@@ -55,7 +55,7 @@ test("answering the Ask restarts the no-commit streak; three more no-commit runs
   // The clock is the test's: each step moves it a second, so the Ask's answer comes after the runs before it.
   setSystemTime(NOW + 1000);
   await unlabel(id);
-  expect((await dispatch(f)).started).toEqual([`fac-${id}`]);
+  expect((await dispatch(f)).started).toEqual([`issue.${id}`]);
   // the started run is not a no-commit run; three more finish after the mark
   setSystemTime(NOW + 2000);
   noCommitRuns(id, 3, 0);

@@ -1,9 +1,9 @@
 // Which checks a land runs: the tests its change reaches, the repo's critical tests and the checks that are not tests; only the critical tests on an unchanged main; never a baseline.
+import { getJson } from "../../../lib/db.ts";
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { land } from "./landing.ts";
-import { putRun } from "../records/record.ts";
+import { reseed } from "../../job.testkit.ts";
 import { dir, job, landLog, moveMain, ports, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
 
 useLandingFixture();
@@ -18,7 +18,7 @@ async function landed(name: string, files: [string, string][], moved: [string, s
   repo.checks = [TESTS, TYPES];
   const e = job(name, files);
   const run = { ...e.run, checkedBase: remote("rev-parse", "main"), checkedTip: sh(repo.path, "git", "rev-parse", `job/${name}`) };
-  putRun(e.id, run);
+  reseed(e.id, { checkedBase: run.checkedBase, checkedTip: run.checkedTip });
   for (const [f, t] of moved) moveMain(f, t);
   const p = ports();
   const r = await land({ ...e, run }, repo, p);
@@ -34,10 +34,10 @@ function seedTree(): void {
 test("a land runs the tests its change reaches and the checks that are not tests, and records no baseline", async () => {
   seedTree();
   const { r, p, log } = await landed("reach", [["a.ts", "export const a = 1;\n"]], [["b.ts", "export const b = 1;\n"]]);
-  expect(r.outcome.condition).toBe("landed");
+  expect(r.outcome.state).toBe("landed");
   expect(p.only).toEqual([[narrowed("a.test.ts", "sub/cli.test.ts"), TYPES]]);
   expect(log).toContain("tests: 2 test files\na.test.ts\nsub/cli.test.ts");
-  expect(existsSync(join(dir, "factory", "baseline.json"))).toBe(false);
+  expect(getJson("state", "baseline", {})).toEqual({});
 });
 
 test("a land adds the repo's critical tests to the tests its change reaches", async () => {
@@ -65,10 +65,10 @@ test("a land whose change is not a module runs no test, or only the critical tes
 test("on an unchanged main a land skips the checks when the repo has no critical tests", async () => {
   seedTree();
   const { r, p, log } = await landed("same", [["a.ts", "export const a = 5;\n"]]);
-  expect(r.outcome.condition).toBe("landed");
+  expect(r.outcome.state).toBe("landed");
   expect(p.calls).toEqual([]);
   expect(log).toContain("checks skipped: main unchanged since");
-  expect(existsSync(join(dir, "factory", "baseline.json"))).toBe(false);
+  expect(getJson("state", "baseline", {})).toEqual({});
 });
 
 test("on an unchanged main a land runs only the critical tests", async () => {
@@ -82,7 +82,7 @@ test("on an unchanged main a land runs only the critical tests", async () => {
 test("a commit added to the branch after its checks gets the checks on land", async () => {
   const e = job("tipped", [["tipped.txt", "t\n"]]);
   const run = { ...e.run, checkedBase: remote("rev-parse", "main"), checkedTip: "0000000" };
-  putRun(e.id, run);
+  reseed(e.id, { checkedBase: run.checkedBase, checkedTip: run.checkedTip });
   const p = ports();
   await land({ ...e, run }, repo, p);
   expect(p.calls).toEqual([["tipped"]]);
@@ -93,6 +93,6 @@ test("a land pushes to main though the repo's pre-push hook fails", async () => 
   await Bun.write(hook, "#!/bin/sh\nexit 1\n");
   sh(repo.path, "chmod", "+x", hook);
   const { r } = await landed("hooked", [["h.ts", "export {};\n"]]);
-  expect(r.outcome.condition).toBe("landed");
+  expect(r.outcome.state).toBe("landed");
   expect(remote("rev-parse", "main")).toBe(r.outcome.commit!);
 });

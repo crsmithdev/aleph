@@ -1,23 +1,20 @@
 # Data model
 
-Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdown with frontmatter, and two git repos. The only database is the vault's search index. `lib/paths.ts` resolves home, `~` and each path under `~/.aleph`; `lib/layout.ts` and `jobs/lib/infra/settings.ts` read it. An environment variable moves each store for tests.
+Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdown with frontmatter, and two git repos. `aleph.db`, a SQLite file, holds the counters, the job rows, the events, the issue state, the tick state, the settings, the factory state rows and the usage, suite and flaky logs. The vault keeps a search index of its own. `lib/paths.ts` resolves home, `~` and each path under `~/.aleph`; `lib/layout.ts` and `jobs/lib/infra/settings.ts` read it. An environment variable moves each store for tests.
 
 ```text
 ~/.aleph/
-├── repos.json          registry of repos                      ALEPH_REPOS
-├── issues/             work store: a git repo of issues       ALEPH_ISSUES
-├── jobs/               job records: the run state             ALEPH_RECORDS_DIR
-├── runs/               run folders: prompts, logs, results    ALEPH_JOBS_DIR
+├── items/              projects, issues and ideas: a git repo ALEPH_ITEMS
+├── jobs/               job folders: prompts, logs, results    ALEPH_JOBS_DIR
 ├── factory/            factory settings, baseline, logs       ALEPH_FACTORY_DIR
 ├── vault/              memory vault: a git repo of notes      ALEPH_VAULT
 ├── handoffs/           session handoffs                       ALEPH_HANDOFFS_DIR
 ├── spool/              hand-offs between hooks, 1 day         ALEPH_SPOOL
-├── usage.jsonl         plan usage, each 10 minutes
-├── judge               jev or haiku
+├── aleph.db            SQLite: counters, jobs, events, issue state, settings, logs  ALEPH_DB
 └── .env                keys: Langfuse, OpenRouter, UI password
 ```
 
-Retention: each tick (`jobs/lib/infra/retention.ts`) deletes data over 90 days old: the run folder of an archived record's run that ended that long ago, a run folder that no record holds and that did not change for 90 days, `usage.jsonl` rows by `at`, `repos.json.bak-*` files, and `dispatch.<day>.log` files (`dispatch.log` moves aside each UTC day under the day it began, which `dispatch.day` holds). The event log and the job records stay forever; the folders of a record that is not archived stay at any age.
+Retention: each tick (`jobs/lib/infra/retention.ts`) deletes data over 90 days old: the folder of a job that ended that long ago (its row stays), a job folder that no row holds and that did not change for 90 days, `usage` rows by `time`, and `dispatch.<day>.log` files (`dispatch.log` moves aside each UTC day under the day it began, which `dispatch.day` holds). The event log and the job rows stay forever.
 
 Locks are not on disk. Each is a directory with an `owner` pid under `$XDG_RUNTIME_DIR/aleph/<name>`, so a reboot clears them (`jobs/lib/infra/locks.ts`).
 
@@ -25,32 +22,36 @@ Locks are not on disk. Each is a directory with an `owner` pid under `$XDG_RUNTI
 
 ```mermaid
 erDiagram
-  REPO ||--o{ ISSUE : "has"
+  PROJECT ||--o{ ISSUE : "has"
+  PROJECT ||--o{ IDEA : "targets"
   ISSUE ||--o{ ISSUE : "children (from)"
-  ISSUE ||--o| JOB_RECORD : "state"
-  JOB_RECORD ||--o{ RUN : "runs[]"
-  JOB_RECORD ||--o| ASK : "ask"
-  RUN ||--|| RUN_FOLDER : "logs"
-  RUN ||--o| COMMIT : "lands as"
+  ISSUE ||--o{ JOB : "target"
+  ISSUE ||--o| ISSUE_STATE : "state"
+  ISSUE_STATE ||--o| ASK : "ask"
+  JOB ||--o| JOB : "prev"
+  JOB ||--|| JOB_FOLDER : "logs"
+  JOB ||--o| COMMIT : "lands as"
 ```
 
 | Entity | Lives in | One per |
 |---|---|---|
-| Repo | `repos.json` | Registered repo; its `code` gives the short IDs in [Naming](naming.md) |
-| Issue | `issues/<repo>/backlog/tasks/<repo>-<n>.md` | Request |
-| Sub-issue | `issues/<repo>/backlog/tasks/<repo>-<n>.md` with `from` | Issue that intake split from a parent issue |
-| Old part | `issues/<repo>/backlog/tasks/<repo>-<n>.<k>.md` | Sub-issue from before `from`; intake no longer makes one |
-| Job record | `jobs/<repo>-<n>[.<k>].json` | Issue or sub-issue with work on it |
-| Run | An entry in the job record's `runs[]` | Agent process: intake, worker, land, director, … |
-| Run folder | `runs/<stamp>-<subject>-<n>/` (old: `runs/<stamp>-<name>-<kind>/`) | Run |
-| Ask | The job record's `ask` | Decision that waits |
+| Project | `items/projects/<n>/project.md` | Registered repo; its `code` gives the short IDs in [Naming](naming.md) |
+| Issue | `items/issues/<n>/issue.md` | Request |
+| Sub-issue | `items/issues/<n>/issue.md` with `from` | Issue that intake split from a parent issue |
+| Idea | `items/ideas/<n>/idea.md` | Idea; its lens results are files beside it |
+| Job | A row of the `jobs` table of `aleph.db`, key `job.<n>` | One execution: build, review, land, recheck, intake, director, monitor, lens, housekeeper, maintainer or plain. A work is a `prev` chain of jobs |
+| Job folder | `jobs/<n>/` | The files of a job |
+| Issue state | A row of `issue_state` | The Ask, the wait and the CI result of an issue |
+| Ask | `issue_state.ask` (`ask_job` names the job that holds it) | Decision that waits |
 
-## Registry: `repos.json`
+## Registry: `items/projects/`
 
-An object keyed by repo key. `loadRegistry` in `jobs/lib/records/ledger.ts` reads it; no code writes it.
+One file per project: `projects/<n>/project.md`. The path is the key, `project.<n>`. The frontmatter holds the fields below and the body is the project's description. `loadRegistry` in `jobs/lib/records/ledger.ts` reads the files from the items checkout; a project with no `path` is not a repo and is left out. A write of an issue for an unknown project makes its file (`writeList` in `issues/lib/store.ts`).
 
 | Key | Default | Meaning |
 |---|---|---|
+| `name` | | The project's name, such as `aleph` |
+| `code` | | The short code of the shown ID (`a-01057`) |
 | `path` | | The repo's main checkout |
 | `env` | | An EnvironmentFile for checks |
 | `main` | `"main"` | The main branch |
@@ -62,31 +63,40 @@ An object keyed by repo key. `loadRegistry` in `jobs/lib/records/ledger.ts` read
 | `critical` | `[]` | Test globs that every land runs |
 | `author` | `false` | Intake also takes in issues filed with a spec |
 | `manual` | `[]` | `{when, say}` manual checks |
+| `note` | | A line for the project's page |
 
-## Work store: `issues/`
+## Items repo: `items/`
 
-A private git repo. Its `origin/main` is the record. A read fetches and reads through `git cat-file`. A write is one commit made with `commit-tree`, pushed to `origin/main` with up to 5 retries, then the checkout fast-forwards (`issues/lib/store.ts`). `aleph issue` is the only writer, and `git-guard` denies an Edit or Write in the store.
+A private git repo. Its `origin/main` is the record. A read fetches and reads through `git cat-file`. A write is one commit made with `commit-tree`, pushed to `origin/main` with up to 5 retries, then the checkout fast-forwards (`issues/lib/store.ts`). `aleph issue` and `aleph idea` are the only writers, and `git-guard` denies an Edit or Write in the repo.
 
-Each `<repo>/` folder is a [Backlog.md](https://github.com/MrLesk/Backlog.md) project. `<repo>/backlog/floor.json` holds `{next, parts}`, the highest numbers that work outside the list has used.
+The numbers of issues, projects and ideas come from one counter for each kind in `aleph.db` (`next` in `lib/db.ts`). A write takes its number before the push, so a refused push leaves a gap. The floor of the issue counter is the highest `items/issues/<n>/`.
 
 ### Issue file
 
 ```markdown
 ---
-id: aleph-1057
+project: project.1
 title: Ignore future usage rows
-created_time: 2026-11-04T15:30:00.000Z
-priority: high
 kind: bug
+priority: high
 source: chris
+created: 2026-11-04T15:30:00.000Z
 ---
-<!-- request -->
+
+# Request
+
 The Status page shows the wrong weekly usage.
-<!-- spec -->
+
+# Spec
+
 ## Goal
+
 ## Edit surface
+
 ## Oracle
-<!-- notes -->
+
+# Notes
+
 - 2026-11-04T10:12:00.000Z: Reproduced on main at c26c10f
 ```
 
@@ -94,52 +104,53 @@ The Status page shows the wrong weekly usage.
 
 | Field | Values | Meaning |
 |---|---|---|
-| `id` | `<repo>-<n>`, `<repo>-<n>.<k>` | The number; a finished issue keeps it |
+| `project` | `project.<n>` | The project that owns the issue |
 | `title` | | An imperative of at most 60 characters |
 | `kind` | `task`, `bug`, `check`, `flake`, `proposal`, `acceptance` | `flake` becomes a tracker note at intake |
 | `priority` | `low`, `medium`, `high`, `critical` | Dispatch order; none ranks as `medium` |
 | `source` | `chris`, `worker`, `memory`, `agent`, `deps` | Who filed it; the director cannot close Chris's |
 | `areas` | list | Labels |
-| `from` | `<repo>-<n>` | The parent: intake split this issue from it |
-| `after` | list of ids | The issues that must be done first |
-| `media` | list of names | The attached images and PDFs, in `<repo>/backlog/media/<repo>-<id>/` ([Media](issues.md#media)) |
+| `from` | `issue.<n>` | The parent: intake split this issue from it |
+| `after` | list of keys | The issues that must be done first, as `issue.<n>` |
+| `media` | list of names | The attached images and PDFs, in `items/issues/<n>/` beside `issue.md` ([Media](issues.md#media)) |
 | `parked` | `"true"` | Stops all work on the issue |
-| `closed_as`, `closed_time`, `closed_why` | `done`, `dropped` | How it closed |
+| `closed_as`, `closed_at`, `closed_why` | `done`, `dropped`; ISO 8601 UTC; the reason | How, when and why it closed |
 | `plan` | `"true"` | Intake will split it |
 | `intake` | `build` | Intake took it in |
 | `tracker` | `"true"` | The repo's flake tracker |
 | `since` | sha | Main's head when the issue was reopened |
-| `created_time`, `updated_time`, `closed_time` | ISO 8601 UTC, ending in `Z` | When it was made, last changed and closed. `aleph issue lint --fix` converts the old `created`, `updated` and `closed_at` dates |
+| `created` | ISO 8601 UTC, ending in `Z` | When it was made. There is no `updated` field: the update time is the latest of `created`, `closed_at` and the last note. `aleph issue lint --fix` renames the old `created_time` |
 
 The status comes from the fields: `closed_as`, else `parked`, else `open`. `aleph issue lint` flags retired fields.
 
-An issue's children are the issues whose `from` names it, and its old parts `<n>.<k>` (`partsOf` in `issues/lib/store.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
+An issue's children are the issues whose `from` names it (`partsOf` in `issues/lib/store.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
 
-## Job records: `jobs/`
+## Job rows and issue state: `aleph.db`
 
-The run state. `jobs/lib/records/record.ts` is the only module that opens a record. `update()` takes the lock `record-<key>`, writes a temp file and renames it. The key is the run's issue (`<repo>-<n>[.<k>]`), or its job id for a run with no issue.
+`jobs/lib/records/record.ts` is the only module that reads or writes a job row or an issue state row. `makeJob` creates a row and `setState` writes its state; each logs the state as an event in the same transaction. The columns hold what every job has: `id` (`job.<n>`), `role`, `by`, `state`, `project`, `made`, `started`, `ended`, `model`, `tier`, `cost`, `commit_sha`, `pid`, `exit_code`, `target`, `prev`, `retry_of`, `was`. Every other field of a `Run` is the JSON `extra` column. The files of a job are in its folder, see below.
 
-| Field | Holds |
+A work is a `prev` chain of jobs. `rounds` and `cost` are queries over the jobs of one target, not stored.
+
+`issue_state` has one row for a key while an Ask, a wait or a CI result is live, and no row otherwise. The key is an issue key, or the job key of a run on no issue.
+
+| Column | Holds |
 |---|---|
-| `issue` | The issue id |
-| `ask`, `askRun` | The open Ask, and the run that owns it |
-| `asks[]` | Ask history: `{set, cleared?, reason?, recommended?}` |
-| `wait` | Why the issue does not start: `{kind, reason, since}` |
-| `runs[]` | Each run, oldest first |
-| `events[]` | `{at, kind, what, run?, data?}` |
-| `rounds`, `cost` | Derived on each write |
-| `ci` | A CI failure that filed the issue: `{url, commit, failure, landed?}` |
+| `issue` | The key |
+| `ask` | The open Ask, as JSON |
+| `ask_job` | The job that holds the Ask; empty when the Ask is on the issue |
+| `wait_kind`, `wait_reason`, `wait_since` | Why the issue does not start |
+| `ci` | A CI failure that filed the issue, as JSON: `{url, commit, failure, landed?}` |
 
-Event kinds: `hold` (with `data.gate`), `started`, `asked` (with the spec version), `streak`, `cap`, `cap-cleared`, `rerun`, `rerun-cleared`, `rescued`, `director`, `timeout` (an Ask with no answer in its time limit, and the action taken). The dispatch's gate holds are `hold` events. `record.next()` reads the record and gives the job's next step.
+A change of the Ask logs `question` or `answered` on the key. The other events (holds, starts, reruns, rescues, director steps) are rows of `events`; [Observability](observability.md) lists them.
 
 ### Run
 
-`Run` in `jobs/lib/records/ledger.ts`.
+`Run` in `jobs/lib/records/ledger.ts`: the fields of a job row and its `extra`.
 
 | Group | Fields |
 |---|---|
-| Identity | `job`, `n`, `name`, `kind`, `repo`, `on`, `branch`, `worktree` |
-| State | `condition`, `phase`, `reason`, `question`, `next`, `round`, `failed` |
+| Identity | `id` (`job.<n>`), `role`, `name`, `repo` (the `project` column), `target` (`issue.<n>`), `prev`, `retryOf`, `by`, `branch`, `worktree` |
+| State | `state`, `phase`, `reason`, `question`, `next`, `round`, `failed` |
 | Why it stopped | `cause`, `checkName`, `fate` |
 | Model | `session`, `model`, `tier`, `cost` |
 | Checks | `checks[]`, `checkedBase`, `checkedTip` |
@@ -150,39 +161,37 @@ Event kinds: `hold` (with `data.gate`), `started`, `asked` (with the spec versio
 
 | Field | Values |
 |---|---|
-| `kind` | `build`, `plain`, `land`, `intake`, `recheck`, `director`, `monitor`, `agent`, … |
-| `condition` | `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` |
+| `role` | `build`, `plain`, `land`, `review`, `intake`, `recheck`, `director`, `monitor`, `lens`, `housekeeper`, `maintainer` |
+| `state` | `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` |
 | `cause` (`outcome.ts`) | `no-commit`, `timeout`, `stalled`, `infra`, `locked`, `credit`, `check`, `conflict`, `moved`, `review`, `unanswered`, `other` |
 | `fate` | `duplicate`, `met`, `manual` |
 | `checks[]` | `{name, ok, seconds, tests?: {ran, passed, failed, skipped, failures[]}, rerun?, noVerdict?}` |
 
 A job is open while its latest run is `running`, `passed`, `waiting`, `returned` or `failed`.
 
-A record from before `docs/naming.md` keeps its old words (`awaiting`, `stuck`, `time-box`, …). `record.ts` reads them as the new words; see "Old words" in `docs/naming.md`.
+## Job folders: `jobs/`
 
-## Run folders: `runs/`
-
-One folder per run: `<YYYYMMDD-HHMMSS>-<subject>-<n>`, for example `20261105-080726-aleph-1421-6`. The subject is the run's `on` in the full form, else the routine (`monitor`), else the run's `name`. `n` is the run's job number on its subject, from 1 in start order, and the run keeps it in `n`: its job ID is `<subject>#<n>` ([Naming](naming.md)). `makeRun` in `ledger.ts` sets `n` under a lock of the subject, so two starts never get the same `n`. A folder from before job IDs is `<YYYYMMDD-HHMMSS>-<name>-<kind>` and its run has no `n`: `jobIdOf` in `record.ts` takes the run's place in start order among the runs on its subject that its caller gives, else reads it as the first. A stamp is never earlier than the stamp of an earlier run on the subject or in the job. The systemd unit of a run is `aleph-<subject>-<n>`; an old run's unit is `aleph-<folder>`. `jobs/lib/records/run-files.ts` names the files:
+One folder per job: `jobs/<n>/` for the key `job.<n>`. `runFile` in `jobs/lib/records/run-files.ts` names every file.
 
 | File | Holds |
 |---|---|
-| `spec.md`, `prompt.md`, `command.txt` | What the run was given |
-| `output.log`, `stderr.log` | The agent's stream-json and errors |
-| `result.md` | The worker's summary |
-| `setup.log`, `checks.log` | Verify's output |
-| `review.md`, `review.json`, `review-prompt.md` | The reviewer's input and verdict |
-| `land.log`, `batch.json` | The land's output and batch verdict |
-| `pid`, `exit` | The process |
+| `spec.md` | The issue's spec, in the folder of the work's first job |
+| `prompt.md` | What the agent was given |
+| `transcript.jsonl` | The agent's stream-json |
+| `result.md` | The agent's final text (a reviewer's verdict text, in its own job) |
+| `log.txt` | Sections, each started by a line `=== <name> ===`: `command` (what started the job), `setup`, `stderr`, `dispatch` (the dispatch after the job, and a refused next step), `checks` (Verify's output), `land` |
+| `review.json` | The reviewer's verdict, in the reviewer job's folder |
+| `batch.json` | The land's batch verdict |
+| `pid`, `exit` | The process; the row copies them when the job ends |
 | `notes/` | Fix-round notes and follow-up specs, one numbered file each |
 | `paused-next` | A next step that a pause kept |
 
-No code prunes run folders or records.
+The reviewer is a job of its own (`role review`, `prev` the build). It runs inside the build's unit and has no `pid`.
 
-The tick moves each finished record into the archive folder `<records>-archive` (`jobs-archive` beside `jobs/`) when no run of it runs or waits, it has no Ask and no wait, and its newest run started over 7 days ago. `/api/factory` reads only the records that are not archived; every other reader of `record.all()` and `allJobs()` reads both folders. A write to an archived record (`update`, so `putRun`, `patchRun` and `addEvent`) moves it back out first.
 
 ## Asks
 
-`jobs/lib/asks/ask.ts`. An Ask sits on the job record.
+`jobs/lib/asks/ask.ts`. An Ask sits in `issue_state.ask`.
 
 | Field | Holds |
 |---|---|
@@ -191,24 +200,26 @@ The tick moves each finished record into the archive folder `<records>-archive` 
 | `question`, `options[]`, `recommended`, `why[]` | What intake or code asks; 2 to 4 options |
 | `headline`, `situation`, `effects[]`, `recommend` | The director's case text when it escalates |
 
+## Machine state tables: `aleph.db`
+
+`PRAGMA user_version` is 2. Version 2 added `state`, `usage`, `openrouter`, `jev`, `suite_history` and `flaky` to the tables of version 1 (`SCHEMAS` in `lib/db.ts`). A file at version 1 runs only the version 2 entry when a process opens it.
+
+| Table | Holds | Writer |
+|---|---|---|
+| `tick` | One row per step: `step`, `last` (the time it last ran) and `result` (`ok`, a short summary or `failed: <error>`). The periodic steps `ci`, `episodes` and `firefight` keep their due time in `last`. Each suite (`suite <repo>`) and the monitor have a row | Tick and every step |
+| `settings` | Rows `caps` (`{live?, run?, intakeTries?, jobSeconds?, fixRounds?, landBatch?, loadLimit?}`; an env var wins), `models` (`{<tier>: {enabled, model}}`), `always` (`{<reason>: {action, at}}`), `timeouts` (`{<reason>: {minutes, then}}`; `then` is `pick` or `drop`; a bare number is minutes with `pick`), `paused` (the time of the pause, `null` when resumed) and `judge` (`jev` or `haiku`). Value is JSON | Automation page, Gates page, `aleph pause`, `aleph models`, `aleph always`, `aleph judge` |
+| `state` | Rows `baseline` (`{<repo>: {commit, ok, failed?}}`), `ci` (GitHub CI state per repo), `stalls` (stall first-seen times), `smoke` (failures in a row), `backend-hold`, `reran` (CI runs rerun), `recheck-held`, `housekeeper`, `corrections` (signals and lessons), `tick.missed` and `tick.suite`. Value is JSON | Tick, suite, firefighter, housekeeper, corrections |
+| `usage` | `seq`, `time`, `five_hour`, `seven_day`, `seven_day_resets_at`: one row per 10 minutes | `pollOnce` in `ui/usage.ts` |
+| `openrouter` | `seq`, `time`, `usage`, `factor`: the key's lifetime USD and the rate per list dollar | `pollOpenRouter` in `ui/usage.ts` |
+| `jev` | `seq`, `time`, `cost`: one row per Jev call | `decide` in `lib/jev.ts` |
+| `suite_history` | `seq`, `time`, `repo`, `commit_sha`, `ran`, `passed`, `failed`, `skipped`, `rerun_passed`: one row per suite run | `aleph suite` |
+| `flaky` | `seq`, `time`, `repo`, `check_name`, `run`, `tests` (a JSON array or null): a check that passed on the rerun | Checks |
+
 ## Factory directory: `factory/`
 
 | File | Holds | Writer |
 |---|---|---|
-| `paused` | The time of the pause | `aleph pause` |
-| `caps.json` | `{live?, run?, intakeTries?, jobSeconds?, fixRounds?, landBatch?, loadLimit?}` | Automation page; an env var wins |
-| `models.json` | `{<tier>: {enabled, model}}` | `aleph models` |
-| `always.json` | `{<reason>: {action, at}}` | Always button, `aleph always` |
-| `timeouts.json` | `{<reason>: {minutes, then}}`, `then` is `pick` or `drop`; a bare number is minutes with `pick` | Gates page, `aleph always timeout` |
-| `baseline.json` | `{<repo>: {commit, ok, failed?}}` | `aleph suite` |
 | `baseline/<repo>/` | The suite's `checks.log` | `aleph suite` |
-| `suite-history.jsonl` | One line per suite run | `aleph suite` |
-| `flaky.json` | `[{repo, check, run, at, tests?}]` | Checks that passed on the rerun |
-| `ci.json` | GitHub CI state per repo | Tick |
-| `tick.json` | Last due times, missed keys, `ran`: `{at, result}` of each tick step, of each suite and of the monitor; a result is `ok`, a short summary or `failed: <error>` | Tick and every step |
-| `events/<day>.jsonl` | The event log: one event as JSON per line, by UTC day | Every `logEvent` call: each run state change, each Ask set or cleared, each new hold, each issue filed or closed, each routing choice, each vault refusal, and the steps and failures of the firefighter, the director and the tick. [Observability](observability.md) lists each one |
-| `stalls.json`, `smoke.json` | Stall first-seen times; the smoke test | Tick |
-| `corrections.json` | Signals and lessons | Corrections |
 | `monitor/<day>.json` | The day's table and findings | Monitor |
 | `episodes/` | One page per finished issue; kept 90 days | Episodes |
 | `episode-use.jsonl` | `{date, title, event, session, query?}` per line; `event` is `shown` or `opened`; kept 90 days | `aleph memory recall --episodes`, the `episode-open.ts` hook |
@@ -218,7 +229,22 @@ The tick moves each finished record into the archive folder `<records>-archive` 
 
 ### Corrections
 
-`corrections.json` holds `{minedAt, lessons[]}` (`jobs/lib/learning/corrections.ts`). A **signal** is a quote from the last 14 days: Chris in a trace, a verify-gate deny, or a drop reason. A **lesson** groups signals under one sentence, with state `open`, `proposed`, `approved` or `declined`. At 3 signals (`ALEPH_PROPOSE_AT`) a lesson becomes a `proposal-*` Ask; an approved one files an issue.
+The `corrections` row of `state` holds `{minedAt, lessons[]}` (`jobs/lib/learning/corrections.ts`). A **signal** is a quote from the last 14 days: Chris in a trace, a verify-gate deny, or a drop reason. A **lesson** groups signals under one sentence, with state `open`, `proposed`, `approved` or `declined`. At 3 signals (`ALEPH_PROPOSE_AT`) a lesson becomes a `proposal-*` Ask; an approved one files an issue.
+
+## Migration: `aleph migrate`
+
+`aleph migrate storage` moves the old store (`issues/`, `ideas/`, `runs/`, the record files in `jobs/` and `jobs-archive/`, `repos.json`, the day files of the event log, the factory JSON files and the usage logs) to the layout above. It finds every path from `ALEPH_DB` (the root) and the `lib/layout.ts` variables, so it runs on a copy. Pause the factory first.
+
+| Step | What it does |
+|---|---|
+| `--dry-run` | Reads and writes nothing. It prints the counts for each kind, the rows it drops, and each key it has no rule for. |
+| Refuse | The real run stops while one key has no rule, or when `aleph.db` already holds jobs, or when an old checkout has changes. |
+| Back up | One `backups/storage-<date>.tgz` of the root without `vault/`, `prior-art/` and `backups/`. `gzip -t` reads it back. |
+| Convert | One transaction fills `aleph.db`. Job folders are hard links of the old run files, with `log.txt` built from the old logs. The old `issues/` folder becomes `items/` in three commits: the restructure, the merge of the ideas repo and the idea numbers. |
+| Check | The rows are compared with the old files that are still in place: the counts, the fields of each run, the event log line by line, and the state files. |
+| Push | The items repo goes to its origin. The run prints whether `origin/main` equals `HEAD`. |
+
+`aleph migrate cleanup` deletes what the migration replaced: the old record, run and log files, `*.bak` files, `tick.converted` and `words-migrated`. It refuses until a migration has passed its check.
 
 ## Vault: `vault/`
 

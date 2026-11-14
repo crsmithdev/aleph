@@ -18,7 +18,7 @@ describe("a factory run", () => {
   test("the worker commits on its branch in the job's worktree; the checks and the reviewer run in worktrees that go after", async () => {
     const r = await fjob("fpass", "commit fpass.txt");
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "build", condition: "passed", branch: "factory/fpass", worktree: worktree("fpass"), cost: 0.01, defaults: [] });
+    expect(s).toMatchObject({ role: "build", state: "passed", branch: "factory/fpass", worktree: worktree("fpass"), cost: 0.01, defaults: [] });
     expect(factoryBranch("fpass")).toBe(true);
     expect(sh(worktree("fpass"), "git", "symbolic-ref", "--short", "HEAD")).toBe("factory/fpass");
     expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
@@ -37,12 +37,13 @@ describe("a factory run", () => {
   });
 
   test("an error result, no result, or no commit ends failed", async () => {
-    expect(state((await fjob("ferr", "error")).json.run)).toMatchObject({ condition: "failed", reason: "API Error: 500" });
-    expect(state((await fjob("fnone", "noresult")).json.run)).toMatchObject({ condition: "failed", reason: expect.stringContaining('"type":"assistant"') });
-    expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ condition: "failed", reason: "no commit" });
-    expect(state((await fjob("fnoout", "nostructured")).json.run)).toMatchObject({ condition: "failed", reason: "worker: no structured output" });
+    const ferr = await fjob("ferr", "error");
+    expect(state(ferr.json.run)).toMatchObject({ state: "failed", reason: "API Error: 500" });
+    expect(state((await fjob("fnone", "noresult")).json.run)).toMatchObject({ state: "failed", reason: expect.stringContaining('"type":"assistant"') });
+    expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ state: "failed", reason: "no commit" });
+    expect(state((await fjob("fnoout", "nostructured")).json.run)).toMatchObject({ state: "failed", reason: "worker: no structured output" });
     expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--json-schema");
-    expect(told).toContain("ferr#1 failed other");
+    expect(told).toContain(`${ferr.json.run} failed other`);
     for (const n of ["ferr", "fnone", "ftrail", "fidle", "fnoout"]) await drop(n);
   });
 });

@@ -2,7 +2,7 @@
 
 The factory builds issues without you. It takes in each open issue as goals, starts a worker for each ready goal, checks and reviews the branch, and lands it on `main`. It asks you only when a rule says so.
 
-A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Workflow](workflow.md) states each step and gate, [Routing](routing.md) the model for each role, and [Data model](data-model.md) each file the factory keeps.
+A project with `sandbox: true` in its `~/.aleph/items/projects/<n>/project.md` is a factory repo. [Workflow](workflow.md) states each step and gate, [Routing](routing.md) the model for each role, and [Data model](data-model.md) each file the factory keeps.
 
 ## Set it up
 
@@ -30,6 +30,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 | `aleph drop <name>` | Drops a run and deletes its branch |
 | `aleph recheck <name>` | Merges main into a returned or failed run's branch and checks it again, without a worker |
 | `aleph pause` / `aleph resume` | Stops and restarts new runs |
+| `aleph migrate storage [--dry-run]` / `aleph migrate cleanup` | Moves the old store to `aleph.db`, `items/` and `jobs/<n>/`; deletes the old files after ([Data model](data-model.md#migration-aleph-migrate)) |
 | `aleph always <list\|grant <reason> <action>\|revoke <reason>>` | Lists or changes the Always rules |
 | `aleph always timeout [<reason> <minutes> [pick\|drop]]` | Lists or sets the no-answer timeouts; 0 removes one |
 | `aleph doctor [--fix] [--json]` | After an outage: clocks, git objects, units, `aleph.home` and lost runs |
@@ -53,11 +54,11 @@ A check that fails in a run, a land or the baseline runs once more on the same t
 
 ## Load
 
-A check, a worker and a land start only while the 1-minute load average is under `ALEPH_LOAD_LIMIT`. Otherwise they wait in a queue, and the run's phase says why. The wait fails nothing and counts against no time limit. A start that had to wait keeps the queue for 15 seconds, so the load average shows it before the next start reads the load. The full suite runs on half the cores (`ALEPH_TEST_PARALLEL` in `package.json`). If it passes, it counts as passed, and the flake goes to `~/.aleph/factory/flaky.json`. Two flakes of one check in 7 days raise a health line in `aleph report`.
+A check, a worker and a land start only while the 1-minute load average is under `ALEPH_LOAD_LIMIT`. Otherwise they wait in a queue, and the run's phase says why. The wait fails nothing and counts against no time limit. A start that had to wait keeps the queue for 15 seconds, so the load average shows it before the next start reads the load. The full suite runs on half the cores (`ALEPH_TEST_PARALLEL` in `package.json`). If it passes, it counts as passed, and the flake goes to the `flaky` table of `aleph.db`. Two flakes of one check in 7 days raise a health line in `aleph report`.
 
 ## Settings
 
-The live cap, the run cap, the intake tries, the job time limit, the fix rounds, the land batch and the load limit are read from their variables (`ALEPH_LIVE_CAP`, `ALEPH_RUN_CAP`, `ALEPH_INTAKE_TRIES`, `ALEPH_JOB_TIMEOUT`, `ALEPH_FIX_ROUNDS`, `ALEPH_LAND_BATCH`, `ALEPH_LOAD_LIMIT`) first, then from `~/.aleph/factory/caps.json` (`{ "live": 5, "run": 3, "intakeTries": 2, "jobSeconds": 1800, "fixRounds": 2, "landBatch": 8, "loadLimit": 24 }`), then the default. The Controls panel of the Automation page edits caps.json. The run cap is the number of starts of one goal in 60 minutes before a `run-cap` Ask; `ALEPH_RUN_CAP` (3) is the default. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops every detached dispatch, intake, director and suite.
+The live cap, the run cap, the intake tries, the job time limit, the fix rounds, the land batch and the load limit are read from their variables (`ALEPH_LIVE_CAP`, `ALEPH_RUN_CAP`, `ALEPH_INTAKE_TRIES`, `ALEPH_JOB_TIMEOUT`, `ALEPH_FIX_ROUNDS`, `ALEPH_LAND_BATCH`, `ALEPH_LOAD_LIMIT`) first, then from the `caps` setting in `aleph.db` (`{ "live": 5, "run": 3, "intakeTries": 2, "jobSeconds": 1800, "fixRounds": 2, "landBatch": 8, "loadLimit": 24 }`), then the default. The Controls panel of the Automation page edits the `caps` setting. The run cap is the number of starts of one goal in 60 minutes before a `run-cap` Ask; `ALEPH_RUN_CAP` (3) is the default. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops every detached dispatch, intake, director and suite.
 
 | Variable | Default | Does |
 |---|---|---|
@@ -78,7 +79,7 @@ The live cap, the run cap, the intake tries, the job time limit, the fix rounds,
 | `ALEPH_MONITOR` | on | `off` turns off the tick's daily monitor step |
 | `ALEPH_RESCUE` | on | `off` leaves a returned or failed run as it is, so its open job keeps its issue not ready |
 | `ALEPH_NEEDS_YOU_LOG` | `needs-you-log.md` next to the vault directory | The file of what reached Chris and why |
-| `ALEPH_RUN_ENV` | none | An env file that a worker, a check or a command run loads. A repo's own `env` in `repos.json` wins |
+| `ALEPH_RUN_ENV` | none | An env file that a worker, a check or a command run loads. A project's own `env` wins |
 | `ALEPH_HOME_URL` | `http://aleph.home/` | The address that `aleph doctor` checks |
 | `ALEPH_UNIT_DIR` | `~/.config/systemd/user` | The directory of the systemd user units |
 | `ALEPH_SYSTEMCTL` | `systemctl` | The command that runs `systemctl --user` |

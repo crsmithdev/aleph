@@ -1,310 +1,262 @@
-import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Entry, Run } from "./ledger.ts";
 import { fixRounds } from "../infra/settings.ts";
-import { eventsDir, readEvents } from "../../../lib/layout.ts";
+import { readEvents } from "../../../lib/layout.ts";
+import { conn } from "../../../lib/db.ts";
+import { seed } from "../../job.testkit.ts";
 import * as record from "./record.ts";
 
 let dir: string;
-const saved = process.env.ALEPH_RECORDS_DIR;
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "aleph-record-")); process.env.ALEPH_RECORDS_DIR = dir; });
-afterEach(() => { setSystemTime(); rmSync(dir, { recursive: true, force: true }); rmSync(record.archiveDir(), { recursive: true, force: true }); if (saved === undefined) delete process.env.ALEPH_RECORDS_DIR; else process.env.ALEPH_RECORDS_DIR = saved; });
+const saved = { db: process.env.ALEPH_DB, jobs: process.env.ALEPH_JOBS_DIR };
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "aleph-record-"));
+  process.env.ALEPH_DB = join(dir, "aleph.db");
+  process.env.ALEPH_JOBS_DIR = join(dir, "jobs");
+});
+afterEach(() => {
+  for (const [k, v] of [["ALEPH_DB", saved.db], ["ALEPH_JOBS_DIR", saved.jobs]] as const) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  rmSync(dir, { recursive: true, force: true });
+});
 
 const AT = "2026-11-04T10:00:00.000Z";
-const run = (o: Partial<Run> = {}): Run => ({ n: 1, kind: "build", job: "j1", name: "aleph-7", repo: "aleph", on: "aleph-7", condition: "running", told: false, started: AT, ...o });
+const ASK = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
+const mine = (object: string) => readEvents().filter((e) => e.object === object).map(({ subject, action, object, detail }) => ({ subject, action, object, detail }));
 
-test("update writes the whole record through a rename and leaves no temporary file", () => {
-  record.update("aleph-7", (r) => { r.wait = { kind: "after", reason: "after aleph-6", since: AT }; });
-  expect(record.read("aleph-7")).toEqual({ issue: "aleph-7", ask: null, wait: { kind: "after", reason: "after aleph-6", since: AT }, rounds: 0, cost: 0, runs: [], events: [] });
-  expect(readdirSync(dir)).toEqual(["aleph-7.json"]);
+test("makeJob numbers a job from the job counter, makes its folder, fills it and logs its first state", () => {
+  const a = record.makeJob({ role: "build", name: "issue.7", repo: "aleph", target: "issue.7", started: AT }, (folder, id) => writeFileSync(join(folder, "prompt.md"), id));
+  const b = record.makeJob({ role: "plain", name: "x" });
+  expect([a.id, b.id]).toEqual(["job.1", "job.2"]);
+  expect(a.folder).toBe(join(dir, "jobs", "1"));
+  expect(readFileSync(join(a.folder, "prompt.md"), "utf8")).toBe("job.1");
+  expect(a.run).toMatchObject({ id: "job.1", job: "job.1", role: "build", state: "running", by: "rule", repo: "aleph", target: "issue.7", started: AT, told: false });
+  expect(mine("job.1")).toEqual([{ subject: "gate", action: "running", object: "job.1", detail: null }]);
 });
 
-test("a write that changes a run's state logs one event by gate in the file of its day; a write that keeps it logs none", () => {
-  const mine = () => readEvents().filter((e) => e.subject === "aleph-31");
-  const r = run({ on: "aleph-31", name: "aleph-31", n: 2 });
-  record.putRun("r31", r);
-  record.putRun("r31", { ...r, phase: "worker" });
-  record.patchRun("r31", { condition: "failed", cause: "timeout" });
-  expect(mine().map(({ by, subject, action, sub, on }) => ({ by, subject, action, sub, on }))).toEqual([
-    { by: "gate", subject: "aleph-31", action: "running", sub: undefined, on: ["aleph-31#2"] },
-    { by: "gate", subject: "aleph-31", action: "failed", sub: "timeout", on: ["aleph-31#2"] },
-  ]);
-  const day = mine()[0].at.slice(0, 10);
-  expect(readdirSync(eventsDir())).toContain(`${day}.jsonl`);
-  expect(readEvents(Date.parse(mine()[1].at) + 1).filter((e) => e.subject === "aleph-31")).toEqual([]);
+test("a job keeps its columns apart from its extra fields, and getRun reads both", () => {
+  const { id } = record.makeJob({ role: "build", name: "issue.7", repo: "aleph", target: "issue.7", model: "opus", tier: "high", cost: 1.5, branch: "job/x", phase: "setup" });
+  const row = conn().query("SELECT * FROM jobs WHERE id = ?").get(id) as Record<string, unknown>;
+  expect(row).toMatchObject({ role: "build", project: "aleph", model: "opus", tier: "high", cost: 1.5, target: "issue.7", prev: null, retry_of: null });
+  expect(JSON.parse(row.extra as string)).toMatchObject({ name: "issue.7", branch: "job/x", phase: "setup" });
+  expect(record.getRun(id)).toMatchObject({ repo: "aleph", branch: "job/x", cost: 1.5 });
+  expect(record.getRun("job.99")).toBeNull();
 });
 
-test("a run that ends logs its cost, a run that lands also its commit, and an Ask set then cleared logs two events", () => {
-  const r = run({ on: "aleph-32", name: "aleph-32", n: 1 });
-  record.putRun("r32", r);
-  record.patchRun("r32", { condition: "landed", cost: 1.5, commit: "abc1234" });
-  record.update("aleph-32", (x) => { x.ask = { kind: "input", reason: "question", question: "q", options: [], why: [] }; });
-  record.update("aleph-32", (x) => { x.ask = null; });
-  const mine = readEvents().filter((e) => e.subject === "aleph-32");
-  expect(mine.map(({ action, cost, commit }) => ({ action, cost, commit }))).toEqual([
-    { action: "running", cost: undefined, commit: undefined },
-    { action: "landed", cost: 1.5, commit: "abc1234" },
-    { action: "question", cost: undefined, commit: undefined },
-    { action: "answered", cost: undefined, commit: undefined },
+test("setState logs one event by gate for a change of state; a patch that keeps the state logs none", () => {
+  const { id } = record.makeJob({ role: "build", name: "issue.31", target: "issue.31" });
+  record.patchRun(id, { phase: "worker" });
+  record.setState(id, "failed", { cause: "timeout" });
+  record.setState(id, "failed", { reason: "again" });
+  expect(mine(id)).toEqual([
+    { subject: "gate", action: "running", object: id, detail: null },
+    { subject: "gate", action: "failed", object: id, detail: "past its time box" },
   ]);
 });
 
-test("a run that fails a check logs the reason as the event note", () => {
-  record.putRun("r33", run({ on: "aleph-33", name: "aleph-33", n: 1 }));
-  record.patchRun("r33", { condition: "failed", cause: "check", checkName: "bun test", reason: "bun test failed: 3 fail (a.test.ts)" });
-  const failed = readEvents().find((e) => e.subject === "aleph-33" && e.action === "failed");
-  expect(failed).toMatchObject({ sub: "check", note: "bun test failed: 3 fail (a.test.ts)" });
+test("a run that fails a check logs the reason as the event detail", () => {
+  const { id } = record.makeJob({ role: "build", name: "issue.33" });
+  record.setState(id, "failed", { cause: "check", checkName: "bun test", reason: "bun test failed: 3 fail (a.test.ts)" });
+  expect(mine(id).find((e) => e.action === "failed")).toMatchObject({ detail: "bun test failed: 3 fail (a.test.ts)" });
 });
 
-test("a run keys by its issue, else by its job id", () => {
-  expect(record.keyOf({ on: "aleph-7", job: "j1" })).toBe("aleph-7");
-  expect(record.keyOf({ job: "20260925-192116-aleph-vault-date-agent" })).toBe("20260925-192116-aleph-vault-date-agent");
+test("a build the reviewer sent back logs its return by the reviewer's job", () => {
+  const build = record.makeJob({ role: "build", name: "issue.34" });
+  const review = record.makeJob({ role: "review", name: "issue.34", prev: build.id });
+  record.setState(build.id, "returned", { cause: "review", reason: "reviewer: no test" });
+  expect(mine(build.id).at(-1)).toMatchObject({ subject: review.id, action: "returned" });
 });
 
-test("record.putRun adds and replaces a run, record.patchRun changes fields and drops undefined ones, and both keep the runs in id order", () => {
-  record.putRun("b", run({ phase: "worker" }));
-  record.putRun("a", run({ condition: "failed", failed: "tests" }));
-  expect(record.read("aleph-7")!.runs.map((x) => x.id)).toEqual(["a", "b"]);
-  const out = record.patchRun("b", { condition: "passed", phase: undefined, cost: 1.5 });
-  expect(out).toMatchObject({ id: "b", condition: "passed", cost: 1.5 });
-  expect("phase" in out!).toBe(false);
-  expect(record.getRun("b")).toEqual(out);
-  expect(() => record.patchRun("nope", { told: true })).toThrow("no record holds the run nope");
+test("patchRun drops a field set to undefined, and takes a function of the run and its work", () => {
+  const a = record.makeJob({ role: "build", name: "w", phase: "setup", reason: "r" });
+  const b = record.makeJob({ role: "land", name: "w", prev: a.id });
+  record.patchRun(a.id, { phase: undefined });
+  expect(record.getRun(a.id)).not.toHaveProperty("phase");
+  record.patchRun(b.id, (_run, work) => ({ reason: work.map((x) => x.id).join(",") }));
+  expect(record.getRun(b.id)!.reason).toBe(`${a.id},${b.id}`);
+  expect(() => record.patchRun("job.99", {})).toThrow();
 });
 
-test("record.getRun finds a run that another process wrote: it scans the records", () => {
-  record.write({ ...record.empty("aleph-9"), runs: [{ ...run({ on: "aleph-9" }), id: "x9" }] });
-  expect(record.getRun("x9")?.on).toBe("aleph-9");
-  expect(record.getRun("missing")).toBeNull();
+test("a work is the prev chain: its runs share the root as `job`, in job order, and job.10 follows job.9", () => {
+  const ids: string[] = [];
+  for (let i = 0; i < 10; i++) ids.push(seed({ role: "plain", name: `p${i}` }).id);
+  const a = seed({ role: "build", name: "w" }), b = seed({ role: "land", name: "w", prev: a.id }), c = seed({ role: "build", name: "w", prev: b.id });
+  expect(record.getRun(c.id)!.job).toBe(a.id);
+  expect(record.allRunRecords().map((r) => r.id).slice(8, 11)).toEqual(["job.9", "job.10", "job.11"]);
+  expect(record.getRun(ids[9])!.job).toBe(ids[9]);
 });
 
-test("read returns a stored run's condition as it is: the word migration owns the old words", () => {
-  const old = { ...run(), id: "1", condition: "stuck", failed: "review" } as unknown as record.RunRecord;
-  record.write({ ...record.empty("aleph-7"), runs: [old] });
-  expect(record.read("aleph-7")!.runs[0].condition as string).toBe("stuck");
+test("rounds are the failed builds of the newest work of a target, and cost is the sum over its jobs", () => {
+  const a = seed({ role: "build", name: "issue.5", target: "issue.5", state: "returned", failed: "tests", cost: 1 });
+  const r = seed({ role: "review", name: "issue.5", target: "issue.5", prev: a.id, cost: 0.25 });
+  seed({ role: "build", name: "issue.5", target: "issue.5", prev: a.id, state: "passed", cost: 2 });
+  seed({ role: "build", name: "issue.6", target: "issue.6", state: "returned", failed: "tests", cost: 4 });
+  expect(record.roundsOf("issue.5")).toBe(1);
+  expect(record.roundsOf("issue.9")).toBe(0);
+  expect(record.costOf("issue.5")).toBe(3.25);
+  expect(r.run.role).toBe("review");
 });
 
-test("a write derives the cost of all runs and the fix rounds of the newest job", () => {
-  record.putRun("1", run({ job: "old", failed: "tests", condition: "failed", cost: 1 }));
-  record.putRun("2", run({ job: "new", failed: "tests", condition: "failed", cost: 0.25 }));
-  record.putRun("3", run({ job: "new", failed: "review", condition: "returned", cost: 0.5 }));
-  record.putRun("4", run({ job: "new", kind: "land", failed: "tests", condition: "failed" }));
-  const r = record.read("aleph-7")!;
-  expect(r.cost).toBe(1.75);
-  expect(r.rounds).toBe(2);
+test("an Ask set on the issue and cleared logs a question and an answered event, and read gives the state", () => {
+  record.setIssueAsk("issue.32", ASK);
+  expect(record.read("issue.32")!.ask).toEqual(ASK);
+  expect(record.issueAsk(record.read("issue.32"))).toEqual(ASK);
+  record.setIssueAsk("issue.32", { ...ASK, situation: "case text" });
+  record.setIssueAsk("issue.32", null);
+  expect(record.read("issue.32")).toBeNull();
+  expect(mine("issue.32")).toEqual([
+    { subject: "gate", action: "question", object: "issue.32", detail: "question" },
+    { subject: "gate", action: "answered", object: "issue.32", detail: null },
+  ]);
 });
 
-test("allRunRecords gives every run of every record in id order", () => {
-  record.putRun("20261104-2", run());
-  record.putRun("20261104-1", run({ on: "aleph-8", name: "aleph-8" }));
-  expect(record.allRunRecords().map((x) => x.id)).toEqual(["20261104-1", "20261104-2"]);
+test("a run's Ask lives in issue_state with the run as its owner, not in the issue's own Ask", () => {
+  const { id } = record.makeJob({ role: "build", name: "issue.7", target: "issue.7", state: "waiting", ask: ASK });
+  const s = record.read("issue.7")!;
+  expect(s).toMatchObject({ ask: ASK, askJob: id });
+  expect(record.issueAsk(s)).toBeNull();
+  expect(record.getRun(id)!.ask).toEqual(ASK);
+  record.setIssueAsk("issue.7", null);
+  expect(record.getRun(id)!.ask).toEqual(ASK);
+  record.setState(id, "passed", { ask: undefined });
+  expect(record.read("issue.7")).toBeNull();
 });
 
-test("addEvent appends and lastEvent finds the newest of a kind", () => {
-  record.addEvent("aleph-7", { at: AT, kind: "hold", what: "after aleph-6" });
-  record.addEvent("aleph-7", { at: AT, kind: "started", what: "started" });
-  record.addEvent("aleph-7", { at: "2026-11-04T11:00:00.000Z", kind: "hold", what: "the live cap is full" });
-  expect(record.lastEvent("aleph-7", "hold")?.what).toBe("the live cap is full");
-  expect(record.lastEvent("aleph-7", "cap")).toBeUndefined();
+test("a land or build of the work that joins after the run an Ask is on clears that Ask; a director run or another work's land does not", () => {
+  const a = record.makeJob({ role: "build", name: "issue.7", target: "issue.7", state: "waiting", ask: ASK });
+  record.makeJob({ role: "director", name: "d", target: "issue.7", prev: a.id });
+  record.makeJob({ role: "land", name: "other", target: "issue.7" });
+  expect(record.read("issue.7")!.ask).toEqual(ASK);
+  record.makeJob({ role: "land", name: "issue.7", target: "issue.7", prev: a.id });
+  expect(record.read("issue.7")).toBeNull();
+  expect(mine("issue.7").map((e) => e.action).filter((x) => x === "question" || x === "answered")).toEqual(["question", "answered"]);
 });
 
-const rec = (runs: Partial<Run>[], o: Partial<record.JobRecord> = {}): record.JobRecord =>
-  ({ ...record.empty("aleph-7"), ...o, runs: runs.map((x, i) => ({ ...run(x), id: String(i) })) });
+test("the wait of an issue is kept in issue_state", () => {
+  record.editIssueState("issue.8", (s) => { s.wait = { kind: "after", reason: "after issue.6", since: AT }; });
+  expect(record.read("issue.8")).toEqual({ ask: null, wait: { kind: "after", reason: "after issue.6", since: AT } });
+});
+
+test("copyEnd copies the pid and exit files of the folder to the row", () => {
+  const { id, folder } = record.makeJob({ role: "plain", name: "x" });
+  writeFileSync(join(folder, "pid"), "4242");
+  writeFileSync(join(folder, "exit"), "3");
+  record.copyEnd(id);
+  expect(conn().query("SELECT pid, exit_code FROM jobs WHERE id = ?").get(id)).toEqual({ pid: 4242, exit_code: 3 });
+  expect(existsSync(join(folder, "exit"))).toBe(true);
+});
+
+test("decisions reads the decision of each director job, oldest first", () => {
+  record.makeJob({ role: "director", name: "d1", decision: { at: "a", outcome: "decided" } });
+  record.makeJob({ role: "build", name: "b" });
+  record.makeJob({ role: "director", name: "d2", decision: { at: "b", outcome: "escalated" } });
+  expect(record.decisions<{ at: string }>().map((d) => d.at)).toEqual(["a", "b"]);
+});
+
+// The next step is a function of the runs and the issue's state.
+const run = (o: Partial<Run> = {}): Run => ({ role: "build", name: "issue.7", repo: "aleph", target: "issue.7", state: "running", told: false, started: AT, made: 0, by: "rule", job: "job.1", ...o });
+const runs = (xs: Partial<Run>[]): record.RunRecord[] => xs.map((x, i) => ({ ...run(x), id: `job.${i + 1}` }));
+const nx = (xs: Partial<Run>[], live?: record.Live) => record.next(runs(xs), live);
+const job = (xs: Partial<Run>[]): Entry[] => runs(xs).map((r) => ({ id: r.id, folder: `/jobs/${r.id}`, run: r }));
 
 test("next: an Ask waits for Chris before anything else", () => {
-  const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
-  expect(record.next(rec([{ condition: "passed" }], { ask })).step).toBe("ask");
-  expect(record.next(rec([{ condition: "waiting" }])).step).toBe("ask");
+  expect(nx([{ state: "passed" }], { ask: ASK, wait: null }).step).toBe("ask");
+  expect(nx([{ state: "waiting" }]).step).toBe("ask");
 });
 
-test("next: each run condition gives its step", () => {
+test("next: each run state gives its step", () => {
   const cases: [Partial<Run>[], record.Step["step"]][] = [
-    [[{ condition: "running" }], "run"],
-    [[{ condition: "returned", failed: "tests", next: "worker" }], "worker"],
-    [[{ condition: "returned", failed: "doc-claims", next: "recheck" }], "recheck"],
-    [[{ condition: "passed", next: "land" }], "land"],
-    [[{ kind: "land", condition: "failed", next: "land" }], "land"],
-    [[{ condition: "passed" }], "wait"],
-    [[{ condition: "passed", next: "land" }, { kind: "land", condition: "failed", cause: "locked" }], "land"],
-    [[{ condition: "failed", reason: "no commit" }], "rescue"],
-    [[{ condition: "failed" }], "rescue"],
-    [[{ kind: "land", condition: "landed", commit: "abc1234def" }], "none"],
-    [[{ condition: "dropped", reason: "dropped by Chris" }], "none"],
-        [[{ condition: "failed", reason: "no commit" }, { kind: "director", condition: "done" }], "rescue"],
-    [[{ condition: "passed", next: "land" }, { kind: "director", condition: "passed" }], "land"],
+    [[{ state: "running" }], "run"],
+    [[{ state: "returned", failed: "tests", next: "worker" }], "worker"],
+    [[{ state: "returned", failed: "doc-claims", next: "recheck" }], "recheck"],
+    [[{ state: "passed", next: "land" }], "land"],
+    [[{ role: "land", state: "failed", next: "land" }], "land"],
+    [[{ state: "passed" }], "wait"],
+    [[{ state: "passed", next: "land" }, { role: "land", state: "failed", cause: "locked" }], "land"],
+    [[{ state: "failed", reason: "no commit" }], "rescue"],
+    [[{ state: "failed" }], "rescue"],
+    [[{ role: "land", state: "landed", commit: "abc1234def" }], "none"],
+    [[{ state: "dropped", reason: "dropped by Chris" }], "none"],
+    [[{ state: "failed", reason: "no commit" }, { role: "director", state: "done" }], "rescue"],
+    [[{ state: "passed", next: "land" }, { role: "director", state: "passed" }], "land"],
+    [[{ state: "passed" }, { role: "review", state: "done" }], "wait"],
   ];
-  for (const [runs, step] of cases) expect([runs, record.next(rec(runs)).step]).toEqual([runs, step]);
-  expect(record.next(rec([{ condition: "failed", cause: "no-commit", reason: "no commit" }, { kind: "director", condition: "done" }])).sub).toBe("no-commit");
+  for (const [xs, step] of cases) expect([xs, nx(xs).step]).toEqual([xs, step]);
+  expect(nx([{ state: "failed", cause: "no-commit", reason: "no commit" }, { role: "director", state: "done" }]).sub).toBe("no-commit");
 });
 
 test("next: each case gives its step as event words", () => {
-  const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
-  expect(record.next(rec([{ condition: "passed" }], { ask }))).toEqual({ step: "ask", action: "waiting", to: "human" });
-  expect(record.next(rec([{ condition: "running", on: "aleph-1375", n: 6 }]))).toEqual({ step: "run", action: "running", on: ["aleph-1375#6"] });
-  expect(record.next(rec([{ condition: "returned", cause: "check", next: "worker" }], { rounds: 1 }))).toEqual({ step: "worker", action: "returned", sub: "check", count: `1 / ${fixRounds()}` });
-  expect(record.next(rec([{ kind: "land", condition: "landed", commit: "4240d76abc9" }]))).toEqual({ step: "none", action: "landed", on: ["4240d76"] });
-  expect(record.next(rec([{ condition: "failed", cause: "review" }]))).toEqual({ step: "rescue", action: "failed", sub: "review" });
-  expect(record.next(rec([]))).toEqual({ step: "start", action: "starting" });
+  expect(nx([{ state: "passed" }], { ask: ASK, wait: null })).toEqual({ step: "ask", action: "waiting", to: "human" });
+  expect(nx([{ state: "running" }])).toEqual({ step: "run", action: "running", on: ["job.1"] });
+  expect(nx([{ state: "returned", failed: "check", cause: "check", next: "worker" }])).toEqual({ step: "worker", action: "returned", sub: "check", count: `1 / ${fixRounds()}` });
+  expect(nx([{ role: "build", state: "returned", failed: "tests" }, { state: "returned", failed: "check", cause: "check", next: "worker" }]).count).toBe(`2 / ${fixRounds()}`);
+  expect(nx([{ role: "land", state: "landed", commit: "4240d76abc9" }])).toEqual({ step: "none", action: "landed", on: ["4240d76"] });
+  expect(nx([{ state: "failed", cause: "review" }])).toEqual({ step: "rescue", action: "failed", sub: "review" });
+  expect(nx([])).toEqual({ step: "start", action: "starting" });
 });
 
 test("next: no step keeps the why sentence", () => {
-  const cases: Partial<Run>[][] = [[], [{ condition: "running" }], [{ condition: "waiting" }], [{ condition: "returned", cause: "check", next: "worker" }], [{ condition: "passed", next: "land" }], [{ condition: "passed" }], [{ condition: "failed", cause: "review" }], [{ kind: "land", condition: "landed", commit: "4240d76abc9" }], [{ condition: "dropped", reason: "dropped by Chris" }], [{ condition: "done" }]];
-  for (const runs of cases) expect("why" in record.next(rec(runs))).toBe(false);
-});
-
-/** The job of `runs` as allJobs gives it: entries in id order. */
-const job = (runs: Partial<Run>[]): Entry[] => runs.map((x, i) => ({ id: String(i), folder: `/runs/${i}`, run: run(x) }));
-
-test("endRun writes the end and its next in one write: no reader sees the ended run with no next", () => {
-  record.putRun("b1", run({ n: 1 }));
-  const seen: string[] = [];
-  const ended = record.endRun("b1", { condition: "returned", failed: "tests", ended: AT }, (r) => {
-    seen.push(record.next(record.read("aleph-7")!).step);
-    return r.condition === "returned" ? "worker" : undefined;
-  });
-  seen.push(record.next(record.read("aleph-7")!).step);
-  expect(seen).toEqual(["run", "worker"]);
-  expect(ended).toMatchObject({ id: "b1", condition: "returned", next: "worker", ended: AT });
-});
-
-test("endRun gives decide the job's land runs with the ended one in its ended state", () => {
-  record.putRun("l1", run({ kind: "land", condition: "failed", conflicts: ["a.ts"] }));
-  record.putRun("l2", run({ kind: "land" }));
-  record.putRun("x1", run({ kind: "land", job: "j2", condition: "failed", conflicts: ["b.ts"] }));
-  let lands: Run[] = [];
-  record.endRun("l2", { condition: "failed", conflicts: ["a.ts"] }, (_, l) => { lands = l; return undefined; });
-  expect(lands.map((x) => [x.job, x.condition, x.conflicts])).toEqual([["j1", "failed", ["a.ts"]], ["j1", "failed", ["a.ts"]]]);
-  expect("next" in record.getRun("l2")!).toBe(false);
-});
-
-test("counting and next pick the same run: not a land that found the lock busy, not a director run", () => {
-  const runs: Partial<Run>[] = [{ condition: "waiting", n: 1 }, { kind: "land", condition: "failed", cause: "locked", n: 2 }];
-  expect(record.counting(job(runs)).id).toBe("0");
-  expect(record.next(rec(runs)).on).toEqual([record.jobIdOf(record.counting(job(runs)))]);
-  expect(record.next(rec([...runs, { kind: "director", job: "d1", condition: "done", n: 3 }])).on).toEqual(["aleph-7#1"]);
-  expect(record.counting(job([{ kind: "director", job: "d1", condition: "done" }])).id).toBe("0");
-});
-
-test("stepOf is next over the job's runs with the Ask of the record of its run that counts", () => {
-  const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
-  record.setIssueAsk("aleph-7", ask);
-  expect(record.stepOf(job([{ condition: "passed" }]))).toEqual({ step: "ask", action: "waiting", to: "human" });
-  record.setIssueAsk("aleph-7", null);
-  expect(record.stepOf(job([{ condition: "passed", next: "land" }, { kind: "land", condition: "failed", cause: "locked" }])).step).toBe("land");
-});
-
-test("stepOf: a run whose cause is not rescuable, as credit, waits; the rescue never sees it", () => {
-  const credit: Partial<Run> = { condition: "failed", cause: "credit", reason: "API Error: 402 This request would exceed your available credits" };
-  expect(record.stepOf(job([credit]))).toEqual({ step: "wait", action: "failed", sub: "credit" });
-  expect(record.stepOf(job([{ condition: "failed", cause: "no-commit" }])).step).toBe("rescue");
-});
-
-test("jobIdOf: a run reads its subject and its n", () => {
-  const runs = job([{ on: "aleph-1375", n: 6 }, { on: undefined, kind: "monitor", name: "monitor", n: 14 }]);
-  expect(runs.map((e) => record.jobIdOf(e))).toEqual(["aleph-1375#6", "monitor#14"]);
+  const cases: Partial<Run>[][] = [[], [{ state: "running" }], [{ state: "waiting" }], [{ state: "returned", cause: "check", next: "worker" }], [{ state: "passed", next: "land" }], [{ state: "passed" }], [{ state: "failed", cause: "review" }]];
+  for (const xs of cases) expect("why" in nx(xs)).toBe(false);
 });
 
 test("next: a stuck run the factory asked Chris about waits", () => {
-  const events = [{ at: AT, kind: "asked", what: "q", run: "0" }];
-  expect(record.next(rec([{ condition: "failed" }], { events })).step).toBe("wait");
+  expect(nx([{ state: "failed", asked: { at: AT, question: "q" } }]).step).toBe("wait");
 });
 
 test("next: a land asked about while it was live (a slow land) and failed later goes to the rescue", () => {
-  const events = [{ at: AT, kind: "asked", what: "slow land", run: "0" }];
-  expect(record.next(rec([{ kind: "land", condition: "failed", cause: "check", ended: "2026-11-04T10:30:00.000Z" }], { events })).step).toBe("rescue");
-  expect(record.next(rec([{ kind: "land", condition: "failed", cause: "check", ended: "2026-11-04T09:30:00.000Z" }], { events })).step).toBe("wait");
+  const asked = { at: AT, question: "slow land" };
+  expect(nx([{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T10:30:00.000Z", asked }]).step).toBe("rescue");
+  expect(nx([{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T09:30:00.000Z", asked }]).step).toBe("wait");
 });
 
 test("next: an issue with no run waits for its hold, else starts", () => {
-  expect(record.next(rec([], { wait: { kind: "after", reason: "after aleph-6", since: AT } }))).toEqual({ step: "wait", action: "waiting" });
-  expect(record.next(rec([])).step).toBe("start");
+  expect(nx([], { ask: null, wait: { kind: "after", reason: "after issue.6", since: AT } })).toEqual({ step: "wait", action: "waiting" });
+  expect(nx([]).step).toBe("start");
 });
 
-test("an Ask with a recommended option keeps the label in its entry after the Ask is cleared", () => {
-  const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [], recommended: "B" };
-  setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
-  record.setIssueAsk("aleph-7", ask);
-  setSystemTime(new Date("2026-11-04T10:05:00.000Z"));
-  record.setIssueAsk("aleph-7", null);
-  expect(record.read("aleph-7")!.asks).toEqual([
-    { set: "2026-11-04T10:00:00.000Z", cleared: "2026-11-04T10:05:00.000Z", reason: "question", recommended: "B" },
-  ]);
+test("endRun writes the end and its next in one write: no reader sees the ended run with no next", () => {
+  const { id } = record.makeJob({ role: "build", name: "issue.7", target: "issue.7" });
+  const seen: string[] = [];
+  const ended = record.endRun(id, { state: "returned", failed: "tests", ended: AT }, (r) => {
+    seen.push(record.next(record.allRunRecords()).step);
+    return r.state === "returned" ? "worker" : undefined;
+  });
+  seen.push(record.next(record.allRunRecords()).step);
+  expect(seen).toEqual(["run", "worker"]);
+  expect(ended).toMatchObject({ id, state: "returned", next: "worker", ended: AT });
 });
 
-test("an Ask set on a record and cleared keeps its set time and clear time, through the issue and through a run", () => {
-  const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
-  setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
-  record.setIssueAsk("aleph-7", ask);
-  record.setIssueAsk("aleph-7", { ...ask, situation: "case text" });
-  setSystemTime(new Date("2026-11-04T10:05:00.000Z"));
-  record.setIssueAsk("aleph-7", null);
-  setSystemTime(new Date("2026-11-04T11:00:00.000Z"));
-  record.putRun("r1", run({ ask }));
-  setSystemTime(new Date("2026-11-04T11:10:00.000Z"));
-  record.patchRun("r1", { ask: { ...ask, situation: "case text" } });
-  setSystemTime(new Date("2026-11-04T11:30:00.000Z"));
-  record.patchRun("r1", { ask: undefined, condition: "passed" });
-  expect(record.read("aleph-7")!.asks).toEqual([
-    { set: "2026-11-04T10:00:00.000Z", cleared: "2026-11-04T10:05:00.000Z", reason: "question" },
-    { set: "2026-11-04T11:00:00.000Z", cleared: "2026-11-04T11:30:00.000Z", reason: "question" },
-  ]);
+test("endRun gives decide the work's land runs with the ended one in its ended state", () => {
+  const a = record.makeJob({ role: "build", name: "w" });
+  const l1 = record.makeJob({ role: "land", name: "w", prev: a.id, state: "failed", conflicts: ["a.ts"] });
+  const l2 = record.makeJob({ role: "land", name: "w", prev: l1.id });
+  record.makeJob({ role: "land", name: "x", state: "failed", conflicts: ["b.ts"] });
+  let lands: Run[] = [];
+  record.endRun(l2.id, { state: "failed", conflicts: ["a.ts"] }, (_, l) => { lands = l; return undefined; });
+  expect(lands.map((x) => [x.job, x.state, x.conflicts])).toEqual([[a.id, "failed", ["a.ts"]], [a.id, "failed", ["a.ts"]]]);
+  expect("next" in record.getRun(l2.id)!).toBe(false);
 });
 
-test("a land or build run of the job that joins after the run an Ask is on clears that Ask, a director run or another job's land does not", () => {
-  const ask = { kind: "input" as const, reason: "question", question: "the reviewer sent it back once: free-text column gets td.wide", options: [], why: [] };
-  setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
-  record.putRun("1", run({ condition: "waiting", ask }));
-  setSystemTime(new Date("2026-11-04T10:02:00.000Z"));
-  record.putRun("2", run({ kind: "director", condition: "passed" }));
-  record.putRun("25", run({ kind: "land", job: "j2", condition: "landed" }));
-  expect(record.read("aleph-7")!.ask).toEqual(ask);
-  expect(record.next(record.read("aleph-7")!).step).toBe("ask");
-  setSystemTime(new Date("2026-11-04T10:05:00.000Z"));
-  record.putRun("3", run({ kind: "land", condition: "failed", failed: "conflict" }));
-  setSystemTime(new Date("2026-11-04T10:10:00.000Z"));
-  record.putRun("4", run({ condition: "failed", reason: "doc claims: x after 2 fix rounds" }));
-  const r = record.read("aleph-7")!;
-  expect(r.ask).toBeNull();
-  expect(r.asks!.at(-1)!.cleared).toBe("2026-11-04T10:05:00.000Z");
-  const s = record.next(r);
-  expect(s).toEqual({ step: "rescue", action: "failed" });
+test("counting and next pick the same run: not a land that found the lock busy, not a director or review run", () => {
+  const xs: Partial<Run>[] = [{ state: "waiting" }, { role: "land", state: "failed", cause: "locked" }];
+  expect(record.counting(job(xs)).id).toBe("job.1");
+  expect(nx(xs).on).toEqual(["job.1"]);
+  expect(nx([...xs, { role: "director", state: "done" }, { role: "review", state: "done" }]).on).toEqual(["job.1"]);
+  expect(record.counting(job([{ role: "director", state: "done" }])).id).toBe("job.1");
 });
 
-const DAY = 864e5, T0 = Date.parse("2026-11-20T00:00:00.000Z");
-const startedAgo = (days: number) => new Date(T0 - days * DAY).toISOString();
-
-test("archiveOld moves a finished record whose newest run started over 7 days ago, and keeps a running, a waiting, an Ask and a newer one", () => {
-  record.putRun("z1", run({ on: "a-1", job: "a1", condition: "done", started: startedAgo(8) }));
-  record.putRun("z2", run({ on: "a-2", job: "a2", condition: "done", started: startedAgo(9) }));
-  record.putRun("z3", run({ on: "a-2", job: "a2", condition: "running", started: startedAgo(8) }));
-  record.putRun("z4", run({ on: "a-3", job: "a3", condition: "waiting", started: startedAgo(9) }));
-  record.putRun("z5", run({ on: "a-4", job: "a4", condition: "done", started: startedAgo(9) }));
-  record.setIssueAsk("a-4", { kind: "approval", reason: "x", question: "", options: [], why: [] } as any);
-  record.putRun("z6", run({ on: "a-5", job: "a5", condition: "done", started: startedAgo(6) }));
-  expect(record.archiveOld(T0)).toEqual(["a-1"]);
-  expect(readdirSync(dir).filter((f) => f.endsWith(".json")).sort()).toEqual(["a-2.json", "a-3.json", "a-4.json", "a-5.json"]);
-  expect(readdirSync(record.archiveDir())).toEqual(["a-1.json"]);
+test("stepOf is next over the work's runs with the Ask of its target's issue state", () => {
+  const a = seed({ role: "build", name: "issue.7", target: "issue.7", state: "passed" });
+  record.setIssueAsk("issue.7", ASK);
+  expect(record.stepOf([a])).toEqual({ step: "ask", action: "waiting", to: "human" });
+  record.setIssueAsk("issue.7", null);
+  expect(record.stepOf([a]).step).toBe("wait");
 });
 
-test("an archived record still reads in all and allRunRecords, and record.putRun of a new run moves it back with the old runs", () => {
-  record.putRun("y1", run({ condition: "done", started: startedAgo(8) }));
-  record.archiveOld(T0);
-  expect(record.all().map((r) => r.issue)).toEqual(["aleph-7"]);
-  expect(record.all(true)).toEqual([]);
-  expect(record.allRunRecords().map((x) => x.id)).toEqual(["y1"]);
-  record.putRun("y2", run({ condition: "running", started: startedAgo(0) }));
-  expect(readdirSync(record.archiveDir())).toEqual([]);
-  expect(readdirSync(dir).filter((f) => f.endsWith(".json"))).toEqual(["aleph-7.json"]);
-  expect(record.read("aleph-7")!.runs.map((x) => x.id)).toEqual(["y1", "y2"]);
-});
-
-test("a run that another process moved to a different record leaves no copy behind when it moves again", () => {
-  record.putRun("m1", run({ on: "aleph-41", name: "aleph-41" }));
-  // Another process moves the run: this process's key map still says aleph-41.
-  record.update("aleph-41", (r) => { r.runs = []; });
-  record.update("aleph-42", (r) => { r.runs.push({ ...run({ on: "aleph-42", name: "aleph-42" }), id: "m1" } as record.RunRecord); });
-  record.putRun("m1", run({ on: "aleph-43", name: "aleph-43" }));
-  expect(record.allRunRecords().filter((x) => x.id === "m1").map((x) => x.on)).toEqual(["aleph-43"]);
+test("stepOf: a run whose cause is not rescuable, as credit, waits; the rescue never sees it", () => {
+  const credit: Partial<Run> = { state: "failed", cause: "credit", reason: "API Error: 402 This request would exceed your available credits" };
+  expect(record.stepOf(job([credit]))).toEqual({ step: "wait", action: "failed", sub: "credit" });
+  expect(record.stepOf(job([{ state: "failed", cause: "no-commit" }])).step).toBe("rescue");
 });

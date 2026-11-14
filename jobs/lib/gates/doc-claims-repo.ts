@@ -67,7 +67,7 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_RUN_CAP: () => s.RUN_CAP_DEFAULT,
   ALEPH_CONTEXT_WARN: () => DEFAULT_WARN,
   ALEPH_GH_USER: () => GH_USER_CMD.join(" "),
-  ALEPH_JUDGE: () => bare("ALEPH_JUDGE", judgeChoice, { ALEPH_JUDGE_FILE: join(tmpdir(), "no-such-judge-file") }),
+  ALEPH_JUDGE: () => bare("ALEPH_JUDGE", judgeChoice, { ALEPH_DB: join(tmpdir(), "no-such-judge.db") }),
   // A stand-in HOME: the default is a path in the live store, which a test may not resolve (lib/paths.ts).
   ALEPH_SPOOL: () => bare("ALEPH_SPOOL", spoolDir, { HOME: "/doc-home" }).replace("/doc-home", "~"),
   ALEPH_ENV: () => bare("ALEPH_ENV", () => classifyEnvironment([])),
@@ -82,7 +82,6 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_WINDOWS_TIME_CMD: () => bare("ALEPH_WINDOWS_TIME_CMD", s.windowsTimeCmd) ?? "none",
   ALEPH_USAGE_URL: plain("ALEPH_USAGE_URL", s.usageUrl),
   ALEPH_CLAUDE_CREDENTIALS: () => bare("ALEPH_CLAUDE_CREDENTIALS", s.credentialsFile).replace(homedir(), "~"),
-  ALEPH_USAGE_FILE: () => bare("ALEPH_USAGE_FILE", s.usageFile, { HOME: "/doc-home" }).replace("/doc-home", "~"),
   ALEPH_SKILLS_DIR: () => bare("ALEPH_SKILLS_DIR", s.skillsDir) === join(ROOT, "skills") ? "the `skills` directory of the repo" : "other",
 };
 
@@ -93,7 +92,7 @@ export function repoTruth(root = ROOT): Truth {
   const code = (f: string) => /^(hooks|jobs|issues|ui|vault|lib|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
   return {
     defaults: DEFAULTS,
-    wordSets: { "Issue status": n.STATUSES, "Job state": n.STATES, Action: n.ACTIONS, Sub: n.SUBS, Actor: n.ACTORS, Kind: n.KINDS, Stage: n.STAGES, "Report lane": n.LANES, "Flow class": n.SPEEDS },
+    wordSets: { "Issue status": n.STATUSES, "Job state": n.STATES, Action: n.ACTIONS, Subject: n.ACTORS, Role: n.ROLES, Stage: n.STAGES, "Report lane": n.LANES, "Flow class": n.SPEEDS },
     root,
     files,
     source: read(files.filter((f) => (code(f) || f === "package.json" || /^compose\/[^/]+$/.test(f) || f === ".env.example") && !f.startsWith("jobs/lib/gates/doc-claims"))),

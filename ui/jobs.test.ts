@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
@@ -11,7 +11,10 @@ import { withEnv } from "./test-server.ts";
 import * as lib from "./lib.js";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
-import { putRun, removeRun } from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { conn } from "../lib/db.ts";
+import { logTo } from "../jobs/lib/records/run-files.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 let base: string, jobsDir: string;
 let restore: () => void;
@@ -28,16 +31,35 @@ afterAll(() => setSystemTime());
 const now = NOW;
 const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
 const seq: Record<string, number> = {};
-// The runs a test adds, removed after it, so no test sees another's runs.
-let made: [string, string][] = [];
-function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
-  const dir = join(jobsDir, id);
-  mkdirSync(dir, { recursive: true });
-  const subject = String(extra.on ?? extra.name);
+// The runs a test adds, removed after it, so no test sees another's runs. `K` maps the label `<name>#<n>` of a job (its n-th run
+// of that name or issue) to its key.
+let made: { id: string; subject: string; group?: string }[] = [];
+const K: Record<string, string> = {};
+const lastOf: Record<string, string> = {};
+const SECTIONS: Record<string, "checks" | "stderr" | "setup" | "land"> = { "checks.log": "checks", "stderr.log": "stderr", "setup.log": "setup", "land.log": "land" };
+/** Put a job in the ledger. `job` groups the runs of one work (each follows the one before); `on` is the issue `<repo>-<n>`. Returns its key. */
+function run(_id: string, extra: Record<string, unknown>, files: Record<string, string> = {}): string {
+  const { job: group, on, ...rest } = extra as any;
+  const subject = String(on ?? rest.name);
   seq[subject] = (seq[subject] ?? 0) + 1;
-  made.push([id, subject]);
-  putRun(basename(join(dir)), { kind: "build", told: true, started: ago(3), n: seq[subject], ...extra } as any);
-  for (const [f, t] of Object.entries(files)) writeFileSync(join(dir, f), t);
+  const row = seed({ role: "build", told: true, started: ago(3), ...rest, ...(on ? { target: `issue.${String(on).split("-")[1]}` } : {}), ...(group && lastOf[group] ? { prev: lastOf[group] } : {}) });
+  K[`${subject}#${seq[subject]}`] = row.id;
+  if (group) lastOf[group] = row.id;
+  made.push({ id: row.id, subject, group });
+  for (const [f, t] of Object.entries(files)) {
+    if (f === "output.log") writeFileSync(join(row.folder, "transcript.jsonl"), t);
+    else if (SECTIONS[f]) logTo(row.folder, SECTIONS[f], t);
+    else if (f !== "review.md" && f !== "review.json") writeFileSync(join(row.folder, f), t);
+  }
+  // The reviewer is a job of its own, the next of the build.
+  if (files["review.md"] !== undefined || files["review.json"] !== undefined) {
+    const rv = seed({ role: "review", name: rest.name, repo: rest.repo, prev: row.id, started: rest.ended ?? ago(3), ended: rest.ended ?? ago(3) });
+    K[`review ${subject}#${seq[subject]}`] = rv.id;
+    made.push({ id: rv.id, subject: `review ${rv.id}` });
+    if (files["review.md"] !== undefined) writeFileSync(join(rv.folder, "result.md"), files["review.md"]);
+    if (files["review.json"] !== undefined) writeFileSync(join(rv.folder, "review.json"), files["review.json"]);
+  }
+  return row.id;
 }
 async function get(path: string) {
   const url = new URL(`http://x${path}`);
@@ -77,21 +99,27 @@ beforeAll(() => {
   sh(base, "git", "clone", "-q", itemsRemote, items);
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: fac }, oth: { path: oth } }));
-  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, LANGFUSE_PUBLIC_KEY: "", ...gitEnv });
+  writeRepos({ fac: { path: fac }, oth: { path: oth } }, items);
+  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, LANGFUSE_PUBLIC_KEY: "", ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => { add(doc, "old title"); return true; }, true);
   // fac-9: a worker, a fix round with a reviewer, then a land.
-  run("20261027-000001-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", condition: "failed", reason: "review held", started: ago(5), ended: ago(4), cost: 0.5, model: "claude-sonnet-5-5" },
+  run("", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", state: "failed", reason: "review held", started: ago(5), ended: ago(4), cost: 0.5, model: "claude-sonnet-5-5" },
     { "result.md": "first\nFOLLOWUP: tidy\n", "checks.log": "## test: exit 1\n" + Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n") + "\n", "stderr.log": "warn\n" });
-  run("20261027-000002-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", condition: "passed", started: ago(3.5), ended: ago(3), cost: 0.25, defaults: ["a? -> b"] },
+  run("", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", state: "passed", started: ago(3.5), ended: ago(3), cost: 0.25, defaults: ["a? -> b"] },
     { "result.md": "fixed it\nFOLLOWUP: tidy\n", "review.md": "Looks right.\nVERDICT: hold quoted\n", "review.json": '{"verdict":"pass","summary":"Looks right.","failures":[]}' });
-  run("20261027-000003-a", { job: "fac-9", name: "fac-9", kind: "land", repo: "fac", branch: "factory/fac-9", condition: "landed", started: ago(2.5), ended: ago(2), commit: "abc1234" });
-  run("20261027-000004-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "failed", started: ago(1) });
-  run("20261027-000005-a", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", condition: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
+  run("", { job: "fac-9", name: "fac-9", role: "land", repo: "fac", branch: "factory/fac-9", state: "landed", started: ago(2.5), ended: ago(2), commit: "abc1234" });
+  run("", { job: "oth-1", name: "oth-1", repo: "oth", state: "failed", started: ago(1) });
+  run("", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", state: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
   made = [];
 });
 afterEach(() => {
-  for (const [id, subject] of made) (rmSync(join(jobsDir, id), { recursive: true, force: true }), removeRun(id), seq[subject]--);
+  for (const { id, subject, group } of made) {
+    rmSync(join(jobsDir, id.slice(4)), { recursive: true, force: true });
+    conn().run("DELETE FROM jobs WHERE id = ?", [id]);
+    if (!subject.startsWith("review ")) seq[subject]--;
+    if (group) delete lastOf[group];
+  }
+  for (const k of Object.keys(K)) if (made.some((m) => m.id === K[k])) delete K[k];
   made = [];
 });
 afterAll(() => {
@@ -101,64 +129,61 @@ afterAll(() => {
 
 describe("a land that found the job lock busy", () => {
   test("the job's state is the run that counts; the run list keeps the land", async () => {
-    const ids = ["20261027-000040-a", "20261027-000041-a"];
-    run(ids[0], { job: "fac-7", name: "fac-7", repo: "fac", condition: "passed", started: ago(3) });
-    run(ids[1], { kind: "land", job: "fac-7", name: "fac-7", repo: "fac", condition: "failed", cause: "locked", reason: "job lock busy", started: ago(2) });
-    try {
-      const d = await (await get(jp("fac-7#2"))).json();
-      expect(d.condition).toBe("passed");
+    run("", { job: "fac-7", name: "fac-7", repo: "fac", state: "passed", started: ago(3) });
+    const land = run("", { role: "land", job: "fac-7", name: "fac-7", repo: "fac", state: "failed", cause: "locked", reason: "job lock busy", started: ago(2) });
+    {
+      const d = await (await get(jp(K["fac-7#2"]))).json();
+      expect(d.state).toBe("passed");
       expect(d.reason).toBeUndefined();
       // The job record gives the next step from the run that counts: the passed run, which waits for a land by hand.
       expect(d.next).toEqual({ step: "wait", action: "passed", to: "human", text: "passed → human" });
       expect(d.next.text).not.toMatch(/[:;]/);
-      expect(d.runs.find((r: any) => r.id === ids[1])).toMatchObject({ condition: "failed", reason: "job lock busy" });
+      expect(d.runs.find((r: any) => r.id === land)).toMatchObject({ state: "failed", reason: "job lock busy" });
       // A row is one job: the land that found the lock busy is a failed job of its own.
-      expect(await idsOf("state=passed")).toContain("fac-7#1");
-      expect(await idsOf("state=failed")).toContain("fac-7#2");
-    } finally {
-      for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
+      expect(await idsOf("state=passed")).toContain(K["fac-7#1"]);
+      expect(await idsOf("state=failed")).toContain(K["fac-7#2"]);
     }
   });
 });
 
 describe("GET /api/jobs", () => {
   test("one row per job, newest first, filtered by project, state and window", async () => {
-    expect(await idsOf("project=fac")).toEqual(["fac-9#3", "fac-9#2", "fac-9#1"]);
-    expect(await idsOf("state=failed")).toEqual(["oth-1#1", "fac-9#1"]);
-    expect(await idsOf("window=month")).toEqual(["oth-1#1", "fac-9#3", "fac-9#2", "fac-9#1", "fac-2#1"]);
+    expect(await idsOf("project=fac")).toEqual([K["fac-9#3"], K["review fac-9#2"], K["fac-9#2"], K["fac-9#1"]]);
+    expect(await idsOf("state=failed")).toEqual([K["oth-1#1"], K["fac-9#1"]]);
+    expect(await idsOf("window=month")).toEqual([K["oth-1#1"], K["fac-9#3"], K["review fac-9#2"], K["fac-9#2"], K["fac-9#1"], K["fac-2#1"]]);
     expect((await get("/api/jobs?window=x")).status).toBe(400);
     const [row] = (await (await get("/api/jobs?project=fac")).json()).jobs;
-    expect(row).toMatchObject({ id: "fac-9#3", subject: "fac-9", name: "fac-9", repo: "fac", kind: "land", actor: null, state: "landed", started: ago(2.5), ended: ago(2), seconds: 1800, cost: null });
+    expect(row).toMatchObject({ id: K["fac-9#3"], subject: "fac-9", name: "fac-9", repo: "fac", kind: "land", actor: null, state: "landed", started: ago(2.5), ended: ago(2), seconds: 1800, cost: null });
   });
   test("?unusable=1 keeps the runs the monitor counts as failed: failed, returned, dropped, or with a cause; not passed or landed", async () => {
-    run("20261027-000006-a", { job: "fac-3", name: "fac-3", repo: "fac", condition: "returned", started: ago(1) });
-    run("20261027-000007-a", { job: "fac-4", name: "fac-4", repo: "fac", condition: "dropped", started: ago(1) });
-    run("20261027-000008-a", { job: "fac-5", name: "fac-5", repo: "fac", condition: "passed", cause: "timeout", started: ago(1) });
-    expect((await idsOf("unusable=1")).sort()).toEqual(["fac-3#1", "fac-4#1", "fac-5#1", "fac-9#1", "oth-1#1"]);
-    expect(await idsOf("unusable=1&project=oth")).toEqual(["oth-1#1"]);
+    run("", { job: "fac-3", name: "fac-3", repo: "fac", state: "returned", started: ago(1) });
+    run("", { job: "fac-4", name: "fac-4", repo: "fac", state: "dropped", started: ago(1) });
+    run("", { job: "fac-5", name: "fac-5", repo: "fac", state: "passed", cause: "timeout", started: ago(1) });
+    expect(await idsOf("unusable=1")).toHaveLength(5);
+    for (const l of ["fac-3#1", "fac-4#1", "fac-5#1", "fac-9#1", "oth-1#1"]) expect(await idsOf("unusable=1")).toContain(K[l]);
+    expect(await idsOf("unusable=1&project=oth")).toEqual([K["oth-1#1"]]);
   });
   test("pages by ?limit= and ?before=, and says where the next page starts", async () => {
     const one = await (await get("/api/jobs?window=month&limit=2")).json();
-    expect(one.jobs.map((j: any) => j.id)).toEqual(["oth-1#1", "fac-9#3"]);
+    expect(one.jobs.map((j: any) => j.id)).toEqual([K["oth-1#1"], K["fac-9#3"]]);
     expect(one.next).toBe(ago(2.5));
     const two = await (await get(`/api/jobs?window=month&limit=2&before=${encodeURIComponent(one.next)}`)).json();
-    expect(two.jobs.map((j: any) => j.id)).toEqual(["fac-9#2", "fac-9#1"]);
-    expect((await (await get(`/api/jobs?window=month&before=${encodeURIComponent(ago(5))}`)).json())).toEqual({ jobs: [expect.objectContaining({ id: "fac-2#1" })], next: null });
+    expect(two.jobs.map((j: any) => j.id)).toEqual([K["review fac-9#2"], K["fac-9#2"]]);
+    expect((await (await get(`/api/jobs?window=month&before=${encodeURIComponent(ago(5))}`)).json())).toEqual({ jobs: [expect.objectContaining({ id: K["fac-2#1"] })], next: null });
     for (const q of ["limit=0", "limit=x", "before=soon"]) expect((await get(`/api/jobs?${q}`)).status).toBe(400);
   });
   test("each row names its actor from its kind, for the page's Role filter", async () => {
-    const ids = ["20261027-000010-a", "20261027-000011-a", "20261027-000012-a"];
-    run(ids[0], { kind: "intake", job: "oth-5", name: "oth-5", repo: "oth", condition: "failed", started: ago(1) });
-    run(ids[1], { kind: "build", job: "oth-6", name: "oth-6", repo: "oth", condition: "failed", started: ago(1) });
-    run(ids[2], { kind: "director", job: "oth-7", name: "oth-7", repo: "oth", condition: "failed", started: ago(1) });
-    try {
+    run("", { role: "intake", job: "oth-5", name: "oth-5", repo: "oth", state: "failed", started: ago(1) });
+    run("", { role: "build", job: "oth-6", name: "oth-6", repo: "oth", state: "failed", started: ago(1) });
+    run("", { role: "director", job: "oth-7", name: "oth-7", repo: "oth", state: "failed", started: ago(1) });
+    {
       const rows = (await (await get("/api/jobs?project=oth")).json()).jobs;
       const actor = (id: string) => rows.find((j: any) => j.id === id).actor;
-      expect([actor("oth-5#1"), actor("oth-6#1"), actor("oth-7#1")]).toEqual(["intake", "worker", "director"]);
-      expect(v.renderJobsTable(rows, { role: "director" })).toContain("oth-7#1");
-      expect(v.renderJobsTable(rows, { role: "director" })).not.toContain("oth-6#1");
-      expect(v.renderJobsTable(rows)).toContain('<tr class="rowlink" data-annotate="oth-5#1">');
-    } finally { for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id)); }
+      expect([actor(K["oth-5#1"]), actor(K["oth-6#1"]), actor(K["oth-7#1"])]).toEqual(["intake", "worker", "director"]);
+      expect(v.renderJobsTable(rows, { role: "director" })).toContain(K["oth-7#1"]);
+      expect(v.renderJobsTable(rows, { role: "director" })).not.toContain(K["oth-6#1"]);
+      expect(v.renderJobsTable(rows)).toContain(`<tr class="rowlink" data-annotate="${K["oth-5#1"]}">`);
+    }
   });
   test("the Role filter offers the six actors and no old role", () => {
     const h = v.renderFilters({});
@@ -168,20 +193,20 @@ describe("GET /api/jobs", () => {
     expect(h).not.toContain('value="planner"');
   });
   test("?project narrows to one project", async () => {
-    expect(await idsOf("project=oth&window=month")).toEqual(["oth-1#1"]);
+    expect(await idsOf("project=oth&window=month")).toEqual([K["oth-1#1"]]);
     expect(await (await get("/api/jobs?project=nope")).json()).toEqual({ jobs: [], next: null });
   });
 });
 
 describe("item titles", () => {
   test("a rename between two requests shows in the second", async () => {
-    run("20261027-000006-a", { job: "fac-7", name: "fac-7", repo: "fac", condition: "running", on: "fac-1" });
-    const title = async () => (await (await get("/api/jobs")).json()).jobs.find((j: any) => j.id === "fac-1#1").title;
+    run("", { job: "fac-7", name: "fac-7", repo: "fac", state: "running", on: "fac-1" });
+    const title = async () => (await (await get("/api/jobs")).json()).jobs.find((j: any) => j.id === K["fac-1#1"]).title;
     expect(await title()).toBe("old title");
     writeList({ key: "fac" }, "rename", (doc) => { doc.items.find((i) => i.id === 1)!.title = "new title"; return true; });
     expect(readList({ key: "fac" })!.items[0].title).toBe("new title");
     expect(await title()).toBe("new title");
-    expect((await (await get(jp("fac-1#1"))).json()).item.title).toBe("new title");
+    expect((await (await get(jp(K["fac-1#1"]))).json()).item.title).toBe("new title");
   });
 });
 
@@ -196,35 +221,24 @@ describe("GET /api/jobs/:id", () => {
       return true;
     }, true);
     const [gone, open, shut] = refs;
-    const ids = ["20261027-000050-a", "20261027-000051-a"];
-    run(ids[0], { job: `oth-${open}`, name: `oth-${open}`, repo: "oth", condition: "failed", on: `oth-${open}`, started: ago(1) });
-    run(ids[1], { job: `oth-${shut}`, name: `oth-${shut}`, repo: "oth", condition: "landed", on: `oth-${shut}`, started: ago(1) });
-    const j = await (await get(jp(`oth-${open}#1`))).json();
-    const closed = await (await get(jp(`oth-${shut}#1`))).json();
-    for (const id of ids) rmSync(join(jobsDir, id), { recursive: true, force: true });
+    run("", { job: `oth-${open}`, name: `oth-${open}`, repo: "oth", state: "failed", on: `oth-${open}`, started: ago(1) });
+    run("", { job: `oth-${shut}`, name: `oth-${shut}`, repo: "oth", state: "landed", on: `oth-${shut}`, started: ago(1) });
+    const j = await (await get(jp(K[`oth-${open}#1`]))).json();
+    const closed = await (await get(jp(K[`oth-${shut}#1`]))).json();
     expect(j.blockers).toEqual([expect.objectContaining({ id: `oth-${gone}`, title: "gone work", dead: "dropped" })]);
     expect(closed.blockers).toBeUndefined();
     const html = v.renderJob(j);
     expect(html).toContain('<span class="quiet">Waits on</span>');
     expect(html).toContain(`data-act="unblock" data-path="/api/issues/oth-${open}/unblock"`);
   });
-  test("a chat run's Job page is titled by the first line of its message, not chat", async () => {
-    const id = "20261027-000060-a";
-    run(id, { job: id, name: "chat", kind: "chat", condition: "done", started: ago(1) }, { "command.txt": "chat:   Fix the title \nand the rest\n" });
-    try {
-      const j = await (await get(jp("chat#1"))).json();
-      expect(j.title).toBe("Fix the title");
-      expect(v.renderJob(j)).toContain("<h1>Fix the title</h1>");
-    } finally { rmSync(join(jobsDir, id), { recursive: true }); removeRun(id); }
-  });
   test("404 for an unknown name, or another project's job", async () => {
-    expect((await get(jp("nope#1"))).status).toBe(404);
-    expect((await get(jp("fac-9#3", "?project=oth"))).status).toBe(404);
-    expect((await get(jp("fac-9#3", "?project=fac"))).status).toBe(200);
+    expect((await get(jp(K["nope#1"]))).status).toBe(404);
+    expect((await get(jp(K["fac-9#3"], "?project=oth"))).status).toBe(404);
+    expect((await get(jp(K["fac-9#3"], "?project=fac"))).status).toBe(200);
   });
   test("the verdict comes from review.json beside review.md, not from review.md's text", async () => {
-    const j = await (await get(jp("fac-9#3"))).json();
-    expect(j.id).toBe("fac-9#3");
+    const j = await (await get(jp(K["fac-9#3"]))).json();
+    expect(j.id).toBe(K["fac-9#3"]);
     expect(j.review).toContain("VERDICT: hold quoted");
     expect(j.verdict).toBe("pass");
   });
@@ -232,20 +246,19 @@ describe("GET /api/jobs/:id", () => {
 
 describe("a name reused by a dropped job and its rerun", () => {
   test("each job ID names its own job, and its diff", async () => {
-    run("20261001-000001-a", { job: "dup-old", name: "fac-dup", repo: "fac", branch: "factory/gone", condition: "dropped", started: ago(24 * 40), ended: ago(24 * 40 - 1) });
-    run("20261001-000002-a", { job: "dup-new", name: "fac-dup", repo: "fac", branch: "factory/fac-9", condition: "landed", started: ago(24 * 39), ended: ago(24 * 39 - 1), commit: "def5678" });
-    const j = await (await get(jp("fac-dup#2"))).json();
-    expect(j.condition).toBe("landed");
-    expect(j.runs.map((r: any) => r.condition)).toEqual(["landed"]);
-    expect((await (await get(jp("fac-dup#1"))).json()).condition).toBe("dropped");
-    const d = await get(jp("fac-dup#2", "/diff"));
+    run("", { job: "dup-old", name: "fac-dup", repo: "fac", branch: "factory/gone", state: "dropped", started: ago(24 * 40), ended: ago(24 * 40 - 1) });
+    run("", { job: "dup-new", name: "fac-dup", repo: "fac", branch: "factory/fac-9", state: "landed", started: ago(24 * 39), ended: ago(24 * 39 - 1), commit: "def5678" });
+    const j = await (await get(jp(K["fac-dup#2"]))).json();
+    expect(j.state).toBe("landed");
+    expect(j.runs.map((r: any) => r.state)).toEqual(["landed"]);
+    expect((await (await get(jp(K["fac-dup#1"]))).json()).state).toBe("dropped");
+    const d = await get(jp(K["fac-dup#2"], "/diff"));
     expect(d.status).toBe(200);
     expect(await d.text()).toContain("+two");
   });
 });
 
 describe("run logs", () => {
-  const id = "20261027-000090-a";
   const stream = [
     JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "looking" }, { type: "tool_use", id: "t1", name: "Bash", input: { command: "ls" } }] } }),
     JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "a\nb" }] } }),
@@ -260,12 +273,12 @@ describe("run logs", () => {
   });
   async function logs(file: string, q = "") {
     const url = new URL(`http://x/api/jobs/oth-90%231/logs/${encodeURIComponent(file)}${q}`);
-    return routes["GET /api/jobs/:id/logs/:file"](new Request(url), { id: "oth-90#1", file }, url);
+    return routes["GET /api/jobs/:id/logs/:file"](new Request(url), { id: K["oth-90#1"], file }, url);
   }
   test("lists the known logs with sizes, serves them whole or as a transcript, and refuses other names", async () => {
-    run(id, { job: "oth-90", name: "oth-90", kind: "build", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) },
+    run("", { job: "oth-90", name: "oth-90", role: "build", repo: "oth", state: "passed", started: ago(1), ended: ago(0.5) },
       { "output.log": stream, "land.log": "landed\n", "notes.txt": "x" });
-    const j = await (await get(jp("oth-90#1"))).json();
+    const j = await (await get(jp(K["oth-90#1"]))).json();
     expect(j.runs[0].logs).toEqual([{ name: "output.log", size: stream.length }, { name: "land.log", size: 7 }].sort((a, b) => ["output.log", "land.log"].indexOf(a.name) - ["output.log", "land.log"].indexOf(b.name)));
     expect(await (await logs("land.log")).text()).toBe("landed\n");
     const steps = await (await logs("output.log", "?as=transcript")).json();
@@ -275,8 +288,7 @@ describe("run logs", () => {
     for (const bad of ["state.json", "state.json/../../x", "notes.txt", "stderr.log"]) expect((await logs(bad)).status).toBe(404);
     expect((await logs("land.log", "?as=transcript")).status).toBe(404);
     const other = new URL("http://x/");
-    expect((await routes["GET /api/jobs/:id/logs/:file"](new Request(other), { id: "nope#1", file: "land.log" }, other)).status).toBe(404);
-    rmSync(join(jobsDir, id), { recursive: true, force: true });
+    expect((await routes["GET /api/jobs/:id/logs/:file"](new Request(other), { id: K["nope#1"], file: "land.log" }, other)).status).toBe(404);
   });
 });
 
@@ -289,36 +301,36 @@ describe("GET /api/jobs/:id/diff", () => {
     const commit = sh(fac, "git", "rev-parse", "HEAD");
     sh(fac, "git", "switch", "-q", "main");
     sh(fac, "git", "branch", "-D", "tmp-seal");
-    run("20261027-000060-a", { job: "fac-S", name: "fac-S", repo: "fac", branch: "factory/fac-S", condition: "landed", commit }, { "review.md": "land" });
-    const d = (await (await get(jp("fac-S#1"))).json()) as any;
+    run("", { job: "fac-S", name: "fac-S", repo: "fac", branch: "factory/fac-S", state: "landed", commit }, { "review.md": "land" });
+    const d = (await (await get(jp(K["fac-S#1"]))).json()) as any;
     expect(d.look).toBe(3);
     expect(d.checkedBy).toEqual(["reviewer"]);
   });
   test("a dropped job's kept diff.patch is served when the branch is gone; none recorded says so", async () => {
-    run("20261027-000051-a", { job: "fac-K", name: "fac-K", repo: "fac", branch: "factory/fac-K", condition: "dropped" }, { "diff.patch": "+kept line\n", "diff.stat": " k.txt | 1 +\n" });
-    expect(await (await get(jp("fac-K#1", "/diff"))).text()).toContain("+kept line");
-    expect(((await (await get(jp("fac-K#1"))).json()) as any).stat).toContain("k.txt");
-    run("20261027-000052-a", { job: "fac-N", name: "fac-N", repo: "fac", branch: "factory/fac-N", condition: "dropped" });
-    const res = await get(jp("fac-N#1", "/diff"));
+    run("", { job: "fac-K", name: "fac-K", repo: "fac", branch: "factory/fac-K", state: "dropped" }, { "diff.patch": "+kept line\n", "diff.stat": " k.txt | 1 +\n" });
+    expect(await (await get(jp(K["fac-K#1"], "/diff"))).text()).toContain("+kept line");
+    expect(((await (await get(jp(K["fac-K#1"]))).json()) as any).stat).toContain("k.txt");
+    run("", { job: "fac-N", name: "fac-N", repo: "fac", branch: "factory/fac-N", state: "dropped" });
+    const res = await get(jp(K["fac-N#1"], "/diff"));
     expect(res.status).toBe(404);
     expect(await res.text()).toContain("No diff was recorded");
   });
   test("404 when the branch is gone, or the job unknown", async () => {
-    expect((await get(jp("fac-2#1", "/diff"))).status).toBe(404);
-    expect((await get(jp("oth-1#1", "/diff"))).status).toBe(404);
-    expect((await get(jp("zzz#1", "/diff"))).status).toBe(404);
-    expect((await get(jp("fac-9#3", "/diff?project=oth"))).status).toBe(404);
+    expect((await get(jp(K["fac-2#1"], "/diff"))).status).toBe(404);
+    expect((await get(jp(K["oth-1#1"], "/diff"))).status).toBe(404);
+    expect((await get(jp(K["zzz#1"], "/diff"))).status).toBe(404);
+    expect((await get(jp(K["fac-9#3"], "/diff?project=oth"))).status).toBe(404);
   });
 });
 
 describe("render", () => {
   const job: any = {
-    id: "fac-9#3", name: "fac-9", repo: "fac", item: { id: 9, title: "Fix <it>" }, condition: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
+    id: "fac-9#3", name: "fac-9", repo: "fac", item: { id: 9, title: "Fix <it>" }, state: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
     runs: [
-      { id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 0.5, model: "m1" },
-      { id: "2", kind: "worker", condition: "passed", started: ago(3.5), ended: ago(3), cost: 0.25 },
-      { id: "2-review", kind: "review", condition: "passed", started: ago(3) },
-      { id: "3", kind: "land", condition: "landed", started: ago(2.5), ended: ago(2) },
+      { id: "1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 0.5, model: "m1" },
+      { id: "2", kind: "worker", state: "passed", started: ago(3.5), ended: ago(3), cost: 0.25 },
+      { id: "2-review", kind: "review", state: "passed", started: ago(3) },
+      { id: "3", kind: "land", state: "landed", started: ago(2.5), ended: ago(2) },
     ],
     result: "fixed it", review: "Looks right.", stat: " a.txt | 1 +", trace: "http://lf/sessions/s",
   };
@@ -397,14 +409,14 @@ describe("render", () => {
   });
   test("a failed count is badCount's cell, and no cell of the checks table holds a button", () => {
     const tests = { ran: 5, passed: 3, failed: 2, skipped: 0, failures: [] };
-    const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), logs: [{ name: "checks.log", size: 9 }] }], checks: [{ name: "tests", ok: false, seconds: 3, tests }] });
+    const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), logs: [{ name: "checks.log", size: 9 }] }], checks: [{ name: "tests", ok: false, seconds: 3, tests }] });
     expect(h).toContain('<td class="num bad">2</td>');
     expect(h).toContain('data-file="checks.log">checks.log</button>');
     const table = h.slice(h.indexOf('<table class="tbl">'), h.indexOf("</table>"));
     expect(table).not.toContain("<button");
   });
   test("the KPI strip shows its values through dur(), count() and miss(), with no hand-written look text", () => {
-    const h = v.renderJob({ name: "fac-9", repo: "fac", condition: "passed", runs: [], checkedBy: ["opus"], look: 5 });
+    const h = v.renderJob({ name: "fac-9", repo: "fac", state: "passed", runs: [], checkedBy: ["opus"], look: 5 });
     expect(h).toContain('<span class="dp-v">0</span>');
     expect(h).toContain('<span class="dp-v">–</span>');
     expect(h).toContain("look: 5m 00s");
@@ -428,7 +440,7 @@ describe("render", () => {
   });
   test("the Job page of a sub-issue says sub-issue, and its work lane counts jobs", () => {
     const parent = { id: "fac-9", href: "#/issues/fac/9", n: 1, of: 2, next: { id: "fac-10", href: "#/jobs/fac-10" } };
-    const h = v.renderJob({ ...job, parent, runs: [{ id: "1", kind: "intake", condition: "done", started: ago(3), ended: ago(2) }] });
+    const h = v.renderJob({ ...job, parent, runs: [{ id: "1", kind: "intake", state: "done", started: ago(3), ended: ago(2) }] });
     expect(h).toContain("sub-issue 1 of 2 of");
     expect(h).toContain("Next sub-issue: fac-10");
     expect(h).toContain(">1 job<");
@@ -448,7 +460,7 @@ describe("render", () => {
     expect(h).toContain('href="#/factory/jobs"');
   });
   test("a failed run's event names it, gives its reason as the note with code set as code, and offers its logs", () => {
-    const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });
+    const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });
     const ev = h.match(/<div class="dp-ev">.*?<\/div><\/div><\/div>/)?.[0] ?? "";
     expect(ev).toContain('<span class="badge stuck">failed</span>');
     expect(ev).toContain("implement · opus · checks failed in <code>a.ts</code>");
@@ -470,7 +482,7 @@ test("the job check-log table is empty() with no checks and pages at 50", () => 
 test("the Job page's id pill shows the short id", () => {
   setCodes({ fac: "f" });
   try {
-    expect(v.renderJob({ name: "fac-1", repo: "fac", condition: "passed", runs: [] })).toContain('<span class="idp">f1</span></div>');
+    expect(v.renderJob({ name: "fac-1", repo: "fac", state: "passed", runs: [] })).toContain('<span class="idp">f1</span></div>');
   } finally {
     setCodes({});
   }

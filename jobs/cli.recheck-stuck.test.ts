@@ -22,25 +22,25 @@ describe("a factory run", () => {
       sh(other, "git", "commit", "-qm", "fix main"); sh(other, "git", "push", "-q", "origin", "main");
     };
     const agentRuns = (name: string) => jobRuns(name, "build");
-    const kinds = (name: string) => jobRuns(name).map((d) => state(d).kind);
+    const kinds = (name: string) => jobRuns(name).map((d) => state(d).role).filter((k: string) => k !== "review");
     const NOFIX = { ALEPH_FIX_ROUNDS: "0" };
 
     test("a job stuck on a failed check passes once main is fixed, keeps the worker's commit and starts no worker", async () => {
       red();
       const r = await fjob("rc1", "commit rc1.txt", NOFIX);
-      expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "tests failed: FAIL is present 1" });
+      expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "tests failed: FAIL is present 1" });
       const worker = sh(repo, "git", "rev-parse", "factory/rc1");
       mend();
       const c = await aleph(["recheck", "rc1"], NOFIX);
       expect(c.code).toBe(0);
-      expect(state(c.json.run)).toMatchObject({ kind: "recheck", condition: "passed", job: r.json.job });
+      expect(state(c.json.run)).toMatchObject({ role: "recheck", state: "passed", job: r.json.job });
       expect(kinds("rc1")).toEqual(["build", "recheck"]);
       expect(agentRuns("rc1")).toHaveLength(1);
       expect(sh(repo, "git", "merge-base", "--is-ancestor", worker, "factory/rc1")).toBe("");
       expect(sh(repo, "git", "log", "--format=%s", "factory/rc1")).toContain("add rc1.txt");
       expect(sh(repo, "git", "ls-tree", "--name-only", "factory/rc1")).not.toContain("FAIL");
       const l = await land("rc1");
-      expect(state(l.json.run).condition).toBe("landed");
+      expect(state(l.json.run).state).toBe("landed");
     }, 60_000);
 
   });

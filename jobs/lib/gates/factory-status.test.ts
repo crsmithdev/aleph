@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readList } from "../../../issues/lib/store.ts";
 import { setup, teardown, mk, newIssue } from "../transitions/factory.helpers.ts";
+import { logTo } from "../records/run-files.ts";
 import { firefighterLines, issueFacts, nextRun, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
 import { issueDecision } from "./issue-decision.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
@@ -57,9 +58,9 @@ test("first runs that ended with the API credit error set no run-cap Ask: past t
   expect(issueDecision({ ...f, done: () => false }).kind).toBe("ready");
 });
 
-test("a run whose stderr.log holds the credit error but that states no credit cause is a start and sets no credit wait", () => {
+test("a run whose stderr holds the credit error but that states no credit cause is a start and sets no credit wait", () => {
   const id = newIssue();
-  mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN) }, { "stderr.log": "API Error: 402 This request would exceed your available credits\n" });
+  logTo(mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN) }).folder, "stderr", "API Error: 402 This request would exceed your available credits\n");
   const f = allFacts(id);
   expect(f.startsInHour).toBe(1);
   expect(f.creditWait).toBeNull();
@@ -79,7 +80,7 @@ test("the hold lifts when the probe answers, and stays when the probe fails", as
   expect(await probeHold(async () => false)).toBeNull();
   expect(backendHold()?.via).toBe("openrouter");
   expect(await probeHold(async () => true)).toBe("OpenRouter answers again: the hold is off");
-  expect(readEvents().filter((e) => e.subject === "openrouter").map((e) => [e.action, e.note])).toEqual([
+  expect(readEvents().filter((e) => e.object === "openrouter").map((e) => [e.action, e.detail])).toEqual([
     ["paused", "held OpenRouter: API Error: 402 This request would exceed your available credits"],
     ["reran", "OpenRouter answers again: the hold is off"],
   ]);
@@ -100,11 +101,11 @@ test("recordHold logs its hold event once, and not again for the same kind and t
   const ev = { action: "paused" };
   recordHold("fac-3", "live-cap", "3 agent runs are live", ev);
   recordHold("fac-3", "live-cap", "3 agent runs are live", ev);
-  expect(readEvents().filter((e) => e.subject === "fac-3").map((e) => e.action)).toEqual(["paused"]);
+  expect(readEvents().filter((e) => e.object === "fac-3").map((e) => e.action)).toEqual(["paused"]);
 });
 
 test("firefighterLines returns the line of a firefighter event", () => {
-  logEvent({ by: "firefighter", subject: "fac", action: "filed", note: "from the event log" });
+  logEvent({ subject: "firefighter", action: "filed", object: "fac", detail: "from the event log" });
   expect(firefighterLines().map((l) => l.line)).toEqual(["firefighter: from the event log"]);
 });
 
@@ -112,8 +113,8 @@ test("after a clock step back, nextRun returns the build run with the higher ID 
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN) });
   mk(`fac-${id}`, "build", "passed", { started: ago(50 * MIN) });
-  const run = nextRun("fac", `fac-${id}`, allJobs());
-  expect(run?.condition).toBe("passed");
+  const run = nextRun("fac", `issue.${id}`, allJobs());
+  expect(run?.state).toBe("passed");
   expect(run?.started).toBe(ago(50 * MIN));
 });
 
@@ -123,7 +124,7 @@ test("a land that failed on a lock does not hide the job's passed build", () => 
   mk(`fac-${id}`, "land", "failed", { job, started: ago(10 * MIN), ended: ago(5 * MIN), cause: "locked", reason: "busy lock" });
   const f = allFacts(id);
   expect(f.open).toBe("passed");
-  expect(f.job).toBe(`fac-${id}#1`);
+  expect(f.job).toBe(job);
 });
 
 test("an open job whose last run ended with the API credit error holds the issue for the credit wait, then the issue is ready", () => {

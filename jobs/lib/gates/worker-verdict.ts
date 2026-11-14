@@ -11,7 +11,7 @@ import { stopFields, type ChecksStop } from "./checks.ts";
 import type { Run } from "../records/ledger.ts";
 
 /** The fields of the run that a verdict sets. */
-export type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "review" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
+export type Outcome = Pick<Run, "state" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "review" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
 export interface Verdict { outcome: Outcome; code: number }
 
 /** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict, `credit` its API credit error line when the API refused it, `model` the reviewer model, `session` the session of this call. */
@@ -55,13 +55,13 @@ export interface Branch {
   checked: Pick<Outcome, "checkedBase" | "checkedTip">;
 }
 
-/** A verdict that waits for Chris: the condition `waiting` and the Ask. */
-export const waiting = (reason: AskReason, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
-  ({ condition: "waiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
+/** A verdict that waits for Chris: the state `waiting` and the Ask. */
+export const waiting = (reason: AskReason, question: string, why: string[] = []): Pick<Outcome, "state" | "ask"> =>
+  ({ state: "waiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
 
 /** A stop: `returned` when it goes back to the worker (`failed` is set), else `failed`. */
 const stopped = (why: ChecksStop, extra: Partial<Outcome> = {}): Verdict =>
-  ({ outcome: { condition: extra.failed ? "returned" : "failed", ...stopFields(why), ...extra }, code: 1 });
+  ({ outcome: { state: extra.failed ? "returned" : "failed", ...stopFields(why), ...extra }, code: 1 });
 
 /**
  * The check that the checks' stop sends back to the worker, or null. `check` is the last check of the run that failed.
@@ -129,25 +129,26 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
     const rv = await p.review();
     ms += Date.now() - t;
     if (rv.session) sessions.push(rv.session);
-    if (rv.cost !== undefined) { facts.cost = (facts.cost ?? 0) + rv.cost; spent = (spent ?? 0) + rv.cost; }
+    // The reviewer is a job of its own: its cost is its job's, not the build's.
+    if (rv.cost !== undefined) spent = (spent ?? 0) + rv.cost;
     return rv;
   };
   let rv = await call();
   // A second miss is the reviewer's, not the worker's: it goes to Chris whatever fix rounds are left, since a fix round cannot cure it.
   if (rv.none && !rv.credit) rv = await call();
   // A call the API refused for credit did no work: the run stops as failed with the credit cause, as a worker's does, so it waits for credit and counts no run cap.
-  if (rv.credit) return { outcome: { condition: "failed", cause: "credit", reason: rv.credit, ...facts }, code: 1 };
+  if (rv.credit) return { outcome: { state: "failed", cause: "credit", reason: rv.credit, ...facts }, code: 1 };
   const review = (call: "passed" | "returned" | "waiting" | "failed") => ({ call, ...(rv.reason && { reason: rv.reason }), ...(rv.model && { model: rv.model }), ...(spent !== undefined && { cost: spent }), ...(sessions.length && { sessions }), seconds: Math.round(ms / 1000) });
   if (!rv.reason) {
     // A reviewed diff that changes a security path or a held path waits for Chris.
     const security = p.security();
     const rule = security ? `held path ${security}` : p.heldRule();
     if (rule) return { outcome: { ...waiting("held-path", rule, [stat]), reason: rule, stat, review: review("passed"), ...facts }, code: 0 };
-    return { outcome: { condition: "passed", review: review("passed"), ...facts }, code: 0 };
+    return { outcome: { state: "passed", review: review("passed"), ...facts }, code: 0 };
   }
   if (rv.none) return { outcome: { ...waiting("review", rv.reason, [stat]), cause: "review", reason: rv.reason, stat, review: review("failed"), ...facts }, code: 0 };
   const hold = reviewHold(done, earlier, rv.reason, rounds);
-  if ("round" in hold) return { outcome: { condition: "returned", cause: "review", reason: rv.reason, stat, review: review("returned"), ...facts, failed: "review", round: hold.round }, code: 1 };
+  if ("round" in hold) return { outcome: { state: "returned", cause: "review", reason: rv.reason, stat, review: review("returned"), ...facts, failed: "review", round: hold.round }, code: 1 };
   return { outcome: { ...waiting("review", hold.reason, [stat]), cause: "review", reason: hold.reason, stat, review: review("waiting"), ...facts }, code: 0 };
 }
 

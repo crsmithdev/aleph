@@ -1,35 +1,46 @@
-/** `GET /api/jobs`, `/api/jobs/:id`, its diff and logs, and `/api/issues/:id/jobs`: the Jobs and Job views' data. `:id` is a job ID, `a1430#2`. */
-import { counting, jobIdOf, keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/records/record.ts";
-import { existsSync, readFileSync, statSync } from "node:fs";
+/** `GET /api/jobs`, `/api/jobs/:id`, its diff and logs, and `/api/issues/:id/jobs`: the Jobs and Job views' data. `:id` is a job key, `job.6802`. */
+import { roundsOf, stepOf, type Step as NextStep } from "../../jobs/lib/records/record.ts";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
-import { OPUS_MODEL, readModels } from "../../jobs/lib/routing/models.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { allRuns, isAgentRun, isBuild, issueKeyOf, loadRegistry, onOf, runOfJob, runsByIssue, type Entry } from "../../jobs/lib/records/ledger.ts";
-import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
+import { allRuns, isBuild, issueKeyOf, loadRegistry, onOf, runOfJob, runsByIssue, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { allJobs, checkedBy, lookMinutes, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { currentFit, runShare, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
 import { resultContent } from "../../lib/toolresult.ts";
-import { contentText, issueHref, parseId, subjectOf, tail } from "../../lib/naming.ts";
+import { issueHref, parseId, shownId } from "../../lib/naming.ts";
+import { isSection, readSection } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
-/** `id` is the run folder's name, the key of its logs; `job` is the job ID that the page shows, `a1375#6`. */
-interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "chat" | "lens" | "housekeeper" | "maintainer"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+/** `id` is the job key, the key of its logs; `job` is the key the page shows. */
+interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "lens" | "housekeeper" | "maintainer"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
 export interface LogFile { name: string; size: number }
-/** The log files the Job page serves, and no others. */
-export const LOGS = ["output.log", "review.log", "checks.log", "stderr.log", "land.log", "setup.log"] as const;
-/** The known log files a run folder has. */
+/**
+ * The log files the Job page serves, and no others: the names the page asks for, each a file of the job folder or a section of its `log.txt`.
+ * A reviewer's transcript is the `output.log` of its own job.
+ */
+const LOG_SOURCE = { "output.log": { file: "transcript.jsonl" }, "stderr.log": { section: "stderr" }, "setup.log": { section: "setup" }, "checks.log": { section: "checks" }, "land.log": { section: "land" } } as const;
+export const LOGS = Object.keys(LOG_SOURCE) as (keyof typeof LOG_SOURCE)[];
+/** The text of the log `name` of the job folder `folder`, or undefined when it has none. */
+function logText(folder: string, name: keyof typeof LOG_SOURCE): string | undefined {
+  const src: { file: string } | { section: string } = LOG_SOURCE[name];
+  if ("section" in src) return isSection(src.section) ? readSection(folder, src.section) : undefined;
+  try { return readFileSync(join(folder, src.file), "utf8"); } catch { return undefined; }
+}
+/** The known logs a job folder has. */
 function logsOf(folder: string): LogFile[] {
   const out: LogFile[] = [];
   for (const name of LOGS) {
-    try { const st = statSync(join(folder, name)); if (st.isFile()) out.push({ name, size: st.size }); } catch {}
+    const text = logText(folder, name);
+    if (text !== undefined) out.push({ name, size: Buffer.byteLength(text) });
   }
   return out;
 }
@@ -63,7 +74,7 @@ export function transcript(stream: string): Step[] {
 interface JobDetail extends Job {
   blockers?: Wait[];
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
-  /** The reviewer's verdict, from the review.json beside review.md. */
+  /** The reviewer's verdict, from the review.json beside its result.md. */
   verdict?: "pass" | "hold";
   trace?: string;
   /** What checked the job; a delivery's minutes to spot-check it, an estimate. */
@@ -72,8 +83,8 @@ interface JobDetail extends Job {
   spec?: string;
   /** Why the job waited: its hold records, oldest first. */
   holds: HoldRecord[];
-  /** From its job record: the next step, its line of event words, the fix rounds, and what happened to it, oldest first. */
-  next?: NextStep & { text: string }; rounds?: number; events?: JobEvent[];
+  /** The next step of the work and its fix rounds. */
+  next?: NextStep & { text: string }; rounds?: number;
   /** For a part: its issue, its place among the issue's parts, and the part after it. */
   parent?: { id: string; href: string; n: number; of: number; next?: { id: string; href: string } };
 }
@@ -95,7 +106,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   return out;
 }
 
-const KIND = { build: "worker", recheck: "worker", land: "land", plain: "plain", intake: "intake", director: "director", monitor: "monitor", chat: "chat", lens: "lens", housekeeper: "housekeeper", maintainer: "maintainer" } as const;
+const KIND = { build: "worker", recheck: "worker", land: "land", review: "review", plain: "plain", intake: "intake", director: "director", monitor: "monitor", lens: "lens", housekeeper: "housekeeper", maintainer: "maintainer" } as const;
 /** The actor a run belongs to, by its kind. */
 const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
   worker: "worker", review: "reviewer", intake: "intake", director: "director", monitor: "monitor",
@@ -105,8 +116,8 @@ function runInfos(runs: Entry[], fit: Fit | null): RunInfo[] {
   const out: RunInfo[] = [];
   runs.forEach((e) => {
     const r = e.run;
-    const condition = r.condition;
-    const info: RunInfo = { id: e.id, job: jobIdOf(e), kind: KIND[r.kind] ?? "worker", condition, started: r.started };
+    const state = r.state;
+    const info: RunInfo = { id: e.id, job: e.id, kind: KIND[r.role] ?? "worker", state, started: r.started };
     if (r.ended) info.ended = r.ended;
     if (r.cost !== undefined) info.cost = r.cost;
     if (r.model) info.model = r.model;
@@ -116,10 +127,6 @@ function runInfos(runs: Entry[], fit: Fit | null): RunInfo[] {
     const logs = logsOf(e.folder);
     if (logs.length) info.logs = logs;
     out.push(info);
-    // The reviewer runs inside the worker's run folder and leaves review.md there.
-    if (isAgentRun(r.kind) && hasFile(e, "review.md")) {
-      out.push({ id: `${e.id}-review`, kind: "review", condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: r.review?.model ?? readModels().reviewer?.model ?? OPUS_MODEL });
-    }
   });
   return out;
 }
@@ -146,9 +153,9 @@ function rowsOf(runs: Entry[]): Row[] {
   const lists = jobProjector().lists;
   return runs.map((e) => {
     const r = e.run, issue = issueKeyOf(r) ?? null;
-    const ended = r.ended ?? null, kind = KIND[r.kind as keyof typeof KIND] ?? "worker";
+    const ended = r.ended ?? null, kind = KIND[r.role] ?? "worker";
     return {
-      id: jobIdOf(e), subject: subjectOf(r), name: r.name, repo: r.repo ?? "", kind: r.kind, actor: RUN_ACTOR[kind] ?? null, state: r.condition,
+      id: e.id, subject: r.name, name: r.name, repo: r.repo ?? "", kind: r.role, actor: RUN_ACTOR[kind] ?? null, state: r.state,
       title: (issue && lists.item(r.repo!, onOf(r)!)?.title) || r.name, issue, started: r.started, ended,
       seconds: ended ? Math.round((Date.parse(ended) - Date.parse(r.started)) / 1000) : null, cost: r.cost ?? null, model: r.model ?? null,
     };
@@ -172,23 +179,20 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
   const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit), holds: readHolds([job.name]) };
   const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
   if (blockers.length) detail.blockers = blockers;
-  const rec = readRecord(keyOf(counting(runs).run));
-  if (rec) {
-    const step = nextStep(rec);
-    Object.assign(detail, { next: { ...step, text: [step.action, step.sub, contentText(step)].filter(Boolean).join(" ") }, rounds: rec.rounds, events: rec.events });
-  }
+  const step = stepOf(runs);
+  Object.assign(detail, { next: { ...step, text: [step.action, step.sub, step.on?.map((x) => shownId(x)).join(" "), step.count, step.to && `→ ${step.to}`].filter(Boolean).join(" ") }, rounds: roundsOf(runs[0].run.target ?? runs[0].id) });
   // The job's share is its runs' shares: a run's reviewer is on another model than the job's.
   const wks = detail.runs.flatMap((r) => (r.wk ? [r.wk] : []));
   if (wks.length) detail.wk = { pct: wks.reduce((a, w) => a + w.pct, 0), pooled: wks[0].pooled };
-  const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
-  const review = latestFile(runs, "review.md");
+  const result = latestFile(runs, "result.md", (e) => isBuild(e.run.role))?.text;
+  const review = latestFile(runs, "result.md", (e) => e.run.role === "review");
   if (result !== undefined) detail.result = result;
   if (review) detail.review = review.text;
   const rv = review && readFile(review.entry, "review.json");
   if (rv) detail.verdict = JSON.parse(rv).verdict;
   const by = checkedBy(runs);
   if (by.length) detail.checkedBy = by;
-  const landedIn = v.condition === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;
+  const landedIn = v.state === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;
   const shortstat = landedIn ? git(landedIn.path, "show", "--shortstat", "--format=", v.commit!).out : "";
   if (shortstat) detail.look = lookMinutes(changedLinesOf(shortstat));
   // The job's diff stat (branch, landed commit, or the kept file), else the stat the run kept.
@@ -214,7 +218,7 @@ export const routes: Routes = {
     if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
     loadRegistry();
     const since = Date.now() - sc.ms, all = allRuns();
-    const hit = all.filter((e) => { const r = e.run; return repoIn(r.repo, sc.project) && (!state || r.condition === state) && (q.get("unusable") !== "1" || unusable(e)) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)); })
+    const hit = all.filter((e) => { const r = e.run; return repoIn(r.repo, sc.project) && (!state || r.state === state) && (q.get("unusable") !== "1" || unusable(e)) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)); })
       .sort((a, b) => Date.parse(b.run.started) - Date.parse(a.run.started));
     const page = hit.slice(0, limit);
     return Response.json({ jobs: rowsOf(page), next: hit.length > limit ? page.at(-1)!.run.started : null });
@@ -226,7 +230,7 @@ export const routes: Routes = {
     const p = parseId(params.id);
     if (!p || !repoIn(p.repo, projectOf(url))) return Response.json({ error: "no such issue" }, { status: 404 });
     const all = allRuns();
-    const mine = [...(runsByIssue(all, { rollUp: true }).get(`${p.repo}-${tail(p)}`) ?? [])].reverse();
+    const mine = [...(runsByIssue(all.filter((e) => e.run.repo === p.repo)).get(`issue.${p.n}`) ?? [])].reverse();
     return Response.json({ jobs: rowsOf(mine) });
   },
 
@@ -247,12 +251,12 @@ export const routes: Routes = {
   "GET /api/jobs/:id/logs/:file": (_req, params, url) => {
     const at = located(params.id, projectOf(url));
     if (!at || !(LOGS as readonly string[]).includes(params.file)) return Response.json({ error: "no such log" }, { status: 404 });
-    const path = join(at.e.folder, params.file);
-    if (!existsSync(path)) return Response.json({ error: "no such log" }, { status: 404 });
+    const text = logText(at.e.folder, params.file as keyof typeof LOG_SOURCE);
+    if (text === undefined) return Response.json({ error: "no such log" }, { status: 404 });
     if (url.searchParams.get("as") === "transcript") {
-      if (params.file !== "output.log" && params.file !== "review.log") return Response.json({ error: "not a transcript" }, { status: 404 });
-      return Response.json(transcript(readFileSync(path, "utf8")));
+      if (params.file !== "output.log") return Response.json({ error: "not a transcript" }, { status: 404 });
+      return Response.json(transcript(text));
     }
-    return new Response(Bun.file(path), { headers: { "content-type": "text/plain; charset=utf-8" } });
+    return new Response(text, { headers: { "content-type": "text/plain; charset=utf-8" } });
   },
 };

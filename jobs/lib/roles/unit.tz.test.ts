@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Repo } from "../records/ledger.ts";
 import { checkEnv, checksAt, runOnCommit } from "../gates/checks.ts";
 import { fixture } from "../../../tests/git-fixture.ts";
+import { readSection } from "../records/run-files.ts";
 
 // The check path through checksAt: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -79,7 +80,7 @@ test("checksAt runs the checks in a detached worktree at the commit, and checkEn
   const { repo, sha } = committed([], [{ name: "a", run: "cat f.txt; echo tz=[$TZ]; git status --porcelain --branch | head -1; exit 3" }]);
   const why = await checksAt({ folder: base, repo, changed: [], phase: () => {} }, sha, checkEnv());
   expect(why).toEqual({ cause: "check", checkName: "a", reason: "a failed: ## HEAD (no branch)" });
-  const log = await Bun.file(join(base, "checks.log")).text();
+  const log = readSection(base, "checks") ?? "";
   expect(log).toContain("x\ntz=[UTC]\n## HEAD (no branch)");
   expect(extraTrees(repo.path)).toBe(0);
 });

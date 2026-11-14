@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { countsInFactory, countsInRecords, countsInSkills } from "./updater.ts";
-import { putRun } from "../jobs/lib/records/record.ts";
-import type { Run } from "../jobs/lib/records/ledger.ts";
+import { countsInFactory, countsInSkills } from "./updater.ts";
+import { seed, reseed, type Seed } from "../jobs/job.testkit.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 let base: string, runs: string, factory: string, ref: string;
 let server: TestServer, stop: () => void, restoreEnv: () => void;
@@ -16,8 +16,8 @@ beforeAll(async () => {
   ref = join(base, "issues", ".git", "refs", "remotes", "origin");
   for (const d of [join(runs, "old"), factory, ref]) mkdirSync(d, { recursive: true });
   // The project filter matches only registry keys.
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ p: { path: join(base, "p") }, q: { path: join(base, "q") }, "p-x": { path: join(base, "p-x") } }));
-  restoreEnv = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: runs, ALEPH_ISSUES: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
+  writeRepos({ p: { path: join(base, "p") }, q: { path: join(base, "q") }, "p-x": { path: join(base, "p-x") } }, join(base, "issues"));
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: runs, ALEPH_ITEMS: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
   ({ server, stop } = await withServer({ warm: false }));
   // A change names only the keys a page asked for: Status's key is kept from here on.
   expect((await get("/api/factory")).headers.get("x-aleph-keys")).toBe("/api/factory");
@@ -52,18 +52,23 @@ async function changeAfter(act: () => void, query = ""): Promise<string | null> 
   finally { ctl.abort(); }
 }
 
-const run = (on: string): Run => ({ n: 1, kind: "build", job: on, name: on, on, condition: "running", told: false, started: "2026-11-04T10:00:00Z" });
+const run = (repo: string, n: number): Seed => ({ role: "build", name: `issue.${n}`, repo, target: `issue.${n}`, state: "running", told: false, started: "2026-11-04T10:00:00Z" });
+let first: string;
 
-test("a run's write to its job record sends a change naming the kept key, and the refetch has the write", async () => {
-  putRun("old", run("r-1"));
-  expect(await changeAfter(() => putRun("old", { ...run("r-1"), phase: "worker" }))).toMatch(/event: change\ndata: \{"keys":\["\/api\/factory"\]\}/);
-  expect(await changeAfter(() => putRun("new", run("r-2")))).not.toBeNull();
-  expect(JSON.stringify(await (await get("/api/factory")).json())).toContain("r-2");
+test("a run's write to its job row sends a change naming the kept key, and the refetch has the write", async () => {
+  first = seed(run("p", 1)).id;
+  expect(await changeAfter(() => reseed(first, { phase: "worker" }))).toMatch(/event: change\ndata: \{"keys":\["\/api\/factory"\]\}/);
+  let second = "";
+  expect(await changeAfter(() => { second = seed(run("p", 2)).id; })).not.toBeNull();
+  expect(JSON.stringify(await (await get("/api/factory")).json())).toContain(second);
 });
 
-// AC1: the 3 s is the test's time limit, from the stream's first ping to the change.
-test("a write to a job record sends its change within 3 s", async () => {
-  expect(await changeAfter(() => putRun("old", { ...run("r-1"), phase: "checks" }))).toMatch(/"\/api\/factory"/);
+// AC1: the 3 s is the test's time limit, from the stream's first ping to the change. A job row write that logs no event
+// sends none: it waits for the quiet refresh timer.
+test("an event written by another process sends its change within 3 s", async () => {
+  const code = `import { logEvent } from "./lib/layout.ts"; logEvent({ subject: "human", action: "changed", object: "settings", detail: "x" });`;
+  const text = await changeAfter(() => { Bun.spawn(["bun", "-e", code], { cwd: join(import.meta.dir, ".."), env: process.env }); });
+  expect(text).toMatch(/event: ev\ndata: .*"object":"settings".*\n\nevent: change\ndata: \{"keys":\["\/api\/factory"\]\}/s);
 }, 3_000);
 
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {
@@ -72,26 +77,25 @@ test("a change in the factory folder or to the store's origin/main sends a chang
 });
 
 test("a run that starts sends its event as an ev, before the change, with the event as JSON", async () => {
-  const text = (await changeAfter(() => putRun("r3", run("r-3"))))!;
+  let id = "";
+  const text = (await changeAfter(() => { id = seed(run("p", 3)).id; }))!;
   const ev = /event: ev\ndata: (.*)\n/.exec(text);
   expect(ev).not.toBeNull();
-  expect(JSON.parse(ev![1])).toMatchObject({ by: "gate", subject: "r-3", action: "running" });
+  expect(JSON.parse(ev![1])).toMatchObject({ subject: "gate", object: id, action: "running" });
   expect(text.indexOf("event: ev")).toBeLessThan(text.indexOf("event: change"));
 });
 
 test("a stream with a project sends only the ev events of that project, and a change to all", async () => {
-  const text = (await changeAfter(() => { for (const on of ["q-1", "q-1.1", "p-x-1", "p-1"]) putRun(on, run(on)); }, "?project=p"))!;
-  const subjects = [...text.matchAll(/event: ev\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]).subject);
-  expect(subjects).toContain("p-1");
-  expect(subjects).not.toContain("q-1");
-  expect(subjects).not.toContain("q-1.1");
-  expect(subjects).not.toContain("p-x-1");
+  const ids: Record<string, string> = {};
+  const text = (await changeAfter(() => { for (const repo of ["q", "p-x", "p"]) ids[repo] = seed(run(repo, 9)).id; }, "?project=p"))!;
+  const subjects = [...text.matchAll(/event: ev\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]).object);
+  expect(subjects).toContain(ids.p);
+  expect(subjects).not.toContain(ids.q);
+  expect(subjects).not.toContain(ids["p-x"]);
 }, 10_000);
 
 // The watchers pass names relative to the folder, as the tests above show; these files must not count.
-test("a temporary record or factory file and a log count as no change", () => {
-  expect(countsInRecords("r-1.json.123.tmp")).toBe(false);
-  expect(countsInRecords("r-1.json")).toBe(true);
+test("a temporary factory file and a log count as no change", () => {
   expect(countsInFactory("x.log")).toBe(false);
   expect(countsInFactory("tick.json.4242.tmp")).toBe(false);
   expect(countsInFactory("paused")).toBe(true);

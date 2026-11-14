@@ -1,24 +1,24 @@
 /**
- * The work store holds every registry repo's issues, one file each, in a
- * git repo of its own at $ALEPH_ISSUES or ~/.aleph/issues. A repo's items are
- * `<repo>/backlog/tasks/<repo>-<n>.md`, in the layout `todo.ts` reads. A read fetches and reads
- * origin/main; a write is one commit on origin/main, made without a working
- * tree, and the store's checkout follows. No product repo's main moves when
- * an item changes, and no branch of a product repo can edit its own item.
+ * The items repo holds every project's issues, one folder each, in a git repo at $ALEPH_ITEMS or ~/.aleph/items:
+ * `issues/<n>/issue.md`, in the layout `todo.ts` reads, with its media files flat beside it. The number is one
+ * counter across projects (`next("issue")`), and an issue's `project` field names its project. A read fetches and
+ * reads origin/main; a write is one commit on origin/main, made without a working tree, and the checkout follows. No
+ * product repo's main moves when an item changes, and no branch of a product repo can edit its own item.
  *
- * It is the Issues module: the predicates (`isBuildable`, `isSorted`,
- * `awaitsChris`), one read of a repo's list (`reader`), and the named writes
- * (`note`, `close`, `closeAndFile`, `file`). Every new issue but the flake
- * tracker comes from `writeFiling`. Callers do not read
- * `fm.labels` or name a task's path.
+ * It is the Issues module: the predicates (`isBuildable`, `isSorted`, `awaitsChris`), one read of a project's list
+ * (`reader`), and the named writes (`note`, `close`, `closeAndFile`, `file`). Every new issue but the flake tracker
+ * comes from `writeFiling`, and every close is logged by `logClosed`. Callers do not read `fm.labels` or name a path.
  */
 import * as record from "../../jobs/lib/records/record.ts";
 import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
 import { layout, logEvent } from "../../lib/layout.ts";
+import { next } from "../../lib/db.ts";
+import { key as keyOf } from "../../lib/naming.ts";
 import * as issues from "./todo.ts";
-import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { labels, parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
+import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 export { labels };
 
@@ -28,16 +28,9 @@ export interface Place { key: string; author?: boolean }
 const MAIN = "main";
 const ATTEMPTS = 5;
 
-export const storeDir = (): string => layout().store;
-/** Where runs read the items' media: `<store>-media`, outside the store's checkout. */
-export const mediaDir = (): string => `${storeDir()}-media`;
-const tasksDir = (key: string): string => `${key}/backlog/tasks`;
-const configPath = (key: string): string => `${key}/backlog/config.yml`;
-const floorPath = (key: string): string => `${key}/backlog/floor.json`;
-const itemPath = (key: string, item: issues.Issue | string): string => `${tasksDir(key)}/${key}-${typeof item === "string" ? item : issues.refOf(item)}.md`;
-
-/** The file that marks a repo as having a list in the store. */
-export const config = (key: string): string => `project_name: "${key}"\ntask_prefix: "${key}"\n`;
+export const itemsDir = (): string => layout().items;
+const issueDir = (id: number): string => `issues/${id}`;
+const itemPath = (item: Issue): string => `${issueDir(item.id)}/issue.md`;
 
 let fetches = true;
 
@@ -52,7 +45,7 @@ function fetch(dir: string): void {
 const REFSPEC = `refs/heads/${MAIN}:refs/remotes/origin/${MAIN}`;
 
 /** Fetch origin/main without blocking: the error text, or null. */
-export async function fetchStore(dir = storeDir()): Promise<string | null> {
+export async function fetchStore(dir = itemsDir()): Promise<string | null> {
   const r = await fetchOriginAsync(dir, REFSPEC);
   return r.ok ? null : r.out;
 }
@@ -83,142 +76,165 @@ function readFiles(dir: string, specs: string[]): string[] {
   return out;
 }
 
-/**
- * The item files of a repo's list at the commit last loaded, by store and repo key: a commit never changes, so a
- * later load of the same commit reads no blob. Only the latest commit is kept for each list.
- */
-const texts = new Map<string, { sha: string; files: string[] | null; items?: Issue[]; floor?: Floor }>();
+/** Every issue of the items repo at the commit last loaded, by directory: a commit never changes, so a later load of the same commit reads no blob. Only the latest commit is kept. */
+const texts = new Map<string, { sha: string; items: Issue[] }>();
+const ISSUE = /^issues\/(\d+)\/issue\.md$/;
 
-/** A repo's items at `rev`, in number order, or null when the store has no list for it. One ls-tree finds the config and the items. */
-function load(dir: string, rev: string, key: string): Doc | null {
-  // The commit `rev` names: the files of a commit loaded before are reused with their parsed items, which a caller gets as copies.
+/** Every issue at `rev`, in number order, parsed once for each commit. */
+function loadAll(dir: string, rev: string): Issue[] {
   const sha = /^[0-9a-f]{40}$/.test(rev) ? rev : git(dir, "rev-parse", "--verify", "-q", `${rev}^{commit}`).out;
-  const id = `${dir}\0${key}`;
   const known = /^[0-9a-f]{40}$/.test(sha), at = known ? sha : rev;
-  let hit = texts.get(id);
+  let hit = texts.get(dir);
   if (!hit || hit.sha !== sha || !known) {
-    const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", at, "--", configPath(key), floorPath(key), `${tasksDir(key)}/`);
-    const paths = ls.ok ? ls.out.split("\0") : [];
-    const names = paths.filter((p) => p.startsWith(`${tasksDir(key)}/`) && p.endsWith(".md") && !p.slice(tasksDir(key).length + 1).includes("/"));
-    const floor = paths.includes(floorPath(key)) ? JSON.parse(readFiles(dir, [`${at}:${floorPath(key)}`])[0]) as Floor : undefined;
-    hit = { sha, files: paths.includes(configPath(key)) ? readFiles(dir, names.map((p) => `${at}:${p}`)) : null, ...(floor ? { floor } : {}) };
-    if (known) texts.set(id, hit);
+    const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", at, "--", "issues/");
+    const names = (ls.ok ? ls.out.split("\0") : []).filter((p) => ISSUE.test(p));
+    const files = readFiles(dir, names.map((p) => `${at}:${p}`));
+    hit = { sha, items: names.map((p, n) => parseItem(Number(ISSUE.exec(p)![1]), files[n])).sort((a, b) => a.id - b.id) };
+    if (known) texts.set(dir, hit);
   }
-  if (!hit.files) return null;
-  const items = structuredClone(hit.items ??= hit.files.map(parseItem));
-  return { repo: key, items: items.sort((a, b) => a.id - b.id || (a.sub ?? -1) - (b.sub ?? -1)), ...(hit.floor ? { floor: hit.floor } : {}) };
+  return hit.items;
+}
+
+/** The name of the project of each issue at `rev`, by issue number, with no fetch. */
+export const projectsAt = (dir: string, rev: string): Map<number, string> => new Map(loadAll(dir, rev).flatMap((i) => { const name = projectName(String(i.fm.project)); return name ? [[i.id, name] as [number, string]] : []; }));
+
+/** Whether the items repo has issue `n` on its origin/main as last fetched. */
+export const hasIssue = (n: number): boolean => loadAll(itemsDir(), `origin/${MAIN}`).some((i) => i.id === n);
+
+/** The name of the project that holds issue `n`, or undefined when the items repo has no such issue. */
+export function projectOfIssue(n: number): string | undefined {
+  const dir = itemsDir();
+  fetch(dir);
+  const found = loadAll(dir, `origin/${MAIN}`).find((i) => i.id === n);
+  return found ? projectName(String(found.fm.project)) : undefined;
+}
+
+/** A project's issues at `rev`, in number order, or null when the items repo has no project of that name. */
+function load(dir: string, rev: string, name: string): Doc | null {
+  const project = projectKey(name);
+  if (!project) return null;
+  const all = structuredClone(loadAll(dir, rev));
+  return { repo: name, project, items: all.filter((i) => i.fm.project === project), floor: all.at(-1)?.id ?? 0 };
 }
 
 /** The repo's list on the store's origin/main, or null when the store has none. */
 export function readList(repo: Place): Doc | null {
-  const dir = storeDir();
+  const dir = itemsDir();
   fetch(dir);
   return load(dir, `origin/${MAIN}`, repo.key);
 }
 
 /** The repo's list on the store's origin/main as last fetched, with no fetch; null when the store has none. */
 export function readFetched(repo: Place, rev = `origin/${MAIN}`): Doc | null {
-  return load(storeDir(), rev, repo.key);
+  return load(itemsDir(), rev, repo.key);
 }
 
 /** Each repo's list on the store's origin/main, after one fetch; null when the store has none. */
 export function readLists(repos: Place[]): (Doc | null)[] {
-  const dir = storeDir();
+  const dir = itemsDir();
   fetch(dir);
   return repos.map((r) => load(dir, `origin/${MAIN}`, r.key));
 }
 
+const CLOSED = ["done", "dropped"];
+
+/** Log the close of `item`: `done` or `dropped` by its `closed_as`, with its `closed_why` as the detail. */
+function logClosed(item: Issue, by: string): void {
+  const why = item.fm.closed_why ? String(item.fm.closed_why) : undefined;
+  logEvent({ subject: by, action: status(item), object: keyOf("issue", item.id), ...(why ? { detail: why } : {}) });
+}
+
 /**
- * Apply `change` to the repo's list on the store's origin/main and push it as
- * one commit. When the push is refused because main moved, fetch and apply
- * `change` again. `change` returns null to write nothing. A repo the store
- * has no list for starts blank only when `create` is set.
+ * Apply `change` to the project's list on the store's origin/main and push it as one commit. When the push is refused
+ * because main moved, fetch and apply `change` again. `change` returns null to write nothing. A project the items repo
+ * has none for gets one in the same commit only when `create` is set. A new issue takes its number from the counter in
+ * `change`, before the push, so a refused push leaves a gap. Each issue the write closes logs `done` or `dropped` as `by`
+ * once the push succeeds (git first, then the event): this is the one door for a close, so no caller logs its own.
  */
-export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false, blobs: Record<string, Uint8Array> = {}): { value: T; commit: string; follow: string | null } | null {
-  const dir = storeDir();
+export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false, blobs: Record<string, Uint8Array> = {}, by = "rule"): { value: T; commit: string; follow: string | null } | null {
+  const dir = itemsDir();
   for (let attempt = 1; ; attempt++) {
     // `change` fills `blobs` again on each attempt: a retry can give the item another number.
     for (const k of Object.keys(blobs)) delete blobs[k];
     fetchNow(dir);
     const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
-    const found = load(dir, base, repo.key);
-    if (found === null && !create) throw new Error(`the work store has no list for ${repo.key}`);
-    const doc = found ?? issues.blank(repo.key);
-    const before = new Map(doc.items.map((i) => [issues.refOf(i), renderItem(repo.key, i)]));
+    const files: Record<string, string | Uint8Array> = {};
+    let doc = load(dir, base, repo.key);
+    if (doc === null) {
+      if (!create) throw new Error(`the items repo has no project ${repo.key}`);
+      const n = next("project", readProjects().reduce((m, p) => Math.max(m, p.n), 0));
+      files[`projects/${n}/project.md`] = renderProject({ name: repo.key, description: "", fields: {} });
+      doc = issues.blank(repo.key, keyOf("project", n));
+      doc.floor = loadAll(dir, base).at(-1)?.id ?? 0;
+    }
+    const before = new Map(doc.items.map((i) => [i.id, renderItem(i)]));
+    const open = new Set(doc.items.filter((i) => !CLOSED.includes(status(i))).map((i) => i.id));
     const value = change(doc);
     if (value === null) return null;
-    const files: Record<string, string | Uint8Array> = { ...(found === null ? { [configPath(repo.key)]: config(repo.key) } : {}), ...blobs };
+    Object.assign(files, blobs);
     for (const item of doc.items) {
-      const text = renderItem(repo.key, item);
-      if (before.get(issues.refOf(item)) !== text) files[itemPath(repo.key, item)] = text;
+      const text = renderItem(item);
+      if (before.get(item.id) !== text) files[itemPath(item)] = text;
     }
-    // Nothing changed: no commit, so the store's history holds only real writes.
+    // Nothing changed: no commit, so the history holds only real writes.
     if (Object.keys(files).length === 0) return { value, commit: base, follow: null };
     const tree = treeWithFiles(dir, `${base}^{tree}`, files);
     const commit = git(dir, "commit-tree", tree, "-p", base, "-m", `${repo.key}: ${message}`);
     if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
     const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
     if (push.ok) {
+      for (const item of doc.items) if (CLOSED.includes(status(item)) && (open.has(item.id) || !before.has(item.id))) logClosed(item, by);
       return { value, commit: commit.out, follow: followMain(dir, MAIN) };
     }
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
   }
 }
 
-// The media: images and PDFs attached to an item, stored beside the list and named in the item's `media` field.
+// The media: images and PDFs attached to an item, stored flat beside its file and named in the item's `media` field.
 
 export const MEDIA_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf" };
 /** The largest file an item takes. */
 export const MEDIA_BYTES = 20 * 1024 * 1024;
 
-/** The store path of an item's media file. */
-export const mediaPath = (key: string, item: Issue, name: string): string => `${key}/backlog/media/${key}-${issues.refOf(item)}/${name}`;
+/** The items-repo path of an item's media file. */
+export const mediaPath = (item: Issue, name: string): string => `${issueDir(item.id)}/${name}`;
 /** The names of an item's media files. */
 export const mediaOf = (item: Issue): string[] => list(item.fm.media);
 
-/**
- * The item's media files on disk, read from origin/main into `<store>-media`, so a run reads them whatever state
- * the store's checkout is in. A file already there with the same size is not read again.
- */
-export function mediaFiles(key: string, item: Issue): string[] {
-  const dir = storeDir();
+/** The item's media files in the items checkout, which follows origin/main after each write. A write by another process leaves the checkout behind, so a missing file brings it up to date once. Throws when one is not there. */
+export function mediaFiles(item: Issue): string[] {
   return mediaOf(item).map((name) => {
-    const out = join(mediaDir(), `${key}-${issues.refOf(item)}`, name);
-    const spec = `origin/${MAIN}:${mediaPath(key, item, name)}`;
-    const size = Number(git(dir, "cat-file", "-s", spec).out);
-    if (existsSync(out) && statSync(out).size === size) return out;
-    const blob = spawnGit(["git", "cat-file", "blob", spec], { cwd: dir, stdout: "pipe", stderr: "pipe" });
-    if (blob.exitCode !== 0) throw new Error(`no media ${name} on the store's main: ${blob.stderr.toString().trim()}`);
-    mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, blob.stdout);
+    const out = join(itemsDir(), mediaPath(item, name));
+    if (!existsSync(out)) { fetchNow(itemsDir()); followMain(itemsDir(), MAIN); }
+    if (!existsSync(out)) throw new Error(`no media ${name} in the items checkout: ${out}`);
     return out;
   });
 }
 
-/** The media files a run on item `id` reads: its own, and for a part its issue's too. */
+/** The media files a run on item `id` reads: its own, and for a child its parent's too. */
 export function runMedia(key: string, id: number | string, lists: Reader = reader()): string[] {
   const item = lists.item(key, id);
   if (!item) return [];
-  const parent = item.sub === undefined ? undefined : lists.item(key, item.id);
-  return [...(parent ? mediaFiles(key, parent) : []), ...mediaFiles(key, item)];
+  const parent = parentIn(key, item, lists);
+  return [...(parent ? mediaFiles(parent) : []), ...mediaFiles(item)];
 }
 
-/** An item with an Ask in its job record: it waits for Chris, so it is never dispatched and never triaged. */
-const asks = (doc: Doc, item: Issue, repo: Place): boolean => record.issueAsk(record.read(`${doc.repo ?? repo.key}-${issues.refOf(item)}`)) !== null;
+/** An item with an Ask in its issue state: it waits for Chris, so it is never dispatched and never triaged. */
+const asks = (_doc: Doc, item: Issue, _repo: Place): boolean => record.issueAsk(record.read(`issue.${issues.refOf(item)}`)) !== null;
 
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
-/** Who raised the item: its `source`, else agent for a part (a part is made by the planner, never by chris) and chris for an issue. */
+/** Who raised the item: its `source`, else agent for a child (a child is made by the planner, never by chris) and chris for an issue. */
 export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" | "agent" {
   const s = text(item.fm.source);
-  return s === "worker" || s === "deps" || s === "memory" || s === "agent" ? s : item.sub === undefined ? "chris" : "agent";
+  return s === "worker" || s === "deps" || s === "memory" || s === "agent" ? s : issues.parentRef(item) === undefined ? "chris" : "agent";
 }
-/** The children of an issue, in number order: the issues with a `from` that names it, and its old parts `<n>.<k>`. */
+/** The children of an issue, in number order: the issues with a `from` that names it. */
 export const partsOf = (doc: Doc, item: Issue): Issue[] => doc.items.filter((i) => issues.parentRef(i) === issues.refOf(item));
-/** The parent of a child or an old part; undefined for a top-level issue. */
+/** The parent of a child; undefined for an issue with none. */
 export const parentOf = (doc: Doc, item: Issue): Issue | undefined => { const up = issues.parentRef(item); return up === undefined ? undefined : issues.find(doc, up); };
-/** The parent of a child or an old part, read from `lists`; undefined for a top-level issue. */
+/** The parent of a child, read from `lists`; undefined for an issue with none. */
 export const parentIn = (key: string, item: Issue, lists: Reader = reader()): Issue | undefined => { const up = issues.parentRef(item); return up === undefined ? undefined : lists.item(key, up); };
 /** Whether the issue needs a plan run, or "plan the rest" on a parent. */
 export const planSet = (item: Issue): boolean => item.fm.plan === "true";
@@ -305,28 +321,35 @@ export function buildableIssue(repo: Place, id: number | string): Issue | null {
 }
 
 /** Why a write did not happen, from what it threw. */
-const why = (e: any): string => e?.message ?? String(e);
+const reason = (e: any): string => e?.message ?? String(e);
 
-/**
- * A note on item `id`, as one commit; with `done` the item is done too.
- * Returns why it could not, or null.
- */
-export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean } = {}): string | null {
+/** A note on item `id`, as one commit: what a person or an agent said. Returns why it could not, or null. */
+export function note(repo: Place, id: number | string, text: string): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = issues.find(doc, id);
-      if (!item) return null;
-      if (opts.done) issues.setStatus(item, "done");
-      return issues.note(item, text);
+      return item ? issues.note(item, text) : null;
     });
     return w ? null : `no issue ${id}`;
   } catch (e) {
-    return why(e);
+    return reason(e);
   }
 }
 
-/** Item `id` done, with the note `text`. Returns why it could not, or null. */
-export const close = (repo: Place, id: number | string, text: string): string | null => note(repo, id, text, { done: true });
+/** Item `id` closed as `how`, with `text` as `closed_why`, as one commit; the close is logged as by `by` (a rule unless the caller says). Returns why it could not, or null. */
+export function close(repo: Place, id: number | string, text: string, how: "done" | "dropped" = "done", by = "rule"): string | null {
+  try {
+    const w = writeList(repo, `todo: item ${id} ${how}: ${text}`, (doc) => {
+      const item = issues.find(doc, id);
+      if (!item) return null;
+      issues.setStatus(item, how, undefined, text);
+      return item;
+    }, false, {}, by);
+    return w ? null : `no issue ${id}`;
+  } catch (e) {
+    return reason(e);
+  }
+}
 
 /**
  * Change item `id` with `change` as one commit, while it is still open and not
@@ -357,7 +380,7 @@ export function reopen(doc: Doc, item: Issue, since: string | null): void {
   if (since) item.fm.since = since;
 }
 
-/** A new issue; `spec` makes it buildable, `from` (the full id it was split from) makes it a part, and `after` is what it waits for. */
+/** A new issue; `spec` makes it buildable, `from` (the key of the issue it was split from, `issue.5`) makes it a child, and `after` is what it waits for. */
 export interface Filing { title: string; kind?: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: issues.Source; parked?: boolean; from?: string; after?: string[] }
 
 /** What a new issue starts once its commit is on main. Production passes `filing` (factory.ts): intake or a dispatch. A test passes a recorder. */
@@ -383,9 +406,9 @@ export function writeFiling<T>(repo: Place, message: string, by: string, effects
       made.push(item);
       return item;
     });
-  }, create, blobs);
+  }, create, blobs, by);
   for (const item of w ? made : []) {
-    logEvent({ by, subject: `${repo.key}-${issues.refOf(item)}`, action: "filed" });
+    logEvent({ subject: by, action: "filed", object: keyOf("issue", item.id) });
     effects.after(repo, item);
   }
   return w;
@@ -396,12 +419,11 @@ export const fileIssue = (repo: Place, f: Filing, by: string, effects: Effects):
   writeFiling(repo, `todo: file ${f.title}`, by, effects, (_, file) => file(f))!.value;
 
 /**
- * Item `id` done with the note `text` (when `id` is given), and `filed` added,
- * as one commit; a repo the store has no list for gets one. Returns what became
- * of the item (`done`, `no issue <id>`, or the write's error) and the new numbers.
- * A filing with no `priority` takes the priority of the closed item.
+ * Item `id` done with `why` as its `closed_why` (when `id` is given), and `filed` added, as one commit; a project the
+ * items repo has none for gets one. The close is logged. Returns what became of the item (`done`, `no issue <id>`, or
+ * the write's error) and the new numbers. A filing with no `priority` takes the priority of the closed item.
  */
-export function closeAndFile(repo: Place, message: string, id: number | string | undefined, text: string, filed: Filing[], by: string, effects: Effects): { todo?: string; ids: number[] } {
+export function closeAndFile(repo: Place, message: string, id: number | string | undefined, why: string, filed: Filing[], by: string, effects: Effects): { todo?: string; ids: number[] } {
   let todo: string | undefined;
   let ids: number[] = [];
   try {
@@ -411,8 +433,7 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
         const item = issues.find(doc, id);
         if (item) {
           inherited = item.fm.priority as string | undefined;
-          issues.setStatus(item, "done");
-          issues.note(item, text);
+          issues.setStatus(item, "done", undefined, why || undefined);
         }
         todo = item ? "done" : `no issue ${id}`;
       }
@@ -420,7 +441,7 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
       return true;
     });
   } catch (e) {
-    todo = why(e);
+    todo = reason(e);
     ids = [];
   }
   return { todo, ids };
@@ -433,7 +454,7 @@ export const file = (repo: Place, message: string, filed: Filing[], by: string, 
 /** The open flake tracker (`tracker: true`), the lowest id when there are several; undefined when there is none. */
 export function flakeTracker(doc: Doc): Issue | undefined {
   return doc.items
-    .filter((i) => i.sub === undefined && status(i) === "open" && isTracker(i))
+    .filter((i) => status(i) === "open" && isTracker(i))
     .sort((a, b) => a.id - b.id)[0];
 }
 
@@ -457,6 +478,6 @@ export function noteFlake(repo: Place, text: string): { id: number } | string {
     }, true);
     return w ? w.value : "no flake tracker written";
   } catch (e) {
-    return why(e);
+    return reason(e);
   }
 }

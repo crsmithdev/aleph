@@ -16,7 +16,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
 try {
-  const { storeDir } = await import("../issues/lib/store.ts");
+  const { itemsDir } = await import("../issues/lib/store.ts");
   const { vaultDir } = await import("../vault/lib/vault.ts");
   const { probe } = await import("../lib/git.ts");
 
@@ -40,11 +40,10 @@ try {
     return r.ok ? r.out.trim() : null;
   }
 
-  // A hand edit of the store races every aleph issue commit on its origin/main.
-  const items = real(storeDir());
+  // A hand edit of the items repo races every aleph issue commit on its origin/main.
+  const items = real(itemsDir());
   if (target.startsWith(items + "/")) {
-    const repoKey = target.slice(items.length + 1).split("/")[0];
-    console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `The work store is written by aleph issue, never by hand. Use: aleph issue add ${repoKey} "<title>" --body -, aleph issue edit ${repoKey} <id> [--title ...] [--body -], aleph issue note|done|drop ${repoKey} <id> "<text>". Put measurements in a findings file and link it in a note.` } }));
+    console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `The items repo is written by aleph issue and aleph idea, never by hand. Use: aleph issue add <project> "<title>" --body -, aleph issue edit <project> <id> [--title ...] [--body -], aleph issue note|done|drop <project> <id> "<text>". Put measurements in a findings file and link it in a note.` } }));
     process.exit(0);
   }
 

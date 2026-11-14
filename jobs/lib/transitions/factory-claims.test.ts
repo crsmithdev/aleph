@@ -1,19 +1,20 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, readdirSync, watch, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { putJson } from "../../../lib/db.ts";
+import { readdirSync, watch } from "node:fs";
+import { join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
-import * as issues from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
+import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
-import { factoryDir } from "../gates/factory-status.ts";
+import { setPaused } from "../gates/factory-status.ts";
 import { allJobs, allRuns } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { ctx, newIssue, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";
-import { askOf } from "../asks/ask.ts";
 import { markRescued } from "./continuation.ts";
 import { ciStep } from "../gates/ci.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
+import { reseed } from "../../job.testkit.ts";
 import { readEvents } from "../../../lib/layout.ts";
 
 beforeEach(setup);
@@ -23,17 +24,17 @@ for (const red of [false, true]) {
   test(`a second claimed run after one rescued as claimed, main ${red ? "red: it asks Chris" : "green: the item is done"}`, async () => {
     const id = newIssue();
     const first = mk(`fac-${id}`, "build", "dropped", { cause: "no-commit", reason: "no commit", alreadyMet: "main has it" });
-    markRescued({ id: first.folder.split("/").at(-1)!, folder: first.folder, run: record.getRun(basename(first.folder))! }, "claimed");
+    markRescued({ id: first.job, folder: first.folder, run: record.getRun(first.job)! }, "claimed");
     claimed(`fac-${id}`, "main has it");
     const f = fakes();
     await withChecks(f, async () => (red ? { cause: "check" as const, checkName: "tests", reason: "tests failed" } : null));
     if (red) {
       expect(f.calls).toEqual([]);
-      expect(ask(id)).toMatchObject({ reason: "rescue", recommended: "Rerun", why: [`Run: fac-${id}, failed`, "Reason: no commit", "Claim: main has it"] });
-      expect(ask(id)!.question).toStartWith(`fac-${id} says the goal is already met again, but main is red at `);
+      expect(ask(id)).toMatchObject({ reason: "rescue", recommended: "Rerun", why: [`Run: issue.${id}, failed`, "Reason: no commit", "Claim: main has it"] });
+      expect(ask(id)!.question).toStartWith(`issue.${id} says the goal is already met again, but main is red at `);
       expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
     } else {
-      expect(f.calls).toEqual([`drop fac-${id}`]);
+      expect(f.calls).toEqual([`drop issue.${id}`]);
       expect(ask(id)).toBeNull();
       expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
     }
@@ -43,15 +44,15 @@ for (const red of [false, true]) {
 test("aleph-1206: the local checks pass but GitHub CI on main is red, so the claim on a CI issue does not close it, and the rerun quotes the CI failure", async () => {
   const id = newIssue(["red-main"]);
   const failure = "Failing tests:\n(fail) the docs on this tree match the code > every default\n\nRunner: 4 cores; this host: 24.";
-  record.update(`fac-${id}`, (r) => { r.ci = { url: "https://github.com/x/y/actions/runs/7", commit: "c1", failure }; });
+  record.editIssueState(`issue.${id}`, (r) => { r.ci = { url: "https://github.com/x/y/actions/runs/7", commit: "c1", failure }; });
   const red = [{ conclusion: "failure", status: "completed", headSha: "c1", url: "https://github.com/x/y/actions/runs/7", createdAt: "2026-11-04T20:20:05Z" }];
   ciStep([loadRegistry().fac], () => ({ ok: true, out: JSON.stringify(red) }));
   claimed(`fac-${id}`, "Goal: Already met — jobs/lib/gates/doc-claims.test.ts passes 6 of 6 on main\n");
   const f = fakes();
   await withChecks(f, async () => null);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
   expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
-  expect(allRuns().find((r) => r.run.condition === "dropped")!.run.fate).toBeUndefined();
+  expect(allRuns().find((r) => r.run.state === "dropped")!.run.fate).toBeUndefined();
   expect(f.specs[0]).toContain("GitHub CI");
   expect(f.specs[0]).toContain(failure);
 });
@@ -61,27 +62,26 @@ test("no commit, the item open, first time: dropped with no fate and the issue r
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit" }, { "result.md": lines(30) });
   const f = fakes();
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
   expect(f.specs[0]).toContain("made no commit");
   expect(f.specs[0]).toContain("line 11\n");
   expect(f.specs[0]).toContain("line 30");
   expect(f.specs[0]).not.toContain("line 10\n");
   expect(notes(id)).toContain("made no commit");
-  expect(allRuns().find((r) => r.run.condition === "dropped")!.run.fate).toBeUndefined();
+  expect(allRuns().find((r) => r.run.state === "dropped")!.run.fate).toBeUndefined();
 });
 
 const dottedPart = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => issues.refOf(addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." })), true)!.value;
-const dotted = (ref: string) => readList({ key: "fac" })!.items.find((i) => issues.refOf(i) === ref)!;
 
 test("a dotted issue's rescue note reaches the issue, and a second no-commit run asks Chris on it", async () => {
   const ref = dottedPart();
   mk(`fac-${ref}`, "build", "failed", { cause: "no-commit", reason: "no commit" });
   const f = fakes();
   await dispatch(f);
-  expect(dotted(ref).notes.join("\n")).toContain("the last run made no commit");
+  expect(notes(Number(ref))).toContain("the last run made no commit");
   mk(`fac-${ref}`, "build", "failed", { cause: "no-commit", reason: "no commit" });
   await dispatch(f);
-  expect(askOf(`fac-${ref}`)).not.toBeNull();
+  expect(ask(Number(ref))).not.toBeNull();
 });
 
 test("a pass that began before a pause starts nothing after it", async () => {
@@ -90,11 +90,10 @@ test("a pass that began before a pause starts nothing after it", async () => {
   const calls: string[] = [];
   const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);
-    mkdirSync(factoryDir(), { recursive: true });
-    writeFileSync(join(factoryDir(), "paused"), "");
+    setPaused(true);
     return null;
   }, undefined, undefined);
-  expect(calls).toEqual([`fac-${first}`]);
+  expect(calls).toEqual([`issue.${first}`]);
   expect(out.skipped.at(-1)).toEndWith(": paused");
 });
 
@@ -103,11 +102,11 @@ test("the second no-commit run with no claim asks Chris: no drop and the issue s
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit" }, { "result.md": lines(3) });
   const f = fakes();
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit" }, { "result.md": lines(30) });
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(ask(id)).toMatchObject({ reason: "rescue", question: `fac-${id} hit the same case again (no-commit): how should the factory go on?`, why: [`Run: fac-${id}, failed`, "Reason: no commit", "A rerun did not clear it"] });
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
+  expect(ask(id)).toMatchObject({ reason: "rescue", question: `issue.${id} hit the same case again (no-commit): how should the factory go on?`, why: [`Run: issue.${id}, failed`, "Reason: no commit", "A rerun did not clear it"] });
   expect(notes(id)).toContain("hit the same case again");
 });
 
@@ -117,13 +116,13 @@ test("a second infrastructure failure of one issue gets an Ask", async () => {
   mk(`fac-${id}`, "land", "failed", { cause: "infra", reason: "fetch failed", job: a.job });
   const f = fakes();
   await dispatch(f);
-  expect(f.calls).toEqual([`land fac-${id}`]);
+  expect(f.calls).toEqual([`land issue.${id}`]);
   // The land again fails the same way (the fake land started nothing, so the run still stands).
   const b = allJobs()[0];
   mk(`fac-${id}`, "land", "failed", { cause: "infra", reason: "fetch failed", job: b[0].run.job });
   await dispatch(f);
-  expect(f.calls).toEqual([`land fac-${id}`]);
-  expect(ask(id)).toMatchObject({ reason: "rescue", question: `fac-${id} hit the same case again (infra): how should the factory go on?`, why: [`Run: fac-${id}, failed`, "Reason: fetch failed", "A rerun did not clear it"] });
+  expect(f.calls).toEqual([`land issue.${id}`]);
+  expect(ask(id)).toMatchObject({ reason: "rescue", question: `issue.${id} hit the same case again (infra): how should the factory go on?`, why: [`Run: issue.${id}, failed`, "Reason: fetch failed", "A rerun did not clear it"] });
 });
 
 test("a land that failed with a merge conflict is dropped and the issue reruns; the second one gets an Ask", async () => {
@@ -132,7 +131,7 @@ test("a land that failed with a merge conflict is dropped and the issue reruns; 
   mk(`fac-${id}`, "land", "failed", { cause: "conflict", reason: "merge conflict", conflicts: ["a.ts", "b.ts"], job: a.job });
   const f = fakes();
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
   expect(f.specs[0]).toContain("merge conflict in a.ts, b.ts");
   expect(notes(id)).toContain("merge conflict in a.ts, b.ts");
   expect(ask(id)).toBeNull();
@@ -140,27 +139,26 @@ test("a land that failed with a merge conflict is dropped and the issue reruns; 
   const b = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "failed", { cause: "conflict", reason: "merge conflict", conflicts: ["a.ts"], job: b.job });
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(ask(id)).toMatchObject({ reason: "rescue", question: `fac-${id} hit the same case again (land-conflict): how should the factory go on?`, why: [`Run: fac-${id}, failed`, "Reason: merge conflict", "A rerun did not clear it"] });
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
+  expect(ask(id)).toMatchObject({ reason: "rescue", question: `issue.${id} hit the same case again (land-conflict): how should the factory go on?`, why: [`Run: issue.${id}, failed`, "Reason: merge conflict", "A rerun did not clear it"] });
 });
 
 test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an always: Rerun note", async () => {
-  mkdirSync(join(ctx.base, "factory"), { recursive: true });
-  writeFileSync(join(ctx.base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: "2026-11-04T12:00:00.000Z" } }));
+  putJson("settings", "always", { rescue: { action: "recommended", at: "2026-11-04T12:00:00.000Z" } });
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
   await dispatch(f);
-  expect(f.calls).toContain(`drop fac-${id}`);
+  expect(f.calls).toContain(`drop issue.${id}`);
   expect(ask(id)).toBeNull();
   expect(notes(id)).toContain("always: Rerun");
-  expect(readEvents()).toContainEqual(expect.objectContaining({ by: "rule", subject: `fac-${id}`, action: "reran", sub: "rescue", on: [`fac-${id}#1`], result: "dropped" }));
+  expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "rule", object: `issue.${id}`, action: "reran", detail: "dropped job.1" }));
 });
 
 test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {
   const id = newIssue();
-  const name = `fac-${id}`;
-  const { folder } = mk(name, "build", "failed", { reason: "weird" });
+  const name = `issue.${id}`;
+  const stuck = mk(`fac-${id}`, "build", "failed", { reason: "weird" });
   // Dispatch A holds the lock; the stuck state B must act on appears only after A is done.
   const release = (await lock(`rescue-fac-${name}`, 0))!;
   const f = fakes();
@@ -172,7 +170,7 @@ test("a rescue that finds the lock taken waits, then acts once on the state it f
     if (waiting()) { w.close(); r(); }
   });
   expect(f.calls).toEqual([]);
-  record.putRun(basename(folder), { ...record.getRun(basename(folder))!, condition: "failed", cause: "timeout", reason: "time box" });
+  reseed(stuck.job, { state: "failed", cause: "timeout", reason: "time box" });
   release();
   await b;
   expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);

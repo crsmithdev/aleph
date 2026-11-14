@@ -25,7 +25,7 @@ describe("a doc that does not match fails, quoting the claim", () => {
 
   test("a Word sets row with a missing or an extra value", () => {
     const naming = (...rows: string[]) => docProblems([{ file: "docs/naming.md", text: ["## Word sets", "", "| Set | Stored | Values |", "|---|---|---|", ...rows].join("\n") }], repoTruth());
-    expect(naming("| Kind | yes | build, recheck, land, intake, director, monitor, chat, lens, housekeeper, maintainer |", "| Flow class | derived | landed, returned, failed, reran, dropped |")).toEqual([]);
+    expect(naming("| Kind | yes | build, plain, recheck, land, intake, director, monitor, chat, lens, housekeeper, maintainer |", "| Flow class | derived | landed, returned, failed, reran, dropped |")).toEqual([]);
     expect(naming("| Report lane | derived | landed, waiting, other |", "| Flow class | derived | landed, returned, failed, reran, dropped, lost |")).toEqual([
       "docs/naming.md:5: the Report lane row of the Word sets table lacks failed, against lib/naming.ts",
       "docs/naming.md:6: the Flow class row of the Word sets table adds lost, against lib/naming.ts",

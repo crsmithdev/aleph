@@ -44,7 +44,7 @@ test("a ready issue starts with no route asked, so the start rates the spec itse
 test("with the live cap full of Claude runs, a tier on the local backend starts; a tier on Claude stays held", async () => {
   process.env.ALEPH_LIVE_CAP = "1";
   expect(setModel("worker-low", { model: "gpt-oss-20b" })).toBeNull();
-  mk("claude-1", "build", "running", { model: "sonnet", made: NOW });
+  mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
   const id = newIssue();
   expect(await decide(id, "worker-low")).toMatchObject({ kind: "ready", tier: "worker-low" });
   expect(await decide(id, "opus")).toMatchObject({ kind: "live-cap", tier: "opus", why: "1 agent runs are live" });
@@ -54,7 +54,7 @@ test("with the live cap full of Claude runs, a tier on the local backend starts;
 
 test("the live cap with every tier on Claude asks no route", async () => {
   process.env.ALEPH_LIVE_CAP = "1";
-  mk("claude-1", "build", "running", { model: "sonnet", made: NOW });
+  mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
   const id = newIssue();
   expect(await decide(id, "worker-low")).toMatchObject({ kind: "live-cap", tier: undefined });
   expect(asked).toBe(0);
@@ -87,7 +87,7 @@ test("stalled and the dispatch agree: a hold on Claude holds an issue with no ru
   try {
     const out = await dispatchIssues(async () => null);
     expect(out.started).toEqual([]);
-    expect(out.skipped).toEqual([`fac-${id}: waits for Claude: ${CREDIT}`]);
+    expect(out.skipped).toEqual([`issue.${id}: waits for Claude: ${CREDIT}`]);
   } finally {
     r.stop();
   }
@@ -95,6 +95,6 @@ test("stalled and the dispatch agree: a hold on Claude holds an issue with no ru
 
 test("stalled and the dispatch agree on a ready issue: stalled lists it and the dispatch starts it", async () => {
   const id = newIssue();
-  expect(await stalled()).toEqual([`goal:fac-${id}`]);
-  expect((await dispatchIssues(async () => null)).started).toEqual([`fac-${id}`]);
+  expect(await stalled()).toEqual([`goal:issue.${id}`]);
+  expect((await dispatchIssues(async () => null)).started).toEqual([`issue.${id}`]);
 });

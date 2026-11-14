@@ -29,14 +29,27 @@ const names = (pid: number, folder: string): boolean => {
   try { return readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " ").includes(folder); } catch { return false; }
 };
 
+/** The `pid` and the exit code a job's folder holds, each null when its file is not there or is not a number. */
+export function readEnd(folder: string): { pid: number | null; exit: number | null } {
+  const num = (f: string): number | null => {
+    try { const n = Number(readFileSync(join(folder, f), "utf8").trim()); return Number.isInteger(n) ? n : null; } catch { return null; }
+  };
+  return { pid: pidOf(folder), exit: num("exit") };
+}
+
+/** The name of the job's systemd unit: `aleph-job-6802`. */
+export const unitOf = (id: string): string => `aleph-${id.replace(".", "-")}`;
+
 /** The state of the run's process. */
-export function processState(e: { folder: string; run: Pick<Run, "condition" | "made"> }): ProcessState {
+export function processState(e: { folder: string; run: Pick<Run, "state" | "made"> & { role?: Run["role"] } }): ProcessState {
+  // A reviewer runs inside its build's unit: it has no process of its own.
+  if (e.run.role === "review") return "none";
   if (existsSync(join(e.folder, "exit"))) return "ended";
   if (existsSync(join(e.folder, "pid"))) {
     const pid = pidOf(e.folder);
     return pid !== null && names(pid, e.folder) ? "live" : "lost";
   }
-  return e.run.condition === "running" && Date.now() - (e.run.made ?? 0) < STARTING_MS ? "starting" : "none";
+  return e.run.state === "running" && Date.now() - (e.run.made ?? 0) < STARTING_MS ? "starting" : "none";
 }
 
 /** When this host booted, in ms. */
@@ -52,21 +65,21 @@ export type Health = ProcessState | "killed";
  */
 export function runHealth(e: Entry, booted = bootedAt()): Health {
   const s = processState(e);
-  return e.run.condition === "running" && Date.parse(e.run.started) < booted && s !== "live" && s !== "starting" ? "killed" : s;
+  return e.run.state === "running" && Date.parse(e.run.started) < booted && s !== "live" && s !== "starting" ? "killed" : s;
 }
 
-/** An intake or director run of `on` that is running and live or starting: it holds the work, so nothing starts a second. A lost or killed run frees it. */
-export const holdsWork = (runs: Entry[], kind: string, on: string): boolean =>
-  runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running" && ["live", "starting"].includes(runHealth(e)));
+/** An intake or director run of `target` that is running and live or starting: it holds the work, so nothing starts a second. A lost or killed run frees it. */
+export const holdsWork = (runs: Entry[], role: string, target: string): boolean =>
+  runs.some((e) => e.run.role === role && e.run.target === target && e.run.state === "running" && ["live", "starting"].includes(runHealth(e)));
 
 /** The run's process is live or still starting: a second run of its job must not start. */
 export const isRunning = (e: Entry): boolean => ["live", "starting"].includes(processState(e));
 
 /** Sidetone's rule (spec 14.10.4): `pid`, no `exit`, and that process names the folder. */
-export const isLive = (folder: string): boolean => processState({ folder, run: { condition: "done" } }) === "live";
+export const isLive = (folder: string): boolean => processState({ folder, run: { state: "done", made: 0 } }) === "live";
 
 /** `pid`, no `exit`, and the process is gone: the run died without an end. */
-export const isLost = (folder: string): boolean => processState({ folder, run: { condition: "done" } }) === "lost";
+export const isLost = (folder: string): boolean => processState({ folder, run: { state: "done", made: 0 } }) === "lost";
 
 /**
  * The unit process is alive, whether or not it wrote `exit`: the unit writes `exit` and then awaits its run-end
@@ -108,8 +121,7 @@ async function gone(folder: string, ms: number): Promise<boolean> {
  * run as stuck, never as failed.
  */
 export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
-  // The unit is `aleph-<subject>-<n>`, the folder name after its stamp; a run from before job IDs has no `n` and its unit has the whole folder name.
-  systemctl("stop", `aleph-${e.run.n === undefined ? e.id : e.id.slice(16)}`);
+  systemctl("stop", unitOf(e.id));
   const pid = pidOf(e.folder);
   if (pid === null || !unitAlive(e.folder)) return true;
   const signal = (s: NodeJS.Signals) => { for (const p of [-pid, pid]) try { process.kill(p, s); } catch {} };

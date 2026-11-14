@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
 import { renderItem, type Issue } from "./lib/todo.ts";
-import { config } from "./lib/store.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 /** `repo` is a product repo; `items` is the work store's checkout and `remote` its origin. Set again before each test. */
 export const fx = { base: "", remote: "", repo: "", repoRemote: "", items: "" };
@@ -22,7 +22,7 @@ export function sh(cwd: string, ...args: string[]): string {
 
 /** The environment of `aleph` on the fixture. */
 export function env(extra: Record<string, string> = {}): Record<string, string> {
-  return { ...(process.env as Record<string, string>), CLAUDECODE: "", ...gitEnv, ALEPH_REPOS: join(fx.base, "repos.json"), ALEPH_ISSUES: fx.items, ...extra };
+  return { ...(process.env as Record<string, string>), CLAUDECODE: "", ...gitEnv, ALEPH_ITEMS: fx.items, ...extra };
 }
 
 /** The items of a list in the old docs/todo.md form, in the stored shape. */
@@ -31,25 +31,27 @@ export function parse(text: string): { items: Issue[] } {
   const items: Issue[] = [];
   for (let i = 1; i < parts.length; i += 3) {
     const { frontmatter, body } = splitFrontmatter(parts[i + 2].replace(/^\n/, ""));
-    const { status, kind, labels, ...fm } = parseFrontmatter(frontmatter ?? "") as Record<string, any>;
+    const { status, kind, labels, id: _id, ...fm } = parseFrontmatter(frontmatter ?? "") as Record<string, any>;
     const text = body.trim();
-    items.push({ id: Number(parts[i]), title: parts[i + 1].trim(), fm: { ...fm, ...(status && status !== "open" ? { closed_as: status } : {}) }, request: kind === "goal" ? "" : text, spec: kind === "goal" ? text : "", notes: [] });
+    items.push({ id: Number(parts[i]), title: parts[i + 1].trim(), fm: { project: "project.1", ...fm, ...(status && status !== "open" ? { closed_as: status } : {}) }, request: kind === "goal" ? "" : text, spec: kind === "goal" ? text : "", notes: [] });
   }
   return { items };
 }
 
-export const tasks = "proj/backlog/tasks";
+/** The path of issue `id` in the items repo. */
+export const issueFile = (id: number) => `issues/${id}/issue.md`;
 /** Item `id` as the store's checkout has it, which follows origin/main. */
-export const doc = (id: number) => readFileSync(join(fx.items, tasks, `proj-${id}.md`), "utf8");
-export const remoteItem = (id: number) => sh(fx.base, "git", "--git-dir", fx.remote, "show", `main:${tasks}/proj-${id}.md`);
+export const doc = (id: number) => readFileSync(join(fx.items, issueFile(id)), "utf8");
+export const remoteItem = (id: number) => sh(fx.base, "git", "--git-dir", fx.remote, "show", `main:${issueFile(id)}`);
 
 /** Put the items of `text`, a list in the old docs/todo.md form, on the store's origin/main by hand. */
 export function seed(text: string | null): void {
-  rmSync(join(fx.items, "proj"), { recursive: true, force: true });
+  rmSync(join(fx.items, "issues"), { recursive: true, force: true });
   if (text !== null) {
-    mkdirSync(join(fx.items, tasks), { recursive: true });
-    writeFileSync(join(fx.items, "proj", "backlog", "config.yml"), config("proj"));
-    parse(text).items.forEach((item, n) => writeFileSync(join(fx.items, tasks, `proj-${item.id}${n ? `-${n}` : ""}.md`), renderItem("proj", item)));
+    for (const item of parse(text).items) {
+      mkdirSync(join(fx.items, "issues", String(item.id)), { recursive: true });
+      writeFileSync(join(fx.items, issueFile(item.id)), renderItem(item));
+    }
   }
   sh(fx.items, "git", "add", "-A");
   sh(fx.items, "git", "commit", "-qm", "seed", "--allow-empty");
@@ -58,7 +60,7 @@ export function seed(text: string | null): void {
 
 /** Put item 4 back on origin/main with `fields` in its front matter, as an old writer would have left it. */
 export function breakItem(fields: string): void {
-  writeFileSync(join(fx.items, tasks, "proj-4.md"), remoteItem(4).replace("source: chris", `source: chris\n${fields}`));
+  writeFileSync(join(fx.items, issueFile(4)), remoteItem(4).replace("source: chris", `source: chris\n${fields}`));
   sh(fx.items, "git", "add", "-A");
   sh(fx.items, "git", "commit", "-qm", "break");
   sh(fx.items, "git", "push", "-q", "origin", "main");
@@ -82,10 +84,13 @@ function template(): string {
 
 /** Make the fixture before each test of the file that calls this, and remove it after. */
 export function useFixture(): void {
+  const testDb = process.env.ALEPH_DB;
   // One `bun test` process without --parallel runs several files with this module loaded once: the next file builds a new template.
   afterAll(() => { rmSync(templateDir, { recursive: true, force: true }); templateDir = ""; });
   beforeEach(() => {
     fx.base = mkdtempSync(join(tmpdir(), "aleph-todo-"));
+    // The test and the CLI it runs read one database, and its counters start at 0 for each test.
+    process.env.ALEPH_DB = join(fx.base, "aleph.db");
     fx.remote = join(fx.base, "items.git");
     fx.items = join(fx.base, "items");
     fx.repoRemote = join(fx.base, "proj.git");
@@ -93,8 +98,11 @@ export function useFixture(): void {
     // Four repos cost twenty git processes: make them once, and copy them with their remotes pointed here.
     cpSync(template(), fx.base, { recursive: true });
     for (const clone of [fx.items, fx.repo]) writeFileSync(join(clone, ".git", "config"), readFileSync(join(clone, ".git", "config"), "utf8").replaceAll(templateDir, fx.base));
-    writeFileSync(join(fx.base, "repos.json"), JSON.stringify({ proj: { path: fx.repo, code: "p" } }));
-    seed("# To do\n\n## 3. An old item\n---\nid: 3\nstatus: open\ncreated_time: 2026-09-01T00:00:00.000Z\nupdated_time: 2026-09-01T00:00:00.000Z\npriority: medium\nlabels: []\n---\n\nWritten long ago.\n\nDone when it is done.\n");
+    writeRepos({ proj: { path: fx.repo, code: "x" } }, fx.items);
+    seed("# To do\n\n## 3. An old item\n---\nid: 3\nstatus: open\ncreated: 2026-09-01T00:00:00.000Z\npriority: medium\nlabels: []\n---\n\nWritten long ago.\n\nDone when it is done.\n");
   });
-  afterEach(() => rmSync(fx.base, { recursive: true, force: true }));
+  afterEach(() => {
+    if (testDb === undefined) delete process.env.ALEPH_DB; else process.env.ALEPH_DB = testDb;
+    rmSync(fx.base, { recursive: true, force: true });
+  });
 }

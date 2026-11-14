@@ -64,7 +64,7 @@ It fetches `origin` only for the sandbox repos. It prints nothing when `ALEPH_AG
 
 `hooks/git-guard.ts` returns `permissionDecision: "deny"` for:
 
-- an edit in the work store (`storeDir` in `issues/lib/store.ts`); the reason says to use `aleph issue`;
+- an edit in the items repo (`itemsDir` in `issues/lib/store.ts`); the reason says to use `aleph issue` or `aleph idea`;
 - an edit of `VAULT.md` in the vault;
 - an edit on `main`, `master` or a detached HEAD in a repo's main checkout.
 

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { getJson, putJson } from "../lib/db.ts";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 import { state } from "./fixtures/status-state.ts";
@@ -6,7 +7,7 @@ import { withEnv } from "./test-server.ts";
 import { asksOf, prop } from "./test-now.ts";
 
 // ---- proposals ----
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 
 import { tmpdir } from "node:os";
 
@@ -16,6 +17,7 @@ import { readList } from "../issues/lib/store.ts";
 
 import { routes as proposalRoutes } from "./api/proposals.ts";
 import { storeRepos } from "../tests/git-fixture.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 test("the lede says proposals need your attention", () => {
   // A proposal reaches Chris once the director wrote its case text.
@@ -31,15 +33,14 @@ test("approve and decline handlers", async () => {
   let restore = () => {};
   try {
     restore = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
-      ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json") });
+      ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "items"), });
     storeRepos(base);
-    writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: true } }));
+    writeRepos({ fac: { path: base, sandbox: true } }, join(base, "items"));
     mkdirSync(join(base, "factory"), { recursive: true });
     const sig = [{ id: "s", source: "chris", at: "2026-10-27T10:00:00Z", quote: "q", link: "" }];
     const lesson = (id: string) => ({ id, sentence: "S " + id, state: "proposed", signals: sig, count: 3, kind: "check" });
-    const file = join(base, "factory", "corrections.json");
-    writeFileSync(file, JSON.stringify({ minedAt: "", lessons: [lesson("l-a"), lesson("l-b")] }));
-    const stored = () => JSON.parse(readFileSync(file, "utf8")).lessons;
+    putJson("state", "corrections", { minedAt: "", lessons: [lesson("l-a"), lesson("l-b")] });
+    const stored = () => getJson<any>("state", "corrections", null).lessons;
     const post = (p: string, h: Record<string, string> = { "x-aleph-ui": "1" }) => new Request(`http://x/api/${p}`, { method: "POST", headers: h });
     const call = (key: string, p: string, id: string, h?: Record<string, string>) => (proposalRoutes as any)[key](post(p, h), { id }, new URL("http://x/"));
 
@@ -50,8 +51,7 @@ test("approve and decline handlers", async () => {
     expect(body.issue).toMatch(/^fac-\d+$/);
     expect(stored()[0].state).toBe("approved");
     const items = readList({ key: "fac" })!.items;
-    // The issue and its part `.1`.
-    expect(items.map((i) => i.fm.id)).toEqual(["1"]);
+    expect(items.map((i) => i.id)).toEqual([1]);
     expect(items[0].fm).toMatchObject({ source: "memory" });
     const again = await call("POST /api/proposals/:id/approve", "approve/l-a", "l-a");
     expect(again.status).toBe(422);
@@ -68,9 +68,9 @@ test("approve and decline handlers", async () => {
 
 test("the approve refusal names the issue when no registry repo is sandboxed", async () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-prop-"));
-  const restore = withEnv({ ALEPH_REPOS: join(base, "repos.json") });
+  const restore = withEnv({ });
   try {
-    writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: false } }));
+    writeRepos({ fac: { path: base, sandbox: false } }, join(base, "items"));
     const req = new Request("http://x/api/proposals/l-a/approve", { method: "POST", headers: { "x-aleph-ui": "1" } });
     const res = await (proposalRoutes as any)["POST /api/proposals/:id/approve"](req, { id: "l-a" }, new URL("http://x/"));
     expect(res.status).toBe(422);

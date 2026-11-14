@@ -1,21 +1,22 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ciState, ciStep, redCi, type Gh, type GhRun } from "./ci.ts";
 import { health } from "./factory-status.ts";
 import { reds } from "./firefighter.ts";
 import type { Repo } from "../records/ledger.ts";
+import { writeRepos } from "../../../tests/projects.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_JOBS_DIR"];
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_ITEMS", "ALEPH_JOBS_DIR"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ci-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
-  Object.assign(process.env, { ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") });
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "repo"), sandbox: true, autoland: false } }));
+  Object.assign(process.env, { ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") });
+  writeRepos({ fac: { path: join(base, "repo"), sandbox: true, autoland: false } }, join(base, "items"));
 });
 
 afterEach(() => {

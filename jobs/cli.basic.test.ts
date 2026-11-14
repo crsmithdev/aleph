@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, now, seedRun, setupLog, sh, state, stateNow, told, worktree, setup, teardown, when } from "./cli.helpers";
+import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, now, section, seedRun, setupLog, sh, state, stateNow, told, worktree, setup, teardown, when } from "./cli.helpers";
 import { actionJob, cli, drop, jobView } from "./flow.testkit.ts";
 
 // The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in jobs/cli.ts itself: the jobs list,
@@ -19,18 +19,18 @@ describe("job", () => {
     const r = await aleph(["job", "De mo", "alpha", "--spec", "-"], { ALEPH_UI_PASSWORD: "hunter2" }, "Goal: alpha\nACTION: commit a.txt\n");
     expect(r.code).toBe(0);
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "build", name: "alpha", repo: "demo", condition: "passed", told: true, branch: "job/alpha", worktree: worktree("alpha") });
+    expect(s).toMatchObject({ role: "build", name: "alpha", repo: "demo", state: "passed", told: true, branch: "job/alpha", worktree: worktree("alpha") });
     expect(s.session).toMatch(/^[0-9a-f-]{36}$/);
     expect(s.phase).toBeUndefined();
     expect(file(r.json.run, "exit")).toBe("0");
     expect(file(r.json.run, "result.md")).toBe("did commit a.txt");
-    expect(file(r.json.run, "checks.log")).toContain("## tests: exit 0");
-    expect(file(r.json.run, "checks.log")).not.toContain("android");
+    expect(section(r.json.run, "checks")).toContain("## tests: exit 0");
+    expect(section(r.json.run, "checks")).not.toContain("android");
     expect(s.checks.map((c: any) => c.name)).toContain("tests");
     expect(s.checks.map((c: any) => c.name)).not.toContain("android build");
     for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
     expect(setups()).toBe(before + 1);
-    expect(told).toContain("alpha#1 passed");
+    expect(told).toContain(`${r.json.run} passed`);
     const args = readFileSync(join(fakeLog, "args"), "utf8");
     expect(args).toContain(`--session-id ${s.session}`);
     expect(args).toContain("--output-format stream-json --verbose");
@@ -47,8 +47,8 @@ describe("job", () => {
     const first = jobRuns("beta", "build")[0];
     expect(r.json.job).toBe(first);
     expect(r.json.run).not.toBe(first);
-    expect(state(r.json.run).condition).toBe("passed");
-    expect(existsSync(join(jobsDir, first, "notes", "001.md"))).toBe(true);
+    expect(state(r.json.run).state).toBe("passed");
+    expect(existsSync(join(jobsDir, first.slice(4), "notes", "001.md"))).toBe(true);
     const prompt = readFileSync(join(fakeLog, "prompt"), "utf8");
     expect(prompt).toContain("You are a worker on job `beta`");
     expect(prompt).toContain("## Spec\n\nGoal: beta\nACTION: commit a.txt");
@@ -64,7 +64,7 @@ describe("job", () => {
     expect((await actionJob("gamma", "commit a.txt")).code).toBe(0);
     const list = await aleph(["jobs"]);
     const gamma = list.json.find((j: any) => j.name === "gamma");
-    expect(gamma).toMatchObject({ repo: "demo", goal: "Goal: gamma", condition: "passed" });
+    expect(gamma).toMatchObject({ repo: "demo", goal: "Goal: gamma", state: "passed" });
     const one = await aleph(["jobs", "gamma"]);
     expect(one.json.result).toBe("did commit a.txt");
     expect(one.json.checks).toContain("## tests: exit 0");
@@ -73,31 +73,23 @@ describe("job", () => {
   test("with no name, jobs lists the open jobs, then the jobs that ended in the last 24 hours, the latest first", async () => {
     // The runs are seeded with their end times: the order comes from the test, not from how fast the jobs ran.
     const hoursAgo = (h: number) => new Date(now - h * 3600_000).toISOString();
-    const ended = (name: string, h: number) => seedRun("demo", { kind: "build", condition: "dropped", name, job: name, ended: hoursAgo(h) });
+    const ended = (name: string, h: number) => seedRun("demo", { role: "build", state: "dropped", name, ended: hoursAgo(h) });
     ended("older", 2);
     ended("newer", 1);
     ended("stale", 25);
-    seedRun("demo", { kind: "build", condition: "passed", name: "open", job: "open" });
+    seedRun("demo", { role: "build", state: "passed", name: "open" });
     const names = (await aleph(["jobs"])).json.map((j: any) => j.name).filter((n: string) => ["older", "newer", "stale", "open"].includes(n));
     expect(names).toEqual(["open", "newer", "older"]);
-  });
-
-  test("with no name, jobs leaves an open chat run out of the list", async () => {
-    seedRun("demo", { kind: "chat", condition: "returned", name: "chat-open", job: "chat-open" });
-    seedRun("demo", { kind: "build", condition: "returned", name: "build-open", job: "build-open" });
-    const names = (await aleph(["jobs"])).json.map((j: any) => j.name);
-    expect(names).toContain("build-open");
-    expect(names).not.toContain("chat-open");
   });
 
   test("drop removes the worktree and branch and ends the job", async () => {
     expect((await actionJob("delta", "commit a.txt")).code).toBe(0);
     const r = await aleph(["drop", "delta", "not", "needed"]);
     expect(r.code).toBe(0);
-    expect(r.json).toMatchObject({ condition: "dropped", reason: "not needed" });
+    expect(r.json).toMatchObject({ state: "dropped", reason: "not needed" });
     expect(existsSync(worktree("delta"))).toBe(false);
     expect(branchExists("delta")).toBe(false);
-    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "delta")).toMatchObject({ condition: "dropped" });
+    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "delta")).toMatchObject({ state: "dropped" });
     expect((await aleph(["drop", "delta"])).code).toBe(1);
   });
 
@@ -106,7 +98,7 @@ describe("job", () => {
     const r = await aleph(["drop", "epsilon", "--fate", "bogus"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("duplicate, met, manual");
-    expect((await jobView("epsilon")).json.condition).not.toBe("dropped");
+    expect((await jobView("epsilon")).json.state).not.toBe("dropped");
     await drop("epsilon");
   });
 });
@@ -136,19 +128,19 @@ describe("guards", () => {
       expect(refused.code, refused.stdout + refused.stderr + endedRun(refused)).toBe(1);
       expect(refused.stderr).toContain("5 agent runs are live");
       // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
-      const worker = (n: string) => jobRuns(n).some((r) => (stateNow(r) as any).phase === "worker" && stateNow(r).condition === "running");
+      const worker = (n: string) => jobRuns(n).some((r) => (stateNow(r) as any).phase === "worker" && stateNow(r).state === "running");
       await when(() => names.filter(worker).length === 5, jobsDir);
       const live = await mine();
       expect(live.length).toBe(5);
-      expect(live.every((j: any) => j.condition === "running" && j.phase === "worker")).toBe(true);
+      expect(live.every((j: any) => j.state === "running" && j.phase === "worker")).toBe(true);
       for (const j of live) expect((await aleph(["drop", j.name])).code).toBe(0);
       const ends = await Promise.all(started);
       expect(ends.filter((r) => r.code === 143).length).toBe(5);
-      for (const j of live) expect(state(j.run).condition).toBe("dropped");
-      expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.condition)).toEqual(live.map(() => "dropped"));
+      for (const j of live) expect(state(j.run).state).toBe("dropped");
+      expect((await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => j.state)).toEqual(live.map(() => "dropped"));
     } finally {
       // Drop every run that started, so a failure here does not leave five held runs for the next test.
-      for (const j of await mine()) if (j.condition === "running") await aleph(["drop", j.name]);
+      for (const j of await mine()) if (j.state === "running") await aleph(["drop", j.name]);
       await Promise.allSettled(started);
     }
   }, 300_000);
@@ -159,7 +151,7 @@ describe("news", () => {
     const r = await actionJob("offline", "exit3", { SIDETONE_TELL_URL: "https://127.0.0.1:1/tell" });
     expect(state(r.json.run).told).toBe(false);
     const news = await aleph(["jobs", "--news"]);
-    expect(news.json).toEqual([{ run: r.json.run, line: "offline#1 failed other" }]);
+    expect(news.json).toEqual([{ run: r.json.run, line: `${r.json.run} failed other` }]);
     expect((await aleph(["jobs", "--news"])).json).toEqual([]);
   });
 });
@@ -168,9 +160,9 @@ describe("run", () => {
   test("a plain command runs in the current directory and says it is done", async () => {
     const r = await aleph(["run", "build", "--", "bash", "-c", 'pwd; echo "it\'s done"']);
     expect(r.code).toBe(0);
-    expect(state(r.json.run)).toMatchObject({ kind: "plain", condition: "done", told: true });
-    expect(file(r.json.run, "output.log")).toBe(`${base}\nit's done\n`);
-    expect(told).toContain("build#1 done");
+    expect(state(r.json.run)).toMatchObject({ role: "plain", state: "done", told: true });
+    expect(file(r.json.run, "transcript.jsonl")).toBe(`${base}\nit's done\n`);
+    expect(told).toContain(`${r.json.run} done`);
   });
 });
 
@@ -211,7 +203,7 @@ describe("help", () => {
     expect(l.code).toBe(0);
     expect(l.stdout).toContain("aleph land <name> [--checked]");
     const j = (await aleph(["jobs", "zeta"])).json;
-    expect(j.condition).not.toBe("dropped");
+    expect(j.state).not.toBe("dropped");
   });
 
   test("a wrong call prints the usage line of its command", async () => {

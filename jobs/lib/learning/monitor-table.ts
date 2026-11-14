@@ -7,17 +7,16 @@
  * Each value is measured over local days. A count in the trailing column is the mean per day; a ratio, a rate and
  * a median are pooled over the 7 days.
  */
-import * as record from "../records/record.ts";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonOr } from "../../../lib/json.ts";
-import { allRuns, loadRegistry, type Entry } from "../records/ledger.ts";
+import { allRuns, loadRegistry, onOf, type Entry } from "../records/ledger.ts";
 import { allHolds, flakeNames, flakes, stopsStart, type Flake, type HoldRecord } from "../gates/factory-status.ts";
 import { layout } from "../../../lib/layout.ts";
 import { git } from "../infra/git.ts";
 import { causeOf } from "../records/outcome.ts";
-import { usageFile } from "../infra/settings.ts";
-import { flakeTracker, reader, storeDir, type Reader } from "../../../issues/lib/store.ts";
+import { conn } from "../../../lib/db.ts";
+import { flakeTracker, reader, itemsDir, type Reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { quantile } from "../../../lib/windows.ts";
 
@@ -91,7 +90,7 @@ export interface Table {
 const LEFT_OUT = [
   "spec checks (before intake) with no usable result, and their time: the job record keeps only the cost",
   "time in each state of an item after its start (awaiting, answered): no record keeps those changes with their times",
-  "usage per agent: usage.jsonl is the account's quota, not per run",
+  "usage per agent: the usage table is the account's quota, not per run",
 ];
 
 /** The table's stage order; a stage with no run is left out. */
@@ -116,7 +115,7 @@ const inside = (iso: string | undefined, from: number, to: number): boolean => {
 /** A run that ended with nothing the line can use: it failed, was returned or was dropped, or it states a cause. */
 export function unusable(e: Entry): boolean {
   const r = e.run;
-  return r.condition === "failed" || r.condition === "returned" || r.condition === "dropped" || causeOf(r) !== undefined;
+  return r.state === "failed" || r.state === "returned" || r.state === "dropped" || causeOf(r) !== undefined;
 }
 
 /** One run of a stage in `from`..`to`: the issue it was on (or its job, for a run on no issue), whether it gave nothing usable, and its seconds. A build's reviewer is a run of `review`, with the seconds its record states, else none. */
@@ -125,13 +124,14 @@ interface StageRun { stage: string; item: string; issue: boolean; unusable: bool
 function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun> {
   for (const e of runs) {
     const r = e.run;
-    if (r.kind === "plain" || r.condition === "running" || !inside(r.started, from, to)) continue;
+    if (r.role === "plain" || r.state === "running" || !inside(r.started, from, to)) continue;
     const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
     // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
-    const review = r.kind === "build" && r.review && r.review.call !== "running" ? r.review : undefined;
-    // A run on no item (a firefighter sweep) is its own item. The run's cost is the worker's plus the reviewer's, so the build stage counts the worker's share only.
-    yield { stage: r.kind, item: r.on ?? r.job, issue: !!r.on, unusable: unusable(e), secs: took >= 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost - (review?.cost ?? 0) : null };
-    if (review) yield { stage: "review", item: r.on ?? r.name, issue: !!r.on, unusable: review.call === "failed", secs: review.seconds ?? null, cost: review.cost ?? null };
+    const review = r.role === "build" && r.review && r.review.call !== "running" ? r.review : undefined;
+    // A run on no item (a firefighter sweep) is its own item. The reviewer's cost is its own, not the run's.
+    const on = onOf(r);
+    yield { stage: r.role, item: on === undefined ? r.job : String(on), issue: on !== undefined, unusable: unusable(e), secs: took >= 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost : null };
+    if (review) yield { stage: "review", item: on === undefined ? r.name : String(on), issue: on !== undefined, unusable: review.call === "failed", secs: review.seconds ?? null, cost: review.cost ?? null };
   }
 }
 
@@ -232,7 +232,7 @@ function windowOf(src: Sources, from: number, to: number): Window {
   };
 }
 
-/** The flake counts of the 7 days before `now`: the reruns on flaky.json and each tracker's notes. */
+/** The flake counts of the 7 days before `now`: the reruns in the `flaky` table and each tracker's notes. */
 export function flakeSection(rows: Flake[], trackers: Sources["trackers"], now: number): FlakeSection {
   const counts = new Map<string, number>();
   for (const f of rows) {
@@ -282,28 +282,22 @@ function trackersOf(lists: Reader, keys = factoryKeys()): Sources["trackers"] {
 export const flakeLines = (now = Date.now(), lists: Reader = reader()): string[] => flakeHealth(flakeSection(flakes(), trackersOf(lists), now));
 
 /** The changes of the store's item files, from its git history. */
-export function storeLog(dir = storeDir()): StoreChange[] {
+export function storeLog(dir = itemsDir()): StoreChange[] {
   if (!existsSync(dir)) return [];
   const rev = git(dir, "rev-parse", "--verify", "-q", "origin/main").ok ? "origin/main" : "HEAD";
-  const r = git(dir, "log", rev, "--format=%x01%cI", "-p", "--unified=0", "--no-color", "--no-renames", "--", "*.md");
+  const r = git(dir, "log", rev, "--format=%x01%cI", "-p", "--unified=0", "--no-color", "--no-renames", "--", "issues/*/issue.md");
   if (!r.ok) return [];
   const out: StoreChange[] = [];
   let at = "", cur: StoreChange | null = null;
   for (const line of r.out.split("\n")) {
     if (line.startsWith("\x01")) { at = new Date(line.slice(1)).toISOString(); cur = null; continue; }
     const f = /^diff --git a\/\S+ b\/(\S+)$/.exec(line);
-    if (f) { cur = { at, item: f[1].split("/").at(-1)!.replace(/\.md$/, ""), added: [], removed: [] }; out.push(cur); continue; }
+    if (f) { cur = { at, item: f[1].replace(/^issues\/(\d+)\/issue\.md$/, "issue.$1"), added: [], removed: [] }; out.push(cur); continue; }
     if (!cur || line.startsWith("+++") || line.startsWith("---")) continue;
     const m = /^([+-])((?:reason|closed_as): .*)$/.exec(line);
     if (m) (m[1] === "+" ? cur.added : cur.removed).push(m[2]);
   }
   return out.filter((c) => c.added.length || c.removed.length);
-}
-
-function readJsonl<T>(file: string): T[] {
-  let raw: string;
-  try { raw = readFileSync(file, "utf8"); } catch { return []; }
-  return raw.split("\n").flatMap((l) => { if (!l.trim()) return []; try { return [JSON.parse(l) as T]; } catch { return []; } });
 }
 
 /** The spec checks of `records`: they ran before intake, and their cost is a `spec-check` event in the job record. */
@@ -315,17 +309,17 @@ export function readSources(): Sources {
   const keys = factoryKeys(), set = new Set(keys);
   const lists = reader({ fetch: false });
   const items = keys.flatMap((key) => (lists.list(key)?.items ?? []).map((item) => ({ name: `${key}-${issues.refOf(item)}`, item })));
-  const records = record.all();
   return {
     // Runs of other repos are not the factory's; a run with no repo (explain, firefighter, director, monitor) is.
     runs: allRuns().filter((e) => !e.run.repo || set.has(e.run.repo)),
     holds: allHolds(),
-    specChecks: specChecksOf(records),
+    // Nothing writes a spec-check event now.
+    specChecks: [],
     items,
     storeLog: storeLog(),
     flakes: flakes(),
     trackers: trackersOf(lists, keys),
-    usage: readJsonl(usageFile()),
+    usage: conn().query("SELECT time AS at, seven_day FROM usage ORDER BY seq").all() as Sources["usage"],
   };
 }
 

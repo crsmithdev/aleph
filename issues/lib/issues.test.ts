@@ -14,10 +14,12 @@ const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NA
 let base: string;
 
 let n = 0;
-function repo(items: { title: string; labels?: string[] }[] = []): store.Place {
-  const r = { key: `is${++n}` };
+/** A project and the numbers of the issues it starts with, `ids`: one counter runs across projects, so a test reads its numbers here. */
+type Repo = store.Place & { ids: number[] };
+function repo(items: { title: string; labels?: string[] }[] = []): Repo {
+  const r: Repo = { key: `is${++n}`, ids: [] };
   store.writeList(r, "start", (doc) => {
-    for (const i of items) { issues.add(doc, i.title, { labels: i.labels, ...(i.labels?.includes("goal") ? { spec: "Do it." } : {}) }); }
+    r.ids = items.map((i) => issues.add(doc, i.title, { labels: i.labels, ...(i.labels?.includes("goal") ? { spec: "Do it." } : {}) }).id);
     return true;
   }, true);
   return r;
@@ -30,14 +32,14 @@ const refusal = (f: () => unknown) => {
   throw new Error("did not refuse");
 };
 
-const saved = process.env.ALEPH_ISSUES;
+const saved = process.env.ALEPH_ITEMS;
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-issues-"));
   storeRepos(base);
-  Object.assign(process.env, gitEnv, { ALEPH_ISSUES: join(base, "items") });
+  Object.assign(process.env, gitEnv, { ALEPH_ITEMS: join(base, "items") });
 });
 afterAll(() => {
-  if (saved === undefined) delete process.env.ALEPH_ISSUES; else process.env.ALEPH_ISSUES = saved;
+  if (saved === undefined) delete process.env.ALEPH_ITEMS; else process.env.ALEPH_ITEMS = saved;
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -45,14 +47,14 @@ describe("issue verbs without argv", () => {
   test("add, note and done", async () => {
     const r = repo();
     const a = await issueOps.add(r, "first thing", { labels: ["x"] }, quiet);
-    expect(a.result.added).toBe(1);
+    const id = a.result.added;
     expect(a.result.title).toBe("first thing");
-    const n = issueOps.note(r, 1, "a remark");
+    const n = issueOps.note(r, id, "a remark");
     expect(n.result.note).toContain("a remark");
-    expect(item(r, 1).notes.length).toBe(1);
-    const d = issueOps.close(r, 1, "done", "shipped");
+    expect(item(r, id).notes.length).toBe(1);
+    const d = issueOps.close(r, id, "done", "shipped");
     expect(d.result.status).toBe("done");
-    expect(issues.status(item(r, 1))).toBe("done");
+    expect(issues.status(item(r, id))).toBe("done");
   });
 
   test("an unknown issue number is refused", () => {
@@ -64,28 +66,31 @@ describe("issue verbs without argv", () => {
 
   test("drop needs a reason", () => {
     const r = repo([{ title: "a" }]);
-    expect(refusal(() => issueOps.close(r, 1, "drop", " "))).toContain("why it is dropped");
-    expect(issues.status(item(r, 1))).toBe("open");
+    expect(refusal(() => issueOps.close(r, r.ids[0], "drop", " "))).toContain("why it is dropped");
+    expect(issues.status(item(r, r.ids[0]))).toBe("open");
   });
 
   test("done and drop set a status and keep the number; list hides them and --status picks each", () => {
     const r = repo([{ title: "a" }, { title: "ships" }, { title: "abandoned" }]);
-    issueOps.close(r, 2, "done", "landed in abc123");
-    expect(issueOps.close(r, 3, "drop", "superseded by 2").result.status).toBe("dropped");
-    expect(store.readList(r)!.items.map((i) => [i.id, i.title])).toEqual([[1, "a"], [2, "ships"], [3, "abandoned"]]);
-    expect(item(r, 2).notes.at(-1)).toContain("landed in abc123");
+    const [a, ships, gone] = r.ids;
+    issueOps.close(r, ships, "done", "landed in abc123");
+    expect(issueOps.close(r, gone, "drop", "superseded by 2").result.status).toBe("dropped");
+    expect(store.readList(r)!.items.map((i) => [i.id, i.title])).toEqual([[a, "a"], [ships, "ships"], [gone, "abandoned"]]);
+    expect(item(r, ships).notes.at(-1)).toContain("landed in abc123");
+    expect(item(r, ships).fm).toMatchObject({ closed_as: "done", closed_why: "landed in abc123" });
     const ids = (status?: string) => issueOps.list(r, { status }).map((i) => i.id);
-    expect(ids()).toEqual([1]);
-    expect(ids("done")).toEqual([2]);
-    expect(ids("dropped")).toEqual([3]);
+    expect(ids()).toEqual([a]);
+    expect(ids("done")).toEqual([ships]);
+    expect(ids("dropped")).toEqual([gone]);
   });
 
   test("edit parks with the reason as a note and no closed_as, unparks, and add can file parked", async () => {
     const r = repo([{ title: "a" }]);
-    expect(issueOps.edit(r, 1, { status: "parked" }, "needs more investigation").result.status).toBe("parked");
-    expect(item(r, 1).fm.closed_as).toBeUndefined();
-    expect(item(r, 1).notes.at(-1)).toContain("needs more investigation");
-    expect(issueOps.edit(r, 1, { status: "open" }).result.status).toBe("open");
+    const [id] = r.ids;
+    expect(issueOps.edit(r, id, { status: "parked" }, "needs more investigation").result.status).toBe("parked");
+    expect(item(r, id).fm.closed_as).toBeUndefined();
+    expect(item(r, id).notes.at(-1)).toContain("needs more investigation");
+    expect(issueOps.edit(r, id, { status: "open" }).result.status).toBe("open");
     const a = await issueOps.add(r, "filed parked", { status: "parked" }, quiet);
     expect(issues.status(item(r, a.result.added))).toBe("parked");
   });
@@ -98,7 +103,7 @@ describe("issue verbs without argv", () => {
       delete process.env.CLAUDECODE;
       Object.assign(process.env, env);
       const a = await issueOps.add(r, "who filed", {}, quiet);
-      return readEvents(0).find((e) => e.action === "filed" && e.subject === `${r.key}-${a.result.added}`)?.by;
+      return readEvents(0).find((e) => e.action === "filed" && e.object === `issue.${a.result.added}`)?.subject;
     };
     try {
       expect(await by({})).toBe("human");
@@ -111,34 +116,36 @@ describe("issue verbs without argv", () => {
 
   test("edit with nothing to change is refused", () => {
     const r = repo([{ title: "a" }]);
-    expect(refusal(() => issueOps.edit(r, 1, {}))).toContain("give --title, --request, --spec, --priority, --labels, --after");
+    expect(refusal(() => issueOps.edit(r, r.ids[0], {}))).toContain("give --title, --request, --spec, --priority, --labels, --after");
   });
 
   test("edit reads the issue for the group prefix: a child with a from link takes it, a top-level issue refuses it", () => {
     const r = repo([{ title: "parent" }]);
-    const child = store.writeList(r, "split", (doc) => issues.add(doc, "[Group] Old name", { spec: "x", from: `${r.key}-1` }).id)!.value;
+    const [parent] = r.ids;
+    const child = store.writeList(r, "split", (doc) => issues.add(doc, "[Group] Old name", { spec: "x", from: `issue.${parent}` }).id)!.value;
     const title = "[Group] Do the thing: now";
     issueOps.edit(r, child, { title });
     expect(item(r, child).title).toBe(title);
-    expect(refusal(() => issueOps.edit(r, 1, { title }))).toContain("': ' prefix");
-    expect(item(r, 1).title).toBe("parent");
+    expect(refusal(() => issueOps.edit(r, parent, { title }))).toContain("': ' prefix");
+    expect(item(r, parent).title).toBe("parent");
   });
 
   test("decide needs an issue with an Ask, clears it and makes no issue", () => {
     const r = repo([{ title: "a" }, { title: "b" }]);
-    for (const n of [1, 2]) store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, n)!), { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
-    store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); setAsk(refIn(doc.repo!, i), { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
-    expect(refusal(() => issueOps.decide(r, 99, "yes"))).toContain("has no issue");
-    issueOps.decide(r, 2, "yes");
-    expect(askOf(`${r.key}-2`)).toBeNull();
-    issueOps.decide(r, 1, "yes");
-    expect(askOf(`${r.key}-1`)).toBeNull();
-    expect(item(r, 1).fm.ask).toBeUndefined();
-    expect(item(r, 1).notes.at(-1)).toContain("yes");
-    store.writeList(r, "x", (doc) => { issues.add(doc, "plain"); return true; });
-    expect(refusal(() => issueOps.decide(r, 4, "yes"))).toContain("not waiting for a decision");
-    issueOps.decide(r, 3, "wait");
-    expect(askOf(`${r.key}-3`)).toBeNull();
+    const [one, two] = r.ids;
+    for (const n of [one, two]) store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, n)!), { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
+    const three = store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); setAsk(refIn(doc.repo!, i), { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return i.id; })!.value;
+    expect(refusal(() => issueOps.decide(r, 99999, "yes"))).toContain("has no issue");
+    issueOps.decide(r, two, "yes");
+    expect(askOf(`${r.key}-${two}`)).toBeNull();
+    issueOps.decide(r, one, "yes");
+    expect(askOf(`${r.key}-${one}`)).toBeNull();
+    expect(item(r, one).fm.ask).toBeUndefined();
+    expect(item(r, one).notes.at(-1)).toContain("yes");
+    const plain = store.writeList(r, "x", (doc) => issues.add(doc, "plain").id)!.value;
+    expect(refusal(() => issueOps.decide(r, plain, "yes"))).toContain("not waiting for a decision");
+    issueOps.decide(r, three, "wait");
+    expect(askOf(`${r.key}-${three}`)).toBeNull();
   });
 
 });

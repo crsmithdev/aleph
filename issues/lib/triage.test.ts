@@ -10,8 +10,6 @@ let server: ReturnType<typeof Bun.serve>;
 let reply: { status: number; answers: Record<string, number> };
 let asked: any[] = [];
 
-// The preload sets ALEPH_JUDGE_FILE; put it back, not delete it, so later files never reach the live judge file.
-const judgeFile = process.env.ALEPH_JUDGE_FILE!;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "aleph-triage-"));
   server = Bun.serve({
@@ -23,9 +21,9 @@ beforeAll(() => {
       return Response.json(reply.status === 200 ? { model: "typesafe/jev-1.13", answers } : { error: { message: "down" } }, { status: reply.status });
     },
   });
-  Object.assign(process.env, { ALEPH_JUDGE_FILE: join(dir, "judge"), ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
+  Object.assign(process.env, { ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
 });
-afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); delete process.env.ALEPH_JUDGE; process.env.ALEPH_JUDGE_FILE = judgeFile; });
+afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); delete process.env.ALEPH_JUDGE; });
 beforeEach(() => { asked = []; reply = { status: 200, answers: {} }; delete process.env.ALEPH_JUDGE; });
 
 function list(n = 3): issues.Doc {
@@ -37,6 +35,7 @@ function list(n = 3): issues.Doc {
 }
 
 test("labels and duplicates at p >= 0.7", async () => {
-  reply.answers = { "label:obs": 0.9, "label:factory": 0.2, "item:2": 0.8 };
-  expect(await triage(list(), "t")).toEqual({ labels: ["obs"], maybeSame: [{ id: 2, title: "item two", p: 0.8 }] });
+  const doc = list(), two = doc.items[1].id;
+  reply.answers = { "label:obs": 0.9, "label:factory": 0.2, [`item:${two}`]: 0.8 };
+  expect(await triage(doc, "t")).toEqual({ labels: ["obs"], maybeSame: [{ id: two, title: "item two", p: 0.8 }] });
 });

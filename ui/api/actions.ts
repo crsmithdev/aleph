@@ -6,7 +6,7 @@
  */
 import { allRuns, isWaiting, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { latestJob } from "../../jobs/lib/records/job.ts";
-import { counting, jobIdOf } from "../../jobs/lib/records/record.ts";
+import { counting } from "../../jobs/lib/records/record.ts";
 import { may } from "../../jobs/lib/asks/ask.ts";
 import * as issues from "../../issues/lib/issues.ts";
 import { afterOf } from "../../issues/lib/store.ts";
@@ -19,7 +19,7 @@ function find(id: string): Entry {
   loadRegistry();
   const all = allRuns(), e = runOfJob(id, all) ?? fail(404, `no job ${id}`);
   const now = counting(latestJob(e.run.name)!);
-  if (now.id !== e.id) fail(409, `${id} is no longer the job of ${e.run.name}: ${jobIdOf(now)} is`);
+  if (now.id !== e.id) fail(409, `${id} is no longer the job of ${e.run.name}: ${now.id} is`);
   return e;
 }
 
@@ -31,7 +31,7 @@ const action = (verb: "land" | "recheck" | "drop") => post(async (body, { id }) 
 
 const answerAndRerun = post(async (body, { id }) => {
   const { run } = find(id);
-  if (!isWaiting(run.condition) || may("chris", "answer", run.ask, { run: true })) fail(409, `${id} is ${run.condition}, not waiting for an answer`);
+  if (!isWaiting(run.state) || may("chris", "answer", run.ask, { run: true })) fail(409, `${id} is ${run.state}, not waiting for an answer`);
   const said = typeof body.answer === "string" ? body.answer.trim() : "";
   if (!said) fail(400, "answer is required");
   return aleph(["drop", "--", run.name, `Chris answered the worker's question "${run.ask?.question ?? run.question ?? ""}": ${said}`]);

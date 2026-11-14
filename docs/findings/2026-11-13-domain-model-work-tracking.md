@@ -1,3 +1,5 @@
+> Superseded by [Naming](../naming.md) and the [storage and IDs plan](../specs/2026-11-14-storage-ids.md). Draft decisions 1 and 4 were taken. Decisions 2, 3 and 5 were overturned.
+
 # Domain model: aleph's work-tracking cluster
 
 The cluster has one central two-answer case. The code's **Job** is a group of runs that share `run.job`, the folder name of the group's first run. But a "job ID" (`a1430#2`) belongs to each run. So one job with a build, a fix round and a land has three job IDs. Most of the other conflicts follow from this one.

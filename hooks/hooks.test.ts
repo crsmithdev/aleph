@@ -262,7 +262,7 @@ describe("git-guard", () => {
 
   async function guard(filePath: string, env: Record<string, string> = {}, tool_input: Record<string, string> = { file_path: filePath }) {
     const proc = Bun.spawn(["bun", join(HOOKS, "git-guard.ts")], {
-      env: { ...(process.env as Record<string, string>), ALEPH_REPOS: join(root, "none.json"), ...env },
+      env: { ...(process.env as Record<string, string>), ...env },
       stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Edit", tool_input })),
       stdout: "pipe", stderr: "pipe",
     });
@@ -306,11 +306,11 @@ describe("git-guard", () => {
     const out = JSON.parse(await guard(join(root, "plain", "linked.md")));
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
   });
-  test("denies a hand edit of a work store file, naming the repo in the commands", async () => {
-    const env = { ALEPH_ISSUES: join(root, "plain", "items") };
-    const out = JSON.parse(await guard(join(root, "plain", "items", "demo", "backlog", "tasks", "demo-3.md"), env));
+  test("denies a hand edit of a work store file, naming the commands", async () => {
+    const env = { ALEPH_ITEMS: join(root, "plain", "items") };
+    const out = JSON.parse(await guard(join(root, "plain", "items", "issues", "3", "issue.md"), env));
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
-    expect(out.hookSpecificOutput.permissionDecisionReason).toContain("aleph issue edit demo");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toContain("aleph issue edit <project>");
     expect(await guard(join(root, "plain", "itemsx", "a.md"), env)).toBe("");
   });
   test("follows a linked directory into a worktree, and allows a new file there", async () => {

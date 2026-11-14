@@ -1,8 +1,8 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, undecided, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
-import { contentText, issueHref, parseId, parseJob, shownId } from "../../lib/naming.ts";
+import { fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, undecided, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
 
@@ -46,9 +46,9 @@ export function renderGates(d, q = new URLSearchParams()) {
     renderCaps(d) + renderHeld(d) + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
 }
 
-/** The environment variable that overrides each key of caps.json, as jobs/lib/infra/settings.ts names it. */
+/** The environment variable that overrides each key of the `caps` setting, as jobs/lib/infra/settings.ts names it. */
 const CAP_ENV = { live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP", intakeTries: "ALEPH_INTAKE_TRIES", jobSeconds: "ALEPH_JOB_TIMEOUT", fixRounds: "ALEPH_FIX_ROUNDS", landBatch: "ALEPH_LAND_BATCH", loadLimit: "ALEPH_LOAD_LIMIT" };
-/** One cap as a setting: a number input with a Save button, `now` in the hint, and a warning when its environment variable overrides caps.json. */
+/** One cap as a setting: a number input with a Save button, `now` in the hint, and a warning when its environment variable overrides the `caps` setting. */
 function capSetting(f, key, label, value, note) {
   const id = `cap-${key}`, env = f.capEnv?.[key] ? ` ${CAP_ENV[key]} is set: an edit has no effect while that variable is set.` : "";
   return setting(label, inputBox(key, value, { id, type: "number", attrs: ` min="${key === "fixRounds" ? 0 : 1}" step="1" inputmode="numeric" required` }),
@@ -125,7 +125,7 @@ const WAITS = [["d", 1440, "days"], ["h", 60, "hours"], ["min", 1, "minutes"]];
 const splitWait = (m) => { const [unit, k] = WAITS.find(([, k]) => m % k === 0); return { n: m / k, unit }; };
 const waitText = (m) => { const { n, unit } = splitWait(m); return `${n} ${unit}`; };
 
-/** Who decides a reason first: a rule's action when always.json grants one, else the director. */
+/** Who decides a reason first: a rule's action when the always setting grants one, else the director. */
 const decidesText = (r) => (r.places ? (r.places.length ? `Approve for ${r.places.map((k) => k.slice(k.indexOf(":") + 1)).join(", ")}` : "Director") : r.granted ? modeLabel(r.granted.action) : "Director");
 
 /** What happens when an escalated Ask gets no answer: it keeps waiting, or after the timeout the director's pick is taken or the Ask is dropped. */
@@ -180,31 +180,27 @@ export function renderHeld(d) {
     (repos.length ? "" : empty()), { id: "gates-held", label: "Held paths" });
 }
 
-/** An ID of the log in its short form, as a link to its issue page: a job ID links to its subject's. Other text stays text. */
-function idHtml(id) {
-  const to = issueHref(parseJob(id)?.subject ?? id);
-  return to ? idLink(shownId(id), to, { title: String(id) }) : esc(shownId(id) || "–");
+/** An ID of the log in its short form, as a link to its issue page: a job ID links to its `target`'s. `repo` is the project of an issue key. Other text stays text. */
+function idHtml(id, repo, target) {
+  const to = issueHref(id, repo) || issueHref(target, repo);
+  return to ? idLink(shownId(id, repo), to, { title: String(id) }) : esc(shownId(id, repo) || "–");
 }
 
-/** The content of an event, `contentText`, with each ID as a link and the file's base name in mono with its full path as the title. */
-function contentHtml(e) {
-  const ids = new Map([e.on ?? []].flat().map((x) => [shownId(x), x]));
-  const file = e.file && String(e.file).split("/").at(-1);
-  return contentText(e).split(" ").map((t) => (ids.has(t) ? idHtml(ids.get(t)) : t === file ? `<code title="${esc(e.file)}">${esc(t)}</code>` : esc(t))).join(" ");
-}
+/** The detail of an event with each key and issue ID as a link. */
+const detailHtml = (e) => linked(e.detail ?? "").map((p) => (typeof p === "string" ? esc(p) : idHtml(p.id, p.id === e.object ? e.project : undefined))).join("");
 
-/** The log, newest first, filtered by `by` (an actor) from the address; page `page` shows. A row's note opens with its button. */
+/** The log, newest first, filtered by `by` (a subject) from the address; page `page` shows. */
 export function renderLog(d, by, page = 1) {
   const pick = Object.hasOwn(BY, by ?? "") ? by : "";
   const filter = filterBar([{ name: "by", label: "By", value: pick, options: [{ value: "", label: "All" }, ...Object.keys(BY).map((k) => ({ value: k, label: k }))] }]);
-  const entries = d.log.entries.filter((e) => !pick || e.by === pick);
+  const entries = d.log.entries.filter((e) => !pick || e.subject === pick);
   const rows = pageRows(entries, page, PAGE).map((e) => {
-    const subject = e.action === "changed" && !parseId(e.subject) ? `<a href="#rules">${esc(e.subject)}</a>` : idHtml(e.subject);
-    return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${subject}</td><td>${tag(e.by, tone(e.by))}</td><td>${e.action ? esc(e.action) : miss("no action")}</td><td>${e.sub ? esc(e.sub) : miss("no sub")}</td>` +
-      `<td class="wide"${contentText(e) ? ` title="${esc(contentText(e))}"` : ""}>${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
+    const object = e.action === "changed" && !parseId(e.object) ? `<a href="#rules">${esc(e.object)}</a>` : idHtml(e.object, e.project, e.object_target);
+    return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.time)}` : when(e.time))}</td><td>${object}</td><td>${tag(e.subject, tone(e.subject))}</td><td>${e.action ? esc(e.action) : miss("no action")}</td>` +
+      `<td class="wide"${contentText(e) ? ` title="${esc(contentText(e))}"` : ""}>${detailHtml(e)}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return card("Log", filter +
-    (rows ? dataTable(heads(["Logged", "Subject", "By", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty()), { id: "gates-log" });
+    (rows ? dataTable(heads(["Logged", "Object", "Subject", "Action", "Detail", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty()), { id: "gates-log" });
 }
 
 /** What each settings form posts, by its `data-` key: the URL, the body and the word for an error line. */

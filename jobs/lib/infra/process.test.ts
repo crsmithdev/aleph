@@ -1,32 +1,31 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { type Entry, type Run } from "../records/ledger.ts";
-import { putRun } from "../records/record.ts";
+import { seed } from "../../job.testkit.ts";
 import { holdsWork, isRunning, markEnded, markStarted, processState, runHealth, STARTING_MS, stop, unitAlive } from "./process.ts";
 
 const NOW = Date.parse("2026-11-03T00:00:00Z");
-let base: string, jobs: string | undefined;
+let base: string, jobs: string | undefined, db: string | undefined;
 const kids: { kill: (s?: NodeJS.Signals) => void }[] = [];
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-process-"));
   jobs = process.env.ALEPH_JOBS_DIR;
+  db = process.env.ALEPH_DB;
   process.env.ALEPH_JOBS_DIR = join(base, "runs");
-  mkdirSync(join(base, "runs"));
+  process.env.ALEPH_DB = join(base, "aleph.db");
 });
 afterEach(() => {
   setSystemTime();
   for (const k of kids.splice(0)) k.kill("SIGKILL");
   process.env.ALEPH_JOBS_DIR = jobs;
+  process.env.ALEPH_DB = db;
   rmSync(base, { recursive: true, force: true });
 });
 
-function entry(id: string, extra: Partial<Run> = {}): Entry {
-  const folder = join(base, "runs", id);
-  mkdirSync(folder);
-  const run = { n: 1, kind: "build", job: id, name: "x", repo: "demo", condition: "running", told: true, started: "2026-11-03T00:00:00Z", made: NOW, ...extra } as Run;
-  putRun(basename(folder), run);
+function entry(_label: string, extra: Partial<Run> = {}): Entry {
+  const { id, folder, run } = seed({ role: "build", name: "x", repo: "demo", state: "running", told: true, started: "2026-11-03T00:00:00Z", made: NOW, ...extra });
   return { id, folder, run };
 }
 
@@ -49,7 +48,7 @@ test("each state of a run's process", async () => {
   const starting = entry("a");
   expect(processState(starting)).toBe("starting");
   expect(processState(entry("b", { made: NOW - STARTING_MS - 1000 }))).toBe("none");
-  expect(processState(entry("c", { condition: "done" }))).toBe("none");
+  expect(processState(entry("c", { state: "done" }))).toBe("none");
   const lost = entry("d");
   markStarted(lost.folder, 999_999_999);
   expect(processState(lost)).toBe("lost");
@@ -99,15 +98,15 @@ test("a running run with a dead pid is killed when it started before the boot, a
   markStarted(e.folder, 999_999_999);
   expect(runHealth(e, NOW + 1)).toBe("killed");
   expect(runHealth(e, NOW - 1)).toBe("lost");
-  expect(runHealth({ ...e, run: { ...e.run, condition: "done" } }, NOW + 1)).toBe("lost");
+  expect(runHealth({ ...e, run: { ...e.run, state: "done" } }, NOW + 1)).toBe("lost");
   expect(runHealth(entry("r-new"), NOW + 1)).toBe("starting");
 });
 
 test("a lost director run frees its work and a live one holds it", async () => {
-  const dead = entry("r-dir", { kind: "director", on: "x1" });
+  const dead = entry("r-dir", { role: "director", target: "x1" });
   markStarted(dead.folder, 999_999_999);
   expect(holdsWork([dead], "director", "x1")).toBe(false);
-  const live = entry("r-dir2", { kind: "director", on: "x2" });
+  const live = entry("r-dir2", { role: "director", target: "x2" });
   await liveIn(live.folder);
   expect(holdsWork([live], "director", "x2")).toBe(true);
 });

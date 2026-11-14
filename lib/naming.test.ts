@@ -12,6 +12,9 @@ describe("ids", () => {
     expect(n.issueHref("aleph-1430")).toBe("#/issues/aleph/1430");
     expect(n.issueHref("b3.1")).toBe("#/issues/btcx-tools/3.1");
     expect(n.issueHref("monitor")).toBe("");
+    expect(n.issueHref("issue.1430", "aleph")).toBe("#/issues/aleph/1430");
+    expect(n.issueHref("issue.1430")).toBe("");
+    expect(n.issueHref("job.5", "aleph")).toBe("");
   });
 
   test("short and full forms map both ways", () => {
@@ -27,20 +30,11 @@ describe("ids", () => {
     expect(n.parseId("z12")).toBeNull();
     expect(n.parseId("a12")).toEqual({ repo: "aleph", n: 12, sub: undefined });
   });
-  test("job IDs", () => {
-    expect(n.jobId("aleph-1430", 2)).toBe("a1430#2");
-    expect(n.jobId("monitor", 14)).toBe("monitor#14");
-    expect(n.parseJob("a1430#2")).toEqual({ subject: "aleph-1430", n: 2 });
-    expect(n.parseJob("a1430-2")).toEqual({ subject: "aleph-1430", n: 2 });
-    expect(n.parseJob("aleph-1430#2")).toEqual({ subject: "aleph-1430", n: 2 });
-    expect(n.parseJob("monitor#14")).toEqual({ subject: "monitor", n: 14 });
-    expect(n.parseJob("aleph-1430")).toBeNull();
-    expect(n.fileSafe("a1430#2")).toBe("a1430-2");
-  });
-  test("a run's subject is its issue, else the routine, else its name", () => {
-    expect(n.subjectOf({ on: "aleph-1430", kind: "build", name: "a1430" })).toBe("aleph-1430");
-    expect(n.subjectOf({ kind: "monitor", name: "monitor" })).toBe("monitor");
-    expect(n.subjectOf({ kind: "build", name: "a1430" })).toBe("a1430");
+  test("keys", () => {
+    expect(n.key("job", 6802)).toBe("job.6802");
+    expect(n.parseKey("issue.12")).toEqual({ kind: "issue", n: 12 });
+    expect(n.parseKey("a1430#2")).toBeNull();
+    expect(n.shownId("job.6802")).toBe(n.shownKey("job.6802"));
   });
   test("free text yields full IDs only, never a sha", () => {
     expect(n.refs("waits for aleph-1372 and btcx-tools-3; sha a143077 and a1372")).toEqual(["aleph-1372", "btcx-tools-3"]);
@@ -60,30 +54,26 @@ describe("words", () => {
   });
   test("the credit wait reads as the hold word credit", () => {
     expect(n.word("gate", "credit-wait")).toBe("credit");
-    expect(n.event({ by: "gate", subject: "aleph-1", action: "credit" }).action).toBe("credit");
+    expect(n.event({ subject: "gate", action: "credit", object: "aleph-1" }).action).toBe("credit");
   });
-  test("credit is a sub", () => {
-    expect(n.event({ by: "gate", subject: "aleph-1", action: "failed", sub: "credit" }).sub).toBe("credit");
-  });
+  test("credit is a cause with a phrase", () => expect(n.because("credit")).toBe("out of credit"));
   test("every set is lower case with no separator marks", () => {
-    const sets = [n.STATUSES, n.ACTIONS, n.SUBS, n.ACTORS, n.KINDS, n.STAGES, n.LANES, n.SPEEDS];
+    const sets = [n.STATUSES, n.ACTIONS, n.ACTORS, n.ROLES, n.STAGES, n.LANES, n.SPEEDS];
     for (const w of sets.flat()) expect(w).toMatch(/^[a-z][a-z-]*$/);
     for (const map of Object.values(n.OLD)) for (const w of Object.values(map)) expect(sets.flat()).toContain(w);
   });
 });
 
 describe("events", () => {
-  test("content joins the fields", () => {
-    expect(n.contentText({ on: ["aleph-1372"], file: "ui/views/issues.js" })).toBe("a1372 → issues.js");
-    expect(n.contentText({ on: ["a1421#6"], result: "dropped" })).toBe("a1421#6 → dropped");
-    expect(n.contentText({ file: "hooks/lib/docclaims.ts", to: "human" })).toBe("docclaims.ts → human");
-    expect(n.contentText({ file: "tests" })).toBe("→ tests");
-    expect(n.contentText({ count: "3 / 1h" })).toBe("3 / 1h");
+  test("content is the detail with each issue ID short", () => {
+    expect(n.contentText({ detail: "waits for aleph-1372" })).toBe("waits for a1372");
+    expect(n.contentText({})).toBe("");
   });
-  test("a word outside its set throws", () => {
-    expect(() => n.event({ by: "gate", subject: "aleph-1", action: "not-ready" })).toThrow(/action/);
-    expect(() => n.event({ by: "You", subject: "aleph-1", action: "changed" })).toThrow(/by/);
-    expect(n.event({ at: "t", by: "gate", subject: "aleph-1", action: "busy", on: ["aleph-2"] })).toEqual({ at: "t", by: "gate", subject: "aleph-1", action: "busy", on: ["aleph-2"] });
+  test("a subject or action outside its set throws", () => {
+    expect(() => n.event({ subject: "gate", action: "not-ready", object: "aleph-1" })).toThrow(/action/);
+    expect(() => n.event({ subject: "You", action: "changed", object: "aleph-1" })).toThrow(/subject/);
+    expect(() => n.event({ subject: "gate", action: "refused", object: "aleph-1" })).toThrow(/action/);
+    expect(n.event({ time: "t", subject: "job.6802", action: "stalled", object: "issue.2072", detail: "no output" })).toEqual({ time: "t", subject: "job.6802", action: "stalled", object: "issue.2072", detail: "no output" });
   });
   test("clip cuts at a word end", () => expect(n.clip("the hold is right on the letter", 16)).toBe("the hold is…"));
 });
@@ -138,16 +128,57 @@ test("no file outside lib/naming.ts reads an issue ID with its own regex", () =>
   expect(hits).toEqual([]);
 });
 
-test("sayText says an event in the active voice, its job or issue first, the sub's cause after a colon", () => {
+test("sayText says an event in the active voice, its object first, the detail after a colon or in place", () => {
   const cases: [Record<string, unknown>, string][] = [
-    [{ subject: "aleph-1868", action: "landed", on: ["a1868#2"] }, "a1868#2 landed"],
-    [{ subject: "aleph-1749", action: "failed", sub: "conflict", on: ["a1749#6"] }, "a1749#6 failed: merge conflict"],
-    [{ subject: "aleph-3", action: "returned", sub: "review", on: ["a3#1"] }, "a3#1 returned by review"],
-    [{ subject: "aleph-3", action: "waiting", to: "human" }, "a3 waits for you"],
-    [{ subject: "aleph-3", action: "after", on: ["aleph-2"] }, "a3 waits for a2"],
-    [{ subject: "aleph-3", action: "filed", by: "human" }, "a3 filed by you"],
-    [{ subject: "aleph-3", action: "filed", by: "claude" }, "a3 filed by Claude Code"],
-    [{ subject: "aleph-3", action: "filed", by: "worker" }, "a3 filed by a worker"],
+    [{ subject: "gate", action: "landed", object: "job.6802" }, "J-06802 landed"],
+    [{ subject: "gate", action: "landed", object: "job.6802", detail: "over review" }, "J-06802 landed: over review"],
+    [{ subject: "gate", action: "failed", object: "job.6802", detail: "merge conflict" }, "J-06802 failed: merge conflict"],
+    [{ subject: "job.6803", subject_role: "review", action: "returned", object: "job.6802" }, "J-06802 returned by review"],
+    [{ subject: "gate", action: "returned", object: "job.6802" }, "J-06802 returned"],
+    [{ subject: "gate", action: "waiting", object: "issue.3" }, "I-00003 waits for you"],
+    [{ subject: "gate", action: "after", object: "issue.3", detail: "issue.2" }, "I-00003 waits for I-00002"],
+    [{ subject: "gate", action: "waiting", object: "issue.3", project: "aleph" }, "a-00003 waits for you"],
+    [{ subject: "gate", action: "busy", object: "issue.3", detail: "job.6802 holds src/x.ts" }, "I-00003 waits: J-06802 holds src/x.ts"],
+    [{ subject: "gate", action: "red", object: "issue.3", detail: "at abc1234" }, "I-00003 waits: main is red: at abc1234"],
+    [{ subject: "human", action: "filed", object: "issue.3" }, "I-00003 filed by you"],
+    [{ subject: "claude", action: "filed", object: "issue.3" }, "I-00003 filed by Claude Code"],
+    [{ subject: "job.6801", subject_role: "intake", action: "filed", object: "issue.3" }, "I-00003 filed by intake"],
+    [{ subject: "rule", action: "stalled", object: "job.6802" }, "J-06802 stalled"],
+    [{ subject: "human", action: "changed", object: "settings", detail: "the factory is paused" }, "settings changed: the factory is paused"],
   ];
   for (const [ev, text] of cases) expect(n.sayText(ev)).toBe(text);
+});
+
+test("say links the keys in the detail", () => {
+  expect(n.say({ subject: "gate", action: "busy", object: "issue.3", detail: "job.6802 holds src/x.ts" })).toEqual([{ id: "issue.3" }, " waits: ", { id: "job.6802" }, " holds src/x.ts"]);
+});
+
+describe("keys", () => {
+  test("a key builds and parses", () => {
+    expect(n.key("job", 6802)).toBe("job.6802");
+    expect(n.parseKey("issue.2072")).toEqual({ kind: "issue", n: 2072 });
+    expect(n.parseKey("project.1")).toEqual({ kind: "project", n: 1 });
+    expect(n.parseKey("aleph-2072")).toBeNull();
+    expect(n.parseKey("issue.x")).toBeNull();
+  });
+  test("a shown key pads to 5 digits and parses back, leading zeros included", () => {
+    expect(n.shownKey("job.6802")).toBe("J-06802");
+    expect(n.shownKey("issue.2")).toBe("I-00002");
+    expect(n.shownKey("idea.7")).toBe("D-00007");
+    expect(n.shownKey("project.3")).toBe("P-00003");
+    expect(n.shownKey("issue.1234", "a")).toBe("a-01234");
+    expect(n.shownKey("settings")).toBe("settings");
+    for (const k of ["job.6802", "issue.2", "idea.7", "project.3", "job.123456"]) expect(n.parseKey(n.shownKey(k))).toEqual(n.parseKey(k));
+  });
+  test("a project code reads as an issue", () => {
+    expect(n.parseKey("a-01234")).toEqual({ kind: "issue", n: 1234 });
+    expect(n.parseKey("z-01234")).toBeNull();
+  });
+  test("a project code i does not clash with the issue letter", () => {
+    n.setCodes({ interview: "i" });
+    expect(n.shownKey("issue.5", "i")).toBe("i-00005");
+    expect(n.parseKey("i-00005")).toEqual({ kind: "issue", n: 5 });
+    expect(n.parseKey("I-00005")).toEqual({ kind: "issue", n: 5 });
+    expect(n.parseKey("J-00005")).toEqual({ kind: "job", n: 5 });
+  });
 });

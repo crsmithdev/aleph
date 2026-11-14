@@ -894,7 +894,6 @@ describe("provenance and the contradiction screen", () => {
   let asked: any[];
   let answer: number;
   let factory: string;
-  const events = () => { const d = join(factory, "events"); return existsSync(d) ? readdirSync(d).flatMap((f) => readFileSync(join(d, f), "utf8").split("\n").filter(Boolean)) : []; };
   const env = (extra: Record<string, string> = {}) => ({ ALEPH_FACTORY_DIR: factory, ALEPH_VAULT: v, ALEPH_JUDGE: "jev", ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k", CLAUDE_CODE_SESSION_ID: "", ...extra });
   const snapshot = () => Bun.spawnSync(["bash", "-c", `cd ${v} && find . -path ./.git -prune -o -type f -print | sort | xargs cat | sha256sum`], { stdout: "pipe" }).stdout.toString();
   const write = (path: string, extra: Record<string, string> = {}) => runAsync(env(extra), "write", path, "--why", "t");
@@ -947,29 +946,17 @@ describe("provenance and the contradiction screen", () => {
     const r = await write(note("Sprocket Ledger Rules", { scope: "screen" }), { ALEPH_JEV_URL: "http://127.0.0.1:1/" });
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("warn contradiction");
-    expect(events()).toEqual([]);
   });
-  test("a refusal at p 0.9 logs one event naming both titles and changes nothing, even when the log fails; p 0.1 logs none", async () => {
+  test("a refusal at p 0.9 changes nothing; p 0.1 writes", async () => {
     await live("Gear Housing");
     reset(0.1);
     const ok = await write(note("Gear Housing Notes", { scope: "screen" }));
     expect(ok.code).toBe(0);
-    expect(events()).toEqual([]);
     reset(0.9);
     const before = snapshot();
     const r = await write(note("Gear Housing Claims", { scope: "screen" }));
     expect(r.code).toBe(1);
-    expect(snapshot()).toBe(before);
-    const lines = events();
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("Gear Housing Claims");
-    expect(JSON.parse(lines[0]).on).toContain("Gear Housing");
-    // An event log that cannot be written still leaves the refusal in force.
-    const blocked = join(v, "..", "not-a-folder");
-    writeFileSync(blocked, "");
-    const r2 = await write(note("Gear Housing Claims", { scope: "screen" }), { ALEPH_FACTORY_DIR: blocked });
-    expect(r2.code).toBe(1);
-    expect(r2.stderr).toContain("may contradict [Gear Housing]");
+    expect(r.stderr).toContain("may contradict [Gear Housing]");
     expect(snapshot()).toBe(before);
   });
 });

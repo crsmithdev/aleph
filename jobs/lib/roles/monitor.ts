@@ -88,10 +88,10 @@ export async function monitorStep(now = new Date()): Promise<Report | null> {
   if (!day) return null;
   try {
     const r = await runMonitor(day);
-    if (r) await recordRan("monitor", r.error ? "no reading" : r.findings.length ? `${r.findings.length} findings` : "nothing looks off");
+    if (r) recordRan("monitor", r.error ? "no reading" : r.findings.length ? `${r.findings.length} findings` : "nothing looks off");
     return r;
   } catch (e: any) {
-    await recordRan("monitor", "failed");
+    recordRan("monitor", "failed");
     return null;
   }
 }

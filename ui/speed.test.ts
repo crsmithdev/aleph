@@ -1,7 +1,10 @@
 import { afterAll, afterEach, beforeAll, expect, setSystemTime, spyOn, test } from "bun:test";
+import { recordFlake } from "../jobs/lib/gates/factory-status.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
+import { jobFolder } from "../jobs/lib/records/run-files.ts";
+import { closePass, openPass } from "../lib/sources.ts";
 import { withEnv } from "./test-server.ts";
 import { activeIssues, agentStats, CLASSES, classify, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { buckets } from "../lib/windows.ts";
@@ -11,46 +14,46 @@ import { bar, statusCards, usageCard, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { pct } from "./lib.js";
 // @ts-ignore plain JS shared with the page
-import * as record from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { conn } from "../lib/db.ts";
 import { averageFigures, figures } from "./api/speed.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 let base: string;
 let restore: () => void;
 const now = new Date(2026, 9, 28, 15, 0, 0);
 const at = (daysAgo: number, h: number, m = 0) => new Date(2026, 9, 28 - daysAgo, h, m).toISOString();
-let n = 0;
-/** The runs a test adds: they go after it, so the next test reads the runs of the setup only. */
+/** The jobs a test adds: they go after it, so the next test reads the jobs of the setup only. */
 const made: string[] = [];
-function run(r: Record<string, unknown>) {
-  const dir = join(base, "jobs", `r${String(++n).padStart(3, "0")}`);
-  mkdirSync(dir, { recursive: true });
-  record.putRun(basename(join(dir)), { job: `j${n}`, name: `j${n}`, told: true, n, ...r } as any);
-  made.push(dir);
+/** Make a job; `on` is the issue `<repo>-<n>` and `job` is dropped, a job's work being its `prev` chain. */
+function run({ on, job: _job, n: _n, ...r }: Record<string, unknown>) {
+  made.push(seed({ name: "job", ...(on ? { target: `issue.${String(on).split("-")[1]}` } : {}), ...r } as any).id);
 }
 const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, h), ended: new Date(Date.parse(at(daysAgo, h)) + s * 1000).toISOString() });
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-speed-"));
   // A project filter names a registry key, or it matches nothing.
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ alpha: { path: "/nonexistent/alpha" }, beta: { path: "/nonexistent/beta" }, pc: { path: "/nonexistent/pc" } }));
-  restore = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0", ALEPH_ISSUES: join(base, "issues") });
+  writeRepos({ alpha: { path: "/nonexistent/alpha" }, beta: { path: "/nonexistent/beta" }, pc: { path: "/nonexistent/pc" } }, join(base, "issues"));
+  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0", ALEPH_ITEMS: join(base, "issues") });
   // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (stuck, model unset), a 5 h broken clock
-  run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
-  run({ kind: "build", condition: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
-  run({ kind: "build", condition: "failed", cost: 3, ...secs(0, 10, 1800) });
-  run({ kind: "build", condition: "passed", cost: 9, ...secs(0, 1, 5 * 3600) });
-  run({ kind: "land", condition: "landed", ...secs(0, 9, 40) });
-  run({ kind: "land", condition: "landed", ...secs(0, 9, 46) }); // both without an issue: one key
-  run({ kind: "land", condition: "failed", ...secs(0, 9, 100) });
-  run({ kind: "intake", condition: "done", ...secs(0, 11, 20) });
-  run({ kind: "build", condition: "running", started: at(0, 14) });
+  run({ role: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
+  run({ role: "build", state: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
+  run({ role: "build", state: "failed", cost: 3, ...secs(0, 10, 1800) });
+  run({ role: "build", state: "passed", cost: 9, ...secs(0, 1, 5 * 3600) });
+  run({ role: "land", state: "landed", ...secs(0, 9, 40) });
+  run({ role: "land", state: "landed", ...secs(0, 9, 46) }); // both without an issue: one key
+  run({ role: "land", state: "failed", ...secs(0, 9, 100) });
+  run({ role: "intake", state: "done", ...secs(0, 11, 20) });
+  run({ role: "build", state: "running", started: at(0, 14) });
   // three days ago and 20 days ago
-  run({ kind: "build", condition: "passed", model: "claude-sonnet-5-5", cost: 0.5, checks: [{ name: "tests", ok: true, seconds: 40 }], ...secs(3, 9, 300) });
-  run({ kind: "intake", condition: "done", ...secs(20, 9, 90) });
+  run({ role: "build", state: "passed", model: "claude-sonnet-5-5", cost: 0.5, checks: [{ name: "tests", ok: true, seconds: 40 }], ...secs(3, 9, 300) });
+  run({ role: "intake", state: "done", ...secs(20, 9, 90) });
   made.length = 0;
 });
 afterEach(() => {
-  for (const dir of made) { record.removeRun(basename(dir)); rmSync(dir, { recursive: true, force: true }); }
+  for (const id of made) { conn().run("DELETE FROM jobs WHERE id = ?", [id]); rmSync(jobFolder(id), { recursive: true, force: true }); }
+  conn().run("DELETE FROM events WHERE subject = 'gate' AND action IN ('question', 'answered')");
   made.length = 0;
 });
 afterAll(() => {
@@ -60,10 +63,10 @@ afterAll(() => {
 
 test("done and issues.landed count landed issues, not land runs", () => {
   // 40 days back, so no other test's window sees these runs.
-  const old = (h: number, m: number, extra: object) => run({ kind: "land", condition: "landed", ...extra, started: at(40, h, m), ended: at(40, h, m + 1) });
-  old(9, 0, { repo: "zz", on: "zz-5" });
-  old(9, 30, { repo: "zz", on: "zz-5" }); // the same issue lands again
-  old(9, 45, { repo: "zz", on: "zz-6" });
+  const old = (h: number, m: number, extra: object) => run({ role: "land", state: "landed", ...extra, started: at(40, h, m), ended: at(40, h, m + 1) });
+  old(9, 0, { repo: "zz", target: "issue.5" });
+  old(9, 30, { repo: "zz", target: "issue.5" }); // the same issue lands again
+  old(9, 45, { repo: "zz", target: "issue.6" });
   old(9, 50, {}); // no issue
   old(9, 55, {}); // no issue: one key with the one above
   const d = speed("day", new Date(2026, 8, 18, 15));
@@ -113,7 +116,7 @@ test("the Status Usage meter fill takes the default fill", () => {
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (job: string, kind: string, state: string, a: string, b: string) => ({ n: 1, kind, job, name: job, condition: state, started: a, ended: b }) as any;
+  const r = (job: string, kind: string, state: string, a: string, b: string) => ({ n: 1, role: kind, job, name: job, state: state, started: a, ended: b }) as any;
   const since = new Date(2026, 9, 28, 5).getTime(), end = new Date(2026, 9, 28, 15).getTime();
   const none = { issue: new Map(), goal: new Map() };
   const p = phases([
@@ -132,12 +135,14 @@ test("phases: implement spans a job's fix rounds, land starts at the last finish
   expect(p.land).toMatchObject({ count: 3, p50: 1800, p90: 3600 }); // 600 (a), 1800 (b), 3600 (e)
 });
 
-test("filed: an issue's file is its filing; a part's file and a bulk commit's time do not count", () => {
+test("filed: an issue's file is its filing; a bulk commit's time does not count", () => {
   const store = join(base, "store");
-  mkdirSync(join(store, "fx/backlog/tasks"), { recursive: true });
+  mkdirSync(store, { recursive: true });
+  writeRepos({ fx: {} }, store);
+  const restore = withEnv({ ALEPH_ITEMS: store });
   const git = (...a: string[]) => Bun.spawnSync(["git", "-C", store, ...a], { stderr: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
   const add = (when: number, msg: string, ...ids: string[]) => {
-    for (const id of ids) writeFileSync(join(store, `fx/backlog/tasks/fx-${id}.md`), id);
+    for (const id of ids) { mkdirSync(join(store, `issues/${id}`), { recursive: true }); writeFileSync(join(store, `issues/${id}/issue.md`), "---\nproject: project.1\n---\n"); }
     git("add", ".");
     const stamp = `@${when} +0000`;
     Bun.spawnSync(["git", "-C", store, "commit", "-qm", msg], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: stamp, GIT_COMMITTER_DATE: stamp } });
@@ -145,30 +150,31 @@ test("filed: an issue's file is its filing; a part's file and a bulk commit's ti
   };
   git("init", "-q");
   add(1000, "fx: add", "1", "2");
-  add(1600, "fx: plan", "1.1");
   add(2100, "migrate: work model, 3 items", "3");
+  try {
   const f = filed(store);
   expect([f.issue.get("fx-1"), f.issue.get("fx-2"), f.issue.get("fx-3"), f.issue.size]).toEqual([1000_000, 1000_000, null, 3]);
   // A new commit reads only what it adds.
   add(3000, "fx: add", "5");
   expect(filed(store).issue.get("fx-5")).toBe(3000_000);
+  } finally { restore(); }
 });
 
 test("classify: one run of each class, with its cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (job: string, todo: number, h: number, m: number, o: Record<string, unknown> = {}) =>
-    ({ n: 1, kind: "build", job, name: job, repo: "fx", on: `fx-${todo}`, condition: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
+    ({ n: 1, role: "build", job, name: job, repo: "fx", target: `issue.${todo}`, state: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
   const runs = [
     // issue 1: a fix round and the landing run in job a, an earlier job z restarted, then a run after the land
-    r("z", 1, 1, 0, { condition: "failed", reason: "agent run z: stalled" }),
-    r("a", 1, 2, 0, { condition: "failed", failed: "tests" }),
+    r("z", 1, 1, 0, { state: "failed", reason: "agent run z: stalled" }),
+    r("a", 1, 2, 0, { state: "failed", failed: "tests" }),
     r("a", 1, 3, 0),
-    { n: 1, kind: "land", job: "a", name: "a", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
+    { n: 1, role: "land", job: "a", name: "a", repo: "fx", target: "issue.1", state: "landed", started: t(3, 20), ended: t(3, 25) },
     r("b", 1, 5, 0),
     // issue 2: four starts in an hour, the 4th is a loop; they have no landing, the first three are not counted
     r("l1", 2, 6, 0), r("l2", 2, 6, 10), r("l3", 2, 6, 20), r("l4", 2, 6, 30),
     // issue 3 is dropped
-    r("d", 3, 8, 0, { condition: "failed", noCommit: true }),
+    r("d", 3, 8, 0, { state: "failed", noCommit: true }),
     // issue 4 is open and unclassed
     r("o", 4, 9, 0),
   ];
@@ -198,24 +204,24 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 test("a build run counts as an agent run", () => {
   const before = speed("week", now);
-  run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
+  run({ role: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
   const d = speed("week", now);
-  expect(d.slowest[0]).toMatchObject({ condition: "passed", took: 7000, tests: 20 });
+  expect(d.slowest[0]).toMatchObject({ state: "passed", took: 7000, tests: 20 });
   expect(d.models.find((m) => m.model === "claude-opus-5-5")!.count).toBe(before.models.find((m) => m.model === "claude-opus-5-5")!.count + 1);
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (o: Record<string, unknown>) => ({ n: 1, job: "b", name: "b", repo: "fx", on: "fx-1", condition: "passed", ...o }) as any;
+  const r = (o: Record<string, unknown>) => ({ n: 1, job: "b", name: "b", repo: "fx", target: "issue.1", state: "passed", ...o }) as any;
   const out = classify([
-    r({ kind: "build", condition: "failed", failed: "tests", started: t(2), ended: t(2, 10) }),
-    r({ kind: "build", started: t(3), ended: t(3, 10) }),
-    { n: 1, kind: "land", job: "b", name: "b", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
+    r({ role: "build", state: "failed", failed: "tests", started: t(2), ended: t(2, 10) }),
+    r({ role: "build", started: t(3), ended: t(3, 10) }),
+    { n: 1, role: "land", job: "b", name: "b", repo: "fx", target: "issue.1", state: "landed", started: t(3, 20), ended: t(3, 25) },
   ], () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   expect(out.classes.find((c) => c.key === "landed")!.causes.map((c) => c.name)).toEqual(["After fix rounds"]);
 });
 
 test("classify: a held run that later landed is landed, its earlier held rounds are returned", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (o: Record<string, unknown>) => ({ n: 1, kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", condition: "waiting", reason: "held path package.json", ...o }) as any;
-  const land = (job: string, state: string, h: number) => ({ n: 1, kind: "land", job, name: job, repo: "fx", on: "fx-1", condition: state, started: t(h, 20), ended: t(h, 25) }) as any;
+  const r = (o: Record<string, unknown>) => ({ n: 1, role: "build", job: "h", name: "h", repo: "fx", target: "issue.1", state: "waiting", reason: "held path package.json", ...o }) as any;
+  const land = (job: string, state: string, h: number) => ({ n: 1, role: "land", job, name: job, repo: "fx", target: "issue.1", state: state, started: t(h, 20), ended: t(h, 25) }) as any;
   const out = classify([
     r({ started: t(2), ended: t(2, 10) }),
     land("h", "failed", 2),
@@ -231,7 +237,7 @@ test("classify: a held run that later landed is landed, its earlier held rounds 
 test("classify: a drop's fate, not its prose, sets the failed class and the Needed the user cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (todo: number, o: Record<string, unknown>) =>
-    ({ n: 1, kind: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", on: `fx-${todo}`, condition: "failed", started: t(todo), ended: t(todo, 10), ...o }) as any;
+    ({ n: 1, role: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", target: `issue.${todo}`, state: "failed", started: t(todo), ended: t(todo, 10), ...o }) as any;
   const runs = [
     r(1, { fate: "met", reason: "agent run j1: stopped" }),
     r(2, { fate: "duplicate" }),
@@ -253,31 +259,31 @@ test("classify: a drop's fate, not its prose, sets the failed class and the Need
   expect(by("dropped").causes.find((c) => c.name === "Needed the user")!.text).toBe("The run waited for the user, or the user restarted or dropped it by hand.");
 });
 
-test("runs read their issue from on: a part counts under its own ref, an issue run under its number", () => {
+test("runs read their issue from target: an issue run counts under its number", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const a = (job: string, o: Record<string, unknown>) => ({ n: 1, kind: "build", job, name: job, repo: "aleph", condition: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
+  const a = (job: string, o: Record<string, unknown>) => ({ n: 1, role: "build", job, name: job, repo: "aleph", state: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
   const runs = [
-    a("p", { on: "aleph-1430" }), a("q", { on: "aleph-1430.1" }), a("r", { on: "aleph-1359" }),
+    a("p", { target: "issue.1430" }), a("q", { target: "issue.1430" }), a("r", { target: "issue.1359" }),
   ];
   const seen: string[] = [];
   classify(runs, (g) => { seen.push(g); return "open"; }, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
-  expect(new Set(seen)).toEqual(new Set(["aleph-1430", "aleph-1430.1", "aleph-1359"]));
+  expect(new Set(seen)).toEqual(new Set(["aleph-1430", "aleph-1359"]));
 
-  const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), kind: "land", condition: "landed" });
-  for (const r of [a("p", { on: "aleph-1430" }), a("q", { on: "aleph-1430.1" }), land("p", { on: "aleph-1430" }), land("q", { on: "aleph-1430.1" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
+  const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), role: "land", state: "landed" });
+  for (const r of [a("p", { target: "issue.1430" }), a("q", { target: "issue.1430" }), land("p", { target: "issue.1430" }), land("q", { target: "issue.1430" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
   const fit = { fable: 0.1, rest: 0.1, pooled: true, hours: 24 };
   const w = speed("week", now, fit);
-  expect(w.issues.week).toBe(0.2); // both runs under the one key aleph-1430
+  expect(w.issues.week).toBe(0.2); // the runs under the one key aleph-1430
   expect(w.issues.usage).toEqual([{ goal: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }]);
   expect(speed("week", now).issues.usage).toEqual([]);
-  run({ ...a("r", { on: "aleph-1359" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { on: "aleph-1359" }), started: at(1, 9), ended: at(1, 10) });
+  run({ ...a("r", { target: "issue.1359" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { target: "issue.1359" }), started: at(1, 9), ended: at(1, 10) });
   const w2 = speed("week", now, fit);
   expect(w2.issues.week).toBe(0.1); // aleph-1359 counts too: median of 0.2 and 0.1
   expect(w2.issues.usage).toEqual([{ goal: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }, { goal: "aleph-1359", href: "#/issues/aleph/1359", week: 0.1, runs: 1 }]);
 });
 
 test("phases: intake runs from the filing to the first triage end, queue from there to the first agent start, lead from the filing to the last land", () => {
-  const r = (n: number, kind: string, state: string, a: number, b: number, repo = "fx") => ({ kind, job: `${repo}-${n}-${a}`, name: "x", repo, on: `${repo}-${n}`, condition: state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
+  const r = (n: number, kind: string, state: string, a: number, b: number, repo = "fx") => ({ role: kind, job: `${repo}-${n}-${a}`, name: "x", repo, target: `issue.${n}`, state: state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
   const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", null], ["fx-3", 1000_000]]) };
   const p = phases([
     r(1, "intake", "done", 1000_000, 1060_000),
@@ -295,7 +301,7 @@ test("phases: intake runs from the filing to the first triage end, queue from th
 });
 
 test("per-issue times carry each issue's phases and outcome, and a bucket has a p90 next to its p50", () => {
-  const r = (n: number, kind: string, state: string, a: number, b: number) => ({ kind, job: `fx-${n}`, name: "x", repo: "fx", on: `fx-${n}`, condition: state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
+  const r = (n: number, kind: string, state: string, a: number, b: number) => ({ role: kind, job: `fx-${n}`, name: "x", repo: "fx", target: `issue.${n}`, state: state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
   const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", 1000_000]]) };
   const t = phaseTimes([
     r(1, "intake", "done", 1000_000, 1060_000), r(1, "build", "passed", 1660_000, 1900_000), r(1, "land", "landed", 2000_000, 2100_000),
@@ -306,8 +312,8 @@ test("per-issue times carry each issue's phases and outcome, and a bucket has a 
   expect(by["fx-2"]).toEqual({ id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: new Date(1000_000).toISOString(), intake: 100, queue: 300, implement: 100, land: null, lead: null });
   // Two jobs finish in one hour: builds of 600 and 1200 s.
   const now2 = new Date(2026, 2, 10, 15), h = (m: number) => new Date(2026, 2, 10, 9, m).toISOString();
-  run({ kind: "build", job: "pa", repo: "px", on: "px-1", condition: "passed", started: h(0), ended: h(10) });
-  run({ kind: "build", job: "pb", repo: "px", on: "px-2", condition: "passed", started: h(5), ended: h(25) });
+  run({ role: "build", job: "pa", repo: "px", target: "issue.1", state: "passed", started: h(0), ended: h(10) });
+  run({ role: "build", job: "pb", repo: "px", target: "issue.2", state: "passed", started: h(5), ended: h(25) });
   const d = speed("day", now2);
   const b = d.buckets.find((x) => x.implement !== null)!;
   expect(b.implement).toBe(600);
@@ -317,7 +323,7 @@ test("per-issue times carry each issue's phases and outcome, and a bucket has a 
 
 test("agents: each role's live, runs, hours and models, with a peak over all roles", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
-  const e = (kind: string, a: number, b: number | null, extra: object = {}) => ({ folder: `f${a}`, id: `f${a}`, run: { n: 1, kind, condition: b === null ? "running" : "passed", started: iso(a), ...(b === null ? {} : { ended: iso(b) }), ...extra } }) as any;
+  const e = (kind: string, a: number, b: number | null, extra: object = {}) => ({ folder: `f${a}`, id: `f${a}`, run: { n: 1, role: kind, state: b === null ? "running" : "passed", started: iso(a), ...(b === null ? {} : { ended: iso(b) }), ...extra } }) as any;
   const runs = [
     e("build", 1, 3, { model: "sonnet", review: { call: "passed" } }), e("build", 2, 4, { model: "sonnet" }), e("build", 3, 3.5, { model: "haiku" }),
     e("build", 7, null), e("build", 6, null), e("build", 0, 9.5), // a live run, a lost one, and a broken clock
@@ -340,16 +346,16 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
 test("agents: outcome rows per role and model, with first pass, reviewer verdicts and a baseline rate", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
-  const e = (kind: string, a: number, extra: object) => ({ folder: `o${n}`, id: `o${n++}`, run: { n: 1, kind, job: `j${n}`, condition: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const e = (kind: string, a: number, extra: object) => ({ folder: `o${n}`, id: `o${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
   const runs = [
     // Window 10..20: haiku has one pass that landed first time, one run sent back by the reviewer, one timed out; gpt-oss has one failed check.
-    e("build", 10, { model: "claude-haiku", cost: 1, job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
-    e("build", 11, { model: "claude-haiku", cost: 0.5, condition: "returned", failed: "review", reason: "reviewer: no" }),
-    e("build", 13, { model: "claude-haiku", condition: "failed", cause: "timeout" }),
-    e("build", 14, { model: "gpt-oss-20b", condition: "failed", failed: "tests", cost: 0.25 }),
+    e("build", 10, { model: "claude-haiku", cost: 1, job: "a" }), e("land", 12, { job: "a", state: "landed" }),
+    e("build", 11, { model: "claude-haiku", cost: 0.5, state: "returned", failed: "review", reason: "reviewer: no" }),
+    e("build", 13, { model: "claude-haiku", state: "failed", cause: "timeout" }),
+    e("build", 14, { model: "gpt-oss-20b", state: "failed", failed: "tests", cost: 0.25 }),
     e("intake", 15, { model: "gpt-oss-20b" }),
     // The span before, 0..10: haiku one of two, gpt-oss none.
-    e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", condition: "failed" }),
+    e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", state: "failed" }),
   ];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false, [[0, 10 * H]]);
   const by = (role: string, model: string) => a.outcomes.find((x) => x.role === role && x.model === model)!;
@@ -363,14 +369,14 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
 test("agents: the all-roles success rate, its baseline, the worker first pass and the local share", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
-  const e = (kind: string, a: number, extra: object) => ({ folder: `r${n}`, id: `r${n++}`, run: { n: 1, kind, job: `j${n}`, condition: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const e = (kind: string, a: number, extra: object) => ({ folder: `r${n}`, id: `r${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
   const runs = [
     // Window 10..20: job a landed first time, job b landed after a fix round, a gpt-oss triage passed, a gpt-oss build failed.
-    e("build", 10, { model: "claude-haiku", job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
-    e("build", 13, { model: "claude-haiku", job: "b", condition: "returned", failed: "review" }), e("build", 14, { model: "claude-haiku", job: "b" }), e("land", 16, { job: "b", condition: "landed" }),
-    e("intake", 15, { model: "gpt-oss-20b" }), e("build", 17, { model: "gpt-oss-20b", condition: "failed", failed: "tests" }),
+    e("build", 10, { model: "claude-haiku", job: "a" }), e("land", 12, { job: "a", state: "landed" }),
+    e("build", 13, { model: "claude-haiku", job: "b", state: "returned", failed: "review" }), e("build", 14, { model: "claude-haiku", job: "b" }), e("land", 16, { job: "b", state: "landed" }),
+    e("intake", 15, { model: "gpt-oss-20b" }), e("build", 17, { model: "gpt-oss-20b", state: "failed", failed: "tests" }),
     // The span before, 0..10: one of two ended runs succeeded.
-    e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", condition: "failed" }),
+    e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", state: "failed" }),
   ];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false, [[0, 10 * H]]);
   expect(a.rates).toEqual({ success: 0.6, baseline: 0.5, firstPass: 0.5, local: 0.4 });
@@ -379,7 +385,7 @@ test("agents: the all-roles success rate, its baseline, the worker first pass an
 
 test("an unlanded run of an issue that left the store is Dropped", () => {
   const t = (h: number) => new Date(2026, 9, 28, h).toISOString();
-  const r = { n: 1, job: "g", name: "g", repo: "fx", on: "fx-659", condition: "failed", kind: "build", started: t(8), ended: t(9) } as any;
+  const r = { n: 1, job: "g", name: "g", repo: "fx", target: "issue.659", state: "failed", role: "build", started: t(8), ended: t(9) } as any;
   const since = new Date(2026, 9, 27).getTime(), at = new Date(2026, 9, 28, 15).getTime();
   expect(classify([r], () => "gone", since, at, null).classes.find((c) => c.key === "dropped")!.runs).toBe(1);
   expect(classify([r], () => undefined, since, at, null).notCounted.runs).toBe(1);
@@ -410,7 +416,7 @@ test("activeEnd pulls ended back to the last worker activity", () => {
     const folder = join(dir, name);
     mkdirSync(folder);
     for (const [f, m] of Object.entries(files)) { writeFileSync(join(folder, f), "x"); utimesSync(folder + "/" + f, (t0 + m * min) / 1000, (t0 + m * min) / 1000); }
-    return { id: name, folder, run: { n: 1, kind: "build", job: name, name, told: true, started: new Date(t0).toISOString(), ended: new Date(t0 + 180 * min).toISOString() } as any };
+    return { id: name, folder, run: { n: 1, role: "build", job: name, name, told: true, started: new Date(t0).toISOString(), ended: new Date(t0 + 180 * min).toISOString() } as any };
   };
   // killed: last output at 24 min, noticed at 180 min
   expect(Date.parse(activeEnd(mk("a", { log: 24, exit: 180 })).ended!)).toBe(t0 + 24 * min);
@@ -422,16 +428,14 @@ test("activeEnd pulls ended back to the last worker activity", () => {
 });
 
 test("flakes count each test name; a row without tests counts under its check", async () => {
-  const file = join(base, "factory", "flaky.json");
-  mkdirSync(join(base, "factory"), { recursive: true });
   const row = (check: string, tests?: string[]) => ({ repo: "r", check, run: "x", at: at(1, 9), ...(tests ? { tests } : {}) });
-  writeFileSync(file, JSON.stringify([row("tests", ["a.test.ts > one", "b.test.ts > two"]), row("tests", ["a.test.ts > one"]), row("tests"), row("types")]));
+  for (const r of [row("tests", ["a.test.ts > one", "b.test.ts > two"]), row("tests", ["a.test.ts > one"]), row("tests"), row("types")]) recordFlake(r);
   try {
       const d = await speed("week", now);
     expect(d.flaky).toBe(4);
     expect(d.flakes).toEqual([{ name: "a.test.ts > one", count: 2 }, { name: "b.test.ts > two", count: 1 }, { name: "tests", count: 1 }, { name: "types", count: 1 }]);
   } finally {
-    rmSync(file, { force: true });
+    conn().run("DELETE FROM flaky");
     }
 });
 
@@ -452,16 +456,19 @@ test("the day baseline in one read equals the baseline of seven spans each read 
 
 test("GET /api/flow?baseline=1 reads the job records once for the window, the other windows and every span", async () => {
   setSystemTime(new Date(2026, 9, 28, 15));
-  const real = record.all;
+  // The reads of the whole jobs table: the records are cached, so the many callers share one.
+  const d = conn(), real = d.query.bind(d);
   let calls = 0;
-  const spy = spyOn(record, "all").mockImplementation((...a: []) => { calls++; return real(...a); });
+  const spy = spyOn(d, "query").mockImplementation(((sql: string) => { if (sql.startsWith("SELECT * FROM jobs ")) calls++; return real(sql); }) as any);
   try {
-    run({ kind: "land", condition: "landed", ...secs(0, 13, 60) });
+    run({ role: "land", state: "landed", ...secs(0, 13, 60) });
     calls = 0;
+    // The page builds in a pass (ui/build-worker.ts), where the jobs read is cached for the pass.
+    openPass({}, "t");
     const r = await routes["GET /api/flow"](new Request("http://x/api/flow?window=day&baseline=1"), {}, new URL("http://x/api/flow?window=day&baseline=1"));
     expect(r.status).toBe(200);
     expect(calls).toBe(1);
-  } finally { spy.mockRestore(); setSystemTime(); }
+  } finally { closePass(); spy.mockRestore(); setSystemTime(); }
 });
 
 test("cardTrend writes a sub-point change with pct() and keeps the flat marker for 0", async () => {
@@ -474,10 +481,12 @@ test("cardTrend writes a sub-point change with pct() and keeps the flat marker f
 });
 
 test("asks: the window counts the Asks set, and those that came to Chris, in the answer and in figures()", () => {
-  const dir = (a: string, outcome: string) => ({ at: a, kind: "director", what: outcome, data: { outcome } });
-  const rec = (key: string, asks: { set: string; cleared?: string }[], events: unknown[] = []) => record.write({ ...record.empty(key), asks, events: events as never });
-  rec("fx-1", [{ set: at(1, 9), cleared: at(1, 10) }], [dir(at(1, 9, 30), "escalated")]); // escalated between set and cleared
-  rec("fx-2", [{ set: at(0, 7) }, { set: at(40, 9), cleared: at(40, 10) }], [dir(at(0, 6), "escalated"), dir(at(0, 7, 5), "decided")]); // escalated before the set; decided; one outside the window
+  const dir = (ref: string, at: string, outcome: string) => made.push(seed({ role: "director", state: "done", started: at, decision: { at, ref, outcome } }).id);
+  // An Ask is a `question` event of the issue, then an `answered` event when it goes.
+  const ev = (time: string, action: string, issue: number) => conn().run("INSERT INTO events (time, subject, action, object, detail) VALUES (?, 'gate', ?, ?, ?)", [time, action, `issue.${issue}`, action === "question" ? "question" : null]);
+  const rec = (issue: number, asks: { set: string; cleared?: string }[]) => asks.forEach((a) => { ev(a.set, "question", issue); if (a.cleared) ev(a.cleared, "answered", issue); });
+  rec(1, [{ set: at(1, 9), cleared: at(1, 10) }]); dir("fx-1", at(1, 9, 30), "escalated"); // escalated between set and cleared
+  rec(2, [{ set: at(0, 7) }, { set: at(40, 9), cleared: at(40, 10) }]); dir("fx-2", at(0, 6), "escalated"); dir("fx-2", at(0, 7, 5), "decided"); // escalated before the set; decided; one outside the window
   const s = speed("week", now);
   expect(s.asks).toEqual({ count: 2, manual: 1 });
   expect(figures(s)).toMatchObject({ asks: 2 });
@@ -487,11 +496,11 @@ test("asks: the window counts the Asks set, and those that came to Chris, in the
 
 test("GET /api/flow?project= counts only that repo's runs and issues, in the answer and the baseline", async () => {
   // 60 days back (this week) and 67 days back (the week before), so no other test's window sees these runs.
-  const land = (daysAgo: number, repo: string, i: number) => run({ kind: "land", condition: "landed", repo, on: `${repo}-${i}`, ...secs(daysAgo, 9, 60) });
+  const land = (daysAgo: number, repo: string, i: number) => run({ role: "land", state: "landed", repo, target: `issue.${i}`, ...secs(daysAgo, 9, 60) });
   land(60, "alpha", 1); land(60, "beta", 1); land(60, "beta", 2);
-  run({ kind: "build", condition: "passed", repo: "alpha", on: "alpha-1", ...secs(60, 8, 300) });
-  run({ kind: "build", condition: "passed", repo: "beta", on: "beta-1", ...secs(60, 8, 300) });
-  run({ kind: "build", condition: "passed", repo: "beta", on: "beta-2", ...secs(60, 8, 300) });
+  run({ role: "build", state: "passed", repo: "alpha", target: "issue.1", ...secs(60, 8, 300) });
+  run({ role: "build", state: "passed", repo: "beta", target: "issue.1", ...secs(60, 8, 300) });
+  run({ role: "build", state: "passed", repo: "beta", target: "issue.2", ...secs(60, 8, 300) });
   land(67, "alpha", 3); land(67, "beta", 3); land(67, "beta", 4);
   setSystemTime(new Date(2026, 9, 28 - 60, 15));
   try {
@@ -508,10 +517,10 @@ test("GET /api/flow?project= counts only that repo's runs and issues, in the ans
 
 test("a bucket's cost per model is the recorded cost of the agent runs that started in it", () => {
   const now3 = new Date(2026, 4, 10, 15), h = (hh: number, m = 0) => new Date(2026, 4, 10, hh, m).toISOString();
-  run({ kind: "build", repo: "pc", condition: "passed", model: "opus", cost: 1.25, started: h(9, 5), ended: h(9, 10) });
-  run({ kind: "build", repo: "pc", condition: "passed", model: "opus", cost: 0.5, started: h(9, 40), ended: h(10, 10) }); // ends in the next hour, counts where it starts
-  run({ kind: "build", repo: "pc", condition: "passed", model: "sonnet", cost: 2, started: h(9, 20), ended: h(9, 30) });
-  run({ kind: "build", repo: "pc", condition: "passed", cost: 4, started: h(11), ended: h(11, 5) });
+  run({ role: "build", repo: "pc", state: "passed", model: "opus", cost: 1.25, started: h(9, 5), ended: h(9, 10) });
+  run({ role: "build", repo: "pc", state: "passed", model: "opus", cost: 0.5, started: h(9, 40), ended: h(10, 10) }); // ends in the next hour, counts where it starts
+  run({ role: "build", repo: "pc", state: "passed", model: "sonnet", cost: 2, started: h(9, 20), ended: h(9, 30) });
+  run({ role: "build", repo: "pc", state: "passed", cost: 4, started: h(11), ended: h(11, 5) });
   const d = speed("day", now3, null, "pc");
   const at9 = d.buckets.find((b) => b.at === h(9))!, at11 = d.buckets.find((b) => b.at === h(11))!;
   expect(at9.cost).toEqual({ opus: 1.75, sonnet: 2 });
@@ -532,13 +541,13 @@ test("every Status card with a second value has a qualifier, Lost time too, and 
 
 test("speed: a build on an unchanged store spawns one git process and reads the same filing times and titles", () => {
   const store = join(base, "issues");
-  mkdirSync(join(store, "tt/backlog/tasks"), { recursive: true });
-  writeFileSync(join(store, "tt/backlog/config.yml"), "");
-  writeFileSync(join(store, "tt/backlog/tasks/tt-7.md"), "---\nid: tt-7\ntitle: Seven\nstatus: To Do\n---\n");
+  mkdirSync(join(store, "issues/7"), { recursive: true });
+  writeRepos({ tt: {} }, store);
+  writeFileSync(join(store, "issues/7/issue.md"), "---\nproject: project.1\ntitle: Seven\n---\n");
   const who = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: "@5000 +0000", GIT_COMMITTER_DATE: "@5000 +0000" };
   for (const a of [["init", "-q"], ["add", "."], ["commit", "-qm", "tt: add"], ["update-ref", "refs/remotes/origin/main", "HEAD"]]) Bun.spawnSync(["git", "-C", store, ...a], { env: { ...process.env, ...who } });
-  run({ kind: "build", condition: "passed", repo: "tt", on: "tt-7", cost: 1, ...secs(0, 9, 600) });
-  run({ kind: "land", condition: "landed", repo: "tt", on: "tt-7", ...secs(0, 9, 40) });
+  run({ role: "build", state: "passed", repo: "tt", target: "issue.7", cost: 1, ...secs(0, 9, 600) });
+  run({ role: "land", state: "landed", repo: "tt", target: "issue.7", ...secs(0, 9, 40) });
   const read = () => { const d = speed("week", now, { fable: 0.1, rest: 0.1, pooled: true, hours: 24 }); return [d.times.map((x) => x.filed), d.issues.usage.map((u) => u.title)]; };
   const first = read();
   expect(first[1]).toContain("Seven");
@@ -556,7 +565,7 @@ test("classify: the restart loop starts at the run cap setting", () => {
   const off = withEnv({ ALEPH_RUN_CAP: "5" });
   try {
     const t = (m: number) => new Date(2026, 9, 28, 8, m).toISOString();
-    const runs = [0, 1, 2, 3, 4, 5].map((i) => ({ n: 1, kind: "build", job: `l${i}`, name: `l${i}`, repo: "fx", on: "fx-2", condition: "passed", started: t(i * 5), ended: t(i * 5 + 4) }) as any);
+    const runs = [0, 1, 2, 3, 4, 5].map((i) => ({ n: 1, role: "build", job: `l${i}`, name: `l${i}`, repo: "fx", target: "issue.2", state: "passed", started: t(i * 5), ended: t(i * 5 + 4) }) as any);
     const out = classify(runs, () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
     const reran = out.classes.find((c) => c.key === "reran")!;
     expect(reran.causes.map((c) => c.name)).toEqual(["Restart loop"]);
@@ -568,7 +577,7 @@ test("classify: the restart loop starts at the run cap setting", () => {
 
 test("activeIssues counts each issue once per bucket in each stage it was in", () => {
   const H = 3600_000, t0 = new Date(2026, 2, 10, 12).getTime(), at = (h: number) => t0 + h * H;
-  const r = (n: number, kind: string, state: string, a: number, b: number) => ({ kind, job: `ax-${n}`, name: "x", repo: "ax", on: `ax-${n}`, condition: state, started: new Date(at(a)).toISOString(), ended: new Date(at(b)).toISOString() }) as any;
+  const r = (n: number, kind: string, state: string, a: number, b: number) => ({ role: kind, job: `ax-${n}`, name: "x", repo: "ax", target: `issue.${n}`, state: state, started: new Date(at(a)).toISOString(), ended: new Date(at(b)).toISOString() }) as any;
   // The day window ends in the hour of `now` (15:30): hourly buckets from 16:00 the day before.
   const now = at(3.5), b = buckets("day", now), slot = (h: number) => b.slotOf(at(h));
   const f = { issue: new Map<string, number | null>([["ax-1", at(-2)], ["ax-2", at(0.5)]]) };
@@ -590,7 +599,7 @@ test("activeIssues counts each issue once per bucket in each stage it was in", (
 test("activeIssues counts an open issue with no agent run in intake, then in the queue", () => {
   const H = 3600_000, t0 = new Date(2026, 2, 10, 12).getTime(), at = (h: number) => t0 + h * H;
   const now = at(3.5), b = buckets("day", now), slot = (h: number) => b.slotOf(at(h));
-  const intake = { kind: "intake", job: "ax-2", name: "x", repo: "ax", on: "ax-2", condition: "done", started: new Date(at(0)).toISOString(), ended: new Date(at(2)).toISOString() } as any;
+  const intake = { role: "intake", job: "ax-2", name: "x", repo: "ax", target: "issue.2", state: "done", started: new Date(at(0)).toISOString(), ended: new Date(at(2)).toISOString() } as any;
   const f = { issue: new Map<string, number | null>([["ax-1", at(0.5)], ["ax-2", at(-1)], ["ax-3", at(0.5)]]) };
   // ax-1 is open with no run, ax-2 is open with an ended intake run, ax-3 is closed with no run.
   const rows = activeIssues([intake], f, b, now, (k) => k !== "ax-3");

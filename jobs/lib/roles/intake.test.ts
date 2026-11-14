@@ -1,15 +1,18 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { putJson } from "../../../lib/db.ts";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssues, isBuildable, isSorted, mediaDir, mediaPath, partsOf, readList, writeList, type File } from "../../../issues/lib/store.ts";
+import { buildableIssues, isBuildable, isSorted, itemsDir, mediaPath, partsOf, readList, writeList, type File } from "../../../issues/lib/store.ts";
 
 import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts } from "./intake.ts";
 import type { Spec } from "./issue-spec.ts";
-import { allRuns, stamp, type Repo } from "../records/ledger.ts";
-import { getRun, putRun } from "../records/record.ts";
+import { allRuns, type Repo } from "../records/ledger.ts";
+import { getRun } from "../records/record.ts";
+import { seed } from "../../job.testkit.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
+import { newItems } from "../../../tests/projects.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 import { readEvents } from "../../../lib/layout.ts";
 
@@ -21,7 +24,7 @@ afterAll(() => setSystemTime());
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
 // The factory dir for the whole file: nothing here may read or write ~/.aleph/factory.
-let factoryHome: string;
+let factoryHome: string, dbHome: string;
 const repo = { key: "int", path: "", main: "main" } as Repo;
 
 function sh(cwd: string, ...args: string[]): string {
@@ -35,9 +38,9 @@ const spec = (o: Partial<{ goal: string; edit_surface: { path: string; new: bool
 const GOOD = { route: "build", reason: "one run", spec: spec() };
 const VERDICTS: Record<string, object> = {
   goal: GOOD,
-  parts: { route: "build", reason: "two runs", after: ["int-9"], parts: [{ title: "[Big] Do the first half", spec: spec({ goal: "Half one." }), after: [] }, { title: "[Big] Do the second half", spec: spec({ goal: "Half two.", edit_surface: [{ path: "y.ts", new: true }] }), after: [1] }] },
-  waits: { ...GOOD, after: ["FAKEKEY-1", "FAKEKEY-2"] },
-  close: { route: "close", reason: "duplicate of int-1" },
+  parts: { route: "build", reason: "two runs", after: ["issue.2"], parts: [{ title: "[Big] Do the first half", spec: spec({ goal: "Half one." }), after: [] }, { title: "[Big] Do the second half", spec: spec({ goal: "Half two.", edit_surface: [{ path: "y.ts", new: true }] }), after: [1] }] },
+  waits: { ...GOOD, after: ["issue.1", "issue.2"] },
+  close: { route: "close", reason: "duplicate of issue.1" },
   structured: { route: "ask", reason: "a product choice", question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["one", "two"] },
   chris: { route: "ask", reason: "a product choice", question: "Which plan, A or B?" },
   missing: { route: "build", reason: "one run", spec: spec({ edit_surface: [{ path: "nope.ts", new: false }] }) },
@@ -57,7 +60,7 @@ case $word in
   fail) exit 3 ;;
   "") echo 'no json here'; exit 0 ;;
 esac
-v=$(jq -c --arg w "$word" '.[$w]' "$FAKE_VERDICTS" | sed "s/FAKEKEY/$FAKE_KEY/g")
+v=$(jq -c --arg w "$word" '.[$w]' "$FAKE_VERDICTS" | cat)
 echo "{\\"type\\":\\"result\\",\\"is_error\\":false,\\"result\\":\\"\\",\\"session_id\\":\\"s-$word\\",\\"total_cost_usd\\":0.25,\\"structured_output\\":{\\"verdict\\":$v}}"
 `;
 
@@ -66,12 +69,16 @@ let lists = 0;
 type Seed = { title: string; body?: string; ask?: boolean; after?: string[]; spec?: string; kind?: string; source?: "worker"; redMain?: boolean };
 function reset(items: Seed[], o: { author?: boolean } = {}): void {
   repo.key = `int${++lists}`;
+  // Issue numbers repeat across the tests' items repos, and asks and jobs key on them: each test gets its own database and jobs folder.
+  process.env.ALEPH_DB = join(base, `aleph-${lists}.db`);
+  process.env.ALEPH_JOBS_DIR = join(base, `jobs-${lists}`);
   repo.author = o.author;
   process.env.FAKE_KEY = repo.key;
+  process.env.ALEPH_ITEMS = newItems(base, `items${lists}`);
   writeList(repo, "reset", (doc) => {
     for (const i of items) {
       const item = issues.add(doc, i.title, { request: i.body, kind: i.kind, ...(i.source ? { source: i.source } : {}) });
-      if (i.ask) setAsk(`${repo.key}-${item.id}`, { kind: "input", reason: "question", question: "Which plan, A or B?", options: [], why: [] });
+      if (i.ask) setAsk(`issue.${item.id}`, { kind: "input", reason: "question", question: "Which plan, A or B?", options: [], why: [] });
       if (i.after) item.fm.after = i.after;
       if (i.spec) item.spec = i.spec;
       if (i.redMain) item.fm.areas = ["red-main"];
@@ -101,6 +108,7 @@ async function run(): Promise<{ counts: Counts; skipped: string[] }> {
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-intake-"));
   factoryHome = join(base, "factory");
+  dbHome = join(base, "aleph.db");
   factoryRepos(base);
   repo.path = join(base, "repo");
   // Main holds x.ts and its test, which the specs above name.
@@ -113,15 +121,15 @@ beforeAll(() => {
   chmodSync(join(base, "fake"), 0o755);
   writeFileSync(join(base, "verdicts.json"), JSON.stringify(VERDICTS));
   Object.assign(process.env, gitEnv, {
-    ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_INTAKE_CMD: join(base, "fake"),
-    FAKE_LOG: join(base, "calls"), FAKE_VERDICTS: join(base, "verdicts.json"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome, ALEPH_DISPATCH: "off",
+    ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_INTAKE_CMD: join(base, "fake"),
+    FAKE_LOG: join(base, "calls"), FAKE_VERDICTS: join(base, "verdicts.json"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome, ALEPH_DB: dbHome, ALEPH_DISPATCH: "off",
     // Locks live in $XDG_RUNTIME_DIR/aleph, shared by every process on the machine; keep this process's own.
     XDG_RUNTIME_DIR: join(base, "run"),
   });
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 beforeEach(() => { delete process.env.ALEPH_INTAKE_TRIES; writeFileSync(join(base, "calls"), ""); });
-const runs = () => allRuns().filter((e) => e.run.kind === "intake" && e.run.repo === repo.key).map((e) => e.run);
+const runs = () => allRuns().filter((e) => e.run.role === "intake" && e.run.repo === repo.key).map((e) => e.run);
 const runOf = (id: number) => runs().find((r) => r.name === `intake-${repo.key}-${id}`);
 const calls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 
@@ -129,13 +137,13 @@ test("an intake run records its route, the issue it is on and its cost", async (
   reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:chris" }, { title: "c", body: "VERDICT:close" }]);
   const t = await run();
   expect(t.counts).toEqual({ build: 1, ask: 1, close: 1 });
-  expect(runOf(1)).toMatchObject({ kind: "intake", route: "build", on: `${repo.key}-1`, reason: "one run", cost: 0.25 });
+  expect(runOf(1)).toMatchObject({ role: "intake", route: "build", target: "issue.1", reason: "one run", cost: 0.25 });
   expect(runOf(2)!.route).toBe("ask");
   expect(runOf(3)!.route).toBe("close");
   expect(item(1).spec).toBe("## Goal\nDo it.\n\n## Edit surface\n- x.ts\n\n## Oracle\n- `bun test x.test.ts` passes");
   expect(item(1).fm.intake).toBe("build");
   expect(issues.status(item(3))).toBe("done");
-  expect(askOf(`${repo.key}-2`)).toMatchObject({ reason: "question" });
+  expect(askOf("issue.2")).toMatchObject({ reason: "question" });
 });
 
 test("a reply that fails the code check goes back once in the same session; a fixed reply is applied and the cost is the sum", async () => {
@@ -156,8 +164,8 @@ test("a reply that fails the code check twice asks Chris with the reason intake-
   const t = await run();
   expect(t.counts).toEqual({});
   expect(calls()).toHaveLength(2);
-  expect(askOf(`${repo.key}-1`)).toMatchObject({ reason: "intake-failed" });
-  expect(askOf(`${repo.key}-1`)!.question).toContain("nope.ts");
+  expect(askOf("issue.1")).toMatchObject({ reason: "intake-failed" });
+  expect(askOf("issue.1")!.question).toContain("nope.ts");
   expect(runOf(1)!.cause).toBe("unanswered");
 });
 
@@ -165,15 +173,15 @@ test("a malformed verdict is sent back once, then asks Chris", async () => {
   reset([{ title: "a", body: "VERDICT:bad" }]);
   await run();
   expect(calls()).toHaveLength(2);
-  expect(askOf(`${repo.key}-1`)).toMatchObject({ reason: "intake-failed" });
-  expect(askOf(`${repo.key}-1`)!.question).toContain('unknown route "maybe"');
+  expect(askOf("issue.1")).toMatchObject({ reason: "intake-failed" });
+  expect(askOf("issue.1")!.question).toContain('unknown route "maybe"');
 });
 
 test("an issue an Issue trailer on main names is done with no run", async () => {
   reset([{ title: "a", body: "VERDICT:goal" }]);
   writeFileSync(join(repo.path, "z.ts"), "1\n");
   sh(repo.path, "git", "add", "-A");
-  sh(repo.path, "git", "commit", "-q", "-m", `z\n\nIssue: ${repo.key}-1`);
+  sh(repo.path, "git", "commit", "-q", "-m", `z\n\nIssue: issue.1`);
   sh(repo.path, "git", "push", "-q", "origin", "main");
   const sha = sh(repo.path, "git", "rev-parse", "--short=7", "HEAD");
   const t = await run();
@@ -181,7 +189,10 @@ test("an issue an Issue trailer on main names is done with no run", async () => 
   expect(calls()).toHaveLength(0);
   expect(runs()).toHaveLength(0);
   expect(issues.status(item(1))).toBe("done");
-  expect(item(1).notes.at(-1)).toContain(`intake: already on main in ${sha}`);
+  expect(item(1).fm.closed_why).toContain(`commit ${sha}`);
+  // Issue numbers repeat across the tests' items repos, so the trailer would name issue.1 in every later test: drop the commit.
+  sh(repo.path, "git", "reset", "-q", "--hard", "HEAD~1");
+  sh(repo.path, "git", "push", "-q", "-f", "origin", "main");
 });
 
 test("an issue of kind flake is a note on the flake tracker with no run", async () => {
@@ -204,25 +215,24 @@ test("a worker's follow-up whose Edit surface is only test files is closed as te
 });
 
 test("parts are filed in the intake run as new issues from the issue; each waits on what the issue waits on and on its earlier parts", async () => {
-  reset([{ title: "a", body: "VERDICT:parts" }]);
+  reset([{ title: "a", body: "VERDICT:parts" }, { title: "other", spec: "## Goal\nx" }]);
   started = [];
   const before = readEvents().length;
   const t = await run();
   expect(t.counts).toEqual({ build: 1 });
   const doc = readList(repo)!;
   const parts = partsOf(doc, item(1));
-  expect(parts.map((p) => [p.id, p.sub, p.fm.from])).toEqual([[2, undefined, `${repo.key}-1`], [3, undefined, `${repo.key}-1`]]);
+  expect(parts.map((p) => [p.id, p.fm.from])).toEqual([[3, "issue.1"], [4, "issue.1"]]);
   expect(parts.map((p) => p.title)).toEqual(["[Big] Do the first half", "[Big] Do the second half"]);
-  expect(parts.map((p) => p.fm.after)).toEqual([["int-9"], ["int-9", `${repo.key}-2`]]);
+  expect(parts.map((p) => p.fm.after)).toEqual([["issue.2"], ["issue.2", "issue.3"]]);
   expect(parts[1].spec).toContain("- y.ts (new)");
   expect(parts.map((p) => [isSorted(doc, p, repo), isBuildable(doc, p, repo)])).toEqual([[true, true], [true, true]]);
   expect(isBuildable(doc, item(1), repo)).toBe(false);
   expect(item(1).spec).toBe("");
-  expect(item(1).notes.at(-1)).toContain(`intake: split into ${repo.key}-2`);
   expect(calls()).toHaveLength(1);
   // Each part is filed through writeFiling: one filed event by intake, and its effects.
-  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["intake", `${repo.key}-2`], ["intake", `${repo.key}-3`]]);
-  expect(started).toEqual([`${repo.key}-2`, `${repo.key}-3`]);
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.subject, e.object])).toEqual([["intake", "issue.3"], ["intake", "issue.4"]]);
+  expect(started).toEqual([`${repo.key}-3`, `${repo.key}-4`]);
 });
 
 test("a split gives the parts task when the parent's stored kind is one the store dropped, and a current kind as it is", () => {
@@ -231,20 +241,19 @@ test("a split gives the parts task when the parent's stored kind is one the stor
   const parent = item(1);
   parent.fm.kind = "goal";
   const half = { goal: "Half.", surface: [{ path: "x.ts", new: false }], oracle: ["`bun test x.test.ts` passes"] };
-  const refs = addParts(repo, fileIn(doc), parent, [{ title: "[Big] Do the first half", spec: half, after: [] }, { title: "[Big] Do the second half", spec: half, after: [1] }]);
-  const parts = refs.map((r) => issues.find(doc, r.slice(repo.key.length + 1))!);
-  expect(parts.map((p) => p.fm.from)).toEqual([`${repo.key}-1`, `${repo.key}-1`]);
-  expect(parts.map((p) => p.fm.after ?? [])).toEqual([[], [`${repo.key}-3`]]);
+  const refs = addParts(fileIn(doc), parent, [{ title: "[Big] Do the first half", spec: half, after: [] }, { title: "[Big] Do the second half", spec: half, after: [1] }]);
+  const parts = refs.map((r) => issues.find(doc, r)!);
+  expect(parts.map((p) => p.fm.from)).toEqual(["issue.1", "issue.1"]);
+  expect(parts.map((p) => p.fm.after ?? [])).toEqual([[], ["issue.3"]]);
   expect(parts.map((p) => p.fm.kind)).toEqual(["task", "task"]);
-  const bugs = addParts(repo, fileIn(doc), item(2), [{ title: "[Bug] Do the fix", spec: half, after: [] }]).map((r) => issues.find(doc, r.slice(repo.key.length + 1))!);
+  const bugs = addParts(fileIn(doc), item(2), [{ title: "[Bug] Do the fix", spec: half, after: [] }]).map((r) => issues.find(doc, r)!);
   expect(bugs.map((p) => p.fm.kind)).toEqual(["bug"]);
 });
 
 test("a build drops an after-link to an item that waits for Chris and keeps one to an ordinary open issue", async () => {
   reset([{ title: "asks", ask: true }, { title: "plain", spec: "## Goal\nx" }, { title: "a", body: "VERDICT:waits" }]);
   await run();
-  expect(item(3).fm.after).toEqual([`${repo.key}-2`]);
-  expect(item(3).notes.some((n) => n.includes(`dropped after ${repo.key}-1`) && n.includes("waits for Chris"))).toBe(true);
+  expect(item(3).fm.after).toEqual([`issue.2`]);
 });
 
 describe("a repo with author", () => {
@@ -293,7 +302,7 @@ test("the code checks of a spec", () => {
   expect(check({ oracle: ["`bun run test`: a test writes a report for the file `w.test.ts` and expects `passed([\"w.test.ts\"])` to hold it"] })).toEqual([]);
   expect(check({ oracle: ["`bun run test` passes and the new w.test.ts passes"] })).toEqual(["the spec: the Oracle names w.test.ts, which is not on main and not in the Edit surface"]);
   expect(check({ edit_surface: [{ path: "../etc/x", new: true }] })[0]).toContain("is not a path in the repo");
-  expect(check({}, [`${repo.key}-1`, `${repo.key}-2`, `${repo.key}-77`])).toEqual([`after names this issue, ${repo.key}-1`, `after names ${repo.key}-77, which is not an issue of ${repo.key}`]);
+  expect(check({}, ["issue.1", "issue.2", "issue.77"])).toEqual(["after names this issue, issue.1", "after names issue.77, which is not an issue"]);
   const part = (title: string, after: number[] = []) => ({ title, spec: parseSpec(spec()), after });
   expect(problems(repo, item(1), { route: "build", reason: "r", parts: [part("one")], after: [] })).toEqual(["1 parts: give 2 to 6, or one spec and no parts"]);
   expect(problems(repo, item(1), { route: "build", reason: "r", parts: [part("one", [2]), part("Check foo: bar")], after: [] })).toEqual(["part 1: its after names a part that is not an earlier part", expect.stringContaining("part 2: the title has a ': ' prefix")]);
@@ -325,60 +334,55 @@ test("the prompt has intake search past work for the issue's title, quoted for t
   expect(p).toContain("# Past work\n\nBefore you plan, run `aleph memory recall --episodes 'Fix Chris'\\''s land'` as it stands, with no pipe.");
 });
 
-const factory = () => process.env.ALEPH_FACTORY_DIR!;
-const grant = (reason: string, action: string) => {
-  mkdirSync(factory(), { recursive: true });
-  writeFileSync(join(factory(), "always.json"), JSON.stringify({ [reason]: { action, at: new Date(NOW).toISOString() } }));
-};
+const grant = (reason: string, action: string) => putJson("settings", "always", { [reason]: { action, at: new Date(NOW).toISOString() } });
 
 describe("a run with no reply", () => {
-  beforeEach(() => { process.env.ALEPH_FACTORY_DIR = join(base, `factory-${++lists}`); });
-  afterAll(() => { process.env.ALEPH_FACTORY_DIR = factoryHome; });
+  beforeEach(() => { process.env.ALEPH_FACTORY_DIR = join(base, `factory-${++lists}`); process.env.ALEPH_DB = join(base, `aleph-${lists}.db`); });
+  afterAll(() => { process.env.ALEPH_FACTORY_DIR = factoryHome; process.env.ALEPH_DB = dbHome; });
 
   test("an exit that is not zero counts toward the limit, and the second asks Chris", async () => {
     reset([{ title: "a", body: "VERDICT:fail" }]);
     await run();
-    expect(askOf(`${repo.key}-1`)).toBeNull();
+    expect(askOf("issue.1")).toBeNull();
     await run();
-    expect(askOf(`${repo.key}-1`)).toMatchObject({ reason: "intake-failed" });
-    expect(item(1).notes.at(-1)).toContain("no verdict in 2 runs: failed: intake exited 3");
+    expect(askOf("issue.1")).toMatchObject({ reason: "intake-failed" });
   });
 
   test("no structured output is not sent back; it counts toward the limit", async () => {
     reset([{ title: "a", body: "nothing" }]);
     await run();
     expect(calls()).toHaveLength(1);
-    expect(askOf(`${repo.key}-1`)).toBeNull();
+    expect(askOf("issue.1")).toBeNull();
   });
 
   test("retry: no Ask, and a third intake runs the command", async () => {
-    grant("intake-failed", "retry");
     reset([{ title: "a", body: "nothing" }]);
+    grant("intake-failed", "retry");
     await run();
     const t = await run();
-    expect(askOf(`${repo.key}-1`)).toBeNull();
+    expect(askOf("issue.1")).toBeNull();
     expect(t.skipped).toEqual([`${repo.key}-1: no verdict in 2 intake runs; standing: intake again next tick`]);
     const n = calls().length;
     await run();
     expect(calls().length).toBe(n + 1);
-    expect(readEvents()).toContainEqual(expect.objectContaining({ by: "rule", subject: `${repo.key}-1`, action: "reran", sub: "intake" }));
+    expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "rule", object: `${repo.key}-1`, action: "reran", detail: "intake" }));
   });
 
   test("close: the item is done with the note", async () => {
-    grant("intake-failed", "close");
     reset([{ title: "a", body: "nothing" }]);
+    grant("intake-failed", "close");
     await run();
     await run();
     expect(issues.status(item(1))).toBe("done");
-    expect(item(1).notes.at(-1)).toEndWith("intake: no verdict in 2 runs; standing: closed");
+    expect(item(1).fm.closed_why).toBe("no verdict in 2 runs; standing: closed");
   });
 
   test("recommended: an ask with options leaves no Ask and a note naming the recommendation", async () => {
-    grant("question", "recommended");
     reset([{ title: "a", body: "VERDICT:structured" }]);
+    grant("question", "recommended");
     const t = await run();
     expect(t.counts).toEqual({ ask: 1 });
-    expect(askOf(`${repo.key}-1`)).toBeNull();
+    expect(askOf("issue.1")).toBeNull();
     expect(isSorted(readList(repo)!, item(1))).toBe(false);
     expect(item(1).notes.at(-1)).toEndWith("always: took the recommendation B: do b");
   });
@@ -386,11 +390,9 @@ describe("a run with no reply", () => {
 
 test("an intake run whose process ended before a verdict is ended as failed by the next intake", async () => {
   reset([]);
-  const folder = join(base, "jobs", `${stamp()}-intake-${repo.key}-1-intake`);
-  mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { n: 1, kind: "intake", job: folder.split("/").at(-1)!, name: `intake-${repo.key}-1`, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "intake", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
+  const { id } = seed({ role: "intake", name: `intake-${repo.key}-1`, repo: repo.key, target: "issue.1", state: "running", phase: "intake", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
   await intakeIssue(repo, 1, () => true);
-  expect(getRun(basename(folder))).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict" });
+  expect(getRun(id)).toMatchObject({ state: "done", reason: "failed: its process ended before a verdict" });
 });
 
 test("intake reads a clone at origin/main, and the clone is gone after", async () => {
@@ -411,16 +413,15 @@ test("intakeNow takes in one issue with no tick, and leaves a sorted one alone",
 
 test("intake does not close a red-main issue while its main is still red: it asks Chris; once main is green it closes", async () => {
   reset([{ title: "Fix the red main at abc1234", body: "VERDICT:close", redMain: true }]);
-  const file = join(factoryHome, "baseline.json");
-  writeFileSync(file, JSON.stringify({ [repo.key]: { repo: repo.key, commit: "abc1234", ok: false, failed: "setup" } }));
+  putJson("state", "baseline", { [repo.key]: { repo: repo.key, commit: "abc1234", ok: false, failed: "setup" } });
   const red = await run();
   expect(red.counts).toEqual({ ask: 1 });
   expect(issues.status(item(1))).toBe("open");
-  expect(askOf(`${repo.key}-1`)!.question).toContain("Main is still red (main is red at abc1234: setup)");
-  expect(askOf(`${repo.key}-1`)!.question).toContain("duplicate of int-1");
+  expect(askOf("issue.1")!.question).toContain("Main is still red (main is red at abc1234: setup)");
+  expect(askOf("issue.1")!.question).toContain("duplicate of issue.1");
 
   reset([{ title: "Fix the red main at abc1234", body: "VERDICT:close", redMain: true }]);
-  writeFileSync(file, JSON.stringify({ [repo.key]: { repo: repo.key, commit: "abc1234", ok: true } }));
+  putJson("state", "baseline", { [repo.key]: { repo: repo.key, commit: "abc1234", ok: true } });
   expect((await run()).counts).toEqual({ close: 1 });
   expect(issues.status(item(1))).toBe("done");
 });
@@ -430,20 +431,20 @@ test("intake reads the media attached to the issue", async () => {
   writeList(repo, "media", (doc) => {
     const i = issues.find(doc, 1)!;
     i.fm.media = ["shot.png"];
-    blobs[mediaPath(repo.key, i, "shot.png")] = new Uint8Array([1, 2, 3]);
+    blobs[mediaPath(i, "shot.png")] = new Uint8Array([1, 2, 3]);
     return true;
   }, false, blobs);
   await run();
-  const file = join(mediaDir(), `${repo.key}-1`, "shot.png");
+  const file = join(itemsDir(), "issues", "1", "shot.png");
   expect(readFileSync(file)).toEqual(Buffer.from([1, 2, 3]));
   expect(readFileSync(join(base, "calls.prompt"), "utf8")).toContain(`# Media\n\nThe issue has these files attached`);
   expect(readFileSync(join(base, "calls.prompt"), "utf8")).toContain(`- ${file}`);
-  expect(calls()[0]).toContain(`--add-dir ${mediaDir()}`);
+  expect(calls()[0]).toContain(`--add-dir ${join(itemsDir(), "issues", "1")}`);
 });
 const blobs: Record<string, Uint8Array> = {};
 
-test("the prompt's 'Commits on main since' heading and window come from created_time, to the second", () => {
-  const item = (created_time: string) => ({ id: 1, title: "t", request: "", spec: "", notes: [], fm: { created_time } }) as unknown as issues.Issue;
+test("the prompt's 'Commits on main since' heading and window come from created, to the second", () => {
+  const item = (created: string) => ({ id: 1, title: "t", request: "", spec: "", notes: [], fm: { created } }) as unknown as issues.Issue;
   expect(prompt(repo, item("2020-01-02T03:04:05.000Z"))).toContain("# Commits on main since 2020-01-02T03:04:05.000Z\n\n" + sh(repo.path, "git", "log", "--oneline", "--no-decorate", "-n", "50", "origin/main") + "\n");
   const after = new Date((+sh(repo.path, "git", "log", "-1", "--format=%ct", "--all") + 1) * 1000).toISOString();
   expect(prompt(repo, item(after))).toContain(`# Commits on main since ${after}\n\n(none)\n`);

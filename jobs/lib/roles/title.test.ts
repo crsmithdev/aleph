@@ -42,7 +42,7 @@ test("when the GPU slot stays taken past the rule writer's time box, the line co
     setSystemTime(T0 + 31_000); // the 30 s box ends while the slot stays taken
     expect(await line).toBe("A rule from Claude");
     expect(readFileSync(join(dir, "args-busy"), "utf8")).toContain("--model haiku");
-    expect(readEvents().find((e) => e.action === "gpu")?.note).toContain("the call falls back to Claude");
+    expect(readEvents().find((e) => e.action === "gpu")?.detail).toContain("the call falls back to Claude");
   } finally {
     release();
     setSystemTime();

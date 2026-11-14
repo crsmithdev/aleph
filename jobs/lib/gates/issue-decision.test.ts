@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { conn, putJson } from "../../../lib/db.ts";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GATES, issueDecision, refDone, type IssueFacts } from "./issue-decision.ts";
@@ -18,7 +19,7 @@ test("an issue with no fact against it is ready, and a fact not read stops nothi
 
 test("Not ready names only the open after refs, in both lines", () => {
   const d = issueDecision(facts({ item: item({ after: ["fac-1", "fac-2", "fac-3"] }), done: (r) => r === "fac-1" }));
-  expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "after fac-2,fac-3", text: "Waits on fac-2, fac-3", ev: { action: "after", on: ["fac-2", "fac-3"] } });
+  expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "after fac-2,fac-3", text: "Waits on fac-2, fac-3", ev: { action: "after", detail: "fac-2 fac-3" } });
 });
 
 test("the 7 gates bind in the order of GATES, Loop guard last", () => {
@@ -95,10 +96,11 @@ test("an issue whose run is on the held backend gets the hold decision, not a st
       kind: "backend",
       why: "waits for OpenRouter: API Error: 402 This request would exceed your available credits",
       text: "Waiting for OpenRouter: API Error: 402 This request would exceed your available credits",
-      ev: { action: "waiting", count: "for OpenRouter" },
+      ev: { action: "waiting", detail: "for OpenRouter" },
     });
     expect(issueDecision(facts({ ...factoryGates(undefined, { model: "haiku" }) })).kind).toBe("ready");
   } finally {
+    putJson("state", "backend-hold", null);
     if (was === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = was;
     if (url === undefined) delete process.env.SIDETONE_TELL_URL; else process.env.SIDETONE_TELL_URL = url;
     rmSync(dir, { recursive: true, force: true });
@@ -119,10 +121,11 @@ test("the run cap is the stored cap: 5 lets 4 starts through and binds at 5; uns
   process.env.ALEPH_FACTORY_DIR = dir;
   try {
     expect(kind({ startsInHour: 3 })).toBe("loop-guard");
-    writeFileSync(join(dir, "caps.json"), JSON.stringify({ run: 5 }));
+    putJson("settings", "caps", { run: 5 });
     expect(kind({ startsInHour: 4 })).toBe("ready");
     expect(issueDecision(facts({ startsInHour: 5 }))).toMatchObject({ kind: "loop-guard", ask: "run-cap", starts: 5 });
   } finally {
+    conn().run("DELETE FROM settings WHERE key = 'caps'");
     if (was === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = was;
     rmSync(dir, { recursive: true, force: true });
   }

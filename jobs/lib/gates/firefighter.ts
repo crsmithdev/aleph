@@ -1,6 +1,6 @@
 /**
  * The firefighter, as code: no agent runs. Each tick it reads the reds of the factory repos (a failed baseline in
- * baseline.json, a red GitHub CI on main in ci.json) and files one critical
+ * the `baseline` row, a red GitHub CI on main in the `ci` row of `state`) and files one critical
  * issue per failing commit, with the tail of the failure's log in its request. The request names the commit
  * (`Failing commit: <sha>`), so a second tick, or a second source for the same commit, files nothing more. While the
  * repo has an open red-main issue whose failure failed the same tests, a new failing commit is one note on that issue,
@@ -23,11 +23,10 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
 import { baselines, factoryDir, sandboxRepos, gates, redLine } from "./factory-status.ts";
 import { git } from "../infra/git.ts";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
+import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
 import { askSlowLands } from "../land/rescue.ts";
-import { runFile } from "../records/run-files.ts";
 import { afterFiling } from "../transitions/filing.ts";
 
 /** The most of a log that goes into an issue's request: its last LOG_LINES lines, cut to LOG_CHARS. */
@@ -103,7 +102,7 @@ export function reds(ports: Ports = defaultPorts): Red[] {
   const out: Red[] = [];
   for (const b of Object.values(baselines())) {
     if (b.ok || !keys.has(b.repo)) continue;
-    out.push({ repo: b.repo, commit: b.commit, source: "baseline", line: `${b.repo} ${redLine(b)}`, log: () => read(runFile(join(factoryDir(), "baseline", b.repo), "checks.log")) });
+    out.push({ repo: b.repo, commit: b.commit, source: "baseline", line: `${b.repo} ${redLine(b)}`, log: () => read(join(factoryDir(), "baseline", b.repo, "checks.log")) });
   }
   for (const c of redCi()) {
     if (!keys.has(c.repo) || !c.sha) continue;
@@ -151,7 +150,7 @@ function fileRed(r: Red, effects: store.Effects = defaultPorts): Filed | null {
     return { ...at, filed: file({ title: titleOf(r), kind: "bug", priority: "critical", labels: ["red-main"], source: "agent", request }).id };
   });
   const f = w?.value ?? null;
-  if (f && "filed" in f && r.source === "ci") record.update(`${r.repo}-${f.filed}`, (x) => { x.ci = { url: r.url!, commit: r.commit, failure: log }; });
+  if (f && "filed" in f && r.source === "ci") record.editIssueState(`issue.${f.filed}`, (x) => { x.ci = { url: r.url!, commit: r.commit, failure: log }; });
   return f;
 }
 
@@ -170,7 +169,7 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
     if (!c || !repo) continue;
     for (const i of store.reader().list(key)?.items ?? []) {
       const ref = `${key}-${issues.refOf(i)}`;
-      const ci = issues.status(i) === "open" && isRedMain(i) ? record.read(ref)?.ci : undefined;
+      const ci = issues.status(i) === "open" && isRedMain(i) ? record.read(`issue.${issues.refOf(i)}`)?.ci : undefined;
       if (!ci) continue;
       // A landed issue waits for a run at or after the land; one that never landed, for a run past its failing commit.
       const at = ci.landed ?? ci.commit;
@@ -189,7 +188,7 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
         store.reopen(doc, item, ci.landed!);
         return issues.note(item, `firefighter: GitHub CI on main is still red at ${c.sha.slice(0, 7)} (${c.url}), after the land ${ci.landed!.slice(0, 7)}: the goal runs again. The failure:\n\n\`\`\`\n${failure}\n\`\`\``);
       });
-      record.update(ref, (x) => { x.ci = { url: c.url, commit: c.sha, failure }; });
+      record.editIssueState(`issue.${issues.refOf(i)}`, (x) => { x.ci = { url: c.url, commit: c.sha, failure }; });
       out.push(`${ref} sent back: CI red at ${c.sha.slice(0, 7)} after its land`);
     }
   }
@@ -205,16 +204,15 @@ const early = (log: string): boolean => {
   return steps.length > 0 && !steps.some((s) => /typecheck|test:all/.test(s));
 };
 
-const reran = () => join(factoryDir(), "reran.json");
-const rerunIds = (): string[] => readJsonOr(reran(), []);
+const rerunIds = (): string[] => getJson("state", "reran", []);
 
 /** Rerun the failed jobs of a red CI run that failed before any test, once per run. True when it did. */
 function rerun(r: Red, ports: Ports): boolean {
   const id = /\/runs\/(\d+)/.exec(r.url ?? "")?.[1], repo = loadRegistry()[r.repo];
   if (r.source !== "ci" || !id || !repo || rerunIds().includes(id) || (store.reader().list(r.repo)?.items ?? []).some((i) => holds(i, r.commit)) || !early(r.log())) return false;
   if (!ports.gh(repo, ["run", "rerun", id, "--failed"]).ok) return false;
-  writeJson(reran(), [...rerunIds(), id]);
-  logEvent({ by: "firefighter", subject: r.repo, action: "reran", on: [r.commit.slice(0, 7)], note: `reran CI run ${id} of ${r.repo}: it failed before any test` });
+  putJson("state", "reran", [...rerunIds(), id]);
+  logEvent({ subject: "firefighter", action: "reran", object: r.repo, detail: `reran CI run ${id} of ${r.repo}: it failed before any test` });
   return true;
 }
 
@@ -227,20 +225,20 @@ export interface Fired { filed: Filed[]; asked: string[] }
 export async function firefight(ports: Ports = defaultPorts, now = Date.now()): Promise<Fired | null> {
   if (gates({ only: ["pause"] })) return null;
   const filed: Filed[] = [];
-  for (const r of (() => { try { return reds(ports); } catch (e: any) { logEvent({ by: "firefighter", subject: "reds", action: "failed", note: `failed: ${e?.message ?? e}` }); return []; } })()) {
+  for (const r of (() => { try { return reds(ports); } catch (e: any) { logEvent({ subject: "firefighter", action: "failed", object: "reds", detail: `failed: ${e?.message ?? e}` }); return []; } })()) {
     try {
       if (rerun(r, ports)) continue;
       const f = fileRed(r, ports);
       if (!f) continue;
       filed.push(f);
       // A new issue's `filed` event is the filing's own.
-      if ("noted" in f) logEvent({ by: "firefighter", subject: `${f.repo}-${f.noted}`, action: "red", on: [r.commit.slice(0, 7)], note: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
+      if ("noted" in f) logEvent({ subject: "firefighter", action: "red", object: `${f.repo}-${f.noted}`, detail: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
     } catch (e: any) {
-      logEvent({ by: "firefighter", subject: r.repo, action: "failed", note: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}` });
+      logEvent({ subject: "firefighter", action: "failed", object: r.repo, detail: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}` });
     }
   }
-  try { for (const l of settleCi(ports)) logEvent({ by: "firefighter", subject: "ci", action: "changed", note: l }); } catch (e: any) { logEvent({ by: "firefighter", subject: "ci", action: "failed", note: `CI watch: failed: ${e?.message ?? e}` }); }
+  try { for (const l of settleCi(ports)) logEvent({ subject: "firefighter", action: "changed", object: "ci", detail: l }); } catch (e: any) { logEvent({ subject: "firefighter", action: "failed", object: "ci", detail: `CI watch: failed: ${e?.message ?? e}` }); }
   let asked: string[] = [];
-  try { asked = await askSlowLands(now); } catch (e: any) { logEvent({ by: "firefighter", subject: "lands", action: "failed", note: `slow lands: failed: ${e?.message ?? e}` }); }
+  try { asked = await askSlowLands(now); } catch (e: any) { logEvent({ subject: "firefighter", action: "failed", object: "lands", detail: `slow lands: failed: ${e?.message ?? e}` }); }
   return { filed, asked };
 }

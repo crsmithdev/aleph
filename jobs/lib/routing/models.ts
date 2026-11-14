@@ -1,15 +1,14 @@
 /**
  * The models aleph can run and which model serves each tier. Every model call is `claude -p`; a model that Claude
  * does not serve differs only in the env the call adds, which `modelEnv` gives from MODELS. The tier map lives in
- * models.json in the factory folder as tier -> {enabled, model}; a missing file or tier means enabled on its Claude model.
+ * the `models` setting as tier -> {enabled, model}; a missing row or tier means enabled on its Claude model.
  */
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
-import { layout } from "../../../lib/layout.ts";
+import { conn, getJson, putJson } from "../../../lib/db.ts";
+import { logSetting } from "../../../lib/layout.ts";
 import { openRouterKey } from "../../../lib/env.ts";
-import { alephPath } from "../../../lib/paths.ts";
 import { NO_SKILLS } from "../roles/role-skill.ts";
 
 /** USD per million tokens. */
@@ -27,7 +26,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api";
 const routed = (id: string, input: number, output: number, cacheRead = input, cacheWrite = input): Model =>
   ({ via: "openrouter", id, price: { input, output, cacheRead, cacheWrite } });
 
-/** Every model a tier can use, by the name models.json and the run records carry. */
+/** Every model a tier can use, by the name the `models` setting and the run records carry. */
 export const MODELS: Record<string, Model> = {
   haiku: { via: "claude", id: "haiku" },
   sonnet: { via: "claude", id: "sonnet" },
@@ -110,19 +109,13 @@ export async function openRouterSpend(): Promise<{ day: number; week: number; mo
   }
 }
 
-/** One line per poll of the UI (ui/usage.ts), `{at, usage, factor?}`: the key's lifetime USD and the rate below. */
-export const openRouterFile = () => alephPath("ALEPH_OPENROUTER_FILE", "openrouter.jsonl");
-
 /**
- * What OpenRouter bills per dollar of its list price, from the last line of openRouterFile that has one; 1 with none.
+ * What OpenRouter bills per dollar of its list price, from the last row of the `openrouter` table (ui/usage.ts: one per poll, the key's lifetime USD and the rate) that has one; 1 with none.
  * The bill ran 1.26x to 1.42x the list price of the transcripts (2026-11-11): providers add fees the list leaves out.
  */
 export function openRouterFactor(): number {
-  // Under `bun test` only a file the test names counts: the real one changes every 10 minutes.
-  if ((process.env.NODE_ENV === "test" && !process.env.ALEPH_OPENROUTER_FILE) || !existsSync(openRouterFile())) return 1;
-  const rows = readFileSync(openRouterFile(), "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
-  const f = rows.findLast((r) => typeof r?.factor === "number")?.factor;
-  return Number.isFinite(f) && f > 0 ? f : 1;
+  const row = conn().query("SELECT factor FROM openrouter WHERE factor > 0 ORDER BY seq DESC LIMIT 1").get() as { factor: number } | null;
+  return row?.factor ?? 1;
 }
 
 /**
@@ -170,12 +163,11 @@ const WORKERS = ["worker-low", "worker-medium"] as const;
 /** The worker tier of a run's Claude model. */
 export const WORKER_TIER: Record<string, Tier | undefined> = { haiku: "worker-low", sonnet: "worker-medium" };
 
-const file = (): string => join(layout().factory, "models.json");
-const write = (m: Record<Tier, Setting>): void => writeJson(file(), m);
+const write = (m: Record<Tier, Setting>): void => putJson("settings", "models", m);
 
 /** Every tier with its setting. */
 export function readModels(): Record<Tier, Setting> {
-  const m: any = readJsonOr(file(), {});
+  const m: any = getJson("settings", "models", {});
   const all = Object.fromEntries((Object.keys(OFFERS) as Tier[]).map((t) => [t, {
     enabled: !(WORKERS as readonly string[]).includes(t) || m[t]?.enabled !== false,
     model: OFFERS[t].includes(m[t]?.model) ? m[t].model : OFFERS[t][0],
@@ -191,5 +183,6 @@ export function setModel(tier: string, change: Partial<Setting>): string | null 
   if (change.enabled === false && !(WORKERS as readonly string[]).includes(t)) return `only ${WORKERS.join(" and ")} can be disabled`;
   const m = readModels();
   write({ ...m, [t]: { ...m[t], ...change } });
+  logSetting(`${t}: ${Object.entries(change).map(([k, v]) => `${k} ${v}`).join(", ")}`);
   return null;
 }

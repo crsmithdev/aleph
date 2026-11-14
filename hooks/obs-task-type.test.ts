@@ -35,7 +35,7 @@ describe("obs hook task type", () => {
         stdin: new TextEncoder().encode(JSON.stringify({ session_id: "s-tt", cwd: "/tmp/proj", prompt_id: id, ...payload })),
         env: {
           ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${langfuse.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk",
-          ALEPH_SPOOL: dir, ALEPH_JEV_URL: `http://127.0.0.1:${jev.port}/`, OPENROUTER_API_KEY: "k-test", ALEPH_JUDGE_FILE: join(dir, "judge"), ...env,
+          ALEPH_SPOOL: dir, ALEPH_JEV_URL: `http://127.0.0.1:${jev.port}/`, OPENROUTER_API_KEY: "k-test", ...env,
         },
         stdout: "pipe", stderr: "pipe",
       });

@@ -54,7 +54,7 @@ test("the page and the status sentence show a health line's issue id in its shor
 });
 
 test("stuck and failed jobs are one alert that links to their cards", () => {
-  const stuck = [job({ name: "aleph-1", condition: "failed" }), job({ name: "aleph-2", condition: "failed" })];
+  const stuck = [job({ name: "aleph-1", state: "failed" }), job({ name: "aleph-2", state: "failed" })];
   const h = view.renderLede({ ...calmState, stuck });
   expect(h).toBe('<span class="say error">Alert: <a href="#jobs-stuck">Jobs are unhealthy</a>.</span>');
 });
@@ -73,7 +73,7 @@ test("a red-main alert is ranked by its key, not by its text", () => {
 });
 
 test("the sentence says at most three parts, the most serious first", () => {
-  const stuck = [job({ name: "aleph-1", condition: "failed" })];
+  const stuck = [job({ name: "aleph-1", state: "failed" })];
   expect(said({ health: [alert("health: something new broke."), mainRed, ciRed] }, { stuck })).toBe("Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy.");
 });
 
@@ -187,7 +187,7 @@ test("a dead factory tick says the alert, in red", () => {
 });
 
 test("the status-line links point at anchors in the rendered Alerts section", () => {
-  const stuck = [job({ name: "aleph-1", condition: "failed" })];
+  const stuck = [job({ name: "aleph-1", state: "failed" })];
   const lede = view.renderLede({ ...calmState, stuck, asks: [{ kind: "approval" }] });
   const needs = view.renderNeeds({ ...calmState, stuck, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
   const alerts = needs.split('<h2 id="h-needs">Alerts</h2>')[1] ?? "";

@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { conn } from "../../../lib/db.ts";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-import { archiveDir, putRun } from "../records/record.ts";
-import { recordsDir } from "../../../lib/layout.ts";
+import { join } from "node:path";
+import { allRunRecords, patchRun } from "../records/record.ts";
+import { seed } from "../../job.testkit.ts";
 import { today } from "../../../lib/day.ts";
 import { birthDay, retain } from "./retention.ts";
 
@@ -12,24 +13,22 @@ const ago = (d: number) => new Date(NOW - d * 864e5);
 let base = "";
 
 const age = (p: string, d: number) => utimesSync(p, ago(d), ago(d));
-/** A run folder of the job `on`, ended `d` days ago; with `archived` its record moves to the archive. */
-function run(id: string, on: string, d: number, archived: boolean) {
-  const folder = join(base, "runs", id);
-  mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "output.log"), "x");
-  putRun(basename(folder), { n: 1, kind: "build", job: id, name: id, on, condition: "done", started: ago(d).toISOString(), ended: ago(d).toISOString() } as any);
-  if (archived) { mkdirSync(archiveDir(), { recursive: true }); renameSync(join(recordsDir(), `${on}.json`), join(archiveDir(), `${on}.json`)); }
-  return folder;
+/** A job folder of a job that ended `d` days ago, or that has not ended when `d` is null; the folder holds one file. */
+function run(name: string, d: number | null) {
+  const { id, folder } = seed({ role: "build", name, state: d === null ? "running" : "done", started: ago(d ?? 0).toISOString() });
+  if (d !== null) patchRun(id, { ended: ago(d).toISOString() });
+  writeFileSync(join(folder, "transcript.jsonl"), "x");
+  return { id, folder };
 }
 
-const KEYS = ["ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_REPOS", "ALEPH_USAGE_FILE", "XDG_RUNTIME_DIR"];
+const KEYS = ["ALEPH_DB", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR"];
 let saved: (string | undefined)[] = [];
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-retention-"));
   saved = KEYS.map((k) => process.env[k]);
   Object.assign(process.env, {
-    ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_REPOS: join(base, "repos.json"),
-    ALEPH_USAGE_FILE: join(base, "usage.jsonl"), XDG_RUNTIME_DIR: join(base, "run"),
+    ALEPH_DB: join(base, "aleph.db"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"),
+    XDG_RUNTIME_DIR: join(base, "run"),
   });
   mkdirSync(join(base, "factory"));
 });
@@ -38,8 +37,8 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("retain deletes old run folders only of archived records, and keeps events and records", () => {
-  const old = run("r-old", "rt-1", 91, true), recent = run("r-new", "rt-2", 89, true), live = run("r-live", "rt-3", 100, false);
+test("retain deletes the folder of a job 90 days after it ended, and keeps its row, the events and a recent or running job", () => {
+  const old = run("r-old", 91), recent = run("r-new", 89), live = run("r-live", null);
   const orphan = join(base, "runs", "orphan"), fresh = join(base, "runs", "orphan-new");
   for (const f of [orphan, fresh]) { mkdirSync(f); writeFileSync(join(f, "a.log"), "x"); }
   for (const p of [join(orphan, "a.log"), orphan]) age(p, 100);
@@ -47,31 +46,26 @@ test("retain deletes old run folders only of archived records, and keeps events 
   mkdirSync(join(base, "factory", "events"), { recursive: true });
   writeFileSync(events, "{}\n");
   age(events, 400);
-  age(join(archiveDir(), "rt-1.json"), 400);
 
   retain(NOW);
 
-  expect(existsSync(old)).toBe(false);
-  expect(existsSync(recent)).toBe(true);
-  expect(existsSync(live)).toBe(true);
+  expect(existsSync(old.folder)).toBe(false);
+  expect(existsSync(recent.folder)).toBe(true);
+  expect(existsSync(live.folder)).toBe(true);
   expect(existsSync(orphan)).toBe(false);
   expect(existsSync(fresh)).toBe(true);
-  expect(existsSync(recordsDir())).toBe(true);
   expect(existsSync(events)).toBe(true);
-  expect(existsSync(join(archiveDir(), "rt-1.json"))).toBe(true);
+  expect(allRunRecords().map((r) => r.id)).toContain(old.id);
 });
 
-test("retain trims usage rows and old registry backups", () => {
-  const row = (d: number) => JSON.stringify({ at: ago(d).toISOString(), five_hour: 1 });
-  writeFileSync(join(base, "usage.jsonl"), `${row(91)}\n${row(10)}\n`);
-  const oldBak = join(base, "repos.json.bak-1"), newBak = join(base, "repos.json.bak-2");
-  for (const [f, d] of [[oldBak, 91], [newBak, 10]] as const) { writeFileSync(f, "{}"); age(f, d); }
+test("retain trims usage rows", () => {
+  const row = (d: number) => conn().query("INSERT INTO usage (time, five_hour, seven_day) VALUES (?, 1, 2)").run(ago(d).toISOString());
+  row(91);
+  row(10);
 
   retain(NOW);
 
-  expect(readFileSync(join(base, "usage.jsonl"), "utf8")).toBe(`${row(10)}\n`);
-  expect(existsSync(oldBak)).toBe(false);
-  expect(existsSync(newBak)).toBe(true);
+  expect(conn().query("SELECT time FROM usage").all()).toEqual([{ time: ago(10).toISOString() }]);
 });
 
 test("retain moves dispatch.log aside by the day it began, once a day, and deletes the aside files over 90 days old", () => {

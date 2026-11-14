@@ -1,13 +1,17 @@
 /**
- * The ideas store: one folder per idea in its own git repo, `$ALEPH_IDEAS` or ~/.aleph/ideas.
- * `<slug>/idea.md` is frontmatter, the write-up, then `## Log`; `<slug>/lenses/<lens>-<YYYY-MM-DD-HHMM>.html|md`
- * are the lens results. Every write is one commit, pushed when the store has an origin. See docs/specs/2026-11-10-ideas.md.
+ * The ideas: one folder per idea in the items repo, `ideas/<n>/` (the path is its key, `idea.<n>`; `slug` below is
+ * that number as text). `idea.md` is frontmatter (`title`, `project`, `status`, `built`), the write-up, then `## Log`;
+ * `<lens>-<YYYY-MM-DD-HHMM>.html|md` beside it are the lens results. Every write is one commit, pushed when the repo
+ * has an origin. See docs/specs/2026-11-10-ideas.md.
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../lib/frontmatter.ts";
 import { today } from "../lib/day.ts";
-import { alephPath } from "../lib/paths.ts";
+import { next } from "../lib/db.ts";
+import { key, parseKey } from "../lib/naming.ts";
+import { itemsDir } from "../issues/lib/store.ts";
+import { projectKey } from "../issues/lib/projects.ts";
 import { refuse } from "../lib/refusal.ts";
 import { commitPaths, git, pushOrigin } from "../vault/lib/git.ts";
 import { openRun } from "../jobs/lib/roles/agent-run.ts";
@@ -23,9 +27,13 @@ const LENS_FLAGS = ["--tools", "Read,Grep,Glob,WebSearch,WebFetch,Write", "--all
 
 export interface Idea { slug: string; fm: Frontmatter; writeup: string; log: string[] }
 
-export const ideasDir = (): string => alephPath("ALEPH_IDEAS", "ideas");
+export const ideasDir = (): string => join(itemsDir(), "ideas");
 
-const slugOf = (title: string): string => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+/** The idea number as text, from `3`, `idea.3` or a shown form such as `D-00003`; a refusal for anything else. */
+export const slugOf = (arg: string): string => {
+  const n = parseKey(arg);
+  return n?.kind === "idea" ? String(n.n) : /^\d+$/.test(arg) ? String(Number(arg)) : refuse(`name an idea by its number: ${arg}`);
+};
 
 /** The path of `idea.md`. */
 export const file = (slug: string): string => join(ideasDir(), slug, "idea.md");
@@ -39,35 +47,38 @@ export function read(slug: string): Idea {
 
 const render = (i: Idea): string => `${serializeFrontmatter(i.fm)}\n${i.writeup}\n\n## Log\n${i.log.length ? `\n${i.log.join("\n")}\n` : ""}`;
 
-/** Write the idea and the extra paths, commit them as `<verb> <slug>`, and push; a warning when the push failed, else null. */
+/** Write the idea and the extra paths, commit them as `<verb> idea.<n>` in the items repo, and push; a warning when the push failed, else null. */
 function write(i: Idea, verb: string, extra: string[] = []): string | null {
-  const dir = ideasDir();
-  if (!existsSync(dir)) { mkdirSync(dir, { recursive: true }); git(dir, "init", "-q"); }
-  mkdirSync(join(dir, i.slug), { recursive: true });
+  const dir = itemsDir();
+  if (!existsSync(join(dir, ".git"))) { mkdirSync(dir, { recursive: true }); git(dir, "init", "-q"); }
+  mkdirSync(join(ideasDir(), i.slug), { recursive: true });
   writeFileSync(file(i.slug), render(i));
-  commitPaths(dir, `${verb} ${i.slug}`, [file(i.slug), ...extra]);
+  commitPaths(dir, `${verb} ${key("idea", Number(i.slug))}`, [file(i.slug), ...extra]);
   const p = pushOrigin(dir);
-  return p.pushed || p.detail === "no origin" ? null : `warn: push of ${verb} ${i.slug} failed: ${p.detail}; the commit stands`;
+  return p.pushed || p.detail === "no origin" ? null : `warn: push of ${verb} ${key("idea", Number(i.slug))} failed: ${p.detail}; the commit stands`;
 }
 
-/** Add an idea; its slug and the push warning. */
+/** The highest idea number on disk. */
+const highest = (): number => (existsSync(ideasDir()) ? readdirSync(ideasDir()).map(Number).filter((n) => Number.isInteger(n)).reduce((m, n) => Math.max(m, n), 0) : 0);
+
+/** Add an idea under the next number of the counter; its slug and the push warning. `target` names the project it is for. */
 export function add(title: string, writeup: string, target?: string): { slug: string; warn: string | null } {
-  const slug = slugOf(title);
-  if (existsSync(file(slug))) refuse(`an idea named ${slug} exists: ${read(slug).fm.title}`);
-  const fm: Frontmatter = { title, ...(target ? { target } : {}), status: "exploring", built: [] };
+  const slug = String(next("idea", highest()));
+  const project = target ? projectKey(target) ?? refuse(`no project named ${target}`) : undefined;
+  const fm: Frontmatter = { title, ...(project ? { project } : {}), status: "exploring", built: [] };
   return { slug, warn: write({ slug, fm, writeup: writeup.trim(), log: [] }, "add") };
 }
 
 /** The local time `YYYY-MM-DD HH:MM`. */
 const stamp = (d = new Date()): string => `${today(d)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
-/** The idea's lens results, oldest first. */
+/** The idea's lens results, oldest first. `file` is the name beside `idea.md`. */
 export function lenses(slug: string): { lens: string; at: string; file: string }[] {
-  const dir = join(ideasDir(), slug, "lenses");
+  const dir = join(ideasDir(), slug);
   if (!existsSync(dir)) return [];
   return readdirSync(dir).sort().flatMap((f) => {
     const m = /^(.+)-(\d{4}-\d\d-\d\d)-(\d\d)(\d\d)\.(html|md)$/.exec(f);
-    return m ? [{ lens: m[1], at: `${m[2]} ${m[3]}:${m[4]}`, file: `lenses/${f}` }] : [];
+    return m ? [{ lens: m[1], at: `${m[2]} ${m[3]}:${m[4]}`, file: f }] : [];
   });
 }
 
@@ -75,18 +86,17 @@ export function lenses(slug: string): { lens: string; at: string; file: string }
 export function list(status = "exploring"): { idea: Idea; lenses: string[]; last: string }[] {
   const dir = ideasDir();
   if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((d) => existsSync(file(d))).sort().map(read).filter((i) => i.fm.status === status)
-    .map((idea) => ({ idea, lenses: [...new Set(lenses(idea.slug).map((l) => l.lens))], last: git(dir, "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M", "--", idea.slug).out }));
+  return readdirSync(dir).filter((d) => existsSync(file(d))).sort((a, b) => Number(a) - Number(b)).map(read).filter((i) => i.fm.status === status)
+    .map((idea) => ({ idea, lenses: [...new Set(lenses(idea.slug).map((l) => l.lens))], last: git(itemsDir(), "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M", "--", join("ideas", idea.slug)).out }));
 }
 
-/** Copy `from`, an .html or .md result, to `lenses/<lens>-<YYYY-MM-DD-HHMM>.<ext>` and log it; its path in the idea and the push warning. */
+/** Copy `from`, an .html or .md result, to `<lens>-<YYYY-MM-DD-HHMM>.<ext>` in the idea's folder and log it; its name and the push warning. */
 export function save(slug: string, lens: string, from: string): { file: string; warn: string | null } {
   const i = read(slug);
   const ext = extname(from).slice(1);
   if (ext !== "html" && ext !== "md") refuse(`a lens result is .html or .md, not ${from}`);
   const now = new Date();
-  const rel = `lenses/${lens}-${stamp(now).replace(" ", "-").replace(":", "")}.${ext}`;
-  mkdirSync(join(ideasDir(), slug, "lenses"), { recursive: true });
+  const rel = `${lens}-${stamp(now).replace(" ", "-").replace(":", "")}.${ext}`;
   copyFileSync(from, join(ideasDir(), slug, rel));
   return { file: rel, warn: write({ ...i, log: [...i.log, `- ${stamp(now)} ${lens} saved: ${rel}`] }, "save", [join(ideasDir(), slug, rel)]) };
 }

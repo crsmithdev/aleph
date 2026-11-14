@@ -4,9 +4,9 @@
  */
 import { readFetched, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { parseId, tail } from "../../../lib/naming.ts";
+import { parseId, parseKey, tail } from "../../../lib/naming.ts";
 import { fetchOrigin, git, jobCommit } from "../infra/git.ts";
-import { allRuns, trailerOf, type Entry, type Repo, type State } from "./ledger.ts";
+import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
 
@@ -37,7 +37,7 @@ export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs:
     if (item === undefined || job[0].run.repo !== repo.key) continue;
     // An intake run (a triage or planner run before it) marks its item in the store and does not land:
     // neither is a factory run working on the item, so an issue they close in the store is done.
-    if (typeof item === "number" && repo.sandbox && job.some((e) => e.run.kind !== "intake")) touched.add(item);
+    if (typeof item === "number" && repo.sandbox && job.some((e) => e.run.role !== "intake")) touched.add(item);
     (runs[item] ??= []).push(runViewOf(job));
     if (isOpen(job)) open[item] = stateOf(job);
   }
@@ -45,7 +45,7 @@ export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs:
 }
 
 /**
- * The commits on `main` whose trailer block holds `Issue: <key>-<n>`, after the item's `since`, and that
+ * The commits on `main` whose trailer block holds `Issue: issue.<n>`, after the item's `since`, and that
  * no later commit reverts. Only trailer lines count: a subject or a body line that says `Issue:` does not.
  */
 export function landedCommits(cwd: string, main: string, key: string, n: number | string): string[] {
@@ -81,7 +81,7 @@ export function landedIndex(cwd: string, main: string, key: string, since: (n: s
   const hits: [string, string][] = [];
   for (const [h, issue] of rows) {
     for (const s of new Set(values(issue))) {
-      const p = parseId(s), part = p?.repo === key ? tail(p) : undefined;
+      const k = parseKey(s), part = k?.kind === "issue" ? String(k.n) : undefined;
       if (part === undefined) continue;
       const at = since(part), from = at === undefined ? undefined : place.get(at);
       if (from === undefined || place.get(h)! < from) hits.push([h, part]);
@@ -106,17 +106,17 @@ export function itemOnMain(repo: { path: string; key: string; main: string } | u
 
 /**
  * Where a job's or an item's work is on origin/<main>, or null. Each test runs when its input is given, in this order:
- * a `Job:` trailer of `job` (the full sha; `how` "Job trailer"), an `Issue:` trailer of `item` (the short sha;
+ * a `Job:` trailer of one of `jobs` (the full sha; `how` "Job trailer"), an `Issue:` trailer of `item` (the short sha;
  * "Issue trailer"), then, while `branch` exists and has a net change, a merge of it into main that leaves main's tree
  * as it is (the full sha of main; "content"): the work is already there, however it got there.
  * `fetch` says whether to fetch origin once first; without it the ref is read as it is.
  */
-export function onMain(repo: { path: string; key: string; main: string } | undefined, o: { job?: string; item?: number | string; branch?: string; fetch: boolean }): { commit: string; how: "Job trailer" | "Issue trailer" | "content" } | null {
+export function onMain(repo: { path: string; key: string; main: string } | undefined, o: { jobs?: string[]; item?: number | string; branch?: string; fetch: boolean }): { commit: string; how: "Job trailer" | "Issue trailer" | "content" } | null {
   if (!repo) return null;
   if (o.fetch) fetchOrigin(repo.path);
   const main = `origin/${repo.main}`;
-  if (o.job) {
-    const trailer = jobCommit(repo.path, repo.main, [o.job, trailerOf(o.job)]);
+  if (o.jobs?.length) {
+    const trailer = jobCommit(repo.path, repo.main, o.jobs);
     if (trailer) return { commit: trailer, how: "Job trailer" };
   }
   const there = itemOnMain(repo, o.item);

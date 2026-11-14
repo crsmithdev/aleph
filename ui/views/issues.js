@@ -528,7 +528,7 @@ function noteItem(e) {
 
 /** The filing time: the store's, else the created date unless a job that day starts the issue (midnight would draw a false wait). */
 function filedAt(d, runs) {
-  const created = Date.parse(d.frontmatter?.created_time);
+  const created = Date.parse(d.frontmatter?.created);
   const sameDay = runs.length && new Date(created).toDateString() === new Date(runs[0].start).toDateString();
   return d.timeline?.filed ? Date.parse(d.timeline.filed) : (created >= 0 && !sameDay ? created : runs[0]?.start ?? NaN);
 }
@@ -555,7 +555,7 @@ export function issueSegments(d, now = Date.now()) {
   // The hold records of a job name: why its waits waited.
   const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);
   if (!parts.length) {
-    return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no job yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.condition === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes, holds: holdsOf(id) })] }];
+    return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no job yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.state === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes, holds: holdsOf(id) })] }];
   }
   const ofPart = (g) => all.filter((x) => x.r.issue === g.id), partRuns = parts.flatMap(ofPart);
   const first = partRuns.length ? Math.min(...partRuns.map((x) => x.start)) : Infinity;
@@ -596,7 +596,7 @@ function issueKpis(d, segments, now = Date.now()) {
 }
 
 /** Front-matter keys the page shows elsewhere, or that are the store's own. */
-const HIDE = ["labels", "id", "from", "closed_as", "parked", "closed_why", "closed_at", "closed_time", "created_time", "updated_time", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
+const HIDE = ["labels", "id", "from", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
 
 /** The Issue page: the header and its pills, the KPI strip, the Timeline, the Description and the Spec, then Notes and Commits. Shared with views/issue.js. */
 export function renderIssue(d) {

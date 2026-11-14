@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { seedPart, setup, teardown } from "../../jobs/cli.helpers";
 import { issueAdd, issueClose, issueEdit, issueNote, issueShow, status } from "../../jobs/flow.testkit.ts";
 
-// The verbs of `aleph issue` on a part `<n>.<k>`, and the drop of a part, called in-process as the CLI calls them.
+// The verbs of `aleph issue` on a child (an issue with `from`), and the drop of a child, called in-process as the CLI calls them.
 beforeAll(setup);
 afterAll(teardown);
 
@@ -15,8 +15,8 @@ const statusLine = async (ref: string) => { const s = (await status(ref)).json; 
 describe("the drop of a part", () => {
   test("dropping the only open part sets the part-dropped Ask, and status says waiting", async () => {
     const n = await add();
-    seedPart("fac", n, 1);
-    const r = await issueClose("fac", `${n}.1`, "drop", "not needed");
+    const part = seedPart("fac", n);
+    const r = await issueClose("fac", part, "drop", "not needed");
     expect(r.code, r.stderr).toBe(0);
     const issue = await show(n);
     expect(issue.ask).toMatchObject({ kind: "input", reason: "part-dropped" });
@@ -26,9 +26,9 @@ describe("the drop of a part", () => {
 
   test("a second open part means no Ask", async () => {
     const n = await add();
-    seedPart("fac", n, 1);
-    seedPart("fac", n, 2, {}, "second");
-    const r = await issueClose("fac", `${n}.1`, "drop", "not needed");
+    const part = seedPart("fac", n);
+    seedPart("fac", n, {}, "second");
+    const r = await issueClose("fac", part, "drop", "not needed");
     expect(r.code, r.stderr).toBe(0);
     expect((await show(n)).ask).toBeNull();
     expect(await statusLine(`fac-${n}`)).not.toContain("awaiting");
@@ -36,17 +36,17 @@ describe("the drop of a part", () => {
 });
 
 describe("the verbs on a part", () => {
-  test("show --json, note, and edit; after takes a plain or a dotted ref", async () => {
+  test("show --json, note, and edit; after takes an issue key", async () => {
     const n = await add("Listed");
     const m = await add("Other");
-    seedPart("fac", n, 1, {}, "Part", SPEC);
-    expect((await issueNote("fac", `${n}.1`, "a worker note")).code).toBe(0);
-    const e = await issueEdit("fac", `${n}.1`, { title: "Renamed", priority: "high", after: [`fac-${m}`] });
+    const part = seedPart("fac", n, {}, "Part", SPEC);
+    expect((await issueNote("fac", part, "a worker note")).code).toBe(0);
+    const e = await issueEdit("fac", part, { title: "Renamed", priority: "high", after: [`issue.${m}`] });
     expect(e.code, e.stderr).toBe(0);
-    const shown = await show(`${n}.1`);
-    expect(shown).toMatchObject({ title: "Renamed", priority: "high", after: [`fac-${m}`] });
+    const shown = await show(part);
+    expect(shown).toMatchObject({ title: "Renamed", priority: "high", after: [`issue.${m}`] });
     expect(shown.spec).toContain("## Goal");
     expect(shown.notes.join("\n")).toContain("a worker note");
-    expect((await issueEdit("fac", `${n}.1`, { after: ["fac-9999"] })).code).toBe(1);
+    expect((await issueEdit("fac", part, { after: ["issue.9999"] })).code).toBe(1);
   });
 });

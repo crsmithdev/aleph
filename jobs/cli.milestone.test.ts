@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, base, fakeLog, file, other, remote, sh, state, setup, teardown } from "./cli.helpers";
+import { CLI, base, fakeLog, other, remote, section, sh, state, setup, teardown } from "./cli.helpers";
 import { actionJob as job, cli, drop, issueAdd, issueClose, job as startJob, land, status as statusOf } from "./flow.testkit.ts";
+import { readRepos, writeRepos } from "../tests/projects.ts";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -23,7 +24,7 @@ describe("milestone 2", () => {
     for (const n of ["qa", "qb", "qc"]) await job(n, `commit pair/${n}.txt`);
     const lands = await Promise.all(["qa", "qb", "qc"].map((n) => land(n)));
     const order = lands.map((l) => state(l.json.run)).sort((a, b) => a.made - b.made).map((s) => s.name);
-    expect(lands.map((l) => state(l.json.run).condition)).toEqual(["landed", "landed", "landed"]);
+    expect(lands.map((l) => state(l.json.run).state)).toEqual(["landed", "landed", "landed"]);
     expect(remoteGit("log", "-3", "--reverse", "--format=%s", "main").split("\n")).toEqual(order.map((n) => `add pair/${n}.txt`));
     // Each is one squash commit on the one before: no merge commits.
     expect(remoteGit("rev-list", "--merges", "-3", "main")).toBe("");
@@ -34,9 +35,9 @@ describe("milestone 2", () => {
     pushFromOther(`add crashed.txt\n\nJob: ${j.json.job}`, "crashed.txt");
     const pushed = remoteGit("rev-parse", "main");
     const l = await land("crashed");
-    expect(state(l.json.run)).toMatchObject({ condition: "landed", commit: pushed });
+    expect(state(l.json.run)).toMatchObject({ state: "landed", commit: pushed });
     expect(remoteGit("rev-parse", "main")).toBe(pushed);
-    expect(file(l.json.run, "land.log")).toContain(`## already on main as ${pushed}`);
+    expect(section(l.json.run, "land")).toContain(`## already on main as ${pushed}`);
   });
 
   test("aleph status with no item gives the stage of each open item in the recent repos", async () => {
@@ -53,23 +54,23 @@ describe("milestone 2", () => {
 
   test("aleph status reads a short ID like the full one", async () => {
     const id = (await issueAdd("fac", "read by its short ID")).json.added;
-    const repos = readFileSync(join(base, "repos.json"), "utf8");
-    writeFileSync(join(base, "repos.json"), JSON.stringify({ ...JSON.parse(repos), fac: { ...JSON.parse(repos).fac, code: "f" } }));
+    const repos = readRepos(join(base, "items"));
+    writeRepos({ ...repos, fac: { ...repos.fac, code: "f" } }, join(base, "items"));
     try {
       const full = await cli(["status", `fac-${id}`, "--json"]), short = await cli(["status", `f${id}`, "--json"]);
       expect(short.code).toBe(0);
       expect(short.json.stage).toBe(full.json.stage);
       expect(short.json.id).toBe(`fac-${id}`);
-    } finally { writeFileSync(join(base, "repos.json"), repos); await issueClose("fac", id, "done"); }
+    } finally { writeRepos(repos, join(base, "items")); await issueClose("fac", id, "done"); }
   }, 30_000);
 
   test("aleph status inside a factory worker says what it says outside", async () => {
     const done = (await issueAdd("fac", "landed one")).json.added;
-    pushFromOther(`landed\n\nIssue: fac-${done}`, "landed-one.txt");
+    pushFromOther(`landed\n\nIssue: issue.${done}`, "landed-one.txt");
     const open = (await issueAdd("fac", "open one")).json.added;
     const items = [`fac-${done}`, `fac-${open}`];
     const r = await startJob("fac", "finside", `Goal: inside\nACTION: status ${CLI} ${items.join(" ")}\n`);
-    expect(state(r.json.run).condition).toBe("passed");
+    expect(state(r.json.run).state).toBe("passed");
     const inside = readFileSync(join(fakeLog, "status-inside"), "utf8").trim().split(/\n(?=\{)/).map((t) => JSON.parse(t));
     const outside = await Promise.all(items.map(status));
     expect(inside).toEqual(outside);

@@ -2,12 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlink
 import { probe } from "../lib/git.ts";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { allRuns, type Run } from "./lib/records/ledger.ts";
-import { getRun, numbered, putRun } from "./lib/records/record.ts";
+import { allRuns } from "./lib/records/ledger.ts";
+import { getRun } from "./lib/records/record.ts";
+import { seed, type Seed } from "./job.testkit.ts";
+import { readSection, type Section } from "./lib/records/run-files.ts";
 import { unitAlive } from "./lib/infra/process.ts";
-import { config as storeConfig } from "../issues/lib/store.ts";
+import { projectOf, writeRepos } from "../tests/projects.ts";
 import { renderItem } from "../issues/lib/todo.ts";
-import { parseId, subjectOf } from "../lib/naming.ts";
 import { fixture } from "../tests/git-fixture.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
@@ -37,7 +38,7 @@ const busy = log + ".busy." + process.pid, joberr = log + ".err." + process.pid;
 writeFileSync(busy, "");
 writeFileSync(joberr, "");
 appendFileSync(log, name + "\\n");
-const runs = () => readdirSync(dir).filter((d) => d.includes("-" + name + "-"));
+const runs = () => readdirSync(dir);
 const before = runs();
 const job = Bun.spawn(["bun", ${JSON.stringify(CLI)}, "job", kind, name, "--spec", "-", "--on", on], { env: { ...process.env, ALEPH_JOB_FOREGROUND: "1" }, stdin: "inherit", stdout: "ignore", stderr: Bun.file(joberr) });
 let gone = false;
@@ -100,10 +101,10 @@ export async function when(f: () => boolean, dir = base): Promise<void> {
   try { if (!f()) await promise; } finally { w.close(); }
 }
 
-/** The run folders on the issue `fac-<id>`, by name: `<stamp>-fac-<id>-<n>`. A folder is there a moment before its record. */
-export const issueRuns = (id: string | number): string[] => (existsSync(jobsDir) ? readdirSync(jobsDir).filter((r) => new RegExp(`^\\d{8}-\\d{6}-fac-${id}-\\d+$`).test(r)) : []);
-/** The runs of the job `name`, oldest first, only those of `kind` when given: a folder name has the subject, not the job's name or kind. */
-export const jobRuns = (name: string, kind?: string): string[] => allRuns().filter((e) => e.run.name === name && (!kind || e.run.kind === kind)).map((e) => e.id);
+/** The folders of the jobs on the issue `issue.<id>`, by name: the job number, oldest first. A reviewer job has no unit of its own and is left out. */
+export const issueRuns = (id: string | number): string[] => allRuns().filter((e) => e.run.target === `issue.${id}` && e.run.role !== "review").map((e) => basename(e.folder));
+/** The keys of the jobs named `name`, oldest first, only those of `kind` when given. */
+export const jobRuns = (name: string, kind?: string): string[] => allRuns().filter((e) => e.run.name === name && (!kind || e.run.role === kind)).map((e) => e.id);
 
 const tail = (f: string, n = 15) => (existsSync(f) ? readFileSync(f, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "(none)");
 /** What a failed concurrency test needs to name its cause: the runs of the given issue ids with their pid and exit, and the factory logs. */
@@ -125,9 +126,9 @@ export function sh(cwd: string, ...args: string[]): string {
 export function env(extra: Record<string, string> = {}): Record<string, string> {
   return {
     ...(process.env as Record<string, string>), CLAUDECODE: "", ...gitEnv,
-    ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_JOB_FOREGROUND: "1",
+    ALEPH_JOBS_DIR: jobsDir, ALEPH_ITEMS: items, ALEPH_JOB_FOREGROUND: "1",
     ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
-    ALEPH_FACTORY_DIR: join(base, "factory"),
+    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_DB: join(base, "aleph.db"),
     // No test reaches the live router: its tier for a seed varies, so a start does not rate it.
     ALEPH_JUDGE: "haiku",
     // The live cap's test starts six runs against a cap of five.
@@ -173,10 +174,14 @@ export function moveMain(): void {
   sh(other, "git", "push", "-q", "origin", "main");
 }
 /** The run's state: its entry in its job record. Throws when no record holds it yet. */
-export const state = (run: string): any => getRun(run) ?? (() => { throw new Error(`no record holds ${run}`); })();
-/** `state` for a run that may be starting: its folder exists a moment before its record has it, so a missing run reads as no state yet. */
-export const stateNow = (run: string): { condition: string } => getRun(run) ?? { condition: "" };
-export const file = (run: string, f: string) => readFileSync(join(jobsDir, run, f), "utf8");
+export const state = (run: string): any => getRun(keyOf(run)) ?? (() => { throw new Error(`no record holds ${run}`); })();
+/** `state` for a run that may be starting: a missing run reads as no state yet. */
+export const stateNow = (run: string): { state: string } => getRun(keyOf(run)) ?? { state: "" };
+/** The job key of `run`, given as a key or as the name of its folder. */
+const keyOf = (run: string): string => (run.startsWith("job.") ? run : `job.${run}`);
+export const file = (run: string, f: string) => readFileSync(join(jobsDir, keyOf(run).slice(4), f), "utf8");
+/** The text of a section of the job's `log.txt`: `command`, `setup`, `stderr`, `dispatch`, `checks` or `land`. */
+export const section = (run: string, name: Section) => readSection(join(jobsDir, keyOf(run).slice(4)), name) ?? "";
 export const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
 export const branchExists = (name: string) => probe(repo, "rev-parse", "--verify", "-q", `job/${name}`).ok;
 
@@ -336,14 +341,17 @@ function buildRepos(dir: string): void {
   sh(dir, "openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
 }
 
+let jobsEnv: string | undefined;
 export function setup(): void {
   base = mkdtempSync(join(tmpdir(), "aleph-jobs-"));
   now = statSync(base).mtimeMs;
   sweepLeftovers();
   for (const d of ["run", "fake", "jobs", "vault"]) mkdirSync(join(base, d));
   jobsDir = join(base, "jobs");
-  // The test process reads and seeds the records the units write.
-  process.env.ALEPH_RECORDS_DIR = join(jobsDir, ".records");
+  // The test process reads and seeds the rows the units write.
+  process.env.ALEPH_DB = join(base, "aleph.db");
+  jobsEnv = process.env.ALEPH_JOBS_DIR;
+  process.env.ALEPH_JOBS_DIR = jobsDir;
   fakeLog = join(base, "fake");
   setupLog = join(base, "setup.log");
   fake = join(base, "fake-worker");
@@ -377,7 +385,7 @@ export function setup(): void {
     // Pushes a commit that names an item (its trailer is in item-once) from another clone once, during the land's checks.
     { name: "item race", run: `if [ -f ${join(base, "item-once")} ]; then m=$(cat ${join(base, "item-once")}); rm ${join(base, "item-once")}; cd ${join(base, "other")} && git fetch -q origin && git reset -q --hard origin/main && echo $RANDOM > item-hand && git add item-hand && git -c user.name=t -c user.email=t@t commit -qm hand -m "$m" && git push -q origin main; fi`, when: ["item-race/**"] },
   ];
-  writeFileSync(join(base, "repos.json"), JSON.stringify({
+  writeRepos({
     // The tests land by hand; "auto" is the same clone with the default, landing by itself.
     demo: { path: repo, setup: [`echo ran >> "$SETUP_LOG"`], checks, manual: [{ when: ["android/**"], say: "run it on the phone" }], autoland: false },
     auto: { path: repo, checks: [], manual: [{ when: ["android/**"], say: "run it on the phone" }] },
@@ -389,7 +397,7 @@ export function setup(): void {
     },
     // Last, so the unknown-repo listing keeps its order up to fac.
     aleph: { path: repo, checks: [], autoland: false },
-  }));
+  }, items);
 
   lf =Bun.serve({ port: 0, async fetch(req) { lfPosts.push(await req.json()); return new Response("{}", { status: lfStatus }); } });
   server = Bun.serve({
@@ -408,7 +416,8 @@ export async function teardown(): Promise<void> {
   try { lf?.stop(true); } catch {}
   try { if (base) await killReferring(base); } catch {}
   if (base) rmSync(base, { recursive: true, force: true });
-  delete process.env.ALEPH_RECORDS_DIR;
+  delete process.env.ALEPH_DB;
+  if (jobsEnv === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = jobsEnv;
 }
 
 /** Brings the test store's checkout up to origin/main. A detached dispatch or intake writing the store at the same moment can make one fetch find no ref, so it retries. */
@@ -431,51 +440,36 @@ function pushItems(): void {
  * which no verb of `aleph issue` writes yet, or an old-shape one with a field the verbs do not set.
  */
 /** A seed's fields and text in the stored shape: `status` becomes `closed_as`, and `kind: "goal"` puts the text in the spec. */
-function seedShape(id: string, fm: Record<string, unknown>, body: string, spec: boolean) {
+function seedShape(repoKey: string, fm: Record<string, unknown>, body: string, spec: boolean) {
   const { status, kind, issue: _issue, goals: _parts, ...rest } = fm as Record<string, any>;
-  const closed = status && status !== "open" ? { closed_as: status, closed_at: "2026-10-30" } : {};
+  const closed = status && status !== "open" ? { closed_as: status, closed_at: "2026-10-30T00:00:00.000Z" } : {};
   const isSpec = spec || kind === "goal";
-  return { fm: { id, created: "2026-10-30", updated: "2026-10-30", priority: "medium", ...closed, ...rest }, request: isSpec ? "" : body, spec: isSpec ? body : "", notes: [] as string[] };
+  return { fm: { project: projectOf(repoKey, items), created: "2026-10-30T00:00:00.000Z", priority: "medium", ...closed, ...rest }, request: isSpec ? "" : body, spec: isSpec ? body : "", notes: [] as string[] };
 }
 
-export function seedItem(repoKey: string, title: string, fm: Record<string, unknown> = {}, body = "Body."): number {
+/** The next free issue number in the test items folder, above every number on disk. */
+const nextNumber = (): number => Math.max(0, ...readdirSync(join(items, "issues")).map(Number).filter((n) => !Number.isNaN(n))) + 1;
+
+function seedFile(repoKey: string, title: string, fm: Record<string, unknown>, body: string, spec: boolean): number {
   pullItems();
-  const dir = join(items, repoKey, "backlog", "tasks");
-  mkdirSync(dir, { recursive: true });
-  if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
-  const id = Math.max(0, ...readdirSync(dir).map((f) => parseId(f.replace(/\.md$/, ""))?.n ?? 0)) + 1;
-  const item = { id, title, ...seedShape(String(id), fm, body, false) };
-  writeFileSync(join(dir, `${repoKey}-${id}.md`), renderItem(repoKey, item as any));
-  sh(items, "git", "add", "-A");
-  sh(items, "git", "commit", "-qm", `seed ${repoKey}-${id}`);
+  mkdirSync(join(items, "issues"), { recursive: true });
+  const id = nextNumber();
+  mkdirSync(join(items, "issues", String(id)), { recursive: true });
+  writeFileSync(join(items, "issues", String(id), "issue.md"), renderItem({ id, title, ...seedShape(repoKey, fm, body, spec) } as any));
+  sh(items, "git", "add", "-A", "issues");
+  sh(items, "git", "commit", "-qm", `seed issue.${id}`);
   pushItems();
   return id;
 }
 
-/** Files the part `<repo>-<n>.<k>` of issue `<repo>-<n>` in one commit on the test store's origin/main; returns `"<n>.<k>"`. */
-export function seedPart(repoKey: string, n: number, k: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): string {
-  pullItems();
-  const dir = join(items, repoKey, "backlog", "tasks");
-  mkdirSync(dir, { recursive: true });
-  if (!existsSync(join(items, repoKey, "backlog", "config.yml"))) writeFileSync(join(items, repoKey, "backlog", "config.yml"), storeConfig(repoKey));
-  const ref = `${n}.${k}`;
-  const item = { id: n, sub: k, title, ...seedShape(ref, fm, body, true) };
-  writeFileSync(join(dir, `${repoKey}-${ref}.md`), renderItem(repoKey, item as any));
-  sh(items, "git", "add", "-A");
-  sh(items, "git", "commit", "-qm", `seed ${repoKey}-${ref}`);
-  pushItems();
-  return ref;
-}
+export const seedItem = (repoKey: string, title: string, fm: Record<string, unknown> = {}, body = "Body."): number => seedFile(repoKey, title, fm, body, false);
 
-/** Writes a run folder into the test ledger: `run` holds the fields the test cares about. */
-let seeded = 0;
-export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | "condition">): string {
-  const id = `20261030-${String(++seeded).padStart(6, "0")}-${repoKey}-seed-${run.kind}`;
-  const folder = join(jobsDir, id);
-  mkdirSync(folder, { recursive: true });
-  const r = { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date(now).toISOString(), ...run } as Omit<Run, "n">;
-  putRun(basename(folder), { ...r, n: run.n ?? numbered(subjectOf(r), allRuns()).length + 1 });
-  return id;
+/** Files a child of issue `n` in one commit on the test store's origin/main: an issue with `from: issue.<n>`. Returns its number. */
+export const seedPart = (repoKey: string, n: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): number => seedFile(repoKey, title, { from: `issue.${n}`, ...fm }, body, true);
+
+/** Puts a job into the test ledger: `run` holds the fields the test cares about. Returns the job key. */
+export function seedRun(repoKey: string, run: Seed): string {
+  return seed({ repo: repoKey, shown: true, started: new Date(now).toISOString(), ...run }).id;
 }
 
 /**

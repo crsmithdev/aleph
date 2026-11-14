@@ -10,16 +10,14 @@ let server: ReturnType<typeof Bun.serve>;
 let reply: { status: number; body: unknown };
 let asked: any[] = [];
 
-// The preload sets ALEPH_JUDGE_FILE; put it back, not delete it, so later files never reach the live judge file.
-const judgeFile = process.env.ALEPH_JUDGE_FILE!;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "aleph-judge-"));
   // The fake claude denies, and leaves a mark that it ran.
   writeFileSync(join(dir, "claude"), `#!/bin/sh\ntouch ${join(dir, "haiku-ran")}\necho '{"type":"result","is_error":false,"result":"{\\"verdict\\":\\"deny\\",\\"reason\\":\\"no run backs tests pass\\"}"}'\n`, { mode: 0o755 });
   server = Bun.serve({ port: 0, async fetch(req) { asked.push({ auth: req.headers.get("authorization"), body: await req.json() }); return Response.json(reply.body, { status: reply.status }); } });
-  Object.assign(process.env, { ALEPH_JUDGE_FILE: join(dir, "judge"), ALEPH_JUDGE_CMD: join(dir, "claude"), ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
+  Object.assign(process.env, { ALEPH_JUDGE_CMD: join(dir, "claude"), ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
 });
-afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); delete process.env.ALEPH_JUDGE; process.env.ALEPH_JUDGE_FILE = judgeFile; });
+afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); delete process.env.ALEPH_JUDGE; });
 beforeEach(() => { asked = []; for (const f of ["haiku-ran", "judge"]) rmSync(join(dir, f), { force: true }); delete process.env.ALEPH_JUDGE; });
 
 const jev = (claim: number) => ({ status: 200, body: { model: "typesafe/jev-1.13-x", answers: { claim: { type: "noul", noul: claim } }, usage: { cost: 0.00002 } } });

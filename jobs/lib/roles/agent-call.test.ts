@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { conn } from "../../../lib/db.ts";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -42,16 +43,13 @@ test("a call on a model Claude does not serve is priced from its tokens, not fro
 });
 
 test("a call on OpenRouter is priced at what OpenRouter bills per list dollar, and a local call at 0", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "or-")), keep = process.env.ALEPH_OPENROUTER_FILE;
-  process.env.ALEPH_OPENROUTER_FILE = join(dir, "openrouter.jsonl");
-  writeFileSync(process.env.ALEPH_OPENROUTER_FILE, [{ at: "2026-11-11T00:00:00Z", usage: 1 }, { at: "2026-11-11T00:10:00Z", usage: 2, factor: 1.3 }, "torn"].map((r) => JSON.stringify(r)).join("\n") + "\n");
+  conn().query("INSERT INTO openrouter (time, usage, factor) VALUES (?, ?, ?), (?, ?, ?)").run("2026-11-11T00:00:00Z", 1, null, "2026-11-11T00:10:00Z", 2, 1.3);
   try {
     const ev = { type: "result", is_error: false, result: "ok", total_cost_usd: 9, usage: { input_tokens: 1_000_000, output_tokens: 1_000_000 } };
     expect((await callAgent("monitor", "x", ask(fake(`echo '${JSON.stringify(ev)}'`), "deepseek-v4.1-flash"))).cost).toBeCloseTo(0.545 * 1.3);
     expect((await callAgent("monitor", "x", ask(fake(`echo '${JSON.stringify(ev)}'`), "gpt-oss-20b"))).cost).toBe(0);
   } finally {
-    if (keep === undefined) delete process.env.ALEPH_OPENROUTER_FILE; else process.env.ALEPH_OPENROUTER_FILE = keep;
-    rmSync(dir, { recursive: true });
+    conn().run("DELETE FROM openrouter");
   }
 });
 
@@ -85,4 +83,17 @@ test("a call's env has no ALEPH_UI_PASSWORD, from the default env or from the en
   expect(passed).not.toContain("ALEPH_UI_PASSWORD");
   expect(passed).toContain("MAX_THINKING_TOKENS=0");
   delete process.env.ALEPH_UI_PASSWORD;
+});
+
+/** A shell prefix that opens fd 3 on a pipe with no writer: `read -t N -u 3` then waits N seconds. */
+const WAIT = `f=$(mktemp -u); mkfifo $f; exec 3<>$f; rm $f`;
+
+test("output on stderr keeps a call from stalling, and a silent call stalls", async () => {
+  process.env.ALEPH_STALL_SECONDS = "1";
+  try {
+    const busy = await callAgent("monitor", "x", ask(fake(`${WAIT}; for i in 1 2 3 4 5 6; do echo tick >&2; read -t 0.4 -u 3; done`)));
+    expect(busy.step.stalled).toBe(false);
+    const silent = await callAgent("monitor", "x", ask(fake(`${WAIT}; read -t 30 -u 3`)));
+    expect(silent.step.stalled).toBe(true);
+  } finally { delete process.env.ALEPH_STALL_SECONDS; }
 });

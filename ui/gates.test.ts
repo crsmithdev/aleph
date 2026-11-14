@@ -11,18 +11,21 @@ import { withEnv, withServer } from "./test-server.ts";
 import { day, pct, tone, when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
-import * as record from "../jobs/lib/records/record.ts";
-import { allHolds, recordHold, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
+import { allHolds, recordHold, setTick, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
 import { issueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { eventsDir, logEvent } from "../lib/layout.ts";
+import { conn, getJson, putJson } from "../lib/db.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { logEvent } from "../lib/layout.ts";
 import { contentText, setCodes } from "../lib/naming.ts";
+import { writeRepos } from "../tests/projects.ts";
 
-/** Make `rows` the only hold records: each issue's `hold` and `started` events in its job record. */
+/** Make `rows` the only hold records: a hold is the event of its gate on an issue, a `started` record the rule's `started` event. */
 function setHolds(rows: HoldRecord[]): void {
-  const names = new Set([...record.all().map((r) => r.issue), ...rows.map((x) => x.name)]);
-  for (const n of names) record.update(n, (r) => {
-    r.events = rows.filter((x) => x.name === n).map((x) => (x.kind === "started" ? { at: x.at, kind: "started", what: x.text } : { at: x.at, kind: "hold", what: x.text, data: { gate: x.kind, ...(x.event ? { event: x.event } : {}) } }));
-  });
+  conn().run("DELETE FROM events WHERE object LIKE 'issue.%' AND ((subject = 'gate' AND action NOT IN ('question', 'answered')) OR (subject = 'rule' AND action = 'started'))");
+  for (const x of rows) {
+    if (x.kind === "started") logEvent({ time: x.at, subject: "rule", action: "started", object: x.name, detail: x.text });
+    else if (x.event) logEvent(x.event);
+  }
 }
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
@@ -37,14 +40,14 @@ const post = (p: string) => at(p, { method: "POST", headers: { "X-Aleph-UI": "1"
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-gates-"));
   // No git store and no repo: this file shares its process with ui/state-load.test.ts, whose timer a blocking git call would stall.
-  writeFileSync(join(base, "repos.json"), JSON.stringify({
+  writeRepos({
     held: { path: join(base, "held-repo"), sandbox: true, held: ["src/auth/**"] },
     plain: { path: join(base, "plain-repo"), sandbox: true },
     alpha: { path: join(base, "alpha"), sandbox: true }, "alpha-ui": { path: join(base, "alpha-ui"), sandbox: true }, beta: { path: join(base, "beta"), sandbox: true },
-  }));
+  }, join(base, "items"));
   const factory = join(base, "factory");
   mkdirSync(factory);
-  writeFileSync(join(factory, "always.json"), JSON.stringify({ rescue: { action: "recommended", at: ago(30) }, "run-cap": { action: "rerun", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } }));
+  putJson("settings", "always", { rescue: { action: "recommended", at: ago(30) }, "run-cap": { action: "rerun", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } });
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\necho '{}'\nexit 0\n`);
@@ -52,18 +55,19 @@ beforeAll(async () => {
   // systemctl answers `show` with a 1min tick and a 1h suite, and logs every call.
   const systemctl = join(base, "systemctl");
   writeFileSync(systemctl, `#!/bin/sh\necho "$@" >> ${join(base, "systemctl.log")}\ncase "$*" in *"show aleph-tick"*) echo "TimersMonotonic={ OnUnitActiveUSec=1min ; next_elapse=1min }";; *"show aleph-suite"*) echo "TimersMonotonic={ OnUnitActiveUSec=1h ; next_elapse=1h }";; esac\n`, { mode: 0o755 });
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake, ALEPH_SYSTEMCTL: systemctl, ALEPH_UNIT_DIR: join(base, "config/systemd/user") });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake, ALEPH_SYSTEMCTL: systemctl, ALEPH_UNIT_DIR: join(base, "config/systemd/user") });
   setHolds([
     // The log shows a hold's stored event, not its text; a hold with no event has no row.
-    { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live", event: { at: ago(5), by: "gate", subject: "r-3", action: "full", sub: "local" } },
-    { at: ago(6), name: "r-13", kind: "pause", text: "paused" },
-    { at: ago(4), name: "r-3", kind: "started", text: "started" },
-    { at: ago(60 * 24 * 9), name: "r-4", kind: "gate", text: "too old" },
+    { at: ago(5), name: "issue.3", kind: "gate", text: "5 agent runs are live", event: { time: ago(5), subject: "gate", object: "issue.3", action: "full", detail: "local" } },
+    { at: ago(6), name: "issue.13", kind: "pause", text: "paused" },
+    { at: ago(4), name: "issue.3", kind: "started", text: "started" },
+    { at: ago(60 * 24 * 9), name: "issue.4", kind: "gate", text: "too old" },
   ]);
   ({ stop, at } = await withServer({ warm: false }));
 });
-// Each test starts with no events and no caps file: the ones it reads, it writes.
-beforeEach(() => { rmSync(eventsDir(), { recursive: true, force: true }); rmSync(join(base, "factory", "caps.json"), { force: true }); });
+// Each test starts with no events and no caps row: the ones it reads, it writes.
+const clearEvents = () => void conn().run("DELETE FROM events");
+beforeEach(() => { clearEvents(); conn().run("DELETE FROM settings WHERE key = 'caps'"); });
 afterAll(() => {
   stop();
   restoreEnv();
@@ -87,67 +91,77 @@ test("the body of /api/automation has every section, one rule per Ask reason wit
 });
 
 test("the body names the held backend and the line it holds with, and the backend gate row binds while the hold is up", async () => {
-  const file = join(process.env.ALEPH_FACTORY_DIR!, "backend-hold.json");
   const why = "API Error: 402 This request would exceed your available credits";
   try {
-    writeFileSync(file, JSON.stringify({ via: "openrouter", why, since: ago(10) }));
+    putJson("state", "backend-hold", { via: "openrouter", why, since: ago(10) });
     const d: any = await body();
     expect(d.backend).toEqual({ via: "OpenRouter", why });
     expect(d.gated).toEqual({ gate: "backend", why: `waits for OpenRouter: ${why}`, text: `Waiting for OpenRouter: ${why}` });
-  } finally { rmSync(file, { force: true }); }
+  } finally { putJson("state", "backend-hold", null); }
   // No hold: the body names no backend, and no factory gate binds.
   const d: any = await body();
   expect(d.backend).toBeNull();
   expect(d.gated).toBeNull();
 });
 
-/** An entry as one line: by, subject, action, sub, content and note. */
-const line = (x: any) => [x.by, x.subject, x.action, x.sub ?? "-", contentText(x) || "-", x.note ?? "-"].join(" | ");
+/** An entry as one line: subject, object, action and detail. */
+const line = (x: any) => [x.subject, x.object, x.action, x.detail ?? "-"].join(" | ");
 
 test("the log reads the hold, the rules Chris set, and the old rule, director and firefighter lines as events, newest first, 7 days back", async () => {
-  logEvent({ at: ago(3), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" });
-  logEvent({ at: ago(2), by: "firefighter", subject: "r-6", action: "answered", note: "r-6: picked the plain option" });
-  logEvent({ at: ago(2.5), by: "director", subject: "r-8", action: "reran", sub: "capped", note: "the cause is fixed" });
+  logEvent({ time: ago(5), subject: "gate", action: "full", object: "issue.3", detail: "local" });
+  logEvent({ time: ago(3), subject: "rule", action: "reran", object: "issue.5", detail: "rescue" });
+  logEvent({ time: ago(2), subject: "firefighter", action: "answered", object: "issue.6", detail: "issue.6: picked the plain option" });
+  logEvent({ time: ago(2.5), subject: "director", action: "reran", object: "issue.8", detail: "the cause is fixed" });
   const d: any = await body();
   const e = d.log.entries;
   expect(d.log.days).toBe(7);
   expect(e.map(line)).toEqual([
-    "firefighter | r-6 | answered | - | - | r-6: picked the plain option",
-    "director | r-8 | reran | capped | - | the cause is fixed",
-    "rule | r-5 | reran | rescue | → dropped | -",
-    "gate | r-3 | full | local | - | -",
-    "human | rescue | changed | rescue | - | set to recommended",
-    "human | run-cap | changed | capped | - | set to rerun",
-    "human | proposal-claude-md:global | changed | - | - | set to approve",
+    "firefighter | issue.6 | answered | issue.6: picked the plain option",
+    "director | issue.8 | reran | the cause is fixed",
+    "rule | issue.5 | reran | rescue",
+    "gate | issue.3 | full | local",
+    "human | rescue | changed | set to recommended",
+    "human | run-cap | changed | set to rerun",
+    "human | proposal-claude-md:global | changed | set to approve",
   ]);
 });
 
 test("a hold writes its event, and the log shows it as busy with the job and the file's base name", () => {
   const was = allHolds();
   try {
-    const d = issueDecision({ name: "aleph-1420", item: { id: 1420, notes: [], spec: "", fm: {} } as any, done: () => false, busy: { why: "waits for aleph-1372: both change the busy file ui/views/issues.js", on: "aleph-1372", file: "ui/views/issues.js" } });
-    recordHold("aleph-1420", d.kind as any, d.why, d.ev);
-    const e = log().find((x) => x.subject === "aleph-1420")!;
-    expect(e).toMatchObject({ by: "gate", action: "busy", on: ["aleph-1372"], file: "ui/views/issues.js" });
+    const d = issueDecision({ name: "issue.1420", item: { id: 1420, notes: [], spec: "", fm: {} } as any, done: () => false, busy: { why: "waits for issue.1372: both change the busy file ui/views/issues.js", on: "issue.1372", file: "ui/views/issues.js" } });
+    recordHold("issue.1420", d.kind as any, d.why, d.ev);
+    const e = log().find((x) => x.object === "issue.1420")!;
+    expect(e).toMatchObject({ subject: "gate", action: "busy", detail: "issue.1372 holds ui/views/issues.js" });
     // The registry of this test has no code: the page gets the codes with the body.
     setCodes({ aleph: "a" });
-    expect(contentText(e)).toBe("a1372 → issues.js");
+    expect(contentText(e)).toBe("issue.1372 holds ui/views/issues.js");
     const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
-    expect(h).toContain('</td><td><a class="idl" title="aleph-1420" href="#/issues/aleph/1420">a1420</a></td><td>');
+    // An issue key names no repo, so the log shows its shown form and links nothing.
+    expect(h).toContain("</td><td>I-01420</td><td>");
     expect(h).toContain('<tr><td class="time lead">');
-    expect(h).toContain('</td><td>busy</td><td><span title="no sub">–</span></td><td class="wide" title="a1372 → issues.js"><a class="idl" title="aleph-1372" href="#/issues/aleph/1372">a1372</a> → <code title="ui/views/issues.js">issues.js</code></td>');
+    expect(h).toContain('</td><td>busy</td><td class="wide" title="issue.1372 holds ui/views/issues.js">I-01372 holds ui/views/issues.js</td>');
   } finally { setHolds(was); }
 });
 
-test("a director decision shows its action and sub, and its long note only behind the row's button", () => {
+test("renderLog links an issue key to its page when the entry carries its project", () => {
+  const e = { time: "2026-11-14T10:00:00Z", subject: "rule", action: "reran", object: "issue.1420", detail: "after issue.1372", project: "aleph" };
+  const h = gates.renderLog({ log: { entries: [e] } });
+  expect(h).toContain('href="#/issues/aleph/1420"');
+  expect(h).not.toContain('href="#/issues/aleph/1372"');
+  const j = gates.renderLog({ log: { entries: [{ ...e, object: "job.7", object_target: "issue.1420" }] } });
+  expect(j).toContain('href="#/issues/aleph/1420"');
+});
+
+test("a director decision shows its action and its detail", () => {
   const note = `Director: landed over the reviewer hold. ${"word ".repeat(60)}`.trim();
   try {
-    logEvent({ by: "director", subject: "r-12", action: "landed", sub: "override", note });
-    const e = log().find((x) => x.subject === "r-12")!;
-    expect(line(e)).toBe(`director | r-12 | landed | override | - | ${note}`);
+    logEvent({ subject: "director", action: "landed", object: "r-12", detail: `over review: ${note}` });
+    const e = log().find((x) => x.object === "r-12")!;
+    expect(line(e)).toBe(`director | r-12 | landed | over review: ${note}`);
     const h = gates.renderLog({ log: { entries: [e] } });
-    expect(h).toContain(`<td>landed</td><td>override</td><td class="wide"><div class="clamp">${note}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
-  } finally { rmSync(eventsDir(), { recursive: true, force: true }); }
+    expect(h).toContain(`<td>landed</td><td class="wide" title="over review: ${note}">over review: ${note}</td>`);
+  } finally { clearEvents(); }
 });
 
 test("POST /api/automation/rules/:reason/revoke runs `aleph always revoke`, and refuses a request without the UI header", async () => {
@@ -159,9 +173,8 @@ test("POST /api/automation/rules/:reason/revoke runs `aleph always revoke`, and 
 });
 
 test("rules() gives each reason row its timeout minutes and no-answer action, and POST timeout passes the action on", async () => {
-  const f = join(base, "factory", "timeouts.json");
   try {
-    writeFileSync(f, JSON.stringify({ "held-path": 30, "core-change": 30, question: { minutes: 20, then: "drop" } }));
+    putJson("settings", "timeouts", { "held-path": 30, "core-change": 30, question: { minutes: 20, then: "drop" } });
     const row = (reason: string) => rules().find((x) => x.reason === reason)!;
     expect(row("held-path").timeout).toBeUndefined();
     expect(row("core-change").timeout).toBeUndefined();
@@ -176,7 +189,7 @@ test("rules() gives each reason row its timeout minutes and no-answer action, an
     expect((await send(20, "drop")).status).toBe(200);
     expect(readFileSync(calls, "utf8").trim().split("\n").at(-1)).toBe("always timeout -- question 20 drop");
     expect((await send(20, "wait")).status).toBe(400);
-  } finally { rmSync(f, { force: true }); }
+  } finally { conn().run("DELETE FROM settings WHERE key = 'timeouts'"); }
 });
 
 const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", card: "decide", label: "Decide", headline: `t ${id}`, tag: "", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
@@ -193,7 +206,7 @@ const data = () => ({
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
-  log: { days: 7, max: 200, entries: [{ at: ago(1), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" }, { at: ago(2), by: "human", subject: "rescue", action: "changed", sub: "rescue", note: "set to recommended" }] },
+  log: { days: 7, max: 200, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to recommended" }] },
 });
 
 test("the view draws the sections in order, a closed gate, and an Edit row with only Director and the reason's mode", () => {
@@ -232,7 +245,7 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No data</p></div>');
 });
 
-const entry = (by: string, action = "answered", subject = "r-1") => ({ at: ago(1), by, subject, action }) as any;
+const entry = (subject: string, action = "answered", object = "r-1") => ({ time: ago(1), subject, object, action }) as any;
 const rec = (min: number, name: string, kind: string) => ({ at: ago(min), name, kind, text: "t" });
 
 test("the automation rate is the rule and director decisions over those and Chris's answers; his rule changes, a director escalation and a second event of one decision do not count", () => {
@@ -243,13 +256,13 @@ test("the automation rate is the rule and director decisions over those and Chri
 
 test("the body's automation rate counts every decision in the 7 days, past the log's cap of each actor", async () => {
   const before = (await body()).metrics.rate ?? { auto: 0, total: 0 };
-  for (let i = 0; i < LOG_MAX; i++) logEvent({ at: ago(5 + i / 100), by: "rule", subject: `r-${i}`, action: "reran", sub: "rescue" });
+  for (let i = 0; i < LOG_MAX; i++) logEvent({ time: ago(5 + i / 100), subject: "rule", action: "reran", object: `r-${i}`, detail: "rescue" });
   try {
     const after = (await body()).metrics.rate;
     expect(after.auto - before.auto).toBe(LOG_MAX);
     expect(after.total - before.total).toBe(LOG_MAX);
   } finally {
-    rmSync(eventsDir(), { recursive: true, force: true });
+    clearEvents();
   }
 });
 
@@ -259,11 +272,11 @@ test("the held time sums, over the issues, the hours from a hold to the next sta
 });
 
 test("gate catches are the builds a check or the reviewer sent back in the 7 days, against those a later build of the job passed", () => {
-  const run = (job: string, min: number, condition: string, failed?: string) => ({ n: 1, job, kind: "build", condition, started: ago(min), ...(failed ? { failed } : {}) });
-  const r = (runs: any[]) => ({ issue: "r-1", runs }) as any;
+  const run = (job: string, min: number, state: string, failed?: string) => ({ run: { n: 1, job, role: "build", state, started: ago(min), ...(failed ? { failed } : {}) } });
+  const r = (runs: any[]) => runs as any;
   const records = [
     r([run("j1", 300, "returned", "tests"), run("j1", 200, "returned", "review"), run("j1", 100, "landed")]),
-    r([run("j2", 300, "returned", "types"), run("j3", 200, "passed")]),
+    r([run("j2", 300, "returned", "types")]), r([run("j3", 200, "passed")]),
     r([run("j4", 60 * 24 * 9, "returned", "tests"), run("j4", 60, "passed")]),
   ];
   expect(metrics([], [], NOW, records).catches).toEqual({ fired: 3, fixed: 2 });
@@ -274,26 +287,26 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).toMatch(/class="seg"[^>]*>.*aria-pressed="true">human</);
   expect(h).not.toContain("fchip");
   expect(h).toContain('</td><td><a href="#rules">rescue</a></td><td>');
-  expect(h).toContain("</td><td>changed</td><td>rescue</td>");
+  expect(h).toContain(`</td><td>changed</td><td class="wide"`);
   expect(h).not.toContain("r-5");
-  expect(h).toContain('<tr><th>Logged</th><th>Subject</th><th>By</th><th>Action</th><th>Sub</th><th>Content</th><th class="num">Times</th></tr>');
-  expect(h).toContain(`<td class="wide"><div class="clamp">set to recommended</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
-  expect(gates.renderLog(data(), "rule")).not.toContain("clamp");
+  expect(h).toContain('<tr><th>Logged</th><th>Object</th><th>Subject</th><th>Action</th><th>Detail</th><th class="num">Times</th></tr>');
+  expect(h).toContain(`<td class="wide" title="set to recommended">set to recommended</td>`);
+  expect(gates.renderLog(data(), "rule")).not.toContain("set to recommended");
 });
 
-test("renderLog shows a missing action and sub the same way, and each By badge takes its tone from tone()", () => {
-  const at = new Date(NOW).toISOString();
-  const h = gates.renderLog({ log: { entries: [{ at, by: "rule", subject: "x-1" }] } } as any);
-  expect(h.match(/<td><span title="no (action|sub)">–<\/span><\/td>/g)).toHaveLength(2);
+test("renderLog shows a missing action, and each By badge takes its tone from tone()", () => {
+  const time = new Date(NOW).toISOString();
+  const h = gates.renderLog({ log: { entries: [{ time, subject: "rule", object: "x-1" }] } } as any);
+  expect(h.match(/<td><span title="no action">–<\/span><\/td>/g)).toHaveLength(1);
   expect(Object.keys(gates.BY)).toEqual(["human", "rule", "director", "firefighter", "gate"]);
-  for (const by of Object.keys(gates.BY)) expect(gates.renderLog({ log: { entries: [{ at, by, subject: "x-1", action: "a" }] } } as any)).toContain(`<span class="badge ${tone(by)}">${by}</span>`);
+  for (const by of Object.keys(gates.BY)) expect(gates.renderLog({ log: { entries: [{ time, subject: by, object: "x-1", action: "a" }] } } as any)).toContain(`<span class="badge ${tone(by)}">${by}</span>`);
   expect(new Set(Object.keys(gates.BY).map(tone)).size).toBe(5);
 });
 
 test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times", () => {
-  const e = (n: number): any => ({ at: new Date(NOW - n * 1000).toISOString(), by: "rule", subject: "x-1", action: "reran", note: `t${n}` });
+  const e = (n: number): any => ({ time: new Date(NOW - n * 1000).toISOString(), subject: "rule", object: "x-1", action: "reran", detail: `t${n}` });
   const entries = Array.from({ length: 120 }, (_, i) => e(i));
-  entries[0] = { ...entries[0], by: "gate", times: 3, first: entries[1].at };
+  entries[0] = { ...entries[0], subject: "gate", times: 3, first: entries[1].time };
   const h = gates.renderLog({ log: { entries } } as any);
   expect(h.match(/<tr>/g)!.length - 1).toBe(50);
   expect(h).toContain("1–50 of 120");
@@ -307,8 +320,8 @@ const withHolds = (rows: HoldRecord[], f: () => void) => {
   setHolds(rows);
   try { f(); } finally { setHolds(was); }
 };
-const hold = (min: number, name = "r-9", text = "busy") => ({ at: ago(min), name, kind: "gate", text, event: { at: ago(min), by: "gate", subject: name, action: "busy" } });
-const gateLines = () => log().filter((e) => e.by === "gate");
+const hold = (min: number, name = "issue.9", text = "busy") => ({ at: ago(min), name, kind: "gate", text, event: { time: ago(min), subject: "gate", object: name, action: "busy" } });
+const gateLines = () => log().filter((e) => e.subject === "gate");
 
 test("log collapses a run of identical gate events into one with times, first and last time", () => {
   withHolds([hold(30), hold(20), hold(10)], () => {
@@ -316,23 +329,22 @@ test("log collapses a run of identical gate events into one with times, first an
     expect(g.length).toBe(1);
     expect(g[0].times).toBe(3);
     expect(Date.parse(g[0].first!)).toBeCloseTo(NOW - 30 * 60_000, -4);
-    expect(Date.parse(g[0].at)).toBeCloseTo(NOW - 10 * 60_000, -4);
+    expect(Date.parse(g[0].time)).toBeCloseTo(NOW - 10 * 60_000, -4);
   });
 });
 
-const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
 const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/automation/caps", { method: "POST", headers, body: JSON.stringify(b) });
 
 test("POST /api/automation/caps refuses a missing header with 403 and bad values with 422, and leaves the file", async () => {
-  const seed = JSON.stringify({ live: 9 });
-  writeFileSync(capsPath(), seed);
+  const seed = { live: 9 };
+  putJson("settings", "caps", seed);
   expect((await postCaps({ live: 5 }, {})).status).toBe(403);
   for (const v of [0, -1, 2.5, "x"]) {
     const r = await postCaps({ live: v });
     expect(r.status).toBe(422);
     expect(typeof (await r.json()).error).toBe("string");
   }
-  expect(readFileSync(capsPath(), "utf8")).toBe(seed);
+  expect(getJson<unknown>("settings", "caps", null)).toEqual(seed);
 });
 
 test("the Gates page says the user, never you, your or Chris, in its visible text", () => {
@@ -346,32 +358,32 @@ test("the Gates page says the user, never you, your or Chris, in its visible tex
 });
 
 test("a cap post writes the live cap only and leaves the old day and awaiting keys alone", async () => {
-  writeFileSync(capsPath(), JSON.stringify({ day: 999, awaiting: 5 }));
+  putJson("settings", "caps", { day: 999, awaiting: 5 });
   const r = await postCaps({ live: 3, day: 7 });
   expect(r.status).toBe(200);
   expect(await r.json()).toMatchObject({ live: 3, run: 3, intakeTries: 2, jobSeconds: 1800, fixRounds: 2, landBatch: 8 });
-  expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ day: 999, awaiting: 5, live: 3 });
+  expect(getJson<any>("settings", "caps", {})).toEqual({ day: 999, awaiting: 5, live: 3 });
 });
 
 test("a cap post writes the run cap and refuses 0", async () => {
-  writeFileSync(capsPath(), "{}");
+  putJson("settings", "caps", {});
   const r = await postCaps({ run: 5 });
   expect(r.status).toBe(200);
   expect((await r.json()).run).toBe(5);
-  expect(JSON.parse(readFileSync(capsPath(), "utf8")).run).toBe(5);
+  expect(getJson<any>("settings", "caps", {}).run).toBe(5);
   expect((await postCaps({ run: 0 })).status).toBe(422);
 });
 
 test("a cap post writes the settings; fix rounds take 0 and the rest refuse it", async () => {
-  writeFileSync(capsPath(), "{}");
+  putJson("settings", "caps", {});
   const r = await postCaps({ fixRounds: 0, jobSeconds: 2400, intakeTries: 3, landBatch: 4, loadLimit: 12 });
   expect(r.status).toBe(200);
   // The preload sets ALEPH_LOAD_LIMIT, which wins over the file: the file holds the load limit.
   expect(await r.json()).toMatchObject({ fixRounds: 0, jobSeconds: 2400, intakeTries: 3, landBatch: 4 });
-  expect(JSON.parse(readFileSync(capsPath(), "utf8")).loadLimit).toBe(12);
+  expect(getJson<any>("settings", "caps", {}).loadLimit).toBe(12);
   for (const k of ["jobSeconds", "intakeTries", "landBatch", "loadLimit"]) expect((await postCaps({ [k]: 0 })).status).toBe(422);
   expect((await postCaps({ fixRounds: -1 })).status).toBe(422);
-  writeFileSync(capsPath(), "{}");
+  putJson("settings", "caps", {});
 });
 
 test("the Caps section holds a form each for the two caps, with use against limit, then one per setting, and no day cap", () => {
@@ -445,54 +457,52 @@ test("rules() has one row per Ask reason; renderRules is one table with a row pe
 });
 
 test("a stored firefighter grant for held-path is dead: rules() shows no grant and Decides offers only Director and User", () => {
-  const f = join(base, "factory", "always.json");
-  const saved = readFileSync(f, "utf8");
+  const saved = getJson("settings", "always", {});
   try {
-    writeFileSync(f, JSON.stringify({ "held-path": { action: "firefighter", at: ago(5) } }));
+    putJson("settings", "always", { "held-path": { action: "firefighter", at: ago(5) } });
     const row = rules().find((x) => x.reason === "held-path")!;
     expect(row.granted).toBeNull();
     const h = gates.renderRules({ rules: [row] });
     expect(h).not.toContain("always.json grants");
     expect(h).not.toContain("firefighter");
     expect(h).toMatch(/data-value="" aria-pressed="true">Director<\/button><button type="button" data-value="user" aria-pressed="false">User</);
-  } finally { writeFileSync(f, saved); }
+  } finally { putJson("settings", "always", saved); }
 });
 
 test("a reason granted user shows User in Decides, and the proposal-skill row offers no User choice", () => {
-  const f = join(base, "factory", "always.json");
-  const saved = readFileSync(f, "utf8");
+  const saved = getJson("settings", "always", {});
   try {
-    writeFileSync(f, JSON.stringify({ "held-path": { action: "user", at: ago(5) } }));
+    putJson("settings", "always", { "held-path": { action: "user", at: ago(5) } });
     const all = rules();
     const held = gates.renderRules({ rules: all.filter((x) => x.reason === "held-path") });
     expect(held).toContain("<td>User</td>");
     expect(held).toMatch(/data-value="user" aria-pressed="true">User</);
     const skill = gates.renderRules({ rules: all.filter((x) => x.reason === "proposal-skill") });
     expect(skill).not.toContain('data-value="user"');
-  } finally { writeFileSync(f, saved); }
+  } finally { putJson("settings", "always", saved); }
 });
 
 test("a grant that is neither the reason's mode nor user still shows pressed in Decides", () => {
-  const f = join(base, "factory", "always.json");
-  const saved = readFileSync(f, "utf8");
+  const saved = getJson("settings", "always", {});
   try {
-    writeFileSync(f, JSON.stringify({ "intake-failed": { action: "close", at: ago(5) } }));
+    putJson("settings", "always", { "intake-failed": { action: "close", at: ago(5) } });
     const h = gates.renderRules({ rules: rules().filter((x) => x.reason === "intake-failed") });
     expect(h).toMatch(/data-value="" aria-pressed="false">Director<\/button><button type="button" data-value="retry" aria-pressed="false">[^<]+<\/button><button type="button" data-value="close" aria-pressed="true">[^<]+<\/button><button type="button" data-value="user" aria-pressed="false">User</);
-  } finally { writeFileSync(f, saved); }
+  } finally { putJson("settings", "always", saved); }
 });
 
 test("rules() counts each reason's Asks in the window by who decided them and what followed; renderRules shows the counts", () => {
   const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
   const ask = (n: number, cleared = true) => ({ set: at(n * 10), ...(cleared ? { cleared: at(n * 10 + 1) } : {}), reason: "question" });
-  const build = (m: number): any => ({ n: 1, kind: "build", started: at(m) });
-  const rec = (issue: string, asks: any[], runs: any[] = []): any => ({ issue, asks, runs, events: [] });
+  const rec = (n: number, asks: any[]) => asks.map((a) => ({ issue: `issue.${n}`, ...a }));
+  // A build that starts after the Ask of issue 1 went is what followed it.
+  const built = seed({ role: "build", state: "done", target: "issue.1", started: at(15) }).id;
   const records = [
-    rec("x-1", [ask(1)], [build(15)]), rec("x-2", [ask(2)]), rec("x-3", [ask(3)]), rec("x-4", [ask(4), ask(5, false)]),
-    rec("x-5", [{ ...ask(6), reason: "run-cap" }]),
+    ...rec(1, [ask(1)]), ...rec(2, [ask(2)]), ...rec(3, [ask(3)]), ...rec(4, [ask(4), ask(5, false)]),
+    ...rec(5, [{ ...ask(6), reason: "run-cap" }]),
   ];
-  const e = (n: number, by: any, subject: string, note?: string): any => ({ at: at(n * 10), by, subject, action: "answered", note });
-  const entries = [e(1, "rule", "x-1"), e(2, "rule", "x-2"), e(3, "director", "x-3"), e(4, "human", "x-4", "Chris: yes")];
+  const e = (n: number, subject: any, object: string, detail?: string): any => ({ time: at(n * 10), subject, object, action: "answered", detail });
+  const entries = [e(1, "rule", "issue.1"), e(2, "rule", "issue.2"), e(3, "director", "issue.3"), e(4, "human", "issue.4", "Chris: yes")];
   const row: any = rules(entries, records, NOW + 3600_000).find((x) => x.reason === "question");
   expect(row.fired).toBe(5);
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
@@ -503,15 +513,7 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   expect(h).toContain('<td class="num">5</td>');
   expect(h).toContain('<small class="split">2 rule · 1 director · 1 user</small>');
   expect(h).toMatch(/<i class="c-rule" style="width:50.0%"><\/i><i class="c-dir" style="width:25.0%"><\/i><i class="c-user" style="width:25.0%"><\/i>/);
-});
-
-test("rules() takes an entry's missing reason from the run that awaited when it was set; with no such run the entry is not counted", () => {
-  const set = new Date(NOW).toISOString();
-  const fired = (records: any[]) => Object.fromEntries(rules([], records, NOW + 3600_000).map((x) => [x.reason, x.fired]));
-  const base = fired([]);
-  const awaiting: any = { id: "r1", n: 1, kind: "build", condition: "waiting", started: new Date(NOW - 60_000).toISOString(), ended: set };
-  expect(fired([{ issue: "x-1", asks: [{ set }], ask: { reason: "held-path" }, askRun: "r1", runs: [awaiting], events: [] }])["held-path"]).toBe(base["held-path"] + 1);
-  expect(fired([{ issue: "x-2", asks: [{ set }], runs: [], events: [] }])).toEqual(base);
+  conn().run("DELETE FROM jobs WHERE id = ?", [built]);
 });
 
 test("the Monitor panel says the monitor has not run with no report, and holds the newest report with the findings inside the part that expands", async () => {
@@ -562,8 +564,7 @@ test("the Monitor draws **text** as bold in the summary and the list, and escape
   }
 });
 
-test("the body has the tick, the suite and the monitor with their last run from tick.json; with no record each has not run", async () => {
-  const dir = process.env.ALEPH_FACTORY_DIR!;
+test("the body has the tick, the suite and the monitor with their last run from the tick table; with no record each has not run", async () => {
   const none: any = (await body()).schedules;
   expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d" }]);
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
@@ -582,8 +583,9 @@ test("the body has the tick, the suite and the monitor with their last run from 
   const tbody = h.split("<tbody>")[1].split("</tbody>")[0];
   expect(tbody.match(/<tr>/g)).toHaveLength(3);
   expect(tbody).toContain(`<td class="time"></td></tr>`);
-  const ran = { "suite plain": { at: ago(11), result: "green" }, "suite held": { at: ago(10), result: "green" }, monitor: { at: ago(50), result: "7 findings" } };
-  writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {}, ran }));
+  const ran = { "suite plain": { last: ago(11), result: "green" }, "suite held": { last: ago(10), result: "green" }, monitor: { last: ago(50), result: "7 findings" }, ci: { last: ago(9), result: null }, firefight: { last: ago(2), result: null } };
+  for (const [k, v] of Object.entries(ran)) setTick(k, v);
+  putJson("state", "tick.missed", ["stalled:x"]);
   try {
     const d: any = (await body()).schedules;
     expect(d).toEqual([
@@ -595,7 +597,8 @@ test("the body has the tick, the suite and the monitor with their last run from 
     const t = gates.renderSchedules({ ...(await body()), schedules: d });
     expect(t).toContain("<td>7 findings</td>");
   } finally {
-    rmSync(join(dir, "tick.json"));
+    conn().run("DELETE FROM tick");
+    conn().run("DELETE FROM state");
   }
 });
 
@@ -608,10 +611,10 @@ test("renderNow shows a dash, not undefined or NaN, with no rate and no held tim
 
 test("GET /api/automation takes window and project: the log and the metrics keep that window and that repo; no parameter keeps 7 days of every repo; a bad window is 400", async () => {
   const m = (min: number) => min * 60 * 24;
-  for (const [min, id] of [[30, "alpha-1"], [m(3), "beta-1"], [m(10), "beta-2"], [m(40), "alpha-3"]] as const) logEvent({ at: ago(min), by: "rule", subject: id, action: "reran", sub: "rescue" });
-  logEvent({ at: ago(60 * 5), by: "rule", subject: "alpha-2", action: "reran", sub: "rescue" });
+  for (const [min, id] of [[30, "alpha-1"], [m(3), "beta-1"], [m(10), "beta-2"], [m(40), "alpha-3"]] as const) logEvent({ time: ago(min), subject: "rule", action: "reran", object: id, detail: "rescue" });
+  logEvent({ time: ago(60 * 5), subject: "rule", action: "reran", object: "alpha-2", detail: "rescue" });
   const get = async (q: string) => { const r = await at(`/api/automation${q}`); return { status: r.status, d: r.status === 200 ? await r.json() as any : null }; };
-  const items = (d: any) => d.log.entries.map((e: any) => e.subject).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
+  const items = (d: any) => d.log.entries.map((e: any) => e.object).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
   try {
     const week = await get("");
     expect(items(week.d)).toEqual(["alpha-1", "alpha-2", "beta-1"]);
@@ -625,12 +628,12 @@ test("GET /api/automation takes window and project: the log and the metrics keep
     const alpha = await get("?project=alpha");
     expect(items(alpha.d)).toEqual(["alpha-1", "alpha-2"]);
     expect(alpha.d.metrics.rate.total).toBe(2);
-    logEvent({ at: ago(30), by: "rule", subject: "alpha-ui-2", action: "reran", sub: "rescue" });
+    logEvent({ time: ago(30), subject: "rule", action: "reran", object: "alpha-ui-2", detail: "rescue" });
     expect(items((await get("?project=alpha")).d)).toEqual(["alpha-1", "alpha-2"]);
     expect(items((await get("?project=beta&window=month")).d)).toEqual(["beta-1", "beta-2"]);
     expect((await get("?window=year")).status).toBe(400);
   } finally {
-    rmSync(eventsDir(), { recursive: true, force: true });
+    clearEvents();
   }
 });
 
@@ -668,7 +671,7 @@ test("Monitor, Schedules, Rules and Log are each a card that keeps its id", asyn
 
 test("Schedules, Rules and Log show empty() with no rows; the Log pages at 50", () => {
   expect(gates.renderLog({ log: { entries: [] } } as any)).toContain('class="empty"');
-  expect(gates.renderLog({ log: { entries: Array.from({ length: 51 }, (_, i) => ({ at: new Date(NOW - i * 1000).toISOString(), by: "rule", subject: "x-1", action: "reran", note: `t${i}` })) } } as any)).toContain("50 of 51");
+  expect(gates.renderLog({ log: { entries: Array.from({ length: 51 }, (_, i) => ({ time: new Date(NOW - i * 1000).toISOString(), subject: "rule", object: "x-1", action: "reran", detail: `t${i}` })) } } as any)).toContain("50 of 51");
   expect(gates.renderSchedules({ schedules: [] })).toContain('class="empty"');
   expect(gates.renderRules({ rules: [] })).toContain('class="empty"');
 });

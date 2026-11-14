@@ -11,7 +11,7 @@ import { admit, type Admission, type Check, type CheckResult, type FailedTest, t
 import type { Stated } from "../records/outcome.ts";
 import { checkSeconds } from "../infra/settings.ts";
 import { git } from "../infra/git.ts";
-import { runFile } from "../records/run-files.ts";
+import { jobOfFolder, logTo } from "../records/run-files.ts";
 import type { Plan } from "./keep-earn.ts";
 import { isJsTestFile } from "./test-files.ts";
 
@@ -73,7 +73,7 @@ export const testRecord = (file: string): TestRecord =>
  * runs it again. The first failure or no verdict ends the loop. Returns why.
  */
 async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<ChecksStop | null> {
-  const log = (text: string) => appendFileSync(runFile(t.folder, "checks.log"), text);
+  const log = (text: string) => logTo(t.folder, "checks", text);
   for (const check of checks) {
     t.phase(`check ${check.name}`);
     const out = join(t.folder, "check.out");
@@ -108,8 +108,8 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
     const failedFirst = rerun ? failedTests(first!) : [];
     if (rerun) {
       const tests = failedFirst;
-      const row = { repo: t.repo.key, check: check.name, run: basename(t.folder), at: new Date().toISOString(), ...(tests.length ? { tests } : {}) };
-      if (!await recordFlake(row)) log(`## ${check.name}: flake not recorded, lock busy\n\n`);
+      const row = { repo: t.repo.key, check: check.name, run: /^\d+$/.test(basename(t.folder)) ? jobOfFolder(t.folder) : basename(t.folder), at: new Date().toISOString(), ...(tests.length ? { tests } : {}) };
+      recordFlake(row);
     }
     t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}), ...(lost ? { noVerdict: true as const } : {}), ...(record ? { tests: record } : {}), ...(failedFirst.length ? { rerunPassed: failedFirst.length } : {}) });
     log(`## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : r.killed ? " (killed)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
@@ -193,7 +193,7 @@ export async function checksAt(t: CheckTask, sha: string, env: Record<string, st
       t.phase("check setup");
       const bad = await setup(t.repo, wt, env, log, t.onSpawn);
       if (bad !== null) {
-        appendFileSync(runFile(t.folder, "checks.log"), `## setup: exit 1\n${tail(log, 100)}\n\n`);
+        logTo(t.folder, "checks", `## setup: exit 1\n${tail(log, 100)}\n\n`);
         if (bad.lost) return { cause: "infra", checkName: "setup", reason: `no verdict: setup ${bad.cmd} timed out or was killed` };
         return { cause: "check", checkName: "setup", reason: "setup failed" };
       }
@@ -358,7 +358,7 @@ export function changedSources(cwd: string, base: string, tip: string): Source[]
   });
 }
 
-/** The mutation operators, in order: a comparison, a logical operator, a boolean, a condition, a constant. */
+/** The mutation operators, in order: a comparison, a logical operator, a boolean, a state, a constant. */
 const OPS: [RegExp, (m: string) => string][] = [
   [/===|!==/, (m) => m === "===" ? "!==" : "==="],
   [/ (?:<=|>=|<|>) /, (m) => ({ " <= ": " > ", " >= ": " < ", " < ": " >= ", " > ": " <= " })[m]!],

@@ -2,7 +2,7 @@
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, money, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, undecided, when, scope } from "../lib.js";
-import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, parseId, say as sayParts, whoOf } from "../../lib/naming.ts";
+import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, parseId, say as sayParts, targetOf, whoOf } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { share, flowOf, statusCards, usable } from "./speed.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
@@ -133,6 +133,9 @@ function feedRow({ tone, at, body, by, cls = "", bodyCls = "" }) {
 /** A short hash of a text, to key a row by its text. */
 const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString(36);
 
+/** An event row as the rows below read it: its time in `at`, its subject in `by`, the issue or routine it is about in `subject`, its job in `on`, its detail in `note`, and the run facts of its job; `row` is the row itself. */
+const shaped = (r) => ({ row: r, at: r.time, by: r.subject, subject: targetOf(r), on: [r.object], note: r.detail, tier: r.tier ?? undefined, model: r.model ?? undefined, cost: r.cost ?? undefined, commit: r.commit_sha ?? undefined, action: r.action });
+
 /** An event's identity: the same event from the stream and from the state has the same key. */
 const eventKey = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
 
@@ -142,15 +145,16 @@ const HERALD_KEEP = 50;
 
 /** The events of the state and of the stream, each once, newest first. */
 export function heraldEvents(s, more = streamed) {
-  const all = new Map([...(s.herald?.events ?? []), ...more].map((e) => [eventKey(e), e]));
+  const all = new Map([...(s.herald?.events ?? []), ...more].map(shaped).map((e) => [eventKey(e), e]));
   return [...all.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, HERALD_KEEP);
 }
 
 /** A piece of `say`: text escaped, a job ID linked to its job page, an issue ID to its issue page, any other ID as text. */
-const saidHtml = (p) => {
+const saidHtml = (p, row) => {
   if (typeof p === "string") return esc(p);
-  const to = p.id.includes("#") ? jobHref(shownId(p.id)) : issueHref(p.id);
-  return idLink(shownId(p.id), to);
+  const repo = p.id === row.object ? row.project : undefined;
+  const to = isJobId(p.id) ? jobHref(shownId(p.id)) : issueHref(p.id, repo);
+  return idLink(shownId(p.id, repo), to);
 };
 
 /** The holds: an issue's state while it waits, not an event, so the feed leaves them out. The ones that need Chris are alerts. */
@@ -164,45 +168,31 @@ const MARK = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returne
 /** The leading verb of a sentence after its ID, with the words that only join it to the rest. */
 const VERB = /^ ?(?:(?:is|has|asks|proposes|hit) |\S+(?: up| its checks)?(?: by| for| to)?(?::|$| ))\s*/;
 
-/** What a routing event chose, "worker-medium · sonnet · p 0.99 · $0.00003", from its fields. An event from before the fields has a note, "cost … model M tier T p P", read as "T · M · p P"; any other note as it is. */
+/** What a routing event chose, "worker-medium · sonnet · $0.00003", from its job's fields. An event with no such job has a note, "cost … model M tier T p P", read as "T · M · p P"; any other note as it is. */
 const routeText = (ev) => {
-  if (ev.tier) return [ev.tier, ev.model, `p ${ev.p}`, ev.cost !== undefined && `$${Number(ev.cost.toFixed(5))}`].filter(Boolean).join(" · ");
+  if (ev.tier) return [ev.tier, ev.model, ev.cost !== undefined && `$${Number(ev.cost.toFixed(5))}`].filter(Boolean).join(" · ");
   const note = ev.note ?? "";
   const m = Object.fromEntries([...note.matchAll(/(\w+) (\S+)/g)].map(([, k, v]) => [k, v]));
   return m.tier ? `${m.tier} · ${shortModel(m.model?.split("/").pop())} · p ${m.p}` : note;
 };
 
-/** What an event's own fields add to its row, as HTML: a routing event's choice, a tally's counts with the issues it changed linked. */
-function detail(ev) {
-  if (ev.tier) return `→ ${esc(routeText(ev))}`;
-  if (!ev.tally) return "";
-  const ids = (ev.on ?? []).filter((x) => !x.includes("#")).map((x) => idLink(shownId(x), issueHref(x)));
-  return [esc(Object.entries(ev.tally).map(([k, n]) => `${TALLY[k] ?? k} ${n}`).join(" · ")), ids.join(" ")].filter(Boolean).join(" ");
-}
-
-/** The past word of a housekeeper action. A note reads "commented", in the tally too. */
-const DID = { close: "closed", drop: "dropped", retitle: "retitled", reprioritize: "reprioritized", note: "commented", unpark: "unparked" };
-const TALLY = { noted: "commented" };
-
-/** A run's changes as sub-items for its fold, one per issue: the linked issue, then its actions' past words in the order they ran. */
-function changeRows(ev) {
-  const by = new Map();
-  for (const c of ev.changes ?? []) by.set(c.id, [...(by.get(c.id) ?? []), DID[c.do] ?? c.do]);
-  return [...by].map(([id, did]) => `<div class="event-brief event-change"><span class="event-time"></span>` +
-    `<span class="brief-label">${idLink(shownId(id), issueHref(id))}</span><span class="brief-text">${esc(did.join(" · "))}</span></div>`);
-}
+/** What an event's own fields add to its row, as HTML: a routing event's choice. */
+const detail = (ev) => (ev.tier ? `→ ${esc(routeText(ev))}` : "");
 
 /** An event's sentence in two parts of HTML: its leading ID, and what follows the verb ("the factory is paused", "past its time box"). */
 function parts(ev) {
   // Adjacent text pieces as one, so the verb's colon and the reason after it ("failed", ": past its time box") read as one.
-  const said = sayParts(ev).reduce((out, p) => (typeof p === "string" && typeof out.at(-1) === "string" ? [...out.slice(0, -1), out.at(-1) + p] : [...out, p]), []);
-  const lead = typeof said[0] === "string" ? "" : saidHtml(said.shift());
+  const said = sayParts(ev.row).reduce((out, p) => (typeof p === "string" && typeof out.at(-1) === "string" ? [...out.slice(0, -1), out.at(-1) + p] : [...out, p]), []);
+  const lead = typeof said[0] === "string" ? "" : saidHtml(said.shift(), ev.row);
   if (typeof said[0] === "string") said[0] = said[0].replace(VERB, "");
-  return { lead, rest: said.map(saidHtml).join("").trim() };
+  return { lead, rest: said.map((p) => saidHtml(p, ev.row)).join("").trim() };
 }
 
+/** Whether `id` names a job: `a1878#2`, or the key `job.1878`. */
+const isJobId = (id) => id.includes("#") || /^job\.\d+$/.test(id);
+
 /** The job of an event, `a1878#2`, if it names one. */
-const jobOf = (ev) => ev.on?.find((x) => x.includes("#"));
+const jobOf = (ev) => ev.on?.find(isJobId);
 
 /** The chip of an event: what happened, never who. A done closes an issue, or ends a routine's run; a start or a running run is "started". */
 function stateWord(ev) {
@@ -213,18 +203,17 @@ function stateWord(ev) {
 const CHIP_TONES = { filed: "quiet", ended: "quiet", closed: "done", started: "run" };
 const chipTone = (word) => CHIP_TONES[word] ?? tone(word);
 
-/** An event's row: the time, then the issue's title, and under it the state, the ID and what the sentence adds. A chat turn's line is its message; a routing event's is its tier and model. `more` is the count of older rows folded behind it; `run` is the kind of the event's run. */
+/** An event's row: the time, then the issue's title, and under it the state, the ID and what the sentence adds. A routing event's is its tier and model. `more` is the count of older rows folded behind it; `run` is the kind of the event's run. */
 export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "", all = [ev]) {
-  const chat = ev.subject === "chat", route = ev.action === "routed" && !ev.tier;
-  const title = chat || route ? "" : titles[ev.subject] ?? "";
-  const { lead, rest } = chat || route ? { lead: "", rest: "" } : parts(ev);
+  const route = ev.action === "routed" && !ev.tier;
+  const title = route ? "" : titles[ev.subject] ?? "";
+  const { lead, rest } = route ? { lead: "", rest: "" } : parts(ev);
   const word = stateWord(ev), who = run && isIssue(ev.subject) ? `${esc(role(run))} ` : "";
-  const line = chat ? esc(chats[ev.on?.[0]]?.title ?? "")
-    : route ? esc(routeText(ev))
+  const line = route ? esc(routeText(ev))
     : `${tag(word, chipTone(word))} ${[lead && who + lead, rest !== ev.action && rest, detail(ev), run && isIssue(ev.subject) && jobFacts(ev, jobOf(ev), run, all)].filter(Boolean).join(" · ")}`;
   return feedRow({ tone: chipTone(word), at: ev.at, by: ev.by, cls: route ? " sys" : "",
     body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
-      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>${!chat && !route && ev.note ? `<span class="reason" title="${esc(ev.note)}">${esc(ev.note)}</span>` : ""}` });
+      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>` });
 }
 
 /** The newest event of `all` (newest first) at or before `at` that `ok` takes. */
@@ -245,17 +234,16 @@ function jobFacts(ev, job, run, all) {
 function brief(ev, runs = {}, chats = {}, all = [ev]) {
   const job = jobOf(ev), run = runs[job];
   const cut = (s) => esc(s ?? "");
-  if (ev.subject === "chat") return { ev, label: "", text: cut(chats[ev.on?.[0]]?.title) };
   if (ev.action === "routed") return { ev, label: "routed", text: cut(routeText(ev)) };
-  const { lead, rest } = parts(ev), more = detail(ev) && ` ${detail(ev)}`, note = ev.note ? ` <span class="reason" title="${cut(ev.note)}">${cut(ev.note)}</span>` : "";
+  const { lead, rest } = parts(ev), more = detail(ev) && ` ${detail(ev)}`;
   if (run) {
     const fx = jobFacts(ev, job, run, all);
-    return { ev, label: role(run), text: `${idLink(shownId(job), jobHref(job))} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${fx ? ` ${fx}` : ""}${more}${note}` };
+    return { ev, label: role(run), text: `${idLink(shownId(job), jobHref(job))} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${fx ? ` ${fx}` : ""}${more}` };
   }
   // The group already names its issue, so a row whose sentence adds only the actor says who did it.
-  const by = ev.by && whoOf(ev.by);
+  const by = ev.by && whoOf(ev.by, ev.row.subject_role);
   const said = isIssue(ev.subject) && by && (!rest || rest === esc(by)) ? `by ${esc(by)}` : rest || lead;
-  return { ev, label: stateWord(ev), text: said + more + note };
+  return { ev, label: stateWord(ev), text: said + more };
 }
 
 /** The older rows of a group, newest first: no start of a job with another event, nor of a run kind with a newer one, and no routing or start of an issue that a later job start draws as that job's facts. */
@@ -281,7 +269,7 @@ const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.act
 
 /** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones briefly behind it; `row(ev, more, events)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
 const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
-  const inner = [...changeRows(events[0]), ...briefs(events, runs, chats).map(briefRow)];
+  const inner = briefs(events, runs, chats).map(briefRow);
   return { at: events[0].at, key: `event ${hash(eventKey(events[0]))}`, html: inner.length ? fold(row(events[0], inner.length, events), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(events[0], 0, events) };
 });
 
@@ -290,21 +278,8 @@ function issueRows(events, titles = {}, runs = {}) {
   const by = new Map();
   // An issue's runs share its row; any other subject (the housekeeper) is one row per run, so a row's older events belong to one run.
   const groupOf = (ev) => (isIssue(ev.subject) || !jobOf(ev) ? ev.subject : `${ev.subject}:${jobOf(ev)}`);
-  for (const ev of events) if (ev.subject !== "chat" && !WAITS.has(ev.action)) by.set(groupOf(ev), [...(by.get(groupOf(ev)) ?? []), ev]);
+  for (const ev of events) if (!WAITS.has(ev.action)) by.set(groupOf(ev), [...(by.get(groupOf(ev)) ?? []), ev]);
   return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more, all) => eventRow(ev, titles, {}, more, runs[jobOf(ev)], all), runs);
-}
-
-/** The rows of the chat events, newest first: one per session, its latest turn's newest event, with the earlier turns' behind an expand control. */
-function chatRows(events, chats = {}) {
-  const turns = new Set(), sessions = new Map();
-  for (const ev of events) {
-    const turn = ev.on?.[0];
-    if (ev.subject !== "chat" || turns.has(turn)) continue;
-    turns.add(turn);
-    const key = chats[turn]?.session ?? turn;
-    sessions.set(key, [...(sessions.get(key) ?? []), ev]);
-  }
-  return grouped([...sessions].map(([k, v]) => [`chat:${k}`, v]), (ev, more) => eventRow(ev, {}, chats, more), {}, chats);
 }
 
 /** A status text without the "health: " of each health line, which older history entries carry. */
@@ -316,10 +291,10 @@ function runNow(s) {
   const row = (id, who, label, title, t, model) => `<div class="run-now" data-job="${esc(id)}"><span class="run-dot"></span>${who}<span class="run-label"${model ? ` title="${esc(model)}"` : ""}>${esc(label)}</span>` +
     `<span class="run-title" title="${esc(title)}">${esc(title)}</span><span class="event-time">${at(t)}</span></div>`;
   const rows = (s.runningIssues ?? []).map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat((s.running ?? []).map((j) => {
-    const run = j.run ?? { kind: "build", started: j.started };
+    const run = j.run ?? { role: "build", started: j.started };
     // A job's tier is the Claude model it asked for: its model, or, when another backend served it, its recorded tier.
     const tier = TIERS[j.tier ?? shortModel(j.model)];
-    const label = run.kind === "build" ? [role("build"), tier].filter(Boolean).join(" · ") : run.kind;
+    const label = run.role === "build" ? [role("build"), tier].filter(Boolean).join(" · ") : run.role;
     return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), label, j.item?.title || j.name, run.started ?? j.started, j.model);
   }));
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
@@ -354,7 +329,7 @@ export function renderHerald(s) {
   for (const r of [...status].reverse()) { const n = (seen.get(r.key) ?? 0) + 1; seen.set(r.key, n); r.key += ` ${n}`; }
   const live = errors ? status.shift() : null;
   const events = heraldEvents(s);
-  const rows = [...status, ...issueRows(events, s.herald?.titles, s.herald?.runs), ...chatRows(events, s.herald?.chats)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const rows = [...status, ...issueRows(events, s.herald?.titles, s.herald?.runs)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = (live ? [live, ...rows] : rows).map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}"`)).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
@@ -497,12 +472,12 @@ const stuckSentence = (j) => {
     moved: "Main moved during the land.",
     review: "The reviewer held the change.",
     unanswered: "The agent ended without an answer.",
-  }[j.cause] ?? (j.condition === "failed" ? "The run failed." : "The run stopped.");
+  }[j.cause] ?? (j.state === "failed" ? "The run failed." : "The run stopped.");
 };
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && shortText(b.id);
-  const hold = b ? holdLine({ action: "after", on: [b.id] }) : stuckSentence(j);
+  const hold = b ? holdLine({ action: "after", detail: b.id }) : stuckSentence(j);
   const job = (verb) => `/api/jobs/${encodeURIComponent(j.id)}/${verb}`;
   const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, path: job("wait"), body: JSON.stringify({ on: b.id }), label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, path: job("recheck"), label: "Re-check" });
   const meta = metaRow({ id: repoIdLink(j.name, jobHref(j.id), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });

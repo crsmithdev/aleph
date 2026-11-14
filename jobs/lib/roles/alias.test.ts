@@ -9,7 +9,7 @@ import { loadVault, readRun, today, wikiNotes } from "../../../vault/lib/vault.t
 import { alias, findMisses, MISSES } from "./alias.ts";
 import { render } from "./maintainer.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_REPOS", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 const NOW = Date.parse("2026-11-04T12:00:00Z"), AT = (min: number) => new Date(NOW - 60 * 60_000 + min * 60_000).toISOString();
 let base = "", root = "", saved: Record<string, string | undefined> = {};
@@ -50,7 +50,7 @@ beforeEach(() => {
   chmodSync(join(base, "fake"), 0o755);
   root = join(base, "vault");
   Object.assign(process.env, GIT, {
-    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_VAULT: root, ALEPH_REPOS: join(base, "repos.json"),
+    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_VAULT: root, 
     ALEPH_MAINTAINER_CMD: join(base, "fake"), ALEPH_JUDGE: "haiku", FAKE_DIR: base,
   });
   vault(root);

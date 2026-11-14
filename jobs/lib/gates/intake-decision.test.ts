@@ -33,13 +33,13 @@ test("decideIntake: closed and sorted items get none; a red main and an open aft
     ["to plan, red",        parent,                            "red", "none",    "red"],
     ["to plan, after",      add({ plan: true }),               null,  "none",    `after fac-${blocker}`],
     ["take in, after",      add(),                             null,  "take-in", "not sorted"],
-    ["a part to plan",      add({ plan: true, from: `fac-${parent}` }), null, "none", "sorted"],
+    ["a part to plan",      add({ plan: true, from: `issue.${parent}` }), null, "none", "sorted"],
   ];
   const id = (name: string) => rows.find((r) => r[0] === name)![1];
   change(id("closed"), (i) => issues.setStatus(i, "done"));
   change(id("to plan, after"), (i) => { i.fm.after = [`fac-${blocker}`]; });
   change(id("take in, after"), (i) => { i.fm.after = [`fac-${blocker}`]; });
-  setAsk(`fac-${id("asking")}`, plainAsk("question", "which?"));
+  setAsk(`issue.${id("asking")}`, plainAsk("question", "which?"));
   const repo = loadRegistry().fac, doc = readList({ key: "fac" })!;
   const got = rows.map(([name, n, red]) => [name, n, red, ...Object.values(decideIntake(repo, issues.find(doc, n)!, { doc, done: () => false, red }))]);
   expect(got).toEqual(rows);
@@ -58,16 +58,16 @@ test("stalled and the intake queue agree on an issue to plan and one to take in,
     return { swept, queued: intakeQueued(() => {}) };
   };
   await baseline(true);
-  expect(await sides()).toEqual({ swept: [`fac-${plan}`, `fac-${fresh}`], queued: [`fac-${plan}`, `fac-${fresh}`] });
+  expect(await sides()).toEqual({ swept: [`issue.${plan}`, `issue.${fresh}`], queued: [`issue.${plan}`, `issue.${fresh}`] });
   await baseline(false);
-  expect(await sides()).toEqual({ swept: [`fac-${fresh}`], queued: [`fac-${fresh}`] });
+  expect(await sides()).toEqual({ swept: [`issue.${fresh}`], queued: [`issue.${fresh}`] });
 });
 
 test("a dispatch pass leaves the intake of an issue to plan to the intake queue, so it starts once", async () => {
   const plan = add({ plan: true });
   await baseline(true);
   await dispatchIssues(async () => null);
-  expect(readEvents().filter((e) => e.subject === `fac-${plan}` && e.sub === "intake")).toEqual([]);
+  expect(readEvents().filter((e) => e.object === `issue.${plan}`)).toEqual([]);
   const calls: string[] = [];
   await runDispatch({ intake: (_r, id) => { calls.push(`fac-${id}`); }, director: () => {} });
   expect(calls).toEqual([`fac-${plan}`]);

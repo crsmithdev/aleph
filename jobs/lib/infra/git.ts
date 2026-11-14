@@ -6,7 +6,7 @@ import { git, lockRetry } from "../../../lib/git.ts";
 
 export { fetchOrigin, followMain, git, lockRetry } from "../../../lib/git.ts";
 
-/** The `git log -E --grep` of a `Job:` trailer line with one of `values`: a job ID, and the folder name an old job wrote. */
+/** The `git log -E --grep` of a `Job:` trailer line with one of `values`: a job key such as `job.12`. */
 export const jobGrep = (values: string[]): string => `--grep=^Job: (${[...new Set(values)].map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`;
 
 /** The commit of a job on `origin/<main>` (the newest whose message has a `Job:` trailer with one of `values`), or an empty string. */

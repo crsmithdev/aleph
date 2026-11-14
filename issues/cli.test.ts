@@ -1,10 +1,11 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { env, fx, remoteItem, seed, sh, tasks, useFixture } from "./fixture.ts";
+import { env, fx, issueFile, remoteItem, seed, sh, useFixture } from "./fixture.ts";
 import { clock, renderItem, titleProblem } from "./lib/todo.ts";
-import { putRun } from "../jobs/lib/records/record.ts";
+import { seed as seedJob } from "../jobs/job.testkit.ts";
 import { askOf, clearAsk, setAsk } from "../jobs/lib/asks/ask.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 // Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
 setDefaultTimeout(30000);
@@ -34,9 +35,9 @@ test("a write is one commit on the store's origin/main, the store's checkout fol
   const head = sh(fx.base, "git", "--git-dir", fx.remote, "rev-parse", "main");
   expect(JSON.parse(a.out).commit).toBe(head);
   expect(sh(fx.base, "git", "--git-dir", fx.remote, "rev-parse", "main~1")).toBe(before);
-  expect(sh(fx.base, "git", "--git-dir", fx.remote, "diff", "--name-only", "main~1", "main")).toBe(`${tasks}/proj-4.md`);
+  expect(sh(fx.base, "git", "--git-dir", fx.remote, "diff", "--name-only", "main~1", "main")).toBe(issueFile(4));
   expect(sh(fx.base, "git", "--git-dir", fx.remote, "log", "-1", "--format=%s", "main")).toBe("proj: todo: add an item");
-  expect(remoteItem(4)).toContain("id: proj-4\ntitle: Teach the gate to count\n");
+  expect(remoteItem(4)).toContain("---\nproject: project.1\ntitle: Teach the gate to count\n");
   expect(sh(fx.items, "git", "rev-parse", "HEAD")).toBe(head);
   expect(sh(fx.items, "git", "status", "--porcelain")).toBe("");
   expect(sh(fx.base, "git", "--git-dir", fx.repoRemote, "rev-parse", "main")).toBe(product);
@@ -66,25 +67,25 @@ test("--kind reaches add, edit and list, and an unknown kind is refused", () => 
 });
 
 test("lint blocks on bad frontmatter and --fix repairs what it can", () => {
-  seed(`# To do\n\n## 7. Broken\n---\nid: 9\nstatus: open\ncreated: 2026-09-01\n---\n\nBody.\n`);
+  seed(`# To do\n\n## 7. Broken\n---\nid: 9\nstatus: open\ncreated: 2026-09-01T00:00:00.000Z\nupdated_time: 2026-09-01T00:00:00.000Z\n---\n\nBody.\n`);
   const bad = aleph("issue", "lint", "proj");
   expect(bad.code).toBe(1);
-  expect(bad.err).toContain("updated_time is missing");
+  expect(bad.err).toContain("updated_time is retired");
   const fixed = aleph("issue", "lint", "proj", "--fix");
   expect(fixed.code).toBe(0);
   expect(JSON.parse(fixed.out).fixed.length).toBeGreaterThan(0);
   expect(aleph("issue", "lint", "proj").code).toBe(0);
 });
 
-test("add starts a list for a repo that has none; every other verb refuses", () => {
+test("a project with no issue lists none, and add numbers the first one from the counter", () => {
   seed(null);
   expect(aleph("issue", "list", "nope").err).toContain("no repo named nope");
-  expect(aleph("issue", "list", "proj").code).toBe(1);
-  expect(aleph("issue", "list", "proj").err).toContain("the work store has no list for proj");
+  expect(aleph("issue", "list", "proj").out).toBe("no issues\n");
+  expect(aleph("issue", "show", "proj", "1").code).toBe(1);
   const a = aleph("issue", "add", "proj", "The first thing");
   expect(a.code).toBe(0);
   expect(JSON.parse(a.out).added).toBe(1);
-  expect(sh(fx.base, "git", "--git-dir", fx.remote, "show", "main:proj/backlog/config.yml")).toContain('task_prefix: "proj"');
+  expect(sh(fx.base, "git", "--git-dir", fx.remote, "show", `main:${issueFile(1)}`)).toContain("project: project.1\ntitle: The first thing\n");
   expect(JSON.parse(aleph("issue", "list", "proj", "--json").out)).toHaveLength(1);
   expect(aleph("issue", "lint", "proj").code).toBe(0);
 });
@@ -108,7 +109,7 @@ test("the duplicate warning names the item with the repo's key", async () => {
     });
     const [code, , err] = await Promise.all([p.exited, new Response(p.stdout).text(), new Response(p.stderr).text()]);
     expect(code).toBe(0);
-    expect(err).toContain("proj-3 may be the same task: An old item");
+    expect(err).toContain("x-00003 may be the same task: An old item");
     expect(err).not.toContain("aleph-3");
   } finally { server.stop(true); }
 });
@@ -145,31 +146,33 @@ test("edit replaces the title, body, priority and labels it is given, and keeps 
   expect(sh(fx.base, "git", "--git-dir", fx.remote, "log", "-1", "--format=%s", "main")).toBe("proj: todo: edit item 4");
 });
 
-test("list and show print a part's ref, and the list column is right-aligned on the longest ref", () => {
-  seed(`# To do\n\n## 5. Parent\n---\nid: 5\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\n---\n\nBody.\n`);
-  writeFileSync(join(fx.items, tasks, "proj-5.1.md"), renderItem("proj", { id: 5, sub: 1, title: "A part", fm: { kind: "task", priority: "medium" }, request: "Body.", spec: "", notes: [] }));
+test("list and show print each issue's shown key, with the project's code", () => {
+  seed(`# To do\n\n## 5. Parent\n---\nstatus: open\ncreated: 2026-09-01T00:00:00.000Z\npriority: medium\n---\n\nBody.\n`);
+  mkdirSync(join(fx.items, "issues", "6"), { recursive: true });
+  writeFileSync(join(fx.items, issueFile(6)), renderItem({ id: 6, title: "A part", fm: { project: "project.1", kind: "task", priority: "medium", from: "issue.5" }, request: "Body.", spec: "", notes: [] }));
   sh(fx.items, "git", "add", "-A");
   sh(fx.items, "git", "commit", "-qm", "seed part");
   sh(fx.items, "git", "push", "-q", "origin", "main");
-  expect(aleph("issue", "list", "proj").out).toBe("  5  open    medium   Parent\n5.1  open    medium   A part\n");
-  expect(aleph("issue", "show", "proj", "5.1").out.split("\n")[0]).toBe("## 5.1. A part");
+  expect(aleph("issue", "list", "proj").out).toBe("x-00005  open    medium   Parent\nx-00006  open    medium   A part\n");
+  expect(aleph("issue", "show", "proj", "6").out.split("\n")[0]).toBe("## x-00006. A part");
+  expect(aleph("issue", "show", "x-00006").out.split("\n")[0]).toBe("## x-00006. A part");
+  expect(aleph("issue", "show", "issue.6").out.split("\n")[0]).toBe("## x-00006. A part");
 });
 
 test("list and lint with no repo cover the repos with a run or an item update in the last 7 days, the latest first", () => {
-  writeFileSync(join(fx.base, "repos.json"), JSON.stringify({ proj: { path: fx.repo }, fresh: { path: fx.repo } }));
+  writeRepos({ proj: { path: fx.repo, code: "x" }, fresh: { path: fx.repo } }, fx.items);
   const jobs = join(fx.base, "jobs");
   mkdirSync(jobs);
   const e = { ALEPH_JOBS_DIR: jobs };
   expect(alephWith(e, "issue", "add", "fresh", "A new item").code).toBe(0);
-  expect(alephWith(e, "issue", "list").out).toBe("fresh\n  1  open    medium   A new item\n");
+  expect(alephWith(e, "issue", "list").out).toBe("fresh\n  I-00004  open    medium   A new item\n");
   // proj's only item is from September; a run today makes proj recent, and the latest.
-  mkdirSync(join(jobs, "r1"));
   const saved = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobs;
-  putRun("r1", { n: 1, kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: clock().toISOString() } as any);
+  seedJob({ role: "build", name: "x", repo: "proj", state: "landed", started: clock().toISOString() });
   // Assigning undefined would set the string "undefined", and a later test's records would land in ./undefined/.
   if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
-  expect(alephWith(e, "issue", "list").out).toBe("proj\n  3  open    medium   An old item\nfresh\n  1  open    medium   A new item\n");
+  expect(alephWith(e, "issue", "list").out).toBe("proj\n  x-00003  open    medium   An old item\nfresh\n  I-00004  open    medium   A new item\n");
   expect(JSON.parse(alephWith(e, "issue", "list", "--status", "done", "--json").out)).toEqual([]);
   const lint = alephWith(e, "issue", "lint");
   expect(lint.code).toBe(1);
@@ -188,14 +191,14 @@ test("aleph issue is the only command: aleph todo is gone", () => {
 });
 
 
-test("a short ID names the issue in the repo slot of show and note", () => {
-  const short = aleph("issue", "show", "p3", "--json");
+test("a shown ID names the issue in the repo slot of show and note", () => {
+  const short = aleph("issue", "show", "x-00003", "--json");
   const long = aleph("issue", "show", "proj", "3", "--json");
   expect([short.code, long.code]).toEqual([0, 0]);
   const [a, b] = [JSON.parse(short.out), JSON.parse(long.out)];
   expect(a.id).toBe(b.id);
   expect(a.title).toBe(b.title);
-  expect(aleph("issue", "note", "p3", "short-form-note").code).toBe(0);
+  expect(aleph("issue", "note", "x-00003", "short-form-note").code).toBe(0);
   expect(remoteItem(3)).toContain("short-form-note");
 });
 
@@ -206,7 +209,7 @@ test("retitle prints the ids it retitled", () => {
   const item = remoteItem(9);
   const title = /^title: (.*)$/m.exec(item)![1];
   expect(titleProblem(title)).toBeNull();
-  expect(r.out).toBe(`proj-9: ${title}\n`);
+  expect(r.out).toBe(`x-00009: ${title}\n`);
   expect(item).toContain("retitled from: Check foo: bar");
 });
 
@@ -225,15 +228,15 @@ test("attach puts a file on an issue in one store commit; a type it does not tak
 });
 
 test("decide notes the answer and clears the Ask; an issue with no Ask exits 1", () => {
-  setAsk("proj-3", { kind: "input", reason: "question", question: "A or B?", options: [], why: [] });
+  setAsk("issue.3", { kind: "input", reason: "question", question: "A or B?", options: [], why: [] });
   try {
     const d = aleph("issue", "decide", "proj", "3", "Take B.");
     expect(d.code).toBe(0);
     expect(JSON.parse(d.out)).toMatchObject({ repo: "proj", id: 3 });
     expect(remoteItem(3)).toContain("Take B.");
-    expect(askOf("proj-3")).toBeNull();
+    expect(askOf("issue.3")).toBeNull();
     const again = aleph("issue", "decide", "proj", "3", "Take A.");
     expect(again.code).toBe(1);
     expect(again.err).toContain("proj-3 is not waiting for a decision");
-  } finally { clearAsk("proj-3"); }
+  } finally { clearAsk("issue.3"); }
 });

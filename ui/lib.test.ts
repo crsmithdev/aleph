@@ -2,7 +2,7 @@ import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import { renderHerald } from "./views/now.js";
-import { withFactory } from "./test-now.ts";
+import { row, withFactory } from "./test-now.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
@@ -131,7 +131,7 @@ test("recordState and restoreState bring back open details, a shown diff and typ
 test("a Herald group open before a newer event for its subject is open after it, and no localStorage key is written", () => {
   const g = globalThis as any, writes: string[] = [];
   g.localStorage = { getItem: () => null, setItem: (k: string) => void writes.push(k) };
-  const ev = (at: string, n: number) => ({ at, by: "gate", subject: "aleph-77", action: "done", on: [`aleph-77#${n}`] });
+  const ev = (at: string, n: number) => (row({ at, by: "gate", subject: "aleph-77", action: "done", on: [`aleph-77#${n}`] }));
   const herald = (events: any[]) => renderHerald({ ...withFactory({}), now: "2026-11-09T12:00:00Z", asks: [], stuck: [], herald: { history: [], events, titles: {} } });
   const old = [ev("2026-11-10T10:00:00Z", 1), ev("2026-11-10T10:01:00Z", 2)];
   const before = fakeRoot(herald(old));

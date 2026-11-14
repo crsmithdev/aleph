@@ -1,23 +1,27 @@
 import { beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { getJson, putJson } from "../../../lib/db.ts";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as record from "../records/record.ts";
 import type { Entry } from "../records/ledger.ts";
+import { seed } from "../../job.testkit.ts";
 import type { Ask } from "./ask.ts";
 import { dueAt, issueAsks, readTimeouts, setTimeoutOf, timeoutStep } from "./timeout.ts";
 
 let dir = "";
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "timeout-")); process.env.ALEPH_FACTORY_DIR = dir; });
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "timeout-")); process.env.ALEPH_FACTORY_DIR = dir; process.env.ALEPH_DB = join(dir, "aleph.db"); });
 
 const ask = (recommend = "land"): Ask => ({ kind: "approval", reason: "review", question: "Land it?", options: [], why: [], situation: "It changes hooks/.", recommend: { action: recommend, why: "w" } });
 const NOW = Date.parse("2026-11-10T12:00:00Z");
 let n = 0;
+/** A director job whose decision escalated the Ask of `on`, `at` ms. */
+const escalated = (on: string, at: number) => seed({ role: "director", name: "director", decision: { on, outcome: "escalated", at: new Date(at).toISOString() } as any });
 /** A waiting run on a new issue, escalated `ago` minutes before now. */
 function waiting(ago: number, a: Ask = ask(), now = NOW): Entry {
-  const on = `tmo-${++n}`, id = `run-${n}`;
-  record.addEvent(on, { at: new Date(now - ago * 60_000).toISOString(), kind: "director", what: "review: escalated", data: { on: id, outcome: "escalated" } });
-  return { id, folder: "", run: { n, name: `job-${n}`, on, job: `a${n}`, condition: "waiting", ask: a } as any };
+  const target = `issue.${++n}`, id = `job.${9000 + n}`;
+  escalated(id, now - ago * 60_000);
+  return { id, folder: "", run: { name: `job-${n}`, target, job: id, state: "waiting", ask: a } as any };
 }
 
 test("setTimeoutOf writes minutes and pick or drop for any reason in the table, 0 removes them, and other reasons are refused", () => {
@@ -31,7 +35,7 @@ test("setTimeoutOf writes minutes and pick or drop for any reason in the table, 
   expect(setTimeoutOf("question", 30, "wait")).toContain("pick or drop");
   expect(setTimeoutOf("review", -1)).toContain("whole number");
   expect(setTimeoutOf("review", 0)).toBeNull();
-  expect(JSON.parse(readFileSync(join(dir, "timeouts.json"), "utf8"))).toEqual({ question: { minutes: 40, then: "drop" }, "no-commit": { minutes: 10, then: "pick" } });
+  expect(getJson("settings", "timeouts", {})).toEqual({ question: { minutes: 40, then: "drop" }, "no-commit": { minutes: 10, then: "pick" } });
 });
 
 test("dueAt is the escalation time plus the minutes, only when the case text recommends an action", () => {
@@ -69,10 +73,10 @@ const question = (recommend?: string): Ask => ({
 });
 /** An issue with `a` on it, escalated `ago` minutes before now. */
 function onIssue(ago: number, a: Ask) {
-  const ref = `tmo-${++n}`;
+  const ref = `issue.${++n}`;
   record.setIssueAsk(ref, a);
-  record.addEvent(ref, { at: new Date(NOW - ago * 60_000).toISOString(), kind: "director", what: "question: escalated", data: { on: ref, outcome: "escalated" } });
-  return issueAsks([record.read(ref)!]);
+  escalated(ref, NOW - ago * 60_000);
+  return issueAsks(new Map([[ref, record.read(ref)!]]));
 }
 const taker = (took: string[]) => async (name: string, action: string) => { took.push(`${name} ${action}`); return null; };
 
@@ -102,7 +106,7 @@ test("a due drop timeout takes the reason's drop, close or deny; an Ask not due,
 
 test("held-path has no timeout: setTimeoutOf refuses it, readTimeouts ignores a stored entry, and a due held-path run is left waiting", async () => {
   expect(setTimeoutOf("held-path", 30)).toContain("has no timeout");
-  writeFileSync(join(dir, "timeouts.json"), JSON.stringify({ "held-path": 30, question: 20 }));
+  putJson("settings", "timeouts", { "held-path": 30, question: 20 });
   expect(readTimeouts()).toEqual({ question: { minutes: 20, then: "pick" } });
   const held = waiting(31, { ...ask(), reason: "held-path" }), took: string[] = [];
   expect(await timeoutStep(taker(took), NOW, [held])).toEqual([]);
@@ -111,7 +115,7 @@ test("held-path has no timeout: setTimeoutOf refuses it, readTimeouts ignores a 
 
 test("core-change has no timeout: setTimeoutOf refuses it, readTimeouts ignores a stored entry, and a due core-change Ask that recommends approve is left waiting", async () => {
   expect(setTimeoutOf("core-change", 30)).toContain("has no timeout");
-  writeFileSync(join(dir, "timeouts.json"), JSON.stringify({ "core-change": 30, question: 20 }));
+  putJson("settings", "timeouts", { "core-change": 30, question: 20 });
   expect(readTimeouts()).toEqual({ question: { minutes: 20, then: "pick" } });
   const core = onIssue(31, { ...ask("approve"), reason: "core-change" }), took: string[] = [];
   expect(await timeoutStep(taker(took), NOW, [], core)).toEqual([]);

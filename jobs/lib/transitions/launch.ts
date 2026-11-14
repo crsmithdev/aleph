@@ -86,7 +86,7 @@ export function detached(args: string[], log: string): void {
     const unit = `aleph-${args.join("-")}-${Date.now()}-${process.pid}-${++detachedCount}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
     startUnit(args, { unit, cwd: dirname(log), output: { file: log },
       props: [`--property=StandardOutput=append:${log}`, `--property=StandardError=append:${log}`] });
-  } catch (e: any) { logEvent({ by: "rule", subject: "detached", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+  } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "detached", detail: String(e?.message ?? e) }); }
 }
 
 /** Run `aleph <args>` and wait for it, its output appended to `log`. Returns its exit code. */

@@ -1,19 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addedLines, failedTests, failureLine, keepGate, mutants, newCases, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
+import { readSection } from "../records/run-files.ts";
 import type { CheckResult, Repo } from "../records/ledger.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_LOAD_LIMIT", "ALEPH_CHECK_TIMEOUT"];
+const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_LOAD_LIMIT", "ALEPH_CHECK_TIMEOUT"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "checks-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
-  Object.assign(process.env, { ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run") });
+  Object.assign(process.env, { ALEPH_DB: join(base, "aleph.db"), ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run") });
   delete process.env.ALEPH_CHECK_TIMEOUT;
 });
 
@@ -39,7 +40,7 @@ async function run(r: Repo, replies: Reply[], changed: string[] = []) {
     return { code: reply.code, timedOut: reply.timedOut ?? false, killed: reply.killed };
   };
   const failed = await runChecks({ folder: base, repo: r, changed, phase: () => {}, record: (c) => results.push(c) }, exec);
-  return { failed, calls, results, log: readFileSync(join(base, "checks.log"), "utf8") };
+  return { failed, calls, results, log: readSection(base, "checks") ?? "" };
 }
 
 test("a check that passes runs once", async () => {

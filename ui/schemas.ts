@@ -7,7 +7,7 @@
  */
 export type Schema = string | Schema[] | { [key: string]: Schema };
 
-const job = { id: "string", name: "string", repo: "string", condition: "string", started: "time?", run: "object" };
+const job = { id: "string", name: "string", repo: "string", state: "string", started: "time?", run: "object" };
 const row = { id: "string", subject: "string", name: "string", repo: "string", kind: "string", actor: "string?", state: "string", title: "string?", issue: "string?", started: "time", ended: "time?", seconds: "number?", cost: "number?", model: "string?" };
 const issue = { id: "number", ref: "string", repo: "string", title: "string", href: "string", kind: "string", status: "string", priority: "string", stage: "string", createdTime: "string?" };
 const turn = { n: "number", traceId: "string", start: "time", seconds: "number?", cost: "number" };
@@ -19,7 +19,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   }],
   "/api/factory": {
     now: "time", factory: { paused: "boolean", liveCap: "number", liveRuns: "number", runCap: "number", runStarts: "number", nextTick: "time?" },
-    herald: { history: [{ at: "time", tone: "string", text: "string" }], events: [{ at: "time", subject: "string", action: "string" }], titles: { "*": "string" }, runs: { "*": "string" } },
+    herald: { history: [{ at: "time", tone: "string", text: "string" }], events: [{ time: "time", subject: "string", action: "string", object: "string" }], titles: { "*": "string" }, runs: { "*": "string" } },
     done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }],
     stuck: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],
@@ -43,15 +43,15 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/issues/:id": {
     ...issue, labels: "array", after: "array", "created?": "string", "closed?": "string", "closedTime?": "string", "source?": "string", "updated?": "string", "updatedTime?": "string",
     notes: "array", "parent?": "any", "why?": "string", blockers: "array", "ask?": "object", request: "string?", spec: "string?", goals: "array", "issue?": "object",
-    media: "array", frontmatter: "object", derived: "object", jobs: [{ id: "string", name: "string", condition: "string" }],
+    media: "array", frontmatter: "object", derived: "object", jobs: [{ id: "string", name: "string", state: "string" }],
     timeline: { filed: "time?", runs: [{ kind: "string", started: "time", ended: "time?" }] }, holds: "array", commits: "array", specs: ["string"],
   },
   "/api/issues/:id/jobs": { jobs: [row] },
   "/api/issues/:id/media/:name": "text",
   "/api/jobs": { jobs: [row], next: "time?" },
   "/api/jobs/:id": {
-    ...job, "item?": "object?", "ended?": "time", "model?": "string", defaults: "array", followups: "array", runs: [{ id: "string", kind: "string", condition: "string", started: "time" }],
-    holds: "array", "next?": "object", "rounds?": "number", events: "array", "spec?": "string", "*": "any",
+    ...job, "item?": "object?", "ended?": "time", "model?": "string", defaults: "array", followups: "array", runs: [{ id: "string", kind: "string", state: "string", started: "time" }],
+    holds: "array", "next?": "object", "rounds?": "number", "spec?": "string", "*": "any",
   },
   "/api/jobs/:id/diff": "text",
   "/api/jobs/:id/logs/:file": "text",

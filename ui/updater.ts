@@ -11,6 +11,7 @@
  *   that answer with a mark `{ error, since }` while a rebuild runs, and `change` names the key when it ends. A key not asked for in 1 h is dropped.
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
+ * - `aleph.db` is polled for `PRAGMA data_version` every 100 ms; a new event row sends the `ev` rows and changes the source `events`.
  * - The annotations file is watched: a note written by the page or by `aleph annotation` sends `change` for
  *   /api/annotations at once. That route is not kept; the page reads it whole.
  * - The skills folder is watched: a skill folder added or removed, or a SKILL.md written, rebuilds the keys that read the skills.
@@ -20,12 +21,14 @@
  * - Every POST that succeeds counts as a change of the source `action`, which every key reads: an action can write
  *   what no watcher sees (a systemd timer).
  */
+import { Database } from "bun:sqlite";
 import { readJsonOr } from "../lib/json.ts";
 import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { factoryDir } from "../jobs/lib/gates/factory-status.ts";
-import { eventsDir, layout, recordsDir } from "../lib/layout.ts";
-import { reposFile, skillsDir } from "../jobs/lib/infra/settings.ts";
+import { conn, dbFile } from "../lib/db.ts";
+import { layout, lastSeq } from "../lib/layout.ts";
+import { skillsDir } from "../jobs/lib/infra/settings.ts";
 import { annotationsFile, handoffsDir, vaultDir } from "../lib/paths.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
 import { fetchStore } from "../issues/lib/store.ts";
@@ -33,7 +36,7 @@ import { build as workerBuild, onLater, type Answer, type Built } from "./build.
 
 const SETTLE_MS = 500;
 export const KEEP_MS = 10 * 60_000, DROP_MS = 60 * 60_000;
-const POLL_MS = 30_000;
+const POLL_MS = 30_000, DATA_VERSION_MS = 100;
 const SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 60_000;
 
 /** The GET routes whose answers the updater keeps. */
@@ -252,8 +255,8 @@ export async function respond(url: URL): Promise<Response> {
 }
 
 let stops: (() => void)[] = [];
-/** Files of the event log that grew, for the `ev` stream (ui/api/events.ts). */
-export const eventFiles: ((file: string) => void)[] = [];
+/** Readers of the events a write added, for the `ev` stream (ui/api/events.ts). */
+export const eventTails: (() => void)[] = [];
 
 function follow(dir: string, counts: (file: string) => boolean, source: string, recursive = false): void {
   if (!existsSync(dir)) return;
@@ -264,8 +267,30 @@ function follow(dir: string, counts: (file: string) => boolean, source: string, 
   stops.push(() => w.close());
 }
 
-/** A job record counts; its temporary file does not, as the rename that puts it in place does. */
-export const countsInRecords = (file: string): boolean => file.endsWith(".json");
+/**
+ * `data_version` moves when another connection commits: the CLI, a job, or this process's own writes, which go through the
+ * other connection of lib/db.ts. When it moves and an event row is new, the `ev` stream sends the rows and the source `events` changes.
+ * A write that logs no event (usage, tick, a job row) waits for the quiet refresh timer.
+ */
+function followEvents(): void {
+  conn();
+  const db = new Database(dbFile(), { readonly: true });
+  const version = db.query("PRAGMA data_version"), newest = db.query("SELECT coalesce(max(seq), 0) AS n FROM events");
+  let seen = (version.get() as { data_version: number }).data_version, last = lastSeq();
+  const t = setInterval(() => {
+    const v = (version.get() as { data_version: number }).data_version;
+    if (v === seen) return;
+    seen = v;
+    const n = (newest.get() as { n: number }).n;
+    if (n === last) return;
+    last = n;
+    for (const tail of eventTails) tail();
+    updater.changed("events");
+  }, DATA_VERSION_MS);
+  t.unref?.();
+  stops.push(() => { clearInterval(t); db.close(); });
+}
+
 /** The logs change on every line of output and the page does not show them; a temporary file is renamed into place, and the rename counts. */
 export const countsInFactory = (file: string): boolean => !file.endsWith(".log") && !file.endsWith(".tmp");
 
@@ -278,20 +303,13 @@ const countsInVault = (file: string): boolean => !/^\.(git|index|obsidian)(\/|$)
 /** Watch the sources, poll Langfuse, fetch the store and sweep the keys until `stopUpdater`; with `restore`, build the saved keys. */
 export function startUpdater({ restore = true }: { restore?: boolean } = {}): void {
   if (stops.length) return;
-  const repos = reposFile();
-  mkdirSync(recordsDir(), { recursive: true });
-  mkdirSync(eventsDir(), { recursive: true });
-  follow(recordsDir(), countsInRecords, "records");
+  mkdirSync(dirname(dbFile()), { recursive: true });
   follow(factoryDir(), countsInFactory, "factory");
   // Each issue write moves this ref; the builds read the issues from it.
-  follow(join(layout().store, ".git", "refs", "remotes", "origin"), (f) => f === "main", "store");
-  follow(dirname(repos), (f) => f === basename(repos), "registry");
+  follow(join(layout().items, ".git", "refs", "remotes", "origin"), (f) => f === "main", "store");
+  follow(join(layout().items, "projects"), (f) => f.endsWith("project.md"), "registry", true);
   follow(skillsDir(), countsInSkills, "skills", true);
-  follow(eventsDir(), (f) => {
-    if (!f.endsWith(".jsonl")) return false;
-    for (const tail of eventFiles) tail(f);
-    return true;
-  }, "events");
+  followEvents();
   follow(vaultDir(), countsInVault, "vault", true);
   follow(handoffsDir(), (f) => f.endsWith(".md"), "handoffs", true);
   follow(episodesDir(), (f) => f.endsWith(".md"), "episodes");

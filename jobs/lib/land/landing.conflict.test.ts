@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, file, jobsDir, other, remote, sh, state, told, setup, teardown } from "../../cli.helpers";
+import { base, file, other, remote, section, sh, state, told, setup, teardown } from "../../cli.helpers";
+import { allRuns } from "../records/ledger.ts";
 import { actionJob, land } from "../../flow.testkit.ts";
 
 beforeAll(setup);
@@ -18,23 +19,23 @@ describe("land: conflicts", () => {
     sh(other, "git", "push", "-q", "origin", "main");
   }
 
-  const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => new RegExp(`-${name}-\\d+$`).test(d)).sort().map((d) => ({ id: d, ...state(d) }));
+  const runsOf = (name: string) => allRuns().filter((e) => e.run.name === name).map((e) => ({ id: e.id, ...state(e.id) }));
 
   test("a conflict records its paths, sends the job back to the worker, and the passed follow-up lands", async () => {
     await actionJob("mend", "resolve-later mend.txt");
     pushFromOther("mend.txt", "theirs\n");
     const r = await land("mend");
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "merge conflict", conflicts: ["mend.txt"], next: "worker" });
-    expect(file(r.json.run, "land.log")).toContain("## conflicts\nmend.txt");
-    expect(told).toContain("mend#2 failed conflict");
+    expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "merge conflict", conflicts: ["mend.txt"], next: "worker" });
+    expect(section(r.json.run, "land")).toContain("## conflicts\nmend.txt");
+    expect(told).toContain(`${r.json.run} failed conflict`);
     const runs = runsOf("mend");
-    expect(runs.map((x) => [x.kind, x.condition])).toEqual([["build", "passed"], ["land", "failed"], ["build", "passed"], ["land", "landed"]]);
+    expect(runs.map((x) => [x.role, x.state])).toEqual([["build", "passed"], ["land", "failed"], ["build", "passed"], ["land", "landed"]]);
     expect(runs[2].land).toBe(true);
     expect(state(runs[2].id)).toMatchObject({ merge: true, model: "haiku" });
     expect(file(runs[2].id, "prompt.md")).toContain("mend.txt");
     expect(file(runs[2].id, "prompt.md")).not.toContain("ACTION:");
     expect(file(runs[2].id, "prompt.md")).not.toContain("## Spec");
-    expect(file(runs[1].id, "next.log")).not.toContain("held:");
+    expect(section(runs[1].id, "dispatch")).not.toContain("held:");
     expect(sh(base, "git", "--git-dir", remote, "show", "main:mend.txt")).toBe("mine");
     expect(remoteHead()).toBe(runs[3].commit);
   }, 30_000);

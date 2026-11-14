@@ -3,9 +3,11 @@
  * route reads it: null, undefined or "" is no filter, and everything belongs. A key that is not in the registry
  * is a filter that matches nothing.
  */
-import { parseId } from "../../lib/naming.ts";
+import { once } from "../../lib/sources.ts";
+import { parseId, parseKey } from "../../lib/naming.ts";
 import { DAY, FACTORY, WINDOWS } from "../../lib/windows.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { allRunRecords } from "../../jobs/lib/records/record.ts";
 
 type Project = string | null | undefined;
 
@@ -28,12 +30,23 @@ export const known = (project: string) => Object.hasOwn(loadRegistry(), project)
 /** Whether the registry key `repo` (a job's, a flake's, an ask's) is `project`. */
 export const repoIn = (repo: string | undefined, project: Project) => !project || (repo === project && known(project));
 
-/** Whether an issue, job, record, hold or event subject belongs to `project`: a registry key that parseId gives as its repo. */
-export const inProject = (subject: string, project: Project) => !project || (parseId(subject)?.repo === project && known(project));
+/** The repo of each job key and of each issue key that a job targets (the newest job's). */
+const ownerOf = (): Map<string, string> => once("owners", ["records"], () => {
+  const out = new Map<string, string>();
+  for (const r of allRunRecords()) if (r.repo) { out.set(r.id, r.repo); if (r.target) out.set(r.target, r.repo); }
+  return out;
+});
 
-/** Whether an event belongs to `project`: by its subject when that is an issue, else (a job, a reason, a routine, none) to every known project. */
-export const eventIn = (subject: string | undefined, project: Project) =>
-  !project || (subject !== undefined && parseId(subject) ? inProject(subject, project) : known(project));
+/** The repo of a subject: the repo of an old `<repo>-<n>` ID, else that of a job key or of an issue key that a job targets. */
+const repoOfSubject = (subject: string): string | undefined => parseId(subject)?.repo ?? (parseKey(subject) ? ownerOf().get(subject) : undefined);
+
+/** Whether an issue, job, record, hold or event subject belongs to `project`: a registry key that is its repo. */
+export const inProject = (subject: string, project: Project) => !project || (repoOfSubject(subject) === project && known(project));
+
+/** Whether an event belongs to `project`: by its job's `owner` when it has one, else by its object when that is an issue or job ID, else (a reason, a routine, none) to every known project. */
+export const eventIn = (object: string | undefined, project: Project, owner?: string | null) => {
+  return !project || (owner ? owner === project && known(project) : object !== undefined && repoOfSubject(object) !== undefined ? inProject(object, project) : known(project));
+};
 
 /** Whether a memory item with `scope` belongs to `project`: its own project's, or global or unscoped (a rule section, a skill, a hook) in every known project. */
 export const memoryIn = (scope: string, project: Project) => !project || ((!scope || scope === "global" || scope === project) && known(project));

@@ -8,12 +8,12 @@ import { setCodes } from "../lib/naming.ts";
 // @ts-ignore
 import { issueSegments, renderIssue } from "./views/issues.js";
 
-const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", issue: "fac-1", href: "#/jobs/fac-1%231", condition: "passed", started, ended, ...extra });
+const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", issue: "fac-1", href: "#/jobs/fac-1%231", state: "passed", started, ended, ...extra });
 const issue = (over: object = {}) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { filed: "2026-11-01T10:00:00Z", runs: [] }, ...over });
 const held = () => [
   run("intake", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"),
-  run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z", { condition: "waiting", cost: 0.25 }),
-  run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed", cost: 0.05 }),
+  run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z", { state: "waiting", cost: 0.25 }),
+  run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { state: "landed", cost: 0.05 }),
 ];
 const rowsOf = (d: object, now?: number) => issueSegments(issue(d), now).flatMap((s: any) => s.rows);
 
@@ -44,7 +44,7 @@ describe("the issue timeline", () => {
   test("an open issue waits up to now; a live run runs up to now", () => {
     const now = Date.parse("2026-11-01T12:00:00Z");
     expect(rowsOf({ status: "open", timeline: { filed: new Date(now - 3_600_000).toISOString(), runs: [] } }, now)[0].waits).toEqual([{ start: now - 3_600_000, end: now, chris: false }]);
-    const live = rowsOf({ status: "open", timeline: { filed: new Date(now - 3_600_000).toISOString(), runs: [run("build", "2026-11-01T11:30:00Z", null, { condition: "running" })] } }, now)[0];
+    const live = rowsOf({ status: "open", timeline: { filed: new Date(now - 3_600_000).toISOString(), runs: [run("build", "2026-11-01T11:30:00Z", null, { state: "running" })] } }, now)[0];
     expect(live.bars[0].end).toBe(now);
   });
 
@@ -57,7 +57,7 @@ describe("the issue timeline", () => {
     const parts = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [{ id: "fac-1.1#2", name: "fac-1.1" }] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
     const runs = [
       run("intake", "2026-11-01T10:05:00Z", "2026-11-01T10:06:00Z", { name: "plan-fac-1" }),
-      run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1", issue: "fac-1.1", condition: "failed", reason: "it broke" }),
+      run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1", issue: "fac-1.1", state: "failed", reason: "it broke" }),
       run("build", "2026-11-01T10:11:00Z", "2026-11-01T10:15:00Z", { name: "fac-1.1", on: "fac-1.1", issue: "fac-1.1" }),
       run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2", issue: "fac-1.2" }),
     ];
@@ -92,10 +92,10 @@ describe("the event tags", () => {
   const tagTone = (e: any) => [e.tag, e.tone];
 
   test("a run's tag is its job state: returned for a sent-back run, failed for a broken one", () => {
-    expect(tagTone(runTag({ condition: "returned", failed: "review" }))).toEqual(["returned", "stuck"]);
-    expect(tagTone(runTag({ condition: "failed" }))).toEqual(["failed", "stuck"]);
-    expect(tagTone(runTag({ condition: "waiting" }))).toEqual(["waiting", "need"]);
-    expect(tagTone(runTag({ condition: "landed" }))).toEqual(["landed", "done"]);
+    expect(tagTone(runTag({ state: "returned", failed: "review" }))).toEqual(["returned", "stuck"]);
+    expect(tagTone(runTag({ state: "failed" }))).toEqual(["failed", "stuck"]);
+    expect(tagTone(runTag({ state: "waiting" }))).toEqual(["waiting", "need"]);
+    expect(tagTone(runTag({ state: "landed" }))).toEqual(["landed", "done"]);
   });
 
   test("a wait's tone is the tone of its state: a red hold is stuck", () => {
@@ -111,7 +111,7 @@ describe("the event tags", () => {
   });
 
   test("a run's event shows its bar label, then the reason as the note with no colon between them", () => {
-    const e = runTag({ condition: "returned", failed: "review", reason: "checks failed" });
+    const e = runTag({ state: "returned", failed: "review", reason: "checks failed" });
     expect(e.tag).toBe("returned");
     expect(e.html.startsWith("build 1")).toBe(true);
     expect(e.html).toBe("build 1 · checks failed");
@@ -120,11 +120,11 @@ describe("the event tags", () => {
 
   test("no event tag of a lane row has an upper-case letter", () => {
     const runs = [
-      run("worker", iso(0), iso(5), { condition: "returned", failed: "review" }),
-      run("worker", iso(5.5), iso(10), { condition: "failed" }),
-      run("worker", iso(30), iso(35), { condition: "waiting", reason: "which one?" }),
-      run("worker", iso(60), iso(65), { condition: "failed" }),
-      run("worker", iso(65.5), iso(70), { condition: "dropped" }),
+      run("worker", iso(0), iso(5), { state: "returned", failed: "review" }),
+      run("worker", iso(5.5), iso(10), { state: "failed" }),
+      run("worker", iso(30), iso(35), { state: "waiting", reason: "which one?" }),
+      run("worker", iso(60), iso(65), { state: "failed" }),
+      run("worker", iso(65.5), iso(70), { state: "dropped" }),
     ];
     const row = laneRow({ head: "h", runs: spans(runs), from: Date.parse(iso(0)) });
     expect(row.events.map((e: any) => e.tag)).toEqual(["waiting", "waiting", "returned", "failed", "waiting", "failed", "dropped"]);
@@ -135,7 +135,7 @@ describe("the event tags", () => {
 describe("the bar tips", () => {
   test("a tip keeps the label, the state word and the time, and drops the reason", () => {
     const iso = (m: number) => new Date(Date.parse("2026-11-01T10:00:00Z") + m * 60_000).toISOString();
-    const [b] = barsOf(spans([run("worker", iso(0), iso(5), { condition: "returned", failed: "review", reason: "checks failed" })]));
+    const [b] = barsOf(spans([run("worker", iso(0), iso(5), { state: "returned", failed: "review", reason: "checks failed" })]));
     expect(b.tip).toBe("implement · returned · 5m 00s");
   });
 });
@@ -173,7 +173,7 @@ describe("the timeline panel", () => {
   });
 
   test("a bar with no link takes focus, and every bar names its state outside title; a segment aside is the kit's aside", () => {
-    const [a, b] = spans([run("worker", "2026-11-01T10:00:00Z", "2026-11-01T10:05:00Z", { condition: "failed" }), run("worker", "2026-11-01T10:10:00Z", "2026-11-01T10:15:00Z", { condition: "landed", href: undefined })]);
+    const [a, b] = spans([run("worker", "2026-11-01T10:00:00Z", "2026-11-01T10:05:00Z", { state: "failed" }), run("worker", "2026-11-01T10:10:00Z", "2026-11-01T10:15:00Z", { state: "landed", href: undefined })]);
     const row = laneRow({ head: "h", runs: [a, b] });
     const bars = renderTimeline([{ title: "Work", aside: "to the <land>", rows: [row] }]).match(/<(?:a|span) class="dp-bar[^>]*>.*?<\/(?:a|span)>/g) as string[];
     expect(bars).toHaveLength(2);
@@ -224,9 +224,9 @@ describe("waitEvent", () => {
   test("a hold's event gives the tag, its content and the wait's length", () => {
     setCodes({ aleph: "a" });
     try {
-      const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "busy-file", text: "both change the busy file", event: { action: "busy", on: ["aleph-1372"], file: "ui/views/issues.js" } }]);
+      const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "busy-file", text: "both change the busy file", event: { action: "busy", detail: "aleph-1372 holds ui/views/issues.js" } }]);
       expect(e.tag).toBe("busy");
-      expect(e.html).toContain("a1372 → issues.js");
+      expect(e.html).toContain("a1372 holds ui/views/issues.js");
       expect(e.html).toContain("9m 00s");
     } finally { setCodes({}); }
   });
@@ -253,7 +253,7 @@ describe("waitEvent", () => {
 });
 
 describe("the issue page's tidy-up", () => {
-  const html = renderIssue(issue({ derived: { stage: "done" }, timeline: { filed: 0, runs: [run("build", "2026-11-01T10:30:00Z", "2026-11-01T14:40:00Z", { model: "claude-sonnet-5-5" }), run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed" })] }, notes: ["- 2026-11-01T10:00:00.000Z: a note"].map(noteOf) }));
+  const html = renderIssue(issue({ derived: { stage: "done" }, timeline: { filed: 0, runs: [run("build", "2026-11-01T10:30:00Z", "2026-11-01T14:40:00Z", { model: "claude-sonnet-5-5" }), run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { state: "landed" })] }, notes: ["- 2026-11-01T10:00:00.000Z: a note"].map(noteOf) }));
   test("the Stage is lower case, no bar or tip names a model, and there is no Detail h2", () => {
     expect(html).toContain('<span class="dp-v text">done</span>');
     expect(html).not.toMatch(/sonnet|opus/i);

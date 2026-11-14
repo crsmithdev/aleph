@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { admit, issueKeyOf, loadRegistry, runsByIssue, type Entry, type Run } from "./ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { setCodes, shortId } from "../../../lib/naming.ts";
+import { writeRepos, type Repos } from "../../../tests/projects.ts";
 
 let base: string;
 let saved: string | undefined;
@@ -50,12 +51,11 @@ describe("admit", () => {
 
 describe("loadRegistry codes", () => {
   afterEach(() => setCodes({}));
-  const load = (repos: object) => {
-    const file = join(base, "repos.json");
-    writeFileSync(file, JSON.stringify(repos));
-    const old = process.env.ALEPH_REPOS;
-    process.env.ALEPH_REPOS = file;
-    try { return loadRegistry(); } finally { if (old === undefined) delete process.env.ALEPH_REPOS; else process.env.ALEPH_REPOS = old; }
+  const load = (repos: Repos) => {
+    writeRepos(repos, join(base, "items"));
+    const old = process.env.ALEPH_ITEMS;
+    process.env.ALEPH_ITEMS = join(base, "items");
+    try { return loadRegistry(); } finally { if (old === undefined) delete process.env.ALEPH_ITEMS; else process.env.ALEPH_ITEMS = old; }
   };
   test("a repo's code sets its short IDs", () => {
     expect(load({ aleph: { path: "/a", code: "a" }, koans: { path: "/k" } }).aleph.code).toBe("a");
@@ -69,28 +69,23 @@ describe("loadRegistry codes", () => {
 });
 
 describe("the issue of a run", () => {
-  const entry = (id: string, repo: string, on?: string): Entry => ({ id, folder: "", run: { n: 1, repo, on } as Run });
-  // prettier-ignore
-  const cases: [string, string, string | undefined, string | undefined, string | undefined][] = [
-    // id   repo     on                 own                parent
-    ["a",  "aleph", "aleph-7",          "aleph-7",         "aleph-7"],
-    ["b",  "aleph", "aleph-7.1",        "aleph-7.1",       "aleph-7"],
-    ["c",  "aleph", "aleph-7.2",        "aleph-7.2",       "aleph-7"],
-    ["d",  "aleph", "aleph-12",         "aleph-12",        "aleph-12"],
-    ["e",  "aleph", "other-7",          undefined,         undefined],
-    ["f",  "other", "other-7",          "other-7",         "other-7"],
-    ["g",  "aleph", undefined,          undefined,         undefined],
+  const entry = (id: string, target?: string): Entry => ({ id, folder: "", run: { target } as Run });
+  const cases: [string, string | undefined, string | undefined][] = [
+    // id   target          issue key
+    ["a",  "issue.7",       "issue.7"],
+    ["b",  "issue.12",      "issue.12"],
+    ["c",  "project.3",     undefined],
+    ["d",  "idea.4",        undefined],
+    ["e",  undefined,       undefined],
   ];
-  const entries = cases.map(([id, repo, on]) => entry(id, repo, on));
+  const entries = cases.map(([id, target]) => entry(id, target));
 
-  test.each(cases)("%s: %s on %s", (_id, repo, on, own, parent) => {
-    expect(issueKeyOf({ n: 1, repo, on } as Run)).toBe(own);
-    expect(issueKeyOf({ n: 1, repo, on } as Run, { parent: true })).toBe(parent);
+  test.each(cases)("%s: target %s", (_id, target, own) => {
+    expect(issueKeyOf({ target } as Run)).toBe(own);
   });
 
-  test("runsByIssue groups by the full ID; rollUp adds an old part's runs to its parent", () => {
+  test("runsByIssue groups by the issue key", () => {
     const ids = (m: Map<string, Entry[]>) => Object.fromEntries([...m].map(([k, es]) => [k, es.map((e) => e.id)]));
-    expect(ids(runsByIssue(entries))).toEqual({ "aleph-7": ["a"], "aleph-7.1": ["b"], "aleph-7.2": ["c"], "aleph-12": ["d"], "other-7": ["f"] });
-    expect(ids(runsByIssue(entries, { rollUp: true }))).toEqual({ "aleph-7": ["a", "b", "c"], "aleph-7.1": ["b"], "aleph-7.2": ["c"], "aleph-12": ["d"], "other-7": ["f"] });
+    expect(ids(runsByIssue([...entries, entry("f", "issue.7")]))).toEqual({ "issue.7": ["a", "f"], "issue.12": ["b"] });
   });
 });

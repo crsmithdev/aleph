@@ -1,25 +1,26 @@
 // The tick starts only periodic work: each transition that used to wait for it now starts its next step at once,
 // and the tick's sweep logs and starts what a transition missed.
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { setPaused, writeBaseline, writeStalls } from "../gates/factory-status.ts";
+import { setPaused, setTick, tickRows, writeBaseline, writeStalls } from "../gates/factory-status.ts";
+import { conn, getJson } from "../../../lib/db.ts";
 import { git } from "../infra/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { archiveDir, getRun, putRun } from "../records/record.ts";
-import { chatLock } from "../roles/agent-run.ts";
+import { seed as seedJob } from "../../job.testkit.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
+import { newItems, writeRepos } from "../../../tests/projects.ts";
 
 // The test's clock: the run that holds the live slot is `starting` against it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -48,16 +49,18 @@ beforeAll(() => {
   chmodSync(join(base, "fake"), 0o755);
   Object.assign(process.env, {
     GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
-    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_INTAKE_CMD: join(base, "fake"),
+    ALEPH_ITEMS: join(base, "items"), ALEPH_INTAKE_CMD: join(base, "fake"),
     ALEPH_DISPATCH: "off", ALEPH_RESCUE: "off", XDG_RUNTIME_DIR: join(base, "run"),
   });
 });
 afterAll(() => { use(null); setSystemTime(); rmSync(base, { recursive: true, force: true }); });
 beforeEach(() => {
   key = `tk${++n}`;
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: join(base, "repo"), main: "main", sandbox: true } }));
+  process.env.ALEPH_ITEMS = newItems(base, `items${n}`);
+  writeRepos({ [key]: { path: join(base, "repo"), main: "main", sandbox: true } });
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
+  process.env.ALEPH_DB = join(base, `aleph${n}.db`);
   process.env.ALEPH_VAULT = join(base, `vault${n}`);
   process.env.ALEPH_LIVE_CAP = "10";
 });
@@ -70,7 +73,7 @@ function seed(items: { body: string; ask?: boolean }[]): void {
   writeList({ key }, "seed", (doc) => {
     for (const i of items) {
       const it = issues.add(doc, `issue ${i.body}`, { request: i.body });
-      if (i.ask) setAsk(`${key}-${it.id}`, plainAsk("question", "which module?"));
+      if (i.ask) setAsk(`issue.${it.id}`, plainAsk("question", "which module?"));
     }
     return true;
   }, true);
@@ -82,13 +85,13 @@ function recorder(): Starts & { taken: string[]; directors: number } {
   return r;
 }
 
-const missedKeys = () => readEvents().filter((e) => e.action === "missed").map((e) => e.subject);
+const missedKeys = () => readEvents().filter((e) => e.action === "missed").map((e) => e.object);
 
 test("an intake that sets an Ask starts the director at once, with no tick", async () => {
   seed([{ body: "VERDICT:ask" }]);
   const s = recorder();
   await intakeNow(repo(), 1, s);
-  expect(askOf(`${key}-1`)?.kind).toBe("input");
+  expect(askOf(`issue.1`)?.kind).toBe("input");
   expect(s.directors).toBe(1);
   expect(s.taken).toEqual([]);
 });
@@ -102,7 +105,7 @@ test("an intake with no reply starts its retry at once; after the tries it sets 
     expect(s.taken).toEqual([`${key}-1`]);
     expect(s.directors).toBe(0);
     await intakeNow(repo(), 1, s);
-    expect(askOf(`${key}-1`)?.reason).toBe("intake-failed");
+    expect(askOf(`issue.1`)?.reason).toBe("intake-failed");
     expect(s.taken).toEqual([`${key}-1`]);
     expect(s.directors).toBe(1);
   } finally {
@@ -114,18 +117,16 @@ test("an intake the live cap held starts at the dispatch that a run's end makes,
   process.env.ALEPH_LIVE_CAP = "1";
   seed([{ body: "nothing" }]);
   // A build run that holds the one live slot: made now, no pid yet.
-  const folder = join(process.env.ALEPH_JOBS_DIR!, "20261104-120000-busy");
-  mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { n: 1, kind: "build", job: "busy", name: "busy", condition: "running", told: true, started: new Date(NOW).toISOString(), made: NOW });
+  const busy = seedJob({ role: "build", name: "busy", state: "running", told: true, started: new Date(NOW).toISOString(), made: NOW });
   const s = recorder();
   const held = await intakeNow(repo(), 1, s);
   expect(held.skipped).toEqual(["intake: 1 agent runs are live"]);
-  expect(readEvents().filter((e) => e.action === "skipped").map((e) => [e.subject, e.note])).toEqual([[`${key}-1`, "intake: 1 agent runs are live"]]);
+  expect(readEvents().filter((e) => e.action === "skipped").map((e) => [e.object, e.detail])).toEqual([[`issue.1`, "intake: 1 agent runs are live"]]);
   expect((await runDispatch(s)).intaking).toBeUndefined();
   expect(s.taken).toEqual([]);
   // The run ends: its unit writes `exit`, then runs the dispatch.
-  writeFileSync(join(folder, "exit"), "0\n");
-  expect((await runDispatch(s)).intaking).toEqual([`${key}-1`]);
+  writeFileSync(join(busy.folder, "exit"), "0\n");
+  expect((await runDispatch(s)).intaking).toEqual(["issue.1"]);
   expect(s.taken).toEqual([`${key}-1`]);
 });
 
@@ -134,7 +135,7 @@ test("a dispatch after a write that set an Ask starts the director; an Ask with 
   const s = recorder();
   await runDispatch(s);
   expect(s.directors).toBe(1);
-  setAsk(`${key}-1`, { ...askOf(`${key}-1`)!, situation: "The case." });
+  setAsk(`issue.1`, { ...askOf(`issue.1`)!, situation: "The case." });
   await runDispatch(s);
   expect(s.directors).toBe(1);
 });
@@ -151,8 +152,8 @@ test("the sweep logs work that two ticks in a row saw as missed, once, and start
   const s = readTick();
   expect(await sweep(NOW, s, p)).toEqual([]);
   expect(p.dispatches).toBe(0);
-  expect(await sweep(NOW + MIN, s, p)).toEqual([`ask:${key}-1`]);
-  expect(missedKeys()).toEqual([`ask:${key}-1`]);
+  expect(await sweep(NOW + MIN, s, p)).toEqual([`ask:issue.1`]);
+  expect(missedKeys()).toEqual([`ask:issue.1`]);
   expect(p.dispatches).toBe(1);
   expect(await sweep(NOW + 2 * MIN, s, p)).toEqual([]);
   expect(p.dispatches).toBe(1);
@@ -162,10 +163,8 @@ test("the sweep logs work that two ticks in a row saw as missed, once, and start
 
 test("the sweep logs a job that waits for a spec edit as missed once the spec moves, and starts one dispatch", async () => {
   writeList({ key }, "seed", (doc) => { issues.add(doc, "goal", { spec: "Old spec." }); return true; }, true);
-  const folder = join(process.env.ALEPH_JOBS_DIR!, "w1");
-  mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { n: 1, kind: "build", job: "w1", name: `${key}-1`, repo: key, on: `${key}-1`, condition: "failed", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
-  markAsked({ id: "w1", folder, run: { job: "w1", name: `${key}-1`, repo: key, on: `${key}-1` } as any }, "which wins?", specVersion(issues.find(readList({ key })!, 1)!));
+  const w = seedJob({ role: "build", name: "issue.1", repo: key, target: "issue.1", state: "failed", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
+  markAsked({ id: w.id, folder: w.folder, run: w.run }, "which wins?", specVersion(issues.find(readList({ key })!, 1)!));
   const p = sweepPorts();
   const s = readTick();
   expect(await sweep(NOW, s, p)).toEqual([]);
@@ -173,8 +172,8 @@ test("the sweep logs a job that waits for a spec edit as missed once the spec mo
   expect(p.dispatches).toBe(0);
   writeList({ key }, "edit", (doc) => { issues.find(doc, 1)!.spec = "New spec."; return true; });
   expect(await sweep(NOW + 2 * MIN, s, p)).toEqual([]);
-  expect(await sweep(NOW + 3 * MIN, s, p)).toEqual([`edited:${key}-1`]);
-  expect(missedKeys()).toEqual([`edited:${key}-1`]);
+  expect(await sweep(NOW + 3 * MIN, s, p)).toEqual([`edited:issue.1`]);
+  expect(missedKeys()).toEqual([`edited:issue.1`]);
   expect(p.dispatches).toBe(1);
 });
 
@@ -189,7 +188,7 @@ test("the sweep with nothing to move starts nothing", async () => {
 
 test("a red main that moved since its record (a fix by hand) starts the suite once for the new commit", async () => {
   seed([]);
-  await writeBaseline(key, () => ({ repo: key, commit: "0000000old", ok: false, failed: "tests" }));
+  writeBaseline(key, () => ({ repo: key, commit: "0000000old", ok: false, failed: "tests" }));
   const p = sweepPorts();
   const s = readTick();
   await sweep(NOW, s, p);
@@ -212,66 +211,36 @@ test("a tick that finds the tick lock held runs no step, writes nothing and says
   try {
     seed([{ body: "a", ask: true }]);
     // A key a tick would see as missed: a tick that ran would start its dispatch.
-    writeStalls({ [`ask:${key}-1`]: new Date(NOW).toISOString() });
-    const file = join(process.env.ALEPH_FACTORY_DIR!, "tick.json");
-    mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
-    const before = JSON.stringify({ last: {}, missed: [], suite: {} });
-    writeFileSync(file, before);
+    writeStalls({ [`ask:issue.1`]: new Date(NOW).toISOString() });
+    const state = () => JSON.stringify([tickRows(), getJson("state", "tick.missed", []), getJson("state", "tick.suite", {})]);
+    const before = state();
     const calls: string[] = [];
     const ports: TickPorts = { dispatch: async () => { calls.push("dispatch"); }, suite: () => { calls.push("suite"); }, intake: () => { calls.push("intake"); } };
     const release = (await lock("tick", 0))!;
     try {
       expect(await runTick(NOW, ports)).toEqual({ tick: "lock busy" });
       expect(calls).toEqual([]);
-      expect(readFileSync(file, "utf8")).toBe(before);
+      expect(state()).toBe(before);
     } finally { release(); }
     // The lock is free: the next tick runs its steps and writes its own `last`.
     await runTick(NOW, ports);
     expect(calls).toEqual(["dispatch"]);
-    expect(JSON.parse(readFileSync(file, "utf8")).last.ci).toBe(new Date(NOW).toISOString());
+    expect(tickRows().ci.last).toBe(new Date(NOW).toISOString());
   } finally { setSystemTime(NOW); }
 });
 
-test("one tick moves a finished record older than 7 days into the archive folder", async () => {
-  seed([]);
-  const started = new Date(NOW - 8 * 864e5).toISOString();
-  putRun("20261020-120000-old", { n: 1, kind: "build", job: "old", name: `${key}-1`, on: `${key}-1`, condition: "done", told: true, started } as any);
-  const ports: TickPorts = { dispatch: async () => {}, suite: () => {}, intake: () => {} };
-  const out = await runTick(NOW, ports);
-  expect(out.archived).toEqual([`${key}-1`]);
-  expect(readdirSync(archiveDir())).toEqual([`${key}-1.json`]);
-});
-
-test("a tick, paused or not, ends a running chat run whose lock is free and leaves one whose lock is held", async () => {
-  seed([]);
-  const started = new Date(NOW).toISOString();
-  const chat = (n: number, job: string) => putRun(`20261110-1520${n}0-chat-${n}`, { n, kind: "chat", job, name: "chat", condition: "running", told: true, started } as any);
-  chat(1, "20261110-152010-chat-1");
-  chat(2, "20261110-152020-chat-2");
-  const release = (await lock(chatLock("20261110-152020-chat-2"), 0))!;
-  setPaused(true);
-  try {
-    await runTick(NOW, { dispatch: async () => {}, suite: () => {}, intake: () => {} });
-  } finally { release(); setPaused(false); }
-  expect(getRun("20261110-152010-chat-1")).toMatchObject({ condition: "done", reason: "failed: its process ended before a reply", cause: "unanswered" });
-  expect(getRun("20261110-152020-chat-2")?.condition).toBe("running");
-});
-
 const quiet = (): TickPorts => ({ dispatch: async () => {}, suite: () => {}, intake: () => {} });
-const tickFile = () => join(process.env.ALEPH_FACTORY_DIR!, "tick.json");
-
-test("a tick records the time and result of each due step in ran and keeps the suite's and the monitor's keys", async () => {
+test("a tick records the time and result of each due step in its tick row and keeps the suite's and the monitor's keys", async () => {
   seed([]);
-  mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
-  const kept = { "suite tk1": { at: "2026-11-04T10:00:00.000Z", result: "green" }, monitor: { at: "2026-11-04T03:00:00.000Z", result: "2 findings" } };
-  writeFileSync(tickFile(), JSON.stringify({ last: {}, missed: [], suite: {}, ran: kept }));
+  const kept = { "suite tk1": { last: "2026-11-04T10:00:00.000Z", result: "green" }, monitor: { last: "2026-11-04T03:00:00.000Z", result: "2 findings" } };
+  for (const [k, v] of Object.entries(kept)) setTick(k, v);
   // The monitor writes its own key when it runs: here it does not.
   process.env.ALEPH_MONITOR = "off";
   try { await runTick(NOW, quiet()); } finally { delete process.env.ALEPH_MONITOR; }
-  const ran = JSON.parse(readFileSync(tickFile(), "utf8")).ran;
+  const ran = tickRows();
   const at = new Date(NOW).toISOString();
-  for (const k of ["ci", "episodes", "sweep", "hold", "smoke", "archive", "retention", "firefighter", "timeout"]) {
-    expect(ran[k]).toEqual({ at, result: expect.stringMatching(/\S/) });
+  for (const k of ["ci", "episodes", "sweep", "hold", "smoke", "retention", "firefighter", "timeout"]) {
+    expect(ran[k]).toEqual({ last: at, result: expect.stringMatching(/\S/) });
   }
   expect(ran["suite tk1"]).toEqual(kept["suite tk1"]);
   expect(ran.monitor).toEqual(kept.monitor);
@@ -279,13 +248,13 @@ test("a tick records the time and result of each due step in ran and keeps the s
 
 test("a step that fails in a tick records a result that starts with failed and its error message", async () => {
   seed([]);
-  // A directory where the CI read writes its file: the write throws.
-  mkdirSync(join(process.env.ALEPH_FACTORY_DIR!, "ci.json"), { recursive: true });
+  // A ci row that is not JSON: the CI read throws.
+  conn().run("INSERT OR REPLACE INTO state VALUES ('ci', 'not json')");
   // An aleph-ui that answers 503: the smoke test fails without a throw.
   const ui = Bun.serve({ port: 0, fetch: () => new Response("", { status: 503 }) });
   process.env.ALEPH_UI_PORT = String(ui.port);
   try { await runTick(NOW, quiet()); } finally { delete process.env.ALEPH_UI_PORT; ui.stop(true); }
-  const ran = JSON.parse(readFileSync(tickFile(), "utf8")).ran;
+  const ran = tickRows();
   expect(ran.ci.result).toMatch(/^failed: \S/);
   expect(ran.smoke.result).toBe("failed: / answered 503");
   expect(ran.episodes.result).toBe("0 written");
@@ -297,16 +266,15 @@ test("a tick where an episode page fails to write records the episodes result as
   const dir = join(base, "repo");
   writeFileSync(join(dir, `${key}.txt`), "x\n");
   git(dir, "add", ".");
-  git(dir, "commit", "-q", "-m", "ship it", "-m", `Issue: ${key}-${id}`);
+  git(dir, "commit", "-q", "-m", "ship it", "-m", `Issue: issue.${id}`);
   git(dir, "push", "-q", "origin", "main");
-  mkdirSync(join(process.env.ALEPH_JOBS_DIR!, "20261104-110000-ship"), { recursive: true });
-  putRun("20261104-110000-ship", { n: 1, kind: "build", job: "20261104-110000-ship", name: `${key}-${id}`, repo: key, on: `${key}-${id}`, condition: "landed", told: true, started: new Date(NOW - 60 * MIN).toISOString(), ended: new Date(NOW - 30 * MIN).toISOString() });
+  seedJob({ role: "build", name: `issue.${id}`, repo: key, target: `issue.${id}`, state: "landed", told: true, started: new Date(NOW - 60 * MIN).toISOString(), ended: new Date(NOW - 30 * MIN).toISOString() });
   // An episodes folder the tick cannot write in.
   const episodes = join(process.env.ALEPH_FACTORY_DIR!, "episodes");
   mkdirSync(episodes, { recursive: true });
   chmodSync(episodes, 0o555);
   try { await runTick(NOW, quiet()); } finally { chmodSync(episodes, 0o755); }
-  expect(JSON.parse(readFileSync(tickFile(), "utf8")).ran.episodes.result).toMatch(/^failed: 1 of 1 pages, \S/);
+  expect(tickRows().episodes.result).toMatch(/^failed: 1 of 1 pages, \S/);
 });
 
 // The daily vault maintenance, dry: from 03:00 local, on a vault that has Home.md, once per local date.
@@ -344,7 +312,7 @@ test("guard: the maintain step runs once per local date: the same date again is 
 test("guard: a tick with a vault present records the maintain step's dry result in ran", async () => {
   vaultHere();
   await runTick(NOW, quiet());
-  const ran = JSON.parse(readFileSync(tickFile(), "utf8")).ran;
+  const ran = tickRows();
   expect(ran.maintain.result).toMatch(/^dry: 0 fixed, .* · 0 lessons · 0 notes · 0 rechecked · 0 resolved · 0 aliased$/);
   expect(ran.corrections).toBeUndefined();
 });

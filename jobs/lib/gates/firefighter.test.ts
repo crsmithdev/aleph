@@ -1,5 +1,6 @@
 // The firefighter as code: one critical issue per failing commit, from a red baseline or a red CI,
 // and a rescue Ask on a land live past 30 minutes. No agent run starts.
+import { putJson } from "../../../lib/db.ts";
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,7 +20,7 @@ useDirectorFixture();
 const A = "a1".repeat(20), B = "b2".repeat(20), C = "c3".repeat(20);
 const factory = () => process.env.ALEPH_FACTORY_DIR!;
 const write = (file: string, text: string) => { mkdirSync(join(factory(), file, ".."), { recursive: true }); writeFileSync(join(factory(), file), text); };
-const baselineRed = (commit: string) => write("baseline.json", JSON.stringify({ [key]: { repo: key, commit, ok: false, failed: "tests" } }));
+const baselineRed = (commit: string) => putJson("state", "baseline", { [key]: { repo: key, commit, ok: false, failed: "tests" } });
 const longLog = (what: string) => Array.from({ length: 500 }, (_, i) => `${what} line ${i}`).join("\n");
 const reds = () => readList({ key })!.items.filter((i) => store.areasOf(i).includes("red-main"));
 let ciCalls = 0;
@@ -38,7 +39,7 @@ test("a red baseline files exactly one critical issue for its commit across two 
   expect(one!.filed).toEqual([{ repo: key, commit: A, source: "baseline", filed: 2 }]);
   expect((await firefight(ports()))!.filed).toEqual([]);
   // It files through writeFiling: one filed event, and the ports' `after` once.
-  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["firefighter", `${key}-2`]]);
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.subject, e.object])).toEqual([["firefighter", "issue.2"]]);
   expect(started).toEqual([`${key}-2`]);
   const [it] = reds();
   expect(reds().length).toBe(1);
@@ -119,8 +120,8 @@ test("a land live past 30 minutes sets one rescue Ask; a land live for 10 minute
   process.env.ALEPH_FIREFIGHTER_CMD = join(base, "fake");
   fresh([{ title: "slow one" }, { title: "quick one" }]);
   baselineRed(A);
-  const slow = run({ name: `${key}-1`, on: `${key}-1`, kind: "land", condition: "running" }, {}, 35);
-  const quick = run({ name: `${key}-2`, on: `${key}-2`, kind: "land", condition: "running" }, {}, 10);
+  const slow = run({ name: "issue.1", target: "issue.1", role: "land", state: "running" }, {}, 35);
+  const quick = run({ name: "issue.2", target: "issue.2", role: "land", state: "running" }, {}, 10);
   // Live means the pid's cmdline holds the folder. bash runs only builtins, so it execs nothing that would lose
   // the folder; it blocks on its stdin until killed, and once it has said `up` its cmdline is bash's.
   const procs = [slow, quick].map((folder) => {
@@ -131,12 +132,12 @@ test("a land live past 30 minutes sets one rescue Ask; a land live for 10 minute
   try {
     await Promise.all(procs.map((p) => p.stdout.getReader().read()));
     const one = await firefight(ports());
-    expect(one!.asked).toEqual([`${key}-1`]);
+    expect(one!.asked).toEqual(["issue.1"]);
     expect((await firefight(ports()))!.asked).toEqual([]);
-    const ask = askOf(`${key}-1`);
+    const ask = askOf("issue.1");
     expect(ask).toMatchObject({ kind: "input", reason: "rescue", recommended: "Wait" });
     expect(ask!.options.map((o) => o.label)).toEqual(["Wait", "Kill and rerun", "Drop"]);
-    expect(askOf(`${key}-2`)).toBeNull();
+    expect(askOf("issue.2")).toBeNull();
     expect(calls()).toBe(0);
     expect(agentRuns()).toEqual([]);
   } finally {
@@ -183,7 +184,7 @@ test("a CI issue quotes the run URL, the failing tests, their failure lines and 
   expect(it.request).toContain("ALEPH_LIVE_CAP defaults to 4, the code has 1");
   expect(it.request).toContain("Runner: 4 cores");
   expect(it.request).not.toContain("(pass)");
-  expect(record.read(`${key}-${it.id}`)!.ci).toMatchObject({ url, commit: B, failure: expect.stringContaining("(fail) the docs") });
+  expect(record.read(`issue.${it.id}`)!.ci).toMatchObject({ url, commit: B, failure: expect.stringContaining("(fail) the docs") });
 });
 
 test("a landed CI issue closes on a green CI at or after the land, waits on one before it, and goes back open on a red one", async () => {
@@ -197,8 +198,8 @@ test("a landed CI issue closes on a green CI at or after the land, waits on one 
   ci("failure", before);
   await firefight(gh);
   const [it] = reds();
-  const ref = `${key}-${it.id}`;
-  record.update(ref, (r) => { r.ci = { ...r.ci!, landed }; });
+  const ref = `issue.${it.id}`;
+  record.editIssueState(ref, (r) => { r.ci = { ...r.ci!, landed }; });
   // Green, but on a commit before the land: the land is not tested yet.
   ci("success", before);
   await firefight(gh);
@@ -212,11 +213,11 @@ test("a landed CI issue closes on a green CI at or after the land, waits on one 
   expect(reds()[0].notes.at(-1)).toContain("(fail) the docs on this tree match the code");
   expect(record.read(ref)!.ci).toEqual({ url: "https://github.com/x/y/actions/runs/103", commit: after, failure: ciFailure(CI_LOG) });
   // Landed again; green at the land itself: done.
-  record.update(ref, (r) => { r.ci = { ...r.ci!, landed: after }; });
+  record.editIssueState(ref, (r) => { r.ci = { ...r.ci!, landed: after }; });
   ci("success", after);
   await firefight(gh);
   expect(issues.status(reds()[0])).toBe("done");
-  expect(reds()[0].notes.at(-1)).toContain(`green at ${after.slice(0, 7)}`);
+  expect(reds()[0].fm.closed_why).toContain(`green at ${after.slice(0, 7)}`);
 });
 
 const SETUP_LOG = "test\tRun oven-sh/setup-bun@v2\t2026-11-08T09:00:00.0000000Z ##[error]Unexpected HTTP response: 504";
@@ -230,9 +231,9 @@ test("a CI run that failed in setup is rerun once; failing again, it files an is
   const p: Ports = { gh: (_, args) => { asked.push(args); return { ok: true, out: args[1] === "rerun" ? "" : SETUP_LOG }; }, after: () => {} };
   await firefight(p);
   expect(asked.filter((a) => a[1] === "rerun")).toEqual([["run", "rerun", "777", "--failed"]]);
-  expect(readEvents()).toContainEqual(expect.objectContaining({ by: "firefighter", subject: key, action: "reran", on: [B.slice(0, 7)] }));
+  expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "firefighter", object: key, action: "reran" }));
   expect(reds()).toEqual([]);
-  expect(readEvents().filter((e) => e.by === "firefighter").map((e) => e.action)).toEqual(["reran"]);
+  expect(readEvents().filter((e) => e.subject === "firefighter").map((e) => e.action)).toEqual(["reran"]);
   await firefight(p);
   expect(asked.filter((a) => a[1] === "rerun").length).toBe(1);
   expect(reds().length).toBe(1);
@@ -254,7 +255,7 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
   ci("failure", failed);
   await firefight(gh);
   const [it] = reds();
-  const ref = `${key}-${it.id}`;
+  const ref = `issue.${it.id}`;
   expect(record.read(ref)!.ci!.landed).toBeUndefined();
   // Red at a later commit: an unlanded issue has no land to be sent back from, so it gets no note and no reopen.
   ci("failure", fixed);
@@ -272,17 +273,17 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
   expect(issues.status(reds()[0])).toBe("open");
   // Green at a commit past the failing one, from a fix the job never made: done, naming that commit and its run.
   const url = ci("success", fixed);
-  expect(settleCi(gh)).toEqual([`${ref} done: CI green at ${fixed.slice(0, 7)}`]);
+  expect(settleCi(gh)).toEqual([`${key}-${it.id} done: CI green at ${fixed.slice(0, 7)}`]);
   expect(issues.status(reds()[0])).toBe("done");
-  expect(reds()[0].notes.at(-1)).toContain(`green at ${fixed.slice(0, 7)} (${url})`);
-  expect(reds()[0].notes.at(-1)).toContain(`past the failing commit ${failed.slice(0, 7)}`);
+  expect(reds()[0].fm.closed_why).toContain(`green at ${fixed.slice(0, 7)} (${url})`);
+  expect(reds()[0].fm.closed_why).toContain(`past the failing commit ${failed.slice(0, 7)}`);
 });
 
 test("a step that fails is an event of the firefighter with the failure in its note", async () => {
   fresh([]);
   ciStep([loadRegistry()[key]], listing([{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }]));
   await firefight({ gh: () => { throw new Error("gh broke"); }, after: () => {} });
-  const events = readEvents().filter((e) => e.by === "firefighter" && e.action === "failed");
+  const events = readEvents().filter((e) => e.subject === "firefighter" && e.action === "failed");
   expect(events.length).toBeGreaterThan(0);
-  expect(events.some((e) => e.note?.includes("gh broke"))).toBe(true);
+  expect(events.some((e) => e.detail?.includes("gh broke"))).toBe(true);
 });

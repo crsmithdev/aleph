@@ -5,15 +5,16 @@
  * `ALEPH_<ROLE>_TIMEOUT` replaces the role's time box, in seconds.
  */
 import { appendFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
-import { allRuns, makeRun, runsDir, type Run } from "../records/ledger.ts";
-import { getRun, patchRun, putRun } from "../records/record.ts";
+import { allRuns, type Run } from "../records/ledger.ts";
+import { getRun, makeJob, patchRun, setState } from "../records/record.ts";
 import { lock, lockSync } from "../infra/locks.ts";
 import { roleSeconds } from "../infra/settings.ts";
-import { runFile } from "../records/run-files.ts";
+import { logStream, logTo, runFile } from "../records/run-files.ts";
 import { callAgent, stallReason } from "./agent-call.ts";
+import type { AgentRole } from "../../../lib/naming.ts";
 
 interface Call {
+  /** The role the call is made as, for its command, its time box and its reply cost (agent-call.ts). */
   role: string;
   /** The role's name in a failure: `${who} exited 1`. */
   who: string;
@@ -28,23 +29,25 @@ interface Call {
   schema?: object;
 }
 
-/** The ledger's line for a role's run. `job` defaults to the folder's own name. The run's subject is `on`, else the role when it is a routine, else `name` (`subjectOf`, lib/naming.ts). */
+/** The job a role's run makes. Its target is the issue or idea the run is on; its name is its title. */
 export interface Opening extends Call {
-  role: "intake" | "director" | "monitor" | "chat" | "lens" | "housekeeper" | "maintainer";
+  role: AgentRole;
   name: string;
-  /** The first line of command.txt. */
+  /** The first line of the `command` section of log.txt. */
   command: string;
   shown: boolean;
-  job?: string;
   repo?: string;
-  on?: string;
+  /** The key of what the run is on: `issue.<n>`, `project.<n>` or `idea.<n>`. */
+  target?: string;
   /** The session the run resumes: the run's session key, so the turns of one conversation share it. Without it the key is the reply's session. */
   session?: string;
-  /** Names a lock from the run's job: the run holds it from before it is `running` until `end`, so `endLost` leaves it alone. */
-  lock?: (job: string) => string;
+  /** Names a lock from the run's key: the run holds it from before it is `running` until `end`, so `endLost` leaves it alone. */
+  lock?: (id: string) => string;
 }
 
 export interface AgentRun {
+  /** The job's key. */
+  id: string;
   folder: string;
   /**
    * The reply's text. It writes prompt.md and output.log and records the cost, and then throws on a time-out or a non-zero exit.
@@ -62,17 +65,17 @@ export interface AgentRun {
   end(reason: string, fields?: Partial<Run>): void;
 }
 
-/** Make the run's folder and state. The caller ends the run, on every path. */
+/** Make the run's job and folder. The caller ends the run, on every path. */
 export function openRun(o: Opening): AgentRun {
   let release: (() => void) | undefined;
-  const id = makeRun({ kind: o.role, name: o.name, on: o.on, job: o.job }, (folder, n) => {
-    const job = o.job ?? basename(folder);
-    // No other process takes a lock named from a job with no run yet.
-    if (o.lock) release = lockSync(o.lock(job), 0)!;
-    putRun(basename(folder), { kind: o.role, job, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), ...(o.session ? { session: o.session } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now(), n });
+  const { id, folder } = makeJob({
+    role: o.role, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.target !== undefined ? { target: o.target } : {}), ...(o.session ? { session: o.session } : {}),
+    state: "running", phase: o.role, model: o.model, told: true, shown: o.shown,
+  }, (dir, key) => {
+    // No other process takes a lock named from a job with no row yet.
+    if (o.lock) release = lockSync(o.lock(key), 0)!;
+    logTo(dir, "command", o.command);
   });
-  const folder = join(runsDir(), id);
-  writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
   let prev: { input: string; session?: string } | undefined;
   let spent: number | undefined;
   let credit = false;
@@ -81,36 +84,34 @@ export function openRun(o: Opening): AgentRun {
     const resume = again ? prev?.session : undefined;
     const sent = again && !resume ? `${prev?.input ?? ""}\n\n${input}` : input;
     write(runFile(folder, "prompt.md"), again ? `\n\n---\n\n${sent}` : sent);
-    const log = runFile(folder, "output.log");
+    const log = runFile(folder, "transcript.jsonl");
     if (!again) writeFileSync(log, "");
     const r = await callAgent(o.role, sent, {
       model: o.model, flags: resume ? [...o.flags, "--resume", resume] : o.flags, schema: o.schema, cwd: cwd ?? o.cwd,
       env: o.env && { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...o.env },
-      stdout: log, stderr: runFile(folder, "stderr.log"), limit: roleSeconds(o.role.toUpperCase(), o.seconds),
+      stdout: log, stderr: logStream(folder, "stderr"), limit: roleSeconds(o.role.toUpperCase(), o.seconds),
     });
     prev = { input: sent, session: r.session };
-    if (!o.session && r.session) patchRun(basename(folder), { session: r.session });
-    if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; patchRun(basename(folder), { cost: spent }); }
+    if (!o.session && r.session) patchRun(id, { session: r.session });
+    if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; patchRun(id, { cost: spent }); }
     if (r.cause?.kind === "credit") credit = true;
     const failure = r.step.stalled ? stallReason() : r.step.timedOut ? `${o.who} timed out` : r.step.code !== 0 ? `${o.who} exited ${r.step.code}` : undefined;
     if (failure) throw new Error(failure);
     return r;
   };
   return {
+    id,
     folder,
     ask: async (input, cwd) => (await call(input, cwd)).text,
     askData: async (input, cwd) => (await call(input, cwd)).data,
     askAgain: async (input, cwd) => (await call(input, cwd, true)).data,
-    end: (reason, fields = {}) => { endAgentRun(folder, reason, credit ? { ...fields, cause: "credit" } : fields); release?.(); },
+    end: (reason, fields = {}) => { endAgentRun(id, reason, credit ? { ...fields, cause: "credit" } : fields); release?.(); },
   };
 }
 
-function endAgentRun(folder: string, reason: string, fields: Partial<Run> = {}): void {
-  patchRun(basename(folder), { condition: "done", reason, ...fields, phase: undefined, ended: new Date().toISOString() });
+function endAgentRun(id: string, reason: string, fields: Partial<Omit<Run, "state">> = {}): void {
+  setState(id, "done", { reason, ...fields, phase: undefined, ended: new Date().toISOString() });
 }
-
-/** The lock the UI server holds for the whole chat turn of the run with `job`. */
-export const chatLock = (job: string) => `chat-${job}`;
 
 /**
  * End the role's runs that a dead process left `running`. A live run's process holds a lock for the
@@ -118,14 +119,14 @@ export const chatLock = (job: string) => `chat-${job}`;
  * lock, no process is running that run. A run whose lock is held stays as it is.
  */
 export async function endLost(role: Opening["role"], lockOf: (run: Run) => string | null, before = "a reply"): Promise<void> {
-  for (const { folder, run } of allRuns()) {
-    if (run.kind !== role || run.condition !== "running") continue;
+  for (const { id, run } of allRuns()) {
+    if (run.role !== role || run.state !== "running") continue;
     const name = lockOf(run);
     const release = name && await lock(name, 0);
     if (!release) continue;
     try {
       // Read again under the lock: the run may have ended since the list was read.
-      if (getRun(basename(folder))?.condition === "running") endAgentRun(folder, `failed: its process ended before ${before}`, { cause: "unanswered" });
+      if (getRun(id)?.state === "running") endAgentRun(id, `failed: its process ended before ${before}`, { cause: "unanswered" });
     } finally {
       release();
     }

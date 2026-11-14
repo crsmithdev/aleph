@@ -1,16 +1,17 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { nextBrief } from "../transitions/continuation.ts";
 import type { Run } from "../records/ledger.ts";
+import { readSection } from "../records/run-files.ts";
 import { docClaims } from "./unit.ts";
 
 let n = 0;
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
-/** A worker's stream-json output.log: a tool call and its result per step, with the system and result lines around them. */
+/** A worker's stream-json transcript.jsonl: a tool call and its result per step, with the system and result lines around them. */
 function run(steps: [name: string, input: Record<string, unknown>, out: string][]): string {
   const folder = mkdtempSync(join(tmpdir(), "aleph-docclaims-"));
   dirs.push(folder);
@@ -21,7 +22,7 @@ function run(steps: [name: string, input: Record<string, unknown>, out: string][
     lines.push({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: out }] } });
   }
   lines.push({ type: "result", subtype: "success", result: "" });
-  writeFileSync(join(folder, "output.log"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  writeFileSync(join(folder, "transcript.jsonl"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
   return folder;
 }
 const edit = (f = "docs/factory.md"): [string, Record<string, unknown>, string] => ["Edit", { file_path: f }, "ok"];
@@ -60,7 +61,7 @@ test("a final message with no doc claim passes, whatever the transcript", () => 
   expect(docClaims(f, "I added the stall row to docs/factory.md. Tests pass.")).toBeNull();
 });
 
-test("a run with no output.log passes", () => {
+test("a run with no transcript.jsonl passes", () => {
   const folder = mkdtempSync(join(tmpdir(), "aleph-docclaims-"));
   dirs.push(folder);
   expect(docClaims(folder, claim)).toBeNull();
@@ -69,8 +70,8 @@ test("a run with no output.log passes", () => {
 test("the next worker's fix note gives each problem", () => {
   const f = run([bash("grep -n stall docs/factory.md", "600"), edit()]);
   expect(docClaims(f, claim)).not.toBeNull();
-  expect(readFileSync(join(f, "checks.log"), "utf8")).toStartWith("## doc-claims: exit 1\n");
-  const { note } = nextBrief(f, { n: 1, failed: "doc-claims" } as Run);
+  expect(readSection(f, "checks")).toStartWith("## doc-claims: exit 1\n");
+  const { note } = nextBrief(f, { failed: "doc-claims" } as Run);
   expect(note).toContain("The check `doc-claims` failed");
   expect(note).toContain("no run after the last edit reads the doc and compares it with the code");
 });

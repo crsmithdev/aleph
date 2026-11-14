@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, file, state, setup, teardown, seedItem } from "./cli.helpers";
-import { eventsOf } from "../lib/layout.ts";
+import { base, file, section, state, setup, teardown, seedItem } from "./cli.helpers";
+import { readEvents } from "../lib/layout.ts";
 import { cli, dispatch, job, land } from "./flow.testkit.ts";
 
 beforeAll(setup);
@@ -18,19 +18,19 @@ describe("a factory run", () => {
     expect((await cli(["pause"])).json).toEqual({ paused: true });
     const id = seedItem("fac", "while paused", { kind: "goal" }, "ACTION: commit paused.txt\n".trim());
     expect((await dispatch()).json).toMatchObject({ started: [], paused: true });
-    expect(readdirSync(join(base, "factory", "events")).flatMap((f) => eventsOf(readFileSync(join(base, "factory", "events", f), "utf8"))).some((e) => e.action === "paused" && e.subject === "factory")).toBe(true);
+    expect(readEvents().some((e) => e.action === "paused" && e.object === "factory")).toBe(true);
     const r = await fjob("fpaused", "commit fpaused.txt", {}, { land: true });
-    expect(state(r.json.run).condition).toBe("passed");
+    expect(state(r.json.run).state).toBe("passed");
     expect(state(r.json.run).next).toBe("land");
-    expect(file(r.json.run, "next.log")).toContain("paused");
+    expect(section(r.json.run, "dispatch")).toContain("paused");
     expect(file(r.json.run, "paused-next")).toBe("land\n");
     const l = await land("fpaused");
-    expect(state(l.json.run).condition).toBe("landed");
+    expect(state(l.json.run).state).toBe("landed");
     expect((await cli(["resume"])).json).toEqual({ paused: false });
     // The start command only logs the issue: the test is about the tick's choice, not about the run it would start.
     const startCmd = join(base, "pause-start"), startLog = join(base, "pause-start.log");
     writeFileSync(startCmd, `#!/bin/sh\necho "$2" >> ${startLog}\n`, { mode: 0o755 });
-    expect((await dispatch({ ALEPH_START_CMD: startCmd })).json.started).toEqual([`fac-${id}`]);
-    expect(readFileSync(startLog, "utf8")).toBe(`fac-${id}\n`);
+    expect((await dispatch({ ALEPH_START_CMD: startCmd })).json.started).toEqual([`issue.${id}`]);
+    expect(readFileSync(startLog, "utf8")).toBe(`issue.${id}\n`);
   }, 30_000);
 });

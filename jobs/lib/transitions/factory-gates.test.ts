@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, expect, mock, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
 import { gates, gpuSlot, liveEntries, liveRuns } from "../gates/factory-status.ts";
 import { setModel } from "../routing/models.ts";
 import { waitingToLand } from "../land/landing.ts";
-import { runsDir, type Run } from "../records/ledger.ts";
-import { patchRun } from "../records/record.ts";
+import { allJobs, type Run } from "../records/ledger.ts";
+import { layout } from "../../../lib/layout.ts";
+import { reseed, seed } from "../../job.testkit.ts";
 import * as locks from "../infra/locks.ts";
 import { held } from "../infra/locks.ts";
 import { startJob } from "./transitions.ts";
@@ -22,8 +23,8 @@ mock.module("../infra/locks.ts", () => ({ ...real, held: (name: string) => { con
 beforeEach(setup);
 afterEach(teardown);
 
-const entry = (kind: string, state: string, reason?: string): any =>
-  ({ id: `x-${kind}-${state}`, folder: join(ctx.base, "none", `${kind}-${state}`), run: { n: 1, kind, job: "j1", name: "n1", repo: "fac", condition: state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
+const entry = (role: string, state: string, reason?: string): any =>
+  ({ id: `job.1`, folder: join(ctx.base, "none", `${role}-${state}`), run: { role, job: "job.1", name: "issue.1", repo: "fac", state: state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
 
 test("gates returns the first factory gate, in the order pause, live cap", () => {
   const order = () => gates({ jobs: [] })?.gate;
@@ -45,31 +46,24 @@ test("a stuck or failed run stops no gate: its open job keeps only its own issue
 });
 
 test("after a land that failed 'job lock busy' the passed agent run is waiting to land again", () => {
-  const agent = entry("build", "passed");
-  agent.run.land = true;
-  agent.run.next = "land";
-  const busy = entry("land", "failed", "job lock busy");
-  busy.run.cause = "locked";
-  expect(waitingToLand([[agent, busy]])).toEqual(["n1"]);
-  expect(waitingToLand([[agent, entry("land", "failed", "not landed")]])).toEqual([]);
+  const agent = seed({ role: "build", name: "issue.1", repo: "fac", target: "issue.1", state: "passed", land: true, next: "land", started: "2026-10-28T00:00:00Z" });
+  const busy = seed({ role: "land", name: "issue.1", repo: "fac", target: "issue.1", prev: agent.id, state: "failed", reason: "job lock busy", cause: "locked", started: "2026-10-28T00:00:00Z" });
+  expect(waitingToLand()).toEqual(["issue.1"]);
+  reseed(busy.id, { reason: "not landed", cause: undefined });
+  expect(waitingToLand()).toEqual([]);
 });
 
 test("waitingToLand lists the job whose first run has the lower ID first, though it started later", () => {
-  const job = (id: string, name: string, started: string): any => {
-    const e = entry("build", "passed");
-    Object.assign(e, { id });
-    Object.assign(e.run, { name, started, land: true, next: "land" });
-    return [e];
-  };
-  const low = job("20261028-000001-fac-a", "a", "2026-10-28T02:00:00Z");
-  const high = job("20261028-000002-fac-b", "b", "2026-10-28T01:00:00Z");
-  expect(waitingToLand([high, low])).toEqual(["a", "b"]);
+  const job = (name: string, started: string) => seed({ role: "build", name, repo: "fac", target: name, state: "passed", land: true, next: "land", started });
+  job("issue.1", "2026-10-28T02:00:00Z");
+  job("issue.2", "2026-10-28T01:00:00Z");
+  expect(waitingToLand([...allJobs()].reverse())).toEqual(["issue.1", "issue.2"]);
 });
 
 test("a passed run on a parked issue is not waiting to land, and waits again once the issue is open", async () => {
   const id = newIssue();
-  const name = `p-${id}`;
-  mk(name, "build", "passed", { next: "land", land: true });
+  const name = `issue.${id}`;
+  mk(`p-${id}`, "build", "passed", { next: "land", land: true });
   change(id, (i) => issues.setStatus(i, "parked"));
   const f = fakes();
   expect(waitingToLand()).not.toContain(name);
@@ -86,8 +80,8 @@ test("the first dispatch after the resume starts a next step the pause kept, onc
   mk("history-2", "build", "failed", { failed: "test", next: "worker" });
   const go: string[] = [];
   const step = async (_folder: string, run: Run, next: NonNullable<Run["next"]>) => { go.push(`${run.name} ${next}`); };
-  expect(await startKept(step)).toEqual(["kept-1"]);
-  expect(go).toEqual(["kept-1 worker"]);
+  expect(await startKept(step)).toEqual(["issue.1"]);
+  expect(go).toEqual(["issue.1 worker"]);
   expect(existsSync(join(kept.folder, "paused-next"))).toBe(false);
   expect(await startKept(step)).toEqual([]);
 });
@@ -129,11 +123,11 @@ test("with the live cap full of Claude runs and the GPU free, the dispatch start
   const NOW = Date.parse("2026-11-04T00:00:00Z");
   setSystemTime(NOW);
   try {
-    mk("claude-1", "build", "running", { model: "sonnet", made: NOW });
+    mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
     const id = newIssue();
     const tiers: unknown[] = [];
     const out = await dispatchIssues(async (_r, _n, _id, _spec, tier) => { tiers.push(tier); return null; });
-    expect(out.started).toEqual([`fac-${id}`]);
+    expect(out.started).toEqual([`issue.${id}`]);
     expect(tiers).toEqual(["worker-low"]);
   } finally {
     setSystemTime();
@@ -159,7 +153,7 @@ function stubUnit(): () => void {
   };
 }
 
-const folders = () => (existsSync(runsDir()) ? readdirSync(runsDir()).filter((d) => !d.startsWith(".")) : []);
+const folders = () => (existsSync(layout().jobs) ? readdirSync(layout().jobs).filter((d) => !d.startsWith(".")) : []);
 
 test("while a local run's start is before its run record, gpuSlot returns null, and after the start the run is live local", async () => {
   expect(setModel("worker-low", { model: "gpt-oss-20b" })).toBeNull();
@@ -209,7 +203,7 @@ test("when a local run starts while gpuSlot takes the free gpu lock, gpuSlot ret
     const run = mk("local-1", "build", "running", { model: "gpt-oss-20b", made: NOW });
     expect(await probe).toBeNull();
     expect(held("gpu")).toBe(false);
-    patchRun(basename(run.folder), { condition: "failed" });
+    reseed(run.job, { state: "failed" });
     const release = await gpuSlot(0);
     expect(release).not.toBeNull();
     release!();

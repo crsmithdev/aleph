@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
@@ -7,11 +7,13 @@ import { memory, use } from "../lib/langfuse.ts";
 // @ts-ignore plain JS, shared with the page
 import { idLink, pageHead, when } from "./lib.js";
 import { listSessions, routes } from "./api/sessions.ts";
-import { putRun, removeRun } from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { conn } from "../lib/db.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/session.js";
 // @ts-ignore plain JS, shared with the page
 import { options, renderSessions } from "./views/sessions.js";
+import { writeRepos } from "../tests/projects.ts";
 
 const trace = (id: string, session: string, name: string, at: string, extra: object = {}) =>
   ({ id, sessionId: session, name, timestamp: at, input: `prompt ${id}\nsecond line`, output: "x".repeat(600), totalCost: 0.5, latency: 12, metadata: { cwd: `/w/${name}`, task_type: "code_edit" }, ...extra });
@@ -44,29 +46,24 @@ const OBS: Record<string, any[]> = {
 };
 const lf = memory({ traces: TRACES, get observations() { return Object.entries(OBS).flatMap(([traceId, os]) => os.map((o) => ({ ...o, traceId }))); } });
 let fixtures: string;
-let savedRepos: string | undefined;
 let savedJobs: string | undefined;
-let savedUsage: string | undefined;
+let savedDb: string | undefined;
 
 beforeAll(() => {
   // The route lists projects from the registry and reads runs from the jobs dir: give it our own, not ~/.aleph.
-  savedRepos = process.env.ALEPH_REPOS;
   savedJobs = process.env.ALEPH_JOBS_DIR;
-  // The chat route adds `wk` from the usage fit: read no snapshots from ~/.aleph. The file is never written.
-  savedUsage = process.env.ALEPH_USAGE_FILE;
+  savedDb = process.env.ALEPH_DB;
   fixtures = mkdtempSync(join(tmpdir(), "sessions-fixtures-"));
-  writeFileSync(join(fixtures, "repos.json"), JSON.stringify({ aleph: { path: "/w/aleph" }, sidetone: { path: "/w/sidetone" } }));
+  writeRepos({ aleph: { path: "/w/aleph" }, sidetone: { path: "/w/sidetone" } });
   mkdirSync(join(fixtures, "jobs"));
-  process.env.ALEPH_REPOS = join(fixtures, "repos.json");
   process.env.ALEPH_JOBS_DIR = join(fixtures, "jobs");
-  process.env.ALEPH_USAGE_FILE = join(fixtures, "usage.jsonl");
+  process.env.ALEPH_DB = join(fixtures, "aleph.db");
   use(lf);
 });
 afterAll(() => {
   use(null);
-  if (savedRepos === undefined) delete process.env.ALEPH_REPOS; else process.env.ALEPH_REPOS = savedRepos;
   if (savedJobs === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = savedJobs;
-  if (savedUsage === undefined) delete process.env.ALEPH_USAGE_FILE; else process.env.ALEPH_USAGE_FILE = savedUsage;
+  if (savedDb === undefined) delete process.env.ALEPH_DB; else process.env.ALEPH_DB = savedDb;
   rmSync(fixtures, { recursive: true, force: true });
 });
 beforeEach(() => { lf.asked.length = 0; lf.down = null; });
@@ -245,17 +242,18 @@ test("the chat route gives whole prompts and replies and each turn's tool calls 
 });
 
 test("a one-turn worker session that Langfuse prices at 0 has its ledger cost on the list, the session and the chat", async () => {
-  TRACES.push(trace("w1", "worker-1", "aleph", iso(5), { totalCost: 0 }));
-  putRun("20261104-115500-worker-1", { n: 1, kind: "build", condition: "done", started: iso(5), name: "worker-1", job: "worker-1", repo: "aleph", cost: 2 } as any);
+  // The session id of a factory job is its key, which exists only after the job does.
+  const { id } = seed({ role: "build", state: "done", started: iso(5), name: "worker-1", repo: "aleph", cost: 2 });
+  TRACES.push(trace("w1", id, "aleph", iso(5), { totalCost: 0 }));
   try {
     const list: any = await listSessions(new Request("http://localhost/api/sessions"));
-    expect(list.sessions.find((x: any) => x.id === "worker-1")).toMatchObject({ label: "worker-1", cost: 2 });
-    const one: any = await (await call("GET /api/sessions/:id", "/api/sessions/worker-1", { id: "worker-1" })).json();
+    expect(list.sessions.find((x: any) => x.id === id)).toMatchObject({ label: "worker-1", cost: 2 });
+    const one: any = await (await call("GET /api/sessions/:id", `/api/sessions/${id}`, { id })).json();
     expect(one.turns[0].cost).toBe(2);
-    expect((await chat("worker-1")).turns[0].cost).toBe(2);
+    expect((await chat(id)).turns[0].cost).toBe(2);
   } finally {
     TRACES.pop();
-    removeRun("20261104-115500-worker-1");
+    conn().run("DELETE FROM jobs WHERE id = ?", [id]);
   }
 });
 

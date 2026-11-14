@@ -36,48 +36,48 @@ test("add stores kind task by default, refuses an unknown kind, and addPart copi
 });
 
 test("lint names the bad title of an open or parked item and a missing or unknown kind; fix moves kind areas into kind", () => {
-  const doc = issues.blank("r");
+  const doc = issues.blank("r", "project.1");
   // Items from before the rule: the store holds titles that add now refuses.
   const item = (title: string, fm: Record<string, unknown>) => { const i = issues.add(doc, "Placeholder"); i.title = title; delete i.fm.kind; Object.assign(i.fm, fm); return i; };
-  item("Fix the lane height", { kind: "task", areas: ["ui"] });
-  item("a".repeat(61), { kind: "task" });
-  item("Fix it.", { kind: "task", parked: "true" });
-  item("Check foo: bar", { kind: "task", closed_as: "done" });
-  item("Fix the flaky gate", { areas: ["flakes", "tests"] });
+  const lane = item("Fix the lane height", { kind: "task", areas: ["ui"] });
+  const long = item("a".repeat(61), { kind: "task" });
+  const dot = item("Fix it.", { kind: "task", parked: "true" });
+  const closed = item("Check foo: bar", { kind: "task", closed_as: "done" });
+  const noKind = item("Fix the flaky gate", { areas: ["flakes", "tests"] });
   item("Fix red main", { areas: ["red-main", "check"] });
-  item("Old goal", { kind: "goal", areas: ["deps"] });
+  const goal = item("Old goal", { kind: "goal", areas: ["deps"] });
   const bug = item("Fix the bug", { areas: ["bug"] });
   item("Teach the gate", { kind: "proposal", areas: ["proposal"] });
   const part = addPart(doc, bug, { title: "[Bug] Find the cause", spec: "x" });
   part.title = "[Bug] Find the cause: first";
   delete part.fm.kind;
-  const found = (id: string) => issues.lint(doc).filter((f) => f.id === id).map((f) => f.problem);
-  expect(found("1")).toEqual([]);
-  expect(found("2")[0]).toContain("61 characters");
-  expect(found("3")[0]).toContain("period");
-  expect(found("4")).toEqual([]);
-  expect(found("5")).toEqual(["kind is missing"]);
-  expect(found("7")[0]).toContain('unknown kind "goal"');
-  expect(found("8.1")).toEqual(["kind is missing"]);
+  const found = (i: issues.Issue) => issues.lint(doc).filter((f) => f.id === issues.refOf(i)).map((f) => f.problem);
+  expect(found(lane)).toEqual([]);
+  expect(found(long)[0]).toContain("61 characters");
+  expect(found(dot)[0]).toContain("period");
+  expect(found(closed)).toEqual([]);
+  expect(found(noKind)).toEqual(["kind is missing"]);
+  expect(found(goal)[0]).toContain('unknown kind "goal"');
+  expect(found(part)).toEqual(["kind is missing"]);
 
   issues.fix(doc);
-  expect(doc.items.map((i): unknown[] => [issues.refOf(i), i.fm.kind, i.fm.areas])).toEqual([
-    ["1", "task", ["ui"]], ["2", "task", []], ["3", "task", []], ["4", "task", []],
-    ["5", "flake", ["tests"]], ["6", "bug", ["red-main"]], ["7", "task", []], ["8", "bug", []], ["9", "task", []], ["8.1", "bug", undefined],
+  expect(doc.items.map((i): unknown[] => [i.fm.kind, i.fm.areas])).toEqual([
+    ["task", ["ui"]], ["task", []], ["task", []], ["task", []],
+    ["flake", ["tests"]], ["bug", ["red-main"]], ["task", []], ["bug", []], ["task", []], ["bug", []],
   ]);
   expect(issues.lint(doc).filter((f) => f.fixable)).toEqual([]);
 });
 
 test("add and addPart store the filing time, and setStatus stores the closing time and a reopen removes it", () => {
-  const doc: issues.Doc = { items: [] } as any;
+  const doc = issues.blank("r");
   const a = issues.add(doc, "Do a thing", { now: new Date(2026, 10, 4, 14, 5) });
-  expect(a.fm).toMatchObject({ created_time: new Date(2026, 10, 4, 14, 5).toISOString() });
+  expect(a.fm).toMatchObject({ created: new Date(2026, 10, 4, 14, 5).toISOString() });
   const p = addPart(doc, a, { title: "[C] part", spec: "x", now: new Date(2026, 10, 4, 14, 5) });
-  expect(p.fm).toMatchObject({ created_time: new Date(2026, 10, 4, 14, 5).toISOString() });
-  issues.setStatus(a, "done", new Date(2026, 10, 4, 15, 30));
-  expect(a.fm).toMatchObject({ closed_time: new Date(2026, 10, 4, 15, 30).toISOString() });
+  expect(p.fm).toMatchObject({ created: new Date(2026, 10, 4, 14, 5).toISOString() });
+  issues.setStatus(a, "done", new Date(2026, 10, 4, 15, 30), "shipped");
+  expect(a.fm).toMatchObject({ closed_as: "done", closed_at: new Date(2026, 10, 4, 15, 30).toISOString(), closed_why: "shipped" });
   issues.setStatus(a, "open");
-  expect(a.fm.closed_time).toBeUndefined();
+  expect(Object.keys(a.fm).filter((k) => k.startsWith("closed"))).toEqual([]);
 });
 
 test("edit leaves labels unset and lint reports no retired labels finding", () => {
@@ -103,67 +103,94 @@ test("edit takes the title it already has, even a bad one, and still refuses ano
   expect(() => issues.edit(item, { title: "Check baz: bar" })).toThrow("': ' prefix");
 });
 
-test("add, note and setStatus write ISO UTC times and no date-only fields, and lint passes them", () => {
-  const doc = issues.blank("r");
+test("add, note and setStatus write one date set in ISO UTC, and lint passes it", () => {
+  const doc = issues.blank("r", "project.1");
   const now = new Date(Date.UTC(2026, 10, 4, 15, 30, 5));
   const item = issues.add(doc, "A", { now });
   const line = issues.note(item, "x", now);
   issues.setStatus(item, "done", now);
-  expect([item.fm.created_time, item.fm.updated_time, item.fm.closed_time]).toEqual(Array(3).fill("2026-11-04T15:30:05.000Z"));
+  expect([item.fm.created, item.fm.closed_at]).toEqual(Array(2).fill("2026-11-04T15:30:05.000Z"));
   expect(line).toBe("- 2026-11-04T15:30:05.000Z: x");
-  for (const k of ["created", "updated", "closed_at"]) expect(item.fm[k]).toBeUndefined();
+  for (const k of ["id", "was", "created_time", "updated_time", "closed_time", "updated"]) expect(item.fm[k]).toBeUndefined();
   expect(issues.lint(doc)).toEqual([]);
 });
 
-test("fix converts local times and note stamps to ISO UTC and drops the date-only fields", () => {
-  const doc = issues.blank("r");
+test("fix drops the id, was and updated fields and renames the old time fields", () => {
+  const doc = issues.blank("r", "project.1");
   const item = issues.add(doc, "A");
-  Object.assign(item.fm, { created: "2026-11-04", created_time: "2026-11-04 15:30", updated: "2026-11-04", closed_at: "2026-11-04" });
-  delete item.fm.updated_time;
-  item.notes = ["- 2026-11-04 16:00: x"];
-  expect(issues.lint(doc).length).toBeGreaterThan(0);
+  const at = "2026-11-04T15:30:00.000Z";
+  delete item.fm.created;
+  Object.assign(item.fm, { id: "r-2", was: "old-2", created_time: at, updated_time: at, closed_as: "done", closed_time: at });
+  expect(issues.lint(doc).filter((f) => !f.fixable)).toEqual([]);
   issues.fix(doc);
-  const at = (h: number, m: number) => new Date(2026, 10, 4, h, m).toISOString();
-  expect(item.fm.created_time).toBe(at(15, 30));
-  expect(item.fm.updated_time).toBe(at(0, 0));
-  expect(item.fm.closed_time).toBe(at(0, 0));
-  expect(item.notes).toEqual([`- ${at(16, 0)}: x`]);
-  for (const k of ["created", "updated", "closed_at"]) expect(item.fm[k]).toBeUndefined();
+  expect(item.fm).toMatchObject({ created: at, closed_at: at });
+  for (const k of ["id", "was", "created_time", "updated_time", "closed_time"]) expect(item.fm[k]).toBeUndefined();
   expect(issues.lint(doc)).toEqual([]);
 });
 
-test("lint reports an item without created_time or with a non-ISO time", () => {
-  const doc = issues.blank("r");
+test("lint reports an item without created or with a non-ISO time, and a project it lacks", () => {
+  const doc = issues.blank("r", "project.1");
   const item = issues.add(doc, "A");
-  delete item.fm.created_time;
-  expect(issues.lint(doc).map((f) => f.problem)).toContain("created_time is missing");
-  item.fm.created_time = "2026-11-04 15:30";
-  expect(issues.lint(doc).find((f) => f.problem.startsWith("created_time"))?.fixable).toBe(true);
-  item.fm.created_time = "soon";
-  expect(issues.lint(doc).find((f) => f.problem.startsWith("created_time"))).toMatchObject({ problem: 'created_time "soon" is not an ISO UTC time', fixable: false });
-  item.notes.push("- 2026-11-04 16:00: x");
-  expect(issues.lint(doc).map((f) => f.problem)).toContain("a note stamp is not an ISO UTC time");
+  delete item.fm.created;
+  expect(issues.lint(doc).map((f) => f.problem)).toContain("created is missing");
+  item.fm.created = "soon";
+  expect(issues.lint(doc).find((f) => f.problem.startsWith("created"))).toMatchObject({ problem: 'created "soon" is not an ISO UTC time', fixable: false });
+  item.fm.created = "2026-11-04T15:30:00.000Z";
+  delete item.fm.project;
+  expect(issues.lint(doc).find((f) => f.problem === "project is missing")?.fixable).toBe(true);
 });
 
-test("created, updated and closed read ISO UTC, convert old local times and fall back to the old date fields", () => {
+test("created and closed read the stored times, and updated is the latest of them and the last note", () => {
   const now = new Date("2026-11-04T15:30:00.000Z");
   const item = issues.add(issues.blank("r"), "Fix the lane", { now });
   expect([issues.created(item), issues.updated(item), issues.closed(item)]).toEqual([now.toISOString(), now.toISOString(), undefined]);
-  issues.setStatus(item, "done", now);
-  expect(issues.closed(item)).toBe(now.toISOString());
-  const old = issues.parseItem("---\nid: r-2\ntitle: Old\ncreated: 2026-11-01\nupdated_time: 2026-11-02 09:07\nclosed_as: done\nclosed_at: 2026-11-03\n---\n");
-  expect(issues.created(old)).toBe(new Date(2026, 10, 1).toISOString());
-  expect(issues.updated(old)).toBe(new Date(2026, 10, 2, 9, 7).toISOString());
-  expect(issues.closed(old)).toBe(new Date(2026, 10, 3).toISOString());
-  issues.setStatus(old, "open");
-  expect(issues.closed(old)).toBeUndefined();
-  expect(issues.created(issues.parseItem("---\nid: r-3\ntitle: None\n---\n"))).toBeUndefined();
+  issues.note(item, "later", new Date("2026-11-05T00:00:00.000Z"));
+  expect(issues.updated(item)).toBe("2026-11-05T00:00:00.000Z");
+  issues.setStatus(item, "done", new Date("2026-11-06T00:00:00.000Z"));
+  expect(issues.closed(item)).toBe("2026-11-06T00:00:00.000Z");
+  issues.setStatus(item, "open");
+  expect(issues.closed(item)).toBeUndefined();
+  expect(issues.created(issues.parseItem(3, "---\ntitle: None\n---\n"))).toBeUndefined();
 });
 
 test("kindOf reads task for none, and sinceOf reads since or undefined", () => {
-  const item = issues.parseItem("---\nid: r-1\ntitle: Bare\n---\n");
+  const item = issues.parseItem(1, "---\ntitle: Bare\n---\n");
   expect([issues.kindOf(item), issues.sinceOf(item)]).toEqual(["task", undefined]);
   item.fm.kind = "bug";
   item.fm.since = "abc1234";
   expect([issues.kindOf(item), issues.sinceOf(item)]).toEqual(["bug", "abc1234"]);
+});
+
+test("an issue renders with the headings and parses back to the same issue", () => {
+  const doc = issues.blank("r", "project.2");
+  const item = issues.add(doc, "Fix: the lane".replace(": ", " "), { request: "Make it wider.\n\n# Spec\nnot a heading", spec: "## Goal\nWide.\n\n## Edit surface\n- a.ts\n\n## Oracle\n- it is wide", source: "worker", after: ["issue.3"], from: "issue.1" });
+  issues.note(item, "a remark: with a colon", new Date("2026-11-04T15:30:05.000Z"));
+  const text = issues.renderItem(item);
+  expect(text.split("\n").filter((l) => l.startsWith("# "))).toEqual(["# Request", "# Spec", "# Notes"]);
+  expect(text.startsWith("---\nproject: project.2\ntitle: Fix the lane\nkind: task\npriority: medium\nsource: worker\ncreated: ")).toBe(true);
+  expect(text).not.toMatch(/^(id|was|updated)/m);
+  expect(issues.parseItem(item.id, text)).toEqual(item);
+  expect(issues.renderItem(issues.parseItem(item.id, text))).toBe(text);
+  expect(issues.parentRef(item)).toBe("1");
+});
+
+test("a child is an issue with from: its parent and no number of its own under the parent", () => {
+  const doc = issues.blank("r", "project.1");
+  const parent = issues.add(doc, "Lay out the page");
+  const child = addPart(doc, parent, { title: "[Page] Put the metrics left", spec: "x" });
+  expect(child.id).not.toBe(parent.id);
+  expect(issues.parentRef(child)).toBe(String(parent.id));
+  expect(issues.parentRef(parent)).toBeUndefined();
+  expect(issues.find(doc, `issue.${child.id}`)).toBe(child);
+});
+
+test("a number comes from the counter above the floor and the issues of the list, and a number is never reused", () => {
+  const doc = issues.blank("r", "project.1");
+  doc.floor = 5000;
+  const a = issues.add(doc, "A");
+  expect(a.id).toBeGreaterThan(5000);
+  doc.items.pop();
+  doc.floor = 0;
+  const b = issues.add(doc, "B");
+  expect(b.id).toBe(a.id + 1);
 });

@@ -2,13 +2,14 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { watch } from "node:fs";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { add } from "../issues/lib/todo.ts";
 import { fetchStore, readFetched, readList, skipFetches, writeList } from "../issues/lib/store.ts";
 import { routes } from "./api/issues.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
-import { putRun } from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 let base: string, log: string, stale: string, staleRemote: string;
 let restoreEnv: () => void;
@@ -40,14 +41,10 @@ beforeAll(() => {
   mkdirSync(join(base, "bin"));
   writeFileSync(join(base, "bin", "git"), `#!/bin/sh\n[ "$1" = fetch ] && echo fetch >> ${log}\nif [ "$1" = fetch ]; then s=0; if [ -e ${stale} ]; then rm -f ${stale}; ${real} fetch "$2" stale "$4" || s=$?; else ${real} "$@" || s=$?; fi; echo done >> ${log}; exit $s; fi\nexec ${real} "$@"\n`);
   chmodSync(join(base, "bin", "git"), 0o755);
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ a: { path: join(base, "a"), sandbox: true }, b: { path: join(base, "b") } }));
+  writeRepos({ a: { path: join(base, "a"), sandbox: true }, b: { path: join(base, "b") } }, items);
   mkdirSync(join(base, "jobs"));
-  restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
-  for (const [repo, name] of [["a", "a-1"], ["b", "b-1"]]) {
-    const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
-    mkdirSync(folder, { recursive: true });
-    putRun(basename(join(folder)), { n: 1, kind: "build", condition: "running", started: "2026-10-27T10:00:00.000Z", name, job: name, repo, on: `${repo}-1` } as any);
-  }
+  restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ITEMS: items, ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_FACTORY_DIR: join(base, "factory") });
+  for (const repo of ["a", "b"]) seed({ role: "build", state: "running", started: "2026-10-27T10:00:00.000Z", name: "issue.1", repo, target: "issue.1" });
 });
 // Each test starts with fetches skipped, as in the UI: the preload turns them on again after every test.
 beforeEach(() => skipFetches());

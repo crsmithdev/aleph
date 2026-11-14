@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
 import { newsLine, type Entry, type Run } from "./ledger.ts";
-import { CAUSES, setCodes } from "../../../lib/naming.ts";
+import { CAUSES } from "../../../lib/naming.ts";
 import { causeOf, failedCheckOf, policyOf, POLICY } from "./outcome.ts";
 
-const run = (o: Partial<Run>) => ({ kind: "build", job: "j", name: "n", repo: "fac", n: 1, condition: "failed", told: false, started: "", ...o }) as Run;
-const entry = (o: Partial<Run>): Entry => ({ id: "20200101-000000-n-1", folder: "f", run: run(o) });
+const run = (o: Partial<Run>) => ({ role: "build", job: "job.1", name: "n", repo: "fac", state: "failed", told: false, started: "", ...o }) as Run;
+const entry = (o: Partial<Run>, id = "job.1"): Entry => ({ id, folder: "f", run: run(o) });
 
 test("a stated cause wins over the sentence, so a drop does not change it", () => {
-  expect(causeOf(run({ cause: "timeout", condition: "dropped", reason: "no commit" }))).toBe("timeout");
-  expect(failedCheckOf(run({ cause: "check", checkName: "tests", condition: "dropped", reason: "not needed" }))).toBe("tests");
+  expect(causeOf(run({ cause: "timeout", state: "dropped", reason: "no commit" }))).toBe("timeout");
+  expect(failedCheckOf(run({ cause: "check", checkName: "tests", state: "dropped", reason: "not needed" }))).toBe("tests");
 });
 
 test("causeOf gives the stored cause, and none for a run with only a sentence: the word migration stated it", () => {
@@ -29,37 +29,33 @@ test("POLICY has one row per cause; only credit counts to no cap, has no rescue,
 });
 
 test("an old dropped run keeps its no-commit mark, and free prose states no cause", () => {
-  expect(causeOf(run({ condition: "dropped", noCommit: true, reason: "a duplicate" }))).toBe("no-commit");
-  expect(causeOf(run({ condition: "dropped", reason: "the work has no commit and a time box" }))).toBeUndefined();
+  expect(causeOf(run({ state: "dropped", noCommit: true, reason: "a duplicate" }))).toBe("no-commit");
+  expect(causeOf(run({ state: "dropped", reason: "the work has no commit and a time box" }))).toBeUndefined();
 });
 
 test("the news names the stated check, and no other cause", () => {
-  setCodes({ aleph: "a" });
-  expect(newsLine(entry({ repo: "aleph", on: "aleph-1421", n: 6, condition: "failed", cause: "check", checkName: "tests", reason: "tests failed" }))).toBe("a1421#6 failed check → tests");
-  expect(newsLine(entry({ repo: "aleph", on: "aleph-1421", n: 6, condition: "failed", cause: "other", reason: "commit-tree failed" }))).toBe("a1421#6 failed other");
-  setCodes({});
+  expect(newsLine(entry({ repo: "aleph", target: "issue.1421", state: "failed", cause: "check", checkName: "tests", reason: "tests failed" }, "job.6"))).toBe("job.6 failed check → tests");
+  expect(newsLine(entry({ repo: "aleph", target: "issue.1421", state: "failed", cause: "other", reason: "commit-tree failed" }, "job.6"))).toBe("job.6 failed other");
 });
 
 test("the news is the job ID and the state word", () => {
-  setCodes({ aleph: "a" });
-  expect(newsLine(entry({ repo: "aleph", on: "aleph-1421", n: 6, condition: "landed" }))).toBe("a1421#6 landed");
-  setCodes({});
+  expect(newsLine(entry({ repo: "aleph", target: "issue.1421", state: "landed" }, "job.6"))).toBe("job.6 landed");
 });
 
 test("a waiting run takes its sub from its Ask's needs, in the sub set's words", () => {
-  const wait = (reason: string): Partial<Run> => ({ condition: "waiting", ask: { kind: "approval", reason, question: "q", options: [], why: [] } });
-  expect(newsLine(entry(wait("held-path")))).toBe("n#1 waiting protected");
-  expect(newsLine(entry(wait("question")))).toBe("n#1 waiting question");
+  const wait = (reason: string): Partial<Run> => ({ state: "waiting", ask: { kind: "approval", reason, question: "q", options: [], why: [] } });
+  expect(newsLine(entry(wait("held-path")))).toBe("job.1 waiting protected");
+  expect(newsLine(entry(wait("question")))).toBe("job.1 waiting question");
 });
 
 test("a landed reason and the repo note follow on a second line, indented two spaces", () => {
-  expect(newsLine(entry({ condition: "landed", reason: "no net change" }))).toBe("n#1 landed\n  no net change");
-  expect(newsLine(entry({ condition: "landed", reason: "no net change" }), "the tests are flaky")).toBe("n#1 landed\n  no net change the tests are flaky");
+  expect(newsLine(entry({ state: "landed", reason: "no net change" }))).toBe("job.1 landed\n  no net change");
+  expect(newsLine(entry({ state: "landed", reason: "no net change" }), "the tests are flaky")).toBe("job.1 landed\n  no net change the tests are flaky");
 });
 
 test("the news drops the check-open and next-step joins, and holds no semicolon", () => {
-  const landed = newsLine(entry({ condition: "landed", check: "open", next: "worker", reason: "no net change" }));
-  expect(landed).toBe("n#1 landed\n  no net change");
+  const landed = newsLine(entry({ state: "landed", check: "open", next: "worker", reason: "no net change" }));
+  expect(landed).toBe("job.1 landed\n  no net change");
   expect(landed).not.toContain(";");
-  expect(newsLine(entry({ condition: "passed", next: "land" }))).toBe("n#1 passed");
+  expect(newsLine(entry({ state: "passed", next: "land" }))).toBe("job.1 passed");
 });

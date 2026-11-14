@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { withEnv, withServer } from "./test-server.ts";
 import { withAlias, withCore, withLink, withoutLink } from "./api/memory.ts";
 import { updater } from "./updater.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 // The Memory page's search and writes against a real vault: `aleph memory init`, then notes through `aleph memory write`.
 const CLI = join(import.meta.dir, "..", "jobs", "cli.ts");
@@ -32,8 +33,8 @@ beforeAll(async () => {
   mkdirSync(join(hand, "projects"), { recursive: true }); mkdirSync(eps, { recursive: true });
   writeFileSync(join(hand, "current.md"), "## Intent\n\nMove the worktree serve to its own port.\n");
   writeFileSync(join(eps, "aleph-9 Port.md"), `---\nkind: episode\nscope: aleph\nupdated: ${day}\n---\n## Goal\nServe a worktree on a port.\n`);
-  writeFileSync(join(base, "repos.json"), "{}");
-  restore = withEnv({ ALEPH_VAULT: vault, ALEPH_JUDGE: "haiku", ALEPH_HANDOFFS_DIR: hand, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_REPOS: join(base, "repos.json"),
+  writeRepos(JSON.parse("{}"));
+  restore = withEnv({ ALEPH_VAULT: vault, ALEPH_JUDGE: "haiku", ALEPH_HANDOFFS_DIR: hand, ALEPH_FACTORY_DIR: join(base, "factory"), 
     ALEPH_SKILLS_DIR: join(base, "skills"), ALEPH_CLAUDE_SETTINGS: join(base, "settings.json"),
     LANGFUSE_BASE_URL: "http://127.0.0.1:9", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "",
     GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });

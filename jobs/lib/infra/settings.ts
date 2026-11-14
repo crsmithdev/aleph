@@ -9,18 +9,17 @@
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { alephPath, expand, home, vaultDir } from "../../../lib/paths.ts";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
-import { layout } from "../../../lib/layout.ts";
+import { getJson, putJson } from "../../../lib/db.ts";
 
 /** A numeric setting: an empty or missing variable is unset and gives the default. */
 const num = (name: string, dflt: number): number => Number(process.env[name] || dflt);
 
-/** `caps.json` in the factory directory: the caps and settings of CAP_KEYS. A missing file is empty; other keys are left alone. */
-const capsFile = (): Record<string, unknown> => readJsonOr(join(layout().factory, "caps.json"), {});
+/** The `caps` setting: the caps and settings of CAP_KEYS. A missing row is empty; other keys are left alone. */
+const capsRow = (): Record<string, unknown> => getJson("settings", "caps", {});
 
 export const CAP_KEYS = ["live", "run", "intakeTries", "jobSeconds", "fixRounds", "landBatch", "loadLimit"] as const;
 export type CapKey = (typeof CAP_KEYS)[number];
-/** The environment variable that overrides each key of caps.json. */
+/** The environment variable that overrides each key of the `caps` setting. */
 export const CAP_ENV: Record<CapKey, string> = {
   live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP", intakeTries: "ALEPH_INTAKE_TRIES", jobSeconds: "ALEPH_JOB_TIMEOUT",
   fixRounds: "ALEPH_FIX_ROUNDS", landBatch: "ALEPH_LAND_BATCH", loadLimit: "ALEPH_LOAD_LIMIT",
@@ -28,25 +27,25 @@ export const CAP_ENV: Record<CapKey, string> = {
 /** The least value of each key: a job may have no fix round; every other key needs 1. */
 const capMin = (k: CapKey): number => (k === "fixRounds" ? 0 : 1);
 
-/** Merges the given caps into caps.json: whole file to a temp file, then a rename. Throws on a value that is not an integer of at least its key's least value. */
+/** Merges the given caps into the `caps` setting. Throws on a value that is not an integer of at least its key's least value. */
 export function writeCaps(patch: Partial<Record<CapKey, unknown>>): Record<string, unknown> {
   for (const k of CAP_KEYS) {
     const v = patch[k];
     if (v !== undefined && !(typeof v === "number" && Number.isInteger(v) && v >= capMin(k))) throw new Error(`${k} must be an integer of ${capMin(k)} or more`);
   }
-  const next: Record<string, unknown> = { ...capsFile() };
+  const next: Record<string, unknown> = { ...capsRow() };
   for (const k of CAP_KEYS) if (patch[k] !== undefined) next[k] = patch[k];
-  writeJson(join(layout().factory, "caps.json"), next);
+  putJson("settings", "caps", next);
   return next;
 }
 
-/** Whether the environment variable overrides caps.json: the same rule as cap(). */
+/** Whether the environment variable overrides the `caps` setting: the same rule as cap(). */
 export const capEnvSet = (envName: string): boolean => (process.env[envName] ?? "") !== "";
 
-/** The environment variable first, then caps.json, then the default. */
+/** The environment variable first, then the `caps` setting, then the default. */
 function cap(envName: string, key: string, dflt: number): number {
   if (capEnvSet(envName)) return num(envName, 0);
-  const f = capsFile()[key];
+  const f = capsRow()[key];
   return typeof f === "number" && Number.isFinite(f) ? f : dflt;
 }
 
@@ -111,6 +110,8 @@ export const needsYouLog = (): string => process.env.ALEPH_NEEDS_YOU_LOG ?? join
 export const jobId = (): string | undefined => process.env.ALEPH_JOB_ID;
 /** The command for an agent role (`worker`, `reviewer`, ...), `claude` by default. */
 export const roleCmd = (role: string): string => process.env[`ALEPH_${role}_CMD`] ?? "claude";
+/** How long the chat panel's process waits for the next turn before it ends. The prompt cache lives 5 minutes, so a turn after more costs a cache write whether or not the process lives; 10 minutes covers a pause to read and think. */
+export const chatIdleMs = (): number => Number(process.env.ALEPH_CHAT_IDLE_MS ?? 600_000);
 /** The time limit in seconds for an agent role, given the call's own default. */
 export const roleSeconds = (role: string, dflt: number): number => num(`ALEPH_${role}_TIMEOUT`, dflt);
 export const windowsTimeCmd = (): string | undefined => process.env.ALEPH_WINDOWS_TIME_CMD;
@@ -120,8 +121,6 @@ export const homeUrl = () => process.env.ALEPH_HOME_URL ?? "http://aleph.home/";
 export const unitDir = () => process.env.ALEPH_UNIT_DIR ?? join(home(), ".config", "systemd", "user");
 export const systemctlBin = () => process.env.ALEPH_SYSTEMCTL ?? "systemctl";
 export const jobForeground = (): boolean => process.env.ALEPH_JOB_FOREGROUND === "1";
-/** The repos file. */
-export const reposFile = () => alephPath("ALEPH_REPOS", "repos.json");
 /** The port aleph-ui listens on, and the one the smoke check calls. */
 export const uiPort = (): string => process.env.ALEPH_UI_PORT ?? "3020";
 export const startCmd = (): string | undefined => process.env.ALEPH_START_CMD;
@@ -132,9 +131,6 @@ export const skillsStore = () => alephPath("ALEPH_SKILLS_STORE", "skills-store.j
 export const uiPassword = () => process.env.ALEPH_UI_PASSWORD ?? "";
 export const cliOverride = (): string | undefined => process.env.ALEPH_CLI;
 export const stateSlowMs = () => num("ALEPH_STATE_SLOW_MS", 0);
-/** The usage file. */
-export const usageFile = () => alephPath("ALEPH_USAGE_FILE", "usage.jsonl");
-export const usageFileSet = (): boolean => !!process.env.ALEPH_USAGE_FILE;
 /** The credentials file. */
 export const credentialsFile = () => expand(process.env.ALEPH_CLAUDE_CREDENTIALS ?? join(home(), ".claude", ".credentials.json"));
 export const usageUrl = () => process.env.ALEPH_USAGE_URL ?? "https://api.anthropic.com/api/oauth/usage";

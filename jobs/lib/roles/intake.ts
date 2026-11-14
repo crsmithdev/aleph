@@ -8,11 +8,11 @@
  */
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
-import { FULL } from "../../../lib/naming.ts";
+import { parseKey } from "../../../lib/naming.ts";
 import { pastWork } from "../transitions/continuation.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { areasOf, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
-import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
+import { areasOf, labels, itemsDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, hasIssue, reader, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
+import { always, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { causeOf } from "../records/outcome.ts";
@@ -48,7 +48,9 @@ export type Counts = Partial<Record<Applied, number>>;
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 const str = { type: "string", minLength: 1 };
-const refs = { type: "array", items: { type: "string", pattern: FULL.source } };
+/** An issue key, as a verdict names one in `after`. */
+const REF = /^issue\.\d+$/;
+const refs = { type: "array", items: { type: "string", pattern: REF.source } };
 const SPEC_SCHEMA = {
   type: "object", additionalProperties: false, required: ["goal", "edit_surface", "oracle"],
   properties: {
@@ -96,7 +98,7 @@ export const INTAKE_SCHEMA = {
           question: str,
           options: {
             type: "array", minItems: 2, maxItems: 4,
-            items: { type: "object", additionalProperties: false, required: ["label", "line"], properties: { label: str, line: str, after: { type: "string", pattern: FULL.source } } },
+            items: { type: "object", additionalProperties: false, required: ["label", "line"], properties: { label: str, line: str, after: { type: "string", pattern: REF.source } } },
           },
           recommended: str,
           why: { type: "array", minItems: 2, maxItems: 4, items: str },
@@ -122,7 +124,7 @@ export function parseRoute(reply: any): Route | string {
   if (!reason) return `${raw.route} without a reason`;
   switch (raw.route) {
     case "build": {
-      const after = (Array.isArray(raw.after) ? raw.after : []).map((x: unknown) => String(x).trim()).filter((x: string) => FULL.test(x));
+      const after = (Array.isArray(raw.after) ? raw.after : []).map((x: unknown) => String(x).trim()).filter((x: string) => REF.test(x));
       const parts = Array.isArray(raw.parts) && raw.parts.length
         ? raw.parts.map((p: any) => ({ title: (text(p?.title) ?? "").replace(/\s+/g, " "), spec: specOf(p?.spec) ?? { goal: "", surface: [], oracle: [] }, after: Array.isArray(p?.after) ? p.after : [] }))
         : undefined;
@@ -219,8 +221,8 @@ export function problems(repo: Repo, item: issues.Issue, v: Extract<Route, { rou
     out.push("a build gives a spec or parts");
   }
   for (const r of v.after) {
-    if (r === `${repo.key}-${issues.refOf(item)}`) { out.push(`after names this issue, ${r}`); continue; }
-    if (r.startsWith(`${repo.key}-`) && !(doc && issues.find(doc, r.slice(repo.key.length + 1)))) out.push(`after names ${r}, which is not an issue of ${repo.key}`);
+    if (r === `issue.${item.id}`) { out.push(`after names this issue, ${r}`); continue; }
+    if (!hasIssue(parseKey(r)!.n)) out.push(`after names ${r}, which is not an issue`);
   }
   return out;
 }
@@ -228,7 +230,7 @@ export function problems(repo: Repo, item: issues.Issue, v: Extract<Route, { rou
 /** The open issues of the repo, one line each, but not the issue taken in: the others a duplicate can name. */
 function openIssues(repo: Repo, item: issues.Issue): string {
   const others = (reader().list(repo.key)?.items ?? []).filter((o) => o.id !== item.id && issues.status(o) === "open");
-  return others.map((o) => `${repo.key}-${issues.refOf(o)}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
+  return others.map((o) => `issue.${o.id}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
 }
 
 /** The ref of the repo's main, `origin/<main>`, when the repo has it. */
@@ -260,8 +262,8 @@ function commitOnMain(repo: Repo, commit: string): string | null {
 const PART_RULES = `Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each part's Goal says only what that part does: the checks of each part are written from its own Goal. A part's "after" lists the earlier parts (the first is 1) that must land first, only when it changes a file that part changes or uses what that part adds: parts with an empty "after" run side by side, so do not chain parts in a line by habit.`;
 
 /** The media Chris attached, for the planner: each file to read before it decides. */
-function mediaSection(key: string, item: issues.Issue): string {
-  const files = mediaFiles(key, item);
+function mediaSection(item: issues.Issue): string {
+  const files = mediaFiles(item);
   return files.length ? `\n# Media\n\nThe issue has these files attached: screenshots, mockups or documents. Read each one with Read before you decide. They show what the issue means, and the steps you give must cover what they show.\n\n${files.map((f) => `- ${f}`).join("\n")}\n` : "";
 }
 
@@ -269,17 +271,17 @@ export function prompt(repo: Repo, item: issues.Issue, doc = reader().list(repo.
   const parts = doc ? partsOf(doc, item) : [];
   const split = planSet(item)
     ? parts.length
-      ? `\n# Plan the rest\n\nIts parts so far:\n${parts.map((p) => `- ${repo.key}-${issues.refOf(p)} (${issues.status(p)}): ${p.title}`).join("\n")}\n\nChris asked to plan the rest: return "build" with 1 to 6 more "parts" for what the done parts do not cover.\n`
+      ? `\n# Plan the rest\n\nIts parts so far:\n${parts.map((p) => `- issue.${p.id} (${issues.status(p)}): ${p.title}`).join("\n")}\n\nChris asked to plan the rest: return "build" with 1 to 6 more "parts" for what the done parts do not cover.\n`
       : `\n# Split it\n\nA run of this issue reached its time box: return "build" with 2 to 6 "parts".\n`
     : "";
   return `You take in one open issue of the repo ${repo.key}, before any work starts on it. Your working directory is a clone of main: read the code to decide, with your read-only tools. Change nothing. Code checks your reply.
 
-# Issue ${repo.key}-${issues.refOf(item)}: ${item.title}
+# issue.${item.id}: ${item.title}
 
 Source: ${sourceOf(item)}. Kind: ${issues.kindOf(item)}.
 
 ${item.request.trim() || "(no text)"}
-${mediaSection(repo.key, item)}${item.spec.trim() ? `\n# Its spec now\n\n${item.spec.trim()}\n\nKeep what is right in it, and fix what the rules below find wrong.\n` : ""}${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${split}
+${mediaSection(item)}${item.spec.trim() ? `\n# Its spec now\n\n${item.spec.trim()}\n\nKeep what is right in it, and fix what the rules below find wrong.\n` : ""}${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${split}
 # Open issues of ${repo.key}
 
 ${openIssues(repo, item)}
@@ -325,19 +327,18 @@ ${PART_RULES}
  * takes the issue's kind when that is a current one, else `task`, its priority, and its source when that is not chris,
  * else agent. Each part's `after` is the earlier parts it names and the issue's own `after`. The parts' refs.
  */
-export function addParts(repo: Repo, file: File, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
+export function addParts(file: File, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
   const refs: string[] = [];
-  const from = `${repo.key}-${issues.refOf(issue)}`;
+  const from = `issue.${issue.id}`;
   const source = sourceOf(issue) === "chris" ? "agent" : sourceOf(issue);
   // A store from before a kind was dropped (such as `goal`) still splits: a kind the store does not know gives the parts `task`.
   const kind = issues.kindOf(issue);
   for (const c of parts) {
     const part = file({ title: c.title, kind: issues.kindProblem(kind) ? "task" : kind, priority: priorityOf(issue), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
-    refs.push(`${repo.key}-${issues.refOf(part)}`);
+    refs.push(`issue.${part.id}`);
   }
   delete issue.fm.plan;
   issue.spec = "";
-  issues.note(issue, `intake: split into ${refs.map((r, i) => `${r} (${parts[i].title})`).join(", ")}; this issue closes when they are done`);
   return refs;
 }
 
@@ -361,19 +362,16 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
     if (v.route === "build") {
       // An open item with an Ask (a proposal too) waits for Chris: an after-link to it would stall this issue on his answer.
       const waits = v.after.filter((r) => {
-        const o = r.startsWith(`${repo.key}-`) ? issues.find(doc, r.slice(repo.key.length + 1)) : undefined;
+        const o = issues.find(doc, r);
         return o !== undefined && issues.status(o) === "open" && awaitsChris(refIn(repo.key, o));
       });
       const after = v.after.filter((r) => !waits.includes(r));
       if (after.length) item.fm.after = after;
       item.fm.intake = "build";
-      issues.note(item, `intake: build${after.length ? `, after ${after.join(", ")}` : ""}: ${v.reason}`);
-      if (waits.length) issues.note(item, `intake: dropped after ${waits.join(", ")}: it waits for Chris`);
-      if (v.parts) addParts(repo, file, item, v.parts, after);
+      if (v.parts) addParts(file, item, v.parts, after);
       else item.spec = specText(v.spec!);
     } else if (v.route === "done") {
       issues.setStatus(item, "done", undefined, v.reason);
-      issues.note(item, `intake: already on main in ${v.commit}: ${v.reason}`);
     } else if (v.route === "close") {
       issues.setStatus(item, "done", undefined, v.reason);
     } else if (v.ask.recommended && always("question")?.action === "recommended") {
@@ -382,21 +380,18 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
       issues.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
       standing = true;
     } else {
-      issues.note(item, `intake: for Chris: ${askNote(v.ask)}`);
     }
   }, effects);
-  if (ok && v.route === "ask" && !standing) setAsk(ref, v.ask);
-  if (ok && standing) logAlways("question", ref, "answered", { note: "the recommended answer" });
+  if (ok && v.route === "ask" && !standing) setAsk(`issue.${id}`, v.ask);
+  if (ok && standing) logAlways("question", ref, "answered", { detail: "the recommended answer" });
   return ok ? v.route : null;
 }
 
 /** Set the `intake-failed` Ask on the item with `why`; the line to report, or null when the item changed. */
 function askFailed(repo: Repo, id: number, why: string): string | null {
   const ref = `${repo.key}-${id}`;
-  const written = sort(repo, id, `intake ${ref}: failed`, (item) => {
-    issues.note(item, `intake: failed: ${why}`);
-  });
-  if (written) setAsk(ref, plainAsk("intake-failed", `Intake failed: ${why}`));
+  const written = sort(repo, id, `intake ${ref}: failed`, () => {});
+  if (written) setAsk(`issue.${id}`, plainAsk("intake-failed", `Intake failed: ${why}`));
   return written ? `${ref}: intake failed; asked Chris` : null;
 }
 
@@ -409,7 +404,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   // a time would not do, because the wall clock can step back (WSL2 steps it back every half minute).
   const mark = join(factoryDir(), "standing-retry", `${repo.key}-${id}`);
   const before: string[] = readJsonOr(mark, []);
-  const runs = allRuns().filter((e) => e.run.kind === "intake" && e.run.repo === repo.key && onOf(e.run) === id
+  const runs = allRuns().filter((e) => e.run.role === "intake" && e.run.repo === repo.key && onOf(e.run) === id
     && !before.includes(e.id)
     && causeOf(e.run) === "unanswered");
   const n = runs.length;
@@ -423,8 +418,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   }
   if (grant === "close") {
     const closed = sort(repo, id, `intake ${ref}: no verdict`, (item) => {
-      issues.setStatus(item, "done");
-      issues.note(item, `intake: no verdict in ${n} runs; standing: closed`);
+      issues.setStatus(item, "done", undefined, `no verdict in ${n} runs; standing: closed`);
     });
     if (closed) logAlways("intake-failed", ref, "done");
     return closed ? `${ref}: no verdict in ${n} intake runs; standing: closed` : null;
@@ -442,8 +436,7 @@ function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line
     const noted = noteFlake(repo, `${ref}: ${item.title}${item.request.trim() ? `: ${item.request.trim().replace(/\s+/g, " ")}` : ""}`);
     if (typeof noted === "string") return { applied: null, line: `${ref}: flake not noted: ${noted}` };
     const ok = sort(repo, item.id, `intake ${ref}: flake`, (i) => {
-      issues.setStatus(i, "done");
-      issues.note(i, `intake: a flake, noted on ${repo.key}-${noted.id}`);
+      issues.setStatus(i, "done", undefined, `a flake, noted on issue.${noted.id}`);
     });
     return { applied: ok ? "close" : null, line: `${ref}: a flake` };
   }
@@ -452,7 +445,6 @@ function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line
   if (!sha) return null;
   const ok = sort(repo, item.id, `intake ${ref}: done`, (i) => {
     issues.setStatus(i, "done", undefined, `commit ${sha} on main names it`);
-    issues.note(i, `intake: already on main in ${sha}: its Issue trailer names this issue`);
   });
   return { applied: ok ? "done" : null, line: `${ref}: already on main in ${sha}` };
 }
@@ -475,7 +467,7 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
       return;
     }
     // `shown`: the tick's own line reports an intake, so the report has no line for the run.
-    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(aleph memory recall:*)", ...(mediaOf(item).length ? ["--add-dir", mediaDir()] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
+    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(aleph memory recall:*)", ...(mediaOf(item).length ? ["--add-dir", join(itemsDir(), "issues", String(item.id))] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, target: `issue.${id}` });
     const noAnswer = (reason: string) => run.end(reason, { cause: "unanswered" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.

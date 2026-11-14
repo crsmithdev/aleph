@@ -72,7 +72,7 @@ The dispatch also routes when the live cap holds a goal: if a tier on the local 
 | `step-3.5-flash` | OpenRouter | `stepfun/step-3.5-flash` |
 | `mimo-v2.6-flash` | OpenRouter | `xiaomi/mimo-v2.6-flash` |
 
-`~/.aleph/factory/models.json` maps each tier to `{enabled, model}`. Each tier offers its Claude model first, then every model Claude does not serve:
+The `models` setting maps each tier to `{enabled, model}`. Each tier offers its Claude model first, then every model Claude does not serve:
 
 | Tier | Claude model |
 |---|---|
@@ -95,7 +95,7 @@ A run on a worker tier set to another model records that model as `model` and it
 
 ## Judge
 
-`judgeChoice()` reads `ALEPH_JUDGE` first. If it is not set, `judgeChoice()` reads the file `~/.aleph/judge`. If neither is set, the default is `ALEPH_JUDGE`, else `jev`. `aleph judge [jev|haiku]` sets it.
+`judgeChoice()` reads `ALEPH_JUDGE` first. If it is not set, `judgeChoice()` reads the `judge` setting. If neither is set, the default is `ALEPH_JUDGE`, else `jev`. `aleph judge [jev|haiku]` sets it.
 
 - **Jev** is `typesafe/jev-1.13` through OpenRouter's decisions endpoint (`lib/jev.ts`), with `OPENROUTER_API_KEY`. It answers typed questions only: `choice` or `noul` (a probability). It never denies a turn.
 - **Haiku** is `claude -p --model haiku --setting-sources "" --max-turns 1 --tools ""` with a rubric as the system prompt, up to 2 tries.

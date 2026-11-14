@@ -17,26 +17,23 @@ import { recheck } from "../roles/recheck.ts";
 import { dedupe } from "../roles/dedupe.ts";
 import { alias } from "../roles/alias.ts";
 import { addDays } from "../learning/monitor-table.ts";
-import { readJsonOr } from "../../../lib/json.ts";
+import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { holdsWork } from "../infra/process.ts";
 import { reader } from "../../../issues/lib/store.ts";
 import { ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
-import { editTick } from "../gates/factory-status.ts";
 import { doneChecker } from "./filing.ts";
-import { baselines, factoryDir, sandboxRepos, gates, probeHold, readStalls, writeStalls } from "../gates/factory-status.ts";
+import { baselines, sandboxRepos, gates, probeHold, readStalls, setTick, tickRows, writeStalls } from "../gates/factory-status.ts";
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { retain } from "../infra/retention.ts";
-import { archiveOld } from "../records/record.ts";
 import { allJobs, loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { housekeeperDetached, intakeDetached, suiteDetached } from "./launch.ts";
 import { housekeepDue } from "../roles/housekeeper.ts";
 import { monitorStep } from "../roles/monitor.ts";
-import { chatLock, endLost } from "../roles/agent-run.ts";
 import { timeoutStep, type Waiting } from "../asks/timeout.ts";
 import { drop, land, refusal } from "./transitions.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
@@ -49,16 +46,16 @@ const EVERY_MS = { ci: 5 * 60_000, firefight: 5 * 60_000, episodes: 30 * 60_000 
 type Periodic = keyof typeof EVERY_MS;
 
 /**
- * The tick's own record in tick.json: when each periodic step last ran, the missed keys the sweep has acted on
- * (each is acted on once while it stays), and the main commit of each red repo that the sweep started a suite for.
+ * The tick's own record: when each periodic step last ran (its `tick` row), the missed keys the sweep has acted on
+ * (each is acted on once while it stays), and the main commit of each red repo that the sweep started a suite for
+ * (both in `state`).
  */
 export interface TickState { last: Partial<Record<Periodic, string>>; missed: string[]; suite: Record<string, string> }
 
-const stateFile = () => join(factoryDir(), "tick.json");
-
 export function readTick(): TickState {
-  const s = readJsonOr<Partial<TickState>>(stateFile(), {});
-  return { last: s.last ?? {}, missed: s.missed ?? [], suite: s.suite ?? {} };
+  const rows = tickRows(), last: TickState["last"] = {};
+  for (const k of Object.keys(EVERY_MS) as Periodic[]) if (rows[k]?.last) last[k] = rows[k].last!;
+  return { last, missed: getJson("state", "tick.missed", []), suite: getJson("state", "tick.suite", {}) };
 }
 
 /** Whether `step` is due at `now`: it never ran, or it ran EVERY_MS[step] or more ago. */
@@ -153,7 +150,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   const over = keys.filter((k) => k in seen && !(k.startsWith("ingest:") && holdsWork(runs, "intake", k.slice("ingest:".length))));
   const missed = over.filter((k) => !s.missed.includes(k));
   s.missed = over;
-  for (const k of missed) logEvent({ by: "rule", subject: k, action: "missed" });
+  for (const k of missed) logEvent({ subject: "rule", action: "missed", object: k });
   if (missed.length) await p.dispatch();
   const reg = loadRegistry();
   for (const b of Object.values(baselines())) {
@@ -162,7 +159,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
     const head = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
     if (!head || head === b.commit || s.suite[b.repo] === head) continue;
     s.suite[b.repo] = head;
-    logEvent({ by: "rule", subject: b.repo, action: "started", sub: "check", note: `main moved to ${head.slice(0, 7)} while red at ${b.commit.slice(0, 7)}; the suite runs now` });
+    logEvent({ subject: "rule", action: "started", object: b.repo, detail: `main moved to ${head.slice(0, 7)} while red at ${b.commit.slice(0, 7)}; the suite runs now` });
     p.suite();
   }
   return missed;
@@ -195,7 +192,7 @@ const tickPorts: TickPorts = { ...sweepPorts, intake: intakeDetached };
 
 /**
  * `aleph tick`: each step that is due at `now`. Returns what it did, for the tick's JSON. One tick holds the `tick`
- * lock from before it reads tick.json until after its write, so two ticks cannot run the same steps twice: a tick
+ * lock from before it reads the tick state until after its write, so two ticks cannot run the same steps twice: a tick
  * that finds the lock busy runs no step, writes nothing and says so.
  */
 export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promise<Record<string, unknown>> {
@@ -205,9 +202,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     const s = readTick();
     const at = new Date(now).toISOString();
     const out: Record<string, unknown> = {};
-    // Paused or not: a chat turn whose server died holds no lock.
-    await endLost("chat", (run) => chatLock(run.job));
-    // Each step's time and result, in `ran` of tick.json; `say` gives the result, or null for a step that did not run.
+    // Each step's time and result, in its `tick` row; `say` gives the result, or null for a step that did not run.
     const ran: Record<string, { at: string; result: string }> = {};
     const step = async <T>(key: string, run: () => T | Promise<T>, say: (v: T) => string | null = () => "ok"): Promise<T | undefined> => {
       try {
@@ -216,7 +211,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
         return v;
       } catch (e: any) {
         const note = String(e?.message ?? e);
-        logEvent({ by: "rule", subject: key, action: "failed", sub: "error", note });
+        logEvent({ subject: "rule", action: "failed", object: key, detail: note });
         ran[key] = { at, result: `failed: ${note}` };
       }
     };
@@ -239,9 +234,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
       s.last.ci = at;
       await step("ci", () => ciStep(sandboxRepos()), (r) => `${r.length} red`);
     }
-    await step("smoke", () => smokeStep(undefined, undefined, now), (reason) => (reason ? `failed: ${reason}` : "ok"));
-    const old = (await step("archive", () => archiveOld(now), (o) => `${o.length} archived`)) ?? [];
-    if (old.length) out.archived = old;
+    await step("smoke", () => smokeStep(undefined, now), (reason) => (reason ? `failed: ${reason}` : "ok"));
     const gone = await step("retention", () => retain(now), (n) => `${n} removed`);
     if (gone) out.retained = gone;
     if (due(s, "firefight", now)) {
@@ -259,7 +252,12 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     await step("housekeep", () => housekeepDue(now) && (housekeeperDetached(), true), (on) => (on ? "started" : null));
     const mon = await monitorStep(new Date(now));
     if (mon) out.monitor = mon.day;
-    await editTick((t) => ({ ...t, ...s, ran: { ...t.ran, ...ran } }));
+    tx(() => {
+      for (const [k, v] of Object.entries(s.last)) setTick(k, { last: v });
+      for (const [k, v] of Object.entries(ran)) setTick(k, { last: v.at, result: v.result });
+      putJson("state", "tick.missed", s.missed);
+      putJson("state", "tick.suite", s.suite);
+    });
     return out;
   } finally {
     release();

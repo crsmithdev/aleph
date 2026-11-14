@@ -4,30 +4,25 @@
  * text, at $0.042 per million input tokens (OpenRouter, 27 Oct 2026). It
  * cannot be called through chat/completions.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { conn, getJson, putJson } from "./db.ts";
 import { openRouterKey } from "./env.ts";
-import { alephPath } from "./paths.ts";
+import { logSetting } from "./layout.ts";
 
 const JEV_MODEL = "typesafe/jev-1.13";
-/** One line per call, `{at, cost}`: OpenRouter bills Jev on aleph's key, and its calls are in no transcript, so the OpenRouter rate (models.ts) subtracts them. */
-export const jevFile = () => alephPath("ALEPH_JEV_FILE", "jev.jsonl");
-
 export type JudgeChoice = "jev" | "haiku";
-const choiceFile = () => alephPath("ALEPH_JUDGE_FILE", "judge");
 
 /**
  * Whether Jev screens before Haiku, everywhere aleph uses it: ALEPH_JUDGE,
- * else `aleph judge`'s file, else jev.
+ * else the `judge` setting that `aleph judge` writes, else jev.
  */
 export function judgeChoice(): JudgeChoice {
-  const v = process.env.ALEPH_JUDGE ?? (existsSync(choiceFile()) ? readFileSync(choiceFile(), "utf8").trim() : "");
+  const v = process.env.ALEPH_JUDGE ?? getJson("settings", "judge", "");
   return v === "haiku" ? "haiku" : "jev";
 }
 
 export function setJudgeChoice(choice: JudgeChoice) {
-  mkdirSync(dirname(choiceFile()), { recursive: true });
-  writeFileSync(choiceFile(), `${choice}\n`);
+  putJson("settings", "judge", choice);
+  logSetting(`judge is ${choice}`);
 }
 const URL = () => process.env.ALEPH_JEV_URL ?? "https://openrouter.ai/api/alpha/decisions";
 
@@ -56,9 +51,9 @@ export async function decide(state: unknown, questions: Record<string, Question>
     if (a?.type !== questions[id].type) throw new Error(`jev: no ${questions[id].type} answer for ${id}`);
   }
   const cost = body.usage?.cost ?? 0;
-  // Under `bun test` the real ~/.aleph/jev.jsonl is never written, as with usage.jsonl.
-  if (cost > 0 && (process.env.NODE_ENV !== "test" || process.env.ALEPH_JEV_FILE)) {
-    try { mkdirSync(dirname(jevFile()), { recursive: true }); appendFileSync(jevFile(), JSON.stringify({ at: new Date().toISOString(), cost }) + "\n"); } catch { /* a lost line costs cents */ }
+  // One row per call in `jev`: OpenRouter bills Jev on aleph's key, and its calls are in no transcript, so the OpenRouter rate (models.ts) subtracts them.
+  if (cost > 0) {
+    try { conn().query("INSERT INTO jev (time, cost) VALUES (?, ?)").run(new Date().toISOString(), cost); } catch { /* a lost row costs cents */ }
   }
   return { answers: body.answers, cost, model: body.model ?? JEV_MODEL, ms: performance.now() - started };
 }

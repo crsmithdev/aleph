@@ -141,7 +141,7 @@ test("each Jobs chart frame with no data shows its empty line and its hint in th
   expect(blocks).toHaveLength(3);
 });
 
-const J: any = { id: "fac-9#2", subject: "fac-9", name: "fac-9", repo: "fac", kind: "build", actor: "worker", state: "landed", title: "Fix it", issue: "fac-9", started: "2026-11-01T08:00:00Z", ended: null, seconds: null, cost: 0.75, model: null };
+const J: any = { id: "fac-9#2", subject: "fac-9", name: "fac-9", repo: "fac", role: "build", actor: "worker", state: "landed", title: "Fix it", issue: "fac-9", started: "2026-11-01T08:00:00Z", ended: null, seconds: null, cost: 0.75, model: null };
 
 test("the page lists the jobs with the search, the State filter and the Project filter, and links no list", () => {
   const h = renderFactoryJobs(D, null, "lead", [J], { state: "landed" });

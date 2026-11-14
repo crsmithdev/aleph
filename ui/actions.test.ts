@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { putRun } from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -16,8 +17,8 @@ afterAll(() => setSystemTime());
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, calls: string;
 const post = (p: string, headers: Record<string, string> = { "X-Aleph-UI": "1" }, body?: object) =>
   at(p, { method: "POST", headers, body: body ? JSON.stringify(body) : undefined });
-/** The job ID of each fixture run: its issue, else its name, then `#1`. */
-const J: Record<string, string> = {"x": "x#1", "nobranch": "nobranch#1", "asks": "asks#1", "stuckjob": "stuckjob#1", "wt": "r-7#1", "wtgone": "r-99#1", "won": "r-5#1", "wgoal": "r-6.1#1", "nope": "nope#1"};
+/** The job key of each fixture run, by its name. */
+const J: Record<string, string> = {};
 /** The path of an action on the fixture run `name`. */
 const jp = (name: string, verb: string) => `/api/jobs/${encodeURIComponent(J[name])}/${verb}`;
 const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(["git", "-C", cwd, ...a]); if (p.exitCode) throw new Error(p.stderr.toString()); };
@@ -38,7 +39,6 @@ beforeAll(async () => {
   sh(repo, "checkout", "-q", "main");
   writeFileSync(join(repo, "b.txt"), "main moved\n");
   sh(repo, "add", "."); sh(repo, "commit", "-qm", "main moves on");
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ r: { path: repo } }));
   // The work store, with issue 7 of `r` for the Wait button to set `after` on.
   const itemsRemote = join(base, "items.git"), items = join(base, "items");
   sh(base, "init", "-q", "--bare", "-b", "main", itemsRemote);
@@ -46,18 +46,17 @@ beforeAll(async () => {
   sh(items, "config", "user.email", "t@t"); sh(items, "config", "user.name", "t");
   sh(items, "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "push", "-q", "origin", "main");
+  writeRepos({ r: { path: repo } }, items);
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\nif [ "$1" = "drop" ] && [ -e ${base}/fail-drop ]; then echo "drop failed" >&2; exit 1; fi\nif [ "$4" = "no-such-reason" ]; then echo "no such reason" >&2; exit 1; fi\necho out\nexit 0\n`);
   chmodSync(fake, 0o755);
-  restoreEnv = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake });
-  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "failed" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
-    const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
-    mkdirSync(folder, { recursive: true });
-    putRun(basename(join(folder)), { kind: "build", condition: "waiting", started: new Date(NOW).toISOString(), name, job: name, repo: "r", n: 1, ...extra } as any);
+  restoreEnv = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake });
+  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { state: "failed" }], ["wt", { target: "issue.7" }], ["wtgone", { target: "issue.99" }], ["won", { target: "issue.5" }], ["wgoal", { target: "issue.10" }]] as const) {
+    J[name] = seed({ role: "build", state: "waiting", started: new Date(NOW).toISOString(), name, repo: "r", ...extra } as any).id;
   }
   ({ server, stop, at } = await withServer({ warm: false }));
-  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { add(doc, `issue ${i}`, i === 7 ? { spec: "Do it." } : {}); } for (const n of [6, 9]) addPart(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, spec: "x" }); return true; }, true);
+  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { add(doc, `issue ${i}`, i === 7 ? { spec: "Do it." } : {}); } for (const n of [6, 9]) addPart(doc, doc.items.find((x) => x.id === n)!, { title: `goal ${n}`, spec: "x" }); return true; }, true);
 });
 afterAll(() => {
   stop();
@@ -69,22 +68,22 @@ test("POST /api/jobs/:id/wait 400s without a blocker or an item", async () => {
   expect((await post(jp("x", "wait"), undefined)).status).toBe(400);
 });
 
-test("POST /api/jobs/:id/wait reads the issue from `on`, and the integer part of a part's dotted `on`", async () => {
-  for (const [job, n] of [["won", "5"], ["wgoal", "6.1"]] as const) {
+test("POST /api/jobs/:id/wait reads the issue from `target`, and a child issue", async () => {
+  for (const [job, n] of [["won", "5"], ["wgoal", "10"]] as const) {
     const before = recorded().length;
-    const res = await post(jp(job, "wait"), { "X-Aleph-UI": "1" }, { on: "r-9.1" });
+    const res = await post(jp(job, "wait"), { "X-Aleph-UI": "1" }, { on: "r-11" });
     expect(res.status).toBe(200);
     const calledNow = recorded().slice(before);
     expect(calledNow).toHaveLength(2);
-    expect(calledNow[0]).toBe(`issue edit --after r-9.1 -- r ${n}`);
-    expect(calledNow[1].startsWith(`drop -- ${job} Chris chose to wait for r-9.1`)).toBe(true);
+    expect(calledNow[0]).toBe(`issue edit --after r-11 -- r ${n}`);
+    expect(calledNow[1].startsWith(`drop -- ${job} Chris chose to wait for r-11`)).toBe(true);
   }
 });
 
 test("POST /api/jobs/:id/wait is 422 when the edit is refused, and drops nothing", async () => {
   const before = recorded().length;
   // Issue 99 is not in the store: reading its wait refuses it.
-  const res = await post(jp("wtgone", "wait"), { "X-Aleph-UI": "1" }, { on: "r-9.1" });
+  const res = await post(jp("wtgone", "wait"), { "X-Aleph-UI": "1" }, { on: "r-11" });
   expect(res.status).toBe(422);
   expect(((await res.json()) as any).error).toContain("no issue 99");
   expect(recorded().slice(before)).toEqual([]);
@@ -155,22 +154,19 @@ test("POST /api/jobs/:id/answer drops the question run with the answer as its re
 });
 
 test("an action on a job that a newer job of its name replaced is 409, names the newer one, and runs nothing", async () => {
-  // Two jobs named `again`: `again#1`, then `again#2`, a rerun.
-  for (const [n, at] of [[1, NOW - 60_000], [2, NOW]] as const) {
-    const folder = join(base, "jobs", `20261027-10000${n}-r-again-agent`);
-    mkdirSync(folder, { recursive: true });
-    putRun(basename(folder), { kind: "build", condition: "waiting", started: new Date(at).toISOString(), name: "again", job: `again-${n}`, repo: "r", n } as any);
-  }
+  // Two jobs named `again`: the second is a rerun of the first.
+  const one = seed({ role: "build", state: "waiting", started: new Date(NOW - 60_000).toISOString(), name: "again", repo: "r" }).id;
+  const two = seed({ role: "build", state: "waiting", started: new Date(NOW).toISOString(), name: "again", repo: "r", retryOf: one }).id;
   const before = recorded().length;
   const hdr = { "X-Aleph-UI": "1" };
   for (const verb of ["land", "recheck", "drop"]) {
-    const res = await post(`/api/jobs/again%231/${verb}`, hdr, {});
+    const res = await post(`/api/jobs/${one}/${verb}`, hdr, {});
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toContain("again#2");
+    expect((await res.json()).error).toContain(two);
   }
   expect(recorded().length).toBe(before);
   for (const verb of ["land", "recheck"]) {
-    expect((await post(`/api/jobs/again%232/${verb}`, hdr, {})).status).toBe(200);
+    expect((await post(`/api/jobs/${two}/${verb}`, hdr, {})).status).toBe(200);
     expect(recorded().at(-1)).toBe(`${verb} -- again`);
   }
 });

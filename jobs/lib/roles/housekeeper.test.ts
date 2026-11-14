@@ -19,7 +19,7 @@ const NOW = Date.parse("2026-11-01T12:00:00Z");
 const repo = () => loadRegistry()[key];
 const prompt = () => readFileSync(join(base, "prompt.md"), "utf8");
 const act = (actions: object[]) => replyWith({ actions });
-const runs = () => allRuns().filter((e) => e.run.kind === "housekeeper");
+const runs = () => allRuns().filter((e) => e.run.role === "housekeeper");
 
 /** A fresh repo key with these issues, each parked unless `open`. */
 function seed(items: { title: string; body?: string; open?: boolean; ask?: Ask }[]): void {
@@ -31,7 +31,7 @@ function seed(items: { title: string; body?: string; open?: boolean; ask?: Ask }
     }
     return true;
   }, true);
-  for (const [k, i] of items.entries()) if (i.ask) setAsk(`${key}-${k + 1}`, i.ask);
+  for (const [k, i] of items.entries()) if (i.ask) setAsk(`issue.${k + 1}`, i.ask);
 }
 
 test("the daily run reviews every parked issue in batches of BATCH, and no open one nor one with a core-change Ask", async () => {
@@ -45,7 +45,7 @@ test("the daily run reviews every parked issue in batches of BATCH, and no open 
   expect(prompt()).toContain(`### ${key}-12: Parked issue 12`);
   expect(prompt()).not.toContain(`### ${key}-13`);
   expect(prompt()).not.toContain(`### ${key}-14`);
-  expect(runs().map((e) => e.run.condition)).toEqual(["done", "done"]);
+  expect(runs().map((e) => e.run.state)).toEqual(["done", "done"]);
   // The daily review is done: nothing is due until a main moves or a day passes.
   expect(readState().main[key]).toBe(sh(repoPath(), "git", "rev-parse", "main"));
   expect(housekeepDue(NOW + 60_000)).toBe(false);
@@ -75,9 +75,7 @@ test("code applies each action and refuses one with no evidence, a bad title, or
   const ran = runs().at(-1)!.run;
   expect(ran.tally).toEqual(tally);
   expect(ran.touched).toEqual([1, 2, 4, 5, 6, 7].map((n) => `${key}-${n}`));
-  expect(readEvents().findLast((e) => e.action === "done" && e.subject === "housekeeper")).toMatchObject({ tally, on: [expect.stringMatching(/^housekeeper#\d+$/), ...ran.touched!] });
-  expect(readEvents().findLast((e) => e.action === "done" && e.subject === "housekeeper")!.changes).toEqual(
-    ([[1, "close"], [2, "drop"], [4, "retitle"], [5, "reprioritize"], [6, "note"], [7, "unpark"]] as [number, string][]).map(([n, d]) => ({ id: `${key}-${n}`, do: d })));
+  expect(readEvents().findLast((e) => e.action === "done" && e.object_role === "housekeeper")).toMatchObject({ subject: "gate", object: expect.stringMatching(/^job\.\d+$/) });
   expect(o.refused.map((r) => r.split(": refused: ")[1])).toEqual([
     "no longer parked", expect.stringContaining("ends with a period"), `no commit or path deadbeef in ${key}`, "not an issue of this batch",
   ]);

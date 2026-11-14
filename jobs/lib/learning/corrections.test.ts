@@ -1,14 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { conn, getJson, putJson } from "../../../lib/db.ts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { readList } from "../../../issues/lib/store.ts";
 import { section, status, titleProblem } from "../../../issues/lib/todo.ts";
 import { approve, decline, explainLesson, mine, proposals, readStore } from "./corrections.ts";
 import { missingSections } from "../roles/issue-spec.ts";
 import { storeRepos } from "../../../tests/git-fixture.ts";
-import { putRun } from "../records/record.ts";
+import { reseed, seed } from "../../job.testkit.ts";
 import { readEvents } from "../../../lib/layout.ts";
+import { writeRepos } from "../../../tests/projects.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 
@@ -33,8 +35,10 @@ let skillPick = "alpha";
 let lastSkillCriteria: Record<string, string> | undefined;
 /** The sentence-writing stub echoes this prefix and the quote's first word. */
 const RULE_STUB = "#!/bin/sh\nfor a; do :; done\nw=$(printf '%s' \"$a\" | tr -cd 'A-Za-z' | cut -c1-12)\nprintf '{\"type\":\"result\",\"is_error\":false,\"result\":\"Follow rule %s.\"}' \"$w\"\n";
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "ALEPH_JEV_URL", "OPENROUTER_API_KEY", "HOME", "ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_PROPOSE_AT", "ALEPH_RULE_CMD", ...Object.keys(gitEnv)];
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_DB", "ALEPH_JOBS_DIR", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "ALEPH_JEV_URL", "OPENROUTER_API_KEY", "HOME", "ALEPH_ITEMS", "ALEPH_PROPOSE_AT", "ALEPH_RULE_CMD", ...Object.keys(gitEnv)];
 let saved: Record<string, string | undefined>;
+/** The id of the dropped build the signals tests start from. */
+let dropped: string;
 
 beforeAll(() => {
   lf = Bun.serve({
@@ -72,9 +76,9 @@ beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-corr-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   Object.assign(process.env, gitEnv, {
-    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "jobs"), HOME: base,
+    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_DB: join(base, "aleph.db"), ALEPH_JOBS_DIR: join(base, "jobs"), HOME: base,
     LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk",
-    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"),
+    ALEPH_ITEMS: join(base, "items"), 
     ALEPH_JEV_URL: `http://127.0.0.1:${jev.port}/`, OPENROUTER_API_KEY: "k",
   });
   mkdirSync(join(base, "jobs"), { recursive: true });
@@ -85,7 +89,7 @@ beforeEach(() => {
   generalP = 0.9; faultP = 0.9; scope = "global"; skillPick = "alpha";
   mkdirSync(join(base, "fac-repo", "skills", "alpha"), { recursive: true });
   writeFileSync(join(base, "fac-repo", "skills", "alpha", "SKILL.md"), "---\nname: alpha\ndescription: >\n  Does alpha\n  things.\n---\n");
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "fac-repo"), sandbox: true } }));
+  writeRepos({ fac: { path: join(base, "fac-repo"), sandbox: true } }, join(base, "items"));
   checkP = 0.9; ruleP = 0.1; delete process.env.ALEPH_PROPOSE_AT;
   noul = 0.9; choice = "new"; pickFirst = false;
   perPage = 1000;
@@ -94,17 +98,14 @@ beforeEach(() => {
     { id: "t2", sessionId: "s", timestamp: ago(2), input: "No, that is wrong. Do not mock the db.", output: "ok" },
   ];
   observations = [{ id: "o1", traceId: "t1", name: "verify-gate", metadata: { verdict: "deny" }, output: "deny: no run backs tests pass", startTime: ago(1) }];
-  const run = (state: string, reason: string) => ({ n: 1, kind: "build", job: "aleph-9", name: "aleph-9", condition: state, reason, told: true, started: ago(1), ended: ago(1) });
-  const dir = join(base, "jobs", "20261027-aleph-9");
-  mkdirSync(dir, { recursive: true });
-  putRun(basename(join(dir)), run("dropped", "Drops the test it changed.") as any);
+  dropped = seed({ role: "build", name: "aleph-9", state: "dropped", reason: "Drops the test it changed.", started: ago(1), ended: ago(1) }).id;
 });
 afterEach(() => {
   for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
   rmSync(base, { recursive: true, force: true });
 });
 
-const stored = () => JSON.parse(readFileSync(join(base, "factory", "corrections.json"), "utf8"));
+const stored = () => getJson<any>("state", "corrections", null);
 
 const repo = { key: "fac" };
 /** Effects that start nothing. */
@@ -114,7 +115,7 @@ test("the kind falls to claude-md, then skill", async () => {
   pickFirst = true; checkP = 0.4; ruleP = 0.5;
   await mine(NOW, quiet);
   expect(proposals()[0].kind).toBe("claude-md");
-  rmSync(join(base, "factory", "corrections.json"));
+  conn().run("DELETE FROM state WHERE key = 'corrections'");
   ruleP = 0.49;
   await mine(NOW, quiet);
   expect(proposals()[0].kind).toBe("skill");
@@ -126,7 +127,7 @@ test("a proposed lesson without target gets title and target on the next mine", 
   await mine(NOW, quiet);
   const s = stored();
   delete s.lessons[0].target; delete s.lessons[0].title;
-  writeFileSync(join(base, "factory", "corrections.json"), JSON.stringify(s));
+  putJson("state", "corrections", s);
   await mine(NOW + 1000, quiet);
   expect(proposals()[0].target).toBe("fac checks");
   expect(proposals()[0].title!.length).toBeGreaterThan(0);
@@ -147,10 +148,10 @@ test("approve files a lesson with no issue through fileIssue: one filed event, a
   await mine(NOW, quiet);
   const s = stored();
   delete s.lessons[0].issue;
-  writeFileSync(join(base, "factory", "corrections.json"), JSON.stringify(s));
+  putJson("state", "corrections", s);
   const seen: string[] = [], before = readEvents().length;
   expect(approve(s.lessons[0].id, repo, { after: (r, i) => { seen.push(`${r.key}-${i.id}`); } })).toBe("fac-2");
-  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["rule", "fac-2"]]);
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.subject, e.object])).toEqual([["rule", "issue.2"]]);
   expect(seen).toEqual(["fac-2"]);
 });
 
@@ -181,9 +182,8 @@ test("an approved claude-md proposal reopens its issue with a spec with Goal, Ed
 
 describe("standing proposals", () => {
   const grant = (action: string, key = "proposal-check:fac") => {
-    mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "always.json"), JSON.stringify({ [key]: { action, at: new Date(NOW).toISOString() } }));
-    writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: true } }));
+    putJson("settings", "always", { [key]: { action, at: new Date(NOW).toISOString() } });
+    writeRepos({ fac: { path: base, sandbox: true } }, join(base, "items"));
   };
 
   test("approve files the issue at once", async () => {
@@ -195,8 +195,8 @@ describe("standing proposals", () => {
     const [item] = readList(repo)!.items;
     expect(item.fm.kind).toBe("task");
     expect(titleProblem(item.title)).toBeNull();
-    expect(readEvents().find((e) => e.by === "rule" && e.subject === "fac-1" && e.action === "answered")?.note).toStartWith("proposal-check:fac: approved ");
-    expect(readEvents().filter((e) => e.subject === "fac-1" && e.action === "filed").length).toBe(1);
+    expect(readEvents().find((e) => e.subject === "rule" && e.object === "fac-1" && e.action === "answered")?.detail).toStartWith("proposal-check:fac: approved ");
+    expect(readEvents().filter((e) => e.object === "issue.1" && e.action === "filed").length).toBe(1);
   });
 
   test("decline marks it declined", async () => {
@@ -204,16 +204,14 @@ describe("standing proposals", () => {
     pickFirst = true;
     await mine(NOW, quiet);
     expect(stored().lessons[0].state).toBe("declined");
-    expect(readEvents()).toContainEqual(expect.objectContaining({ action: "dropped", note: "proposal-check:fac: declined" }));
+    expect(readEvents()).toContainEqual(expect.objectContaining({ action: "dropped", detail: "proposal-check:fac: declined" }));
   });
 });
 
 describe("explainLesson", () => {
   const text = { situation: "S", effects: [{ action: "approve", text: "files it" }], recommend: { action: "approve", why: "clear" } };
-  const path = () => join(base, "factory", "corrections.json");
   const seed = (state: string) => {
-    mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(path(), JSON.stringify({ minedAt: "", lessons: [{ id: "l-1", sentence: "Do x.", state, signals: [], count: 1 }] }, null, 2) + "\n");
+    putJson("state", "corrections", { minedAt: "", lessons: [{ id: "l-1", sentence: "Do x.", state, signals: [], count: 1 }] });
   };
 
   test("a proposed lesson with the same sentence takes the text", () => {
@@ -250,8 +248,7 @@ describe("noise", () => {
   });
 
   test("a drop whose run made no commit is not a signal, whatever Jev says", async () => {
-    const dir = join(base, "jobs", "20261027-aleph-9");
-    putRun(basename(join(dir)), { n: 1, kind: "build", job: "aleph-9", name: "aleph-9", condition: "dropped", reason: "the work is on main; this run found nothing to commit", noCommit: true, told: true, started: ago(1), ended: ago(1) } as any);
+    reseed(dropped, { reason: "the work is on main; this run found nothing to commit", noCommit: true });
     await mine(NOW, quiet);
     expect(stored().lessons.flatMap((l: any) => l.signals.map((x: any) => x.source)).sort()).toEqual(["chris", "gate"]);
   });

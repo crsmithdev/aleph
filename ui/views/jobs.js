@@ -101,10 +101,10 @@ export function renderTranscript(steps) {
   }).join("") || empty();
 }
 
-/** The event of one run: its condition as the tag, then its reason, the commit of a land, its job ID and its log buttons. */
+/** The event of one run: its state as the tag, then its reason, the commit of a land, its job ID and its log buttons. */
 function jobEvent(x, nth, j) {
   const r = x.r, name = barLabel(r, nth);
-  const e = runEvent(x, name, r.kind === "land" && r.condition === "landed" && j.commit ? `${esc(name)} as ${shaLink(j.commit, j.commitUrl)}.` : null);
+  const e = runEvent(x, name, r.kind === "land" && r.state === "landed" && j.commit ? `${esc(name)} as ${shaLink(j.commit, j.commitUrl)}.` : null);
   return { ...e, html: e.html + (r.job ? ` <span class="quiet">${esc(r.job)}</span>` : "") + logButtons(r) };
 }
 
@@ -127,10 +127,10 @@ function jobSegments(j, now = Date.now()) {
   const builds = count.worker ?? 0, lands = count.land ?? 0;
   const segments = [];
   if (work.length) segments.push({
-    title: "Work", aside: j.condition === "landed" ? "to the land" : "",
+    title: "Work", aside: j.state === "landed" ? "to the land" : "",
     rows: [laneRow({
       head: `<span class="quiet">${esc([builds ? plural(builds, "implement") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "job"))}</span>`,
-      runs: work, from: work[0].start, result: badge(j.condition), cost: true, holds: j.holds ?? [], runEvents: () => events,
+      runs: work, from: work[0].start, result: badge(j.state), cost: true, holds: j.holds ?? [], runEvents: () => events,
       events: [...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: codeText(d) })),
         ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: codeText(f) }))],
     })],
@@ -141,7 +141,7 @@ function jobSegments(j, now = Date.now()) {
 /** The KPI strip of a job: builds, elapsed, cost, change, and what checked it. */
 function jobKpis(j, now = Date.now()) {
   const runs = spans(workRuns(j), now), builds = runs.filter((x) => x.r.kind === "worker");
-  const bad = builds.filter((x) => ["returned", "failed"].includes(x.r.condition)).length, last = builds.at(-1)?.r.condition;
+  const bad = builds.filter((x) => ["returned", "failed"].includes(x.r.state)).length, last = builds.at(-1)?.r.state;
   const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j.stat);
   return renderKpis([
     { k: "Implements", v: esc(count(builds.length)), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
@@ -159,7 +159,7 @@ export function renderJob(j) {
   const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: issueHref(`${j.repo}-${j.item.id}`) });
   const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${shortText(iss.id)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
   const nav = [iss ? linkButton("Issue", iss.href) : "", p?.next ? linkButton(`Next sub-issue: ${shortText(p.next.id)}`, p.next.href) : "", j.trace ? linkButton("Trace", j.trace) : ""].join("");
-  const pills = statusRow(badge(j.condition), j.item ? priorityBadge(j.item.priority) : "", `${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(shortText(p.id), p.href)}` }) : ""}${idLink(shortText(j.name))}`);
+  const pills = statusRow(badge(j.state), j.item ? priorityBadge(j.item.priority) : "", `${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(shortText(p.id), p.href)}` }) : ""}${idLink(shortText(j.name))}`);
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
   const checkLog = checkRun ? `<p><button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(checkRun.job)}" data-file="checks.log">checks.log</button></p>` : "";
@@ -176,7 +176,7 @@ export function renderJob(j) {
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
-    pageHead(j.item?.title || j.title || id, { aside: nav + (j.condition === "waiting" ? cmd(`aleph land ${j.name}`, { primary: true }) + cmd(`aleph drop ${j.name}`) : "") }) + `${pills}${next}${blocked}` +
+    pageHead(j.item?.title || j.title || id, { aside: nav + (j.state === "waiting" ? cmd(`aleph land ${j.name}`, { primary: true }) + cmd(`aleph drop ${j.name}`) : "") }) + `${pills}${next}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? note(j.reason) : "") +
     jobKpis(j) + renderTimeline(jobSegments(j)) +
     (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +

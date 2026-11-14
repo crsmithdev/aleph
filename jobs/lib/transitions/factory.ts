@@ -6,19 +6,19 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { today } from "../../../lib/day.ts";
-import { LANES, lane, shortId } from "../../../lib/naming.ts";
+import { LANES, lane, shownId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, buildableIssue, buildableIssues, note, partsOf, planSet, priorityOf, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
+import { afterOf, buildableIssue, buildableIssues, close, partsOf, planSet, priorityOf, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { itemOnMain } from "../records/status.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
-import { allRuns, isWaiting, loadRegistry, type Entry, type Repo } from "../records/ledger.ts";
+import { allRuns, isWaiting, loadRegistry, onOf, type Entry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { holdsWork, isLive, isRunning } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
-import { clearRerun, issueBrief } from "./continuation.ts";
+import { issueBrief } from "./continuation.ts";
 import { doneChecker, filing } from "./filing.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import { allJobs, checkedBy, isOpen, lookMinutes, openJob } from "../records/job.ts";
@@ -33,7 +33,7 @@ import { drop, land, recheck, refusal, startIssue, type Refused } from "./transi
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, type Tier } from "../routing/route.ts";
-import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, clearCap, issueFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
+import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, issueFacts, issueJob, setPaused, baselines, changedLinesOf, factoryDir, sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
 import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
@@ -67,11 +67,11 @@ type Land = (name: string) => Promise<string | null>;
  */
 export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[] }> {
   if (gates({ only: ["pause"] })) {
-    logEvent({ by: "rule", subject: "factory", action: "paused" });
+    logEvent({ subject: "rule", action: "paused", object: "factory" });
     return { started: [], skipped: [], paused: true };
   }
   const kept = await startKept();
-  for (const name of kept) logEvent({ by: "rule", subject: name, action: "started", note: "the pause kept this step" });
+  for (const name of kept) logEvent({ subject: "rule", action: "started", object: name, detail: "the pause kept this step" });
   if (rescue) await rescueStuck(rescue, land, async (repo) => mainState(repo));
   const landed: string[] = [];
   if (land) {
@@ -100,20 +100,20 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
   /** Skips an issue that a gate holds; a red main's event names its commit, and the note its failed checks. */
   const held = (name: string, repo: Repo, d: IssueDecision) => {
     const b = d.kind === "baseline" ? baselines()[repo.key] : undefined;
-    skip(name, d.kind as Gate, d.why, b ? { action: "red", on: [b.commit.slice(0, 7)], note: b.failed } : d.ev!);
+    skip(name, d.kind as Gate, d.why, b ? { action: "red", detail: `at ${b.commit.slice(0, 7)}: ${b.failed}` } : d.ev!);
   };
   for (const { repo, item: listed } of ready) {
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
     const red = redOf(repo);
     // An open issue whose work is on main is done: the store closes it, so no dispatch lists it again.
-    if (done(name)) {
-      const bad = note(repo, ref, `its work is on origin/${repo.main}: ${itemOnMain(repo, ref) ?? "no commit"}`, { done: true });
-      if (bad) logEvent({ by: "rule", subject: name, action: "failed", sub: "error", note: `not closed: ${bad}` });
+    if (done(`${repo.key}-${ref}`)) {
+      const bad = close(repo, ref, `its work is on origin/${repo.main}: ${itemOnMain(repo, ref) ?? "no commit"}`);
+      if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `not closed: ${bad}` });
       continue;
     }
     // The cheap facts first: the pause was asked above.
-    const first = issueDecision({ name, item: listed, done, red });
+    const first = issueDecision({ name, ref: `${repo.key}-${ref}`, item: listed, done, red });
     if (first.kind !== "ready") { held(name, repo, first); continue; }
     // Wait for a dispatch that holds the issue: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the issue until the next tick. Under the lock all is read again.
@@ -136,23 +136,21 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
         recordHold(name, d.kind, d.why, d.ev);
         skipped.push(`${name}: ${d.why}`);
         if (d.ask === "no-commit") {
-          markStreak(name);
           const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
           const bad = askChris(repo, ref, plainAsk("no-commit", text), text);
-          if (bad) logEvent({ by: "rule", subject: name, action: "failed", sub: "error", note: `no issue note: ${bad}` });
+          if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `no issue note: ${bad}` });
         } else {
           const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
           const bad = askChris(repo, ref, plainAsk("run-cap", text), text);
-          if (bad) logEvent({ by: "rule", subject: name, action: "failed", sub: "error", note: `no issue note: ${bad}` });
-          else markCap(name);
+          if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `no issue note: ${bad}` });
         }
         continue;
       }
-      const { spec, rerun } = issueBrief(item, name, jobs);
+      const { spec } = issueBrief(item, name, jobs);
       const no = await start(repo, name, ref, spec, d.tier);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
       if (no) skip(name, no.gate, no.why, no.ev);
-      else { recordHold(name, "started", "started"); started.push(name); clearCap(name); if (rerun) clearRerun(name); }
+      else { recordHold(name, "started", "started"); started.push(name); }
     } finally {
       release();
     }
@@ -177,17 +175,17 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
   const doc = reader({ fetch: false }).list(repo.key);
   for (const listed of doc?.items ?? []) {
     if (!doc || !finished(doc, listed, repo, done)) continue;
-    const name = `${repo.key}-${listed.id}`;
+    const name = issueJob(repo, listed.id);
     const release = await lock(`issue-${name}`, 0);
-    if (!release) { lines.push(`${name}: another dispatch holds it`); logEvent({ by: "rule", subject: name, action: "busy", note: "another dispatch holds it" }); continue; }
+    if (!release) { lines.push(`${name}: another dispatch holds it`); logEvent({ subject: "rule", action: "busy", object: name, detail: "another dispatch holds it" }); continue; }
     try {
       const now = reader().list(repo.key);
       const item = now ? issues.find(now, listed.id) : undefined;
       if (!now || !item || !finished(now, item, repo, done)) continue;
       const commits = partsOf(now, item).filter((p) => issues.status(p) !== "dropped").map((p) => `${repo.key}-${issues.refOf(p)} (${itemOnMain(repo, issues.idOf(p)) ?? "no commit"})`);
-      const bad = note(repo, item.id, `its sub-issues are done: ${commits.join(", ")}`, { done: true });
+      const bad = close(repo, item.id, `its sub-issues are done: ${commits.join(", ")}`);
       lines.push(bad ? `${name}: not closed: ${bad}` : `${name}: closed as done`);
-      logEvent(bad ? { by: "rule", subject: name, action: "failed", sub: "error", note: `not closed: ${bad}` } : { by: "rule", subject: name, action: "done", note: "its sub-issues are done" });
+      logEvent(bad ? { subject: "rule", action: "failed", object: name, detail: `not closed: ${bad}` } : { subject: "rule", action: "done", object: name, detail: "its sub-issues are done" });
     } finally {
       release();
     }
@@ -237,7 +235,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
   queue.sort((a, b) => (issues.created(a.item) ?? "").localeCompare(issues.created(b.item) ?? "") || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
   const started: string[] = [];
   for (const { repo, item } of queue.slice(0, INTAKE_CAP())) {
-    const name = `${repo.key}-${item.id}`;
+    const name = issueJob(repo, item.id);
     if (holdsWork(runs, "intake", name)) continue;
     start(repo, item.id);
     started.push(name);
@@ -272,14 +270,14 @@ export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
 export async function episodeStep(): Promise<{ written: string[]; failed: string[] }> {
   if (gates({ only: ["pause"] })) return { written: [], failed: [] };
   const r = await writeEpisodes(sandboxRepos());
-  for (const f of r.failed) logEvent({ by: "rule", subject: "episodes", action: "failed", sub: "error", note: f });
+  for (const f of r.failed) logEvent({ subject: "rule", action: "failed", object: "episodes", detail: f });
   return r;
 }
 
 /** Main's baseline as a closed state: `line` is the sentence for logs and skip lines. */
 
 /**
- * Main's state as the last suite run recorded it in baseline.json. A red record stays red until a later suite run
+ * Main's state as the last suite run recorded it in the `baseline` row of `state`. A red record stays red until a later suite run
  * is green, also when main has moved since; a repo with no record is unchecked.
  */
 function mainState(repo: Repo): MainState {
@@ -293,7 +291,7 @@ export const baselineConfig = (repo: Repo): string => JSON.stringify([repo.setup
 
 /**
  * Whether the repo's checks pass on its current origin/<main>: run once per
- * commit, kept in baseline.json. Returns the closed state with its line.
+ * commit, kept in the `baseline` row of `state`. Returns the closed state with its line.
  * One baseline runs per repo at a time, under a lock; a suite run that finds it
  * taken leaves it. A pass and a failed check are recorded: an error that kept
  * the checks from running (no verdict) is reported, and the next suite run tries again.
@@ -322,7 +320,7 @@ export async function baseline(repo: Repo, checks: Checks): Promise<MainState> {
         if (why && why.cause !== "check") return unchecked(`main is unchecked: ${why.reason}`);
         b = { repo: repo.key, commit, config, ok: !why, ...(why ? { failed: why.checkName ?? "" } : {}) };
         const entry = b;
-        await writeBaseline(repo.key, () => entry);
+        writeBaseline(repo.key, () => entry);
         appendSuiteHistory({ repo: repo.key, commit, at: new Date().toISOString(), ...sum });
       }
     } finally {
@@ -344,7 +342,7 @@ export async function suiteStep(checks: Checks = baselineChecks): Promise<Record
     const was = mainState(repo).state;
     const b = await baseline(repo, checks);
     out[repo.key] = b.state === "green" ? "green" : b.line;
-    await recordRan(`suite ${repo.key}`, out[repo.key]);
+    recordRan(`suite ${repo.key}`, out[repo.key]);
     if (b.state === "green" && was !== "green") dispatchDetached();
   }
   return out;
@@ -357,7 +355,7 @@ export async function suiteStep(checks: Checks = baselineChecks): Promise<Record
 export async function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()): Promise<string[]> {
   if (gates({ only: ["pause"], jobs })) return [];
   const runs = jobs.flat();
-  const live = (kind: string) => runs.some((e) => e.run.kind === kind && isLive(e.folder));
+  const live = (kind: string) => runs.some((e) => e.run.role === kind && isLive(e.folder));
   const redOf = mainRed();
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
   if (!liveRuns(runs)) {
@@ -387,7 +385,7 @@ export function behind(repo: Repo, short = false): string | null {
 /** The SessionStart hook's lines: a pause, the asks, the alarms and each sandbox checkout that is behind. It writes nothing. */
 export function hookLines(now = Date.now()): string[] {
   const lines = paused() ? ["factory paused"] : [];
-  const refs = allJobs().filter((j) => isOpen(j) && isWaiting(counting(j).run.condition) && counting(j).run.ask).map((j) => j[0].run.name);
+  const refs = allJobs().filter((j) => isOpen(j) && isWaiting(counting(j).run.state) && counting(j).run.ask).map((j) => j[0].run.name);
   for (const repo of Object.values(loadRegistry())) {
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) {
       if (issues.status(item) === "open" && askOf(refIn(repo.key, item))) refs.push(`${repo.key}-${issues.idOf(item)}`);
@@ -405,18 +403,18 @@ export function hookLines(now = Date.now()): string[] {
 
 const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
 
-/** The heading a run's report entry goes under: the report lane of its condition. */
-const laneOf = (e: Entry): string => lane(e.run.condition);
+/** The heading a run's report entry goes under: the report lane of its state. */
+const laneOf = (e: Entry): string => lane(e.run.state);
 
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
-  const needs = isWaiting(r.condition) ? needsOf(r.ask) : undefined;
+  const needs = isWaiting(r.state) ? needsOf(r.ask) : undefined;
   const lane = laneOf(e);
-  const hit = (lane === "landed" || lane === "waiting") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on) : undefined, prio = hit && priorityOf(hit);
-  const head = `${shortId(r.name)} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "returned" && r.condition !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
+  const hit = (lane === "landed" || lane === "waiting") && r.repo && onOf(r) !== undefined ? reader().item(r.repo, onOf(r)!) : undefined, prio = hit && priorityOf(hit);
+  const head = `${shownId(r.name)} ${r.state}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.state !== "returned" && r.state !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
-  if (r.condition === "landed" && r.commit) {
+  if (r.state === "landed" && r.commit) {
     lines.push(`  commit ${r.commit.slice(0, 7)}`);
     const j = allJobs().find((x) => x[0].run.job === r.job);
     if (j) lines.push(`  checked by: ${checkedBy(j).join(", ") || "nothing recorded"}`);
@@ -481,7 +479,7 @@ function cameDue(): string[] {
   const ids: string[] = [];
   const repos = Object.values(loadRegistry());
   let docs: (issues.Doc | null)[] = [];
-  try { docs = readLists(repos); } catch (e: any) { logEvent({ by: "rule", subject: "came-due", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+  try { docs = readLists(repos); } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "came-due", detail: String(e?.message ?? e) }); }
   for (const [n, repo] of docs.map((_, n) => [n, repos[n]] as const)) {
     for (const item of docs[n]?.items ?? []) {
       const id = `${repo.key}-${item.id}`;
@@ -502,7 +500,7 @@ function cameDue(): string[] {
 
 /** The runs the report has not shown, oldest first; each is then marked shown unless `peek`, and the last line counts the day's runs. */
 function runLines(now: number, peek: boolean): string[] {
-  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.condition !== "running" && !isRunning(e));
+  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.role !== "plain" && e.run.state !== "running" && !isRunning(e));
   const lines: string[] = [];
   for (const l of LANES) {
     const here = fresh.filter((e) => laneOf(e) === l);
@@ -523,19 +521,19 @@ function runLines(now: number, peek: boolean): string[] {
  */
 export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Promise<{ counts: Counts; skipped: string[] }> {
   if (gates({ only: ["pause"] })) return { counts: {}, skipped: [] };
-  const name = `${repo.key}-${id}`;
-  const mine = () => allRuns().filter((e) => e.run.kind === "intake" && e.run.on === name);
+  const name = issueJob(repo, id);
+  const mine = () => allRuns().filter((e) => e.run.role === "intake" && e.run.target === name);
   const before = new Set(mine().map((e) => e.id));
   const done = doneChecker();
   const t = await intakeIssue(repo, id, done);
-  for (const l of t.skipped) logEvent({ by: "intake", subject: name, action: "skipped", sub: "intake", note: l });
+  for (const l of t.skipped) logEvent({ subject: "intake", action: "skipped", object: name, detail: l });
   if (t.counts.build) dispatchDetached();
   const failed = mine().some((e) => !before.has(e.id) && causeOf(e.run) === "unanswered");
   const doc = reader({ fetch: false }).list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
   // Only an intake of this call that ended with no reply starts the retry.
   if (failed && item && decideIntake(repo, item, { doc: doc!, done, red: mainRed()(repo) }).kind !== "none") {
-    logEvent({ by: "rule", subject: name, action: "started", sub: "intake", note: "no reply; intake again now" });
+    logEvent({ subject: "rule", action: "started", object: name, detail: "no reply; intake again now" });
     p.intake(repo, id);
   }
   directIfNew(p.director);

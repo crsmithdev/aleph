@@ -1,42 +1,41 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { speed } from "./api/speed.ts";
 import { withEnv } from "./test-server.ts";
 // @ts-ignore plain JS shared with the page
 import { onTile } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import { renderEfficiency, selection } from "./views/efficiency.js";
-import { putRun } from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
 // @ts-ignore plain JS shared with the page
 
 let base: string;
 let restore: () => void;
 const now = new Date(2026, 9, 28, 15, 0, 0);
-let n = 0;
+const lastOf: Record<string, string> = {};
 function run(job: string, r: Record<string, unknown>) {
-  const dir = join(base, "jobs", `r${String(++n).padStart(3, "0")}`);
-  mkdirSync(dir, { recursive: true });
-  // Each job is its own issue: g1 is fx-1.
-  putRun(basename(join(dir)), { job, name: `${job}-${n}`, told: true, repo: "fx", on: `fx-${job.slice(1)}`, n, ...r } as any);
+  // Each job is its own issue: g1 is issue.1. The runs of one `job` follow each other.
+  const target = `issue.${job.slice(1)}`;
+  lastOf[job] = seed({ name: target, told: true, repo: "fx", target, prev: lastOf[job], ...r } as any).id;
 }
 const at = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
 const span = (h: number, s: number) => ({ started: at(h), ended: new Date(Date.parse(at(h)) + s * 1000).toISOString() });
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-eff-"));
-  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" });
+  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" });
   // g1 landed first try; g2 landed after two fix rounds; g3 landed first try; g4 is not landed
-  run("g1", { kind: "build", condition: "passed", cost: 1, ...span(8, 600) });
-  run("g1", { kind: "land", condition: "landed", ...span(9, 30) });
-  run("g2", { kind: "build", condition: "returned", failed: "tests", cost: 2, ...span(8, 600) });
-  run("g2", { kind: "build", condition: "returned", failed: "review", round: 1, cost: 2, ...span(9, 600) });
-  run("g2", { kind: "build", condition: "passed", round: 2, cost: 2, ...span(10, 600) });
-  run("g2", { kind: "land", condition: "landed", ...span(11, 30) });
-  run("g3", { kind: "build", condition: "passed", cost: 3, ...span(8, 600) });
-  run("g3", { kind: "land", condition: "landed", ...span(12, 30) });
-  run("g4", { kind: "build", condition: "returned", failed: "tests", cost: 9, ...span(8, 600) });
+  run("g1", { role: "build", state: "passed", cost: 1, ...span(8, 600) });
+  run("g1", { role: "land", state: "landed", ...span(9, 30) });
+  run("g2", { role: "build", state: "returned", failed: "tests", cost: 2, ...span(8, 600) });
+  run("g2", { role: "build", state: "returned", failed: "review", round: 1, cost: 2, ...span(9, 600) });
+  run("g2", { role: "build", state: "passed", round: 2, cost: 2, ...span(10, 600) });
+  run("g2", { role: "land", state: "landed", ...span(11, 30) });
+  run("g3", { role: "build", state: "passed", cost: 3, ...span(8, 600) });
+  run("g3", { role: "land", state: "landed", ...span(12, 30) });
+  run("g4", { role: "build", state: "returned", failed: "tests", cost: 9, ...span(8, 600) });
 });
 afterAll(() => {
   restore();

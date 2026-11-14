@@ -48,12 +48,12 @@ The argument sets the scope:
    | `prompt` | One prompt from Chris in three or more sessions |
 
 2. **Read the other sources** for the same window. Done when each one has a count or a reason it has none.
-   - Git, for each repo in `~/.aleph/repos.json` (an object of name to `{path}`): reverts, and fixes to code
+   - Git, for each project in `~/.aleph/items/projects/*/project.md` (the `path:` line of its frontmatter): reverts, and fixes to code
      that landed earlier in the window. Docs-only fixes do not count.
-     `jq -r '.[].path' ~/.aleph/repos.json`, then
+     `grep -h '^path:' ~/.aleph/items/projects/*/project.md`, then
      `git -C <path> log --since=<n>.days --format='%h %s' -i -E --grep='^(revert|fix)'`
    - Issues: `aleph issue list <repo> --kind bug`. Look for titles that repeat a cause.
-   - Factory runs: `find ~/.aleph/runs -name stderr.log -mtime -<n>`. Count repeated error lines, and skip
+   - Factory runs: `find ~/.aleph/jobs -name log.txt -mtime -<n>`, and read the `stderr` section of each. Count repeated error lines, and skip
      lines that every run prints (the connectors notice).
    - Langfuse holds the same turns as the transcripts. Read a trace (`/api/public/observations?traceId=<id>`,
      keys in `~/.aleph/.env`) only when a finding needs the timing or cost of a turn.

@@ -1,29 +1,33 @@
 /**
  * `POST /api/chat`: one turn of the chat agent that ui/vendor/kit/chat.js talks to. The body is
  * `{ text, session?, page?, annotations?, idea?, images? }`. `images` are `{ name, data }`, `data` in base64: the server saves
- * each in the run's folder and the prompt names its path, so the agent reads it.
- * The turn is a `chat` run in the ledger, so it has a folder, a log and a cost. The agent is `claude -p` in this checkout
- * like a terminal session of Chris: his own ~/.claude/CLAUDE.md with its Git rules, his skills, and no `ALEPH_AGENT`, so it files issues with `aleph issue` and answers notes with `aleph annotation`; `session`
- * resumes the last turn's conversation. The annotations Chris points at (`annotations`, ids) go with the text first, then
+ * each in `~/.aleph/sessions/<session>/images/` and the prompt names its path, so the agent reads it.
+ * A conversation is a Claude Code session, not a job: the server keeps one `claude -p --input-format stream-json` process
+ * per open conversation, keyed by the session ID, and writes each turn to its stdin. A turn with no `session` starts a
+ * conversation with a new ID. After `chatIdleMs()` with no turn the process ends, and a turn on that session (also after a server
+ * restart) starts a new process with `--resume`. The agent is `claude -p` in this checkout
+ * like a terminal session of Chris: his own ~/.claude/CLAUDE.md with its Git rules, his skills, and no `ALEPH_AGENT`, so it files issues with `aleph issue` and answers notes with `aleph annotation`. The annotations Chris points at (`annotations`, ids) go with the text first, then
  * the other open annotations of `page` and those with no page.
  *
- * The answer is a server-sent stream: each line of the run's stream-json output as it comes, then `end` with `{ error? }`.
- * A comment line every 20 s keeps the stream open under the server's idle timeout while a tool runs.
+ * The answer is a server-sent stream: each line of the process's stream-json output as it comes until the turn's `result`,
+ * then `end` with `{ error? }`. A comment line every 20 s keeps the stream open under the server's idle timeout while a tool runs.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { MEDIA_BYTES, MEDIA_TYPES } from "../../issues/lib/store.ts";
-import { OPUS_MODEL } from "../../jobs/lib/routing/models.ts";
-import { chatLock, openRun } from "../../jobs/lib/roles/agent-run.ts";
-import { runFile } from "../../jobs/lib/records/run-files.ts";
+import { startChat } from "../../jobs/lib/roles/agent-call.ts";
+import { chatIdleMs } from "../../jobs/lib/infra/settings.ts";
 import { read, type Note } from "../../lib/annotations.ts";
+import { alephPath } from "../../lib/paths.ts";
 import { file as ideaFile } from "../../ideas/ideas.ts";
 import { sameSite } from "../http.ts";
 import type { Routes } from "../server.ts";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const KEEP_MS = 20_000;
-const POLL_MS = 100;
+/** A turn that runs longer than this ends its process. */
+const TURN_MS = 3600_000;
 
 const SYSTEM = `You are the chat agent of the aleph web UI. Chris writes to you from a panel on the page he is looking at.
 - File work with \`aleph issue add <repo> ...\`. Filing an issue starts a factory build, so file only what Chris asks for, and say the issue number.
@@ -51,12 +55,14 @@ Chris is on the idea \`${slug}\`; its write-up is ${ideaFile(slug)}, and the len
 /** The image types the panel sends, by extension. */
 const IMAGES = Object.keys(MEDIA_TYPES).filter((x) => MEDIA_TYPES[x].startsWith("image/"));
 
-/** Save `images` in `folder` and return the part of the prompt that names them; "" when there are none. */
-function attached(folder: string, images: { ext: string; bytes: Buffer }[]): string {
+/** Save `images` in the images folder of `session` and return the part of the prompt that names them; "" when there are none. */
+function attached(session: string, images: { ext: string; bytes: Buffer }[]): string {
   if (!images.length) return "";
-  const dir = join(folder, "images");
+  const dir = join(alephPath("ALEPH_SESSIONS_DIR", "sessions"), session, "images");
   mkdirSync(dir, { recursive: true });
-  const paths = images.map((m, i) => { const p = join(dir, `${i + 1}.${m.ext}`); writeFileSync(p, m.bytes); return p; });
+  // The turns of a session share the folder, so a name carries the time.
+  const at = Date.now();
+  const paths = images.map((m, i) => { const p = join(dir, `${at}-${i + 1}.${m.ext}`); writeFileSync(p, m.bytes); return p; });
   return `\n\nChris attached these screenshots. Read each one with the Read tool:\n${paths.map((p) => `- ${p}`).join("\n")}`;
 }
 
@@ -75,7 +81,71 @@ function imagesOf(given: unknown): { ext: string; bytes: Buffer }[] | string {
   return out;
 }
 
-const enc = new TextEncoder();
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+/** One process of an open conversation. `turn` is set while a turn runs: it takes each output line, and null when the process ends. */
+interface Agent { session: string; p: ReturnType<typeof Bun.spawn>; turn?: (line: string | null) => void; idle?: Timer; err: string }
+const agents = new Map<string, Agent>();
+
+/** The lines of a stream, as they complete. */
+async function* linesOf(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  let rest = "";
+  for await (const chunk of stream) {
+    const lines = (rest + dec.decode(chunk, { stream: true })).split("\n");
+    rest = lines.pop()!;
+    for (const l of lines) if (l.trim()) yield l;
+  }
+  if (rest.trim()) yield rest;
+}
+
+/** The process of `session`: the one that is open, else a new one that resumes it, or starts it when `fresh`. */
+function agentOf(session: string, fresh: boolean): Agent {
+  const open = agents.get(session);
+  if (open) return open;
+  const p = startChat(session, fresh, SYSTEM, ROOT);
+  const a: Agent = { session, p, err: "" };
+  agents.set(session, a);
+  (async () => { for await (const l of linesOf(p.stderr as ReadableStream<Uint8Array>)) a.err = l.slice(0, 300); })();
+  (async () => {
+    for await (const l of linesOf(p.stdout as ReadableStream<Uint8Array>)) a.turn?.(l);
+    await p.exited;
+    clearTimeout(a.idle);
+    if (agents.get(session) === a) agents.delete(session);
+    a.turn?.(null);
+  })();
+  return a;
+}
+
+/** End the process of `a`: it leaves the open list at once, so the next turn on its session starts a new one. */
+function stop(a: Agent): void {
+  if (agents.get(a.session) === a) agents.delete(a.session);
+  a.p.kill();
+}
+
+/** Write `prompt` to the process as one turn; `send` gets each output line until the turn's `result`. Resolves with the error, or undefined. */
+function ask(a: Agent, prompt: string, send: (line: string) => void): Promise<string | undefined> {
+  clearTimeout(a.idle);
+  return new Promise((done) => {
+    const limit = setTimeout(() => stop(a), TURN_MS);
+    const end = (error?: string) => {
+      clearTimeout(limit);
+      a.turn = undefined;
+      a.idle = setTimeout(() => stop(a), chatIdleMs());
+      a.idle.unref();
+      done(error);
+    };
+    a.turn = (line) => {
+      if (line === null) return end(`the chat agent exited${a.err ? `: ${a.err}` : ""}`);
+      send(line);
+      let ev: { type?: string } | undefined;
+      try { ev = JSON.parse(line); } catch { /* not an event */ }
+      if (ev?.type === "result") end();
+    };
+    const stdin = a.p.stdin as import("bun").FileSink;
+    stdin.write(`${JSON.stringify({ type: "user", message: { role: "user", content: prompt } })}\n`);
+    stdin.flush();
+  });
+}
 
 export const routes: Routes = {
   "POST /api/chat": async (req) => {
@@ -85,47 +155,29 @@ export const routes: Routes = {
     if (idea !== undefined && (typeof idea !== "string" || !existsSync(ideaFile(idea)))) return Response.json({ error: `no idea named ${idea}` }, { status: 400 });
     const shots = imagesOf(images);
     if (typeof shots === "string") return Response.json({ error: shots }, { status: 400 });
-    const run = openRun({
-      role: "chat", who: "the chat agent", model: OPUS_MODEL, seconds: 3600, cwd: ROOT, name: "chat", command: `chat: ${text.slice(0, 120)}`, shown: true, session: typeof session === "string" && session ? session : undefined, lock: chatLock,
-      flags: ["--permission-mode", "bypassPermissions", "--append-system-prompt", SYSTEM + (idea ? building(idea) : ""), ...(typeof session === "string" && session ? ["--resume", session] : [])],
-    });
-    // A throw before the stream takes over would leave the run open and its chat lock held.
+    const resumed = typeof session === "string" && session !== "";
+    const id = resumed ? session : randomUUID();
+    if (agents.get(id)?.turn) return Response.json({ error: "this conversation has a turn running" }, { status: 409 });
     try {
       const ids = Array.isArray(annotations) ? annotations.filter((x): x is string => typeof x === "string") : [];
-      const prompt = text + notesOn(typeof page === "string" ? page : undefined, ids) + attached(run.folder, shots);
-      const turn = run.ask(prompt).then(() => undefined, (e: Error) => e.message);
-      const log = runFile(run.folder, "output.log");
-      let open = true, from = 0, rest = "";
-      const body = new ReadableStream<Uint8Array>({
-        async start(c) {
-          const send = (s: string) => { if (open) try { c.enqueue(enc.encode(s)); } catch { open = false; } };
-          const drain = () => {
-            const size = statSync(log, { throwIfNoEntry: false })?.size ?? 0;
-            if (size <= from) return;
-            const buf = Buffer.alloc(size - from), fd = openSync(log, "r");
-            try { readSync(fd, buf, 0, buf.length, from); } finally { closeSync(fd); }
-            from = size;
-            const lines = (rest + buf.toString("utf8")).split("\n");
-            rest = lines.pop()!;
-            for (const l of lines) if (l.trim()) send(`data: ${l}\n\n`);
-          };
-          const poll = setInterval(drain, POLL_MS);
-          const keep = setInterval(() => send(":\n\n"), KEEP_MS);
-          const error = await turn;
-          clearInterval(poll);
-          clearInterval(keep);
-          drain();
-          run.end(error ? `failed: ${error}` : "answered");
-          send(`event: end\ndata: ${JSON.stringify(error ? { error } : {})}\n\n`);
-          if (open) c.close();
-        },
-        cancel() { open = false; },
+      // The idea's steps go with the turn, not the process, because a conversation can move to another idea.
+      const prompt = text + (idea ? building(idea) : "") + notesOn(typeof page === "string" ? page : undefined, ids) + attached(id, shots);
+      const agent = agentOf(id, !resumed);
+      // The turn starts here, not when the client reads the body, so a second request on the session sees it running.
+      const { readable, writable } = new TransformStream<Uint8Array>();
+      const out = writable.getWriter();
+      const send = (s: string) => { out.write(enc.encode(s)).catch(() => {}); };
+      // A first comment line sends the response head now.
+      send(":\n\n");
+      const keep = setInterval(() => send(":\n\n"), KEEP_MS);
+      ask(agent, prompt, (l) => send(`data: ${l}\n\n`)).then((error) => {
+        clearInterval(keep);
+        send(`event: end\ndata: ${JSON.stringify(error ? { error } : {})}\n\n`);
+        out.close().catch(() => {});
       });
-      return new Response(body, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+      return new Response(readable, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      run.end(`failed: ${error}`);
-      return Response.json({ error }, { status: 500 });
+      return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
     }
   },
 };

@@ -5,13 +5,10 @@
  * it: nextStep, afterLand, askedQuestion, rescueCase,
  * and the rescue steps but rerunStep. The briefs and notes read the run folders.
  *
- * It owns two markers: the rerun note at <factory>/rerun/<name>.md, which the issue's
- * next run reads, and `rescued` in a run folder, which counts a rescue case against
+ * It owns two markers: the rerun note, a `reran` event on the issue that its next `started` event clears, and `rescued` on a job row, which counts a rescue case against
  * the issue. The Ask markers (`asked`, `asked-spec`) stay in ask.ts.
  */
-import { basename } from "node:path";
 import { skillSection } from "../roles/role-skill.ts";
-import { existsSync, readFileSync } from "node:fs";
 import { reader, runMedia } from "../../../issues/lib/store.ts";
 import { needsOf } from "../asks/ask.ts";
 import { git } from "../infra/git.ts";
@@ -19,7 +16,8 @@ import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "../record
 import { isAgentRun, isBuild, lastTagged, onOf, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import * as record from "../records/record.ts";
-import { jobSpec, runFile } from "../records/run-files.ts";
+import { jobOfFolder, jobSpec, readSection } from "../records/run-files.ts";
+import { eventsOf, logEvent } from "../../../lib/layout.ts";
 
 // The worker brief
 
@@ -83,13 +81,13 @@ at most 120 words of prose, plus a list only for separate items.`;
 export const pastWork = (title: string): string =>
   `Before you plan, run \`aleph memory recall --episodes '${title.replace(/'/g, "'\\''")}'\` as it stands, with no pipe. It lists the pages of earlier factory work that match. Read each page about the same goal or files, and do not repeat an approach that failed there.`;
 /** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
-export function brief(id: string, folder: string, run: Run, repo: Repo): string {
+export function brief(id: string, run: Run, repo: Repo): string {
   if (run.merge) {
-    const land = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land" && e.id !== id).at(-1)?.run;
+    const land = (jobById(run.job) ?? []).filter((e) => e.run.role === "land" && e.id !== id).at(-1)?.run;
     const n = onOf(run);
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
-  const spec = jobSpec(folder, run);
+  const spec = jobSpec(run);
   const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${spec}`];
   // An issue's spec opens with `# <title>` (issueBrief).
   const title = /^# (.+)$/m.exec(spec)?.[1].trim();
@@ -102,8 +100,8 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
   if (prev) {
     const p = prev.run;
-    parts.push(`## Previous run: ${p.kind}, ${p.condition}${needsOf(p.ask) ? ` (${needsOf(p.ask)})` : ""}${p.reason ? `: ${p.reason}` : ""}`);
-    for (const f of ["result.md", "checks.log", "land.log"] as const) {
+    parts.push(`## Previous run: ${p.role}, ${p.state}${needsOf(p.ask) ? ` (${needsOf(p.ask)})` : ""}${p.reason ? `: ${p.reason}` : ""}`);
+    for (const f of ["result.md", "checks", "land"] as const) {
       const text = readFile(prev, f);
       if (text !== undefined) parts.push(`### ${f}\n\n${text.trim()}`);
     }
@@ -119,24 +117,25 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
  */
 export function issueBrief(item: { title: string; spec: string; notes: string[] }, name: string, jobs: Job[]): { spec: string; rerun: boolean } {
   const again = rerunNote(name);
-  const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.condition === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
+  const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.state === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
   const spec = `# ${item.title}\n\n${item.spec.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
   return { spec, rerun: !!again };
 }
 
 // The rerun note: what the issue's next run reads, under "Note on the last run"
 
-/** Leave the note in the issue's job record: a `rerun` event. */
+/** Leave the note on the issue: a `reran` event with the note as its detail. */
 export function writeRerun(name: string, note: string): void {
-  record.addEvent(name, { kind: "rerun", what: note });
+  logEvent({ subject: "rule", action: "reran", object: name, detail: note });
 }
-/** The issue's rerun note: its newest `rerun` event, unless a `rerun-cleared` event came after it. */
+/** The issue's rerun note: its newest `reran` event, unless a `started` event came after it. */
 const rerunNote = (name: string): string => {
-  const e = record.read(name)?.events.findLast((x) => x.kind === "rerun" || x.kind === "rerun-cleared");
-  return e?.kind === "rerun" ? e.what.trim() : "";
+  const e = eventsOf(name, "reran", "started").findLast((x) => x.subject === "rule");
+  return e?.action === "reran" ? (e.detail ?? "").trim() : "";
 };
-/** The run started with the note: clear it. */
-export const clearRerun = (name: string): void => { if (rerunNote(name)) record.addEvent(name, { kind: "rerun-cleared", what: "the run started with the note" }); };
+
+/** Take the note back: an empty `reran` event. */
+export const clearRerun = (name: string): void => { if (rerunNote(name)) writeRerun(name, ""); };
 
 // What the unit starts after a run ends
 
@@ -160,9 +159,9 @@ export const MERGE_SECONDS = 600;
  * `lands` is the job's land runs, read from the ledger when absent.
  */
 export function nextStep(run: Run, autoland: boolean, lands?: Run[]): Run["next"] {
-  if (isBuild(run.kind) && run.failed) return run.failed === "doc-claims" ? "recheck" : "worker";
-  if (isAgentRun(run.kind)) return run.condition === "passed" && (run.land || autoland) ? "land" : undefined;
-  return run.kind === "land" ? afterLand(run, lands) : undefined;
+  if (isBuild(run.role) && run.failed) return run.failed === "doc-claims" ? "recheck" : "worker";
+  if (isAgentRun(run.role)) return run.state === "passed" && (run.land || autoland) ? "land" : undefined;
+  return run.role === "land" ? afterLand(run, lands) : undefined;
 }
 
 /**
@@ -172,8 +171,8 @@ export function nextStep(run: Run, autoland: boolean, lands?: Run[]): Run["next"
  * `lands` is the job's land runs, this one included, read from the ledger when absent.
  */
 export function afterLand(run: Run, lands?: Run[]): Run["next"] {
-  if (run.condition !== "failed") return undefined;
-  const all = lands ?? (jobById(run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
+  if (run.state !== "failed") return undefined;
+  const all = lands ?? (jobById(run.job) ?? []).filter((e) => e.run.role === "land").map((e) => e.run);
   if (run.conflicts?.length) return all.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
   if (causeOf(run) === "moved") return all.filter((r) => causeOf(r) === "moved").length <= RELANDS ? "land" : undefined;
   return undefined;
@@ -225,15 +224,12 @@ export function nextBrief(folder: string, run: Run): { note: string; merge: bool
   return { note, merge: !run.failed && isMergeBounce(run) };
 }
 
-/** The named check's last section of the run's checks.log, without its heading line. */
+/** The named check's last block of the run's checks section, without its heading line. */
 function checkSection(folder: string, name: string): string {
-  const file = runFile(folder, "checks.log");
-  if (!existsSync(file)) return "";
-  const section = readFileSync(file, "utf8").split(/^## /m).findLast((x) => x.startsWith(`${name}: exit`)) ?? "";
+  const section = (readSection(folder, "checks") ?? "").split(/^## /m).findLast((x) => x.startsWith(`${name}: exit`)) ?? "";
   return section.split("\n").slice(1).join("\n").trimEnd();
 }
 
-/** The last 80 lines of the named check's section of the run's checks.log. */
 const checkLog = (folder: string, name: string): string => checkSection(folder, name).split("\n").slice(-80).join("\n");
 
 /** The failed tests in the run's record of the named check: empty when the check ran no `bun test` or no test failed. */
@@ -246,7 +242,7 @@ const quoteFailures = (failures: FailedTest[]): string =>
 // Fix rounds: the runs before, and the failures they share. The rule itself is in worker-verdict.ts.
 
 /** The job's fix rounds before run `id`: its other build runs that a check or the reviewer sent back. */
-export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed);
+export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) => e.id !== id && isBuild(e.run.role) && e.run.failed);
 
 /**
  * A check that fails unchanged twice: the run before this one also failed `check` with the same failing test
@@ -257,7 +253,7 @@ export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) =
 export function repeatedFailure(folder: string, check: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
   const prev = earlier.at(-1);
   if (!prev || prev.run.failed !== check) return null;
-  const now = failedTests(record.getRun(basename(folder)), check);
+  const now = failedTests(record.getRun(jobOfFolder(folder)), check);
   const key = (f: FailedTest) => `${f.file} > ${f.name}`;
   const before = failedTests(prev.run, check).map(key).sort();
   const names = now.map(key).sort();
@@ -275,8 +271,8 @@ export const questionOf = (result: string): string | undefined => lastTagged(res
 // The rescue of a returned or failed run: which case it is, and the step
 
 /** The case of the safe default action taken on the run, or "" when none was. */
-export const rescued = (e: Entry): string => record.read(record.keyOf(e.run))?.events.findLast((x) => x.kind === "rescued" && x.run === e.id)?.what ?? "";
-export const markRescued = (e: Entry, key: string): void => void record.addEvent(record.keyOf(e.run), { kind: "rescued", run: e.id, what: key });
+export const rescued = (e: Entry): string => e.run.rescued ?? "";
+export const markRescued = (e: Entry, key: string): void => void record.patchRun(e.id, { rescued: key });
 
 /**
  * The question of a run that ended with no commit and asked about the spec, or null when it did not ask: the
@@ -293,10 +289,10 @@ export type RescueCase = "duplicate" | "no-commit" | "claimed" | "timeout" | "in
 export function rescueCase(r: Run, onMainOrDone: boolean, claim: string | null): RescueCase | null {
   const cause = causeOf(r);
   if (cause === "no-commit") return onMainOrDone ? "duplicate" : claim !== null ? "claimed" : "no-commit";
-  if (cause === "timeout" && r.kind !== "land") return "timeout";
+  if (cause === "timeout" && r.role !== "land") return "timeout";
   if (cause === "infra" || cause === "locked") return "infra";
-  if (r.kind === "land" && cause === "conflict") return "land-conflict";
-  if (r.kind === "land" && !r.conflicts?.length && cause === "check") return "land-checks";
+  if (r.role === "land" && cause === "conflict") return "land-conflict";
+  if (r.role === "land" && !r.conflicts?.length && cause === "check") return "land-checks";
   return null;
 }
 
@@ -308,25 +304,25 @@ export type Stuck = { last: Entry; r: Run; repo: Repo; reason: string };
 
 /** The step for a run that a host restart killed. `hasWork`: its branch has commits ahead of main. The issue did not cause this: no rescue mark, so the issue keeps its rerun. */
 export function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
-  const text = `a host restart killed ${r.kind} run ${last.id}`;
+  const text = `a host restart killed ${r.role} run ${last.id}`;
   // The branch passed, and the land may have pushed: a new land finds that, and a new issue run would do the work twice.
-  if (r.kind === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
+  if (r.role === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
   // A build or recheck with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
-  if (isAgentRun(r.kind) && hasWork) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
+  if (isAgentRun(r.role) && hasWork) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
   return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
 }
 
 /** The step for a lost run: a host restart's step, as the issue did not cause it either. The rescue counts it once per issue. */
 export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
-  const text = `${r.kind} run ${last.id} was lost: its process ended with no end written`;
-  if (r.kind === "land") return { action: "land again", noted: `${text}: landed again, once`, told: `${text}: landing again` };
-  if (isAgentRun(r.kind) && hasWork) return { action: "recheck", noted: `${text}: rechecked once, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
+  const text = `${r.role} run ${last.id} was lost: its process ended with no end written`;
+  if (r.role === "land") return { action: "land again", noted: `${text}: landed again, once`, told: `${text}: landing again` };
+  if (isAgentRun(r.role) && hasWork) return { action: "recheck", noted: `${text}: rechecked once, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
   return { action: "drop", dropReason: `${text}. Run the goal again from the start.`, noted: `${text}: dropped, and the goal reruns once`, told: `${text}: the goal reruns` };
 }
 
 /** The step for a worker's claim that the issue is met, by `red`, the red line of main. `failure` is the red CI's failure, which the rerun quotes. */
 export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failure?: string): Step {
-  const said = `${r.kind} run ${last.id} says the goal is already met (${claim})`;
+  const said = `${r.role} run ${last.id} says the goal is already met (${claim})`;
   if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "met" };
   return {
     action: "drop",
@@ -337,13 +333,13 @@ export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: s
 
 /** The step for a run that ended with no commit while the item is already on main (`onMain`) or done. */
 export function duplicateStep({ last, r }: Stuck, onMain: string | null | undefined): Step {
-  return { action: "drop", noted: `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain, fate: "met" };
+  return { action: "drop", noted: `${r.role} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain, fate: "met" };
 }
 
 /** The step for an infrastructure failure: a land lands again, a run with a branch (`hasBranch`) is rechecked, and any other run reruns. */
 export function infraStep({ last, r, reason }: Stuck, hasBranch: boolean): Step {
-  const text = `${r.kind} run ${last.id} failed for infrastructure (${reason}): `;
-  if (r.kind === "land") return { action: "land again", noted: `${text}landed again, once`, told: `${text}landing again` };
+  const text = `${r.role} run ${last.id} failed for infrastructure (${reason}): `;
+  if (r.role === "land") return { action: "land again", noted: `${text}landed again, once`, told: `${text}landing again` };
   if (hasBranch) return { action: "recheck", noted: `${text}rechecked, once`, told: `${text}rechecking` };
   return { action: "drop", rerun: `The last run failed before it made a branch: ${reason}.`, dropReason: `${text}dropped for one rerun`, noted: `${text}dropped; the goal reruns once`, told: `${text}the goal reruns` };
 }
@@ -355,17 +351,17 @@ export function conflictStep({ last, r, repo }: Stuck, touched: string): Step {
   return {
     action: "drop",
     rerun: `The last land failed with a merge conflict in ${what}. Another goal landed on the same lines first; this run starts from the current ${repo.main}.`,
-    noted: `${r.kind} run ${last.id}: merge conflict in ${what}; dropped, and the goal reruns once from current ${repo.main}`,
+    noted: `${r.role} run ${last.id}: merge conflict in ${what}; dropped, and the goal reruns once from current ${repo.main}`,
   };
 }
 
 /** The step for a run that stopped with nothing to keep. The note quotes the end of its log. */
 export function rerunStep({ last, r, reason }: Stuck, key: "no-commit" | "land-checks"): Step {
   const why = key === "no-commit" ? "the last run made no commit" : `the checks failed after the land merged main (${reason})`;
-  const file = key === "land-checks" ? "checks.log" : "result.md";
+  const file = key === "land-checks" ? "checks" : "result.md";
   return {
     action: "drop",
-    rerun: `${why[0].toUpperCase()}${why.slice(1)}. The last 20 lines of its ${file}:\n\n\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``,
-    noted: `${r.kind} run ${last.id}: ${why}; dropped, and the goal reruns once`,
+    rerun: `${why[0].toUpperCase()}${why.slice(1)}. The last 20 lines of its ${file === "checks" ? "checks log" : file}:\n\n\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``,
+    noted: `${r.role} run ${last.id}: ${why}; dropped, and the goal reruns once`,
   };
 }

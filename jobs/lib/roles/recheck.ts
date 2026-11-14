@@ -10,8 +10,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
-import { layout } from "../../../lib/layout.ts";
+import { getJson, putJson } from "../../../lib/db.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { fileIssue, writeList } from "../../../issues/lib/store.ts";
 import { find, note, parseIssueRef, setStatus } from "../../../issues/lib/todo.ts";
@@ -33,7 +32,6 @@ export const MODEL = () => readModels().maintainer?.model ?? "sonnet";
 const ALLOWED = ["Read", "Grep", "Glob", "Bash(git log:*)", "Bash(aleph memory recall:*)"];
 export const TEXT = { type: "string" } as const;
 /** The verdicts held for Chris, by note title: outside the vault, so no vault op or commit touches them. */
-const heldFile = () => join(layout().factory, "recheck-held.json");
 
 export const RECHECK_SCHEMA = {
   type: "object",
@@ -97,8 +95,8 @@ function hold(n: Note, v: Verdict, day: string): void {
   const request = [`The memory re-check of the core note ${n.title} gives the verdict ${v.verdict}.`, `Why: ${v.why}`, claim].filter(Boolean).join("\n\n");
   const issue = fileIssue(repo, { title: cutTitle(`Apply the ${v.verdict} of core note ${n.title}`), kind: "task", source: "memory", parked: true, request }, "rule", { after: () => {} });
   const ref = `${repo.key}-${issue.id}`;
-  setAsk(ref, { kind: "approval", reason: "core-change", question: `Apply the ${v.verdict} verdict to the core note ${n.title}?`, options: [], why: [v.why, claim].filter(Boolean) });
-  writeJson(heldFile(), { ...readJsonOr<Record<string, Held>>(heldFile(), {}), [n.title]: { ...v, day, issue: ref } });
+  setAsk(`issue.${issue.id}`, { kind: "approval", reason: "core-change", question: `Apply the ${v.verdict} verdict to the core note ${n.title}?`, options: [], why: [v.why, claim].filter(Boolean) });
+  putJson("state", "recheck-held", { ...getJson<Record<string, Held>>("state", "recheck-held", {}), [n.title]: { ...v, day, issue: ref } });
 }
 
 /** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. `approved` applies a held core verdict. */
@@ -138,7 +136,7 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
   const all = wikiNotes(await loadVault(root));
   const byTitle = new Map(all.map((n) => [n.title, n]));
   const stale = decayQueue(root, lintVault(all).warn.filter((f) => f.rule === "stale"));
-  const held = readJsonOr<Record<string, unknown>>(heldFile(), {});
+  const held = getJson<Record<string, unknown>>("state", "recheck-held", {});
   const queue = stale.map((f) => byTitle.get(f.note)!).filter((n) => !held[n.title]).slice(0, BUDGET);
   if (!queue.length) return { ...report, skipped: "nothing to re-check" };
   await endLost("maintainer", () => "maintainer", "a reply");
@@ -172,7 +170,7 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
  * (decline) is the result; a refusal of the op is a note on the issue, which stays parked. Why it could not answer, or null.
  */
 export async function answerHeld(ref: string, approved: boolean): Promise<string | null> {
-  const held = readJsonOr<Record<string, Held>>(heldFile(), {});
+  const held = getJson<Record<string, Held>>("state", "recheck-held", {});
   const title = Object.keys(held).find((t) => held[t].issue === ref);
   if (!title) return `no held verdict for ${ref}`;
   const n = wikiNotes(await loadVault(vaultDir())).find((x) => x.title === title);
@@ -187,8 +185,8 @@ export async function answerHeld(ref: string, approved: boolean): Promise<string
     return true;
   });
   // Read again: a recheck may have held another verdict while the op ran.
-  const { [title]: _, ...rest } = readJsonOr<Record<string, Held>>(heldFile(), {});
-  writeJson(heldFile(), rest);
-  clearAsk(ref);
+  const { [title]: _, ...rest } = getJson<Record<string, Held>>("state", "recheck-held", {});
+  putJson("state", "recheck-held", rest);
+  clearAsk(`issue.${at.id}`);
   return r.refused ?? null;
 }

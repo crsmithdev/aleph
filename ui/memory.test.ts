@@ -1,3 +1,5 @@
+import { conn, putJson } from "../lib/db.ts";
+import { setTick } from "../jobs/lib/gates/factory-status.ts";
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, mkdirSync, utimesSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -17,6 +19,7 @@ import * as v from "./views/memory.js";
 import { panel } from "./timeline.js";
 // @ts-ignore
 import { noteView } from "./views/memory.js";
+import { writeRepos } from "../tests/projects.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -72,9 +75,9 @@ beforeAll(async () => {
   git(base, "clone", "-q", join(base, "items.git"), join(base, "items"));
   git(join(base, "items"), "commit", "-q", "--allow-empty", "-m", "start");
   git(join(base, "items"), "push", "-q", "origin", "main");
-  writeFileSync(join(base, "repos.json"), REPOS);
+  writeRepos(JSON.parse(REPOS), join(base, "items"));
   mkdirSync(join(base, "jobs"));
-  const restoreStore = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
+  const restoreStore = withEnv({ ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
   restoreEnv = () => { restoreStore(); restoreVault(); restoreHandoffs(); };
   ({ server, stop } = await withServer());
 });
@@ -266,7 +269,7 @@ test("/api/memory lint still gives a stale finding to an old note that the read 
 });
 
 test("prospective issues carry their priority, medium when they have none", async () => {
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ pri: { path: base } }));
+  writeRepos({ pri: { path: base } }, join(base, "items"));
   try {
     writeList({ key: "pri" }, "seed", (doc) => {
       const a = add(doc, "urgent wait", { priority: "critical" });
@@ -279,7 +282,7 @@ test("prospective issues carry their priority, medium when they have none", asyn
     const all = await items(join(base, "vault"), [], {}, null);
     expect(all.filter((i) => i.source === "issue").map((i) => i.priority)).toEqual(["critical", "medium"]);
   } finally {
-    writeFileSync(join(base, "repos.json"), REPOS);
+    writeRepos(JSON.parse(REPOS), join(base, "items"));
   }
 });
 
@@ -459,14 +462,14 @@ test("/api/memory/log lists writes and recalls newest first, one recall per call
 });
 
 test("/api/memory/processes reads the tick, the corrections store, the episode pages and the stale notes", async () => {
-  const tick = join(base, "factory", "tick.json"), store = join(base, "factory", "corrections.json");
   utimesSync(join(base, "factory", "episodes", "aleph-1 Goal.md"), NOW / 1000, NOW / 1000);
-  writeFileSync(tick, JSON.stringify({ last: { episodes: "2026-11-04T11:30:00.000Z" }, ran: { episodes: { at: "2026-11-04T11:30:00.000Z", result: "failed: no page" }, maintain: { at: "2026-11-04T10:00:00.000Z", result: "dry: 1 fixed · 0 lessons · 2 notes" } } }));
+  setTick("episodes", { last: "2026-11-04T11:30:00.000Z", result: "failed: no page" });
+  setTick("maintain", { last: "2026-11-04T10:00:00.000Z", result: "dry: 1 fixed · 0 lessons · 2 notes" });
   const runs0 = join(base, "vault", ".index", "runs");
   mkdirSync(runs0, { recursive: true });
   writeFileSync(join(runs0, "maintain.json"), JSON.stringify({ at: "2026-11-04T10:00:00.000Z", result: "ok", detail: `dry: ${JSON.stringify({ decay: 3, overlap: 5 })}` }));
   writeFileSync(join(runs0, "compile.json"), JSON.stringify({ at: "2026-11-04T10:00:00.000Z", result: "ok", detail: "dry: 2026-11-03: 2 notes" }));
-  writeFileSync(store, JSON.stringify({ minedAt: "2026-11-04T11:00:00.000Z", lessons: [{ sentence: "Run the checks.", state: "proposed" }, { sentence: "Old.", state: "declined" }] }));
+  putJson("state", "corrections", { minedAt: "2026-11-04T11:00:00.000Z", lessons: [{ sentence: "Run the checks.", state: "proposed" }, { sentence: "Old.", state: "declined" }] });
   try {
     const m = await (await at("/api/memory/processes")).json() as any;
     expect(m.steps.map((s: any) => [s.name, s.last, s.next, s.result])).toEqual([
@@ -494,7 +497,7 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
     expect(v.renderProcessesTab({ ...m, steps: [{ ...m.steps[0], result: "2 written" }] })).toContain('<span class="badge done">2 written</span>');
     expect(h).toContain("No note is stale.");
     expect(h).toContain('<a href="#/memory?tab=processes" aria-current="page">Processes</a>');
-  } finally { rmSync(tick, { force: true }); rmSync(store, { force: true }); rmSync(join(base, "vault", ".index", "runs"), { recursive: true, force: true }); }
+  } finally { conn().run("DELETE FROM tick"); conn().run("DELETE FROM state"); rmSync(join(base, "vault", ".index", "runs"), { recursive: true, force: true }); }
 });
 
 test("the tabs link Search, Context, Log and Processes; the log row opens a recall to its notes", () => {

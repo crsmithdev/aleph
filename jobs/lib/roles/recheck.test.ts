@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { getJson, putJson } from "../../../lib/db.ts";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,8 +12,9 @@ import { decayQueue, sub } from "../../../vault/lib/maintain.ts";
 import { lintVault, loadVault, readRun, today } from "../../../vault/lib/vault.ts";
 import { render } from "./maintainer.ts";
 import { answerHeld, BUDGET, recheck } from "./recheck.ts";
+import { writeRepos } from "../../../tests/projects.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
+const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_ITEMS", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base = "", root = "", saved: Record<string, string | undefined> = {};
 const OLD = "2026-01-01";
@@ -44,12 +46,12 @@ beforeEach(() => {
   chmodSync(join(base, "fake"), 0o755);
   root = join(base, "vault");
   Object.assign(process.env, GIT, {
-    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_VAULT: root, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"),
+    ALEPH_DB: join(base, "aleph.db"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_VAULT: root, ALEPH_ITEMS: join(base, "items"),
     ALEPH_MAINTAINER_CMD: join(base, "fake"), ALEPH_JUDGE: "haiku", FAKE_DIR: base,
   });
   vault(root);
   storeRepos(base);
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ interview: { path: join(base, "interview"), sandbox: true }, aleph: { path: join(base, "aleph"), sandbox: true } }));
+  writeRepos({ interview: { path: join(base, "interview"), sandbox: true }, aleph: { path: join(base, "aleph"), sandbox: true } }, join(base, "items"));
   use(memory({ traces: [], observations: [] }));
 });
 
@@ -145,12 +147,12 @@ test("correct and archive on core notes are held for Chris, change no file, and 
   expect(read("CoreA")).toBe(was.a);
   expect(read("CoreB")).toBe(was.b);
   expect(existsSync(join(root, "archive", "CoreA.md")) || existsSync(join(root, "archive", "CoreB.md"))).toBe(false);
-  const held = JSON.parse(readFileSync(join(base, "factory", "recheck-held.json"), "utf8"));
+  const held = getJson<Record<string, any>>("state", "recheck-held", {});
   expect(Object.keys(held)).toEqual(["CoreA", "CoreB"]);
   // Each held verdict is a parked issue with a core-change Ask that names the note.
   const a = readList({ key: "aleph" })!.items.find((i) => i.id === Number(held.CoreA.issue.split("-")[1]))!;
   expect(status(a)).toBe("parked");
-  expect(askOf(held.CoreA.issue)).toMatchObject({ kind: "approval", reason: "core-change", question: expect.stringContaining("CoreA"), why: ["moved", "New claim: A now holds."] });
+  expect(askOf(`issue.${held.CoreA.issue.split("-")[1]}`)).toMatchObject({ kind: "approval", reason: "core-change", question: expect.stringContaining("CoreA"), why: ["moved", "New claim: A now holds."] });
   await seed("Other", 0);
   reply([]);
   await recheck(root, false);
@@ -168,7 +170,7 @@ async function held(title: string, verdict: Record<string, unknown>) {
   await seed(title, 1, { core: `line ${title}` });
   reply([{ title, verdict: "correct", ...verdict }]);
   await recheck(root, false);
-  return JSON.parse(readFileSync(join(base, "factory", "recheck-held.json"), "utf8"))[title].issue as string;
+  return getJson<Record<string, any>>("state", "recheck-held", {})[title].issue as string;
 }
 const issueOf = (ref: string) => readList({ key: "aleph" })!.items.find((i) => i.id === Number(ref.split("-")[1]))!;
 
@@ -183,7 +185,7 @@ test("approve applies a held correct and keeps the core line, or a held archive,
   expect(await answerHeld(gone, true)).toBeNull();
   expect(existsSync(page("CoreB"))).toBe(false);
   expect(existsSync(join(root, "archive", "CoreB.md"))).toBe(true);
-  expect(JSON.parse(readFileSync(join(base, "factory", "recheck-held.json"), "utf8"))).toEqual({});
+  expect(getJson<Record<string, any>>("state", "recheck-held", {})).toEqual({});
 });
 
 test("approve of a verdict the op refuses is a note on the issue, which stays parked; the held verdict is cleared", async () => {
@@ -199,11 +201,10 @@ test("decline keeps the claim, sets updated to today and drops the issue; the no
   const fix = await held("CoreA", { why: "moved", claim: "A now holds.", details: "d", evidence: "e" });
   const was = read("CoreA");
   // A verdict held while the answer runs stays held.
-  const file = join(base, "factory", "recheck-held.json");
   const answer = answerHeld(fix, false);
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), Later: { issue: "aleph-99" } }));
+  putJson("state", "recheck-held", { ...getJson<Record<string, unknown>>("state", "recheck-held", {}), Later: { issue: "aleph-99" } });
   expect(await answer).toBeNull();
-  expect(Object.keys(JSON.parse(readFileSync(file, "utf8")))).toEqual(["Later"]);
+  expect(Object.keys(getJson("state", "recheck-held", {}))).toEqual(["Later"]);
   expect(read("CoreA")).toBe(was.replace(`updated: ${OLD}`, `updated: ${today()}`));
   expect(status(issueOf(fix))).toBe("dropped");
   expect(askOf(fix)).toBeNull();

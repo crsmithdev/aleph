@@ -4,8 +4,6 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { areasOf, parentIn, reader, type Reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
@@ -13,11 +11,11 @@ import { ciLine, redCi } from "./ci.ts";
 import { isOpen, openJob, type Job } from "../records/job.ts";
 import type { Bound, Gate, Hold } from "./issue-decision.ts";
 import { event, type Event } from "../../../lib/naming.ts";
-import { layout, logEvent, readEvents } from "../../../lib/layout.ts";
+import { eventsOf, layout, logEvent, logSetting, readEvents } from "../../../lib/layout.ts";
+import { conn, getJson, putJson, tx } from "../../../lib/db.ts";
 import * as record from "../records/record.ts";
 import { allRuns, isWaiting, isBuild, loadRegistry, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { held, lock } from "../infra/locks.ts";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { isLive, isRunning } from "../infra/process.ts";
 import { causeOf, policyOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
@@ -26,9 +24,7 @@ import { BACKENDS, probeBackend, readModels, viaOfRun, type Setting, type Tier, 
 
 export const factoryDir = () => layout().factory;
 
-const pauseFile = () => join(factoryDir(), "paused");
-
-/** One record of why an issue waits: `kind` is the gate that bound, or `started`; `event` its log event, which a `started` record lacks. Records from before v6 name older kinds. */
+/** One record of why an issue waits: `kind` is the gate that bound, or `started`; `event` its log event, which a `started` record lacks. */
 export interface HoldRecord { at: string; name: string; kind: string; text: string; event?: Event }
 
 /** The hold record kinds from before the 7 gates that did not stop a start: the issue was done, or its job was open. */
@@ -38,67 +34,69 @@ const OLD_NOT_HELD = new Set(["open", "start", "done"]);
 export const stopsStart = (r: HoldRecord): boolean =>
   r.kind !== "started" && !OLD_NOT_HELD.has(r.kind) && !(r.kind === "not-ready" && /^(its job is |the item is already done$)/.test(r.text));
 
-/** The hold records of a job record: its `hold` and `started` events. */
-const holdsOf = (r: record.JobRecord): HoldRecord[] =>
-  r.events.filter((e) => e.kind === "hold" || e.kind === "started")
-    .map((e) => {
-      const d = e.data as { gate: string; event?: Event } | undefined;
-      return { at: e.at, name: r.issue, kind: e.kind === "started" ? "started" : d!.gate, text: e.what, ...(d?.event ? { event: d.event } : {}) };
-    });
+/** The gate that a hold's log event came from, by its action: an action no gate owns is `not-ready`. */
+const GATE_OF: Record<string, string> = { paused: "pause", red: "baseline", full: "live-cap", gpu: "live-cap", busy: "busy-file", looping: "loop-guard", credit: "credit-wait" };
+/** The actions of the hold events of an issue. A job-state action is the hold "its job is open" and is on the job's key. */
+const HOLD_ACTIONS = [...Object.keys(GATE_OF), "waiting", "after", "parent", "parked", "starting", "done", "dropped"];
 
-/** Every hold record of every job, oldest first. */
+/** The hold of an event: a `started` event of the rule, or an event of the gate in HOLD_ACTIONS on an issue; else null. The text is the event's detail. */
+function holdOf(e: Event): HoldRecord | null {
+  if (!e.object.startsWith("issue.")) return null;
+  if (e.subject === "rule" && e.action === "started") return { at: e.time, name: e.object, kind: "started", text: e.detail ?? "" };
+  if (e.subject !== "gate" || !HOLD_ACTIONS.includes(e.action)) return null;
+  return { at: e.time, name: e.object, kind: e.action === "waiting" ? "backend" : GATE_OF[e.action] ?? "not-ready", text: e.detail ?? "", event: e };
+}
+
+/** Every hold record of every issue, oldest first. */
 export function allHolds(): HoldRecord[] {
-  return record.all().flatMap(holdsOf).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  return readEvents(0).map(holdOf).filter((h): h is HoldRecord => h !== null);
 }
 
 /** The hold records of the given issues, oldest first. */
 export function readHolds(names: string[]): HoldRecord[] {
-  return [...new Set(names)].flatMap((n) => { const r = record.read(n); return r ? holdsOf(r) : []; })
-    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  return [...new Set(names)].flatMap((n) => eventsOf(n).map(holdOf).filter((h): h is HoldRecord => h !== null));
 }
 
 /**
- * Records why an issue waits (or, with kind `started`, that it no longer does) in its job record: an event, unless it
- * repeats the last one, and `wait`, which a record that stops a start sets and any other clears. `ev` gives the hold's
- * log event, by `gate` on the issue.
+ * Records why an issue waits (or, with kind `started`, that it no longer does): its hold event by `gate` on the issue, unless it
+ * repeats the last one, and `wait` in its issue state, which a hold that stops a start sets and any other clears. A `started` record logs
+ * nothing: the start logs its own event. `ev` gives the hold's log event.
  */
 export function recordHold(name: string, kind: Gate | "started", text: string, ev?: Hold): void {
   const at = new Date().toISOString();
-  const logged = ev && event({ at, by: "gate", subject: name, ...ev });
-  record.update(name, (r) => {
-    const last = holdsOf(r).at(-1);
-    if (last && last.kind === kind && last.text === text) return;
-    if (logged) logEvent(logged);
-    r.events.push(kind === "started" ? { at, kind: "started", what: text } : { at, kind: "hold", what: text, data: { gate: kind, ...(logged ? { event: logged } : {}) } });
-    r.wait = stopsStart({ at, name, kind, text }) ? { kind, reason: text, since: at } : null;
+  tx(() => {
+    if (kind !== "started") {
+      const last = eventsOf(name).filter((e) => (e.subject === "gate" && e.action !== "question" && e.action !== "answered") || (e.subject === "rule" && e.action === "started")).at(-1);
+      const e = ev && event({ time: at, subject: "gate", object: name, ...ev });
+      if (last && e && last.subject === "gate" && last.object === e.object && last.action === e.action && (last.detail ?? "") === (e.detail ?? "")) return;
+      if (e) logEvent(e);
+    }
+    record.editIssueState(name, (s) => { s.wait = stopsStart({ at, name, kind, text }) ? { kind, reason: text, since: at } : null; });
   });
 }
 
 const DAY = 24 * 3600_000;
 
-export const paused = () => existsSync(pauseFile());
+export const paused = () => getJson("settings", "paused", null) !== null;
 
-/** Pauses the factory (the `paused` file holds the time) or, with `on` false, resumes it. */
+/** Pauses the factory (the `paused` setting holds the time) or, with `on` false, resumes it. */
 export function setPaused(on: boolean): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  if (on) writeFileSync(pauseFile(), new Date().toISOString() + "\n");
-  else rmSync(pauseFile(), { force: true });
+  putJson("settings", "paused", on ? new Date().toISOString() : null);
+  logSetting(on ? "the factory is paused" : "the factory is resumed");
 }
 
 /** The backend the factory holds after a call on it ended with the API credit error: `via` is the backend, `why` the call's line. */
 export interface BackendHold { via: Via; why: string; since: string }
 
-const holdFile = () => join(factoryDir(), "backend-hold.json");
-
 /** The backend the factory holds now, or null. */
 export function backendHold(): BackendHold | null {
-  const h = readJsonOr<BackendHold | null>(holdFile(), null);
+  const h = getJson<BackendHold | null>("state", "backend-hold", null);
   return h && typeof h.via === "string" ? h : null;
 }
 
 /** The line the hold gives a run on its backend. */
 const holdBound = (h: BackendHold): Bound =>
-  ({ why: `waits for ${BACKENDS[h.via]}: ${h.why}`, text: `Waiting for ${BACKENDS[h.via]}: ${h.why}`, ev: { action: "waiting", count: `for ${BACKENDS[h.via]}` } });
+  ({ why: `waits for ${BACKENDS[h.via]}: ${h.why}`, text: `Waiting for ${BACKENDS[h.via]}: ${h.why}`, ev: { action: "waiting", detail: `for ${BACKENDS[h.via]}` } });
 
 /**
  * The backend hold of an issue with no run yet, whose backend only routing names: it binds when this hold already held
@@ -115,8 +113,8 @@ export function heldGoal(name: string): Bound | null {
  */
 export async function holdBackend(via: Via, why: string): Promise<void> {
   if (backendHold()?.via === via) return;
-  writeJson(holdFile(), { via, why, since: new Date().toISOString() });
-  logEvent({ by: "rule", subject: via, action: "paused", sub: "credit", note: `held ${BACKENDS[via]}: ${why}` });
+  putJson("state", "backend-hold", { via, why, since: new Date().toISOString() });
+  logEvent({ subject: "rule", action: "paused", object: via, detail: `held ${BACKENDS[via]}: ${why}` });
   await tell(`the factory holds ${BACKENDS[via]}: ${why}`);
 }
 
@@ -124,9 +122,9 @@ export async function holdBackend(via: Via, why: string): Promise<void> {
 export async function probeHold(up: (via: Via) => Promise<boolean> = probeBackend): Promise<string | null> {
   const h = backendHold();
   if (!h || !(await up(h.via))) return null;
-  rmSync(holdFile(), { force: true });
+  putJson("state", "backend-hold", null);
   const line = `${BACKENDS[h.via]} answers again: the hold is off`;
-  logEvent({ by: "rule", subject: h.via, action: "reran", note: line });
+  logEvent({ subject: "rule", action: "reran", object: h.via, detail: line });
   return line;
 }
 
@@ -137,17 +135,17 @@ export const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.
 /** `runs` is every run, when the caller has read them already. */
 export function runsToday(now = Date.now(), runs: Entry[] = allRuns()): Entry[] {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return runs.filter((e) => (isBuild(e.run.kind) || e.run.kind === "intake") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
+  return runs.filter((e) => (isBuild(e.run.role) || e.run.role === "intake") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
 /** The dollars of the runs started in the last 24 hours: `runsToday`, and the firefighter and director runs (and the explain runs from before the director), which `runsToday` does not count. A director run has no repo (its `on` is an item ref, a run folder or a lesson id), so it is not filtered by one, as a firefighter run is not. */
 export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number {
-  const others = runs.filter((e) => (e.run.kind === "director") && now - Date.parse(e.run.started) < DAY);
+  const others = runs.filter((e) => (e.run.role === "director") && now - Date.parse(e.run.started) < DAY);
   return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0);
 }
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
-export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && isRunning(e));
+export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.role) && isRunning(e));
 
 /** Whether a build run is on the local backend: unit.ts sets its model to its tier's, and before that its tier's model is the local one. */
 export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Tier, Setting>): boolean => viaOfRun(run, models) === "local";
@@ -196,8 +194,8 @@ export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): 
   const call = local && held("gpu");
   const live = local ? liveLocal(jobs?.flat(), models) + (call ? 1 : 0) : liveRuns(jobs?.flat());
   const bound: Bound = local
-    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)`, ev: call ? { action: "gpu" } : { action: "full", sub: "local", count: `${live} / ${LOCAL_CAP}` } }
-    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)`, ev: { action: "full", count: `${live} / ${LIVE_CAP()}` } };
+    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)`, ev: call ? { action: "gpu" } : { action: "full", detail: `${live} / ${LOCAL_CAP} local runs` } }
+    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)`, ev: { action: "full", detail: `${live} / ${LIVE_CAP()} runs` } };
   return {
     pause: paused() ? PAUSED : null,
     backend: hold && run !== undefined && viaOfRun(run, models) === hold.via ? holdBound(hold) : null,
@@ -220,64 +218,43 @@ export function gates(opts: { only?: readonly FactoryGate[]; jobs?: Job[]; run?:
   return null;
 }
 
-/** Add a row to flaky.json under a lock, because runs in other processes add rows too. Returns false when the lock stays busy. */
-export async function recordFlake(row: Flake): Promise<boolean> {
-  const release = await lock("flaky");
-  if (!release) return false;
-  try {
-    writeJson(flakyFile(), [...flakes(), row]);
-    return true;
-  } finally {
-    release();
-  }
-}
+/** Add a row to the `flaky` table. */
+export const recordFlake = (row: Flake): void => {
+  conn().query("INSERT INTO flaky (time, repo, check_name, run, tests) VALUES (?, ?, ?, ?, ?)").run(row.at, row.repo, row.check, row.run, row.tests ? JSON.stringify(row.tests) : null);
+};
 
 export interface Flake { repo: string; check: string; run: string; at: string; tests?: string[] }
-const flakyFile = () => join(factoryDir(), "flaky.json");
-export const flakes = (): Flake[] => readJsonOr(flakyFile(), []);
+export const flakes = (): Flake[] =>
+  (conn().query("SELECT time AS at, repo, check_name AS `check`, run, tests FROM flaky ORDER BY seq").all() as (Omit<Flake, "tests"> & { tests: string | null })[])
+    .map(({ tests, ...r }) => ({ ...r, ...(tests ? { tests: JSON.parse(tests) } : {}) }));
 
 /** `config`: the setup and checks the record ran, as JSON; a record from before it has none. */
 export interface Baseline { repo: string; commit: string; config?: string; ok: boolean; failed?: string }
 
-const baselineFile = () => join(factoryDir(), "baseline.json");
-
-export const baselines = (): Record<string, Baseline> => readJsonOr(baselineFile(), {});
+export const baselines = (): Record<string, Baseline> => getJson("state", "baseline", {});
 
 /**
- * The one write of baseline.json. Under one lock for the whole file, it reads the entries, lets `decide` turn the
- * repo's old entry into its new one (null leaves the file alone), and writes a temp file that it renames over
- * baseline.json, so a reader never sees a half-written file. Returns whether it wrote.
+ * The one write of the `baseline` row. In one transaction it reads the entries, lets `decide` turn the repo's old
+ * entry into its new one (null leaves the row alone), and writes them back. Returns whether it wrote.
  */
-export async function writeBaseline(key: string, decide: (old: Baseline | undefined) => Baseline | null): Promise<boolean> {
-  const release = await lock("baseline-file");
-  if (!release) throw new Error("baseline.json lock busy");
-  try {
-    const all = baselines();
-    const next = decide(all[key]);
-    if (!next) return false;
-    writeJson(baselineFile(), { ...all, [key]: next });
-    return true;
-  } finally {
-    release();
-  }
-}
+export const writeBaseline = (key: string, decide: (old: Baseline | undefined) => Baseline | null): boolean => tx(() => {
+  const all = baselines();
+  const next = decide(all[key]);
+  if (!next) return false;
+  putJson("state", "baseline", { ...all, [key]: next });
+  return true;
+});
 
 /** One full suite run: the test counts of its bun test checks, and the tests that failed on the first run and passed on the rerun. */
 export interface SuiteRecord { repo: string; commit: string; at: string; ran: number; passed: number; failed: number; skipped: number; rerunPassed: number }
 
-const historyFile = () => join(factoryDir(), "suite-history.jsonl");
-
-/** The suite records in the order they were appended, of `repo` when given. */
-export const suiteHistory = (repo?: string): SuiteRecord[] => {
-  try {
-    const all: SuiteRecord[] = readFileSync(historyFile(), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-    return repo ? all.filter((r) => r.repo === repo) : all;
-  } catch { return []; }
-};
+/** The suite records in the order they were added, of `repo` when given. */
+export const suiteHistory = (repo?: string): SuiteRecord[] =>
+  conn().query(`SELECT repo, commit_sha AS \`commit\`, time AS at, ran, passed, failed, skipped, rerun_passed AS rerunPassed FROM suite_history${repo ? " WHERE repo = ?" : ""} ORDER BY seq`).all(...(repo ? [repo] : [])) as SuiteRecord[];
 
 export const appendSuiteHistory = (r: SuiteRecord): void => {
-  mkdirSync(factoryDir(), { recursive: true });
-  appendFileSync(historyFile(), JSON.stringify(r) + "\n");
+  conn().query("INSERT INTO suite_history (time, repo, commit_sha, ran, passed, failed, skipped, rerun_passed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(r.at, r.repo, r.commit, r.ran, r.passed, r.failed, r.skipped, r.rerunPassed);
 };
 
 export const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
@@ -311,14 +288,12 @@ const STALL_MS = 15 * 60_000;
 /** A land run live for longer than this is stuck: 99% of land runs end within 20 minutes. */
 export const LAND_STUCK_MS = 30 * 60_000;
 
-const stallFile = () => join(factoryDir(), "stalls.json");
-
 /** The tick's record of stalled work: each key with the time a tick first saw it. */
 export function writeStalls(stalls: Record<string, string>): void {
-  writeJson(stallFile(), stalls);
+  putJson("state", "stalls", stalls);
 }
 
-export const readStalls = (): Record<string, string> => readJsonOr(stallFile(), {});
+export const readStalls = (): Record<string, string> => getJson("state", "stalls", {});
 
 /** A health line: its text, its kind, and for an alert the key the status sentence ranks it by (lib/status-words.ts). */
 export interface Health { text: string; kind: "alert" | "warn"; key?: string }
@@ -330,7 +305,7 @@ export function stallLines(now: number, jobs?: Job[]): Health[] {
   const old = Object.entries(readStalls()).filter(([, at]) => now - Date.parse(at) >= STALL_MS).map(([k]) => k);
   const n = (kind: string) => old.filter((k) => k.startsWith(`${kind}:`)).length;
   const lines: Health[] = [];
-  const slow = (jobs?.flat() ?? allRuns()).filter((e) => e.run.kind === "land" && isLive(e.folder) && now - Date.parse(e.run.started) >= LAND_STUCK_MS);
+  const slow = (jobs?.flat() ?? allRuns()).filter((e) => e.run.role === "land" && isLive(e.folder) && now - Date.parse(e.run.started) >= LAND_STUCK_MS);
   if (n("land")) lines.push(alert("lands-stuck", `health: ${n("land")} passed run${n("land") > 1 ? "s" : ""} did not land in 15 minutes`));
   for (const e of slow) lines.push(alert("lands-stuck", `health: the land run of ${e.run.name} is live for over 30 minutes`));
   if (n("goal")) lines.push(alert("queue-stuck", `health: ${n("goal")} goal${n("goal") > 1 ? "s" : ""} can start, but no run started in 15 minutes`));
@@ -375,9 +350,9 @@ export function health(now = Date.now(), o: { jobs?: Job[] } = {}): Health[] {
   return lines;
 }
 
-/** The firefighter's lines of the factory log in the last 24 hours, newest last, at most `n`: what the Status page shows. An event shows its note. */
+/** The firefighter's lines of the factory log in the last 24 hours, newest last, at most `n`: what the Status page shows. An event shows its detail. */
 export function firefighterLines(now = Date.now(), n = 8): { at: string; line: string }[] {
-  const events = readEvents(now - DAY).filter((e) => e.by === "firefighter").map((e) => ({ at: e.at, line: `firefighter: ${e.note ?? `${e.action} ${e.subject}`}` }));
+  const events = readEvents(now - DAY).filter((e) => e.subject === "firefighter").map((e) => ({ at: e.time, line: `firefighter: ${e.detail ?? `${e.action} ${e.object}`}` }));
   return events.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).slice(-n);
 }
 
@@ -385,8 +360,8 @@ export function firefighterLines(now = Date.now(), n = 8): { at: string; line: s
 export const changedLinesOf = (stat: string): number =>
   [...stat.matchAll(/(\d+) (?:insertion|deletion)/g)].reduce((a, m) => a + Number(m[1]), 0);
 
-/** The job name for an issue: its id, `aleph-28` or `aleph-28.1`. */
-export const issueJob = (repo: Repo, id: number | string) => `${repo.key}-${id}`;
+/** The work's name for an issue: its key, `issue.28`. */
+export const issueJob = (_repo: Repo, id: number | string) => `issue.${id}`;
 
 /** A file is busy when this many land runs of its repo conflicted on it in the last BUSY_MS. */
 const BUSY_CONFLICTS = 3;
@@ -399,7 +374,7 @@ function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => { f
   for (const j of jobs) {
     const last = record.counting(j).run;
     const on = onOf(last);
-    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isWaiting(last.condition)) continue;
+    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isWaiting(last.state)) continue;
     const theirs = lists.item(repo.key, on);
     const s = theirs && shares(theirs);
     if (s) return { why: `waits for ${last.name}: ${s.what}`, on: last.name, file: s.file };
@@ -419,7 +394,7 @@ const usesGptOss = (item: issues.Issue): boolean =>
 function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
   const counts = new Map<string, number>();
   for (const j of jobs) for (const { run } of j) {
-    if (run.kind !== "land" || run.repo !== repo.key || now - Date.parse(run.started) > BUSY_MS) continue;
+    if (run.role !== "land" || run.repo !== repo.key || now - Date.parse(run.started) > BUSY_MS) continue;
     for (const f of run.conflicts ?? []) counts.set(f, (counts.get(f) ?? 0) + 1);
   }
   const mine = surfacePaths(item.spec).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
@@ -436,7 +411,7 @@ const byId = (a: Entry, b: Entry): number => (a.id < b.id ? -1 : a.id > b.id ? 1
  * issue has no run yet, so a gate that asks the run to start reads nothing.
  */
 export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null {
-  return jobs.flat().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind))
+  return jobs.flat().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.role))
     .sort(byId).at(-1)?.run ?? null;
 }
 
@@ -446,9 +421,9 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
   // A job whose last run ended with the API credit error is not open work: the credit-wait gate holds the issue for its wait, then it starts again.
   const found = openJob(name, null, jobs), open = found && policyOf(causeOf(record.counting(found).run)).waitMs > 0 ? null : found;
   return {
-    name, item, parent: parentIn(repo.key, item, lists),
-    open: open ? record.counting(open).run.condition : null,
-    job: open ? record.jobIdOf(open[0]) : null,
+    name, ref: `${repo.key}-${issues.idOf(item)}`, item, parent: parentIn(repo.key, item, lists),
+    open: open ? record.counting(open).run.state : null,
+    job: open ? record.counting(open).id : null,
     busy: busyWait(repo, item, jobs, now),
     noCommits: noCommitStreak(repo.key, name, runs),
     capHeld: capMarked(name),
@@ -457,44 +432,34 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
   };
 }
 
-/** Marks now as when the streak set an Ask on the issue's item: a `streak` event in its job record. */
-export function markStreak(name: string): void {
-  record.addEvent(name, { kind: "streak", what: "the no-commit streak set an Ask" });
-}
+/** When an Ask of `reason` was last set on the issue (ms), or null: the time of its latest `question` event. Setting the no-commit streak's Ask is what marks the streak. */
+const askedAt = (name: string, reason: string): number | null => {
+  const e = eventsOf(name, "question").findLast((x) => x.detail === reason);
+  return e ? Date.parse(e.time) : null;
+};
 
 /** When the streak last set an Ask on the issue's item (ms), or null. Runs before it no longer count. */
-const streakMark = (name: string): number | null => {
-  const e = record.lastEvent(name, "streak");
-  return e ? Date.parse(e.at) : null;
-};
+const streakMark = (name: string): number | null => askedAt(name, "no-commit");
 
 /** How many of the issue's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
 function noCommitStreak(repoKey: string, name: string, all: Entry[]): number {
   const mark = streakMark(name) ?? -Infinity;
-  const runs = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
+  const runs = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.role) && e.run.state !== "running" && Date.parse(e.run.started) > mark)
     .sort(byId);
   let n = 0;
   for (const e of runs.reverse()) { if (causeOf(e.run) !== "no-commit") break; n++; }
   return n;
 }
 
-/** Marks that the cap's Ask was set for the issue: a `cap` event in its job record. */
-export function markCap(name: string): void {
-  record.addEvent(name, { kind: "cap", what: "the run cap set an Ask" });
-}
-
-/** Clears the cap mark: a start has followed the Ask. */
-export function clearCap(name: string): void {
-  if (capMarked(name)) record.addEvent(name, { kind: "cap-cleared", what: "a start followed the Ask" });
-}
-
-/** Whether the cap's Ask was set for the issue and no start has followed: its newest `cap` event has no `cap-cleared` after it. */
-const capMarked = (name: string): boolean =>
-  record.read(name)?.events.findLast((e) => e.kind === "cap" || e.kind === "cap-cleared")?.kind === "cap";
+/** Whether the cap's Ask was set for the issue and no start has followed: its latest `run-cap` question has no `started` event after it. */
+const capMarked = (name: string): boolean => {
+  const at = askedAt(name, "run-cap");
+  return at !== null && !eventsOf(name, "started").some((e) => Date.parse(e.time) > at);
+};
 
 /** How long ago the issue's newest build run whose cause has a wait (`waitMs`: the API credit error) ended, or null when it has none. */
 function creditWait(repoKey: string, name: string, all: Entry[], now: number): number | null {
-  const last = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.ended && policyOf(causeOf(e.run)).waitMs > 0)
+  const last = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.role) && e.run.ended && policyOf(causeOf(e.run)).waitMs > 0)
     .sort(byId).at(-1);
   return last ? now - Date.parse(last.run.ended!) : null;
 }
@@ -502,7 +467,7 @@ function creditWait(repoKey: string, name: string, all: Entry[], now: number): n
 /** How many jobs of the issue started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not, and a first run whose cause does not count to the cap (`countsToCap`: the API credit error) does not count. */
 function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: number): number {
   return jobs.filter((j) => {
-    const first = j.find((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind));
+    const first = j.find((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.role));
     return first !== undefined && now - Date.parse(first.run.started) < 3600_000 && policyOf(causeOf(first.run)).countsToCap;
   }).length;
 }
@@ -510,7 +475,7 @@ function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: numb
 /** The most job starts any one issue made in the last 60 minutes, by the rule the loop guard uses. */
 function maxStartsInHour(now: number, jobs: Job[]): number {
   const issues = new Map<string, { repo: string; name: string }>();
-  for (const e of jobs.flat()) if (e.run.repo && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000) issues.set(`${e.run.repo}/${e.run.name}`, { repo: e.run.repo, name: e.run.name });
+  for (const e of jobs.flat()) if (e.run.repo && isBuild(e.run.role) && now - Date.parse(e.run.started) < 3600_000) issues.set(`${e.run.repo}/${e.run.name}`, { repo: e.run.repo, name: e.run.name });
   return Math.max(0, ...[...issues.values()].map((g) => agentStartsInHour(g.repo, g.name, jobs, now)));
 }
 
@@ -537,22 +502,17 @@ export function factorySnapshot(now: number, jobs: Job[]) {
 /** The state of a factory repo's main: green, or red, unchecked or running with its line. */
 export type MainState = { state: "green" } | { state: "red" | "unchecked" | "running"; line: string };
 
-/**
- * The one write of tick.json. The tick, the suite and the monitor each write it from their own processes: under one
- * lock it reads the file, lets `change` make the new record, and puts it in place with a rename, so no write loses
- * the keys of another and no reader sees half a file.
- */
-export async function editTick(change: (s: any) => any): Promise<void> {
-  const file = join(factoryDir(), "tick.json");
-  const release = await lock("tick-file");
-  if (!release) throw new Error("tick.json lock busy");
-  try {
-    writeJson(file, change(readJsonOr(file, {})));
-  } finally {
-    release();
-  }
-}
+/** A row of `tick`: when a step last ran and what it said; a column is null until a write gives it. */
+export interface TickRow { last: string | null; result: string | null }
 
-/** The result of a scheduled step (`suite <repo>`, `monitor`) and its time, in `ran` of tick.json. */
-export const recordRan = (key: string, result: string): Promise<void> =>
-  editTick((s) => ({ ...s, ran: { ...s.ran, [key]: { at: new Date().toISOString(), result } } }));
+export const tickRows = (): Record<string, TickRow> =>
+  Object.fromEntries((conn().query("SELECT * FROM tick").all() as (TickRow & { step: string })[]).map(({ step, ...row }) => [step, row]));
+
+/** Sets the columns that `row` gives for `step`; the other column keeps its value. */
+export const setTick = (step: string, row: Partial<TickRow>): void => {
+  conn().query("INSERT INTO tick (step, last, result) VALUES (?1, ?2, ?3) ON CONFLICT (step) DO UPDATE SET last = coalesce(?2, last), result = coalesce(?3, result)")
+    .run(step, row.last ?? null, row.result ?? null);
+};
+
+/** The result of a scheduled step (`suite <repo>`, `monitor`) and its time, in its row of `tick`. */
+export const recordRan = (key: string, result: string): void => setTick(key, { last: new Date().toISOString(), result });

@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Refusal } from "../../lib/refusal.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { breakItem, doc, env, fx, parse, remoteItem, sec, seed, sh, tasks, useFixture } from "../fixture.ts";
+import { breakItem, doc, env, fx, issueFile, remoteItem, sec, seed, sh, useFixture } from "../fixture.ts";
 import * as store from "./store.ts";
-import { config } from "./store.ts";
 import * as issues from "./todo.ts";
-import { renderItem } from "./todo.ts";
 import { addPart } from "./parts.fixture.ts";
 import * as verbs from "./issues.ts";
 import { readEvents } from "../../lib/layout.ts";
@@ -59,11 +57,11 @@ test("a write from a store clone that is behind lands on top of main and keeps m
 });
 
 test("a write with a changed file in the store's checkout still reaches main, and says the checkout did not follow", async () => {
-  writeFileSync(join(fx.items, tasks, "proj-3.md"), "local edit\n");
+  writeFileSync(join(fx.items, issueFile(3)), "local edit\n");
   const a = await code(() => add("Despite the edit"));
   expect(a.code).toBe(0);
   expect(remoteItem(4)).toContain("Despite the edit");
-  expect(a.value!.follow).toContain(`main checkout not updated: it has changes in ${tasks}/proj-3.md`);
+  expect(a.value!.follow).toContain(`main checkout not updated: it has changes in ${issueFile(3)}`);
   expect(doc(3)).toBe("local edit\n");
 });
 
@@ -93,12 +91,11 @@ test("labels filter, and a flag value never lands in the title", async () => {
   expect(list({ label: "audio" }).map((r: any) => r.id)).toEqual([4]);
 });
 
-test("lint refuses an unknown status and a duplicate id, and --fix cannot save it", () => {
-  seed(`# To do\n\n## 8. One\n---\nid: 8\nstatus: maybe\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nA.\n\n## 8. Two\n---\nid: 8\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nB.\n`);
+test("lint refuses an unknown status, and --fix cannot save it", () => {
+  seed(`# To do\n\n## 8. One\n---\nid: 8\nstatus: maybe\ncreated: 2026-09-01T00:00:00.000Z\n---\n\nA.\n`);
   const r = lint();
   expect(r.code).toBe(1);
   expect(r.err).toContain('closed_as "maybe" is not done or dropped');
-  expect(r.err).toContain("2 items share id 8");
   // `--fix` exits 1 when findings remain.
   expect(verbs.lintFix(proj()).result.remaining.length).toBeGreaterThan(0);
 });
@@ -107,7 +104,7 @@ test("add takes a body of several lines", async () => {
   // The CLI reads it from stdin with `--request -` and trims it.
   expect((await code(() => add("Count at the gate", { request: "Why it matters.\n\nDone when the gate counts.\n".trim() }))).code).toBe(0);
   expect(show(4).request).toBe("Why it matters.\n\nDone when the gate counts.");
-  expect(remoteItem(4)).toContain("---\n<!-- request -->\nWhy it matters.\n\nDone when the gate counts.");
+  expect(remoteItem(4)).toContain("---\n\n# Request\n\nWhy it matters.\n\nDone when the gate counts.");
 });
 
 test("park: the reason is a note, closed_as stays unset, list shows parked and --status parked filters", async () => {
@@ -131,39 +128,25 @@ test("lint refuses a labels field and a waiting_on field and names the item", as
   expect(l.err).toContain("item 4: waiting_on is retired");
 });
 
-test("aleph issue lint reads a dotted issue file and names it by its dotted id", () => {
-  const parent = parse("# To do\n\n## 5. Parent\n---\nid: 5\nstatus: open\ncreated_time: 2026-09-01T00:00:00.000Z\nupdated_time: 2026-09-01T00:00:00.000Z\n---\n\nBody.\n").items[0];
-  parent.fm.kind = "task";
-  const part = { ...parent, sub: 1, title: "Goal", fm: { ...parent.fm, id: "5.1" } };
-  const put = (due?: string) => {
-    seed(null);
-    mkdirSync(join(fx.items, tasks), { recursive: true });
-    writeFileSync(join(fx.items, "proj", "backlog", "config.yml"), config("proj"));
-    writeFileSync(join(fx.items, tasks, "proj-5.md"), renderItem("proj", parent));
-    const g = due ? { ...part, fm: { ...part.fm, created_time: due } } : part;
-    writeFileSync(join(fx.items, tasks, "proj-5.1.md"), renderItem("proj", g));
-    sh(fx.items, "git", "add", "-A");
-    sh(fx.items, "git", "commit", "-qm", "dotted");
-    sh(fx.items, "git", "push", "-q", "origin", "main");
+test("aleph issue lint reads an issue file and names it by its number", () => {
+  const put = (created: string) => {
+    seed(`# To do\n\n## 5. Parent\n---\nstatus: open\ncreated: ${created}\nkind: task\n---\n\nBody.\n`);
   };
   put("soon");
   const bad = lint();
   expect(bad.code).toBe(1);
-  expect(bad.err).toContain('item 5.1: created_time "soon"');
-  expect(bad.err).not.toContain("share id 5");
-  expect(bad.err).not.toContain("id says 5.1");
-  put();
+  expect(bad.err).toContain('item 5: created "soon"');
+  put("2026-09-01T00:00:00.000Z");
   const ok = lint();
-  expect(ok.err).toBe("");
-  expect(ok.code).toBe(0);
+  expect(ok.err).not.toContain("created");
 });
 
-test("lint refuses an after ref that is not <repo>-<n>[.<k>]", () => {
-  seed(`# To do\n\n${sec(20, "kind: goal\nafter: [proj-1.2]\nlabels: []")}\n${sec(21, "kind: goal\nafter: [proj-x]\nlabels: []")}`);
+test("lint refuses an after ref that is not issue.<n>", () => {
+  seed(`# To do\n\n${sec(20, "kind: goal\nafter: [issue.1]\nlabels: []")}\n${sec(21, "kind: goal\nafter: [proj-x]\nlabels: []")}`);
   const r = lint();
   expect(r.code).toBe(1);
   expect(r.err).toContain("after: proj-x");
-  expect(r.err).not.toContain("proj-1.2");
+  expect(r.err).not.toContain("issue.1");
 });
 
 test("add and edit refuse a title over 60 characters, with a final period or with ': ', and write no commit", async () => {
@@ -193,25 +176,25 @@ test("media: add and attach store images in the store, and a run reads them back
   verbs.attach(proj(), a.item.id, [png, pdf]);
   const item = verbs.show(proj(), a.item.id);
   expect(store.mediaOf(item)).toEqual(["shot.png", "shot-2.png", "spec_sheet.pdf"]);
-  const files = store.mediaFiles("proj", item);
+  const files = store.mediaFiles(item);
   expect(readFileSync(files[0])).toEqual(readFileSync(png));
   expect(readFileSync(files[2], "utf8")).toBe("%PDF-1.4");
   // A run on a part of the issue reads the issue's media, then its own.
-  store.writeList(proj(), "a part", (d) => addPart(d, d.items.find((i) => i.id === a.item.id)!, { title: "Fix the logo", spec: "## Goal\nx" }));
-  const part = verbs.attach(proj(), `${a.item.id}.1`, [pdf]);
+  const child = store.writeList(proj(), "a child", (d) => addPart(d, d.items.find((i) => i.id === a.item.id)!, { title: "Fix the logo", spec: "## Goal\nx" }).id)!.value;
+  const part = verbs.attach(proj(), child, [pdf]);
   expect(part.result.media).toEqual(["spec_sheet.pdf"]);
-  expect(store.runMedia("proj", `${a.item.id}.1`)).toEqual([...files, join(store.mediaDir(), `proj-${a.item.id}.1`, "spec_sheet.pdf")]);
+  expect(store.runMedia("proj", child)).toEqual([...files, join(fx.items, "issues", String(child), "spec_sheet.pdf")]);
   writeFileSync(join(fx.base, "clip.mp4"), "x");
   expect((await code(() => verbs.attach(proj(), a.item.id, [join(fx.base, "clip.mp4")]))).code).toBe(1);
 });
 
-test("retitle gives a bad title of an open or parked issue a new one, keeps a part's group and leaves a done issue", async () => {
+test("retitle gives a bad title of an open or parked issue a new one, keeps a child's group and leaves a done issue", async () => {
   const a = await add("Fix the first"), b = await add("Fix the second"), c = await add("Fix the third");
   store.writeList(proj(), "bad titles", (d) => {
     const [x, y, z] = [a, b, c].map((n) => issues.find(d, n.item.id)!);
     x.title = "Check foo: bar";
     y.title = "[Group] Check foo: bar.";
-    y.fm.from = `proj-${x.id}`;
+    y.fm.from = `issue.${x.id}`;
     y.fm.parked = "true";
     z.title = "Done foo: bar";
     z.fm.closed_as = "done";
@@ -228,13 +211,13 @@ test("retitle gives a bad title of an open or parked issue a new one, keeps a pa
   expect(show(c.item.id).title).toBe("Done foo: bar");
 });
 
-test("add logs a filed event, and close logs a done or a dropped event, on the issue's full ID", async () => {
+test("add logs a filed event, and close logs a done or a dropped event, on the issue's key", async () => {
   const before = readEvents().length;
   const added = (await add("Teach the gate to count")).result.added;
   verbs.close(proj(), added, "done");
   const b = (await add("Count the other gate")).result.added;
   verbs.close(proj(), b, "drop", "not needed");
-  const mine = (n: number) => readEvents().slice(before).filter((e) => e.subject === `proj-${n}`).map((e) => e.action);
+  const mine = (n: number) => readEvents().slice(before).filter((e) => e.object === `issue.${n}`).map((e) => e.action);
   expect(mine(added)).toEqual(["filed", "done"]);
   expect(mine(b)).toEqual(["filed", "dropped"]);
 });
@@ -244,7 +227,7 @@ test("add files through writeFiling: one filed event and one after per new issue
   const before = readEvents().length;
   const n = (await add("Start the dispatch on a filing")).result.added;
   expect(started).toEqual([`proj-${n}`]);
-  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.by, e.subject])).toEqual([["human", `proj-${n}`]]);
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.subject, e.object])).toEqual([["human", `issue.${n}`]]);
   expect((await code(() => add("Fix: the title has a prefix"))).code).toBe(1);
   expect(started).toEqual([`proj-${n}`]);
 });

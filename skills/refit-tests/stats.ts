@@ -13,7 +13,7 @@ import { join, resolve } from "node:path";
 import { isTestFile } from "../../jobs/lib/gates/test-files.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { git as run } from "../../lib/git.ts";
-import { layout } from "../../lib/layout.ts";
+import { conn } from "../../lib/db.ts";
 
 export type Case = { name: string; file: string; line: number; s: number; asserts?: number };
 
@@ -108,7 +108,6 @@ export function growth(cwd: string, months = 12, now = new Date()) {
   return { months: rows, suite: suiteHistory(cwd) };
 }
 
-const FACTORY = () => layout().factory;
 /** aleph's registry key of the repo at `cwd`, also from a worktree; else the folder name. */
 function repoKey(cwd: string): string {
   const root = git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir").trim().replace(/\/\.git$/, "");
@@ -117,11 +116,7 @@ function repoKey(cwd: string): string {
 
 /** aleph's full-suite records for this repo, one per month (the last of each): ran, failed, skipped. Empty outside aleph. */
 function suiteHistory(cwd: string) {
-  const file = join(FACTORY(), "suite-history.jsonl");
-  if (!existsSync(file)) return [];
-  const key = repoKey(cwd);
-  const rows: { repo: string; at: string; ran: number; failed: number; skipped: number; rerunPassed: number }[] =
-    readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.repo === key);
+  const rows = conn().query("SELECT time AS at, ran, failed, skipped, rerun_passed AS rerunPassed FROM suite_history WHERE repo = ? ORDER BY seq").all(repoKey(cwd)) as { at: string; ran: number; failed: number; skipped: number; rerunPassed: number }[];
   const last = new Map(rows.map((r) => [r.at.slice(0, 7), r]));
   return [...last].map(([month, r]) => ({ month, ran: r.ran, failed: r.failed, skipped: r.skipped, rerunPassed: r.rerunPassed }));
 }
@@ -156,14 +151,12 @@ export function smells(cwd: string, paths: string[] = []) {
 
 /** aleph's flake rows for `repo`, per test, most often first. Empty outside aleph. */
 export function flakes(repo: string) {
-  const file = join(FACTORY(), "flaky.json");
-  if (!existsSync(file)) return { source: null, tests: [] };
-  const rows: { repo: string; run: string; at: string; tests?: string[] }[] = JSON.parse(readFileSync(file, "utf8"));
-  const seen = rows.filter((r) => r.repo === repo).flatMap((r) => (r.tests ?? ["(no test named)"]).map((t) => ({ t, at: r.at, run: r.run })));
+  const rows = conn().query("SELECT time AS at, run, tests FROM flaky WHERE repo = ? ORDER BY seq").all(repo) as { at: string; run: string; tests: string | null }[];
+  const seen = rows.flatMap((r) => (r.tests ? JSON.parse(r.tests) as string[] : ["(no test named)"]).map((t) => ({ t, at: r.at, run: r.run })));
   const tests = Object.entries(Object.groupBy(seen, (s) => s.t)).map(([test, ss]) => ({
     test, count: ss!.length, first: ss![0].at.slice(0, 10), last: ss!.at(-1)!.at.slice(0, 10), runs: ss!.slice(-3).map((s) => s.run),
   }));
-  return { source: file, tests: tests.sort((a, b) => b.count - a.count) };
+  return { source: "aleph.db", tests: tests.sort((a, b) => b.count - a.count) };
 }
 
 /** Per source file of an lcov report, the set of lines with a hit count above 0. */

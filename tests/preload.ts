@@ -23,11 +23,11 @@ for (const name of readdirSync(tmpdir()).filter((n) => n.startsWith(PREFIX))) {
 delete process.env.ALEPH_AGENT;
 const dir = mkdtempSync(join(tmpdir(), `${PREFIX}${procId(process.pid)}-`));
 const vars: Record<string, string> = {
-  ALEPH_ISSUES: join(dir, "issues"), ALEPH_JOBS_DIR: join(dir, "runs"),
-  ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), ALEPH_BACKUPS_DIR: join(dir, "backups"), ALEPH_REPOS: join(dir, "repos.json"),
-  ALEPH_SKILLS_STORE: join(dir, "skills-store.json"), ALEPH_USAGE_FILE: join(dir, "usage.jsonl"),
+  ALEPH_ITEMS: join(dir, "items"), ALEPH_JOBS_DIR: join(dir, "jobs"),
+  ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), ALEPH_BACKUPS_DIR: join(dir, "backups"),
+  ALEPH_SKILLS_STORE: join(dir, "skills-store.json"),
   ALEPH_CLAUDE_CREDENTIALS: join(dir, "credentials.json"), ALEPH_SPOOL: join(dir, "spool"),
-  ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_JUDGE_FILE: join(dir, "judge"), ALEPH_ANNOTATIONS: join(dir, "annotations.json"),
+  ALEPH_SESSIONS_DIR: join(dir, "sessions"), ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_ANNOTATIONS: join(dir, "annotations.json"), ALEPH_DB: join(dir, "aleph.db"),
   // No test reaches the live model through the monitor's reader: `false` fails, and a test that wants a reply gives a fake.
   ALEPH_MONITOR_CMD: "false",
   // Nor through the maintainer's compile.
@@ -47,8 +47,6 @@ afterEach(() => { for (const [k, v] of Object.entries(vars)) process.env[k] ??= 
 // a test that sets one of them itself still gets the value it sets.
 delete process.env.ALEPH_JOB_ID;
 delete process.env.ALEPH_JOB_RUN;
-// The job records follow the test ledger (`<ALEPH_JOBS_DIR>/.records`), never a folder the shell names.
-delete process.env.ALEPH_RECORDS_DIR;
 // A shell with ALEPH_UI_PASSWORD turns on the UI's login gate, and every UI test would get a 401. A test of the
 // gate sets the password itself.
 delete process.env.ALEPH_UI_PASSWORD;

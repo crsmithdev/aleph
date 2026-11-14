@@ -2,12 +2,12 @@
  * A factory run as one Langfuse trace, under the run's id: the unit posts it after the run, from the worker's
  * and the reviewer's stream-json. episode.ts reads it back by that id.
  */
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resultContent } from "../../../lib/toolresult.ts";
 import { langfuseConfig } from "../../../lib/env.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from "../../../lib/otlp.ts";
-import { onOf, type Run } from "../records/ledger.ts";
-import { runFile } from "../records/run-files.ts";
+import { allRuns, onOf, type Run } from "../records/ledger.ts";
+import { logTo, runFile } from "../records/run-files.ts";
 import { resultOf } from "../roles/agent-call.ts";
 
 export interface TraceInput {
@@ -89,7 +89,7 @@ export function spansFor(t: TraceInput): Span[] {
   const model = t.run.model ?? w.model;
   const cost = t.run.cost ?? w.cost;
   const meta = {
-    "langfuse.trace.metadata.state": t.run.condition,
+    "langfuse.trace.metadata.state": t.run.state,
     "langfuse.trace.metadata.reason": t.run.reason,
     "langfuse.trace.metadata.model": model,
     "langfuse.trace.metadata.cost": cost,
@@ -118,15 +118,17 @@ export async function postTrace(folder: string, runId: string, run: Run, repoKey
   try {
     const cfg = langfuseConfig();
     if (!cfg) return;
+    // The reviewer is a job of its own, the next of this one.
+    const rv = allRuns().findLast((e) => e.run.role === "review" && e.run.prev === runId)?.folder;
     const spans = spansFor({
       runId, run, repoKey,
-      prompt: read(runFile(folder, "prompt.md")) ?? "", stream: read(runFile(folder, "output.log")) ?? "",
-      reviewPrompt: read(runFile(folder, "review-prompt.md")), reviewStream: read(runFile(folder, "review.log")),
+      prompt: read(runFile(folder, "prompt.md")) ?? "", stream: read(runFile(folder, "transcript.jsonl")) ?? "",
+      reviewPrompt: rv && read(runFile(rv, "prompt.md")), reviewStream: rv && read(runFile(rv, "transcript.jsonl")),
       startMs: Date.parse(run.started) || Date.now(), endMs: Date.parse(run.ended ?? "") || Date.now(),
     });
     const r = await postSpans(cfg, spans);
-    if (!r.ok) appendFileSync(runFile(folder, "trace.log"), `${new Date().toISOString()} langfuse post failed: ${r.status ?? ""} ${r.error ?? ""}\n`.replace(/\s+\n/, "\n"));
+    if (!r.ok) logTo(folder, "dispatch", `${new Date().toISOString()} langfuse post failed: ${r.status ?? ""} ${r.error ?? ""}\n`.replace(/\s+\n/, "\n"));
   } catch (e: any) {
-    try { appendFileSync(runFile(folder, "trace.log"), `${new Date().toISOString()} trace failed: ${e?.message ?? e}\n`); } catch {}
+    try { logTo(folder, "dispatch", `${new Date().toISOString()} trace failed: ${e?.message ?? e}\n`); } catch {}
   }
 }

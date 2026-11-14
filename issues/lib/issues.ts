@@ -9,9 +9,8 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
-import { FULL, STATUSES } from "../../lib/naming.ts";
+import { key, parseKey, STATUSES } from "../../lib/naming.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";
-import { logEvent } from "../../lib/layout.ts";
 import { git } from "../../lib/git.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { recentRepos } from "../../jobs/lib/records/status.ts";
@@ -35,7 +34,7 @@ export interface Fields {
   media?: string[];
 }
 
-export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated_time ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
+export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: issues.updated(i) ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
@@ -44,12 +43,11 @@ export function checkFields(f: Fields): void {
   if (f.status !== undefined && !(STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${STATUSES.join(", ")}`);
 }
 
-/** Set what an issue waits for (`after`), checked for form and, in this repo, for existence. */
-function setAfter(repo: store.Place, doc: issues.Doc, i: issues.Issue, after: string[]): void {
-  checkAfter(after);
-  for (const r of after) if (r.startsWith(`${repo.key}-`) && !issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no issue`);
-  i.fm.after = after;
-  issues.touch(i);
+/** Set what an issue waits for (`after`), checked for form and for existence in the items repo. */
+function setAfter(i: issues.Issue, after: string[]): void {
+  const keys = checkAfter(after);
+  for (const r of keys) if (!store.hasIssue(parseKey(r)!.n)) refuse(`--after ${r} names no issue`);
+  i.fm.after = keys;
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
@@ -66,7 +64,7 @@ function pick(repo: store.Place, doc: issues.Doc, id: number | string): issues.I
 
 // Every verb but `add` needs a list on main; `add` starts one.
 function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) => T | null, create = false, blobs?: Record<string, Uint8Array>) {
-  return refusing(() => store.writeList(repo, message, change, create, blobs));
+  return refusing(() => store.writeList(repo, message, change, create, blobs, actor()));
 }
 
 /** What `f` returns; an error of the store is thrown as a refusal. */
@@ -96,13 +94,13 @@ function readMedia(paths: string[]): { name: string; data: Uint8Array }[] {
 }
 
 /** Put `files` on `item`: each in `blobs`, its name in the item's `media`. A name already there gets a number. */
-function attachTo(key: string, item: issues.Issue, files: { name: string; data: Uint8Array }[], blobs: Record<string, Uint8Array>): string[] {
+function attachTo(item: issues.Issue, files: { name: string; data: Uint8Array }[], blobs: Record<string, Uint8Array>): string[] {
   const names = store.mediaOf(item);
   for (const f of files) {
     let name = f.name;
     for (let n = 2; names.includes(name); n++) name = f.name.replace(/(\.[^.]+)$/, `-${n}$1`);
     names.push(name);
-    blobs[store.mediaPath(key, item, name)] = f.data;
+    blobs[store.mediaPath(item, name)] = f.data;
   }
   item.fm.media = names;
   return names;
@@ -115,14 +113,14 @@ export function attach(repo: store.Place, id: number | string, paths: string[]) 
   const blobs: Record<string, Uint8Array> = {};
   const w = write(repo, `todo: media on item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
-    return { id: i.id, media: attachTo(repo.key, i, files, blobs) };
+    return { id: i.id, media: attachTo(i, files, blobs) };
   }, false, blobs)!;
   return { result: { repo: repo.key, id: w.value.id, media: w.value.media, commit: w.commit }, follow: w.follow };
 }
 
-/** A ref for `--after`: `<repo>-<n>` or `<repo>-<n>.<k>`. */
-function checkAfter(after: string[]): void {
-  for (const r of after) if (!FULL.test(r)) refuse(`--after takes ids like <repo>-<n> or <repo>-<n>.<k>: ${r}`);
+/** A ref for `--after`: the key `issue.<n>`, or a shown ID such as `a-01234`. */
+function checkAfter(after: string[]): string[] {
+  return after.map((r) => parseKey(r)?.kind === "issue" ? key("issue", parseKey(r)!.n) : refuse(`--after takes issue keys like issue.5: ${r}`));
 }
 
 /** Who runs this command: a factory agent (`ALEPH_AGENT`), a Claude Code session (`CLAUDECODE`), else Chris at a shell. */
@@ -144,13 +142,13 @@ export async function add(repo: store.Place, title: string, fields: Fields, effe
   const files = readMedia(fields.media ?? []);
   const blobs: Record<string, Uint8Array> = {};
   const t = await triage(store.reader().list(repo.key), title, fields.request ?? spec ?? "");
-  const w = refusing(() => store.writeFiling(repo, "todo: add an item", actor(), effects, (doc, file) => {
+  const w = refusing(() => store.writeFiling(repo, "todo: add an item", actor(), effects, (_, file) => {
     const labels = fields.labels ?? t.labels;
     // Claude Code sets CLAUDECODE in its shells; a label that implies a source still wins over it.
     const implied = labels.some((l) => ["followup", "memory"].includes(l));
     const issue = file({ title, kind: fields.kind, priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined, parked: fields.status === "parked" });
-    if (fields.after?.length) setAfter(repo, doc, issue, fields.after);
-    if (files.length) attachTo(repo.key, issue, files, blobs);
+    if (fields.after?.length) setAfter(issue, fields.after);
+    if (files.length) attachTo(issue, files, blobs);
     return { issue };
   }, true, blobs))!;
   const { issue } = w.value;
@@ -202,7 +200,7 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
     if (issues.status(i) !== "open" || !ask) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     issues.note(i, text);
     decideAsk(ask, i, text);
-    if (fields.after !== undefined) setAfter(repo, doc, i, fields.after);
+    if (fields.after !== undefined) setAfter(i, fields.after);
     return i;
   })!;
   clearAsk(refIn(repo.key, w.value));
@@ -219,7 +217,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
   const kept = after?.filter((r) => r !== "none");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
-    for (const r of kept ?? []) if (r === `${repo.key}-${issues.refOf(i)}`) refuse("an issue cannot wait for itself");
+    for (const r of kept ?? []) if (parseKey(r)?.n === i.id) refuse("an issue cannot wait for itself");
     issues.edit(i, { kind, title, request, spec, priority, areas: labels });
     if (priority !== undefined) for (const p of store.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
     if (source !== undefined) i.fm.source = source;
@@ -227,7 +225,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
     else if (status === "open") store.reopen(doc, i, mainHead(repo));
     else if (status !== undefined) issues.setStatus(i, status as issues.Status);
     if (reason) issues.note(i, reason);
-    if (kept !== undefined) setAfter(repo, doc, i, kept);
+    if (kept !== undefined) setAfter(i, kept);
     return i;
   })!;
   return { result: { repo: repo.key, ...brief(repo.key)(w.value), commit: w.commit }, item: w.value, follow: w.follow };
@@ -241,7 +239,7 @@ function mainHead(repo: store.Place): string | null {
   return head.ok ? head.out.trim() : null;
 }
 
-/** Close an item as done, or as dropped (which needs a reason); `text` goes on it as a note. */
+/** Close an item as done, or as dropped (which needs a reason); `text` goes on it as a note and as `closed_why`. The write logs the close (store.ts `writeList`). */
 export function close(repo: store.Place, id: number | string, how: "done" | "drop", text = "") {
   text = text.trim();
   if (how === "drop" && !text) refuse("say why it is dropped");
@@ -253,7 +251,6 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
     return i;
   })!;
   if (how === "drop") clearAsk(refIn(repo.key, w.value));
-  logEvent({ by: actor(), subject: refIn(repo.key, w.value), action: how === "done" ? "done" : "dropped" });
   return { result: { repo: repo.key, id: w.value.id, status: issues.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };
 }
 

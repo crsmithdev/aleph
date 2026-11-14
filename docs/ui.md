@@ -37,7 +37,6 @@ With the gate on, `/` shows a login form. The right password sets the `aleph_ses
 |---|---|---|
 | `ALEPH_USAGE_URL` | `https://api.anthropic.com/api/oauth/usage` | The address that the UI polls for the Claude plan usage |
 | `ALEPH_CLAUDE_CREDENTIALS` | `~/.claude/.credentials.json` | The file with the OAuth token for that poll |
-| `ALEPH_USAGE_FILE` | `~/.aleph/usage.jsonl` | The file that gets one row per poll |
 | `ALEPH_SKILLS_DIR` | the `skills` directory of the repo | The directory of the skills that the Skills and Memory pages list |
 
 ## Routes

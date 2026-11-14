@@ -58,7 +58,7 @@ export function renderIdea(d) {
   const items = [["writeup", "Write-up"], ...LENS_TABS, ["log", "Log"]];
   const lens = ([id, label]) => {
     const all = d.lenses.filter((l) => l.lens === id);
-    const url = (l) => `/api/ideas/${encodeURIComponent(d.slug)}/${l.file}`;
+    const url = (l) => `/api/ideas/${encodeURIComponent(d.slug)}/lenses/${l.file}`;
     const newest = all[0];
     const body = !newest ? empty()
       : newest.file.endsWith(".md") ? `<div class="md" data-src="${esc(url(newest))}">${loadingLine("the result")}</div>`

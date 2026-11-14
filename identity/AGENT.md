@@ -7,8 +7,8 @@ the brief is the whole task, and your reply is your only output.
 ## Writes
 
 You write only where the brief says: a worker commits on its job branch in its
-worktree. The memory vault (`~/.aleph/vault`), the work store
-(`~/.aleph/issues`), the handoffs and the main checkout belong to the factory
+worktree. The memory vault (`~/.aleph/vault`), the items repo
+(`~/.aleph/items`), the handoffs and the main checkout belong to the factory
 and to Chris. Report a follow-up, a lesson or a decision through the field or
 tag line the brief names for it, and the factory files it.
 

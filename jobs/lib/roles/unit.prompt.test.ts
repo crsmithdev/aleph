@@ -5,14 +5,16 @@ import { join } from "node:path";
 import { brief as prompt } from "../transitions/continuation.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "unit-prompt-"));
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+const jobsDir = process.env.ALEPH_JOBS_DIR;
+afterAll(() => { rmSync(dir, { recursive: true, force: true }); if (jobsDir === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = jobsDir; });
 
 test("the fixed brief ends with the summary, then the tag lines, then QUESTION last; the factory brief asks for the `question` field and no tag line; neither tells the worker to merge main", () => {
-  mkdirSync(join(dir, "job-y"), { recursive: true });
-  writeFileSync(join(dir, "job-y", "spec.md"), "# a goal\n");
-  const run = { n: 1, name: "job-y", job: "job-y", branch: "factory/job-y", kind: "build", condition: "running" } as any;
+  mkdirSync(join(dir, "7"), { recursive: true });
+  writeFileSync(join(dir, "7", "spec.md"), "# a goal\n");
+  process.env.ALEPH_JOBS_DIR = dir;
+  const run = { name: "job-y", job: "job.7", branch: "factory/job-y", role: "build", state: "running" } as any;
   for (const sandbox of [true, false]) {
-    const text = prompt("run-2", join(dir, "run-2"), run, { sandbox, main: "main" } as any);
+    const text = prompt("job.8", run, { sandbox, main: "main" } as any);
     if (sandbox) {
       expect(text).toContain("set `question` to a question that names the clause");
       expect(text).not.toContain("QUESTION:");

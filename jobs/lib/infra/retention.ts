@@ -1,16 +1,16 @@
 /**
- * The tick's retention step: it bounds the stores that grow without limit to `KEEP_DAYS`. It deletes the run folder of a
- * run that ended over `KEEP_DAYS` ago in an archived record, a run folder that no record holds (`.records` and the archive beside it are not run folders) and that did not change
- * for `KEEP_DAYS`, the usage.jsonl rows and the `repos.json.bak-*` files that old, and the dispatch.<day>.log files of a day that old. The
- * event log and the job records stay forever; the folders of a record that is not archived stay at any age.
+ * The tick's retention step: it bounds the stores that grow without limit to `KEEP_DAYS`. It deletes the folder of a
+ * job that ended over `KEEP_DAYS` ago (its row stays), a job folder that no row holds and that did not change
+ * for `KEEP_DAYS`, the `usage` rows that old, and the dispatch.<day>.log files of a day that old. The
+ * event log and the job rows stay forever.
  */
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
 import { factoryDir } from "../gates/factory-status.ts";
 import { today } from "../../../lib/day.ts";
-import { runsDir } from "../records/ledger.ts";
-import { all } from "../records/record.ts";
-import { reposFile, usageFile } from "./settings.ts";
+import { jobsDir } from "../records/ledger.ts";
+import { allRunRecords } from "../records/record.ts";
+import { conn } from "../../../lib/db.ts";
 
 const KEEP_DAYS = 90;
 
@@ -26,28 +26,16 @@ export function retain(now = Date.now()): number {
   let n = 0;
   const drop = (p: string) => { rmSync(p, { recursive: true, force: true }); n++; };
 
-  const live = new Set(all(true).map((r) => r.issue));
+  // The rows stay; a job folder goes 90 days after its job ended. A folder that no row holds goes when it has not changed for that long.
+  const dir = jobsDir();
   const held = new Set<string>();
-  const dir = runsDir();
-  for (const r of all()) {
-    for (const x of r.runs) {
-      held.add(x.id);
-      if (!live.has(r.issue) && x.ended && Date.parse(x.ended) < cut && existsSync(join(dir, x.id))) drop(join(dir, x.id));
-    }
+  for (const r of allRunRecords()) {
+    held.add(r.id.slice(4));
+    if (r.ended && Date.parse(r.ended) < cut && existsSync(join(dir, r.id.slice(4)))) drop(join(dir, r.id.slice(4)));
   }
   if (existsSync(dir)) for (const f of readdirSync(dir)) if (!f.startsWith(".") && !held.has(f) && changed(join(dir, f)) < cut) drop(join(dir, f));
 
-  const usage = usageFile();
-  if (existsSync(usage)) {
-    const rows = readFileSync(usage, "utf8").split("\n").filter(Boolean);
-    const keep = rows.filter((l) => { try { return !(Date.parse(JSON.parse(l).at) < cut); } catch { return true; } });
-    if (keep.length < rows.length) { writeFileSync(usage, keep.map((l) => `${l}\n`).join("")); n += rows.length - keep.length; }
-  }
-
-  const reg = reposFile();
-  if (existsSync(dirname(reg))) {
-    for (const f of readdirSync(dirname(reg))) if (f.startsWith(`${basename(reg)}.bak-`) && statSync(join(dirname(reg), f)).mtimeMs < cut) drop(join(dirname(reg), f));
-  }
+  n += conn().query("DELETE FROM usage WHERE time < ?").run(new Date(cut).toISOString()).changes;
 
   // dispatch.day holds the local day the current dispatch.log began, so the aside file takes the day of its oldest line.
   const fdir = factoryDir(), log = join(fdir, "dispatch.log"), mark = join(fdir, "dispatch.day");

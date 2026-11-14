@@ -1,9 +1,9 @@
 {
   "kind": "build",
-  "job": "tools-1",
-  "name": "tools-1",
+  "job": "tools-31",
+  "name": "tools-31",
   "repo": "tools",
-  "branch": "factory/tools-1",
+  "branch": "factory/tools-31",
   "condition": "waiting",
   "reason": "review: chris",
   "told": true,
@@ -11,7 +11,7 @@
   "ended": "2026-10-28T10:30:00.000Z",
   "cost": 0.52,
   "model": "claude-sonnet-5-5",
-  "on": "tools-1",
+  "on": "tools-31",
   "ask": {
     "kind": "approval",
     "reason": "review",

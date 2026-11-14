@@ -27,7 +27,7 @@ export async function route(spec: string, subject = "route"): Promise<Tier | nul
     const a = d.answers.tier;
     if (a.type !== "choice") return null;
     const p = a.probabilities?.[a.choice] ?? a.confidence ?? 0;
-    try { logEvent({ by: "rule", subject, action: "routed", tier: a.choice, model: TIER_MODEL[a.choice as Tier], p, cost: d.cost, note: `classifier ${d.model.split("/").pop()}` }); } catch { /* the cost event is a note; it never changes the tier */ }
+    try { logEvent({ subject: "rule", action: "routed", object: subject, detail: `${a.choice} by classifier ${d.model.split("/").pop()}` }); } catch { /* the cost event is a note; it never changes the tier */ }
     if (!(TIERS as readonly string[]).includes(a.choice) || p < CUT) return null;
     const models = readModels();
     return TIERS.slice(TIERS.indexOf(a.choice as Tier)).find((t) => t === "opus" || models[t].enabled)!;

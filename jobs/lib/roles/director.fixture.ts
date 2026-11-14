@@ -3,15 +3,16 @@
 import { afterAll, beforeAll, beforeEach, setSystemTime } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import type { Ask } from "../asks/ask.ts";
 import type { Ports } from "./director.ts";
-import { stamp, type Run } from "../records/ledger.ts";
-import { putRun } from "../records/record.ts";
+import type { Run } from "../records/ledger.ts";
+import { seed, type Seed } from "../../job.testkit.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { readEvents } from "../../../lib/layout.ts";
+import { newItems, writeRepos } from "../../../tests/projects.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export let base: string;
@@ -38,14 +39,16 @@ export const repoPath = () => join(base, "repo");
 /** A new repo key, ledger and factory directory, with these items in its list. */
 export function fresh(items: { title: string; body?: string; specced?: boolean; notes?: string[]; ask?: Ask; source?: issues.Source }[] = []): void {
   key = `ff${++n}`;
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false } }));
+  process.env.ALEPH_ITEMS = newItems(base, `items${n}`);
+  writeRepos({ [key]: { path: repoPath(), sandbox: true, autoland: false } });
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
+  process.env.ALEPH_DB = join(base, `aleph${n}.db`);
   writeList({ key }, "reset", (doc) => {
     for (const i of items) {
       const it = issues.add(doc, i.title, { ...(i.specced ? { spec: i.body ?? "Ship the thing." } : { request: i.body }), ...(i.source ? { source: i.source } : {}) });
       for (const note of i.notes ?? []) issues.note(it, note);
-      if (i.ask) setAsk(`${key}-${it.id}`, i.ask);
+      if (i.ask) setAsk(`issue.${it.id}`, i.ask);
     }
     return true;
   }, true);
@@ -54,7 +57,7 @@ export function fresh(items: { title: string; body?: string; specced?: boolean; 
 export const choice = (reason = "question"): Ask => ({ kind: "input", reason, question: "Which page?", options: [{ label: "A", line: "page A" }, { label: "B", line: "page B" }], recommended: "A", why: [] });
 /** A plain question with no options: a how-to-build one. */
 export const plain = (question = "which module?"): Ask => ({ kind: "input", reason: "question", question, options: [], why: [] });
-export const asked = (id: number) => askOf(`${key}-${id}`);
+export const asked = (id: number) => askOf(`issue.${id}`);
 export const item = (id: number) => issues.find(readList({ key })!, id)!;
 /** A stream-json result event whose structured output is `o`. */
 const result = (o: object) => JSON.stringify({ type: "result", is_error: false, result: "", structured_output: o });
@@ -64,7 +67,7 @@ export const reply = (actions: object[], text?: object) => writeFileSync(join(ba
 export const replyWith = (o: object | string) => writeFileSync(join(base, "reply.json"), typeof o === "string" ? o : result(o));
 export const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
 /** The events of the event log, oldest first, but the gate's: those say a run's state changed. */
-export const events = () => readEvents().filter((e) => e.by !== "gate");
+export const events = () => readEvents().filter((e) => e.subject !== "gate");
 
 /** A branch off main that changes `file`. */
 export function branch(name: string, file: string, content = "x\n"): void {
@@ -76,15 +79,11 @@ export function branch(name: string, file: string, content = "x\n"): void {
   sh(repoPath(), "git", "checkout", "-q", "main");
 }
 
-let runs = 0;
 const NOW = Date.parse("2026-11-01T12:00:00Z");
 /** One run in the ledger, with its files; returns its folder. */
 export function run(o: Partial<Run> & { name: string }, files: Record<string, string> = {}, minutesAgo = 0): string {
   const at = new Date(NOW - minutesAgo * 60_000);
-  const id = `${stamp(at)}-${key}-${o.name}-${++runs}-agent`;
-  const folder = join(process.env.ALEPH_JOBS_DIR!, id);
-  mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { kind: "build", job: id, repo: key, condition: "waiting", told: true, shown: true, started: at.toISOString(), n: 1, ...o } as Run);
+  const { folder } = seed({ role: "build", repo: key, state: "waiting", shown: true, started: at.toISOString(), ...o } as Seed);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
   return folder;
 }
@@ -116,7 +115,7 @@ export function useDirectorFixture(): void {
     chmodSync(join(base, "fake"), 0o755);
     server = Bun.serve({ port: 0, fetch: async (req) => { told.push(await req.text()); return new Response("ok"); } });
     Object.assign(process.env, gitEnv, {
-      ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_DIRECTOR_CMD: join(base, "fake"), FF_DIR: base,
+      ALEPH_ITEMS: join(base, "items"), ALEPH_DIRECTOR_CMD: join(base, "fake"), FF_DIR: base,
       // The director's prompt names the vault and the needs-you log; both are under base, never ~/.aleph.
       ALEPH_VAULT: join(base, "vault"), ALEPH_NEEDS_YOU_LOG: join(base, "needs-you-log.md"),
       ALEPH_DISPATCH: "off", SIDETONE_TELL_URL: `http://127.0.0.1:${server.port}/tell`,

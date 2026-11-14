@@ -44,7 +44,7 @@ export function keepDiff(repo: Repo, branch: string | undefined, folder: string)
     if (!j) return;
     writeFileSync(join(folder, DIFF_FILE), j.diff);
     writeFileSync(join(folder, STAT_FILE), j.stat);
-  } catch (e: any) { logEvent({ by: "rule", subject: "jobdiff", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+  } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "jobdiff", detail: String(e?.message ?? e) }); }
 }
 
 function kept(runs: Entry[]): JobDiff | null {
@@ -65,7 +65,7 @@ export function jobDiff(runs: Entry[]): JobDiff | null {
     const branch = branchOf(runs);
     const b = branch && ofBranch(repo, branch);
     if (b) return b;
-    const commit = runs.findLast((e) => e.run.condition === "landed" && e.run.commit)?.run.commit;
+    const commit = runs.findLast((e) => e.run.state === "landed" && e.run.commit)?.run.commit;
     const c = commit ? ofCommit(repo, commit) : null;
     if (c) return c;
   }

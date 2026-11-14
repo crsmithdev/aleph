@@ -16,7 +16,7 @@ test("a run with a question waits for a spec edit: the Ask says so, and an edit 
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);
-  const a = askOf(`fac-${id}`)!;
+  const a = askOf(`issue.${id}`)!;
   expect(a.reason).toBe("question");
   expect(a.recommended).toBeUndefined();
   expect(a.question).toContain("waits for a spec edit");
@@ -27,7 +27,7 @@ test("a run with a question waits for a spec edit: the Ask says so, and an edit 
   // Chris edits the spec.
   writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
   await dispatchIssues(f.start, undefined, f.rescue);
-  expect(f.calls).toContain(`drop fac-${id}`);
+  expect(f.calls).toContain(`drop issue.${id}`);
   expect(ask(id)).toBeNull();
   expect(f.specs.length).toBe(1);
 });
@@ -39,9 +39,9 @@ test("a rescue that throws gives a failed event whose note holds the failure", a
   await dispatchIssues(f.start, undefined, f.rescue);
   writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
   await dispatchIssues(f.start, undefined, { ...f.rescue, drop: async () => { throw new Error("drop broke"); } });
-  const e = readEvents().find((x) => x.action === "failed" && x.sub === "rescue");
-  expect(e?.by).toBe("firefighter");
-  expect(e?.note).toContain("drop broke");
+  const e = readEvents().find((x) => x.action === "failed" && x.detail?.includes("drop broke"));
+  expect(e?.subject).toBe("firefighter");
+  expect(e?.detail).toContain("drop broke");
 });
 
 test("a run the API refused for credit waits: the rescue starts no rerun, recheck or drop, and writes no Ask", async () => {
@@ -59,7 +59,7 @@ test("a run the API refused for credit that ended long ago is started again by t
   mk(`fac-${id}`, "build", "failed", { cause: "credit", reason: "API Error: 402", ended: "2026-01-01T00:00:00.000Z" });
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);
-  expect(f.calls).toEqual([`start fac-${id}`]);
+  expect(f.calls).toEqual([`start issue.${id}`]);
 });
 
 test("a spec question run, then the director's answer: the answer is refused, and the job keeps its Ask and starts nothing", async () => {
@@ -69,11 +69,11 @@ test("a spec question run, then the director's answer: the answer is refused, an
   // The real rescue path sets the plain question Ask and writes asked-spec.
   await dispatchIssues(f.start, undefined, f.rescue);
   expect(ask(id)?.options).toEqual([]);
-  const c = pendingCases([loadRegistry().fac]).find((x) => x.on === `fac-${id}`)!;
+  const c = pendingCases([loadRegistry().fac]).find((x) => x.on === `issue.${id}`)!;
   if (c.at === "lesson") throw new Error("not an item case");
   const r = await applyActions(c, [{ do: "answer", note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop, after: () => {} });
   // The run waits for a spec edit: the director's answer is refused, and the next dispatch keeps the Ask and starts nothing.
-  expect(r.refused).toEqual([`answer: the grep wins: the run fac-${id} asked about the spec and waits for a spec edit; use edit, or drop it`]);
+  expect(r.refused).toEqual([`answer: the grep wins: the run issue.${id} asked about the spec and waits for a spec edit; use edit, or drop it`]);
   await dispatchIssues(f.start, undefined, f.rescue);
   expect(ask(id)).toMatchObject({ reason: "question", options: [] });
   expect(f.specs).toEqual([]);
@@ -81,7 +81,7 @@ test("a spec question run, then the director's answer: the answer is refused, an
 
 test("a time box that runs out on a child filed with from: asks Chris and sets no plan, as intake skips a child", async () => {
   const parent = newIssue();
-  const id = writeList({ key: "fac" }, "add a child", (doc) => issues.add(doc, "[ship] the child", { spec: "Do the part.", from: `fac-${parent}` }).id, true)!.value;
+  const id = writeList({ key: "fac" }, "add a child", (doc) => issues.add(doc, "[ship] the child", { spec: "Do the part.", from: `issue.${parent}` }).id, true)!.value;
   mk(`fac-${id}`, "build", "failed", { cause: "timeout", reason: "time box" });
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);

@@ -6,7 +6,7 @@
  * top-level `oneOf`, `anyOf` or `allOf`: the API refuses those.
  */
 import { closeSync, openSync, readFileSync, statSync } from "node:fs";
-import { BACKENDS, modelArgv, modelEnv, onGpu, openRouterFactor, viaOf } from "../routing/models.ts";
+import { BACKENDS, modelArgv, modelEnv, onGpu, openRouterFactor, OPUS_MODEL, viaOf } from "../routing/models.ts";
 import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
 import { policyOf } from "../records/outcome.ts";
 import { roleCmd, stallSeconds } from "../infra/settings.ts";
@@ -14,7 +14,7 @@ import { logEvent } from "../../../lib/layout.ts";
 import { costDetails, type Usage } from "../../../lib/pricing.ts";
 
 /** The roles that call `claude`. */
-export type AgentRole = "worker" | "reviewer" | "title" | "judge" | "intake" | "director" | "monitor" | "chat" | "lens" | "housekeeper" | "maintainer";
+export type AgentRole = "worker" | "reviewer" | "title" | "judge" | "intake" | "director" | "monitor" | "lens" | "housekeeper" | "maintainer";
 
 /** Why a call gave no usable reply, and its kind. */
 export interface AgentCause { kind: "stalled" | "timeout" | "credit" | "other"; reason: string }
@@ -117,8 +117,8 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   const gpu = onGpu(o.model) && o.slot !== false;
   const release = gpu ? await gpuSlot(o.limit * 1000) : null;
   const model = gpu && !release && o.fallback ? o.fallback : o.model;
-  if (model !== o.model) logEvent({ by: "rule", subject: role, action: "gpu", note: `the GPU slot stayed taken for ${o.limit} s; the call falls back to ${BACKENDS[viaOf(model)]}` });
-  const argv = modelArgv(o.cmd ?? roleCmd(role.toUpperCase()), model, ["--output-format", "stream-json", "--verbose", ...o.flags, ...(o.schema ? ["--json-schema", JSON.stringify(o.schema)] : [])], role === "chat");
+  if (model !== o.model) logEvent({ subject: "rule", action: "gpu", object: role, detail: `the GPU slot stayed taken for ${o.limit} s; the call falls back to ${BACKENDS[viaOf(model)]}` });
+  const argv = modelArgv(o.cmd ?? roleCmd(role.toUpperCase()), model, ["--output-format", "stream-json", "--verbose", ...o.flags, ...(o.schema ? ["--json-schema", JSON.stringify(o.schema)] : [])]);
   // A run whose --allowedTools names Bash prefixes may run only those: hooks/bash-allow.ts reads them, since a user setting that allows plain Bash would let the rest through.
   const at = o.flags.indexOf("--allowedTools");
   const list = at < 0 ? [] : o.flags[at + 1]?.split(",").flatMap((t) => t.match(/^Bash\((.+):\*\)$/)?.[1] ?? []);
@@ -137,6 +137,21 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   return { text: step.code === 0 && !res.found ? out : res.result, data: res.data, session: res.session, cost: costOf(model, res), step, cause };
 }
 
+/**
+ * Start `claude -p --input-format stream-json` for the chat panel, and the only place that does. It runs like a terminal
+ * session of Chris (his settings and skills), and keeps running: the caller writes one user line to stdin per turn and
+ * reads stream-json from stdout up to each `result`. It names the session: `--session-id` for a new one, `--resume` for one
+ * that exists. The command is `ALEPH_CHAT_CMD`, else `claude`.
+ */
+export function startChat(session: string, fresh: boolean, system: string, cwd: string): ReturnType<typeof Bun.spawn> {
+  const argv = modelArgv(roleCmd("CHAT"), OPUS_MODEL, [
+    "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    "--append-system-prompt", system, fresh ? "--session-id" : "--resume", session,
+  ], true);
+  const env = { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(OPUS_MODEL), ALEPH_UI_PASSWORD: undefined };
+  return Bun.spawn(argv, { cwd, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+}
+
 /** Signal the process group that `pid` leads, and `pid` itself when the group is gone. */
 function killGroup(pid: number, signal: NodeJS.Signals): void {
   try { process.kill(-pid, signal); } catch { try { process.kill(pid, signal); } catch {} }
@@ -144,7 +159,7 @@ function killGroup(pid: number, signal: NodeJS.Signals): void {
 
 /**
  * Run `argv` in `o.cwd` and a process group of its own, with stdout and stderr appended to their files.
- * The time box, and the stall watch when stdout has not grown for `stallSeconds`, stop the whole group: SIGTERM,
+ * The time box, and the stall watch when neither file has grown for `stallSeconds`, stop the whole group: SIGTERM,
  * then SIGKILL.
  */
 async function spawn(argv: string[], o: Ask & { env: Record<string, string | undefined>; stdin: string }): Promise<Step> {
@@ -161,11 +176,13 @@ async function spawn(argv: string[], o: Ask & { env: Record<string, string | und
     setTimeout(() => killGroup(p.pid, "SIGKILL"), KILL_AFTER_MS).unref();
   };
   const box = setTimeout(() => { timedOut = true; end(); }, o.limit * 1000);
-  let size = statSync(o.stdout).size;
+  // The model's stream goes to transcript.jsonl and its stderr to log.txt: output on either keeps the call alive.
+  const written = () => [...new Set([o.stdout, o.stderr])].reduce((n, f) => n + (statSync(f, { throwIfNoEntry: false })?.size ?? 0), 0);
+  let size = written();
   let last = performance.now();
   const watch = setInterval(() => {
-    const now = statSync(o.stdout, { throwIfNoEntry: false })?.size;
-    if (now !== size) { size = now ?? 0; last = performance.now(); return; }
+    const now = written();
+    if (now !== size) { size = now; last = performance.now(); return; }
     if (performance.now() - last < stall * 1000) return;
     stalled = true;
     end();

@@ -10,7 +10,8 @@ import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import { renderIssue } from "./views/issues.js";
-import { putRun } from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 // /api/factory on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).
@@ -28,12 +29,9 @@ beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 const now = new Date(NOW);
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
-const seq: Record<string, number> = {};
-const run = (id: string, extra: Record<string, unknown>) => {
-  mkdirSync(join(runsDir, id), { recursive: true });
-  const subject = String(extra.on ?? extra.name);
-  seq[subject] = (seq[subject] ?? 0) + 1;
-  putRun(id, { repo: "fac", told: true, started: ago(2), n: seq[subject], ...extra } as any);
+// `on` is the issue `<repo>-<n>`; the job's work is its own, so `job` is dropped.
+const run = (_id: string, { on, job: _job, kind, ...extra }: Record<string, unknown>) => {
+  seed({ role: (kind ?? "build") as any, repo: "fac", started: ago(2), ...(on ? { target: `issue.${String(on).split("-")[1].split(".")[0]}` } : {}), ...extra } as any);
 };
 
 beforeAll(async () => {
@@ -44,7 +42,7 @@ beforeAll(async () => {
   sh(base, "git", "init", "-q", "--bare", "-b", "main", prod);
   sh(base, "git", "clone", "-q", prod, repo);
   writeFileSync(join(repo, "a"), "1");
-  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "first goal\n\nIssue: fac-1.1\nJob: fac-1.1");
+  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "first goal\n\nIssue: issue.2\nJob: job.4");
   sh(repo, "git", "push", "-q", "origin", "main");
   sh(repo, "git", "fetch", "-q", "origin");
   const remote = join(base, "store.git"), store = join(base, "store");
@@ -52,16 +50,16 @@ beforeAll(async () => {
   sh(base, "git", "clone", "-q", remote, store);
   sh(store, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(store, "git", "push", "-q", "origin", "main");
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, checks: [] } }));
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: runsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: store, ALEPH_FACTORY_DIR: factory, ...gitEnv });
+  writeRepos({ fac: { path: repo, sandbox: true, checks: [] } }, store);
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: runsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: store, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
-    // fac-1: three issues; .1 is done, .2 builds, .3 runs after .2.
+    // issue 1 has three children: 2 is done, 3 builds, 4 runs after 3.
     const one = add(doc, "Three goals", { request: "Do three things.\n" });
     const g1 = addPart(doc, one, { title: "first", spec: "Do it." });
-    addPart(doc, one, { title: "second", spec: "Do it.", after: [`fac-1.1`] });
-    addPart(doc, one, { title: "third", spec: "Do it.", after: [`fac-1.2`] });
+    addPart(doc, one, { title: "second", spec: "Do it.", after: ["issue.2"] });
+    addPart(doc, one, { title: "third", spec: "Do it.", after: ["issue.3"] });
     setStatus(g1, "done");
-    // fac-2: one part that waits for approval; fac-3: an issue that awaits input; fac-4: a new issue.
+    // 5 has one child, 6, that waits for approval; 7 awaits input; 8 is new.
     const two = add(doc, "Needs a go-ahead", { request: "Ask first.\n" });
     const g = addPart(doc, two, { title: "gated", spec: "Do it." });
     setAsk(refIn(doc.repo!, g), { kind: "input", reason: "question", question: "Update left-pad?", options: [], why: [] });
@@ -70,10 +68,10 @@ beforeAll(async () => {
     add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);
-  run("20261031-000001-fac-fac-1.2-build", { kind: "build", job: "fac-1.2", name: "fac-1.2", condition: "running", on: "fac-1.2" });
-  run("20261031-000002-fac-fac-5-triage", { kind: "triage", job: "triage-fac-5", name: "triage-fac-5", condition: "waiting", on: "fac-5", ask: { kind: "input", reason: "no-commit", question: "Triage gave no verdict.", options: [], why: [] } });
-  run("20261031-000003-fac-fac-2.1-build", { kind: "build", job: "fac-2.1-r", name: "fac-2.1-r", condition: "waiting", on: "fac-2.1", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "waiting", reason: "judgement" } });
-  run("20261031-000004-fac-fac-1.1-build", { kind: "build", job: "fac-1.1", name: "fac-1.1", condition: "landed", on: "fac-1.1", commit: "abcdef1234567", ended: ago(1) });
+  run("", { kind: "build", job: "fac-3", name: "fac-3", state: "running", on: "fac-3" });
+  run("", { kind: "triage", job: "triage-fac-99", name: "triage-fac-99", state: "waiting", on: "fac-99", ask: { kind: "input", reason: "no-commit", question: "Triage gave no verdict.", options: [], why: [] } });
+  run("", { kind: "build", job: "fac-6-r", name: "fac-6-r", state: "waiting", on: "fac-6", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "waiting", reason: "judgement" } });
+  run("", { kind: "build", job: "fac-2", name: "fac-2", state: "landed", on: "fac-2", commit: "abcdef1234567", ended: ago(1) });
   ({ server, stop } = await withServer({ warm: false }));
 });
 afterAll(() => {
@@ -84,12 +82,12 @@ afterAll(() => {
 
 describe("/api/factory on a work-model store", () => {
 
-  test("parts are flat: the parent waits for its parts, and .3 runs after .2", () => {
+  test("children are flat: the parent waits for them, and 4 runs after 3", () => {
     const s: any = state(now);
-    // Parts are flat: the parent waits for its parts and has no card in Running; .3 runs after .2, so it is held.
+    // The parent waits for its children and has no card in Running; 4 runs after 3, so it is held.
     expect(s.runningIssues).toEqual([]);
-    expect(s.running.find((j: any) => j.name === "fac-1.2").part).toMatchObject({ n: 2, m: 3, parent: "fac-1" });
-    expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([["1.3", "held"]]);
+    expect(s.running.find((j: any) => j.name === "fac-3").part).toMatchObject({ n: 2, m: 3, parent: "fac-1" });
+    expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([[4, "held"]]);
     expect(s.queued[0].part).toMatchObject({ n: 3, m: 3, parent: "fac-1" });
   });
 });
@@ -97,10 +95,10 @@ describe("/api/factory on a work-model store", () => {
 describe("the Issue page", () => {
 
   test("a part's page names its issue and has no parts of its own", async () => {
-    const d = await getJson("/api/issues/fac-1.2");
-    expect(d).toMatchObject({ ref: "1.2", goals: [], issue: { id: "fac-1", href: "#/issues/fac/1" } });
-    expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-1.2"]);
-    expect((await fetch(`http://127.0.0.1:${server.port}/api/issues/fac-9.9`)).status).toBe(404);
+    const d = await getJson("/api/issues/fac-3");
+    expect(d).toMatchObject({ ref: "3", goals: [], issue: { id: "fac-1", href: "#/issues/fac/1" } });
+    expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-3"]);
+    expect((await fetch(`http://127.0.0.1:${server.port}/api/issues/fac-99`)).status).toBe(404);
   });
 
   test("the page edits an issue and appends a note through the CLI", async () => {
@@ -136,16 +134,16 @@ describe("the Issue page", () => {
     expect(html).not.toContain("<summary>Edit</summary>");
   });
 
-  test("the page shows the parts in the timeline, each linked to its job and its page, then the Request", async () => {
+  test("the page shows the parts in the timeline, each linked to its page, then the Request", async () => {
     const html = renderIssue(await getJson("/api/issues/fac-1"));
     const at = (t: string) => html.indexOf(t);
     expect(at('id="h-request">Description<')).toBeGreaterThan(at("<h3>Sub-issues</h3>"));
     expect(at("Do three things.")).toBeGreaterThan(at('id="h-request"'));
     const parts = html.slice(at("<h3>Sub-issues</h3>"), at('id="h-request"'));
-    for (const id of ["fac-1.1", "fac-1.2", "fac-1.3"]) expect(parts).toContain(`href="#/issues/fac/${id.slice(4)}"`);
-    expect(parts).toContain('href="#/jobs/fac-1.2%231"');
+    for (const id of ["fac-2", "fac-3", "fac-4"]) expect(parts).toContain(`href="#/issues/fac/${id.slice(4)}"`);
+    expect(parts).toContain('href="#/jobs/job.1"');
     // A part with no job yet links its id to its own page.
-    expect(parts).toMatch(/<a class="idl" href="#\/issues\/fac\/1.3">/);
+    expect(parts).toMatch(/<a class="idl" href="#\/issues\/fac\/4">/);
     for (const old of [["needs", "chris"].join("-"), ["needs", "you"].join("-"), ["waiting", "on"].join("_"), "Item"]) expect(html).not.toContain(old);
   });
 });

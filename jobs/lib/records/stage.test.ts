@@ -4,7 +4,6 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { loadRegistry } from "./ledger.ts";
 import { subjectOf } from "./stage.ts";
 import { repoStages } from "./status.ts";
-import { setAsk, plainAsk } from "../asks/ask.ts";
 
 // The rows call repoStages in-process, as `aleph status <ref>` does, under the CLI's environment; one row runs the CLI.
 let restore: () => void;
@@ -23,59 +22,31 @@ interface Row { name: string; stage: string; of?: { n: number; m: number }; acti
 const ref = (n: number | string) => `fac-${n}`;
 let jobs = 0;
 /** A run on its item, as ref(). */
-const newRun = <T extends number | string>(id: T, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { on: ref(id), ...run }); return id; };
+const newRun = <T extends number | string>(id: T, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { target: `issue.${id}`, ...run }); return id; };
 const newIssue = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${++jobs}`, { kind: "goal", ...fm });
 const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", ...fm });
 
 const ISSUES_NEW: Row[] = [
   { name: "new issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, count: "1 / 2", why: /^1 \/ 2$/, build: async () => {
     const n = issue();
-    seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
+    seedPart("fac", n, { status: "done" }); seedPart("fac", n);
     return n;
   } },
   { name: "new issue: parked", stage: "parked", build: async () => issue({ status: "parked" }) },
   { name: "new issue: dropped while a trailer commit on main names it", stage: "dropped", build: async () => {
     const n = issue({ status: "dropped" });
-    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(n)}`);
+    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: issue.${n}`);
     sh(repo, "git", "push", "-q", "origin", "main");
     return n;
   } },
 ];
 
 const PARTS_NEW: Row[] = [
-  { name: "new issue: working", stage: "working", action: "running", on: /^fac-\d+#1$/, why: /^fac-\d+#1 started$/, build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
+  { name: "new issue: working", stage: "working", action: "running", on: /^job\.\d+$/, why: /^J-\d+ started$/, build: async () => newRun(newIssue(), { role: "build", state: "running" }) },
   // PARTS_NEW[1] is the held issue that the `aleph status` test below reads.
   { name: "new issue: held", stage: "held", action: "after", why: /^fac-\d+ waits for fac-\d/, build: async () => newIssue({ after: [ref(newIssue())] }) },
   { name: "new issue: working while intake splits it", stage: "working", build: async () => newIssue({ plan: "true" }) },
-  { name: "new issue: an intake run sorts it, not works it", stage: "queued", action: "starting", build: async () => newRun(newIssue(), { kind: "intake", condition: "running" }) },
-];
-
-// A commit on origin/main that names part `partRef` (`<n>.<k>`) and its parent issue `n`, as the land of an issue does; returns its sha.
-const landPart = (_n: number, partRef: string): string => {
-  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(partRef)}`);
-  sh(repo, "git", "push", "-q", "origin", "main");
-  return sh(repo, "git", "rev-parse", "HEAD");
-};
-
-// Dotted issues: the part `.k` of an issue, seeded through seedPart.
-const PARTS_DOTTED: Row[] = [
-  { name: "dotted issue: done by its trailer commit while the store holds it open", stage: "done", action: "landed", on: /^[0-9a-f]{7}$/, why: /^fac-\d+\.\d+ landed$/, build: async () => {
-    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedPart("fac", n, 1); landPart(n, `${n}.1`); return a;
-  } },
-  { name: "dotted issue: waiting on its Ask while a trailer commit on main names it", stage: "waiting", why: /^fac-\d+\.\d+ waits for you$/, build: async () => {
-    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedPart("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landPart(n, `${n}.1`); return a;
-  } },
-  { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, count: "1 / 2", why: /^1 \/ 2$/, build: async () => {
-    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
-    return n;
-  } },
-  { name: "dotted issue: working under a run on it", stage: "working", build: async () => {
-    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedPart("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", condition: "running" }); return a;
-  } },
+  { name: "new issue: an intake run sorts it, not works it", stage: "queued", action: "starting", build: async () => newRun(newIssue(), { role: "intake", state: "running" }) },
 ];
 
 const built = new Map<string, Promise<number | string>>();
@@ -86,7 +57,7 @@ const statusOf = async (row: Row) => {
 };
 
 // The rows run one after another: each writes to the one store.
-for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["parts, new shape", PARTS_NEW], ["parts, dotted", PARTS_DOTTED]] as const) {
+for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["parts, new shape", PARTS_NEW]] as const) {
   describe(title, () => {
     for (const row of rows) {
       test(row.name, async () => {
@@ -112,10 +83,10 @@ test("aleph status prints the same stage as JSON and as one line, with the short
 }, 90_000);
 
 describe("subjectOf", () => {
-  const item = (id: number, sub?: number): issues.Issue => ({ id, ...(sub === undefined ? {} : { sub }), title: "t", fm: {}, request: "", spec: "", notes: [] });
+  const item = (id: number, after?: string[]): issues.Issue => ({ id, title: "t", fm: after ? { after } : {}, request: "", spec: "", notes: [] });
   const doc: issues.Doc = { items: [] };
-  test("a dotted issue is keyed by its dotted id, a plain item by its number", () => {
-    expect(subjectOf(item(5, 1), "proj", doc).id).toBe("proj-5.1");
+  test("an issue is keyed by its number, and an issue.<n> in after by the repo's key", () => {
     expect(subjectOf(item(5), "proj", doc).id).toBe("proj-5");
+    expect(subjectOf(item(5, ["issue.3"]), "proj", doc).after).toEqual(["proj-3"]);
   });
 });

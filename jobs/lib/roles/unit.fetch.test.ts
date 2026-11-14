@@ -11,7 +11,7 @@ test("a fetch that fails keeps git's error text in the reason", async () => {
   sh(repo, "git", "remote", "set-url", "origin", missing);
   const r = await actionJob("nofetch", "commit-fixed nofetch.txt");
   const s = state(r.json.run);
-  expect(s.condition).toBe("failed");
+  expect(s.state).toBe("failed");
   expect(s.reason).toStartWith("fetch failed: ");
   expect(s.reason).toContain("no-such-origin.git");
 }, 30_000);

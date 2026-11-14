@@ -8,19 +8,23 @@
 import { existsSync } from "node:fs";
 import { flakeNames, flakes } from "../../jobs/lib/gates/factory-status.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
-import { all as allRecords, type JobRecord } from "../../jobs/lib/records/record.ts";
-import { allRuns, isAgentRun, isBuild, issueKeyOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
+import { decisions } from "../../jobs/lib/records/record.ts";
+import { askHistory, type AskSpan } from "./gates.ts";
+import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, isRunning } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
-import { specChecksOf, stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
+import { stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
-import { reader, storeDir } from "../../issues/lib/store.ts";
+import { itemsDir, projectsAt, reader } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP, RUN_CAP } from "../../jobs/lib/infra/settings.ts";
-import { clip, issueHref, NAMES, parseId, SPEEDS, tail } from "../../lib/naming.ts";
+import { clip, issueHref, NAMES, parseId, parseKey, SPEEDS, tail } from "../../lib/naming.ts";
 import { inProject, repoIn, scopeOf } from "./scope.ts";
 import { BUCKETS, buckets, quantile, WINDOWS, type Window } from "../../lib/windows.ts";
+
+/** The goal a run works on, as the issue store names it (`<repo>-<n>`), or undefined for a run on no issue. */
+const goalOf = (r: Pick<Run, "repo" | "target">): string | undefined => { const n = onOf(r); return n === undefined || !r.repo ? undefined : `${r.repo}-${n}`; };
 
 const HOUR = 3600_000;
 
@@ -59,7 +63,7 @@ export interface Speed {
   buckets: ({ at: string; runs: number; cost: Record<string, number>; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
   /** Every issue with a phase that ended in the window. */
   times: IssueTimes[];
-  slowest: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[];
+  slowest: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[];
   /** The stages of the window, as the monitor counts them. */
   stages: { rows: StageRow[] };
   models: { model: string; count: number; p50: number }[];
@@ -171,9 +175,9 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
   for (const r of runs) {
     const t = t0(r);
     if (Number.isFinite(t)) firstStart.set(r.job, Math.min(firstStart.get(r.job) ?? Infinity, t));
-    const g = issueKeyOf(r);
+    const g = goalOf(r);
     if (g === undefined) continue;
-    const m = isAgentRun(r.kind) ? agentsOf : r.kind === "land" && r.condition === "landed" ? landsOf : null;
+    const m = isAgentRun(r.role) ? agentsOf : r.role === "land" && r.state === "landed" ? landsOf : null;
     if (!m) continue;
     if (!m.has(g)) m.set(g, []);
     m.get(g)!.push(r);
@@ -185,7 +189,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
       const end = Date.parse(l.ended ?? "");
       if (Number.isFinite(end)) lastLand.set(g, Math.max(lastLand.get(g) ?? -Infinity, end));
       // A held run lands from `waiting`, so it counts for the land of its own job.
-      const cand = (agentsOf.get(g) ?? []).filter((a) => (passedState(a.condition) || (a.condition === "waiting" && a.job === l.job)) && t0(a) < end).sort((a, b) => t0(b) - t0(a))[0];
+      const cand = (agentsOf.get(g) ?? []).filter((a) => (passedState(a.state) || (a.state === "waiting" && a.job === l.job)) && t0(a) < end).sort((a, b) => t0(b) - t0(a))[0];
       if (cand) { if (!landing.has(g)) landing.set(g, new Set()); landing.get(g)!.add(cand); }
     }
   }
@@ -193,8 +197,8 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
   const rows = new Map<Class, Row[]>(CLASSES.map((c) => [c, []]));
   const skipped: Row[] = [];
   for (const r of runs) {
-    const g = issueKeyOf(r);
-    if (!isAgentRun(r.kind) || g === undefined) continue;
+    const g = goalOf(r);
+    if (!isAgentRun(r.role) || g === undefined) continue;
     const a = t0(r), b = Date.parse(r.ended ?? "");
     if (!(a >= since) || a > now || !(b >= a) || b - a > MAX_RUN) continue;
     const reason = r.reason ?? "";
@@ -214,7 +218,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "failed") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
     else if (cls === "reran" && startsBefore >= RUN_CAP()) row.cause = "Restart loop";
-    else if (r.condition === "waiting") row.cause = "Needed the user";
+    else if (r.state === "waiting") row.cause = "Needed the user";
     else if (r.failed === "review") row.cause = "Reviewer sent back";
     else if (r.failed) row.cause = "Checks failed";
     else if (stated) row.cause = stated;
@@ -224,7 +228,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     else if (/time box|stalled|timed out|lost/i.test(reason)) row.cause = "Stalled or timed out";
     else if (/no commit/i.test(reason)) row.cause = "No commit";
     else if (r.fate === "manual") row.cause = "Needed the user";
-    else if (passedState(r.condition) || /conflict/i.test(reason)) row.cause = "Passed, not landed";
+    else if (passedState(r.state) || /conflict/i.test(reason)) row.cause = "Passed, not landed";
     else row.cause = "Other";
     rows.get(cls)!.push(row);
   }
@@ -258,7 +262,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
 
 // Bulk commits add files whose work is older: they do not say when an issue was created.
 const BULK = /^(migrate:|todo: move every )/;
-const FILED = /^([^/]+)\/backlog\/tasks\/([^/]+)\.md$/;
+const FILED = /^issues\/(\d+)\/issue\.md$/;
 export interface Filed { issue: Map<string, number | null> }
 let filedAt: Filed & { head: string } = { head: "", issue: new Map() };
 
@@ -269,24 +273,30 @@ const originMain = (dir: string): string => {
 };
 
 /** When each issue came into the store, in ms. Null for one that a bulk commit added. Each read adds only the commits since the last. */
-export function filed(dir = storeDir(), head = originMain(dir)): Filed {
+export function filed(dir = itemsDir(), head = originMain(dir)): Filed {
   if (!head) return { issue: new Map() };
   if (head === filedAt.head) return filedAt;
   const known = filedAt.head && git(dir, "merge-base", "--is-ancestor", filedAt.head, head).ok;
   const next = known ? filedAt : { head, issue: new Map() };
   const log = git(dir, "log", "--reverse", "--diff-filter=A", "--no-renames", "--name-only", "--format=@%ct %s", known ? `${filedAt.head}..${head}` : head).out;
   let at: number | null = null;
+  const added: [number, number | null][] = [];
   for (const line of log.split("\n")) {
     if (line.startsWith("@")) {
       const space = line.indexOf(" ");
       at = BULK.test(line.slice(space + 1)) ? null : Number(line.slice(1, space)) * 1000;
       continue;
     }
-    const m = line.match(FILED), p = m && parseId(m[2]);
-    if (!p || p.repo !== m![1] || p.sub !== undefined) continue;
-    const key = `${p.repo}-${p.n}`;
+    const m = line.match(FILED);
+    if (m) added.push([Number(m[1]), at]);
+  }
+  const projects = added.length ? projectsAt(dir, head) : new Map<number, string>();
+  for (const [n, when] of added) {
+    const name = projects.get(n);
+    if (!name) continue;
+    const key = `${name}-${n}`;
     // A file added again keeps the first time.
-    if (!next.issue.has(key)) next.issue.set(key, at);
+    if (!next.issue.has(key)) next.issue.set(key, when);
   }
   filedAt = { ...next, head };
   return filedAt;
@@ -306,12 +316,12 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   const jobs = new Map<string, Run[]>();
   for (const r of runs) jobs.set(r.job, [...(jobs.get(r.job) ?? []), r]);
   for (const rs of jobs.values()) {
-    const agents = rs.filter((r) => { const a = Date.parse(r.started), b = Date.parse(r.ended ?? ""); return isAgentRun(r.kind) && b >= a && b - a <= MAX_RUN; });
-    const landed = Math.min(...rs.filter((r) => r.kind === "land" && (r.condition === "landed" || r.condition === "done")).map((r) => Date.parse(r.ended ?? "")).filter(Number.isFinite));
+    const agents = rs.filter((r) => { const a = Date.parse(r.started), b = Date.parse(r.ended ?? ""); return isAgentRun(r.role) && b >= a && b - a <= MAX_RUN; });
+    const landed = Math.min(...rs.filter((r) => r.role === "land" && (r.state === "landed" || r.state === "done")).map((r) => Date.parse(r.ended ?? "")).filter(Number.isFinite));
     // A job can run again after it lands; what finished the work is the last finish before the land.
-    const ends = agents.filter((r) => passedState(r.condition) || r.condition === "waiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
+    const ends = agents.filter((r) => passedState(r.state) || r.state === "waiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
     if (!ends.length) continue;
-    const key = rs.map((r) => issueKeyOf(r, { parent: true })).find((k) => k !== undefined);
+    const key = rs.map((r) => goalOf(r)).find((k) => k !== undefined);
     const finished = Math.max(...ends), started = Math.min(...agents.map((r) => Date.parse(r.started)));
     if (inWindow(finished)) { implement.push({ at: finished, secs: (finished - started) / 1000 }); note(key, "implement", (finished - started) / 1000); }
     if (inWindow(landed)) { land.push({ at: landed, secs: (landed - finished) / 1000 }); note(key, "land", (landed - finished) / 1000); }
@@ -319,15 +329,15 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   // Queue and Lead are per issue. A run older than its filing (a file added again) has no such span.
   const firstStart = new Map<string, number>(), lastLand = new Map<string, number>(), triaged = new Map<string, number>();
   for (const r of runs) {
-    const key = issueKeyOf(r, { parent: true });
+    const key = goalOf(r);
     if (key === undefined) continue;
-    if (isAgentRun(r.kind)) {
+    if (isAgentRun(r.role)) {
       const a = Date.parse(r.started);
       if (a < (firstStart.get(key) ?? Infinity)) firstStart.set(key, a);
-    } else if (r.kind === "intake") {
+    } else if (r.role === "intake") {
       const b = Date.parse(r.ended ?? "");
       if (b < (triaged.get(key) ?? Infinity)) triaged.set(key, b);
-    } else if (r.kind === "land" && (r.condition === "landed" || r.condition === "done")) {
+    } else if (r.role === "land" && (r.state === "landed" || r.state === "done")) {
       const b = Date.parse(r.ended ?? "");
       if (b > (lastLand.get(key) ?? -Infinity)) lastLand.set(key, b);
     }
@@ -359,15 +369,15 @@ export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof
   type Span = [number, number];
   const per = new Map<string, { triaged?: number; start?: number; end?: number; land?: number }>();
   for (const r of runs) {
-    const key = issueKeyOf(r, { parent: true });
+    const key = goalOf(r);
     if (key === undefined) continue;
     const t = per.get(key) ?? {}, a = Date.parse(r.started), e = Date.parse(r.ended ?? "");
-    if (isAgentRun(r.kind)) {
+    if (isAgentRun(r.role)) {
       t.start = Math.min(a, t.start ?? Infinity);
       t.end = Math.max(Number.isFinite(e) ? e : now, t.end ?? -Infinity);
-    } else if (r.kind === "intake") {
+    } else if (r.role === "intake") {
       if (e < (t.triaged ?? Infinity)) t.triaged = e;
-    } else if (r.kind === "land" && (r.condition === "landed" || r.condition === "done") && e > (t.land ?? -Infinity)) t.land = e;
+    } else if (r.role === "land" && (r.state === "landed" || r.state === "done") && e > (t.land ?? -Infinity)) t.land = e;
     per.set(key, t);
   }
   for (const key of issue.keys()) if (!per.has(key) && open(key)) per.set(key, {});
@@ -421,17 +431,17 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
   };
   const runs = entries.map((e) => e.run);
   // A job landed when a land run of it landed; a job had a fix round when one of its runs was sent back.
-  const landedJobs = new Set(runs.filter((r) => r.kind === "land" && r.condition === "landed").map((r) => r.job));
+  const landedJobs = new Set(runs.filter((r) => r.role === "land" && r.state === "landed").map((r) => r.job));
   const roundJobs = new Set(runs.filter((r) => r.failed).map((r) => r.job));
   for (const r of runs) {
     const a = Date.parse(r.started);
     if (!(a >= since && a < now)) continue;
-    const ok = passedState(r.condition) || r.condition === "waiting";
+    const ok = passedState(r.state) || r.state === "waiting";
     const cause = causeOf(r);
-    const stuck = !ok && r.condition !== "running" && (cause === "timeout" || cause === "stalled" || (r.condition === "failed" && !r.failed));
-    const fail = !ok && !stuck && r.condition !== "running";
-    const build = isBuild(r.kind);
-    const role = build ? "worker" : AGENT_ROLES.find(([, , kind]) => kind === r.kind)?.[0];
+    const stuck = !ok && r.state !== "running" && (cause === "timeout" || cause === "stalled" || (r.state === "failed" && !r.failed));
+    const fail = !ok && !stuck && r.state !== "running";
+    const build = isBuild(r.role);
+    const role = build ? "worker" : AGENT_ROLES.find(([, , kind]) => kind === r.role)?.[0];
     if (role) {
       const w = row(role, r.model || "unset");
       w.runs++; w.cost += r.cost ?? 0;
@@ -464,7 +474,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
   }).sort((p, q) => order(p.role) - order(q.role) || q.runs - p.runs || p.model.localeCompare(q.model));
 }
 
-/** The agents by role over `since`..`now`. `before` are the baseline's spans, each a [since, now] before the window. A run with the condition running ends at `now` when `alive` says so, and does not count when not. `step` is the width of a point in ms. */
+/** The agents by role over `since`..`now`. `before` are the baseline's spans, each a [since, now] before the window. A run with the state running ends at `now` when `alive` says so, and does not count when not. `step` is the width of a point in ms. */
 export function agentStats(entries: Entry[], since: number, now: number, step: number, cap: number, alive: (e: Entry) => boolean = isRunning, before: [number, number][] = []): Agents {
   const length = Math.ceil((now - since) / step);
   const edges: [number, number][] = [];
@@ -475,8 +485,8 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
     let runs = 0;
     for (const e of entries) {
       const r = e.run;
-      if (r.kind !== kind) continue;
-      const running = r.condition === "running" && alive(e);
+      if (r.role !== kind) continue;
+      const running = r.state === "running" && alive(e);
       if (running) live++;
       const a = Date.parse(r.started), b = r.ended ? Date.parse(r.ended) : running ? now : NaN;
       if (a >= since && a < now) {
@@ -500,7 +510,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
   let up = 0, peak = 0;
   for (const [, d] of edges) { up += d; if (up > peak) peak = up; }
   for (const p of points) for (const [key] of AGENT_ROLES) if (p[key] !== undefined) p[key] = round(p[key]!, 2);
-  const inWindow = entries.map((e) => e.run).filter((r) => isBuild(r.kind) && Date.parse(r.started) >= since && Date.parse(r.started) < now);
+  const inWindow = entries.map((e) => e.run).filter((r) => isBuild(r.role) && Date.parse(r.started) >= since && Date.parse(r.started) < now);
   const reviews = inWindow.reduce((n, r) => n + (r.review ? 1 : 0), 0);
   // The baseline rate of a role and model: the mean of its rate over the spans that have data, as averageFigures takes it.
   const prior = before.map(([a, b]) => outcomeRows(entries, a, b));
@@ -530,51 +540,51 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
 }
 
 /** `project` names one repo: then only its runs, Asks and flakes count. */
-/** What `speed` reads: the job records, the store's lists and history at origin/main, and the flakes. A baseline reads them once for all its spans. */
-export interface Inputs { read: JobRecord[]; head: string; lists: ReturnType<typeof reader>; filed: Filed; flakes: ReturnType<typeof flakes> }
+/** What `speed` reads: the Asks and the director's decisions, the store's lists and history at origin/main, and the flakes. A baseline reads them once for all its spans. */
+export interface Inputs { asks: AskSpan[]; decisions: { at: string; ref: string; outcome?: string }[]; head: string; lists: ReturnType<typeof reader>; filed: Filed; flakes: ReturnType<typeof flakes> }
 export function inputs(): Inputs {
-  const head = originMain(storeDir());
-  return { read: allRecords(), head, lists: reader({ fetch: false, rev: head || undefined }), filed: filed(storeDir(), head), flakes: flakes() };
+  const head = originMain(itemsDir());
+  return { asks: askHistory(), decisions: decisions<{ at: string; ref: string; outcome?: string }>(), head, lists: reader({ fetch: false, rev: head || undefined }), filed: filed(itemsDir(), head), flakes: flakes() };
 }
 
 export function speed(window: Window, now = new Date(), fit: Fit | null = null, project?: string, inp = inputs()): Speed {
   const b = buckets(window, now.getTime()), n = b.starts.length, since = new Date(b.since);
   const times: Record<string, number[]> = { land: [], intake: [] };
   const checks = new Map<string, number[]>();
-  const agents: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[] = [];
+  const agents: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[] = [];
   const models = new Map<string, number[]>();
 
-  const { read, lists } = inp;
-  const entries = allRuns(false, read).filter((e) => repoIn(e.run.repo, project));
+  const { lists } = inp;
+  const entries = allRuns().filter((e) => repoIn(e.run.repo, project));
   const all = entries.map((x) => x.run);
   const landed: Run[] = [];
   for (const r of all) {
     const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");
     if (!(t0 >= since.getTime()) || t0 > now.getTime() || !(t1 >= t0) || t1 - t0 > MAX_RUN) continue;
     const secs = (t1 - t0) / 1000;
-    const kind = isAgentRun(r.kind) ? "agent" : r.kind;
+    const kind = isAgentRun(r.role) ? "agent" : r.role;
     if (kind in times) times[kind].push(secs);
     for (const c of r.checks ?? []) {
       if (!checks.has(c.name)) checks.set(c.name, []);
       checks.get(c.name)!.push(c.seconds);
     }
-    if (kind === "land" && r.condition === "landed") landed.push(r);
+    if (kind === "land" && r.state === "landed") landed.push(r);
     if (kind !== "agent") continue;
     const model = r.model || "unset";
     if (!models.has(model)) models.set(model, []);
     models.get(model)!.push(secs);
-    agents.push({ name: r.name, condition: r.condition, model, tests: (r.checks ?? []).find((c) => isTests(c.name))?.seconds ?? null, cost: round(r.cost ?? 0, 2), took: round(secs) });
+    agents.push({ name: r.name, state: r.state, model, tests: (r.checks ?? []).find((c) => isTests(c.name))?.seconds ?? null, cost: round(r.cost ?? 0, 2), took: round(secs) });
   }
   // A fix round is a worker run of the issue that a failed check or the reviewer sent back (`failed` set).
   const rounds = new Map<string, number>();
   for (const r of all) {
-    if (!isAgentRun(r.kind)) continue;
+    if (!isAgentRun(r.role)) continue;
     if (r.failed) rounds.set(r.job, (rounds.get(r.job) ?? 0) + 1);
   }
   // Landed issues: a land run of an issue with no number all share the one key "none". An issue's fix rounds are the most any of its landing runs' jobs needed.
   const landedBy = new Map<string, Run[]>();
   for (const r of landed) {
-    const k = issueKeyOf(r, { parent: true }) ?? "none";
+    const k = goalOf(r) ?? "none";
     landedBy.set(k, [...(landedBy.get(k) ?? []), r]);
   }
   const issuesLanded = landedBy.size;
@@ -588,12 +598,12 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   };
   if (fit) {
     const weekOf = new Map<string, number>();
-    const keyOf = (r: Run) => issueKeyOf(r, { parent: true });
-    for (const r of all) if (isAgentRun(r.kind) && keyOf(r)) weekOf.set(keyOf(r)!, (weekOf.get(keyOf(r)!) ?? 0) + (runShare(fit, r)?.pct ?? 0));
+    const keyOf = goalOf;
+    for (const r of all) if (isAgentRun(r.role) && keyOf(r)) weekOf.set(keyOf(r)!, (weekOf.get(keyOf(r)!) ?? 0) + (runShare(fit, r)?.pct ?? 0));
     const keys = [...new Set(landed.map(keyOf).filter((k) => k !== undefined))];
     const per = keys.map((g) => weekOf.get(g) ?? 0);
     const nRuns = new Map<string, number>();
-    for (const r of all) if (isAgentRun(r.kind) && keyOf(r)) nRuns.set(keyOf(r)!, (nRuns.get(keyOf(r)!) ?? 0) + 1);
+    for (const r of all) if (isAgentRun(r.role) && keyOf(r)) nRuns.set(keyOf(r)!, (nRuns.get(keyOf(r)!) ?? 0) + 1);
     issues.usage = keys.map((g) => {
       const [repo, n] = splitId(g);
       return { goal: g, href: issueHref(`${repo}-${n}`), week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
@@ -608,8 +618,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     return repo && lists.list(repo) ? GONE : undefined;
   };
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
-  const records = read.filter((r) => inProject(r.issue, project));
-  const stages = { rows: stageRows({ runs: entries, specChecks: specChecksOf(records) }, since.getTime(), now.getTime()) };
+  const stages = { rows: stageRows({ runs: entries, specChecks: [] }, since.getTime(), now.getTime()) };
   for (const t of [...cls.classes.flatMap((c) => c.top), ...issues.usage]) {
     const [repo, n] = splitId(t.goal);
     const item = lists.item(repo, n);
@@ -628,7 +637,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   for (const e of entries) {
     const t = Date.parse(e.run.started);
     if (t >= since.getTime() && t < now.getTime()) started[b.slotOf(t)]++;
-    if (!isAgentRun(e.run.kind) || !(t >= since.getTime() && t < now.getTime())) continue;
+    if (!isAgentRun(e.run.role) || !(t >= since.getTime() && t < now.getTime())) continue;
     const spent = costs[b.slotOf(t)], model = e.run.model || "unset";
     spent[model] = round((spent[model] ?? 0) + (e.run.cost ?? 0), 4);
   }
@@ -637,7 +646,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     done: issuesLanded,
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
     phases: Object.fromEntries(PHASE_KEYS.map((k) => [k, phaseStat(ended[k].map((x) => x.secs))])) as Speed["phases"],
-    asks: asksOf(records, since.getTime(), now.getTime()),
+    asks: asksOf(inp, project, since.getTime(), now.getTime()),
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: b.starts.map((at, i) => ({ at: new Date(at).toISOString(), runs: started[i], cost: costs[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) }) as Speed["buckets"][number]),
     times: ended.issues,
@@ -656,10 +665,12 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   };
 }
 
-function asksOf(records: JobRecord[], since: number, now: number): Speed["asks"] {
-  const inWindow = (t: number) => t >= since && t <= now;
-  const asks = records.flatMap((r) => (r.asks ?? []).filter((a) => inWindow(Date.parse(a.set))).map((a) => ({ a, r })));
-  const escalated = ({ a, r }: (typeof asks)[number]) => r.events.some((e) => e.kind === "director" && (e.data as { outcome?: string } | undefined)?.outcome === "escalated" && e.at >= a.set && (!a.cleared || e.at < a.cleared));
+/** The number of an issue, from its key or its old `<repo>-<n>` ID. */
+const numOf = (s: string): number | undefined => parseKey(s)?.n ?? parseId(s)?.n;
+
+function asksOf(inp: Inputs, project: string | undefined, since: number, now: number): Speed["asks"] {
+  const asks = inp.asks.filter((a) => inProject(a.issue, project) && Date.parse(a.set) >= since && Date.parse(a.set) <= now);
+  const escalated = (a: AskSpan) => inp.decisions.some((d) => d.outcome === "escalated" && numOf(d.ref) === numOf(a.issue) && d.at >= a.set && (!a.cleared || d.at < a.cleared));
   return { count: asks.length, manual: asks.filter(escalated).length };
 }
 

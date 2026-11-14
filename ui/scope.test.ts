@@ -1,17 +1,18 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eventIn, inProject, memoryIn, repoIn, scopeOf, traceIn } from "./api/scope.ts";
 import { SESSIONS } from "../lib/windows.ts";
 import { withEnv } from "./test-server.ts";
 import { forProject } from "./api/now.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 let dir: string, restore: () => void;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "scope-"));
-  writeFileSync(join(dir, "repos.json"), JSON.stringify({ alpha: { path: "/repos/alpha" }, "alpha-ui": { path: "/repos/alpha-ui" } }));
-  restore = withEnv({ ALEPH_REPOS: join(dir, "repos.json") });
+  writeRepos({ alpha: { path: "/repos/alpha" }, "alpha-ui": { path: "/repos/alpha-ui" } });
+  restore = withEnv({ });
 });
 afterAll(() => { restore(); rmSync(dir, { recursive: true, force: true }); });
 
@@ -57,9 +58,9 @@ test("a memory item is in its own project, and a global or unscoped one is in ev
 });
 
 test("the Status answer for a project keeps its Herald events and the ones of no issue", () => {
-  const events = ["alpha-1", "alpha-ui-2", "protected"].map((subject) => ({ at: "2026-11-04T12:00:00Z", by: "rule", subject, action: "changed" }));
+  const events = ["alpha-1", "alpha-ui-2", "protected"].map((object) => ({ time: "2026-11-04T12:00:00Z", subject: "rule", object, action: "changed" }));
   const s: any = { stuck: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events, titles: {} } };
-  expect(forProject(s, "alpha").herald!.events.map((e) => e.subject)).toEqual(["alpha-1", "protected"]);
+  expect(forProject(s, "alpha").herald!.events.map((e) => e.object)).toEqual(["alpha-1", "protected"]);
 });
 
 test("scopeOf reads the project and the window by name, with the route's default, and refuses another window", async () => {

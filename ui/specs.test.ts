@@ -7,6 +7,7 @@ import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import * as v from "./views/issues.js";
 // @ts-ignore
 import { view as specView } from "./views/spec.js";
+import { writeRepos } from "../tests/projects.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]) {
@@ -31,8 +32,8 @@ beforeAll(async () => {
   sh(base, "git", "clone", "-q", remote, items);
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ a: { path: a }, b: { path: b }, c: { path: c } }));
-  restoreEnv = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ...gitEnv });
+  writeRepos({ a: { path: a }, b: { path: b }, c: { path: c } }, items);
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: join(base, "factory"), ...gitEnv });
   ({ server, stop } = await withServer({ warm: false }));
 });
 afterAll(() => {

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildReviewFixture } from "./build.ts";
+import { readEvents } from "../../../lib/layout.ts";
 import { askOf } from "../../../jobs/lib/asks/ask.ts";
 import { state } from "../../state.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_VAULT"];
+const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_ITEMS", "ALEPH_VAULT"];
 let saved: Record<string, string | undefined>;
 let dir: string;
 
@@ -20,25 +21,25 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("the fixture's tools-4 is stored as an Ask and shows on Status as an escalated question", () => {
+test("the fixture's tools-34 is stored as an Ask and shows on Status as an escalated question", () => {
   Object.assign(process.env, buildReviewFixture(join(dir, "fx")));
-  const ask = askOf("tools-4");
+  const ask = askOf("issue.34");
   expect(ask?.kind).toBe("input");
   expect(ask?.reason).toBe("question");
   expect(ask?.situation).toContain("second input file");
   expect(ask?.effects?.some((e) => e.action === "decide")).toBe(true);
   expect(ask?.recommend?.action).toBe("decide");
-  const card = state().asks.find((a) => a.id === "tools-4");
+  const card = state().asks.find((a) => a.id === "tools-34");
   expect(card?.escalated).toBe(true);
   expect(card?.actions.length).toBeGreaterThan(0);
 });
 
-test("the fixture's run events go to its own factory folder, not to the caller's", () => {
+test("the fixture's run events go to its own aleph.db, not to the caller's", () => {
   process.env.ALEPH_FACTORY_DIR = join(dir, "outside");
   buildReviewFixture(join(dir, "fx"));
-  expect(existsSync(join(dir, "outside", "events"))).toBe(false);
-  const events = join(dir, "fx", "factory", "events");
-  const lines = readdirSync(events).flatMap((f) => readFileSync(join(events, f), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)));
-  expect(lines.some((e) => e.subject === "demo-27" && e.action === "question")).toBe(true);
+  const was = process.env.ALEPH_DB;
+  expect(existsSync(join(dir, "fx", "aleph.db"))).toBe(true);
+  process.env.ALEPH_DB = join(dir, "fx", "aleph.db");
+  try { expect(readEvents().some((e) => e.object === "issue.27" && e.action === "question")).toBe(true); } finally { process.env.ALEPH_DB = was; }
   expect(process.env.ALEPH_FACTORY_DIR).toBe(join(dir, "outside"));
 });

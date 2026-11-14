@@ -1,15 +1,15 @@
 import { afterAll, afterEach, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { endLost, openRun, type Opening } from "./agent-run.ts";
-import { allRuns, runsDir, stamp } from "../records/ledger.ts";
-import { getRun, jobIdOf, putRun } from "../records/record.ts";
+import { allRuns } from "../records/ledger.ts";
+import { getRun } from "../records/record.ts";
+import { readSection } from "../records/run-files.ts";
 import { backendHold } from "../gates/factory-status.ts";
 import { lock } from "../infra/locks.ts";
 
 let base: string;
-const NOW = new Date("2026-06-01T12:00:00Z");
 const saved = { ...process.env };
 const opening: Opening = { role: "intake", who: "the reviewer", model: "m-1", seconds: 60, flags: ["--tools", "Read"], name: "demo", command: "facts demo", shown: false };
 const fake = (body: string) => {
@@ -22,6 +22,7 @@ const fake = (body: string) => {
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-agent-run-"));
   process.env.ALEPH_JOBS_DIR = join(base, "jobs");
+  process.env.ALEPH_DB = join(base, "aleph.db");
   process.env.XDG_RUNTIME_DIR = join(base, "run");
 });
 afterEach(() => { setSystemTime(); delete process.env.ALEPH_INTAKE_CMD; delete process.env.ALEPH_INTAKE_TIMEOUT; delete process.env.ALEPH_STALL_SECONDS; });
@@ -29,9 +30,9 @@ afterAll(() => { rmSync(base, { recursive: true, force: true }); process.env = s
 
 test("a run holds its state, its prompt, its output and its ending", async () => {
   fake(`cat > ${join(base, "stdin")}; echo "$@" > ${join(base, "args")}; echo reply; echo noise >&2`);
-  const run = openRun({ ...opening, repo: "r", on: "r-1", job: "job-1" });
-  expect(getRun(basename(run.folder))).toMatchObject({ kind: "intake", name: "demo", job: "job-1", repo: "r", on: "r-1", condition: "running", phase: "intake", model: "m-1", shown: false, told: true });
-  expect(readFileSync(join(run.folder, "command.txt"), "utf8")).toBe("facts demo\n");
+  const run = openRun({ ...opening, repo: "r", target: "issue.1" });
+  expect(getRun(run.id)).toMatchObject({ role: "intake", name: "demo", job: run.id, repo: "r", target: "issue.1", state: "running", phase: "intake", model: "m-1", shown: false, told: true });
+  expect(readSection(run.folder, "command")).toBe("facts demo\n");
   expect(await run.ask("hello")).toBe("reply\n");
   expect(readFileSync(join(run.folder, "prompt.md"), "utf8")).toBe("hello");
   expect(readFileSync(join(base, "stdin"), "utf8")).toBe("hello");
@@ -39,46 +40,21 @@ test("a run holds its state, its prompt, its output and its ending", async () =>
   // The role loads no MCP server from the user's config.
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--strict-mcp-config");
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--disable-slash-commands");
-  expect(readFileSync(join(run.folder, "output.log"), "utf8")).toBe("reply\n");
-  expect(readFileSync(join(run.folder, "stderr.log"), "utf8")).toBe("noise\n");
+  expect(readFileSync(join(run.folder, "transcript.jsonl"), "utf8")).toBe("reply\n");
+  expect(readSection(run.folder, "stderr")).toBe("noise\n");
   run.end("ok", { route: "close" });
-  const r = getRun(basename(run.folder))!;
-  expect(r).toMatchObject({ condition: "done", reason: "ok", route: "close" });
+  const r = getRun(run.id)!;
+  expect(r).toMatchObject({ state: "done", reason: "ok", route: "close" });
   expect(r.phase).toBeUndefined();
   expect(typeof r.ended).toBe("string");
 });
 
-test("a role run that joins a job sorts after the job's earlier runs, even when the clock steps back", () => {
-  setSystemTime(NOW);
-  const later = stamp(new Date(NOW.getTime() + 60_000));
-  const earlier = join(runsDir(), `${later}-step-build`);
-  mkdirSync(earlier, { recursive: true });
-  putRun(basename(earlier), { n: 1, kind: "build", job: "step-job", name: "step", condition: "landed", told: true, started: NOW.toISOString() });
-  const run = openRun({ ...opening, name: "step", job: "step-job" });
-  const ids = allRuns().map((e) => e.folder);
-  expect(ids.indexOf(run.folder)).toBeGreaterThan(ids.indexOf(earlier));
-});
-
-test("two jobs on one subject are numbered after an earlier run, and their folders are <stamp>-<subject>-<n>", () => {
-  setSystemTime(NOW);
-  const old = join(runsDir(), `${stamp(new Date(NOW.getTime() - 60_000))}-intake-r-9-intake`);
-  mkdirSync(old, { recursive: true });
-  putRun(basename(old), { kind: "intake", job: "old-9", name: "intake-r-9", on: "r-9", n: 1, condition: "done", told: true, started: NOW.toISOString() });
-  const one = openRun({ ...opening, on: "r-9" });
-  const two = openRun({ ...opening, on: "r-9" });
-  const e = (f: string) => allRuns().find((x) => x.folder === f)!;
-  expect([jobIdOf(e(old)), jobIdOf(e(one.folder)), jobIdOf(e(two.folder))]).toEqual(["r-9#1", "r-9#2", "r-9#3"]);
-  expect(one.folder.split("/").at(-1)).toMatch(/^\d{8}-\d{6}-r-9-2$/);
-  expect(getRun(basename(two.folder))!.n).toBe(3);
-  const first = openRun({ ...opening, on: "r-10" }), second = openRun({ ...opening, on: "r-10" });
-  expect([jobIdOf(e(first.folder)), jobIdOf(e(second.folder))]).toEqual(["r-10#1", "r-10#2"]);
-});
-
-test("starts on one subject in parallel processes never share a number", async () => {
-  const script = `import { openRun } from ${JSON.stringify(join(import.meta.dir, "agent-run.ts"))}; openRun(${JSON.stringify({ ...opening, on: "r-20" })});`;
+test("each run gets its own job number, also when processes start runs at once", async () => {
+  const script = `import { openRun } from ${JSON.stringify(join(import.meta.dir, "agent-run.ts"))}; openRun(${JSON.stringify({ ...opening, target: "issue.20" })});`;
   const ps = Array.from({ length: 6 }, () => Bun.spawn(["bun", "-e", script], { env: process.env, stdout: "ignore", stderr: "inherit" }));
   expect(await Promise.all(ps.map((p) => p.exited))).toEqual([0, 0, 0, 0, 0, 0]);
-  expect(allRuns().filter((x) => x.run.on === "r-20").map((x) => x.run.n).sort()).toEqual([1, 2, 3, 4, 5, 6]);
+  const ids = allRuns().filter((x) => x.run.target === "issue.20").map((x) => x.id);
+  expect(new Set(ids).size).toBe(6);
 });
 
 test("a run records the cost of its result event, also when the command fails, and has none without one", async () => {
@@ -86,17 +62,17 @@ test("a run records the cost of its result event, also when the command fails, a
   fake(`echo '{"type":"system"}'; echo '${result(0.5, false, "the text")}'`);
   const good = openRun(opening);
   expect(await good.ask("x")).toBe("the text");
-  expect(getRun(basename(good.folder))!.cost).toBe(0.5);
+  expect(getRun(good.id)!.cost).toBe(0.5);
 
   fake(`echo '${result(0.25, true, "out of turns")}'; exit 1`);
   const bad = openRun(opening);
   await expect(bad.ask("x")).rejects.toThrow("the reviewer exited 1");
-  expect(getRun(basename(bad.folder))!.cost).toBe(0.25);
+  expect(getRun(bad.id)!.cost).toBe(0.25);
 
   fake("echo plain");
   const none = openRun(opening);
   await none.ask("x");
-  expect(getRun(basename(none.folder))!.cost).toBeUndefined();
+  expect(getRun(none.id)!.cost).toBeUndefined();
 });
 
 test("a run past its time box is killed and says it timed out", async () => {
@@ -104,7 +80,7 @@ test("a run past its time box is killed and says it timed out", async () => {
   process.env.ALEPH_INTAKE_TIMEOUT = "2";
   const run = openRun(opening);
   await expect(run.ask("x")).rejects.toThrow("the reviewer timed out");
-  expect(existsSync(join(run.folder, "output.log"))).toBe(true);
+  expect(existsSync(join(run.folder, "transcript.jsonl"))).toBe(true);
 });
 
 test("a run that ends with the API credit error has cause credit and holds its backend", async () => {
@@ -112,7 +88,7 @@ test("a run that ends with the API credit error has cause credit and holds its b
   const run = openRun(opening);
   await expect(run.ask("x")).rejects.toThrow("the reviewer exited 1");
   run.end("failed: no credit", { cause: "unanswered" });
-  expect(getRun(basename(run.folder))).toMatchObject({ condition: "done", cause: "credit" });
+  expect(getRun(run.id)).toMatchObject({ state: "done", cause: "credit" });
   expect(backendHold()).toMatchObject({ why: "API Error: 402 no credit" });
 });
 
@@ -145,10 +121,10 @@ test("endLost ends a run when its lock is free, and leaves one whose lock is hel
   } finally {
     release();
   }
-  expect(getRun(basename(free.folder))).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict", cause: "unanswered" });
-  expect(getRun(basename(held.folder))?.condition).toBe("running");
-  expect(getRun(basename(other.folder))?.condition).toBe("running");
-  expect(getRun(basename(done.folder))?.reason).toBe("kept");
+  expect(getRun(free.id)).toMatchObject({ state: "done", reason: "failed: its process ended before a verdict", cause: "unanswered" });
+  expect(getRun(held.id)?.state).toBe("running");
+  expect(getRun(other.id)?.state).toBe("running");
+  expect(getRun(done.id)?.reason).toBe("kept");
 });
 
 test("an agent gets no API key and no CLAUDECODE, so it bills the subscription", async () => {
@@ -164,5 +140,5 @@ test("a non-chat run records the session of its reply on its run", async () => {
   fake(`echo '{"type":"result","is_error":false,"session_id":"s1","result":"ok"}'`);
   const run = openRun(opening);
   await run.ask("x");
-  expect(getRun(basename(run.folder))!.session).toBe("s1");
+  expect(getRun(run.id)!.session).toBe("s1");
 });

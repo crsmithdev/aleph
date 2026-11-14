@@ -1,64 +1,47 @@
 /**
- * Where the store, the ledger, and the factory folder live. One answer for every
+ * Where the items repo, the job folders, and the factory folder live. One answer for every
  * reader (docs/data-model.md): the layout
- * (issues, runs, factory) under ~/.aleph. The environment wins, variable by variable.
+ * (items, jobs, factory) under ~/.aleph. The environment wins, variable by variable.
  */
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { event, type Event } from "./naming.ts";
+import { conn } from "./db.ts";
+import { event, type Event, type EventRow } from "./naming.ts";
 import { alephPath } from "./paths.ts";
 import { touch } from "./sources.ts";
 
-export interface Layout { store: string; ledger: string; factory: string }
+export interface Layout { items: string; jobs: string; factory: string }
 
 const factory = () => alephPath("ALEPH_FACTORY_DIR", "factory");
 
 /** Read at each call, so a changed environment is seen at once. Each path touches its source when read (sources.ts). */
 export function layout(): Layout {
   return {
-    get store() { touch("store"); return alephPath("ALEPH_ISSUES", "issues"); },
-    get ledger() { touch("runs"); return alephPath("ALEPH_JOBS_DIR", "runs"); },
+    get items() { touch("store"); return alephPath("ALEPH_ITEMS", "items"); },
+    get jobs() { touch("runs"); return alephPath("ALEPH_JOBS_DIR", "jobs"); },
     get factory() { touch("factory"); return factory(); },
   };
 }
 
-/** The folder of the job records: `ALEPH_RECORDS_DIR`, else beside a ledger the environment names, else ~/.aleph/jobs. */
-export function recordsDir(): string {
-  touch("records");
-  const e = process.env;
-  if (!e.ALEPH_RECORDS_DIR && e.ALEPH_JOBS_DIR) return join(e.ALEPH_JOBS_DIR, ".records");
-  return alephPath("ALEPH_RECORDS_DIR", "jobs");
-}
-
-/** The event log: one file per UTC day, `<day>.jsonl`, one event as JSON per line. A day before today never changes. */
-export const eventsDir = (): string => { touch("events"); return join(factory(), "events"); };
-
-/** One event in the event log, in the file of its day. `event()` checks its words first, so a bad word throws. */
+/** One event in the event table; `event()` checks its words first, so a bad word throws. */
 export function logEvent(e: Parameters<typeof event>[0]): Event {
   const ev = event(e);
-  mkdirSync(eventsDir(), { recursive: true });
-  appendFileSync(join(eventsDir(), `${ev.at.slice(0, 10)}.jsonl`), `${JSON.stringify(ev)}\n`);
+  conn().query("INSERT INTO events (time, subject, action, object, detail) VALUES (?, ?, ?, ?, ?)").run(ev.time, ev.subject, ev.action, ev.object, ev.detail ?? null);
   return ev;
 }
 
-/** The parsed lines of each day file, by path, with the size they were read at: a file is read again only when it grows. */
-const days = new Map<string, { size: number; events: Event[] }>();
+/** A change of a setting (pause, Always, a model tier, the judge) as an event, so the Herald shows it. */
+export const logSetting = (detail: string): Event => logEvent({ subject: "human", action: "changed", object: "settings", detail });
 
-/** The events of a day file's text; a line cut off by a write in progress is left for the next read. */
-export const eventsOf = (text: string): Event[] => text.split("\n").flatMap((l) => { try { return l ? [JSON.parse(l)] : []; } catch { return []; } });
-
-/** The events at or after `since` (ms), oldest first. Only the files of the days from `since` on are read. */
-export function readEvents(since = 0): Event[] {
-  const dir = eventsDir();
-  if (!existsSync(dir)) return [];
-  const from = new Date(since).toISOString(), first = `${from.slice(0, 10)}.jsonl`;
-  const out: Event[] = [];
-  for (const f of readdirSync(dir).filter((f) => f.endsWith(".jsonl") && f >= first).sort()) {
-    const path = join(dir, f), size = statSync(path).size;
-    let d = days.get(path);
-    if (d?.size !== size) days.set(path, (d = { size, events: eventsOf(readFileSync(path, "utf8")) }));
-    out.push(...d.events.filter((e) => e.at >= from));
-  }
-  return out.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+/** The events at or after `since` (ms), oldest first, with the job fields of `event_rows`. */
+export function readEvents(since = 0): EventRow[] {
+  touch("events");
+  return conn().query("SELECT * FROM event_rows WHERE time >= ? ORDER BY seq").all(new Date(since).toISOString()) as EventRow[];
 }
 
+/** The events after `seq`, oldest first. */
+export const eventsAfter = (seq: number): EventRow[] => conn().query("SELECT * FROM event_rows WHERE seq > ? ORDER BY seq").all(seq) as EventRow[];
+/** The `seq` of the last event; 0 when there is none. */
+export const lastSeq = (): number => (conn().query("SELECT coalesce(max(seq), 0) AS n FROM events").get() as { n: number }).n;
+
+/** The events whose object is `object`, oldest first; with `actions`, only those actions. */
+export const eventsOf = (object: string, ...actions: string[]): Event[] =>
+  conn().query(`SELECT seq, time, subject, action, object, detail FROM events WHERE object = ?${actions.length ? ` AND action IN (${actions.map(() => "?").join(", ")})` : ""} ORDER BY seq`).all(object, ...actions) as Event[];

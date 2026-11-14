@@ -1,16 +1,20 @@
 /**
  * Lays the review fixture out as an aleph home: `bun ui/fixtures/review/build.ts <dest> [src]` writes
- * `<dest>/{repos.json,jobs,items,vault}` from the plain files beside this one (or from `src`) and prints
+ * `<dest>/{jobs,items,vault}` (the registry is `items/projects/<n>/project.md`) from the plain files beside this one (or from `src`) and prints
  * the ALEPH_* variables that point at them. The work store needs a git repo, so it is made here, not kept in git.
- * Times in the run folders are written against ANCHOR and moved so the newest sits a few hours back from now.
+ * Times in the runs are written against ANCHOR and moved so the newest sits a few hours back from now.
+ * Each `jobs/<folder>/state.json` becomes a job in the fixture's aleph.db: the folders in name order are `job.1`, `job.2`, and so on,
+ * and a reviewer's job (a folder with a `review.md`) comes after them. Runs that share a `job` name form one work, in folder order.
+ * An issue `<repo>-<n>` is `issue.<n>`; the ids of a later repo continue after those of the one before, so no key is in two repos.
  */
-import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { writeList } from "../../../issues/lib/store.ts";
 import { add, clock, note, setStatus } from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
-import { putRun, setIssueAsk } from "../../../jobs/lib/records/record.ts";
-import { subjectOf } from "../../../lib/naming.ts";
+import { writeRepos } from "../../../tests/projects.ts";
+import { setIssueAsk } from "../../../jobs/lib/records/record.ts";
+import { seed } from "../../../jobs/job.testkit.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };
@@ -48,15 +52,14 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
   mkdirSync(dest, { recursive: true });
   // Project paths are never read from the fixture: each is `<dest>/repos/<key>`, so git runs only inside dest.
   const named: Record<string, { checks?: unknown }> = JSON.parse(readPlain(join(src, "repos.json")));
-  const registry: Record<string, unknown> = {};
+  const registry: Record<string, { path: string; main: string; sandbox: boolean; checks: unknown }> = {};
   for (const [key, r] of Object.entries(named)) {
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(key)) throw new Error(`fixture project name ${JSON.stringify(key)} is not a plain name`);
     registry[key] = { path: join(dest, "repos", key), main: "main", sandbox: true, checks: r.checks ?? [] };
   }
-  writeFileSync(join(dest, "repos.json"), JSON.stringify(registry, null, 2) + "\n");
   // Each project is a git repo with one commit, so the pages that read a repo's log and branches find one.
   // Each also gets a bare `origin` under `<dest>/remotes/<key>.git`, so `git fetch origin` works.
-  for (const [key, r] of Object.entries(registry) as [string, { path: string }][]) {
+  for (const [key, r] of Object.entries(registry)) {
     const bare = join(dest, "remotes", `${key}.git`);
     mkdirSync(r.path, { recursive: true });
     mkdirSync(join(dest, "remotes"), { recursive: true });
@@ -67,23 +70,29 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
     sh(r.path, "git", "push", "-q", "-u", "origin", "main");
   }
   const shift = clock().getTime() - 2 * 3600_000 - ANCHOR;
-  copyPlain(join(src, "jobs"), join(dest, "jobs"));
-  // The fixture keeps each run as a state.json; the copy keeps it in its job record, where the ledger reads it.
-  // The gate events putRun logs go to the fixture's own factory folder.
-  const before = { ALEPH_RECORDS_DIR: process.env.ALEPH_RECORDS_DIR, ALEPH_FACTORY_DIR: process.env.ALEPH_FACTORY_DIR };
-  Object.assign(process.env, { ALEPH_RECORDS_DIR: join(dest, "jobs", ".records"), ALEPH_FACTORY_DIR: join(dest, "factory") });
-  const seen: Record<string, number> = {};
+  // The jobs, the events that seeding them logs and the job folders go to the fixture's own aleph.db and jobs folder.
+  const before = { ALEPH_JOBS_DIR: process.env.ALEPH_JOBS_DIR, ALEPH_FACTORY_DIR: process.env.ALEPH_FACTORY_DIR, ALEPH_DB: process.env.ALEPH_DB };
+  Object.assign(process.env, { ALEPH_JOBS_DIR: join(dest, "jobs"), ALEPH_FACTORY_DIR: join(dest, "factory"), ALEPH_DB: join(dest, "aleph.db") });
+  mkdirSync(join(dest, "jobs"), { recursive: true });
+  const lastOf: Record<string, string> = {}, reviews: { build: string; file: string; run: Record<string, any> }[] = [];
   try {
-    for (const id of readdirSync(join(dest, "jobs"))) {
-      const file = join(dest, "jobs", id, "state.json");
+    for (const old of readdirSync(join(src, "jobs")).sort()) {
+      const dir = join(src, "jobs", old);
       let run;
-      try { run = JSON.parse(readPlain(file)); } catch { continue; }
-      for (const k of ["started", "ended"]) if (run[k]) run[k] = new Date(Date.parse(run[k]) + shift).toISOString();
-      // A fixture run states no `n`: it takes its place in start order on its subject.
-      const subject = subjectOf(run);
-      seen[subject] = (seen[subject] ?? 0) + 1;
-      putRun(id, { n: seen[subject], ...run });
-      rmSync(file);
+      try { run = JSON.parse(readPlain(join(dir, "state.json"))); } catch { continue; }
+      const { kind, condition, on, job, n: _n, ...rest } = run;
+      for (const k of ["started", "ended"]) if (rest[k]) rest[k] = new Date(Date.parse(rest[k]) + shift).toISOString();
+      const target = on ? { target: `issue.${String(on).split("-").at(-1)}` } : {};
+      const { id, folder } = seed({ ...rest, ...target, role: kind === "plan" ? "intake" : kind, state: condition, ...(lastOf[job] ? { prev: lastOf[job] } : {}) });
+      lastOf[job] = id;
+      for (const f of readdirSync(dir)) if (f === "result.md") copyFileSync(join(dir, f), join(folder, f));
+      else if (f === "review.md") reviews.push({ build: id, file: join(dir, f), run: rest });
+    }
+    // A reviewer is its own job, after the build it judged; its verdict text is its result.
+    for (const r of reviews) {
+      const at = r.run.ended ?? r.run.started;
+      const { folder } = seed({ role: "review", repo: r.run.repo, name: r.run.name, model: r.run.model, state: "done", started: at, ended: at, prev: r.build });
+      copyFileSync(r.file, join(folder, "result.md"));
     }
   } finally {
     for (const [k, v] of Object.entries(before)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -95,8 +104,10 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
   sh(dest, "git", "clone", "-q", remote, items);
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
-  // The factory folder is under dest too, so a tick run with this environment never writes to the live ~/.aleph/factory.
-  const env = { ALEPH_JOBS_DIR: join(dest, "jobs"), ALEPH_REPOS: join(dest, "repos.json"), ALEPH_ISSUES: items, ALEPH_VAULT: join(dest, "vault"), ALEPH_FACTORY_DIR: join(dest, "factory") };
+  writeRepos(registry, items);
+  // The factory folder and the database are under dest too, so a tick run with this environment never writes to the live ~/.aleph.
+  const env = { ALEPH_JOBS_DIR: join(dest, "jobs"), ALEPH_ITEMS: items, ALEPH_VAULT: join(dest, "vault"), ALEPH_FACTORY_DIR: join(dest, "factory"), ALEPH_DB: join(dest, "aleph.db") };
+  mkdirSync(env.ALEPH_FACTORY_DIR, { recursive: true });
   const saved = { ...process.env };
   Object.assign(process.env, IDENT, env);
   try {
@@ -108,10 +119,10 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
           const spec = r.kind === "goal" || r.route;
           const item = add(doc, r.title, { labels: r.labels, priority: r.priority, ...(spec ? { spec: r.body || "Do it." } : { request: r.body }) });
           for (const k of NEW_SHAPE) if (r[k] !== undefined) item.fm[k] = r[k];
-          // Status reads the Ask from the job record store, so the fixture's ask is stored there.
+          // Status reads the Ask from the issue's state row, so the fixture's ask is stored there.
           if (r.ask) {
             const [action, why = ""] = (r.recommend ?? "").split(" :: ");
-            setIssueAsk(`${key}-${item.id}`, {
+            setIssueAsk(`issue.${item.id}`, {
               kind: r.ask as "input" | "approval", reason: r.reason ?? "", question: r.question ?? "", options: [], why: [],
               situation: r.situation,
               effects: (r.effects ?? []).map((e) => { const [a, ...t] = e.split(" :: "); return { action: a, text: t.join(" :: ") }; }),

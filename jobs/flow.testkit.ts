@@ -87,7 +87,7 @@ export const dropAs = (name: string, a: { reason?: string; quiet?: boolean; fate
   cli(["drop", ...(a.quiet ? ["--quiet"] : []), ...(a.fate ? ["--fate", a.fate] : []), "--", name, ...(a.reason ? [a.reason] : [])]);
 /** `aleph checked <name>`. */
 export const checked = (name: string) => cli(["checked", name]);
-/** The job's view, from which `aleph jobs [<name>]` prints its condition and check. */
+/** The job's view, from which `aleph jobs [<name>]` prints its state and check. */
 export const jobView = (name: string) => call(() => { const j = findJob(name); return j && view(j); });
 /** `aleph dispatch`. */
 export const dispatch = (extra: Record<string, string> = {}) => cli(["dispatch"], extra);

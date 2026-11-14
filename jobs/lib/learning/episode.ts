@@ -33,7 +33,7 @@ const runsOf = (repo: Repo, item: issues.Issue): Entry[] =>
 /** Whether a page exists for the item: under its ref, or for a part, under the old `<repo>-<parent> ` name. */
 function written(repo: Repo, item: issues.Issue, pages: string[]): boolean {
   if (pages.some((f) => f.startsWith(`${repo.key}-${issues.refOf(item)} `))) return true;
-  return item.sub !== undefined && pages.includes(`${titleUnder(`${repo.key}-${item.id}`, item)}${MD}`);
+  return issues.parentRef(item) !== undefined && pages.includes(`${titleUnder(`${repo.key}-${item.id}`, item)}${MD}`);
 }
 
 /** The repo's done issues with a ledger run in the last KEEP_DAYS and no episode page yet. */
@@ -46,8 +46,8 @@ function doneIssues(repo: Repo, now = Date.now()): issues.Issue[] {
   const dir = episodesDir();
   const pages = existsSync(dir) ? readdirSync(dir) : [];
   const since = now - KEEP_DAYS * 86400_000;
-  const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined && (epoch(e.run.ended) || epoch(e.run.started)) >= since).map((e) => onOf(e.run)));
-  return specced.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(issues.idOf(i)) && !written(repo, i, pages));
+  const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined && (epoch(e.run.ended) || epoch(e.run.started)) >= since).map((e) => String(onOf(e.run))));
+  return specced.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(String(issues.idOf(i))) && !written(repo, i, pages));
 }
 
 const NAME_MAX = 255; // bytes one file name may take
@@ -130,7 +130,7 @@ function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Com
   const aim = section(item.spec, "Goal") || item.spec.trim() || item.request.trim();
   const landed = commits.length ? commits.map((c) => `${c.sha.slice(0, 7)} ${c.subject}${c.stat ? `\n${c.stat}` : ""}`).join("\n") : "nothing landed";
   const went = runs.map(({ id: name, run }) => {
-    const parts = [`${run.kind} run ${name}: ${run.condition}`];
+    const parts = [`${run.role} run ${name}: ${run.state}`];
     if (run.reason) parts.push(run.reason);
     if (run.round) parts.push(`after ${run.round} fix rounds`);
     return parts.join(", ") + `, ${minutes({ id: name, folder: "", run })} min`;
@@ -142,9 +142,9 @@ function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Com
     : langfuse.traces.map((t) => (t.tokens === null ? `trace ${t.id}: no token total` : `trace ${t.id}: ${t.tokens} tokens`)).join("\n");
   const wrong: string[] = [];
   for (const { id: name, run } of runs) {
-    if (run.condition === "dropped") wrong.push(`${run.kind} run ${name} dropped: ${run.reason ?? "no reason"}`);
-    else if (run.failed === "review") wrong.push(`${run.kind} run ${name} failed review: ${run.reason ?? "no reason"}`);
-    if (run.conflicts?.length) wrong.push(`${run.kind} run ${name} conflicted: ${run.conflicts.join(", ")}`);
+    if (run.state === "dropped") wrong.push(`${run.role} run ${name} dropped: ${run.reason ?? "no reason"}`);
+    else if (run.failed === "review") wrong.push(`${run.role} run ${name} failed review: ${run.reason ?? "no reason"}`);
+    if (run.conflicts?.length) wrong.push(`${run.role} run ${name} conflicted: ${run.conflicts.join(", ")}`);
   }
   return [
     "---", "kind: episode", `scope: ${repo.key}`, "confidence: measured", `updated: ${today()}`, "supersedes: []",

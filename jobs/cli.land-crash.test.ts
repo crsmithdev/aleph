@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, base, env, file, jobRuns, jobsDir, moveMain, remote, sh, state, stateNow, setup, teardown, waitCmd, when } from "./cli.helpers";
+import { CLI, base, env, section, jobRuns, jobsDir, moveMain, remote, sh, state, stateNow, setup, teardown, waitCmd, when } from "./cli.helpers";
 import { issueAdd, issueShow, job, land as landJob } from "./flow.testkit.ts";
 
 beforeAll(setup);
@@ -12,7 +12,7 @@ const startLand = (name: string) => Bun.spawn(["bun", CLI, "land", name], { cwd:
 const landRun = (name: string) => jobRuns(name, "land").at(-1)!;
 /** Kills the process that does the land, as a crash or an OOM kill would, and waits for the CLI that started it. */
 async function killLand(name: string, cli: ReturnType<typeof startLand>): Promise<void> {
-  process.kill(Number(readFileSync(join(jobsDir, landRun(name), "pid"), "utf8")), "SIGKILL");
+  process.kill(Number(readFileSync(join(jobsDir, landRun(name).slice(4), "pid"), "utf8")), "SIGKILL");
   cli.kill(9);
   await cli.exited;
 }
@@ -37,7 +37,7 @@ test("a land killed at its checks leaves main alone, and the next land finishes 
 
   // The dead land's lock must not stop this one.
   const again = await landJob("killcheck");
-  expect(state(again.json.run), file(again.json.run, "land.log")).toMatchObject({ condition: "landed" });
+  expect(state(again.json.run), section(again.json.run, "land")).toMatchObject({ state: "landed" });
   expect(remoteGit("rev-list", "--count", `${before}..main`)).toBe("1");
   expect((await itemStatus(id)).status).toBe("done");
 }, 60_000);
@@ -55,11 +55,11 @@ test("a land killed after its push went through closes the issue on the next lan
   await killLand("killpush", land);
   const pushed = remoteGit("rev-parse", "main");
   expect(pushed).not.toBe(before);
-  expect(stateNow(landRun("killpush")).condition).not.toBe("landed");
+  expect(stateNow(landRun("killpush")).state).not.toBe("landed");
   rmSync(hold);
 
   const again = await landJob("killpush");
-  expect(state(again.json.run), file(again.json.run, "land.log")).toMatchObject({ condition: "landed", commit: pushed });
+  expect(state(again.json.run), section(again.json.run, "land")).toMatchObject({ state: "landed", commit: pushed });
   expect(remoteGit("rev-parse", "main")).toBe(pushed);
   expect((await itemStatus(id)).status).toBe("done");
 }, 60_000);

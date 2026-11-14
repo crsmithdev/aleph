@@ -40,6 +40,6 @@ function decay(d) {
 
 /** The body of the tab: `m` is the /api/memory/processes body. */
 export const renderProcesses = (m) =>
-  card("Schedule · aleph tick runs every minute", dataTable(heads(["Process", "Runs", "Last run", "Next", "Last result", "Does"]), m.steps.map(stepRow).join("")), { aside: "From tick.json and corrections.json" }) +
+  card("Schedule · aleph tick runs every minute", dataTable(heads(["Process", "Runs", "Last run", "Next", "Last result", "Does"]), m.steps.map(stepRow).join("")), { aside: "From the tick table and corrections" }) +
   `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:var(--gap-in)">${episodes(m.episodes)}${corrections(m.corrections)}${screen()}${decay(m.decay)}</div>` +
   card("Not automatic today", `<p>Consolidation, dedupe and reflection have no job. Compile, archive and delete run by hand, and the Log tab shows each run. A new job gets a row in Schedule when it exists.</p>`);

@@ -35,7 +35,7 @@ test("the Roles table has a row per role and model, with the warn tone under 70%
   const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "haiku", 0.6, { firstPass: 4, reviewPass: 0.5 }), o("worker", "gpt-oss-20b", 0.8, { firstPass: 6, reviewPass: 1 }), o("reviewer", "unset", 0.9, { pass: 9, fail: 1 })] } });
   const row = (name: string) => html.match(new RegExp(`<tr><td class="wide" title="${name.split(" · ")[0]}">${name.split(" · ")[0]}</td><td>${name.split(" · ")[1]}</td>.*?</tr>`))![0];
   expect(row("Worker · haiku")).toMatch(/<td class="num warn">60%.*?class="tr[^"]*"/);
-  expect(row("Worker · haiku")).toContain('href="#/factory/jobs?role=worker&condition=failed"');
+  expect(row("Worker · haiku")).toContain('href="#/factory/jobs?role=worker&state=failed"');
   expect(row("Worker · gpt-oss-20b")).toMatch(/<td class="num">80%.*?class="tr[^"]*"/);
   expect(row("Worker · gpt-oss-20b")).not.toContain("warn");
   expect(row("Worker · gpt-oss-20b")).toContain('<td class="num">10</td><td class="num">80%');
@@ -226,7 +226,7 @@ test("the Worker row adds up the worker outcomes and the Reviewer row has its ow
   const w = row(h, "Worker");
   expect(w).toContain('<td class="num">150</td><td class="num">80% </td>');
   expect(w).toContain('<td class="num">$30.00</td><td><a');
-  expect(w).toContain('href="#/factory/jobs?role=worker&condition=failed"');
+  expect(w).toContain('href="#/factory/jobs?role=worker&state=failed"');
   expect(row(h, "Reviewer")).toContain('<td class="num">90</td><td class="num warn">67% ');
 });
 
@@ -248,7 +248,7 @@ test("the Roles table heads its job count Jobs, and no head keeps the old words"
 
 test("the Failed jobs link has no underline until hover or focus", () => {
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } });
-  expect(h).toContain('<a class="failed-jobs" href="#/factory/jobs?role=worker&condition=failed">Failed jobs</a>');
+  expect(h).toContain('<a class="failed-jobs" href="#/factory/jobs?role=worker&state=failed">Failed jobs</a>');
   const css = readFileSync(new URL("./app.css", import.meta.url), "utf8");
   expect(css).toMatch(/^a\.failed-jobs \{[^}]*text-decoration: none;/m);
   expect(css).toMatch(/^a\.failed-jobs:hover, a\.failed-jobs:focus-visible \{[^}]*text-decoration: underline;/m);

@@ -8,7 +8,7 @@ import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { allRuns } from "../records/ledger.ts";
 import { compileDay, render, yesterday } from "./maintainer.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR", "FAKE_RECALL", "ALEPH_RECALL_UNLOGGED"] as const;
+const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR", "FAKE_RECALL", "ALEPH_RECALL_UNLOGGED"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base = "", root = "", saved: Record<string, string | undefined> = {};
 const DAY = "2026-11-03";
@@ -35,7 +35,7 @@ beforeEach(() => {
   chmodSync(join(base, "fake"), 0o755);
   root = join(base, "vault");
   Object.assign(process.env, GIT, {
-    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_VAULT: root, ALEPH_HANDOFFS_DIR: join(base, "handoffs"),
+    ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_VAULT: root, ALEPH_HANDOFFS_DIR: join(base, "handoffs"),
     ALEPH_MAINTAINER_CMD: join(base, "fake"), ALEPH_JUDGE: "haiku", FAKE_DIR: base,
   });
   vault(root);
@@ -51,7 +51,7 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-const notes = () => allRuns().filter((e) => e.run.kind === "maintainer");
+const notes = () => allRuns().filter((e) => e.run.role === "maintainer");
 
 test("a real compile writes each note through the vault write op, keeps a refusal with its rule, drops core and records the day", async () => {
   reply([note("Keep The Digest"), note("Bad Link", { related: ["No Such Note"] }), note("Core Try", { core: "always on" })]);
@@ -63,7 +63,7 @@ test("a real compile writes each note through the vault write op, keeps a refusa
   expect(readFileSync(join(root, "wiki", "decisions", "Core Try.md"), "utf8")).not.toContain("core:");
   expect(compiledDays(root)).toEqual([DAY]);
   expect(readRun(root, "compile")?.detail).toBe(`${DAY}: 2 notes`);
-  expect(notes()[0].run).toMatchObject({ condition: "done", reason: "2 notes, 1 refused", name: `maintainer-${DAY}` });
+  expect(notes()[0].run).toMatchObject({ state: "done", reason: "2 notes, 1 refused", name: `maintainer-${DAY}` });
   const prompt = readFileSync(join(base, "prompt.md"), "utf8");
   expect(prompt).toContain("## write");
   expect(prompt).toContain("We decided to keep the compile digest as it is.");
@@ -113,7 +113,7 @@ test("a failed run is in the report and leaves the day uncompiled", async () => 
   expect(r.error).toMatch(/exited 3/);
   expect(compiledDays(root)).toEqual([]);
   expect(retryDays(root)).toEqual([DAY]);
-  expect(notes()[0].run.condition).toBe("done");
+  expect(notes()[0].run.state).toBe("done");
   expect(notes()[0].run.reason).toStartWith("failed:");
   // A compile of the day that succeeds later clears the mark.
   writeFileSync(join(base, "fake"), FAKE);

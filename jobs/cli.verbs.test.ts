@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { getJson } from "../lib/db.ts";
 import { join } from "node:path";
 import { aleph, base, CLI, env, setup, teardown } from "./cli.helpers";
 
@@ -32,7 +32,7 @@ describe("always", () => {
 describe("judge", () => {
   // env() pins ALEPH_JUDGE, which wins over the stored choice: these runs leave it out.
   const judge = async (...args: string[]) => {
-    const { ALEPH_JUDGE: _, ...rest } = env({ ALEPH_JUDGE_FILE: join(base, "judge") });
+    const { ALEPH_JUDGE: _, ...rest } = env();
     const p = Bun.spawn(["bun", CLI, "judge", ...args], { cwd: base, env: rest, stdout: "pipe", stderr: "pipe" });
     return { code: await p.exited, out: await new Response(p.stdout).text(), err: await new Response(p.stderr).text() };
   };
@@ -40,12 +40,12 @@ describe("judge", () => {
   test("prints the choice, stores a new one, and refuses a judge it does not know", async () => {
     expect(JSON.parse((await judge()).out)).toEqual({ judge: "jev" });
     expect(JSON.parse((await judge("haiku")).out)).toEqual({ judge: "haiku" });
-    expect(readFileSync(join(base, "judge"), "utf8")).toBe("haiku\n");
+    expect(getJson("settings", "judge", "")).toBe("haiku");
     expect(JSON.parse((await judge()).out)).toEqual({ judge: "haiku" });
     const bad = await judge("gpt");
     expect(bad.code).toBe(1);
     expect(bad.err).toContain("usage: aleph judge");
-    expect(readFileSync(join(base, "judge"), "utf8")).toBe("haiku\n");
+    expect(getJson("settings", "judge", "")).toBe("haiku");
   });
 });
 

@@ -1,16 +1,18 @@
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { askOf } from "../asks/ask.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues, suiteStep } from "./factory.ts";
 import type { Rescue } from "../land/rescue.ts";
 import { allJobs, allRuns, type Run } from "../records/ledger.ts";
-import { numbered, putRun } from "../records/record.ts";
-import { subjectOf } from "../../../lib/naming.ts";
+import { setState } from "../records/record.ts";
+import { readEvents } from "../../../lib/layout.ts";
+import { seed } from "../../job.testkit.ts";
 import type { ChecksStop } from "../gates/checks.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
+import { writeRepos } from "../../../tests/projects.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export function sh(cwd: string, ...args: string[]): void {
@@ -18,7 +20,7 @@ export function sh(cwd: string, ...args: string[]): void {
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
 }
 
-const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_VAULT", "XDG_RUNTIME_DIR", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH"];
+const KEYS = ["ALEPH_ITEMS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_DB", "ALEPH_VAULT", "XDG_RUNTIME_DIR", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH"];
 let dir: string;
 /** The test's clock: the time setup made its temp directory, read once from that directory. mk's runs start at it. */
 let now: number;
@@ -33,12 +35,12 @@ export function setup(): void {
   now = statSync(dir).mtimeMs;
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   Object.assign(process.env, {
-    ALEPH_ISSUES: join(dir, "items"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_JOBS_DIR: join(dir, "jobs"),
-    ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), XDG_RUNTIME_DIR: join(dir, "run"), ALEPH_LIVE_CAP: "5", SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_DISPATCH: "off",
+    ALEPH_ITEMS: join(dir, "items"), ALEPH_JOBS_DIR: join(dir, "jobs"),
+    ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_DB: join(dir, "aleph.db"), ALEPH_VAULT: join(dir, "vault"), XDG_RUNTIME_DIR: join(dir, "run"), ALEPH_LIVE_CAP: "5", SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_DISPATCH: "off",
   });
   // The factory repo, with an origin the baseline can fetch, and the work store, empty: a list starts with its first item.
   factoryRepos(dir);
-  writeFileSync(join(dir, "repos.json"), JSON.stringify({ fac: { path: join(dir, "repo"), sandbox: true, autoland: false } }));
+  writeRepos({ fac: { path: join(dir, "repo"), sandbox: true, autoland: false } }, join(dir, "items"));
 }
 
 export function teardown(): void {
@@ -58,20 +60,25 @@ export const newIssue = (areas: string[] = [], key = "fac"): number =>
 export const change = (id: number, f: (item: issues.Issue) => void) =>
   writeList({ key: "fac" }, "edit", (doc) => { f(issues.find(doc, id)!); return true; });
 
-let seq = 0;
-/** A run folder in the ledger: a new job when `job` is not given. Returns the folder and the job id. */
-export function mk(name: string, kind: Run["kind"], state: Run["condition"], extra: Partial<Run> = {}, files: Record<string, string> = {}): { folder: string; job: string } {
-  const id = `20261028-0000${String(++seq).padStart(2, "0")}-fac-${name}-${kind}`;
-  const folder = join(ctx.base, "jobs", id);
-  mkdirSync(folder, { recursive: true });
-  for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
-  const run = { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date(now).toISOString(), ...extra } as Omit<Run, "n">;
-  putRun(basename(folder), { ...run, n: extra.n ?? numbered(subjectOf(run), allRuns()).length + 1 });
-  return { folder, job: extra.job ?? id };
+/**
+ * A job in the ledger. `name` is `fac-<n>`: the job works on issue `n`, and its name is the issue key `issue.<n>`. A new work
+ * unless `extra.job` names the first job of a work: then it follows that work's last job.
+ */
+export function mk(name: string, role: Run["role"], state: Run["state"], extra: Partial<Run> = {}, files: Record<string, string> = {}): { folder: string; job: string } {
+  const { job: work, ...rest } = extra;
+  const prev = work ? allRuns().findLast((e) => e.run.job === work)?.id : undefined;
+  const n = name.split("-")[1];
+  const made = seed({ role, name: `issue.${n}`, repo: "fac", target: `issue.${n}`, state, shown: true, started: new Date(now).toISOString(), ...(prev ? { prev } : {}), ...rest });
+  for (const [f, text] of Object.entries(files)) writeFileSync(join(made.folder, f), text);
+  return { folder: made.folder, job: made.run.job };
 }
 export const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
-export const notes = (id: number) => readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes.join("\n");
-export const ask = (id: number) => askOf(`fac-${id}`);
+/** What was said of issue `id`: its notes, why it closed, and the `changed` events code logged for it, as code writes no note. */
+export const notes = (id: number) => {
+  const item = readList({ key: "fac" })!.items.find((i) => i.id === id)!;
+  return [...item.notes, item.fm.closed_why ?? "", ...readEvents().filter((e) => e.action === "changed" && e.object === `issue.${id}`).map((e) => e.detail)].join("\n");
+};
+export const ask = (id: number) => askOf(`issue.${id}`);
 
 /** Fake actions that log their calls: a drop marks the run dropped, a recheck starts a passed recheck run. */
 export function fakes() {
@@ -79,15 +86,15 @@ export function fakes() {
   const rescue: Rescue = {
     drop: async (name, reason, fate) => {
       calls.push(`drop ${name}`);
-      const j = allJobs().find((x) => x.at(-1)!.run.name === name && x.at(-1)!.run.condition !== "dropped")!;
+      const j = allJobs().find((x) => x.at(-1)!.run.name === name.replace(/^fac-/, "issue.") && x.at(-1)!.run.state !== "dropped")!;
       const last = j.at(-1)!;
-      putRun(last.id, { ...last.run, condition: "dropped", reason, ...(fate ? { fate } : {}) });
+      setState(last.id, "dropped", { reason, ...(fate ? { fate } : {}) });
       return null;
     },
     recheck: async (name) => {
       calls.push(`recheck ${name}`);
-      const j = allJobs().find((x) => x.at(-1)!.run.name === name)!;
-      mk(name, "recheck", "running", { job: j[0].run.job, branch: j[0].run.branch });
+      const j = allJobs().find((x) => x.at(-1)!.run.name === name.replace(/^fac-/, "issue."))!;
+      mk(name.replace(/^issue\./, "fac-"), "recheck", "running", { job: j[0].run.job, branch: j[0].run.branch });
       return null;
     },
   };

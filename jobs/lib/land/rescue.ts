@@ -12,14 +12,14 @@
  * restart explains it) is marked failed and gets the same action, once per issue; a second lost run of the issue sets the Ask.
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */
-import { parseId, shortId } from "../../../lib/naming.ts";
+import { key as keyOf, parseId, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { isVersion } from "../roles/issue-spec.ts";
-import { note, partsOf, reader, writeList } from "../../../issues/lib/store.ts";
+import { close, partsOf, reader, writeList } from "../../../issues/lib/store.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
 import { LAND_STUCK_MS, sandboxRepos } from "../gates/factory-status.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
-import { allJobs, isOpen, issue as issueOf, type Job } from "../records/job.ts";
+import { allJobs, isOpen, jobById, issue as issueOf, type Job } from "../records/job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
@@ -30,7 +30,7 @@ import type { MainState } from "../gates/factory-status.ts";
 import { onMain } from "../records/status.ts";
 import { rescueWaitMs } from "../infra/settings.ts";
 import { ciLine, redCi } from "../gates/ci.ts";
-import { counting, jobIdOf, patchRun, read as readRecord, stepOf } from "../records/record.ts";
+import { counting, read as readRecord, setState, stepOf } from "../records/record.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
 
@@ -61,7 +61,7 @@ function factoryJobs(jobs: Job[], test: (last: Entry, h: Health, j: Job) => bool
 }
 
 /** A build, recheck or land still `running`. */
-const inFlight = (r: Run): boolean => r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land");
+const inFlight = (r: Run): boolean => r.state === "running" && (isAgentRun(r.role) || r.role === "land");
 
 /** The open jobs whose last run, in flight, a host restart killed. No mark is kept: a run stays here until it ends. */
 const killed = (jobs: Job[]): Job[] => factoryJobs(jobs, (last, h) => inFlight(last.run) && h === "killed");
@@ -85,7 +85,7 @@ const SLOW_LAND_OPTIONS = [
 
 /** The open jobs of factory repos whose last real run is a land live for LAND_STUCK_MS or more, with no Ask set on it. */
 const slowLands = (jobs: Job[], now: number): Job[] => factoryJobs(jobs, (last, h) =>
-  last.run.kind === "land" && last.run.condition === "running" && h === "live" && now - Date.parse(last.run.started) >= LAND_STUCK_MS && !asked(last));
+  last.run.role === "land" && last.run.state === "running" && h === "live" && now - Date.parse(last.run.started) >= LAND_STUCK_MS && !asked(last));
 
 /**
  * Each land live for 30 minutes or more gets a rescue Ask (input, rescue) on its issue, once per land run: the director
@@ -108,8 +108,8 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
       const question = `${name}: its land run ${last.id} is live for ${minutes} minutes, and 99% of lands end within 20. Wait, kill and rerun, or drop?`;
       const ask = normalizeAsk({ question, options: SLOW_LAND_OPTIONS, recommended: "Wait", why: [`Run: ${name}, land, running since ${r.started}`] }, { kind: "input", reason: "rescue" })!;
       const why = askFromRun(last, repo, issueOf(runs), ask, question);
-      if (why) { logEvent({ by: "firefighter", subject: name, action: "failed", note: `${name}: no rescue Ask for its slow land: ${why}` }); continue; }
-      logEvent({ by: "firefighter", subject: name, action: "waiting", sub: "rescue", on: [jobIdOf(runs[0])], to: "director", note: `${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director` });
+      if (why) { logEvent({ subject: "firefighter", action: "failed", object: name, detail: `${name}: no rescue Ask for its slow land: ${why}` }); continue; }
+      logEvent({ subject: "firefighter", action: "waiting", object: name, detail: `${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director` });
       out.push(name);
     } finally {
       release();
@@ -129,13 +129,13 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
     const release = await lock(`rescue-${first[0].run.repo}-${name}`, rescueWaitMs());
-    if (!release) { logEvent({ by: "firefighter", subject: name, action: "busy", sub: "rescue", note: "the rescue lock stayed busy; the rescue is skipped" }); continue; }
+    if (!release) { logEvent({ subject: "firefighter", action: "busy", object: name, detail: "the rescue lock stayed busy; the rescue is skipped" }); continue; }
     try {
       // Read again under the lock: another dispatch may have acted on it.
       const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
       if (runs) await rescueJob(runs, act, land, checkMain);
     } catch (e: any) {
-      logEvent({ by: "firefighter", subject: name, action: "failed", sub: "rescue", note: String(e?.message ?? e) });
+      logEvent({ subject: "firefighter", action: "failed", object: name, detail: String(e?.message ?? e) });
     } finally {
       release();
     }
@@ -146,7 +146,7 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
 export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
   const last = counting(runs), r = last.run;
   const waits = waitsForSpecEdit(last);
-  if (!waits || !r.repo || !isOpen(runs) || (r.condition !== "returned" && r.condition !== "failed")) return false;
+  if (!waits || !r.repo || !isOpen(runs) || (r.state !== "returned" && r.state !== "failed")) return false;
   const issue = issueOf(runs);
   const item = issue === undefined ? undefined : reader().item(r.repo, issue);
   return !!loadRegistry()[r.repo] && !!item && issues.status(item) === "open" && !isVersion(item, waits.version);
@@ -166,11 +166,11 @@ async function releaseEdited(act: Rescue): Promise<void> {
     if (!release) continue;
     try {
       const why = await act.drop(r.name, "the goal's spec was edited after the run asked about it; the goal starts again on the new spec");
-      if (why) { logEvent({ by: "firefighter", subject: r.name, action: "failed", sub: "rescue", note: `release after a spec edit failed (${why})` }); continue; }
-      if (askOf(`${repo.key}-${issue}`)?.question === question) clearAsk(`${repo.key}-${issue}`);
+      if (why) { logEvent({ subject: "firefighter", action: "failed", object: r.name, detail: `release after a spec edit failed (${why})` }); continue; }
+      if (askOf(`issue.${issue}`)?.question === question) clearAsk(`issue.${issue}`);
       await tell(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
     } catch (e: any) {
-      logEvent({ by: "firefighter", subject: r.name, action: "failed", sub: "rescue", note: `release after a spec edit failed: ${e?.message ?? e}` });
+      logEvent({ subject: "firefighter", action: "failed", object: r.name, detail: `release after a spec edit failed: ${e?.message ?? e}` });
     } finally {
       release();
     }
@@ -181,8 +181,8 @@ async function releaseEdited(act: Rescue): Promise<void> {
 type Stuck = StuckRun & { name: string; issue: number | string | undefined };
 
 /** The commit of this job or this item on main, or `{ onMain: null }` when the item is closed without one; null when neither. */
-function foundDone({ r, repo, issue }: Pick<Stuck, "r" | "repo" | "issue">): { onMain: string | null } | null {
-  const found = onMain(repo, { job: r.job, item: issue, fetch: true });
+function foundDone({ last, repo, issue }: Pick<Stuck, "last" | "repo" | "issue">): { onMain: string | null } | null {
+  const found = onMain(repo, { jobs: (jobById(last.id) ?? [last]).map((e) => e.id), item: issue, fetch: true });
   if (found) return { onMain: found.commit.slice(0, 7) };
   const item = issue === undefined ? undefined : reader().item(repo.key, issue);
   return item && (issues.status(item) === "done" || issues.status(item) === "dropped") ? { onMain: null } : null;
@@ -238,15 +238,17 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   const issue = issueOf(runs) ?? (p === null ? undefined : p.sub === undefined ? p.n : `${p.n}.${p.sub}`);
   const isKilled = killed([runs]).length > 0;
   const isLostRun = !isKilled && lost([runs]).length > 0;
-  const stuck: Stuck = { last, r, repo, name, issue, reason: isKilled ? "host restart" : isLostRun ? "lost: its process ended with no end written" : r.reason ?? r.condition };
+  const stuck: Stuck = { last, r, repo, name, issue, reason: isKilled ? "host restart" : isLostRun ? "lost: its process ended with no end written" : r.reason ?? r.state };
   const { reason } = stuck;
 
   const say = (line: string) => tell(`${shortId(name)}: ${line}`);
+  // Code writes no issue note: a rescue that closes the issue logs `done`, any other step logs `changed`.
   const record = (text: string, opts: { done?: boolean } = {}) => {
-    const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
-    if (why) logEvent({ by: "firefighter", subject: name, action: "failed", sub: "rescue", note: `no issue note: ${why}` });
+    if (issue !== undefined && !opts.done) logEvent({ subject: "firefighter", action: "changed", object: keyOf("issue", Number(issue)), detail: text });
+    const why = issue === undefined ? "no issue" : opts.done ? close(repo, issue, text, "done", "firefighter") : null;
+    if (why) logEvent({ subject: "firefighter", action: "failed", object: name, detail: `no issue note: ${why}` });
   };
-  const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
+  const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
   // A run that ended with a QUESTION about the spec: a rerun reads the same spec and asks again, so it waits for a spec edit.
   const asked = askedQuestion(r);
   const specQuestion = asked !== null;
@@ -256,15 +258,15 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     if (!specQuestion && ask.recommended === "Rerun" && always("rescue")?.action === "recommended") {
       const why = await act.drop(name, question);
       if (!why) {
-        logAlways("rescue", `${repo.key}-${issue ?? name}`, "reran", { on: [jobIdOf(runs[0])], result: "dropped" });
+        logAlways("rescue", name, "reran", { detail: `dropped ${runs[0].id}` });
         record("always: Rerun");
         await tell(`${repo.key}/${name}: always: Rerun; dropped, and the goal reruns`);
         return;
       }
-      logEvent({ by: "firefighter", subject: name, action: "failed", sub: "rescue", note: `always Rerun failed (${why})` });
+      logEvent({ subject: "firefighter", action: "failed", object: name, detail: `always Rerun failed (${why})` });
     }
     const why = askFromRun(last, repo, issue, ask, question, spec);
-    if (why) logEvent({ by: "firefighter", subject: name, action: "failed", sub: "rescue", note: `no issue note: ${why}` });
+    if (why) logEvent({ subject: "firefighter", action: "failed", object: name, detail: `no issue note: ${why}` });
     await say(`asks Chris: ${question}`);
   };
   const take = async (step: Step) => {
@@ -281,11 +283,11 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   };
 
   if (isKilled) {
-    const step = killedStep(stuck, isAgentRun(r.kind) && hasWork(stuck));
+    const step = killedStep(stuck, isAgentRun(r.role) && hasWork(stuck));
     // The real recheck takes only a returned or failed run, so the killed run ends failed first, as a killed land does.
-    if (r.kind === "land" || step.action === "recheck") {
+    if (r.role === "land" || step.action === "recheck") {
       markEnded(last.folder, 143);
-      patchRun(last.id, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
+      setState(last.id, "failed", { reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
     }
     return take(step);
   }
@@ -293,11 +295,11 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (isLostRun) {
     // Marked failed first, so the run is no longer lost, whatever comes next: the recheck and the Ask both want an ended run.
     markEnded(last.folder, 143);
-    patchRun(last.id, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
+    setState(last.id, "failed", { reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
     const again = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "lost");
     if (again) return chris(`${name}: a second run of this goal was lost (its process ended with no end written). Drop it, or change the goal?`, choice(`${name}: a second run was lost: how should the factory go on?`, ["An earlier run of this goal was lost too, and its rerun did not clear it"]));
     markRescued(last, "lost");
-    return take(lostStep(stuck, isAgentRun(r.kind) && hasWork(stuck)));
+    return take(lostStep(stuck, isAgentRun(r.role) && hasWork(stuck)));
   }
 
   const noCommit = causeOf(r) === "no-commit";
@@ -305,21 +307,21 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     const q = asked || reason;
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
     const text = `${name} ended with no commit and asked: ${q} The goal waits for a spec edit; the factory starts it again when you edit it. Or drop it.`;
-    return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.condition}`]), item);
+    return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.state}`]), item);
   }
   const found = noCommit ? foundDone(stuck) : null;
   const claim = noCommit ? r.alreadyMet ?? null : null;
   const key = rescueCase(r, !!found, claim);
-  if (!key) return chris(`${name} is ${r.condition} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.condition} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
+  if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 
   const earlier = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key);
   if (key === "claimed") {
     // The worker says the issue is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
     // the issue with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
     const main: MainState = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
-    if (main.state === "unchecked" || main.state === "running") { logEvent({ by: "firefighter", subject: name, action: "waiting", sub: "rescue", note: `the claim waits: ${main.line}` }); return; }
+    if (main.state === "unchecked" || main.state === "running") { logEvent({ subject: "firefighter", action: "waiting", object: name, detail: `the claim waits: ${main.line}` }); return; }
     // An issue a red CI started is met only when GitHub CI on main is green too: the checks here may pass where CI fails.
-    const ci = r.on ? readRecord(r.on)?.ci : undefined;
+    const ci = issue === undefined ? undefined : readRecord(keyOf("issue", Number(issue)))?.ci;
     const ciRed = ci ? redCi().find((c) => c.repo === repo.key) : undefined;
     const red = main.state === "red" ? main.line : ciRed ? ciLine(ciRed) : null;
     markRescued(last, key);
@@ -334,14 +336,14 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     // No rerun of the same issue: a plain issue goes to intake to be split; a part, or an issue split already, asks.
     if (earlier || splitAlready(stuck)) return chris(`${name} ran out of its time box again, and it cannot be split further (${earlier ? "an earlier run hit the time box too" : "it is a part, or it has been split already"}). Drop it, or change the goal?`, choice(`${name} ran out of its time box and cannot be split: how should the factory go on?`, ["Intake cannot split it again"]));
     markRescued(last, key);
-    const why = await act.drop(name, `time box ran out in ${r.kind} run ${last.id}; the issue goes to intake to split`);
+    const why = await act.drop(name, `time box ran out in ${r.role} run ${last.id}; the issue goes to intake to split`);
     const bad = why ?? sendToIntake(repo, issue as number);
     if (bad) return chris(`${name}: sending it to intake failed (${bad}); ${reason}. What now?`, choice(`${name}: sending it to intake failed: how should the factory go on?`, [`Failure: ${bad}`]));
-    const text = `${r.kind} run ${last.id}: the time box ran out; dropped, and the issue goes to intake to split`;
+    const text = `${r.role} run ${last.id}: the time box ran out; dropped, and the issue goes to intake to split`;
     record(text);
     return void await say(text);
   }
   if (earlier) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
   markRescued(last, key);
-  return take(key === "infra" ? infraStep(stuck, r.kind !== "land" && hasBranch(stuck)) : key === "land-conflict" ? conflictStep(stuck, touched(stuck)) : rerunStep(stuck, key as "no-commit" | "land-checks"));
+  return take(key === "infra" ? infraStep(stuck, r.role !== "land" && hasBranch(stuck)) : key === "land-conflict" ? conflictStep(stuck, touched(stuck)) : rerunStep(stuck, key as "no-commit" | "land-checks"));
 }

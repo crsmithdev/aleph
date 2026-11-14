@@ -1,19 +1,17 @@
 /**
  * The account's weekly plan usage. The UI server polls Anthropic's OAuth usage
  * endpoint (the one Claude Code's `/usage` reads; undocumented, so it can
- * change) every 10 minutes and appends a row to ~/.aleph/usage.jsonl. From the
+ * change) every 10 minutes and adds a row to the `usage` table of aleph.db. From the
  * rows and the hourly Claude dollars in Langfuse it estimates each job's and
  * session's share of the week. The token is read per call and never logged or
  * returned. The same poll records what OpenRouter bills per list dollar.
  */
 import { readJsonOr } from "../lib/json.ts";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { conn } from "../lib/db.ts";
 import { need, type Hourly } from "../lib/langfuse.ts";
-import { jevFile } from "../lib/jev.ts";
-import { openRouterFile, openRouterSpend, viaOf } from "../jobs/lib/routing/models.ts";
+import { openRouterSpend, viaOf } from "../jobs/lib/routing/models.ts";
 import { once, touch } from "../lib/sources.ts";
-import { credentialsFile, usageFile, usageFileSet, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
+import { credentialsFile, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
 
 export interface Snapshot { at: string; five_hour: number | null; seven_day: number; seven_day_resets_at: string | null }
 /** A job's or session's estimated share of the week: percent of the weekly limit, and whether the pooled rate priced it. */
@@ -82,19 +80,15 @@ async function fetchUsage(now = new Date()): Promise<Snapshot | null> {
   return { at: now.toISOString(), five_hour: typeof five === "number" ? five : null, seven_day: seven, seven_day_resets_at: typeof resets === "string" ? resets : null };
 }
 
-/** Polls once: appends the snapshot to the file; on any error records nothing. */
+/** Polls once: adds the snapshot to the `usage` table; on any error records nothing. */
 export async function pollOnce(): Promise<Snapshot | null> {
   const snap = await fetchUsage();
   lastFailed = snap === null;
   if (!snap) return null;
-  // Under `bun test` (NODE_ENV=test) the real ~/.aleph/usage.jsonl is never written: a test that sets a fixed clock and polls would leave a bad row there.
-  if (process.env.NODE_ENV === "test" && !usageFileSet()) return snap;
   try {
-    const file = usageFile();
-    mkdirSync(dirname(file), { recursive: true });
-    appendFileSync(file, JSON.stringify(snap) + "\n");
+    conn().query("INSERT INTO usage (time, five_hour, seven_day, seven_day_resets_at) VALUES (?, ?, ?, ?)").run(snap.at, snap.five_hour, snap.seven_day, snap.seven_day_resets_at);
   } catch (e) {
-    console.error(`ui/usage: cannot write ${usageFile()}: ${e instanceof Error ? e.message : "error"}`);
+    console.error(`ui/usage: cannot write the usage row: ${e instanceof Error ? e.message : "error"}`);
   }
   return snap;
 }
@@ -111,15 +105,7 @@ export function startPoller(ms = POLL_MS, polled = () => {}): () => void {
 /** The snapshots dated at or before `clock`; a row dated after it cannot be a poll that has happened. */
 export function readSnapshots(clock = Date.now()): Snapshot[] {
   touch("usage");
-  const file = usageFile();
-  if (!existsSync(file)) return [];
-  const out: Snapshot[] = [];
-  for (const l of readFileSync(file, "utf8").split("\n")) {
-    try {
-      const s = JSON.parse(l);
-      if (typeof s?.at === "string" && Number.isFinite(Date.parse(s.at)) && typeof s.seven_day === "number") out.push({ at: s.at, five_hour: typeof s.five_hour === "number" && Number.isFinite(s.five_hour) ? s.five_hour : null, seven_day: s.seven_day, seven_day_resets_at: s.seven_day_resets_at ?? null });
-    } catch { /* a torn line */ }
-  }
+  const out = conn().query("SELECT time AS at, five_hour, seven_day, seven_day_resets_at FROM usage").all() as Snapshot[];
   return out.filter((s) => Date.parse(s.at) <= clock).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
@@ -189,7 +175,7 @@ export function share(f: Fit | null, cost: number | undefined, model?: string): 
 /** A run's share: its own cost on its model and its reviewer's cost on the review's model. */
 export function runShare(f: Fit | null, run: { cost?: number; model?: string; review?: { cost?: number; model?: string } }): Wk | undefined {
   const rv = run.review?.cost ?? 0;
-  const own = share(f, (run.cost ?? 0) - rv, run.model), review = share(f, rv, run.review?.model);
+  const own = share(f, run.cost ?? 0, run.model), review = share(f, rv, run.review?.model);
   return own || review ? { pct: (own?.pct ?? 0) + (review?.pct ?? 0), pooled: f!.pooled } : undefined;
 }
 
@@ -204,16 +190,15 @@ export function currentFit(): Promise<Fit | null> {
 }
 
 /**
- * Appends the OpenRouter key's lifetime USD and, with MIN_LIST of list-price spend since the key's first line in the
+ * Adds to the `openrouter` table the OpenRouter key's lifetime USD and, with MIN_LIST of list-price spend since the key's first line in the
  * last week, what it bills per list dollar: the rise of the bill less Jev's calls (no transcript has them), over the
  * list price of the OpenRouter calls Langfuse saw. A fall of the lifetime USD is a new key and starts over.
  */
 export async function pollOpenRouter(now = Date.now()): Promise<void> {
-  if (process.env.NODE_ENV === "test" && !process.env.ALEPH_OPENROUTER_FILE) return;
   const spent = await openRouterSpend();
   if (!spent || typeof spent.total !== "number") return;
   const key: { at: string; usage: number }[] = [];
-  for (const r of lines(openRouterFile())) {
+  for (const r of rows("openrouter")) {
     if (typeof r?.usage !== "number") continue;
     if (key.length && r.usage < key.at(-1)!.usage) key.length = 0;
     key.push(r);
@@ -225,22 +210,19 @@ export async function pollOpenRouter(now = Date.now()): Promise<void> {
     const from = Date.parse(base.at);
     const list = (await need().hourly({ from: new Date(from), to: new Date(now) }, "usage").catch(() => []))
       .filter((h) => viaOf(h.model) === "openrouter").reduce((a, h) => a + h.cost, 0);
-    const jev = lines(jevFile()).filter((j) => Date.parse(j?.at) > from && Date.parse(j.at) <= now).reduce((a, j) => a + (j.cost ?? 0), 0);
+    const jev = rows("jev").filter((j) => Date.parse(j?.at) > from && Date.parse(j.at) <= now).reduce((a, j) => a + (j.cost ?? 0), 0);
     const factor = (spent.total - base.usage - jev) / list;
     if (list >= MIN_LIST && factor > 0) row.factor = factor;
   }
   try {
-    mkdirSync(dirname(openRouterFile()), { recursive: true });
-    appendFileSync(openRouterFile(), JSON.stringify(row) + "\n");
+    conn().query("INSERT INTO openrouter (time, usage, factor) VALUES (?, ?, ?)").run(row.at, row.usage, row.factor ?? null);
   } catch (e) {
-    console.error(`ui/usage: cannot write ${openRouterFile()}: ${e instanceof Error ? e.message : "error"}`);
+    console.error(`ui/usage: cannot write the openrouter row: ${e instanceof Error ? e.message : "error"}`);
   }
 }
 
-/** The JSON lines of a file; a torn line is skipped. */
-const lines = (file: string): any[] => existsSync(file)
-  ? readFileSync(file, "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } })
-  : [];
+/** The rows of a log table in order, with `time` also as `at`. */
+const rows = (table: "openrouter" | "jev"): any[] => conn().query(`SELECT time AS at, * FROM ${table} ORDER BY seq`).all();
 
 interface UsageSummary {
   /** The last snapshot of the reset window, or null with none or when its week has ended. */

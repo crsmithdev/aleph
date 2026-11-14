@@ -53,7 +53,7 @@ aleph issue list aleph --status open
 aleph-ui --port 3020                                                  # prints the URL
 ```
 
-Tracing is off until you add Langfuse keys; everything else works without them. To let the factory build a repo, set `"sandbox": true` for it in `~/.aleph/repos.json` and start the timers in [Factory](docs/factory.md).
+Tracing is off until you add Langfuse keys; everything else works without them. To let the factory build a repo, set `sandbox: true` in its project file, `~/.aleph/items/projects/<n>/project.md` and start the timers in [Factory](docs/factory.md).
 
 A change to a `SKILL.md` applies at once. After you change a hook, run `/reload-plugins`. To try a checkout in one session only, run `claude --plugin-dir <path>`.
 

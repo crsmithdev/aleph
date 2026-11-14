@@ -46,12 +46,12 @@ export function axisTimes(times, x, max = 5) {
 const BAD = ["failed", "returned", "dropped"];
 const AUX = ["intake", "director", "monitor"];
 /** A run's bar colour: bad for a run that failed, land, aux for a run that does not build, else build. */
-const barTone = (r) => (BAD.includes(r.condition) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
+const barTone = (r) => (BAD.includes(r.state) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
 
 /** A run's start and end in ms; a live run ends now, a run with no end ends where it started. */
 export function spanOf(r, now = Date.now()) {
   const start = Date.parse(r.started), end = Date.parse(r.ended ?? "");
-  return { r, start, end: end >= start ? end : r.condition === "running" ? now : start };
+  return { r, start, end: end >= start ? end : r.state === "running" ? now : start };
 }
 
 /** Runs as spans in start order, without the ones with no start. */
@@ -65,11 +65,11 @@ export function gaps(runs, from, to) {
   const out = [];
   let cursor = from, prev = null;
   for (const s of runs) {
-    if (Number.isFinite(cursor) && s.start - cursor > GAP) out.push({ start: cursor, end: s.start, chris: prev?.condition === "waiting" });
+    if (Number.isFinite(cursor) && s.start - cursor > GAP) out.push({ start: cursor, end: s.start, chris: prev?.state === "waiting" });
     cursor = Number.isFinite(cursor) ? Math.max(cursor, s.end) : s.end;
     prev = s.r;
   }
-  if (Number.isFinite(to) && Number.isFinite(cursor) && to - cursor > GAP) out.push({ start: cursor, end: to, chris: prev?.condition === "waiting" });
+  if (Number.isFinite(to) && Number.isFinite(cursor) && to - cursor > GAP) out.push({ start: cursor, end: to, chris: prev?.state === "waiting" });
   return out;
 }
 
@@ -100,7 +100,7 @@ function topHold(w, holds) {
 export function waitEvent(w, holds = []) {
   const h = topHold(w, Array.isArray(holds) ? holds : []); // `waits.map(waitEvent)` passes an index
   const e = h?.event ?? {};
-  const text = [e.sub, contentText(e), dur((w.end - w.start) / 1000), h?.text].filter(Boolean).join(" · ");
+  const text = [contentText(e), dur((w.end - w.start) / 1000), h?.text].filter(Boolean).join(" · ");
   const state = e.action ?? (h ? word("gate", h.kind) : "waiting");
   return { at: w.start, tag: state, tone: tone(state), html: esc(text) };
 }
@@ -118,7 +118,7 @@ export function barsOf(runs, { cost = false } = {}) {
   return runs.map(({ r, start, end }) => {
     seen[r.kind] = (seen[r.kind] ?? 0) + 1;
     const label = barLabel(r, count[r.kind] > 1 ? seen[r.kind] : 0, { cost, model: false });
-    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${dur((end - start) / 1000)}`, ...(r.href ? { href: r.href } : {}) };
+    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.state} · ${dur((end - start) / 1000)}`, ...(r.href ? { href: r.href } : {}) };
   });
 }
 
@@ -182,13 +182,13 @@ export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 
 /** The event of one run: its job state as the tag, then `name` as the content and its reason as the note, or `what` in their place. */
 export function runEvent(x, name, what = null) {
-  const state = x.r.condition;
+  const state = x.r.state;
   return { at: x.end, tag: state, tone: tone(state), html: what ?? [esc(name), x.r.reason && codeText(x.r.reason)].filter(Boolean).join(" · ") };
 }
 /** The events of a lane: each run that stopped or asks, with its reason. */
 const laneEvents = (runs, bars) => runs.flatMap((x, i) => {
   // A run that waits for you shows only with its question; the wait after it already shows.
-  const state = x.r.condition;
+  const state = x.r.state;
   if (!["returned", "failed", "dropped", "waiting"].includes(state) || (state === "waiting" && !x.r.reason)) return [];
   return [runEvent(x, bars[i].label)];
 });

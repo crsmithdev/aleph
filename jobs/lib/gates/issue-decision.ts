@@ -21,15 +21,18 @@ export const GATES = ["pause", "backend", "baseline", "not-ready", "live-cap", "
 /** The kind of a hold record: a gate of GATES, or `credit-wait`, which the issue's own last run decides. */
 export type Gate = (typeof GATES)[number] | "credit-wait";
 
-/** The fields of a hold's log event, after `by` and `subject`. */
-export type Hold = Omit<Event, "at" | "by" | "subject">;
+/** The fields of a hold's log event that the hold sets: the gate is the subject, and the object is the issue unless the hold names a job. */
+export type Hold = Pick<Event, "action"> & Partial<Pick<Event, "object" | "detail">>;
 
 /** A gate that binds: `why` is the line in the dispatch's skipped list; `text` is the line Chris reads; `ev` is the log event. */
 export interface Bound { why: string; text: string; ev?: Hold }
 
 /** A fact left out is not read yet and stops nothing, so a caller can decide from the cheap facts first. */
 export interface IssueFacts {
+  /** The work's name: the issue's key. */
   name: string;
+  /** The issue as the store names it (`<repo>-<n>`), for `done`; the name when absent. */
+  ref?: string;
   item: issues.Issue;
   /** The parent of a sub-issue: its `after` holds the sub-issue as its own does. */
   parent?: issues.Issue;
@@ -39,9 +42,9 @@ export interface IssueFacts {
   backend?: Bound | null;
   /** The line of the repo's baseline when it is red, still running or unchecked. */
   red?: string | null;
-  /** The condition of the issue's open job. */
+  /** The state of the issue's open job. */
   open?: string | null;
-  /** The ID of the issue's open job, `a1421#6` (`jobIdOf`). */
+  /** The key of the issue's open job, `job.6`. */
   job?: string | null;
   "live-cap"?: Bound | null;
   /** Why the issue waits for an open job on a busy file: `on` is that job's issue, `file` the busy file or `gpt-oss`. */
@@ -84,10 +87,10 @@ export const refDone = (item: issues.Issue | undefined, listRead: boolean, stage
 /** Why the issue is not ready: it is done, waits on an `after` ref of its own or its parent, or has an open job; else null. */
 function notReady(f: IssueFacts): Extract<IssueDecision, { kind: "not-ready" }> | null {
   const not = (why: string, text: string, ev: Hold) => ({ kind: "not-ready" as const, why, text, ev });
-  if (f.done(f.name)) return not("the item is already done", "The item is already done", { action: "done" });
+  if (f.done(f.ref ?? f.name)) return not("the item is already done", "The item is already done", { action: "done" });
   const ids = pendingWaits(waitsOf(f.item, f.parent), f.done);
-  if (ids.length) return { ...not(`after ${ids.join(",")}`, `Waits on ${ids.join(", ")}`, { action: "after", on: ids }), ids };
-  if (f.open) return not(`its job is ${f.open}`, `Its job is ${f.open}`, { action: f.open, on: f.job ? [f.job] : undefined });
+  if (ids.length) return { ...not(`after ${ids.join(",")}`, `Waits on ${ids.join(", ")}`, { action: "after", detail: ids.join(" ") }), ids };
+  if (f.open) return not(`its job is ${f.open}`, `Its job is ${f.open}`, { action: f.open, ...(f.job ? { object: f.job } : {}) });
   return null;
 }
 
@@ -101,11 +104,11 @@ export function issueDecision(f: IssueFacts): IssueDecision {
   const not = notReady(f);
   if (not) return not;
   if (f["live-cap"]) return { kind: "live-cap", ...f["live-cap"] };
-  if (f.busy) return { kind: "busy-file", on: f.busy.on, why: f.busy.why, text: f.busy.why[0].toUpperCase() + f.busy.why.slice(1), ev: { action: "busy", on: [f.busy.on], file: f.busy.file } };
+  if (f.busy) return { kind: "busy-file", on: f.busy.on, why: f.busy.why, text: f.busy.why[0].toUpperCase() + f.busy.why.slice(1), ev: { action: "busy", detail: `${f.busy.on} holds ${f.busy.file}` } };
   // A run the API refused for credit did no work, so the issue waits instead of starting again at once, and no run-cap Ask goes out.
   if ((f.creditWait ?? Infinity) < POLICY.credit.waitMs) return { kind: "credit-wait", why: "waits for API credit", text: `Waits for API credit: the last run ended with the API credit error, so it starts again ${POLICY.credit.waitMs / 60_000} minutes later`, ev: { action: "credit" } };
-  if ((f.noCommits ?? 0) >= NO_COMMIT_LIMIT) return { kind: "loop-guard", ask: "no-commit", why: `${NO_COMMIT_LIMIT} runs in a row with no commit`, text: `The last ${NO_COMMIT_LIMIT} runs ended with no commit; the next dispatch asks the director`, ev: { action: "looping", sub: "no-commit", count: `${f.noCommits} / ${NO_COMMIT_LIMIT}` } };
+  if ((f.noCommits ?? 0) >= NO_COMMIT_LIMIT) return { kind: "loop-guard", ask: "no-commit", why: `${NO_COMMIT_LIMIT} runs in a row with no commit`, text: `The last ${NO_COMMIT_LIMIT} runs ended with no commit; the next dispatch asks the director`, ev: { action: "looping", detail: `${f.noCommits} / ${NO_COMMIT_LIMIT} runs with no commit` } };
   const starts = f.capHeld ? 0 : f.startsInHour ?? 0;
-  if (starts >= RUN_CAP()) return { kind: "loop-guard", ask: "run-cap", starts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director`, ev: { action: "looping", sub: "starts", count: `${starts} / 1h` } };
+  if (starts >= RUN_CAP()) return { kind: "loop-guard", ask: "run-cap", starts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director`, ev: { action: "looping", detail: `${starts} starts in 1h` } };
   return { kind: "ready", why: "ready", text: "Starts at the next dispatch" };
 }

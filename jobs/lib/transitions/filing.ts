@@ -4,7 +4,7 @@
  */
 import { logEvent } from "../../../lib/layout.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssue, readFetched, readList, reader, type Effects, type Place } from "../../../issues/lib/store.ts";
+import { buildableIssue, projectOfIssue, readFetched, readList, reader, type Effects, type Place } from "../../../issues/lib/store.ts";
 import { repoStages } from "../records/status.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { mainRed } from "../gates/factory-status.ts";
@@ -26,20 +26,23 @@ export function afterFiling(place: Place, item: issues.Issue): void {
     dispatchAfterIssue(repo, item);
     const doc = reader().list(repo.key);
     if (doc && decideIntake(repo, item, { doc, done: doneChecker(false), red: mainRed()(repo) }).kind !== "none") intakeDetached(repo, item.id);
-  } catch (e: any) { logEvent({ by: "rule", subject: "filing", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+  } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "filing", detail: String(e?.message ?? e) }); }
 }
 
 /** The production effects of a filing (store.ts `writeFiling`). */
 export const filing: Effects = { after: afterFiling };
 
 /**
- * Whether `<repo>-<n>` is done, by `refDone`. It fetches each repo once; with `fetch` false it reads what was last fetched.
+ * Whether `issue.<n>` (or `<repo>-<n>`) is done, by `refDone`. It fetches each repo once; with `fetch` false it reads what was last fetched.
  * An item that its one read lacks is looked up in `later`, a newer read: an item that read has is not absent.
  */
 export function doneChecker(fetch = true, later?: (repo: string, id: number | string) => issues.Issue | undefined): (ref: string) => boolean {
   const reg = loadRegistry();
   const known = new Map<string, { doc: issues.Doc | null; stages: Map<string, string>; read: boolean }>();
-  return (ref) => {
+  return (key) => {
+    // An `issue.<n>` key names its project through the items repo; the rest of the check reads `<repo>-<n>`.
+    const n = /^issue\.(\d+)$/.exec(key)?.[1];
+    const ref = n ? `${projectOfIssue(Number(n))}-${n}` : key;
     const r = issues.parseIssueRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;

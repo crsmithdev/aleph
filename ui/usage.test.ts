@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { conn } from "../lib/db.ts";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { currentFit, fit, gainSince, pollOnce, off, pollOpenRouter, readSnapshots, runShare, share, sinceReset, summary, type Snapshot } from "./usage.ts";
@@ -38,14 +39,19 @@ const snap = (h: number, seven: number, reset = "2026-11-02T00:00:00Z"): Snapsho
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "usage-"));
-  process.env.ALEPH_USAGE_FILE = join(dir, "usage.jsonl");
+  process.env.ALEPH_DB = join(dir, "aleph.db");
   process.env.ALEPH_CLAUDE_CREDENTIALS = join(dir, "cred.json");
   writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS, JSON.stringify({ claudeAiOauth: { accessToken: TOKEN } }));
   reply = OK;
   server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (req) => reply(req) });
   process.env.ALEPH_USAGE_URL = `http://127.0.0.1:${server.port}/`;
 });
-afterEach(() => { server.stop(true); rmSync(dir, { recursive: true }); delete process.env.ALEPH_USAGE_URL; });
+afterEach(() => { server.stop(true); rmSync(dir, { recursive: true }); delete process.env.ALEPH_USAGE_URL; delete process.env.ALEPH_DB; });
+
+/** Rows of the `usage` table, as a poll writes them. */
+const insert = (rows: { at: string; five_hour?: number | null; seven_day: number; seven_day_resets_at?: string | null }[]) => {
+  for (const r of rows) conn().query("INSERT INTO usage (time, five_hour, seven_day, seven_day_resets_at) VALUES (?, ?, ?, ?)").run(r.at, r.five_hour ?? null, r.seven_day, r.seven_day_resets_at ?? null);
+};
 
 test("the window starts at the last reset", () => {
   const w = sinceReset([snap(0, 80, "2026-10-26T00:00:00Z"), snap(1, 90, "2026-10-26T00:00:00Z"), snap(2, 1), snap(3, 2)]);
@@ -110,7 +116,7 @@ test("off: the 7-day percent less the fitted share of this machine's Claude doll
   // The week starts at 00:00, its reset time a hair under the hour; the polls fall 3 minutes past each hour.
   const start = Date.parse("2026-11-04T00:00:00Z"), reset = new Date(start + 7 * 24 * H - 59).toISOString();
   const rows = (r: string | null) => Array.from({ length: 11 }, (_, h): Snapshot => ({ at: new Date(start + h * H + 3 * 60_000).toISOString(), five_hour: 0, seven_day: 3 * h, seven_day_resets_at: r }));
-  const write = (r: string | null) => writeFileSync(process.env.ALEPH_USAGE_FILE!, rows(r).map((x) => JSON.stringify(x)).join("\n"));
+  const write = (r: string | null) => { conn().run("DELETE FROM usage"); insert(rows(r)); };
   write(reset);
   const f = { fable: 1.5, rest: 0.125, pooled: false, hours: 24 };
   const spend = Array.from({ length: 10 }, (_, h) => [
@@ -180,9 +186,8 @@ for (const [name, body] of [["null", { five_hour: null }], ["missing", {}], ["no
 }
 
 test("readSnapshots keeps a null or missing five_hour as null and a number as is", () => {
-  const f = process.env.ALEPH_USAGE_FILE!;
-  const row = (m: number, extra: object) => JSON.stringify({ at: new Date(NOW - 900 * H + m * 60_000).toISOString(), seven_day: 3, seven_day_resets_at: null, ...extra });
-  require("node:fs").appendFileSync(f, [row(1, { five_hour: null }), row(2, {}), row(3, { five_hour: 12 })].join("\n") + "\n");
+  const row = (m: number, extra: object) => ({ at: new Date(NOW - 900 * H + m * 60_000).toISOString(), seven_day: 3, ...extra });
+  insert([row(1, { five_hour: null }), row(2, {}), row(3, { five_hour: 12 })]);
   expect(readSnapshots().slice(-3).map((s) => s.five_hour)).toEqual([null, null, 12]);
 });
 
@@ -200,23 +205,10 @@ test("summary ignores a row dated after the clock, so a future-dated snapshot do
   const now = Date.parse("2026-11-01T23:30:00Z");
   const past = { at: "2026-11-01T23:20:00Z", five_hour: null, seven_day: 25, seven_day_resets_at: "2026-11-05T00:00:00Z" };
   const future = { at: "2026-11-20T12:00:00Z", five_hour: null, seven_day: 18, seven_day_resets_at: "2026-11-05T00:00:00Z" };
-  writeFileSync(process.env.ALEPH_USAGE_FILE!, [past, future].map((s) => JSON.stringify(s)).join("\n") + "\n");
+  insert([past, future]);
   const s = summary(now);
   expect(s.now?.seven_day).toBe(25);
   expect(s.series.map((p) => p.seven_day)).toEqual([25]);
-});
-
-test("under bun test a poll without ALEPH_USAGE_FILE writes no file, so a test cannot leave a row in the real ~/.aleph/usage.jsonl", async () => {
-  const saved = { f: process.env.ALEPH_USAGE_FILE, h: process.env.HOME };
-  delete process.env.ALEPH_USAGE_FILE;
-  process.env.HOME = dir;
-  try {
-    expect((await pollOnce())?.seven_day).toBe(25);
-    expect(existsSync(join(dir, ".aleph"))).toBe(false);
-  } finally {
-    process.env.ALEPH_USAGE_FILE = saved.f;
-    process.env.HOME = saved.h;
-  }
 });
 
 test("currentFit reads Langfuse's hourly spend, and a snapshot dated after the clock does not skew it", async () => {
@@ -224,7 +216,7 @@ test("currentFit reads Langfuse's hourly spend, and a snapshot dated after the c
   const reset = new Date(NOW + 5 * 24 * H).toISOString();
   const good = Array.from({ length: 9 }, (_, h) => ({ at: new Date(t0 + h * H + 60_000).toISOString(), five_hour: 0, seven_day: 10 + h, seven_day_resets_at: reset }));
   const observations = Array.from({ length: 8 }, (_, h) => ({ id: `o${h}`, startTime: new Date(t0 + h * H + 5 * 60_000).toISOString(), providedModelName: "claude-opus-5-5", calculatedTotalCost: 4 }));
-  const write = (rows: object[]) => writeFileSync(process.env.ALEPH_USAGE_FILE!, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  const write = (rows: Parameters<typeof insert>[0]) => { conn().run("DELETE FROM usage"); insert(rows); };
   use(memory({ traces: [], observations }));
   try {
     write(good);
@@ -239,9 +231,7 @@ test("currentFit reads Langfuse's hourly spend, and a snapshot dated after the c
 });
 
 test("the OpenRouter rate is the bill's rise less Jev over the list price Langfuse saw, and a new key starts over", async () => {
-  const fetch = globalThis.fetch, keep = { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY, ALEPH_OPENROUTER_FILE: process.env.ALEPH_OPENROUTER_FILE, ALEPH_JEV_FILE: process.env.ALEPH_JEV_FILE };
-  process.env.ALEPH_OPENROUTER_FILE = join(dir, "openrouter.jsonl");
-  process.env.ALEPH_JEV_FILE = join(dir, "jev.jsonl");
+  const fetch = globalThis.fetch, keep = { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY };
   process.env.OPENROUTER_API_KEY = "or-test";
   let usage = 10;
   globalThis.fetch = (async () => Response.json({ data: { usage, usage_daily: 0, usage_weekly: 0, usage_monthly: 0 } })) as any;
@@ -250,15 +240,15 @@ test("the OpenRouter rate is the bill's rise less Jev over the list price Langfu
   try {
     expect(openRouterFactor()).toBe(1);
     await pollOpenRouter(NOW - 3 * H);
-    writeFileSync(process.env.ALEPH_JEV_FILE, JSON.stringify({ at: new Date(NOW - H).toISOString(), cost: 0.2 }) + "\n");
+    conn().query("INSERT INTO jev (time, cost) VALUES (?, ?)").run(new Date(NOW - H).toISOString(), 0.2);
     usage = 12.8;
     await pollOpenRouter(NOW);
     // (12.8 - 10 - 0.2) / 2 list dollars
     expect(openRouterFactor()).toBeCloseTo(1.3, 9);
     usage = 0.5;
     await pollOpenRouter(NOW);
-    const rows = require("node:fs").readFileSync(process.env.ALEPH_OPENROUTER_FILE, "utf8").trim().split("\n").map(JSON.parse);
-    expect(rows.at(-1)).toEqual({ at: new Date(NOW).toISOString(), usage: 0.5 });
+    const rows = conn().query("SELECT time AS at, usage, factor FROM openrouter ORDER BY seq").all();
+    expect(rows.at(-1)).toEqual({ at: new Date(NOW).toISOString(), usage: 0.5, factor: null });
   } finally {
     globalThis.fetch = fetch;
     for (const [k, v] of Object.entries(keep)) if (v === undefined) delete process.env[k]; else process.env[k] = v;

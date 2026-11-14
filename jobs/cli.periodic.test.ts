@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, other, setup, sh, teardown } from "./cli.helpers";
 import { cli } from "./flow.testkit.ts";
+import { conn } from "../lib/db.ts";
 import { memory, use } from "../lib/langfuse.ts";
 
 // The wiring in jobs/commands.ts of `aleph doctor --fix`, `aleph tick` and `aleph suite`, each outside call faked.
@@ -47,14 +48,14 @@ describe("doctor --fix", () => {
 });
 
 describe("tick", () => {
-  test("guard: exits 0 with its JSON, reads the CI with gh, and records the step in tick.json", async () => {
+  test("guard: exits 0 with its JSON, reads the CI with gh, and records the step in the tick table", async () => {
     mkdirSync(join(base, "bin"));
     script("bin/gh", `echo "$@" >> ${join(base, "gh.log")}\necho '[]'`);
     const r = await cli(["tick"], { PATH: `${join(base, "bin")}:${process.env.PATH}` });
     expect(r.code).toBe(0);
     expect(r.json).toEqual(expect.any(Object));
     expect(readFileSync(join(base, "gh.log"), "utf8")).toContain("run list --branch main");
-    expect(JSON.parse(readFileSync(join(base, "factory", "tick.json"), "utf8")).last.ci).toEqual(expect.any(String));
+    expect((conn().query("SELECT last FROM tick WHERE step = 'ci'").get() as any).last).toEqual(expect.any(String));
   });
 });
 

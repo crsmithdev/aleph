@@ -53,7 +53,7 @@ No transition waits for the tick. Each step starts the next one directly. The ti
 | queued | It has a spec and waits for a dispatch |
 | new | Intake has not taken it in |
 
-A run has one condition: `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped` or `done`. `returned` is a run that a reviewer or a check sent back to its worker. `record.ts` keeps it, with the run's `next` step.
+A job has one state: `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped` or `done`. `returned` is a run that a reviewer or a check sent back to its worker. `record.ts` keeps it, with the run's `next` step.
 
 ## 1. Intake
 
@@ -101,13 +101,13 @@ Then it asks each queued issue 7 gates, in order (`issue-decision.ts`, `factory-
 
 | Gate | Binds when | Result |
 |---|---|---|
-| Pause | `~/.aleph/factory/paused` exists | Nothing starts. Intake, director, suite, firefighter, maintainer and episodes stop too. A unit's next step is kept in `paused-next` |
+| Pause | The `paused` setting holds a time | Nothing starts. Intake, director, suite, firefighter, maintainer and episodes stop too. A unit's next step is kept in `paused-next` |
 | Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`) | Skip. Jobs on that backend do not start; jobs on other backends do |
 | Baseline | The last `aleph suite` on main failed | Skip. Issues labelled `red-main` pass, so the fix can land |
 | Not ready | The issue is done, waits on `after`, or has an open job | Skip |
 | Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the issue to a tier with room |
 | Busy file | A file in the Edit surface had 3 land conflicts in 7 days and another open job names it | Skip |
-| Loop guard | The issue's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or `caps.json` sets | A `no-commit` or `run-cap` Ask in place of a start |
+| Loop guard | The issue's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or the `caps` setting sets | A `no-commit` or `run-cap` Ask in place of a start |
 
 Between Busy file and Loop guard a goal whose last build run ended with the API credit error (`API Error: 402`) less than 10 minutes ago (`waitMs` of `POLICY` in `jobs/lib/records/outcome.ts`) is skipped with a `credit-wait` hold. The credit wait is not one of the 7 gates in `GATES`, because the goal's own last run decides it.
 
@@ -148,7 +148,7 @@ Verify runs four checks in order, each in a detached worktree at the branch's ti
 | Keep-gate | `checks.ts` `keepGate`, `keep-earn.ts` | Each new test fails on the base and passes on the head; a test that cannot load on the base earns its place by coverage or a mutant; a case named `guard: ...` is skipped, and the reviewer judges it |
 | Oracle | `unit.ts` `oracleFailure` | Each Oracle command that the checks did not run passes |
 
-A failing check or Oracle command runs once more on the same tree. A pass on the rerun is a flake, recorded in `~/.aleph/factory/flaky.json`.
+A failing check or Oracle command runs once more on the same tree. A pass on the rerun is a flake, recorded in the `flaky` table of `aleph.db`.
 
 **Send-back: the fix round.** A failure sends the job back to its worker on the same branch and worktree. The note names the check and quotes the JUnit failures, or the last 80 lines of the log. A job gets at most `ALEPH_FIX_ROUNDS` (2) rounds. A run that goes back is `returned`. After the last round the run fails as `<check> failed after <n> fix rounds`.
 
@@ -255,9 +255,9 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 
 An Ask that the actions leave open, a failed director run or a malformed reply also escalates. The Status page shows an Ask's buttons only after the director escalates it.
 
-**Always rules.** The Always button and `aleph always grant` write a rule to `~/.aleph/factory/always.json` that maps a reason to an action. `grant` takes a reason's own actions, its Always action in the table above, or `user`. Code reads only these rules: the Always actions in the table above, `close` for `intake-failed`, `decline` for the memory proposals, and `user`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason but the memory proposals (`proposal-*`) takes `user`, through `aleph always grant <reason> user` or the Gates page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
+**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. `grant` takes a reason's own actions, its Always action in the table above, or `user`. Code reads only these rules: the Always actions in the table above, `close` for `intake-failed`, `decline` for the memory proposals, and `user`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason but the memory proposals (`proposal-*`) takes `user`, through `aleph always grant <reason> user` or the Gates page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
 
-**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Gates page set, for any reason in the table above but the memory proposals, `held-path` and `core-change`, minutes and a no-answer action in `~/.aleph/factory/timeouts.json`; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none; `drop` takes the reason's drop, close or deny. A land takes `Held-by: timeout` and includes the escalation list. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card shows the time of the land.
+**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Gates page set, for any reason in the table above but the memory proposals, `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none; `drop` takes the reason's drop, close or deny. A land takes `Held-by: timeout` and includes the escalation list. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card shows the time of the land.
 
 ## 9. Human controls
 
@@ -271,7 +271,7 @@ An Ask that the actions leave open, a failed director run or a malformed reply a
 | Change an issue's spec | `aleph issue edit <repo> <id> --spec -` | Edit |
 | Grant or revoke a standing rule | `aleph always grant\|revoke` | Always, Gates page |
 | Set a no-answer timeout | `aleph always timeout <reason> <minutes> [pick\|drop]` | Gates page |
-| Set caps and models | `aleph models`, `~/.aleph/factory/caps.json` | Gates page, Agents page |
+| Set caps and models | `aleph models`, the `caps` setting | Gates page, Agents page |
 
 A write to an issue starts intake or a dispatch at once. A land by hand writes `Held-by:` with the lander's name.
 
@@ -291,6 +291,6 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 |---|---|
 | Why an issue did not start | The `hold` events in `~/.aleph/jobs/<repo>-<n>.json`, or the Holds panel on Status |
 | Why a run stopped | `aleph status <repo>-<n>`, or the job page |
-| What a check printed | `~/.aleph/runs/<run>/checks.log` |
+| What a check printed | the `checks` section of `~/.aleph/jobs/<n>/log.txt` |
 | What the director decided | The Automation page |
 | What the sweep caught | the event log, events with the action `missed` |

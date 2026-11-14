@@ -21,7 +21,7 @@ test("the report hook prints one line for each thing to act on, and nothing when
   sh(other, "git", "push", "-q", "origin", "main");
   await cli(["pause"]);
   const id = seedItem("fac", "Needs Chris");
-  setAsk(`fac-${id}`, { kind: "input", reason: "question", question: "Which?", options: [], why: [] });
+  setAsk(`issue.${id}`, { kind: "input", reason: "question", question: "Which?", options: [], why: [] });
   const text = (await cli(["report", "--hook"])).json.hookSpecificOutput.additionalContext;
   const lines = text.split("\n").filter(Boolean);
   expect(lines).toHaveLength(3);
@@ -31,7 +31,7 @@ test("the report hook prints one line for each thing to act on, and nothing when
   expect(lines[2]).toBe("fac is 2 commits behind origin/main");
   expect(text).not.toContain("git pull brings");
   await cli(["resume"]);
-  clearAsk(`fac-${id}`);
+  clearAsk(`issue.${id}`);
   sh(repo, "git", "merge", "-q", "--ff-only", "origin/main");
   const quiet = await cli(["report", "--hook"]);
   expect(quiet.stdout.trim()).toBe("");

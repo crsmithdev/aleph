@@ -4,16 +4,16 @@
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
 import { logEvent, readEvents } from "../lib/layout.ts";
-import { issueHref, parseId, type Event } from "../lib/naming.ts";
+import { issueHref, parseId, parseKey, targetOf, type EventRow } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, waitsOf, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
-import { allJobs, isOpen, readFile, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
-import { counting, jobIdOf } from "../jobs/lib/records/record.ts";
+import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
+import { counting } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
-import { askOf, asking, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
+import { askOf, asking, refIn, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
 import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
@@ -33,7 +33,7 @@ export function logOnce(subject: string, e: any) {
   const note = String(e?.message ?? e), key = `${subject} ${note}`;
   if (logged.has(key)) return;
   logged.add(key);
-  logEvent({ by: "rule", subject, action: "failed", sub: "error", note });
+  logEvent({ subject: "rule", action: "failed", object: subject, detail: note });
 }
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
@@ -43,25 +43,12 @@ const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.de
 /** A part of an issue as a flat card says it: "n/m" with a link to the parent. */
 interface Part { n: number; m: number; parent: string; href: string }
 
-/** A chat run's title: the first line of its `chat: <message>` command, trimmed. */
-const chatTitle = (e: Entry): string => (readFile(e, "command.txt") ?? "").split("\n")[0].replace(/^chat:/, "").trim();
-
-/** The chat run each `chat` event of `events` names, by its job ID: its title and its session key. */
-export function heraldChats(events: Event[], runs: Entry[]): Record<string, { title: string; session?: string }> {
-  const chats: Record<string, { title: string; session?: string }> = {};
-  for (const e of events) {
-    const chat = e.subject === "chat" && e.on?.[0] && !(e.on[0] in chats) ? runOfJob(e.on[0], runs) : undefined;
-    if (chat) chats[e.on![0]] = { title: chatTitle(chat), session: chat.run.session };
-  }
-  return chats;
-}
-
 /** The title of each run an issue event names, by its job ID: the run's kind, or "merge" for a merge-only run. */
-export function heraldRuns(events: Event[], runs: Entry[]): Record<string, string> {
+export function heraldRuns(events: EventRow[], runs: Entry[]): Record<string, string> {
   const titles: Record<string, string> = {};
   for (const e of events) {
-    const run = e.subject !== "chat" && e.on?.[0] && !(e.on[0] in titles) ? runOfJob(e.on[0], runs) : undefined;
-    if (run) titles[e.on![0]] = run.run.merge ? "merge" : run.run.kind;
+    const run = parseKey(e.object)?.kind === "job" && !(e.object in titles) ? runOfJob(e.object, runs) : undefined;
+    if (run) titles[e.object] = run.run.merge ? "merge" : run.run.role;
   }
   return titles;
 }
@@ -70,9 +57,7 @@ export interface Job {
   /** The job ID of the run that counts, `a1430#2`: the Job page's address and the one an action acts on. */
   id: string;
   name: string; repo: string; item: { id: number | string; title: string; priority?: string } | null;
-  condition: string; phase?: string; reason?: string; question?: string;
-  /** A chat run's title: the first line of its message. */
-  title?: string;
+  state: string; phase?: string; reason?: string; question?: string;
   started: string;
   /** The current (last) run: its kind and start. `started` is the job's first. */
   run: { id: string; kind: string; started: string };
@@ -182,8 +167,7 @@ export interface State {
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
   /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
-  herald?: { history: HeraldHistoryItem[]; events: Event[]; /** The title of each issue the events name, by its full ID. */ titles: Record<string, string>;
-    /** The chat run each `chat` event names, by its job ID: the message's first line and the run's session key. */ chats: Record<string, { title: string; session?: string }>;
+  herald?: { history: HeraldHistoryItem[]; events: EventRow[]; /** The title of each issue the events name, by its full ID. */ titles: Record<string, string>;
     /** The title of each run an issue event names, by its job ID. */ runs: Record<string, string> };
 }
 
@@ -246,45 +230,44 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
   const bases = new Map<string, string | null>();
 
   // The trailer the land writes.
-  const needsYouIssue = (key: string | undefined, todo: number | string | undefined): { key: string; value: string }[] =>
-    todo === undefined || key === undefined ? [] : [{ key: "Issue", value: `${key}-${todo}` }];
+  const needsYouIssue = (todo: number | string | undefined): { key: string; value: string }[] =>
+    todo === undefined ? [] : [{ key: "Issue", value: `issue.${todo}` }];
 
   const toJob = (runs: Runs, v: JobView = view(runs)): Job => {
     const repo = v.repo ? registry[v.repo] : undefined;
     const todo = v.item;
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
-      id: jobIdOf(runs.find((e) => e.id === v.run.id) ?? counting(runs)), name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
-      condition: v.condition, started: v.started, run: { id: v.run.id, kind: v.run.kind, started: v.run.started },
+      id: (runs.find((e) => e.id === v.run.id) ?? counting(runs)).id, name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
+      state: v.state, started: v.started, run: { id: v.run.id, kind: v.run.role, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
     for (const k of ["phase", "reason", "question", "ended", "model", "tier"] as const) if (v[k] !== undefined) job[k] = v[k];
-    if (v.run.kind === "chat") job.title = chatTitle(runs.find((e) => e.id === v.run.id) ?? counting(runs));
     if (v.cost !== undefined) job.cost = v.cost;
     if (v.commit) {
       job.commit = v.commit;
       const url = commitUrl(repo, v.commit, bases);
       if (url) job.commitUrl = url;
     }
-    if (v.condition === "waiting" && v.stat) job.stat = v.stat;
+    if (v.state === "waiting" && v.stat) job.stat = v.stat;
     // A stuck or failed job's card shows the word of what stopped its last run, and the failed check's name.
-    if (v.condition === "returned" || v.condition === "failed") {
+    if (v.state === "returned" || v.state === "failed") {
       const run = counting(runs).run;
       job.cause = causeOf(run);
       job.checkName = failedCheckOf(run);
     }
     // A waiting run with no ask of its own asks a question, as stage() reads it.
-    const stored = isWaiting(counting(runs).run.condition) ? counting(runs).run.ask : undefined;
-    const asked = isWaiting(counting(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
+    const stored = isWaiting(counting(runs).run.state) ? counting(runs).run.ask : undefined;
+    const asked = isWaiting(counting(runs).run.state) ? (stored ?? plainAsk("question", "")) : undefined;
     if (asked) job.ask = asked;
     const due = asked ? dueAt(counting(runs)) : null;
     if (due !== null) job.due = new Date(due).toISOString();
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
     if (v.check === "open") job.check = "open";
-    const trailers = v.condition === "landed" ? landedTrailers(repo, v.commit)
-      : v.condition === "waiting" ? [
-        ...needsYouIssue(v.repo, todo),
+    const trailers = v.state === "landed" ? landedTrailers(repo, v.commit)
+      : v.state === "waiting" ? [
+        ...needsYouIssue(todo),
         { key: "Job", value: v.job },
         ...(needsOf(asked) === "protected" || needsOf(asked) === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
       ] : [];
@@ -334,7 +317,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
 export function state(now = new Date()): State {
   const registry = loadRegistry();
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
-  const jobs = allJobs(true);
+  const jobs = allJobs();
   const { lists, toJob, stagesOf, isDone, blocker } = jobProjector(registry, jobs);
 
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
@@ -342,29 +325,27 @@ export function state(now = new Date()): State {
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   for (const runs of jobs) {
     const last = counting(runs).run;
-    // A chat run shows in the Herald, not in the job lanes.
-    if (last.kind === "chat") continue;
     // A running intake (or planner) counts as running; it is not a live agent.
-    if (last.kind === "intake" && last.condition === "running") {
+    if (last.role === "intake" && last.state === "running") {
       running.push(toJob(runs));
       continue;
     }
     // An intake run sorts an issue and never lands; it shows only when it awaits you.
-    if (last.kind === "intake") {
-      if (isOpen(runs) && isWaiting(counting(runs).run.condition)) needs.push(toJob(runs));
+    if (last.role === "intake") {
+      if (isOpen(runs) && isWaiting(counting(runs).run.state)) needs.push(toJob(runs));
       continue;
     }
     if (isOpen(runs)) {
       const real = counting(runs).run;
-      if (isWaiting(real.condition)) needs.push(toJob(runs));
+      if (isWaiting(real.state)) needs.push(toJob(runs));
       // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not stuck.
-      else if ((real.condition === "returned" || real.condition === "failed") && !real.next) stuck.push(toJob(runs));
+      else if ((real.state === "returned" || real.state === "failed") && !real.next) stuck.push(toJob(runs));
       else {
         const k = issueKeyOf(real), on = onOf(real);
         const item = real.repo === undefined || on === undefined ? undefined : lists.item(real.repo, on);
         // A parked issue's job waits on the work store: its next step is held, so a job between steps is not at
         // work. Parking stops new work, not a run already at it, so a running one stays.
-        if (real.condition !== "running" && item !== undefined && status(item) === "parked") continue;
+        if (real.state !== "running" && item !== undefined && status(item) === "parked") continue;
         liveJobs.add(real.job);
         if (k) liveItems.add(k);
         running.push(toJob(runs));
@@ -438,7 +419,7 @@ export function state(now = new Date()): State {
         const ends = mine.map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
         doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(updated(item) ?? "") || 0, repo, item, runs: mine, since: pickedUp(id) });
       }
-      const ask = askOf(id);
+      const ask = askOf(refIn(repo.key, item));
       // A core-change Ask sits on a parked issue, so no work starts on it.
       if (status(item) === "parked" && asking(item, ask)) { awaitingItems.push(card(repo.key, item, "waiting", ask)); continue; }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
@@ -484,14 +465,14 @@ export function state(now = new Date()): State {
   const redOf = mainRed();
   const events = readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS), titles: Record<string, string> = {};
   for (const e of events) {
-    const p = parseId(e.subject);
-    const item = p && !(e.subject in titles) ? lists.item(p.repo, p.sub === undefined ? p.n : `${p.n}.${p.sub}`) : undefined;
-    if (item) titles[e.subject] = item.title;
+    const issue = targetOf(e), p = parseId(issue);
+    const item = p && !(issue in titles) ? lists.item(p.repo, p.sub === undefined ? p.n : `${p.n}.${p.sub}`) : undefined;
+    if (item) titles[issue] = item.title;
   }
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), events, titles, chats: heraldChats(events, jobs.flat()), runs: heraldRuns(events, jobs.flat()) },
+    herald: { history: currentStatusHistory(), events, titles, runs: heraldRuns(events, jobs.flat()) },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {

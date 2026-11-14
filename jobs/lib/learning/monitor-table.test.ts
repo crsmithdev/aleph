@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { flakeHealth, flakeSection, measure, renderTable, storeLog, type Sources } from "./monitor-table.ts";
@@ -12,26 +12,26 @@ const at = (day: string, hh: number, mm = 0) => new Date(`${day}T${String(hh).pa
 const note = (day: string, hh: number, text: string) => `- ${at(day, hh)}: ${text}`;
 
 let n = 0;
-function run(o: Partial<Run> & { kind: Run["kind"]; started: string }): Entry {
+function run(o: Partial<Run> & { role: Run["role"]; started: string }): Entry {
   const id = `r${++n}`;
-  return { id, folder: `/x/${id}`, run: { n, job: id, name: o.on ?? id, condition: "done", told: true, ...o } as Run };
+  return { id, folder: `/x/${id}`, run: { n, job: id, name: o.target ?? id, state: "done", told: true, ...o } as Run };
 }
 const empty: Sources = { runs: [], holds: [], specChecks: [], items: [], storeLog: [], flakes: [], trackers: [], usage: [] };
 
 describe("stages", () => {
   const runs = [
-    run({ kind: "build", on: "p-1", started: at(DAY, 9), ended: at(DAY, 9, 10), condition: "passed", cost: 1, review: { call: "passed", seconds: 90, cost: 0.5 } }),
-    run({ kind: "build", on: "p-1", started: at(DAY, 10), ended: at(DAY, 10, 20), condition: "failed", cause: "no-commit", cost: 2, review: { call: "failed", cost: 0.5 } }),
-    run({ kind: "build", on: "p-2", started: at(DAY, 11), ended: at(DAY, 11, 30), condition: "passed", cost: 3 }),
-    run({ kind: "build", on: "p-3", started: at(DAY, 12), condition: "running" }),
-    run({ kind: "intake", on: "p-1", started: at(DAY, 8), ended: at(DAY, 8, 1), reason: "failed: no reply", cause: "unanswered" }),
-    run({ kind: "director", started: at(DAY, 8), ended: at(DAY, 8, 2) }),
-    run({ kind: "director", started: at(DAY, 9), ended: at(DAY, 9, 2) }),
+    run({ role: "build", target: "issue.1", started: at(DAY, 9), ended: at(DAY, 9, 10), state: "passed", cost: 0.5, review: { call: "passed", seconds: 90, cost: 0.5 } }),
+    run({ role: "build", target: "issue.1", started: at(DAY, 10), ended: at(DAY, 10, 20), state: "failed", cause: "no-commit", cost: 1.5, review: { call: "failed", cost: 0.5 } }),
+    run({ role: "build", target: "issue.2", started: at(DAY, 11), ended: at(DAY, 11, 30), state: "passed", cost: 3 }),
+    run({ role: "build", target: "issue.3", started: at(DAY, 12), state: "running" }),
+    run({ role: "intake", target: "issue.1", started: at(DAY, 8), ended: at(DAY, 8, 1), reason: "failed: no reply", cause: "unanswered" }),
+    run({ role: "director", started: at(DAY, 8), ended: at(DAY, 8, 2) }),
+    run({ role: "director", started: at(DAY, 9), ended: at(DAY, 9, 2) }),
     // The trailing 7 days: two builds on one item.
-    run({ kind: "build", on: "p-0", started: at("2026-10-15", 9), ended: at("2026-10-15", 9, 40), condition: "passed", cost: 7 }),
-    run({ kind: "build", on: "p-0", started: at("2026-10-16", 9), ended: at("2026-10-16", 10), condition: "dropped", cost: 7 }),
+    run({ role: "build", target: "issue.0", started: at("2026-10-15", 9), ended: at("2026-10-15", 9, 40), state: "passed", cost: 7 }),
+    run({ role: "build", target: "issue.0", started: at("2026-10-16", 9), ended: at("2026-10-16", 10), state: "dropped", cost: 7 }),
     // Out of both windows.
-    run({ kind: "build", on: "p-0", started: at("2026-10-01", 9), condition: "passed", cost: 100 }),
+    run({ role: "build", target: "issue.0", started: at("2026-10-01", 9), state: "passed", cost: 100 }),
   ];
   const t = measure({ ...empty, runs, specChecks: [{ at: at(DAY, 7), name: "p-1", cost: 0.5 }, { at: at(DAY, 7, 5), name: "p-1", cost: 0.5 }] }, DAY, Date.parse(at(DAY, 23)));
   const row = (stage: string, w = t.today) => w.stages.find((s) => s.stage === stage);
@@ -59,8 +59,8 @@ describe("stages", () => {
 
   test("a review that records no cost adds none to the review row, and its build keeps the whole run cost", () => {
     const runs2 = [
-      run({ kind: "build", on: "p-9", started: at(DAY, 9), ended: at(DAY, 9, 5), condition: "passed", cost: 4, review: { call: "passed", cost: 1.5 } }),
-      run({ kind: "build", on: "p-9", started: at(DAY, 10), ended: at(DAY, 10, 5), condition: "passed", cost: 3, review: { call: "passed" } }),
+      run({ role: "build", target: "issue.9", started: at(DAY, 9), ended: at(DAY, 9, 5), state: "passed", cost: 2.5, review: { call: "passed", cost: 1.5 } }),
+      run({ role: "build", target: "issue.9", started: at(DAY, 10), ended: at(DAY, 10, 5), state: "passed", cost: 3, review: { call: "passed" } }),
     ];
     const w = measure({ ...empty, runs: runs2 }, DAY, Date.parse(at(DAY, 23)));
     const cost = (stage: string) => w.today.stages.find((s) => s.stage === stage)!.cost;
@@ -82,14 +82,14 @@ describe("stages", () => {
 
 describe("Asks, reopens and holds", () => {
   const storeLog = [
-    { at: at(DAY, 9), item: "p-1", added: ["reason: spec-check"], removed: [] },
+    { at: at(DAY, 9), item: "issue.1", added: ["reason: spec-check"], removed: [] },
     { at: at(DAY, 10), item: "p-2", added: ["reason: spec-check"], removed: ["reason: question"] },
     { at: at(DAY, 11), item: "p-3", added: [], removed: ["closed_as: done"] },
     // A close that rewrites closed_as is no reopen.
     { at: at(DAY, 12), item: "p-4", added: ["closed_as: dropped"], removed: ["closed_as: done"] },
     { at: at("2026-10-14", 9), item: "p-5", added: ["reason: question"], removed: [] },
   ];
-  const runs = [run({ kind: "build", on: "p-6", started: at(DAY, 9), ended: at(DAY, 10), condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } })];
+  const runs = [run({ role: "build", target: "issue.6", started: at(DAY, 9), ended: at(DAY, 10), state: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } })];
   const holds = [
     { at: at(DAY, 9), name: "p-1", kind: "spec-check", text: "" },
     { at: at(DAY, 11), name: "p-1", kind: "started", text: "" },
@@ -161,15 +161,16 @@ test("storeLog reads the reason and closed_as lines of each item file from the s
   const git = (...a: string[]) => { const p = Bun.spawnSync(["git", ...a], { cwd: dir, env }); if (p.exitCode) throw new Error(p.stderr.toString()); };
   try {
     git("init", "-q", "-b", "main");
-    const file = join(dir, "p-1.md");
-    writeFileSync(file, "---\nid: p-1\nclosed_as: done\n---\n- 2026-10-20 09:00: job p-1 landed\n");
+    mkdirSync(join(dir, "issues", "1"), { recursive: true });
+    const file = join(dir, "issues", "1", "issue.md");
+    writeFileSync(file, "---\nclosed_as: done\n---\n- 2026-10-20 09:00: job p-1 landed\n");
     git("add", "."); git("commit", "-q", "-m", "one");
-    writeFileSync(file, "---\nid: p-1\nreason: spec-check\n---\n- 2026-10-20 09:00: job p-1 landed\n- 2026-10-20 10:00: acceptance: fail at abc: x\n- 2026-10-20 10:01: a note it does not keep\n");
+    writeFileSync(file, "---\nreason: spec-check\n---\n- 2026-10-20 09:00: job p-1 landed\n- 2026-10-20 10:00: acceptance: fail at abc: x\n- 2026-10-20 10:01: a note it does not keep\n");
     git("add", "."); git("commit", "-q", "-m", "two");
     const log = storeLog(dir);
     expect(log.map((c) => ({ item: c.item, added: c.added, removed: c.removed }))).toEqual([
-      { item: "p-1", added: ["reason: spec-check"], removed: ["closed_as: done"] },
-      { item: "p-1", added: ["closed_as: done"], removed: [] },
+      { item: "issue.1", added: ["reason: spec-check"], removed: ["closed_as: done"] },
+      { item: "issue.1", added: ["closed_as: done"], removed: [] },
     ]);
     expect(Number.isNaN(Date.parse(log[0].at))).toBe(false);
   } finally {

@@ -1,16 +1,15 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, watch, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
-import { spentToday, runsToday, health, writeBaseline, suiteHistory, factorySnapshot, issueFacts } from "../gates/factory-status.ts";
+import { spentToday, runsToday, health, writeBaseline, baselines, suiteHistory, factorySnapshot, issueFacts } from "../gates/factory-status.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
-import { type Run } from "../records/ledger.ts";
-import { getRun, putRun } from "../records/record.ts";
+import { reseed, seed } from "../../job.testkit.ts";
 import { ctx, sh, newIssue, change, mk, setup, teardown } from "./factory.helpers.ts";
+import { writeRepos } from "../../../tests/projects.ts";
 
 beforeEach(setup);
 afterEach(() => { setSystemTime(); teardown(); });
@@ -40,9 +39,9 @@ test("the report groups each unshown run under its report lane, in the order of 
   const at = (s: string) => out.indexOf(s);
   expect(at("landed:")).toBeLessThan(at("waiting:"));
   expect(at("waiting:")).toBeLessThan(at("failed:"));
-  expect(out).toContain("landed:\nfac-11 landed");
-  expect(out).toContain("waiting:\nfac-12 waiting");
-  expect(out).toContain("failed:\nfac-13 failed");
+  expect(out).toContain("landed:\nI-00011 landed");
+  expect(out).toContain("waiting:\nI-00012 waiting");
+  expect(out).toContain("failed:\nI-00013 failed");
   expect(out).not.toContain("delivered:");
   expect(out).not.toContain("needs you:");
   expect(out).not.toContain("stuck:");
@@ -51,10 +50,10 @@ test("the report groups each unshown run under its report lane, in the order of 
 test("a peek lists the unshown runs and leaves them unshown", () => {
   mk("fac-14", "build", "landed", { shown: false });
   const now = 1_800_000_000_000;
-  expect(report(now, true)).toContain("fac-14 landed");
-  expect(report(now, true)).toContain("fac-14 landed");
-  expect(report()).toContain("fac-14 landed");
-  expect(report()).not.toContain("fac-14 landed");
+  expect(report(now, true)).toContain("I-00014 landed");
+  expect(report(now, true)).toContain("I-00014 landed");
+  expect(report()).toContain("I-00014 landed");
+  expect(report()).not.toContain("I-00014 landed");
 });
 
 test("a deleted episode page leaves the seen file, and a page still on disk is not listed again", () => {
@@ -73,7 +72,7 @@ test("a deleted episode page leaves the seen file, and a page still on disk is n
 
 test("a dispatch with checks, three factory repos and no open issues fetches the work store at most twice", async () => {
   const items = join(ctx.base, "items");
-  writeFileSync(join(ctx.base, "repos.json"), JSON.stringify(Object.fromEntries(["fac", "fac2", "fac3"].map((k) => [k, { path: join(ctx.base, "repo"), sandbox: true, autoland: false }]))));
+  writeRepos(Object.fromEntries(["fac", "fac2", "fac3"].map((k) => [k, { path: join(ctx.base, "repo"), sandbox: true, autoland: false }])));
   const log = join(ctx.base, "fetch.log");
   mkdirSync(join(ctx.base, "bin"));
   const real = Bun.spawnSync(["which", "git"]).stdout.toString().trim();
@@ -113,10 +112,10 @@ test("runStarts counts an issue's job starts in the hour, not its fix rounds, an
 test("a director run has no repo; its cost counts in the day's spend, not in runsToday, and an old one adds nothing", () => {
   setSystemTime(NOW);
   const old = new Date(NOW - 25 * 3600_000).toISOString();
-  mk("fac-6", "director", "done", { cost: 3, repo: undefined, on: "fac-6" });
-  mk("fac-7", "director", "done", { cost: 5, repo: undefined, on: "20261028-000001-fac-fac-1-build", started: old });
+  mk("fac-6", "director", "done", { cost: 3, repo: undefined, target: "issue.6" });
+  mk("fac-7", "director", "done", { cost: 5, repo: undefined, target: "job.1", started: old });
   expect(spentToday()).toBe(3);
-  expect(runsToday().filter((e) => e.run.kind === "director")).toEqual([]);
+  expect(runsToday().filter((e) => e.run.role === "director")).toEqual([]);
 });
 
 test("an issue that names a busy file an open job also names waits; a job waiting for Chris does not count", async () => {
@@ -125,15 +124,15 @@ test("an issue that names a busy file an open job also names waits; a job waitin
   for (const n of [901, 902, 903]) mk(`fac-${n}`, "land", "dropped", { conflicts: ["jobs/busy.ts"] });
   const first = withSurface();
   const second = withSurface();
-  const { folder } = mk(`fac-${first}`, "build", "passed");
+  const { job } = mk(`fac-${first}`, "build", "passed");
   const calls: string[] = [];
   const start = async (_repo: unknown, name: string) => { calls.push(name); return null; };
   const out = await dispatchIssues(start);
   expect(calls).toEqual([]);
-  expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both change the busy file jobs/busy.ts`);
-  putRun(basename(folder), { ...getRun(basename(folder))!, condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  expect(out.skipped).toContain(`issue.${second}: waits for issue.${first}: both change the busy file jobs/busy.ts`);
+  reseed(job, { state: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
   await dispatchIssues(start);
-  expect(calls).toEqual([`fac-${second}`]);
+  expect(calls).toEqual([`issue.${second}`]);
 });
 
 test("an issue that uses the gpt-oss server waits for an open job that uses it; an issue that does not is not held", async () => {
@@ -141,15 +140,15 @@ test("an issue that uses the gpt-oss server waits for an open job that uses it; 
   const first = add("Call the model on 127.0.0.1:8012.\n");
   const second = add("Start aleph-gpt-oss first.\n");
   const third = add("Change a label.\n");
-  const { folder } = mk(`fac-${first}`, "build", "passed");
+  const { job } = mk(`fac-${first}`, "build", "passed");
   const calls: string[] = [];
   const start = async (_repo: unknown, name: string) => { calls.push(name); return null; };
   const out = await dispatchIssues(start);
-  expect(calls).toEqual([`fac-${third}`]);
-  expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both use the gpt-oss server`);
-  putRun(basename(folder), { ...getRun(basename(folder))!, condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  expect(calls).toEqual([`issue.${third}`]);
+  expect(out.skipped).toContain(`issue.${second}: waits for issue.${first}: both use the gpt-oss server`);
+  reseed(job, { state: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
   await dispatchIssues(start);
-  expect(calls).toContain(`fac-${second}`);
+  expect(calls).toContain(`issue.${second}`);
 });
 
 test("an issue that shares only a quiet file with an open job starts", async () => {
@@ -161,22 +160,22 @@ test("an issue that shares only a quiet file with an open job starts", async () 
   mk(`fac-${first}`, "build", "passed");
   const calls: string[] = [];
   await dispatchIssues(async (_repo, name) => { calls.push(name); return null; });
-  expect(calls).toEqual([`fac-${second}`]);
+  expect(calls).toEqual([`issue.${second}`]);
 });
 
 test("stalled lists what could move: a ready issue, a new issue and a passed run, each until a gate or a live run explains it", async () => {
   const id = newIssue();
   const fresh = writeList({ key: "fac" }, "add an issue", (doc) => issues.add(doc, "new thing").id, true)!.value;
-  expect(await stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
-  writeFileSync(join(ctx.base, "repos.json"), JSON.stringify({ fac: { path: join(ctx.base, "repo"), sandbox: true, autoland: true } }));
-  const { folder } = mk(`fac-${id}`, "build", "passed", { next: "land" });
-  expect(await stalled()).toEqual([`land:fac-${id}`, `ingest:fac-${fresh}`]);
+  expect(await stalled()).toEqual([`goal:issue.${id}`, `ingest:issue.${fresh}`]);
+  writeRepos({ fac: { path: join(ctx.base, "repo"), sandbox: true, autoland: true } });
+  const { job } = mk(`fac-${id}`, "build", "passed", { next: "land" });
+  expect(await stalled()).toEqual([`land:issue.${id}`, `ingest:issue.${fresh}`]);
   setPaused(true);
   expect(await stalled()).toEqual([]);
   setPaused(false);
-  putRun(basename(folder), { ...getRun(basename(folder))!, condition: "failed", next: undefined });
+  reseed(job, { state: "failed", next: undefined });
   // A stuck run holds only its own issue, which its open job keeps not ready; the new issue can still move.
-  expect(await stalled()).toEqual([`ingest:fac-${fresh}`]);
+  expect(await stalled()).toEqual([`ingest:issue.${fresh}`]);
 });
 
 test("stalled counts a red baseline until a later suite run is green, also after main moves", async () => {
@@ -184,41 +183,30 @@ test("stalled counts a red baseline until a later suite run is green, also after
   const head = () => Bun.spawnSync(["git", "-C", repo, "rev-parse", "origin/main"], { stdout: "pipe", stderr: "ignore" }).stdout.toString().trim();
   const id = newIssue();
   const fresh = writeList({ key: "fac" }, "add a plan", (doc) => { const i = issues.add(doc, "plan me"); i.fm.plan = "true"; return i.id; }, true)!.value;
-  await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: false, failed: "tests" }));
+  writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: false, failed: "tests" }));
   sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "next");
   sh(repo, "git", "push", "-q", "origin", "main");
   expect(await stalled()).toEqual([]);
-  await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: true }));
-  expect(await stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
+  writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: true }));
+  expect(await stalled()).toEqual([`goal:issue.${id}`, `ingest:issue.${fresh}`]);
 });
 
-test("writeBaseline waits for the baseline-file lock, here and in another process, and both entries survive", async () => {
-  const file = join(ctx.base, "factory", "baseline.json");
-  const release = (await lock("baseline-file"))!;
-  const child = Bun.spawn(["bun", "-e", `import { writeBaseline } from ${JSON.stringify(join(import.meta.dir, "..", "gates", "factory-status.ts"))};
-await writeBaseline("b", () => ({ repo: "b", commit: "2", ok: true }));`], { env: { ...process.env }, stdout: "ignore", stderr: "pipe" });
-  const here = writeBaseline("a", () => ({ repo: "a", commit: "1", ok: true }));
-  // Both writers wait on the lock: lock() makes a `<name>.new.<pid>.<uuid>` directory for each before it tries the name.
-  const waiters = () => readdirSync(join(ctx.base, "run", "aleph")).filter((n) => n.startsWith("baseline-file.new.")).length;
-  await new Promise<void>((r) => {
-    const w = watch(join(ctx.base, "run", "aleph"), () => { if (waiters() === 2) { w.close(); r(); } });
-    if (waiters() === 2) { w.close(); r(); }
-  });
-  expect(existsSync(file)).toBe(false);
-  expect(child.exitCode).toBeNull();
-  release();
-  expect(await here).toBe(true);
-  expect(await child.exited, await new Response(child.stderr).text()).toBe(0);
-  expect(Object.keys(JSON.parse(readFileSync(file, "utf8"))).sort()).toEqual(["a", "b"]);
+test("writeBaseline from 2 processes at once keeps both entries", async () => {
+  const code = (k: string) => `import { writeBaseline } from ${JSON.stringify(join(import.meta.dir, "..", "gates", "factory-status.ts"))};
+for (let i = 0; i < 50; i++) writeBaseline("${k}" + i, () => ({ repo: "${k}", commit: "1", ok: true }));`;
+  const run = (k: string) => Bun.spawn(["bun", "-e", code(k)], { env: { ...process.env }, stdout: "ignore", stderr: "pipe" });
+  const procs = [run("a"), run("b")];
+  for (const p of procs) expect(await p.exited, await new Response(p.stderr).text()).toBe(0);
+  expect(Object.keys(baselines()).filter((k) => /^[ab]\d+$/.test(k))).toHaveLength(100);
 });
 
 test("a blocked issue does not stall; a live agent run leaves a ready issue out", async () => {
   const blocker = newIssue();
   const after = newIssue();
   await change(after, (item) => { item.fm.after = [`fac-${blocker}`]; });
-  expect(await stalled()).toEqual([`goal:fac-${blocker}`]);
+  expect(await stalled()).toEqual([`goal:issue.${blocker}`]);
   setSystemTime(NOW);
-  mk("fac-other", "build", "running", { made: NOW });
+  mk("fac-99", "build", "running", { made: NOW });
   expect(await stalled()).toEqual([]);
 });
 
@@ -239,21 +227,19 @@ test("health says a stall only after 15 minutes of ticks, and stops when the wor
 });
 
 test("health warns when the last full suite of a repo took more than the budget", () => {
-  const suite = (id: string, ended: string, seconds: number, extra: object = {}) => {
-    const dir = join(ctx.base, "jobs", id);
-    mkdirSync(dir, { recursive: true });
-    putRun(basename(dir), { n: 1, kind: "build", job: id, name: id, repo: "fac", condition: "done", told: true, started: ended, ended, checks: [{ name: "tests", ok: true, seconds, ...extra }, { name: "types", ok: true, seconds: 1 }] } as Run);
+  const suite = (ended: string, seconds: number, extra: object = {}) => {
+    seed({ role: "build", name: "x", repo: "fac", state: "done", told: true, started: ended, ended, checks: [{ name: "tests", ok: true, seconds, ...extra }, { name: "types", ok: true, seconds: 1 }] });
   };
   const said = () => health().filter((l) => l.text.includes("full suite"));
-  suite("20261103-000001-a", "2026-11-03T00:01:00Z", 135);
+  suite("2026-11-03T00:01:00Z", 135);
   expect(said()).toEqual([{ text: "health: fac full suite took 135 s; the budget is 120 s", kind: "warn" }]);
   // A pass on rerun does not count: its time holds two runs.
-  suite("20261103-000002-b", "2026-11-03T00:02:00Z", 300, { rerun: true });
+  suite("2026-11-03T00:02:00Z", 300, { rerun: true });
   expect(said()).toEqual([{ text: "health: fac full suite took 135 s; the budget is 120 s", kind: "warn" }]);
   process.env.ALEPH_SUITE_BUDGET_S = "200";
   try { expect(said()).toEqual([]); } finally { delete process.env.ALEPH_SUITE_BUDGET_S; }
   // The last run is the one that ended last, not the one that started last.
-  suite("20261103-000000-c", "2026-11-03T00:03:00Z", 90);
+  suite("2026-11-03T00:03:00Z", 90);
   expect(said()).toEqual([]);
 });
 
@@ -296,10 +282,9 @@ test("each suite run appends a history record with the test counts of its checks
   ]);
 });
 
-test("the report heads a run with its short id once repos.json gives the code", () => {
-  writeFileSync(join(process.env.ALEPH_REPOS!, "..", "repos.json"), JSON.stringify({ fac: { code: "f", path: join(process.env.ALEPH_REPOS!, "..", "repo"), sandbox: true, autoland: false } }));
+test("the report heads a run with its shown key, a letter and five digits", () => {
   mk("fac-1421", "build", "landed", { shown: false });
   const out = report();
-  expect(out).toContain("f1421 landed");
-  expect(out).not.toContain("fac/fac-1421");
+  expect(out).toContain("I-01421 landed");
+  expect(out).not.toContain("issue.1421");
 });

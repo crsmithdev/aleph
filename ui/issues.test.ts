@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendSuiteHistory } from "../jobs/lib/gates/factory-status.ts";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
 import { add, noteOf, setStatus, type Doc } from "../issues/lib/todo.ts";
@@ -25,7 +26,9 @@ import { xLabel } from "./views/speed.js";
 import { when } from "./lib.js";
 // @ts-ignore plain JS, shared with the page
 import * as tl from "./timeline.js";
-import { putRun } from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { conn } from "../lib/db.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const ISO_UTC = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
@@ -53,12 +56,13 @@ const rowsOf = async (project?: string): Promise<any[]> => (await getJson(projec
 const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1" }, q = "") =>
   at(`/api/issues${q}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
-let seq = 0;
-function run(id: string, extra: Record<string, unknown>) {
-  const dir = join(jobsDir, id);
-  mkdirSync(dir, { recursive: true });
-  putRun(basename(join(dir)), { kind: "build", told: true, started: new Date(NOW).toISOString(), n: ++seq, ...extra } as any);
+/** Put a job in the ledger; `on` is the issue `<repo>-<n>`. */
+function run(_id: string, { on, job: _job, ...extra }: Record<string, unknown>) {
+  seed({ role: "build", told: true, started: new Date(NOW).toISOString(), ...(on ? { target: `issue.${String(on).split("-")[1]}` } : {}), ...extra } as any);
 }
+/** The number of the newest job of the fixture: a test's jobs are those after it. */
+let seedMax = 0;
+let issueState: Record<string, unknown>[] = [];
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-issues-"));
@@ -69,7 +73,7 @@ beforeAll(async () => {
   sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
   sh(base, "git", "clone", "-q", remote, repo);
   writeFileSync(join(repo, "a"), "1");
-  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "real work\n\nIssue: fac-1\nJob: fac-1");
+  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "real work\n\nIssue: issue.1\nJob: job.1");
   writeFileSync(join(repo, "b"), "2");
   sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "prose only\n\nthis finishes Item: fac-1 in words.\n\nbut no trailer");
   sh(repo, "git", "push", "-q", "origin", "main");
@@ -81,12 +85,12 @@ beforeAll(async () => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   mkdirSync(join(base, "none"));
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo }, oth: { path: join(base, "none") } }));
+  writeRepos({ fac: { path: repo }, oth: { path: join(base, "none") } }, items);
   argvFile = join(base, "argv"); stdinFile = join(base, "stdin");
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\nprintf '%s\\n' "$@" > ${argvFile}\ncat > ${stdinFile}\necho '{"repo":"fac","added":7}'\n`);
   chmodSync(fake, 0o755);
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake, ...gitEnv });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     seedPart(doc, "first goal", "# Heading\n\n- one\n\n<script>alert(1)</script>");
     add(doc, "plain task", { kind: "bug", labels: ["bug"] });
@@ -96,10 +100,11 @@ beforeAll(async () => {
     return true;
   }, true);
   writeList({ key: "oth" }, "seed", (doc) => { add(doc, "other thing"); return true; }, true);
-  run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", condition: "landed", on: "fac-1" });
-  run("20261027-000002-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "running", on: "oth-1" });
+  run("", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", on: "fac-1" });
+  run("", { job: "oth-1", name: "oth-1", repo: "oth", state: "running", on: "oth-1" });
   seeded = sh(items, "git", "rev-parse", "origin/main");
-  cpSync(jobsDir, `${jobsDir}-seed`, { recursive: true });
+  seedMax = (conn().query("SELECT max(CAST(substr(id, 5) AS INTEGER)) AS n FROM jobs").get() as { n: number }).n;
+  issueState = conn().query("SELECT * FROM issue_state").all() as Record<string, unknown>[];
   ({ server, stop } = await withServer({ warm: false }));
 });
 // Each test ends by putting back the fixture store and runs, so no test reads what another wrote.
@@ -107,10 +112,12 @@ afterEach(() => {
   // A fetch never moves origin/main back, so the reset sets the ref here as well as on the remote.
   sh(items, "git", "push", "-qf", "origin", `${seeded}:refs/heads/main`);
   sh(items, "git", "update-ref", "refs/remotes/origin/main", seeded);
-  // The folders stay, emptied, because the server watches the records folder.
-  const records = join(jobsDir, ".records");
-  for (const d of [jobsDir, records]) for (const f of readdirSync(d)) if (join(d, f) !== records) rmSync(join(d, f), { recursive: true, force: true });
-  cpSync(`${jobsDir}-seed`, jobsDir, { recursive: true });
+  sh(items, "git", "reset", "-q", "--hard", seeded);
+  // The jobs a test made go; the fixture's stay.
+  conn().run("DELETE FROM jobs WHERE CAST(substr(id, 5) AS INTEGER) > ?", [seedMax]);
+  conn().run("DELETE FROM issue_state");
+  for (const r of issueState) conn().query(`INSERT INTO issue_state (${Object.keys(r).join(",")}) VALUES (${Object.keys(r).map(() => "?").join(",")})`).run(...(Object.values(r) as never[]));
+  for (const f of readdirSync(jobsDir)) if (Number(f) > seedMax) rmSync(join(jobsDir, f), { recursive: true, force: true });
 });
 afterAll(() => {
   stop();
@@ -200,14 +207,13 @@ describe("POST /api/issues/:id/media and GET /api/issues/:id/media/:name", () =>
 });
 
 describe("GET /api/issues/:id", () => {
-  test("lists runs by on, parts included, and by todo for old runs", async () => {
-    run("20261027-000010-a", { job: "on-4", name: "on-4", repo: "fac", condition: "running", on: "fac-4" });
-    run("20261027-000011-a", { job: "goal-4-1", name: "goal-4-1", repo: "fac", condition: "running", on: "fac-4.1" });
-    run("20261027-000012-a", { job: "on-2", name: "on-2", repo: "fac", condition: "running", on: "fac-2" });
-    run("20261027-000013-a", { job: "todo-4", name: "todo-4", repo: "fac", condition: "running", on: "fac-4" });
-    run("20261027-000014-a", { job: "other-4", name: "other-4", repo: "oth", condition: "running", on: "oth-4" });
+  test("lists the runs of the issue", async () => {
+    run("", { job: "on-4", name: "on-4", repo: "fac", state: "running", on: "fac-4" });
+    run("", { job: "on-2", name: "on-2", repo: "fac", state: "running", on: "fac-2" });
+    run("", { job: "todo-4", name: "todo-4", repo: "fac", state: "running", on: "fac-4" });
+    run("", { job: "other-4", name: "other-4", repo: "oth", state: "running", on: "oth-4" });
     const d = await getJson("/api/issues/fac-4");
-    expect(d.jobs.map((j: any) => j.name).sort()).toEqual(["goal-4-1", "on-4", "todo-4"]);
+    expect(d.jobs.map((j: any) => j.name).sort()).toEqual(["on-4", "todo-4"]);
     const g = await getJson("/api/issues/fac-2");
     expect(g.jobs.map((j: any) => j.name)).toEqual(["on-2"]);
   });
@@ -234,8 +240,7 @@ describe("views", () => {
   test("the tests card charts the suite history of the selected project in the window", async () => {
     const rec = (repo: string, at: string, ran: number, rerunPassed: number) => ({ repo, commit: "c", at, ran, passed: ran, failed: 0, skipped: 0, rerunPassed });
     const now = new Date("2026-11-04T12:00:00Z"), recs = [rec("fac", "2026-11-04T10:00:00Z", 120, 2), rec("fac", "2026-10-01T10:00:00Z", 90, 1), rec("oth", "2026-11-04T11:00:00Z", 40, 0)];
-    mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "suite-history.jsonl"), recs.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    for (const r of recs) appendSuiteHistory(r);
     const d = await getJson("/api/issues");
     expect(Object.keys(d.tests).sort()).toEqual(["fac", "oth"]);
     expect(d.tests.fac.map((r: any) => r.ran)).toEqual([120, 90]);
@@ -671,7 +676,6 @@ describe("POST /api/issues/:id/decide and deny", () => {
   const item = (n: number) => readList({ key: "fac" })!.items.find((i) => i.id === n)!;
   const ask = (decision: boolean, wait?: string) => writeList({ key: "fac" }, "seed", (doc) => {
     const i = add(doc, "which way", { request: "x" });
-    if (wait && !doc.items.some((x) => x.id === 1 && x.sub === 1)) addPart(doc, doc.items.find((x) => x.id === 1 && x.sub === undefined)!, { title: "g", spec: "x" });
     if (decision) setAsk(refIn(doc.repo!, i), { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { after: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
     else { setAsk(refIn(doc.repo!, i), { kind: "input", reason: "question", question: "Should it be A or B?", options: [], why: [] }); todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller."); }
     return i.id;
@@ -693,13 +697,14 @@ describe("POST /api/issues/:id/decide and deny", () => {
   });
 
   test("an option that waits sets after in the same write as the Ask clears", async () => {
-    const n = ask(true, "fac-1.1");
-    expect(askOf(`fac-${n}`)!.options[0].after).toBe("fac-1.1");
+    const target = writeList({ key: "fac" }, "seed", (doc) => add(doc, "blocker", { request: "x" }).id, true)!.value;
+    const n = ask(true, `issue.${target}`);
+    expect(askOf(`issue.${n}`)!.options[0].after).toBe(`issue.${target}`);
     await withRealCli(async () => {
       const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);
       expect(item(n).fm.labels).toBeUndefined();
-      expect(item(n).fm.after).toEqual(["fac-1.1"]);
+      expect(item(n).fm.after).toEqual([`issue.${target}`]);
       expect(item(n).fm.question).toBeUndefined();
     });
   });
@@ -720,7 +725,7 @@ describe("POST /api/issues/:id/decide and deny", () => {
       Object.assign(i.fm, { kind: "issue" });
       return i.id;
     })!.value;
-    setAsk(`fac-${n}`, { kind, reason, question: "a migrated ask", options: [], why: [] });
+    setAsk(`issue.${n}`, { kind, reason, question: "a migrated ask", options: [], why: [] });
     return n;
   };
 
@@ -735,19 +740,18 @@ describe("POST /api/issues/:id/decide and deny", () => {
     });
   });
 
-  test("the card routes take a part's dotted id", async () => {
+  test("the card routes take a goal's id", async () => {
     const dotted = () => writeList({ key: "fac" }, "seed", (doc) => {
       const i = add(doc, "a capped goal", { request: "x" });
-      Object.assign(i, { id: 9000 + i.id, sub: 1 });
       Object.assign(i.fm, { kind: "goal" });
-      return `${i.id}.1`;
+      return String(i.id);
     })!.value;
-    const capped = () => { const r = dotted(); setAsk(`fac-${r}`, { kind: "input", reason: "run-cap", question: "stopped", options: [], why: [] }); return r; };
-    const find = (ref: string) => readList({ key: "fac" })!.items.find((i) => `${i.id}.${i.sub}` === ref)!;
+    const capped = () => { const r = dotted(); setAsk(`issue.${r}`, { kind: "input", reason: "run-cap", question: "stopped", options: [], why: [] }); return r; };
+    const find = (ref: string) => readList({ key: "fac" })!.items.find((i) => String(i.id) === ref)!;
     await withRealCli(async () => {
       const a = capped();
       expect((await at(`/api/issues/fac-${a}/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
-      expect(askOf(`fac-${a}`)).toBeNull();
+      expect(askOf(`issue.${a}`)).toBeNull();
       expect(find(a).notes.at(-1)).toContain("run it again");
       const b = capped();
       expect((await at(`/api/issues/fac-${b}/checked`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
@@ -935,7 +939,7 @@ describe("priority badges", () => {
 });
 
 describe("the Issue timeline names why a wait waited", () => {
-  const run = (kind: string, started: string, ended: string) => ({ kind, name: "fac-1", on: "fac-1", condition: "passed", started, ended });
+  const run = (kind: string, started: string, ended: string) => ({ kind, name: "fac-1", on: "fac-1", state: "passed", started, ended });
   const d = (holds?: object[]) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], holds,
     timeline: { filed: "2026-11-01T10:00:00Z", runs: [run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"), run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z")] } });
   const evs = (x: any) => v.issueSegments(x).flatMap((s: any) => s.rows).flatMap((r: any) => r.events);
@@ -944,11 +948,11 @@ describe("the Issue timeline names why a wait waited", () => {
     setCodes({ aleph: "a" });
     try {
       const holds = [
-        { at: "2026-11-01T10:05:00Z", name: "fac-1", kind: "busy-file", text: "both jobs change the busy file", event: { action: "busy", on: ["aleph-1372"], file: "ui/views/issues.js" } },
+        { at: "2026-11-01T10:05:00Z", name: "fac-1", kind: "busy-file", text: "both jobs change the busy file", event: { action: "busy", detail: "aleph-1372 holds ui/views/issues.js" } },
         { at: "2026-11-01T10:06:00Z", name: "fac-2", kind: "baseline", text: "other job" },
       ];
       expect(evs(d(holds)).map((e: any) => e.tag)).toContain("busy");
-      expect(html(d(holds))).toContain("a1372 → issues.js · 28m 00s");
+      expect(html(d(holds))).toContain("a1372 holds ui/views/issues.js · 28m 00s");
       expect(html(d(holds))).not.toContain("other job");
     } finally { setCodes({}); }
   });
@@ -985,10 +989,11 @@ describe("the Updated time", () => {
     expect(v.sortRows(rows, { key: "updated", dir: -1 })[0]).toBe(rows[1]);
   });
 
-  test("a write sets updated_time", () => {
-    const i = item({ updated_time: "2026-01-01T00:00:00.000Z" });
+  test("the updated time is the latest of the creation, the close and the last note", () => {
+    const i = item({ created: "2026-01-01T00:00:00.000Z" });
+    expect(todos.updated(i)).toBe("2026-01-01T00:00:00.000Z");
     todos.note(i, "hi", new Date(2026, 10, 5, 9, 7));
-    expect(i.fm.updated_time).toBe(new Date(2026, 10, 5, 9, 7).toISOString());
+    expect(todos.updated(i)).toBe(new Date(2026, 10, 5, 9, 7).toISOString());
   });
 });
 
@@ -1062,7 +1067,7 @@ describe("the labels say sub-issue and job", () => {
       addPart(doc, i, { title: "one", spec: "x" });
       return i.id;
     }, true)!.value;
-    run("20261104-120001-a", { job: `fac-${n}`, name: `fac-${n}`, repo: "fac", condition: "landed", on: `fac-${n}` });
+    run("", { job: `fac-${n}`, name: `fac-${n}`, repo: "fac", state: "landed", on: `fac-${n}` });
     const h = v.renderIssue(await getJson(`/api/issues/fac-${n}`));
     expect(h).toContain("<h3>Sub-issues</h3>");
     expect(h).toContain('<span class="dp-k">Sub-issues done</span>');

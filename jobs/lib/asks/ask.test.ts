@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { getJson, putJson } from "../../../lib/db.ts";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -7,6 +8,7 @@ import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, as
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
 import { readList } from "../../../issues/lib/store.ts";
+import { seed } from "../../job.testkit.ts";
 import { newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
@@ -17,19 +19,19 @@ test("askChris with a null text sets the Ask and adds no note; an unknown issue 
   try {
     const id = newIssue();
     expect(askChris({ key: "fac" }, id, ask, null)).toBeNull();
-    expect(askOf(`fac-${id}`)).toEqual(ask);
+    expect(askOf(`issue.${id}`)).toEqual(ask);
     expect(issues.find(readList({ key: "fac" })!, id)!.notes).toEqual([]);
     expect(askChris({ key: "fac" }, 999, ask, null)).toBe("no issue 999");
-    expect(askOf("fac-999")).toBeNull();
+    expect(askOf("issue.999")).toBeNull();
   } finally { teardown(); }
 });
 
 test("setAsk keeps the Ask whole in the issue's job record, and askOf reads it back", () => {
-  setAsk("fac-11", ask);
-  expect(askOf("fac-11")).toEqual(ask);
-  expect(record.read("fac-11")).toMatchObject({ ask });
-  clearAsk("fac-11");
-  expect(askOf("fac-11")).toBeNull();
+  setAsk("issue.11", ask);
+  expect(askOf("issue.11")).toEqual(ask);
+  expect(record.read("issue.11")).toMatchObject({ ask });
+  clearAsk("issue.11");
+  expect(askOf("issue.11")).toBeNull();
 });
 
 const cased: Ask = {
@@ -44,18 +46,18 @@ const cased: Ask = {
 };
 
 test("setAsk keeps situation, effects and recommend, and askOf reads them back", () => {
-  setAsk("fac-12", cased);
-  expect(askOf("fac-12")).toEqual(cased);
+  setAsk("issue.12", cased);
+  expect(askOf("issue.12")).toEqual(cased);
 });
 
 test("a run's Ask is the run's: the issue has none, and clearing the issue's Ask leaves it", () => {
-  record.putRun("r1", { n: 1, kind: "build", job: "r1", name: "fac-13", on: "fac-13", condition: "waiting", ask, told: true, started: "2026-11-04T10:00:00Z" });
-  expect(record.getRun("r1")?.ask).toEqual(ask);
-  expect(askOf("fac-13")).toBeNull();
-  clearAsk("fac-13");
-  expect(record.getRun("r1")?.ask).toEqual(ask);
-  record.patchRun("r1", { condition: "dropped", ask: undefined });
-  expect(record.read("fac-13")?.ask).toBeNull();
+  const { id } = seed({ role: "build", name: "issue.13", target: "issue.13", state: "waiting", ask, started: "2026-11-04T10:00:00Z" });
+  expect(record.getRun(id)?.ask).toEqual(ask);
+  expect(askOf("issue.13")).toBeNull();
+  clearAsk("issue.13");
+  expect(record.getRun(id)?.ask).toEqual(ask);
+  record.setState(id, "dropped", { ask: undefined });
+  expect(record.read("issue.13")?.ask ?? null).toBeNull();
 });
 
 test("normalizeAsk takes after, 2 to 4 options and a recommended label that is one of them", () => {
@@ -103,8 +105,8 @@ test("actionsOn picks by context for a question and a dropped part", () => {
 
 
 let dir = "";
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "always-")); process.env.ALEPH_FACTORY_DIR = dir; });
-afterEach(() => { delete process.env.ALEPH_FACTORY_DIR; rmSync(dir, { recursive: true, force: true }); });
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "always-")); process.env.ALEPH_FACTORY_DIR = dir; process.env.ALEPH_DB = join(dir, "aleph.db"); });
+afterEach(() => { delete process.env.ALEPH_FACTORY_DIR; delete process.env.ALEPH_DB; rmSync(dir, { recursive: true, force: true }); });
 
 test("grant then always round-trips; revoke removes it", () => {
   expect(always("held-path")).toBeNull();
@@ -127,20 +129,20 @@ test("user is granted on any reason but a memory proposal, and a stored grant st
 
 const CLI = join(import.meta.dir, "..", "..", "cli.ts");
 const cli = (...args: string[]) => {
-  const p = Bun.spawnSync(["bun", CLI, ...args], { env: { ...process.env, ALEPH_FACTORY_DIR: dir }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawnSync(["bun", CLI, ...args], { env: { ...process.env, ALEPH_FACTORY_DIR: dir, ALEPH_DB: join(dir, "aleph.db") }, stdout: "pipe", stderr: "pipe" });
   return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
 };
 
-test("aleph always grant, list and revoke work on always.json", () => {
+test("aleph always grant, list and revoke work on the always setting", () => {
   const g = cli("always", "grant", "rescue", "recommended");
   expect(g.code).toBe(0);
-  const saved = JSON.parse(readFileSync(join(dir, "always.json"), "utf8"));
+  const saved = getJson("settings", "always", {});
   expect(saved).toEqual({ rescue: { action: "recommended", at: expect.any(String) } });
   const l = cli("always", "list");
   expect(l.code).toBe(0);
   expect(JSON.parse(l.out).rescue.action).toBe("recommended");
   expect(cli("always", "revoke", "rescue").code).toBe(0);
-  expect(JSON.parse(readFileSync(join(dir, "always.json"), "utf8"))).toEqual({});
+  expect(getJson("settings", "always", {})).toEqual({});
   expect(cli("always", "list").out).not.toContain("rescue");
 });
 
@@ -154,11 +156,11 @@ test("no reason can be handed to the firefighter: an Ask is the director's, then
 test("readAlways ignores a grant that grant() would refuse, and the next write drops it", () => {
   const at = "2026-11-04T12:00:00Z";
   const dead = Object.fromEntries(["held-path", "review", "no-commit", "run-cap"].map((k) => [k, { action: "firefighter", at }]));
-  writeFileSync(join(dir, "always.json"), JSON.stringify({ ...dead, rescue: { action: "recommended", at } }));
+  putJson("settings", "always", { ...dead, rescue: { action: "recommended", at } });
   expect(Object.keys(readAlways())).toEqual(["rescue"]);
   expect(always("held-path")).toBeNull();
   expect(grant("rescue", "recommended")).toBeNull();
-  expect(Object.keys(JSON.parse(readFileSync(join(dir, "always.json"), "utf8")))).toEqual(["rescue"]);
+  expect(Object.keys(getJson("settings", "always", {}))).toEqual(["rescue"]);
 });
 
 const choice: Ask = { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], why: [] };
@@ -205,23 +207,23 @@ test("decideAsk leaves a plain Ask's issue open; on part-dropped the plan option
 test("askIfPartDropped asks on the parent once its last open part is dropped", () => {
   const doc: issues.Doc = { repo: "fac", items: [] };
   const parent = issues.add(doc, "parent");
-  const a = { ...issues.add(doc, "a"), id: parent.id, sub: 1 };
-  const b = { ...issues.add(doc, "b"), id: parent.id, sub: 2 };
-  doc.items = [parent, a, b];
+  const a = issues.add(doc, "a", { from: `issue.${parent.id}` });
+  const b = issues.add(doc, "b", { from: `issue.${parent.id}` });
   issues.setStatus(a, "dropped");
   askIfPartDropped(doc, a, "too big");
   expect(askOf(refIn("fac", parent))).toBeNull();
   issues.setStatus(b, "dropped");
   askIfPartDropped(doc, b, "too big");
   const a2 = askOf(refIn("fac", parent));
-  expect(a2).toMatchObject({ reason: "part-dropped", question: `Sub-issue fac-${parent.id}.2 was dropped: too big. What now?` });
+  expect(a2).toMatchObject({ reason: "part-dropped", question: `Sub-issue fac-${b.id} was dropped: too big. What now?` });
   const lines = (a2?.options ?? []).map((o) => o.line).join("\n");
   expect(lines).toContain("sub-issue");
   expect(lines).not.toContain("part");
 });
 
 test("askFromRun marks the run asked, and with a spec the run waits for a spec edit", () => {
-  const e = { id: "r1", folder: mkdtempSync(join(tmpdir(), "run-")), run: { job: "r1" } as any };
+  const made = seed({ role: "build", name: "issue.1", state: "running" });
+  const e = { id: made.id, folder: made.folder, run: made.run as any };
   try {
     expect(asked(e)).toBe(false);
     expect(askFromRun(e, { key: "fac" }, undefined, plain, "Which module?")).toBe("no issue");

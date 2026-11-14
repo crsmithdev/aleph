@@ -16,7 +16,7 @@ describe("a factory run", () => {
     const gate = (n: string) => join(base, `gate-${n}`);
     const issue = async (n: string) =>
       seedItem("fac", `dispatch ${n}`, { kind: "goal" }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
-    const settled = (id: number) => issueRuns(id).every((r) => stateNow(r).condition === "passed");
+    const settled = (id: number) => issueRuns(id).every((r) => stateNow(r).state === "passed");
     const ids: number[] = [];
     beforeAll(() => {
       startLog = join(base, "start.log");
@@ -30,7 +30,7 @@ describe("a factory run", () => {
       // The released holds finish their runs; wait for that.
       await when(() => ids.every(settled), jobsDir);
       for (const id of ids) {
-        await drop(`fac-${id}`);
+        await drop(`issue.${id}`);
         await issueClose("fac", id, "drop", "test over");
       }
     });
@@ -40,8 +40,8 @@ describe("a factory run", () => {
       const d = await issue("d");
       ids.push(d);
       const [x, y] = await Promise.all([aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "5" })), aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "5" }))]);
-      expect(started().filter((n) => n === `fac-${d}`)).toHaveLength(1);
-      expect([...x.json.started, ...y.json.started].filter((n: string) => n === `fac-${d}`)).toHaveLength(1);
+      expect(started().filter((n) => n === `issue.${d}`)).toHaveLength(1);
+      expect([...x.json.started, ...y.json.started].filter((n: string) => n === `issue.${d}`)).toHaveLength(1);
       writeFileSync(gate("d"), "");
       await when(() => settled(d), jobsDir);
     }, 60_000);

@@ -18,7 +18,7 @@ test("an issue waiting on a factory item the store says done, with no commit nam
   await change(waiter, (item) => { item.fm.after = [`fac-${blocker}`]; });
   const f = fakes();
   const out = await dispatch(f);
-  expect(out.started).toEqual([`fac-${waiter}`]);
+  expect(out.started).toEqual([`issue.${waiter}`]);
   expect(out.skipped).toEqual([]);
 });
 
@@ -29,13 +29,13 @@ test("an issue set to done while an earlier issue starts is skipped as done", as
   const calls: string[] = [];
   const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);
-    if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
+    if (name === `issue.${first}`) await change(second, (item) => issues.setStatus(item, "done"));
     return null;
   }, undefined, undefined);
-  expect(calls).toEqual([`fac-${first}`]);
-  expect(out.started).toEqual([`fac-${first}`]);
-  expect(out.skipped).toEqual([`fac-${second}: the item is done`]);
-  expect(readHolds([`fac-${second}`])).toMatchObject([{ kind: "not-ready", text: "the item is done" }]);
+  expect(calls).toEqual([`issue.${first}`]);
+  expect(out.started).toEqual([`issue.${first}`]);
+  expect(out.skipped).toEqual([`issue.${second}: the item is done`]);
+  expect(readHolds([`issue.${second}`])).toMatchObject([{ kind: "not-ready", event: { action: "done" } }]);
 });
 
 // The label gap is between the read of the list and an issue's lock: an earlier issue's start removes it.
@@ -45,10 +45,10 @@ test("an issue turned back into a plain issue while an earlier issue starts is n
   const calls: string[] = [];
   const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);
-    if (name === `fac-${first}`) await change(second, (item) => { item.spec = ""; });
+    if (name === `issue.${first}`) await change(second, (item) => { item.spec = ""; });
     return null;
   }, undefined, undefined);
-  expect(calls).toEqual([`fac-${first}`]);
-  expect(out.started).toEqual([`fac-${first}`]);
-  expect(out.skipped).toEqual([`fac-${second}: not a goal`]);
+  expect(calls).toEqual([`issue.${first}`]);
+  expect(out.started).toEqual([`issue.${first}`]);
+  expect(out.skipped).toEqual([`issue.${second}: not a goal`]);
 });

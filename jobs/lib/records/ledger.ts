@@ -1,24 +1,23 @@
 /**
- * The job ledger: one folder per run in ~/.aleph/runs, the repo registry,
+ * The job ledger: one row per job in aleph.db (record.ts) and one folder per job in ~/.aleph/jobs, the repo registry,
  * liveness and locks. See docs/data-model.md.
  */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { loadavg } from "node:os";
-import { join } from "node:path";
-import { readJsonOr } from "../../../lib/json.ts";
 import { needsOf, type Ask } from "../asks/ask.ts";
 import { layout } from "../../../lib/layout.ts";
 import * as record from "./record.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive } from "../infra/process.ts";
+import { jobFolder } from "./run-files.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
-import { loadLimit, reposFile } from "../infra/settings.ts";
+import { loadLimit } from "../infra/settings.ts";
+import { readProjects } from "../../../issues/lib/projects.ts";
 import { touch } from "../../../lib/sources.ts";
 import { expand } from "../../../lib/paths.ts";
-import { contentText, fileSafe, parseId, parseJob, setCodes, subjectOf, tail } from "../../../lib/naming.ts";
+import { parseKey, setCodes, type Role, type State } from "../../../lib/naming.ts";
 
-/** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. */
-export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
+export type { State };
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. A run from before 4 Nov 2026 may have a hidden check with its test counts. */
 /** `files`: the number of test files a build or a land ran in place of the full suite. */
@@ -38,10 +37,18 @@ export interface TestRecord { ran: number; passed: number; failed: number; skipp
  */
 type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string; model?: string; sessions?: string[]; cost?: number; seconds?: number };
 
+/**
+ * A job as code reads it: its row in aleph.db (record.ts) with the long tail of fields from the row's `extra`. `role` is
+ * what the job does; `target` the key of its issue, project or idea; `prev` the job before it in its work and `retryOf`
+ * the job it redoes. The row holds `pid` and `exit_code` after the end.
+ */
 export interface Run {
-  kind: "build" | "plain" | "land" | "intake" | "recheck" | "director" | "monitor" | "chat" | "lens" | "housekeeper" | "maintainer";
-  job: string; name: string; repo?: string; branch?: string; worktree?: string;
-  condition: State; phase?: string;
+  role: Role;
+  /** The first job of its `prev` chain: the work this job belongs to. Derived on read, never written. */
+  job: string;
+  /** The work's name: the issue key a build is on, or the title of a plain run or a routine. Locks, branches and CLI verbs use it. */
+  name: string; repo?: string; branch?: string; worktree?: string;
+  state: State; phase?: string;
   reason?: string; question?: string; say?: string;
   /** An intake run (a triage run before it): the route it applied to its issue. `plan` is a triage route only. */
   route?: "build" | "plan" | "close" | "done" | "ask";
@@ -54,7 +61,7 @@ export interface Run {
   /** A run from before `cause`: a drop set this when the run had ended with no commit. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;
-  /** A housekeeper run: counts of what it did by word (`reviewed`, `dropped`, ...), and the issues it changed in full form; `changes` lists each applied action as `{id, do}`; its `done` event carries all three. */
+  /** A housekeeper run: counts of what it did by word (`reviewed`, `dropped`, ...), and the issues it changed as keys; `changes` lists each applied action as `{id, do}`; its `done` event carries all three. */
   tally?: Record<string, number>; touched?: string[]; changes?: { id: string; do: string }[];
   /** The worker tier (haiku or sonnet) of a run whose model the local backend replaced. */
   tier?: string;
@@ -62,10 +69,22 @@ export interface Run {
   check?: "open" | "done";
   /** The issue that holds an open manual check. */
   checkItem?: number;
-  /** New shape: the issue or part the run is on, `<repo>-<n>`. */
-  on?: string;
-  /** New shape: what the run waits on. */
+  /** The key of what the job is on: `issue.<n>`, `project.<n>` or `idea.<n>`. */
+  target?: string;
+  /** The job before this one in its work: a fix round's earlier build, a land's build, a reviewer's build. */
+  prev?: string;
+  /** The job this one redoes: a build started again after the earlier one was dropped or ended. */
+  retryOf?: string;
+  /** Who started the job: `human`, `rule`, `gate` or `claude`. */
+  by?: string;
+  /** What the job waits on: it lives in issue_state (`ask_job` is this job), and the run reads it as its own. */
   ask?: Ask;
+  /** The run asked about its issue: when, the question and, for a spec question, the spec's version. Set by `markAsked`. */
+  asked?: { at: string; question: string; spec?: string };
+  /** The case key of the rescue that took this run (`markRescued`). */
+  rescued?: string;
+  /** A director run: the decision it made. */
+  decision?: unknown;
   /** The reviewer's call on a build run. */
   review?: Review;
   /** An agent run started with --land: it lands when it passes. */
@@ -102,17 +121,15 @@ export interface Run {
   lander?: "Chris" | "firefighter" | "director" | "timeout";
   /** Sidetone's flag: the news line went out. `shown` is the report's. */
   told: boolean; shown?: boolean; started: string; ended?: string;
-  /** Milliseconds since the epoch, set under the dispatch lock: the order runs were made in. */
-  made?: number;
-  /** The run's number on its subject (`subjectOf`), from 1 in start order: the `n` of its job ID. Every stored run has one; `makeRun` sets it. */
-  n: number;
+  /** Milliseconds since the epoch when the job was made. */
+  made: number;
 }
 
 /** `tests`: globs of the test files that `run` takes as arguments, so a land can run only the related ones. */
 export interface Check { name: string; run: string; when?: string[]; tests?: string[] }
 export interface Repo {
-  /** The short code of its IDs (`a` in `a1430`), docs/naming.md. */
-  key: string; code?: string; path: string; env?: string; main: string;
+  /** The name of its project, the registry key (`aleph`). `n` is the number in `projects/<n>/`, so the project's key is `project.<n>`. `code` is the short code shown in its IDs (`a` in `a-01430`), docs/naming.md. */
+  key: string; n: number; code?: string; description?: string; path: string; env?: string; main: string;
   setup: string[]; checks: Check[]; manual: { when: string[]; say: string }[]; note?: string;
   /** A passed agent run lands by itself. On unless the registry says false. */
   autoland: boolean;
@@ -128,16 +145,16 @@ export interface Repo {
 
 const OPEN: State[] = ["running", "passed", "waiting", "returned", "failed"];
 
-export const runsDir = () => layout().ledger;
+/** The folder that holds a folder for each job. */
+export const jobsDir = () => layout().jobs;
 
+/** The repos: the projects of the items repo that have a `path`, by name (`projects/<n>/project.md`). */
 export function loadRegistry(): Record<string, Repo> {
   touch("registry");
-  const file = reposFile();
-  const raw = readJsonOr(file, {});
   const repos: Record<string, Repo> = {};
-  for (const [key, r] of Object.entries<any>(raw)) {
+  for (const { n, name: key, description, fields: r } of readProjects().filter((p) => p.fields.path)) {
     repos[key] = {
-      key, code: r.code, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
+      key, n, code: r.code, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main", description: description || undefined,
       setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note, autoland: r.autoland ?? true,
       sandbox: r.sandbox ?? false, held: r.held ?? [], author: r.author ?? false, critical: r.critical ?? [],
     };
@@ -145,8 +162,8 @@ export function loadRegistry(): Record<string, Repo> {
   const codes = Object.values(repos).filter((r) => r.code).map((r) => [r.key, r.code!] as const);
   const twice = codes.find(([k, c]) => codes.some(([k2, c2]) => c2 === c && k2 !== k));
   const bad = codes.find(([, c]) => !/^[a-z]{1,2}$/.test(c));
-  if (bad) throw new Error(`repos.json: the code of ${bad[0]} is not 1 or 2 lower-case letters`);
-  if (twice) throw new Error(`repos.json: the code "${twice[1]}" is on more than one repo`);
+  if (bad) throw new Error(`projects: the code of ${bad[0]} is not 1 or 2 lower-case letters`);
+  if (twice) throw new Error(`projects: the code "${twice[1]}" is on more than one project`);
   setCodes(Object.fromEntries(codes));
   return repos;
 }
@@ -163,18 +180,18 @@ export function readEnvFile(file: string | undefined): Record<string, string> {
   return env;
 }
 
+/** A job and its folder: `id` is the job key (`job.6802`), `folder` is `<jobsDir>/<n>`. */
 export interface Entry { id: string; folder: string; run: Run }
 
-/** Every run, oldest first: ids start with the time, so they sort. */
-export function allRuns(live = false, records = record.all(live)): Entry[] {
-  const dir = runsDir();
-  return record.allRunRecords(live, records).map(({ id, ...run }) => ({ id, folder: join(dir, id), run }));
+/** Every job, oldest first by number. */
+export function allRuns(): Entry[] {
+  return record.allRunRecords().map(({ id, ...run }) => ({ id, folder: jobFolder(id), run }));
 }
 
-/** Runs grouped by job, each group oldest first, in the order the jobs started. With `live`, only the records that are not archived. */
-export function allJobs(live = false): Entry[][] {
+/** Runs grouped by work (the `prev` chain of each), each group oldest first, in the order the work started. */
+export function allJobs(): Entry[][] {
   const jobs = new Map<string, Entry[]>();
-  for (const e of allRuns(live)) {
+  for (const e of allRuns()) {
     const list = jobs.get(e.run.job) ?? [];
     list.push(e);
     jobs.set(e.run.job, list);
@@ -182,42 +199,9 @@ export function allJobs(live = false): Entry[][] {
   return [...jobs.values()];
 }
 
-/** The run whose job ID is `id` (`a1375#6`, `monitor#14`), or undefined. A short ID needs the registry's codes: `loadRegistry` sets them. */
+/** The job with key `id`, or undefined. */
 export function runOfJob(id: string, runs = allRuns()): Entry | undefined {
-  // A run with no issue and no routine has its name as its subject: `x#1`.
-  const m = /^(.+)#(\d+)$/.exec(id), p = parseJob(id) ?? (m ? { subject: m[1], n: Number(m[2]) } : null);
-  return p ? record.numbered(p.subject, runs).find((x) => x.n === p.n)?.e : undefined;
-}
-
-/** The `Job:` trailer value of the job `job` (the folder name of its first run): that run's job ID, or `job` when no record holds that run. */
-export function trailerOf(job: string): string {
-  const runs = allRuns();
-  const first = runs.find((e) => e.id === job);
-  return first ? record.jobIdOf(first) : job;
-}
-
-/**
- * Make the folder of a new run, `<stamp>-<subject>-<n>`, and write the run with `fill`, under the subject's lock: `n`
- * is one more than the highest number on the subject, so two starts never share it. Runs sort by folder name, so the
- * stamp comes after the stamp of each earlier run on the subject or in the job `run.job`: a follow-up started in its
- * land's second, or a run started after the wall clock steps back (WSL2 does, by about a second), would sort before it.
- */
-export function makeRun(run: Pick<Run, "on" | "kind" | "name"> & { job?: string }, fill: (folder: string, n: number) => void): string {
-  const subject = subjectOf(run);
-  mkdirSync(runsDir(), { recursive: true });
-  const release = record.lockRecord(`start-${subject}`);
-  try {
-    const runs = allRuns();
-    const n = Math.max(0, ...record.numbered(subject, runs).map((x) => x.n)) + 1;
-    const now = stamp();
-    const last = runs.filter((e) => subjectOf(e.run) === subject || (run.job !== undefined && e.run.job === run.job)).map((e) => e.id.slice(0, 15)).sort().at(-1);
-    const id = `${last && last >= now ? nextStamp(last) : now}-${fileSafe(`${subject}#${n}`)}`;
-    mkdirSync(join(runsDir(), id));
-    fill(join(runsDir(), id), n);
-    return id;
-  } finally {
-    release();
-  }
+  return runs.find((e) => e.id === id);
 }
 
 /**
@@ -227,55 +211,38 @@ export function makeRun(run: Pick<Run, "on" | "kind" | "name"> & { job?: string 
 export function isOpen(runs: Entry[]): boolean {
   const last = record.counting(runs);
   if (!last) return false;
-  if (last.run.kind === "plain") return isLive(last.folder);
-  return OPEN.includes(last.run.condition);
+  if (last.run.role === "plain") return isLive(last.folder);
+  return OPEN.includes(last.run.state);
 }
 
 /** A run waits for Chris. */
 export const isWaiting = (state: State): boolean => state === "waiting";
 
 /** A build run. */
-export const isBuild = (kind: Run["kind"]): boolean => kind === "build";
+export const isBuild = (role: Run["role"]): boolean => role === "build";
 
 /** A run of the job's agent: a build or a recheck. */
-export const isAgentRun = (kind: Run["kind"]): boolean => kind === "build" || kind === "recheck";
+export const isAgentRun = (role: Run["role"]): boolean => role === "build" || role === "recheck";
 
-/** The number of the run's `on` (`<repo>-<n>`, for the run's repo). A dotted `on` gives the issue's `<n>.<m>` as a string. */
-export function onOf(run: Run): number | string | undefined {
-  if (run.on === undefined) return undefined;
-  const p = parseId(run.on);
-  return p && p.repo === run.repo ? (p.sub === undefined ? p.n : tail(p)) : undefined;
+/** The number of the run's issue, or undefined when its target is not an issue. */
+export function onOf(run: Pick<Run, "target">): number | undefined {
+  const k = parseKey(run.target);
+  return k?.kind === "issue" ? k.n : undefined;
 }
 
-/** The full ID of the run's issue (`aleph-1430`, `aleph-1359.1`); with `parent`, an old part's parent (`aleph-1359`). Undefined when `on` names no issue of the run's repo. */
-export function issueKeyOf(run: Run, { parent = false } = {}): string | undefined {
-  const p = run.on === undefined ? null : parseId(run.on);
-  return p && p.repo === run.repo ? `${p.repo}-${parent ? p.n : tail(p)}` : undefined;
-}
+/** The key of the run's issue (`issue.1430`), or undefined when its target is not an issue. */
+export const issueKeyOf = (run: Pick<Run, "target">): string | undefined => (onOf(run) === undefined ? undefined : run.target);
 
-/** The runs of each issue by its full ID, in the order given. With `rollUp`, an old part's runs also count for its parent. */
-export function runsByIssue(entries: Entry[], { rollUp = false } = {}): Map<string, Entry[]> {
+/** The runs of each issue by its key, in the order given. */
+export function runsByIssue(entries: Entry[]): Map<string, Entry[]> {
   const out = new Map<string, Entry[]>();
-  const add = (k: string, e: Entry) => { const l = out.get(k); if (l) l.push(e); else out.set(k, [e]); };
   for (const e of entries) {
-    const own = issueKeyOf(e.run), up = issueKeyOf(e.run, { parent: true })!;
+    const own = issueKeyOf(e.run);
     if (own === undefined) continue;
-    add(own, e);
-    if (rollUp && up !== own) add(up, e);
+    const l = out.get(own);
+    if (l) l.push(e); else out.set(own, [e]);
   }
   return out;
-}
-
-/** `YYYYMMDD-HHMMSS` in local time. */
-export function stamp(d = new Date()): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-}
-
-/** The `stamp` one second after the stamp `s`. */
-function nextStamp(s: string): string {
-  const [y, mo, d, h, mi, se] = s.match(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)$/)!.slice(1).map(Number);
-  return stamp(new Date(y, mo - 1, d, h, mi, se + 1));
 }
 
 /**
@@ -286,12 +253,12 @@ function nextStamp(s: string): string {
 export function newsLine(e: Entry, note?: string): string {
   const run = e.run;
   const needs = needsOf(run.ask);
-  const sub = isWaiting(run.condition) ? needs
-    : run.condition === "failed" ? causeOf(run) : undefined;
-  // A failed check's name is the content. The arrow marks it: `contentText` puts one before a lone file.
+  const sub = isWaiting(run.state) ? needs
+    : run.state === "failed" ? causeOf(run) : undefined;
+  // A failed check's name is the content. The arrow marks it.
   const check = failedCheckOf(run);
-  const line = [`${record.jobIdOf(e)} ${run.condition}`, sub, check && contentText({ file: check })].filter(Boolean).join(" ");
-  const said = run.condition === "landed" ? [run.reason, note].filter(Boolean).join(" ") : "";
+  const line = [`${e.id} ${run.state}`, sub, check && `→ ${check.split("/").at(-1)}`].filter(Boolean).join(" ");
+  const said = run.state === "landed" ? [run.reason, note].filter(Boolean).join(" ") : "";
   return said ? `${line}\n  ${said}` : line;
 }
 

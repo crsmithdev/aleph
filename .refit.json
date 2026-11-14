@@ -2,49 +2,211 @@
   "accepted": [
     {
       "concept": "issue store reads an issue's Ask from jobs/",
-      "copies": ["issues/lib/store.ts:15", "jobs/lib/records/record.ts:73"],
+      "copies": [
+        "issues/lib/store.ts:15",
+        "jobs/lib/records/record.ts:73"
+      ],
       "reason": "An issue's Ask lives in its job record, and record.ts is its one writer. The buildable and sorted predicates read it with record.issueAsk; the edge is one read with no runtime cycle (improve S1, 2026-11-10)."
     },
     {
       "concept": "the issue verbs import Asks, the registry and recent repos",
-      "copies": ["issues/lib/issues.ts:16-20"],
+      "copies": [
+        "issues/lib/issues.ts:16-20"
+      ],
       "reason": "issues.ts is the `aleph issue` verb layer: it sits above both the store and the factory's Asks and decides an Ask on close or drop. The store itself (store.ts, todo.ts) stays free of jobs/ (improve S1, 2026-11-10)."
     },
     {
       "concept": "junit entity decode",
-      "copies": ["jobs/lib/gates/checks.ts:282", "jobs/lib/gates/keep-earn.ts:49"],
+      "copies": [
+        "jobs/lib/gates/checks.ts:282",
+        "jobs/lib/gates/keep-earn.ts:49"
+      ],
       "reason": "keep-earn.ts runs in the target repo and imports nothing from aleph, so it keeps its own copy of unxml from checks.ts."
     },
     {
-      "copies": ["jobs/lib/roles/monitor.ts:7-12", "jobs/lib/roles/intake.ts:24-29"],
+      "copies": [
+        "jobs/lib/roles/monitor.ts:7-12",
+        "jobs/lib/roles/intake.ts:24-29"
+      ],
       "reason": "Both are import lines, not logic. The job only repointed writeJson/readJsonOr to lib/json.ts, so each file keeps its own import list."
     },
     {
-      "copies": ["ui/usage.ts:9-15", "jobs/lib/transitions/tick.ts:9-15"],
+      "copies": [
+        "ui/usage.ts:9-15",
+        "jobs/lib/transitions/tick.ts:9-15"
+      ],
       "reason": "Both are import lines, not logic. ui/usage.ts adds the lib/json.ts import; tick.ts only repoints readJsonOr to lib/json.ts, so each file keeps its own import list."
     },
     {
-      "copies": ["jobs/lib/transitions/tick.ts:18-25", "jobs/lib/records/record.ts:16-23"],
+      "copies": [
+        "jobs/lib/transitions/tick.ts:18-25",
+        "jobs/lib/records/record.ts:16-23"
+      ],
       "reason": "Both are import lines, not logic. tick.ts adds the land and Ask imports for the waited land Ask; each file keeps its own import list."
     },
     {
-      "copies": ["jobs/lib/transitions/tick.ts:19-26", "jobs/lib/roles/intake.ts:21-28"],
+      "copies": [
+        "jobs/lib/transitions/tick.ts:19-26",
+        "jobs/lib/roles/intake.ts:21-28"
+      ],
       "reason": "Both are import lines, not logic. tick.ts adds the land and Ask imports for the waited land Ask; each file keeps its own import list."
     },
     {
       "concept": "lens tie-break and modes table of the retro skills",
-      "copies": ["skills/refit-code/SKILL.md:41-47", "skills/refit-agents/SKILL.md:41-54", "skills/refit-docs/SKILL.md:39-48"],
+      "copies": [
+        "skills/refit-code/SKILL.md:41-47",
+        "skills/refit-agents/SKILL.md:41-54",
+        "skills/refit-docs/SKILL.md:39-48"
+      ],
       "reason": "the refit skills share refit-code's skeleton on purpose (Chris, 2026-11-11); the lenses and modes differ, and their retro and act steps point at refit-code's."
     },
     {
       "concept": "the COMMANDS table rows of the aleph CLI",
-      "copies": ["jobs/commands.ts:56-63", "jobs/commands.ts:57-64", "jobs/commands.ts:56-64", "jobs/commands.ts:64-72", "jobs/commands.ts:68-76", "jobs/commands.ts:72-80"],
+      "copies": [
+        "jobs/commands.ts:56-63",
+        "jobs/commands.ts:57-64",
+        "jobs/commands.ts:56-64",
+        "jobs/commands.ts:64-72",
+        "jobs/commands.ts:68-76",
+        "jobs/commands.ts:72-80"
+      ],
       "reason": "COMMANDS is the one table of each command's usage and purpose. Its rows share one shape on purpose: help, --help and every usage refusal read the table, so each row is data, not a second way."
     },
     {
       "concept": "the shared layout of the refit skills",
-      "copies": ["skills/refit-tests/SKILL.md:38", "skills/refit-agents/SKILL.md:51", "skills/refit-code/SKILL.md", "skills/refit-docs/SKILL.md"],
+      "copies": [
+        "skills/refit-tests/SKILL.md:38",
+        "skills/refit-agents/SKILL.md:51",
+        "skills/refit-code/SKILL.md",
+        "skills/refit-docs/SKILL.md"
+      ],
       "reason": "Each refit skill ends its lens table with the same 'Report a candidate under one lens only.' line and opens the same Modes table, so a reader moves between them without a new layout. The text is a template, not logic (Chris, 2026-11-11)."
+    },
+    {
+      "copies": [
+        "jobs/lib/roles/intake.ts:23-31",
+        "ideas/ideas.ts:9-17"
+      ],
+      "reason": "Both are import lines, not logic. The storage-ids slices repointed each file's imports to the items store and aleph.db, so each keeps its own import list."
+    },
+    {
+      "copies": [
+        "jobs/lib/transitions/tick.ts:28-34",
+        "jobs/lib/infra/retention.ts:7-13"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "issues/lib/todo.ts:73-78",
+        "issues/lib/todo.ts:75-80"
+      ],
+      "reason": "The two ranges overlap: they are the one-line field readers kindOf, sinceOf, created and closed, each reading a different frontmatter field."
+    },
+    {
+      "copies": [
+        "jobs/lib/roles/housekeeper.ts:16-23",
+        "ideas/ideas.ts:9-16"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "jobs/lib/transitions/tick.ts:16-24",
+        "ideas/ideas.ts:12-20"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "jobs/lib/routing/models.ts:6-12",
+        "ideas/ideas.ts:13-19"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "jobs/lib/transitions/tick.ts:19-25",
+        "jobs/commands.ts:14-20"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "jobs/lib/roles/recheck.ts:9-16",
+        "jobs/lib/gates/doc-claims-repo.ts:10-17"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "jobs/lib/transitions/transitions.ts:16-22",
+        "jobs/lib/roles/housekeeper.ts:14-20"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "ui/api/chat.ts:15-21",
+        "jobs/lib/roles/housekeeper.ts:16-22"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "jobs/lib/roles/intake.ts:20-26",
+        "jobs/lib/roles/housekeeper.ts:17-23"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "ui/api/speed.ts:9-14",
+        "jobs/lib/transitions/factory.ts:13-18"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "ui/updater.ts:25-33",
+        "jobs/lib/transitions/tick.ts:15-23"
+      ],
+      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
+    },
+    {
+      "copies": [
+        "lib/naming.ts:162-165",
+        "lib/naming.ts:150-156"
+      ],
+      "reason": "Two different maps of the same shape: SAY holds event phrases and BECAUSE holds cause phrases."
+    },
+    {
+      "copies": [
+        "jobs/lib/migrate.ts:130-138",
+        "issues/lib/todo.ts:112-122"
+      ],
+      "reason": "parseOld reads the old Backlog.md issue format once, for the migration; its markers and escaping differ from the items format that parseItem reads."
+    },
+    {
+      "copies": [
+        "jobs/lib/migrate.ts:138-141",
+        "issues/lib/todo.ts:123-128"
+      ],
+      "reason": "parseOld reads the old Backlog.md issue format once, for the migration; its markers and escaping differ from the items format that parseItem reads."
+    },
+    {
+      "copies": [
+        "jobs/lib/migrate.ts:44-45",
+        "jobs/commands.ts:50-55"
+      ],
+      "reason": "Lists of different names: the old run fields the migration maps, and the CLI flags that take a value."
+    },
+    {
+      "copies": [
+        "jobs/lib/transitions/tick.ts:25-30",
+        "jobs/lib/migrate.ts:14-19"
+      ],
+      "reason": "Both are import lines, not logic."
     }
   ]
 }

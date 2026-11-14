@@ -8,8 +8,8 @@
 import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
-import { allRuns, issueKeyOf, loadRegistry, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
-import { counting, jobIdOf } from "../../jobs/lib/records/record.ts";
+import { allRuns, issueKeyOf, loadRegistry, onOf, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { counting } from "../../jobs/lib/records/record.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
@@ -73,7 +73,7 @@ function list(url: URL): Response {
 function jobRow(runs: ReturnType<typeof allJobs>[number]) {
   const last = counting(runs), r = last.run;
   const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
-  return { id: jobIdOf(last), name: r.name, condition: r.condition, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
+  return { id: last.id, name: r.name, state: r.state, kind: r.role, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
 }
 
 function detail(params: Record<string, string>, url: URL): Response {
@@ -95,9 +95,9 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const all = allJobs().filter((runs) => runs[0].run.repo === repo.key);
   const every = allRuns();
-  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === `${repo.key}-${r}`)).map((runs) => jobRow(runs));
+  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === `issue.${r}`)).map((runs) => jobRow(runs));
   // The runs on this issue, its old parts and its children.
-  const by = runsByIssue(every, { rollUp: true }), keys = [ref, ...partRefs].map((r) => `${repo.key}-${r}`);
+  const by = runsByIssue(every.filter((e) => e.run.repo === repo.key)), keys = [ref, ...partRefs].map((r) => `issue.${r}`);
   const ours = new Set(keys.flatMap((k) => by.get(k) ?? []).map((e) => e.id));
   const jobs = all.filter((runs) => runs.some((e) => ours.has(e.id))).map((runs) => jobRow(runs));
 
@@ -109,7 +109,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
   const timeline = {
     filed: ((t) => (t == null ? null : new Date(t).toISOString()))(filed().issue.get(`${repo.key}-${ref}`)),
-    runs: all.flat().filter((e) => ours.has(e.id)).map((e) => ({ r: e.run, href: jobHref(jobIdOf(e)) })).map(({ r, href }) => ({ kind: r.kind, name: r.name, href, on: r.on, issue: issueKeyOf(r) ?? null, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
+    runs: all.flat().filter((e) => ours.has(e.id)).map((e) => ({ r: e.run, href: jobHref(e.id) })).map(({ r, href }) => ({ kind: r.role, name: r.name, href, on: onOf(r), issue: issueKeyOf(r) ?? null, state: r.state, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
   };
   // The hold records of every job name the answer shows.
   const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...parts.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);
@@ -128,7 +128,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const blockers = jobProjector().blockers(repo.key, ref);
 
   // The Ask row of an issue that waits for Chris: the item `attend` builds, from the NewIssue as the state builds it.
-  const stored = askOf(`${repo.key}-${ref}`);
+  const stored = askOf(refIn(repo.key, item));
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") ask = attend({ runs: [], issues: [card(repo.key, item, "waiting", stored)] }, []).items[0];
 
@@ -179,7 +179,7 @@ function media(params: Record<string, string>): Response {
   const i = item ? mediaOf(item).indexOf(params.name) : -1;
   if (!repo || !item || i < 0) return Response.json({ error: "no such file" }, { status: 404 });
   const ext = params.name.split(".").pop()!.toLowerCase();
-  return new Response(Bun.file(mediaFiles(repo.key, item)[i]), { headers: { "content-type": MEDIA_TYPES[ext] ?? "application/octet-stream", "cache-control": "private, max-age=3600" } });
+  return new Response(Bun.file(mediaFiles(item)[i]), { headers: { "content-type": MEDIA_TYPES[ext] ?? "application/octet-stream", "cache-control": "private, max-age=3600" } });
 }
 
 const create = post(async (b, _p, url) => {
@@ -264,7 +264,7 @@ const answer = (verb: "note" | "decide" | "done", text: string) => post((_b, par
 /** Chris's answer to a held change of a core note, run in process (no `aleph` command does this): the refusal of the vault op is a 422. */
 const core = (approved: boolean) => post(async (_b, params) => {
   const { repo, item } = target(params);
-  const why = await answerHeld(refIn(repo.key, item), approved);
+  const why = await answerHeld(`${repo.key}-${item.id}`, approved);
   if (why) fail(422, why);
   return { status: approved ? "done" : "dropped" };
 });

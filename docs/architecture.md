@@ -104,7 +104,7 @@ The tests, fixtures and testkits of a module are in its folder.
 
 ### The UI read path
 
-The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYED` list answer from it, and it builds them in a worker thread (`ui/build.ts`, `ui/build-worker.ts`). Each build records the sources it read (`lib/sources.ts`); when a source changes, the updater builds the kept keys again and then sends `change` with their keys. `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
+The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYED` list answer from it, and it builds them in a worker thread (`ui/build.ts`, `ui/build-worker.ts`). Each build records the sources it read (`lib/sources.ts`). The updater learns of a write to `aleph.db` by polling `PRAGMA data_version` every 100 ms: a new event row changes the source `events`. It watches the files that stay files (the items repo, job and factory folders, the skills, the vault, the handoffs, the episodes, the annotations); when a source changes, the updater builds the kept keys again and then sends `change` with their keys. `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
 
 ## Invariants
 
@@ -125,4 +125,4 @@ The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYE
 | Cost | Each run records its cost; the Efficiency page and the monitor read it |
 | Secrets | `~/.aleph/.env`, read by `lib/env.ts`; `secret-scan` denies a commit that adds one |
 | Tests | `bun run test` in parallel; each test makes its own temp stores through the `ALEPH_*` path variables |
-| Flakes | A failing check reruns once; a pass on the rerun goes to `flaky.json` and the flake tracker |
+| Flakes | A failing check reruns once; a pass on the rerun goes to the `flaky` table and the flake tracker |

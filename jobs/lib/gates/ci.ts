@@ -1,13 +1,11 @@
 /**
  * GitHub CI on each factory repo's main. The tick reads the latest runs with `gh` and keeps the
- * result in factory/ci.json; the report and the Status page show a red CI as a health line, and
+ * result in the `ci` row of `state`; the report and the Status page show a red CI as a health line, and
  * the firefighter files one critical issue per failing head (firefighter.ts).
  */
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
 import { type Repo } from "../records/ledger.ts";
-import { layout } from "../../../lib/layout.ts";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
+import { getJson, putJson } from "../../../lib/db.ts";
 
 /** A repo's CI on main: green, or red since the first failed run of the current streak. */
 /** `older` marks a streak that runs past the runs read, so `since` and `runs` are a lower bound. */
@@ -16,8 +14,6 @@ export interface Ci { repo: string; ok: boolean; sha: string; url: string; since
 export interface GhRun { conclusion: string; status: string; headSha: string; url: string; createdAt: string }
 /** A `gh` call in `repo`: its stdout when it exits 0, else its error. Every `gh` call of the CI watch goes through one; tests replace it. */
 export type Gh = (repo: Repo, args: string[]) => { ok: boolean; out: string };
-
-const file = () => join(layout().factory, "ci.json");
 
 export const gh: Gh = (repo, args) => {
   const r = spawnSync("gh", args, { cwd: repo.path, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
@@ -43,7 +39,7 @@ export function ciState(repo: string, runs: GhRun[]): Ci | null {
   return { repo, ok: false, sha: last.headSha, url: last.url, since: first.createdAt, sinceSha: first.headSha, runs: streak.length, ...(green < 0 ? { older: true } : {}) };
 }
 
-const saved = (): Record<string, Ci> => readJsonOr(file(), {});
+const saved = (): Record<string, Ci> => getJson("state", "ci", {});
 
 /** Reads each repo's CI and saves it; a repo `gh` cannot read keeps what it had. Returns the red ones. */
 export function ciStep(repos: Repo[], call: Gh = gh): Ci[] {
@@ -53,7 +49,7 @@ export function ciStep(repos: Repo[], call: Gh = gh): Ci[] {
     const c = list && ciState(repo.key, list);
     if (c) all[repo.key] = c;
   }
-  writeJson(file(), all);
+  putJson("state", "ci", all);
   return redCi();
 }
 

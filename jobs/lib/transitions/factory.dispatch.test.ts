@@ -15,11 +15,11 @@ describe("a factory run", () => {
     const id = seedItem("fac", "ship the goal", { kind: "goal" }, "ACTION: commit goal.txt\n".trim());
     const d = (await dispatch()).json;
     expect(d.skipped).toEqual([]);
-    expect(d.started).toEqual([`fac-${id}`]);
+    expect(d.started).toEqual([`issue.${id}`]);
     const runs = issueRuns(id).sort();
-    expect(runs.map((d) => [state(d).kind, state(d).condition])).toEqual([["build", "passed"], ["land", "landed"]]);
+    expect(runs.map((d) => [state(d).role, state(d).state])).toEqual([["build", "passed"], ["land", "landed"]]);
     expect((await issueShow("fac", id)).json.status).toBe("done");
-    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain(`Issue: fac-${id}`);
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain(`Issue: issue.${id}`);
     expect((await dispatch()).json.started).toEqual([]);
   }, 30_000);
 });

@@ -3,12 +3,13 @@ import type { ChecksStop } from "../gates/checks.ts";
 import { afterEach, beforeEach, setDefaultTimeout } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import type { LandPorts } from "./landing.ts";
 import { type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
-import { putRun } from "../records/record.ts";
+import { seed, type Seed } from "../../job.testkit.ts";
+import { readSection } from "../records/run-files.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "ALEPH_ISSUES", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_DB", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "ALEPH_ITEMS", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
 export let dir: string, repo: Repo;
 let saved: Record<string, string | undefined>;
 let sleepers: ReturnType<typeof Bun.spawn>[];
@@ -32,7 +33,7 @@ export function useLandingFixture(): void {
     dir = mkdtempSync(join(tmpdir(), "aleph-landing-"));
     saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
     delete process.env.ALEPH_LAND_BATCH;
-    Object.assign(process.env, { ALEPH_JOBS_DIR: join(dir, "jobs"), XDG_RUNTIME_DIR: join(dir, "run"), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
+    Object.assign(process.env, { ALEPH_JOBS_DIR: join(dir, "jobs"), ALEPH_DB: join(dir, "aleph.db"), XDG_RUNTIME_DIR: join(dir, "run"), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
     mkdirSync(join(dir, "jobs"));
     sh(dir, "git", "init", "-q", "--bare", "-b", "main", "repo.git");
     writeFileSync(join(dir, "repo.git", "hooks", "pre-receive"), `#!/bin/sh\necho x >> ${join(dir, "pushes")}\ncat > /dev/null\n`, { mode: 0o755 });
@@ -80,17 +81,10 @@ function branch(name: string, commits: [string, string][]): void {
 /** A passed job and its land run, not started. `extra` goes on the land run, `agent` on the agent run. */
 export function job(name: string, commits: [string, string][], extra: Partial<Run> = {}, agent: Partial<Run> = {}): Entry {
   if (commits.length) branch(name, commits);
-  const buildId = `20261101-000000-demo-${name}-build`;
-  const started = "2026-11-01T00:00:00.000Z";
-  const base = { name, repo: "demo", job: buildId, branch: `job/${name}`, told: true, started } as const;
-  mkdirSync(join(dir, "jobs", buildId));
-  writeFileSync(join(dir, "jobs", buildId, "spec.md"), "");
-  putRun(buildId, { ...base, n: 1, kind: "build", condition: "passed", ...agent } as Run);
-  const id = `20261101-000001-demo-${name}-land`;
-  const folder = join(dir, "jobs", id);
-  mkdirSync(folder);
-  const run = { ...base, n: 2, kind: "land", condition: "running", made: made++, ...extra } as Run;
-  putRun(basename(folder), run);
+  const base = { name, repo: "demo", branch: `job/${name}`, told: true, started: "2026-11-01T00:00:00.000Z" } as const;
+  const build = seed({ ...base, role: "build", state: "passed", ...agent } as Seed);
+  writeFileSync(join(build.folder, "spec.md"), "");
+  const { id, folder, run } = seed({ ...base, role: "land", state: "running", prev: build.id, made: made++, ...extra } as Seed);
   return { id, folder, run };
 }
 
@@ -124,6 +118,6 @@ export function ports(o: { bad?: (files: string[]) => string | null; races?: num
 }
 
 export const given = (e: Entry) => JSON.parse(readFileSync(join(e.folder, "batch.json"), "utf8"));
-export const landLog = (e: Entry) => readFileSync(join(e.folder, "land.log"), "utf8");
+export const landLog = (e: Entry) => readSection(e.folder, "land") ?? "";
 /** Fails only with both files in the tree, as a check does that two runs break together. */
 export const both = (a: string, b: string) => (files: string[]) => files.includes(a) && files.includes(b) ? "bad failed" : null;

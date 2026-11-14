@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
 import { type Run } from "../records/ledger.ts";
-import { getRun, putRun } from "../records/record.ts";
+import { getRun, patchRun } from "../records/record.ts";
+import { jobOfFolder } from "../records/run-files.ts";
 import { rescued } from "./continuation.ts";
 
 /** The rescue mark of the run `mk` made. */
-const rescuedOf = (r: { folder: string }) => rescued({ id: r.folder.split("/").at(-1)!, folder: r.folder, run: getRun(basename(r.folder))! });
+const rescuedOf = (r: { folder: string }) => rescued({ id: jobOfFolder(r.folder), folder: r.folder, run: getRun(jobOfFolder(r.folder))! });
 import { ctx, newIssue, mk, notes, ask, fakes, dispatch, setup, sh, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
@@ -15,15 +16,15 @@ afterEach(teardown);
 
 // A run that a host restart killed: `running`, started before this boot, its process gone.
 const BEFORE_BOOT = "2020-01-01T00:00:00.000Z";
-const killedRun = (name: string, kind: Run["kind"] = "build", files: Record<string, string> = { pid: "999999999" }) => mk(name, kind, "running", { started: BEFORE_BOOT }, files);
+const killedRun = (name: string, kind: Run["role"] = "build", files: Record<string, string> = { pid: "999999999" }) => mk(name, kind, "running", { started: BEFORE_BOOT, made: Date.parse(BEFORE_BOOT) }, files);
 
 test("a run killed by a host restart is dropped, its issue starts at once, and no Ask or rescue mark is left", async () => {
   const id = newIssue();
   const r = killedRun(`fac-${id}`);
   const f = fakes();
   const out = await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(out.started).toEqual([`fac-${id}`]);
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
+  expect(out.started).toEqual([`issue.${id}`]);
   expect(f.specs[0]).toContain("a host restart killed build run");
   expect(notes(id)).toContain("a host restart killed build run");
   expect(ask(id)).toBeNull();
@@ -39,13 +40,13 @@ for (const [kind, what] of [["build", "a recheck of its branch and no new run"],
     sh(repo, "git", "checkout", "-q", "main");
     const r = killedRun(`fac-${id}`, kind, {});
     // The run's branch is `work`: its commit is ahead of main.
-    putRun(basename(r.folder), { ...getRun(basename(r.folder))!, branch: "work" });
+    patchRun(jobOfFolder(r.folder), { branch: "work" });
     const f = fakes();
     await dispatch(f);
-    expect(f.calls).toEqual([`recheck fac-${id}`]);
+    expect(f.calls).toEqual([`recheck issue.${id}`]);
     expect(f.specs).toEqual([]);
     expect(notes(id)).toContain("its branch has the worker's commits");
-    expect(getRun(basename(r.folder))).toMatchObject({ condition: "failed", reason: "host restart" });
+    expect(getRun(jobOfFolder(r.folder))).toMatchObject({ state: "failed", reason: "host restart" });
     expect(ask(id)).toBeNull();
     expect(rescuedOf(r)).toBe("");
   });
@@ -59,7 +60,7 @@ test("an issue whose run a host restart killed keeps its rerun: the next no comm
   await dispatchIssues(f.start, f.land, f.rescue);
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit" });
   await dispatchIssues(f.start, f.land, f.rescue);
-  expect(f.calls).toEqual([`drop fac-${id}`, `drop fac-${id}`]);
+  expect(f.calls).toEqual([`drop issue.${id}`, `drop issue.${id}`]);
   expect(ask(id)).toBeNull();
 });
 
@@ -68,7 +69,7 @@ test("a killed run with a pid that another process now holds is still killed", a
   killedRun(`fac-${id}`, "build", { pid: String(process.pid) });
   const f = fakes();
   await dispatch(f);
-  expect(f.calls[0]).toBe(`drop fac-${id}`);
+  expect(f.calls[0]).toBe(`drop issue.${id}`);
 });
 
 test("a killed run that wrote no pid yet is killed too", async () => {
@@ -76,7 +77,7 @@ test("a killed run that wrote no pid yet is killed too", async () => {
   killedRun(`fac-${id}`, "build", {});
   const f = fakes();
   await dispatch(f);
-  expect(f.calls[0]).toBe(`drop fac-${id}`);
+  expect(f.calls[0]).toBe(`drop issue.${id}`);
 });
 
 test("a run from before this boot whose pid's process names its folder is live and stays", async () => {
@@ -91,20 +92,20 @@ test("a run from before this boot whose pid's process names its folder is live a
     const f = fakes();
     await dispatch(f);
     expect(f.calls).toEqual([]);
-    expect(getRun(basename(r.folder))!.condition).toBe("running");
+    expect(getRun(jobOfFolder(r.folder))!.state).toBe("running");
   } finally { p.kill(); }
 });
 
 // A lost run: `running`, started in this boot, its process gone with no `exit` written.
-const lostRun = (name: string, kind: Run["kind"] = "build", extra: Partial<Run> = {}) => mk(name, kind, "running", extra, { pid: "999999999" });
+const lostRun = (name: string, kind: Run["role"] = "build", extra: Partial<Run> = {}) => mk(name, kind, "running", extra, { pid: "999999999" });
 
 test("a lost run is marked failed and the issue reruns once; a second lost run of the issue is a rescue Ask", async () => {
   const id = newIssue();
   const r = lostRun(`fac-${id}`);
   const f = fakes();
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(getRun(basename(r.folder))).toMatchObject({ condition: "dropped", reason: expect.stringContaining("was lost") });
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
+  expect(getRun(jobOfFolder(r.folder))).toMatchObject({ state: "dropped", reason: expect.stringContaining("was lost") });
   expect(existsSync(join(r.folder, "exit"))).toBe(true);
   expect(rescuedOf(r)).toBe("lost");
   expect(notes(id)).toContain("was lost: its process ended with no end written: dropped, and the goal reruns once");
@@ -112,12 +113,12 @@ test("a lost run is marked failed and the issue reruns once; a second lost run o
 
   const again = lostRun(`fac-${id}`);
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(getRun(basename(again.folder))).toMatchObject({ condition: "failed", reason: "lost: its process ended with no end written" });
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
+  expect(getRun(jobOfFolder(again.folder))).toMatchObject({ state: "failed", reason: "lost: its process ended with no end written" });
   expect(ask(id)).toMatchObject({ reason: "rescue" });
   // The Ask is set: the next dispatch leaves the run alone.
   await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
 });
 
 test("a lost land is marked failed and lands again, and the issue does not start over", async () => {
@@ -126,20 +127,20 @@ test("a lost land is marked failed and lands again, and the issue does not start
   const l = lostRun(`fac-${id}`, "land", { job: first.job, branch: "b" });
   const f = fakes();
   await dispatch(f);
-  expect(f.calls[0]).toBe(`land fac-${id}`);
-  expect(f.calls).not.toContain(`drop fac-${id}`);
-  expect(getRun(basename(l.folder))).toMatchObject({ condition: "failed", reason: "lost: its process ended with no end written" });
+  expect(f.calls[0]).toBe(`land issue.${id}`);
+  expect(f.calls).not.toContain(`drop issue.${id}`);
+  expect(getRun(jobOfFolder(l.folder))).toMatchObject({ state: "failed", reason: "lost: its process ended with no end written" });
 });
 
 test("a land killed by a host restart fails and lands again, and the issue does not start over", async () => {
   const id = newIssue();
   const first = mk(`fac-${id}`, "build", "passed", { branch: "b", started: BEFORE_BOOT });
-  const l = mk(`fac-${id}`, "land", "running", { job: first.job, branch: "b", started: BEFORE_BOOT }, { pid: "999999999" });
+  const l = mk(`fac-${id}`, "land", "running", { job: first.job, branch: "b", started: BEFORE_BOOT, made: Date.parse(BEFORE_BOOT) }, { pid: "999999999" });
   const f = fakes();
   await dispatch(f);
-  expect(f.calls[0]).toBe(`land fac-${id}`);
-  expect(f.calls).not.toContain(`drop fac-${id}`);
-  expect(getRun(basename(l.folder))).toMatchObject({ condition: "failed", reason: "host restart" });
+  expect(f.calls[0]).toBe(`land issue.${id}`);
+  expect(f.calls).not.toContain(`drop issue.${id}`);
+  expect(getRun(jobOfFolder(l.folder))).toMatchObject({ state: "failed", reason: "host restart" });
   expect(existsSync(join(l.folder, "exit"))).toBe(true);
 });
 
@@ -150,7 +151,7 @@ test("an old held run with a PENDING call.md from before the boot is left alone:
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([]);
-  expect(getRun(basename(r.folder))).toMatchObject({ condition: "waiting", ask: { reason: "held-path" } });
+  expect(getRun(jobOfFolder(r.folder))).toMatchObject({ state: "waiting", ask: { reason: "held-path" } });
   expect(readFileSync(join(r.folder, "call.md"), "utf8")).toBe("PENDING\n");
 });
 
@@ -161,5 +162,5 @@ test("a paused factory leaves a killed run alone", async () => {
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([]);
-  expect(getRun(basename(r.folder))!.condition).toBe("running");
+  expect(getRun(jobOfFolder(r.folder))!.state).toBe("running");
 });

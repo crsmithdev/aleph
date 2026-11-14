@@ -8,7 +8,7 @@ import * as jobRecord from "../records/record.ts";
 import { skillSection } from "./role-skill.ts";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { file as fileIssues, note, noteFlake, priorityOf, reader } from "../../../issues/lib/store.ts";
 import { filing } from "../transitions/filing.ts";
@@ -16,7 +16,7 @@ import { callAgent, resultOf, stallReason, type Reply } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
-import { admit, isAgentRun, onOf, allRuns, issueKeyOf, loadRegistry, newsLine, readEnvFile, tell, trailerOf, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
+import { admit, isAgentRun, onOf, allRuns, issueKeyOf, loadRegistry, newsLine, readEnvFile, tell, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
@@ -36,7 +36,7 @@ import { land as startLand, recheck as startRecheck, startJob } from "../transit
 import { onMain } from "../records/status.ts";
 import { writeTitle } from "./title.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile } from "../infra/settings.ts";
-import { jobSpec, jobSpecFile, runFile } from "../records/run-files.ts";
+import { jobOfFolder, jobSpec, jobSpecFile, logStream, logTo, readSection, runFile } from "../records/run-files.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
@@ -78,8 +78,8 @@ function resultText(log: string): string {
 /** A recorder that starts the run's `checks` over and adds each check that ran. */
 function recorder(folder: string): (c: CheckResult) => void {
   let all: CheckResult[] = [];
-  jobRecord.patchRun(basename(folder), { checks: all });
-  return (c) => { all = [...all, c]; jobRecord.patchRun(basename(folder), { checks: all }); };
+  jobRecord.patchRun(jobOfFolder(folder), { checks: all });
+  return (c) => { all = [...all, c]; jobRecord.patchRun(jobOfFolder(folder), { checks: all }); };
 }
 
 /**
@@ -98,27 +98,27 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
   // Their own units: a child of this land's unit would die with its cgroup when the leader exits.
   for (const n of names) {
     const unit = `aleph-pull-${repo.key}-${n}-${Date.now()}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
-    try { startUnit(["land", n], { unit, cwd: repo.path }); } catch (e: any) { logEvent({ by: "rule", subject: "land", action: "failed", sub: "error", note: String(e?.message ?? e) }); }
+    try { startUnit(["land", n], { unit, cwd: repo.path }); } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "land", detail: String(e?.message ?? e) }); }
   }
   const deadline = Date.now() + 10_000;
   // The land must be live, as queuedLands takes only a live land: one still starting would miss the batch.
-  const queued = (job: string) => allRuns().some((e) => e.run.kind === "land" && e.run.job === job && e.run.condition === "running" && isLive(e.folder));
+  const queued = (job: string) => allRuns().some((e) => e.run.role === "land" && e.run.job === job && e.run.state === "running" && isLive(e.folder));
   while (Date.now() < deadline && !jobsOf.every(queued)) await Bun.sleep(100);
 }
 
 /** The land's checks, in a detached worktree at the commit. */
 function landPorts({ folder, run }: Entry, repo: Repo, env: Record<string, string | undefined>): LandPorts {
-  const phase = (p: string) => jobRecord.patchRun(basename(folder), { phase: p });
-  const logFile = runFile(folder, "checks.log");
+  const phase = (p: string) => jobRecord.patchRun(jobOfFolder(folder), { phase: p });
+  const checksOf = () => readSection(folder, "checks") ?? "";
   return {
     pull: (room) => pullWaiting(repo, run, room),
     check: async (commit, _runs, changed, picked) => {
-      const before = existsSync(logFile) ? readFileSync(logFile, "utf8").length : 0;
+      const before = checksOf().length;
       const task = taskOf(folder, { ...repo, checks: picked.checks }, changed, phase);
       const rec = task.record!;
       task.record = (c) => rec(picked.tests.has(c.name) ? { ...c, files: picked.tests.get(c.name)!.length } : c);
       const why = await checksAt(task, commit, env);
-      return { why, checks: jobRecord.getRun(basename(folder))?.checks, log: existsSync(logFile) ? readFileSync(logFile, "utf8").slice(before) : undefined };
+      return { why, checks: jobRecord.getRun(jobOfFolder(folder))?.checks, log: checksOf().slice(before) || undefined };
     },
   };
 }
@@ -131,15 +131,15 @@ const taskOf = (folder: string, repo: Repo, changed: string[], phase: (p: string
   ({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } });
 
 /**
- * Give each of the worker's commits a `Job:` trailer, so work that reaches
+ * Give each of the worker's commits an `Issue:` and a `Job:` trailer, so work that reaches
  * main by hand is still found (onMain). A branch with a merge keeps its
  * commits as they are, because the rebase would flatten it.
  */
-function stampJob(wt: string, base: string, job: string): void {
-  const value = trailerOf(job);
-  const bare = git(wt, "log", "--format=%H", "--invert-grep", "-E", jobGrep([job, value]), `${base}..HEAD`).out;
+function stampJob(wt: string, base: string, run: Run, id: string): void {
+  const bare = git(wt, "log", "--format=%H", "--invert-grep", "-E", jobGrep([id]), `${base}..HEAD`).out;
   if (!bare || git(wt, "rev-list", "--merges", `${base}..HEAD`).out) return;
-  const amend = `git -c core.hooksPath=/dev/null commit -q --amend --no-edit --no-verify --trailer 'Job: ${value}'`;
+  const issue = run.target ? ` --trailer 'Issue: ${run.target}'` : "";
+  const amend = `git -c core.hooksPath=/dev/null commit -q --amend --no-edit --no-verify --trailer 'Job: ${id}'${issue}`;
   if (!git(wt, "-c", "core.hooksPath=/dev/null", "rebase", "-q", "--exec", amend, base).ok) git(wt, "rebase", "--abort");
 }
 
@@ -149,12 +149,12 @@ function stampJob(wt: string, base: string, job: string): void {
  * backs it; else the reason, which also goes into checks.log for the next worker's fix note.
  */
 export function docClaims(folder: string, result: string): string | null {
-  const log = runFile(folder, "output.log");
+  const log = runFile(folder, "transcript.jsonl");
   if (!existsSync(log)) return null;
   const entries = readFileSync(log, "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
   const problems = docClaimProblems(entries, result);
   if (!problems.length) return null;
-  appendFileSync(runFile(folder, "checks.log"), `## doc-claims: exit 1\nThe final message says a doc matches the code, and the transcript does not back it:\n${problems.map((p) => `- ${p}`).join("\n")}\nRun a command after the last edit that shows both the doc text and the code values, or drop the claim.\n\n`);
+  logTo(folder, "checks", `## doc-claims: exit 1\nThe final message says a doc matches the code, and the transcript does not back it:\n${problems.map((p) => `- ${p}`).join("\n")}\nRun a command after the last edit that shows both the doc text and the code values, or drop the claim.\n\n`);
   return `doc claims: ${problems.join("; ")}`;
 }
 
@@ -169,13 +169,13 @@ export async function unit(folder: string): Promise<void> {
     process.exit(143);
   });
   markStarted(folder);
-  const id = basename(folder);
+  const id = jobOfFolder(folder);
   let run = jobRecord.getRun(id)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   const dispatcherPath = runPath();
   const env: Record<string, string | undefined> = {
     ...process.env, ...readEnvFile(repo?.env ?? runEnvFile()),
-    PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: run.job, ALEPH_JOB_RUN: id,
+    PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: id, ALEPH_JOB_RUN: id,
   };
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDECODE;
@@ -191,24 +191,24 @@ export async function unit(folder: string): Promise<void> {
   let code = 0;
   try {
     // A worker or a land starts only under the load limit: it waits, with the reason as its phase.
-    if (run.kind !== "plain") {
+    if (run.role !== "plain") {
       await admit((line) => jobRecord.patchRun(id, { phase: line }));
       jobRecord.patchRun(id, { phase: undefined });
     }
-    if (run.kind === "plain") {
-      const r = await exec(["bash", "-c", readFileSync(runFile(folder, "command.txt"), "utf8")], { cwd: process.cwd(), env, out: runFile(folder, "output.log") });
+    if (run.role === "plain") {
+      const r = await exec(["bash", "-c", readSection(folder, "command") ?? ""], { cwd: process.cwd(), env, out: runFile(folder, "transcript.jsonl") });
       code = r.code;
-      outcome = code === 0 ? { condition: "done" } : { condition: "failed", cause: "other", reason: `exited ${code}` };
-    } else if (run.kind === "land") {
+      outcome = code === 0 ? { state: "done" } : { state: "failed", cause: "other", reason: `exited ${code}` };
+    } else if (run.role === "land") {
       const entry = { id, folder, run };
       ({ outcome, code } = await land(entry, repo!, landPorts(entry, repo!, checkEnv)));
-    } else if (run.kind === "recheck") {
+    } else if (run.role === "recheck") {
       ({ outcome, code } = await recheck(folder, run, repo!, env));
     } else {
       ({ outcome, code } = await agent(id, folder, run, repo!, env, checkEnv));
     }
   } catch (e: any) {
-    outcome = { condition: "failed", cause: "other", reason: `error: ${e?.message ?? e}` };
+    outcome = { state: "failed", cause: "other", reason: `error: ${e?.message ?? e}` };
     code = 1;
   }
 
@@ -216,16 +216,17 @@ export async function unit(folder: string): Promise<void> {
   const ended = jobRecord.endRun(id, { ...outcome, phase: undefined, ended: new Date().toISOString() }, (r, lands) => nextStep(r, !!repo?.autoland, lands));
   const next = ended.next;
   markEnded(folder, code);
+  jobRecord.copyEnd(id);
   process.exitCode = code;
-  if (isAgentRun(run.kind) && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
+  if (isAgentRun(run.role) && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine({ id, folder, run: ended }, repo?.note))) jobRecord.patchRun(id, { told: true });
   if (next) await start(folder, ended, next);
-  if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);
+  if (run.role !== "plain" && dispatchOn()) await dispatchFree(folder);
 }
 
 /** A run ended, so a slot may be free: `aleph dispatch` starts the ready issues. Its output goes to dispatch.log. */
 async function dispatchFree(folder: string): Promise<void> {
-  await runLogged(["dispatch"], runFile(folder, "dispatch.log"));
+  await runLogged(["dispatch"], logStream(folder, "dispatch"));
 }
 
 /** The worker's time limit: a merge run has a short one. */
@@ -260,16 +261,16 @@ export async function startKept(go: typeof start = start): Promise<string[]> {
 /** Start the next run as `aleph land` or `aleph job` would, in-process. What it prints and its refusal go to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
   if (gates({ only: ["pause"] })) {
-    appendFileSync(runFile(folder, "next.log"), `paused: no ${next} started; the first dispatch after the resume starts it\n`);
+    logTo(folder, "dispatch", `paused: no ${next} started; the first dispatch after the resume starts it\n`);
     writeFileSync(runFile(folder, PAUSED_NEXT), `${next}\n`);
     return;
   }
-  const dropped = (jobById(run.job) ?? []).some((e) => e.run.condition === "dropped");
+  const dropped = (jobById(jobOfFolder(folder)) ?? []).some((e) => e.run.state === "dropped");
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   const there = dropped ? null : onMain(repo, { item: onOf(run), fetch: onOf(run) !== undefined })?.commit;
   if (dropped || there) {
-    appendFileSync(runFile(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
-    jobRecord.patchRun(basename(folder), { next: undefined });
+    logTo(folder, "dispatch", dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
+    jobRecord.patchRun(jobOfFolder(folder), { next: undefined });
     return;
   }
   // A parked issue's job keeps its `next` and its branch: the dispatch lands it once the issue is open (waitingToLand).
@@ -277,14 +278,14 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   const item = next === "land" && repo && on !== undefined ? reader().item(repo.key, on) : undefined;
   const parked = item !== undefined && issues.status(item) === "parked";
   if (parked) {
-    const reason = `issue ${issueKeyOf(run)} is parked`;
-    appendFileSync(runFile(folder, "next.log"), `${reason}: no land started\n`);
-    jobRecord.patchRun(basename(folder), { reason });
+    const reason = `${issueKeyOf(run)} is parked`;
+    logTo(folder, "dispatch", `${reason}: no land started\n`);
+    jobRecord.patchRun(jobOfFolder(folder), { reason });
     return;
   }
   const back = nextBrief(folder, run);
   const merge = next === "worker" && back.merge;
-  const log = runFile(folder, "next.log");
+  const log = logStream(folder, "dispatch");
   try {
     const s = next === "land"
       ? await startLand(run.name, {}, { output: { file: log } })
@@ -295,7 +296,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     await s.child?.exited;
   } catch (e: any) {
     appendFileSync(log, `${String(e?.message ?? e)}\n`);
-    jobRecord.patchRun(basename(folder), { next: undefined });
+    jobRecord.patchRun(jobOfFolder(folder), { next: undefined });
   }
 }
 
@@ -316,12 +317,12 @@ function agentEnv(env: Record<string, string | undefined>, folder: string): Reco
 async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, checkEnv: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const wt = run.worktree!;
   const branch = run.branch!;
-  const phase = (p: string) => jobRecord.patchRun(basename(folder), { phase: p });
-  const fail = (cause: Cause, reason: string) => ({ outcome: { condition: "failed" as const, cause, reason }, code: 1 });
+  const phase = (p: string) => jobRecord.patchRun(jobOfFolder(folder), { phase: p });
+  const fail = (cause: Cause, reason: string) => ({ outcome: { state: "failed" as const, cause, reason }, code: 1 });
 
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
   // A later run whose worktree is gone gets it back on the job's branch.
-  if (run.job === id || !existsSync(wt)) {
+  if (!run.prev || !existsSync(wt)) {
     phase("setup");
     // Units of one repo share its .git: a concurrent worktree add fails on the config lock, prune removes another's
     // half-made worktree entry, and fetch can fail on shared files. One unit at a time runs these git writes.
@@ -330,10 +331,10 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     try {
       const fetched = fetchOrigin(repo.path);
       if (!fetched.ok) {
-        appendFileSync(runFile(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
+        logTo(folder, "setup", `## fetch: failed\n${fetched.out}\n`);
         return fail("infra", `fetch failed: ${fetched.out}`);
       }
-      const kept = run.job !== id && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
+      const kept = !!run.prev && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
       if (kept) {
         git(repo.path, "worktree", "prune");
         const add = git(repo.path, "worktree", "add", "-q", wt, branch);
@@ -355,8 +356,8 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (!existsSync(marker)) {
     phase("setup");
     for (const cmd of repo.setup) {
-      appendFileSync(runFile(folder, "setup.log"), `## ${cmd}\n`);
-      const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: runFile(folder, "setup.log"), limit: checkSeconds() });
+      logTo(folder, "setup", `## ${cmd}\n`);
+      const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: logStream(folder, "setup"), limit: checkSeconds() });
       if (r.timedOut) return fail("stalled", `timed out: setup ${cmd}`);
       if (r.code !== 0) return fail("other", `setup failed: ${cmd}`);
     }
@@ -366,19 +367,19 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const tier = WORKER_TIER[run.model ?? ""];
   // A tier set to a model Claude does not serve runs on it; the run keeps its Claude model as its tier.
   const pick = tier !== undefined ? readModels()[tier].model : undefined;
-  if (pick !== undefined && viaOf(pick) !== "claude") { jobRecord.patchRun(basename(folder), { model: pick, tier: run.model }); run = { ...run, model: pick }; }
-  const text = brief(id, folder, run, repo);
+  if (pick !== undefined && viaOf(pick) !== "claude") { jobRecord.patchRun(jobOfFolder(folder), { model: pick, tier: run.model }); run = { ...run, model: pick }; }
+  const text = brief(id, run, repo);
   writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");
   // No GPU slot: a worker's run on the local backend counts against LOCAL_CAP itself, and the live cap admitted it.
   const w = await callAgent("worker", text, {
     model: run.model, flags: ["--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "--session-id", run.session!, "--permission-mode", "bypassPermissions"],
-    schema: repo.sandbox ? WORKER_SCHEMA : undefined, cwd: wt, env: agentEnv(env, folder), stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"),
+    schema: repo.sandbox ? WORKER_SCHEMA : undefined, cwd: wt, env: agentEnv(env, folder), stdout: runFile(folder, "transcript.jsonl"), stderr: logStream(folder, "stderr"),
     limit: workSeconds(run), slot: false, onSpawn: (p) => { child = p; },
   });
   child = null;
   if (repo.sandbox) return factoryVerdict(id, folder, run, repo, w, env);
-  const result = resultText(readFileSync(runFile(folder, "output.log"), "utf8"));
+  const result = resultText(readFileSync(runFile(folder, "transcript.jsonl"), "utf8"));
   writeFileSync(runFile(folder, "result.md"), result);
 
   // The state rule: the first match wins.
@@ -389,29 +390,29 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     return fail("timeout", `The worker ran past its ${s % 60 === 0 ? `${s / 60}-minute` : `${s}-second`} time box and was stopped.${last}`);
   }
   if (w.cause?.kind === "credit") return fail("credit", w.cause.reason);
-  if (w.step.code !== 0) return { outcome: { condition: "failed", cause: "other", reason: `worker exited ${w.step.code}` }, code: w.step.code };
+  if (w.step.code !== 0) return { outcome: { state: "failed", cause: "other", reason: `worker exited ${w.step.code}` }, code: w.step.code };
   const question = questionOf(result);
   if (question !== undefined) return { outcome: { ...waiting("question", question), question }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
   if (dirty) return fail("other", `uncommitted: ${dirty.split("\n")[0].slice(3)}`);
   const refetched = fetchOrigin(wt);
   if (!refetched.ok) {
-    appendFileSync(runFile(folder, "setup.log"), `## fetch: failed\n${refetched.out}\n`);
+    logTo(folder, "setup", `## fetch: failed\n${refetched.out}\n`);
     return fail("infra", `fetch failed: ${refetched.out}`);
   }
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
   if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
     removeBranch(repo, run);
-    return { outcome: { condition: "done", reason: "no commits" }, code: 0 };
+    return { outcome: { state: "done", reason: "no commits" }, code: 0 };
   }
-  stampJob(wt, base, run.job);
+  stampJob(wt, base, run, id);
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
   const failed = await runChecks(taskOf(folder, repo, changed, () => phase("verify")), inWorktree(wt, checkEnv));
-  if (failed) return { outcome: { condition: "failed", ...stopFields(failed) }, code: 1 };
+  if (failed) return { outcome: { state: "failed", ...stopFields(failed) }, code: 1 };
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
   const manual = repo.manual.find((m) => matches(m.when));
-  return { outcome: { condition: "passed", checkedBase: base, checkedTip: git(wt, "rev-parse", "HEAD").out, ...(manual ? { say: manual.say } : {}) }, code: 0 };
+  return { outcome: { state: "passed", checkedBase: base, checkedTip: git(wt, "rev-parse", "HEAD").out, ...(manual ? { say: manual.say } : {}) }, code: 0 };
 }
 
 /**
@@ -421,7 +422,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
 async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, w: Reply, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const tip = `refs/heads/${run.branch!}`;
   const main = `refs/remotes/origin/${repo.main}`;
-  const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "failed" as const, cause, reason, ...extra }, code: 1 });
+  const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { state: "failed" as const, cause, reason, ...extra }, code: 1 });
   const reply = parseWorker(w.data);
   writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? w.text : reply.summary);
   const facts: Partial<Outcome> = w.cost !== undefined ? { cost: w.cost } : {};
@@ -436,10 +437,10 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return stop("no-commit", "no commit", facts);
   const base = git(repo.path, "merge-base", main, tip).out;
 
-  // The fix rounds so far are the job record's; the runs sent back say what they failed.
-  const done = jobRecord.read(jobRecord.keyOf(run))?.rounds ?? 0;
+  // The fix rounds so far are those of jobs of this target; the runs sent back say what they failed.
+  const done = jobRecord.roundsOf(run.target ?? id);
   if (done) facts.round = done;
-  const earlier = earlierRounds(jobById(run.job) ?? [], id);
+  const earlier = earlierRounds(jobById(id) ?? [], id);
   const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
   if (changed.length > 0 && changed.every((f) => f === "result.md")) return stop("no-commit", "no commit", facts);
   const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out };
@@ -452,7 +453,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
  * final message (a recheck has neither), `runner` runs the Oracle's commands, and `env` is the unit's env.
  */
 export function branchPorts(folder: string, run: Run, repo: Repo, base: string, branch: string, o: { changed: string[]; earlier?: Entry[]; result?: string; runner?: Runner; review?: typeof review; env?: Record<string, string | undefined> }): VerdictPorts {
-  const phase = (p: string) => jobRecord.patchRun(basename(folder), { phase: p });
+  const phase = (p: string) => jobRecord.patchRun(jobOfFolder(folder), { phase: p });
   // Verify is one station: its checks, keep-gate and Oracle all show as the phase `verify`.
   const verify = () => phase("verify");
   const tip = `refs/heads/${branch}`;
@@ -465,12 +466,12 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       const rec = recorder(folder);
       const record = (c: CheckResult) => rec(build.tests.has(c.name) ? { ...c, files: build.tests.get(c.name)!.length } : c);
       for (const [name, files] of build.tests) {
-        appendFileSync(runFile(folder, "checks.log"), `## ${name}: ${files.length} test file${files.length === 1 ? "" : "s"} that the change reaches\n${files.join("\n")}\n\n`);
+        logTo(folder, "checks", `## ${name}: ${files.length} test file${files.length === 1 ? "" : "s"} that the change reaches\n${files.join("\n")}\n\n`);
         if (!files.length) record({ name, ok: true, seconds: 0 });
       }
       const sha = git(repo.path, "rev-parse", tip).out;
       const stop = await checksAt({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase: verify, record, onSpawn: (p) => { child = p; } }, sha, checksEnv(env));
-      return { stop, failed: jobRecord.getRun(basename(folder))?.checks?.findLast((c) => !c.ok)?.name };
+      return { stop, failed: jobRecord.getRun(jobOfFolder(folder))?.checks?.findLast((c) => !c.ok)?.name };
     },
     repeatedFailure: (check) => repeatedFailure(folder, check, o.earlier ?? []),
     docClaims: () => o.result === undefined ? null : docClaims(folder, o.result),
@@ -480,10 +481,10 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       const start = performance.now();
       const kept = await keepGate(repo, base, head, newTests(repo.path, base, head), changedSources(repo.path, base, head), o.runner ?? runOnCommit);
       if (!kept) return null;
-      appendFileSync(runFile(folder, "checks.log"), `## keep-gate: ${kept.noVerdict ? "no verdict" : "exit 1"}\n${kept.log}\n\n`);
+      logTo(folder, "checks", `## keep-gate: ${kept.noVerdict ? "no verdict" : "exit 1"}\n${kept.log}\n\n`);
       if (!kept.noVerdict) return kept.reason;
       // No verdict is a result on the run beside the checks, so the job page shows it.
-      jobRecord.patchRun(basename(folder), { checks: [...jobRecord.getRun(basename(folder))?.checks ?? [], { name: "keep-gate", ok: false, seconds: Math.round((performance.now() - start) / 1000), noVerdict: true }] });
+      jobRecord.patchRun(jobOfFolder(folder), { checks: [...jobRecord.getRun(jobOfFolder(folder))?.checks ?? [], { name: "keep-gate", ok: false, seconds: Math.round((performance.now() - start) / 1000), noVerdict: true }] });
       return { noVerdict: kept.reason };
     },
     stat: () => git(repo.path, "diff", "--stat", base, tip).out,
@@ -506,9 +507,9 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
  * When a command ran, the run's `checks` gets one result `oracle` beside the repo's checks; checks.log gets each command's section.
  */
 async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: () => void): Promise<string | NoVerdict | null> {
-  const specFile = jobSpecFile(folder, run);
+  const specFile = jobSpecFile(run);
   if (!existsSync(specFile)) return null;
-  const ran = new Set((jobRecord.getRun(basename(folder))?.checks ?? []).map((c) => c.name));
+  const ran = new Set((jobRecord.getRun(jobOfFolder(folder))?.checks ?? []).map((c) => c.name));
   const done = new Set(repo.checks.filter((c) => ran.has(c.name)).map((c) => c.run.trim()));
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
   const start = performance.now();
@@ -517,11 +518,11 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   let tests: TestRecord | undefined;
   const result = (ok: boolean, none = false) => {
     if (!any && !none) return;
-    const checks = jobRecord.getRun(basename(folder))?.checks ?? [];
-    jobRecord.patchRun(basename(folder), { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(none ? { noVerdict: true as const } : {}), ...(tests ? { tests } : {}) }] });
+    const checks = jobRecord.getRun(jobOfFolder(folder))?.checks ?? [];
+    jobRecord.patchRun(jobOfFolder(folder), { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(none ? { noVerdict: true as const } : {}), ...(tests ? { tests } : {}) }] });
   };
   const noVerdict = (command: string, r: Ran): NoVerdict => {
-    appendFileSync(runFile(folder, "checks.log"), `## oracle: no verdict\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`);
+    logTo(folder, "checks", `## oracle: no verdict\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`);
     result(false, true);
     return { noVerdict: `no verdict: oracle: ${command}` };
   };
@@ -546,7 +547,7 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
       failures: [...tests.failures, ...rec.failures].slice(0, 20),
     };
     const out = `## oracle: exit ${r.code}${second ? " (second run)" : ""}\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`;
-    appendFileSync(runFile(folder, "checks.log"), out);
+    logTo(folder, "checks", out);
     if (r.code !== 0) { result(false); return `oracle failed: ${command}`; }
     if (rec?.ran === 0) { result(false); return `oracle ran 0 tests: ${command}`; }
   }
@@ -563,8 +564,8 @@ async function recheck(folder: string, run: Run, repo: Repo, env: Record<string,
   const branch = run.branch!;
   const ref = `refs/heads/${branch}`;
   const main = `refs/remotes/origin/${repo.main}`;
-  const phase = (p: string) => jobRecord.patchRun(basename(folder), { phase: p });
-  const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "failed" as const, cause, reason, ...extra }, code: 1 });
+  const phase = (p: string) => jobRecord.patchRun(jobOfFolder(folder), { phase: p });
+  const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { state: "failed" as const, cause, reason, ...extra }, code: 1 });
   phase("setup");
   { const f = fetchOrigin(repo.path); if (!f.ok) return stop("infra", `fetch failed: ${f.out}`); }
   const tip = git(repo.path, "rev-parse", "--verify", "-q", ref);
@@ -659,34 +660,39 @@ export function reviewDiff(cwd: string, range: { from: string; to: string; merge
  * with the worker's env. Returns the reason to hold, or null on a pass, and the cost. Fails closed.
  */
 async function review(folder: string, run: Run, repo: Repo, base: string, branch: string, findings: string[], changed: string[], env: Record<string, string | undefined>): Promise<ReviewCall> {
-  const spec = jobSpec(folder, run);
+  const spec = jobSpec(run);
   const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
   const diff = reviewDiff(repo.path, range, reviewDiffMax());
   const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
-  writeFileSync(runFile(folder, "review-prompt.md"), text);
   const model = readModels().reviewer?.model ?? OPUS_MODEL;
+  // The reviewer is a job of its own: it follows the build, which holds the unit and the process.
+  const rv = jobRecord.makeJob({ role: "review", name: run.name, prev: jobOfFolder(folder), target: run.target, repo: run.repo, model }, (dir) => writeFileSync(runFile(dir, "prompt.md"), text));
+  const end = (state: "done" | "failed", fields: Parameters<typeof jobRecord.setState>[2] = {}) => jobRecord.setState(rv.id, state, { ended: new Date().toISOString(), ...fields });
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
   try {
     return await atCommit(repo, tip, async (wt) => {
       const w = await callAgent("reviewer", text, {
         model, cmd: reviewerCmd(), flags: ["--permission-mode", "bypassPermissions", "--tools", "Read", "Grep", "Glob", "Bash"], schema: REVIEW_SCHEMA,
-        cwd: wt, env: agentEnv(env, folder), stdout: runFile(folder, "review.log"), stderr: runFile(folder, "review.err"), limit: reviewSeconds(),
+        cwd: wt, env: agentEnv(env, rv.folder), stdout: runFile(rv.folder, "transcript.jsonl"), stderr: logStream(rv.folder, "stderr"), limit: reviewSeconds(),
         // No GPU slot: the job's own run holds it, as in the worker's call.
         slot: false, onSpawn: (p) => { child = p; },
       });
       child = null;
       const v = parseReview(w.data);
-      writeFileSync(runFile(folder, "review.md"), typeof v === "string" ? w.text : v.text);
+      writeFileSync(runFile(rv.folder, "result.md"), typeof v === "string" ? w.text : v.text);
       const cost = w.cost;
-      const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true, model, session: w.session });
+      const none = (why: string) => { end("failed", { reason: why, cost }); return { reason: `reviewer: no verdict (${why})`, cost, none: true, model, session: w.session }; };
       if (w.cause?.kind === "credit") return { ...none(w.cause.reason), credit: w.cause.reason };
       if (w.cause) return none(w.cause.reason);
       if (typeof v === "string") return none(v);
-      writeFileSync(runFile(folder, "review.json"), JSON.stringify({ ...v.json, model }));
+      writeFileSync(runFile(rv.folder, "review.json"), JSON.stringify({ ...v.json, model }));
+      end("done", { cost });
       return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost, model, session: w.session };
     });
   } catch (e) {
-    return { reason: `reviewer: no verdict (${e instanceof Error ? e.message : e})`, none: true, model };
+    const why = e instanceof Error ? e.message : String(e);
+    end("failed", { reason: why });
+    return { reason: `reviewer: no verdict (${why})`, none: true, model };
   }
 }
 

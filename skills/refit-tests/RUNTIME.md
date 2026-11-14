@@ -15,7 +15,7 @@ the change.
 - **Slowest tests and files.** For each: is the time a sleep or a timeout (then [SMELLS.md](SMELLS.md)), a real
   process or browser, a network call (then [HERMETIC.md](HERMETIC.md)), or work the test does not need (a full
   build, a large fixture, a repeated setup that `beforeAll` could share)?
-- **History.** aleph's `suite-history.jsonl` (in `stats.ts growth` `suite`), or CI timings: does the wall time grow
+- **History.** aleph's `suite_history` table (in `stats.ts growth` `suite`), or CI timings: does the wall time grow
   faster than the test count?
 
 ## Proof

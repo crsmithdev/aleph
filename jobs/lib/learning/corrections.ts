@@ -2,7 +2,7 @@
  * Correction signals, the procedural memory (docs/vault.md):
  * Chris's messages that push back on the assistant, the verify-gate's denials
  * and the reviewer's drop reasons of the last 14 days, grouped into lessons by
- * Jev. The store is corrections.json in the factory directory.
+ * Jev. The store is the `corrections` row of `state`.
  */
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -10,11 +10,10 @@ import { join } from "node:path";
 import { langfuse, type Langfuse } from "../../../lib/langfuse.ts";
 import { decide, nouls } from "../../../lib/jev.ts";
 import type { Observation } from "../../../lib/otlp.ts";
-import { factoryDir } from "../gates/factory-status.ts";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
+import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 
-const fail = (subject: string, note: string) => logEvent({ by: "rule", subject, action: "failed", note });
+const fail = (object: string, detail: string) => logEvent({ subject: "rule", action: "failed", object, detail });
 import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
 import { always, logAlways, type Ask } from "../asks/ask.ts";
 import { causeOf } from "../records/outcome.ts";
@@ -37,12 +36,10 @@ export type Lesson = {
 } & Partial<Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend">>;
 export interface Store { minedAt: string; lessons: Lesson[] }
 
-const file = () => join(factoryDir(), "corrections.json");
+/** A missing row is empty. */
+export const readStore = (): Store => getJson("state", "corrections", { minedAt: "", lessons: [] });
 
-/** A missing file is empty. */
-export const readStore = (): Store => readJsonOr(file(), { minedAt: "", lessons: [] });
-
-const writeStore = (s: Store): void => writeJson(file(), s);
+const writeStore = (s: Store): void => putJson("state", "corrections", s);
 
 const text = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
 const cut = (s: string) => s.slice(0, QUOTE);
@@ -143,7 +140,7 @@ async function dropSignals(from: Date, seen: Set<string>): Promise<Signal[]> {
   for (const e of allRuns()) {
     const { run } = e;
     const ended = Date.parse(run.ended ?? "");
-    if (run.condition !== "dropped" || !run.reason || !(ended >= from.getTime()) || seen.has(e.id)) continue;
+    if (run.state !== "dropped" || !run.reason || !(ended >= from.getTime()) || seen.has(e.id)) continue;
     // The run's own fact: it made no commit, so the drop is no fault in work that does not exist.
     if (causeOf(run) === "no-commit") continue;
     try {
@@ -279,12 +276,12 @@ function standingProposals(made: Lesson[], effects: Effects): void {
       if (!repo) { fail(l.id, `${reason}: approve failed: no sandboxed repo in the registry`); continue; }
       const ref = approve(l.id, repo, effects);
       // The issue's filing logged `filed`; the standing approve answers its proposal.
-      if (ref.startsWith(`${repo.key}-`)) logAlways(reason, ref, "answered", { note: `${reason}: approved ${l.id}` });
+      if (ref.startsWith(`${repo.key}-`)) logAlways(reason, ref, "answered", { detail: `${reason}: approved ${l.id}` });
       else fail(l.id, `${reason}: approve failed: ${ref}`);
     } else if (action === "decline") {
       const refusal = decline(l.id);
       if (refusal) fail(l.id, `${reason}: decline failed: ${refusal}`);
-      else logAlways(reason, l.id, "dropped", { note: `${reason}: declined` });
+      else logAlways(reason, l.id, "dropped", { detail: `${reason}: declined` });
     }
   }
 }

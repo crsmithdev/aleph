@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { putRun } from "../jobs/lib/records/record.ts";
+import { seed } from "../jobs/job.testkit.ts";
+import { writeRepos } from "../tests/projects.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -12,17 +13,12 @@ afterAll(() => setSystemTime());
 
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, pageDir: string, apiDir: string;
 
-const run = (o: object) => JSON.stringify({ n: 1, kind: "build", condition: "running", started: new Date(NOW).toISOString(), ...o });
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-server-"));
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ aleph: { path: join(base, "aleph") }, other: { path: join(base, "other") } }));
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
-  for (const [repo, name] of [["aleph", "aleph-1"], ["other", "other-2"]]) {
-    const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
-    mkdirSync(folder, { recursive: true });
-    putRun(basename(folder), JSON.parse(run({ name, job: name, repo })));
-  }
+  writeRepos({ aleph: { path: join(base, "aleph") }, other: { path: join(base, "other") } }, join(base, "items"));
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
+  for (const [repo, name] of [["aleph", "issue.1"], ["other", "issue.2"]]) seed({ role: "build", state: "running", started: new Date(NOW).toISOString(), name, target: name, repo });
   // A view added the way a view issue adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");
   for (const f of ["index.html", "app.css", "lib.js", "router.js", "chart.js", "system-parts.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
@@ -45,9 +41,9 @@ test("binds 127.0.0.1", () => {
 
 test("/api/factory?project= keeps only that project's jobs", async () => {
   const all: any = await (await at("/api/factory")).json();
-  expect(all.running.map((j: any) => j.name).sort()).toEqual(["aleph-1", "other-2"]);
+  expect(all.running.map((j: any) => j.name).sort()).toEqual(["issue.1", "issue.2"]);
   const other: any = await (await at("/api/factory?project=other")).json();
-  expect(other.running.map((j: any) => j.name)).toEqual(["other-2"]);
+  expect(other.running.map((j: any) => j.name)).toEqual(["issue.2"]);
   for (const k of ["stuck", "running", "queued"]) expect(other[k].every((j: any) => j.repo === "other")).toBe(true);
 });
 

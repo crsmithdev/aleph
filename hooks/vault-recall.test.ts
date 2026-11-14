@@ -42,7 +42,7 @@ async function run(vault: string, prompt = PROMPT, env: Record<string, string> =
   const p = Bun.spawn(["bun", HOOK], {
     stdin: new Blob([JSON.stringify({ hook_event_name: "UserPromptSubmit", prompt, ...extra })]),
     stdout: "pipe", stderr: "pipe",
-    env: { ...process.env, ALEPH_VAULT: vault, ALEPH_JUDGE_FILE: join(dir, "judge"), ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test", ALEPH_JUDGE: "jev", LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: join(dir, "spool"), ...env },
+    env: { ...process.env, ALEPH_VAULT: vault, ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test", ALEPH_JUDGE: "jev", LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: join(dir, "spool"), ...env },
   });
   const out = await new Response(p.stdout).text();
   return { out, code: await p.exited };

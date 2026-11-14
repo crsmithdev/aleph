@@ -49,7 +49,7 @@ function roles(a, m) {
     if (!o) return `${gone.repeat(num.length)}<td>${miss("no runs in this window")}</td>`;
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td>${cell(dur(o.p50), { num: true })}${cell(money(o.cost), { num: true })}<td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
+    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td>${cell(dur(o.p50), { num: true })}${cell(money(o.cost), { num: true })}<td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&state=failed">Failed jobs</a></td>`;
   };
   /** The worker outcome rows as one, for the one Worker row: the counts add, and the rate is its succeeded over its ended runs. */
   const allWorkers = () => {

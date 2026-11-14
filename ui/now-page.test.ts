@@ -155,7 +155,7 @@ test("a failed flow load shows error() in the Agent Time card", () => {
 });
 
 test("a stuck job's fold reads Technical details, and its blocker is an idLink", () => {
-  const h = view.renderHerald({ ...full, asks: [], stuck: [job({ name: "aleph-30", condition: "failed", blocker: { id: "aleph-7", href: "#/issues/aleph/7", title: "Open work" } })] });
+  const h = view.renderHerald({ ...full, asks: [], stuck: [job({ name: "aleph-30", state: "failed", blocker: { id: "aleph-7", href: "#/issues/aleph/7", title: "Open work" } })] });
   expect(h).toContain("<summary>Technical details</summary>");
   expect(h).not.toContain("<summary>Details</summary>");
   expect(h).toContain('Blocker <a class="idl" href="#/issues/aleph/7">aleph-7</a>: Open work');

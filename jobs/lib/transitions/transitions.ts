@@ -6,14 +6,14 @@
  * is the launcher's (launch.ts). See docs/workflow.md.
  */
 import { existsSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
-import { allRuns, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, makeRun, onOf, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, isWaiting, isAgentRun, isBuild, loadRegistry, onOf, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { isLive, isRunning, markEnded, stop, waitForPid } from "../infra/process.ts";
+import { isLive, isRunning, markEnded, stop, unitOf, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, policyOf, type Fate } from "../records/outcome.ts";
-import { addNote, issue as issueOf, latestJob, openJob } from "../records/job.ts";
-import { counting, jobIdOf, patchRun, putRun } from "../records/record.ts";
+import { addNote, issue as issueOf, lastRun, latestJob, openJob } from "../records/job.ts";
+import { counting, getRun, makeJob, patchRun, setState, type NewJob } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
 import { git } from "../infra/git.ts";
@@ -25,11 +25,11 @@ import { logEvent } from "../../../lib/layout.ts";
 import { raise, route, TIER_MODEL, type Tier } from "../routing/route.ts";
 import type { Gate, Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
-import { parseId, tail } from "../../../lib/naming.ts";
+import { key, parseId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "../infra/settings.ts";
-import { runFile } from "../records/run-files.ts";
+import { logTo, runFile } from "../records/run-files.ts";
 
 /** The message of a transition that refused or threw, or null when it went through: the factory's ports answer this. */
 export async function refusal(f: () => Promise<unknown>): Promise<string | null> {
@@ -54,7 +54,7 @@ export interface Refused { why: string; gate: Gate; ev: Hold }
 /** The hold of a start that threw `e`. A refusal with no gate is a job that runs already. */
 const refusedBy = (e: any): Refused => {
   const why = String(e?.message ?? e).trim() || "refused";
-  return e instanceof Held ? { why, gate: e.gate, ev: { ...e.ev, note: why } } : { why, gate: "not-ready", ev: { action: "running", note: why } };
+  return e instanceof Held ? { why, gate: e.gate, ev: { ...e.ev, detail: why } } : { why, gate: "not-ready", ev: { action: "running", detail: why } };
 };
 
 export function checkName(name: string | undefined): string {
@@ -64,27 +64,27 @@ export function checkName(name: string | undefined): string {
 
 const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
 
-/** What a start prints: the new run, its job and its folder. */
+/** What a start prints: the new job (`run`, its key), the work it belongs to (`job`, the first job of its `prev` chain) and its folder. */
 interface Started { run: string; job: string; folder: string }
 
 /** A started run, and in the foreground its unit's process, for the caller to wait on after the locks are gone. */
 export interface Start { started: Started; child?: ReturnType<typeof Bun.spawn> }
 
-/** How a start is made: the `aleph` argv it is written down as in `command.txt`, and where a foreground unit writes. */
-export interface StartOpts { command?: string[]; output?: Output }
+/** How a start is made: the `aleph` argv it is written down as in the `command` section of `log.txt`, who starts it, and where a foreground unit writes. */
+export interface StartOpts { command?: string[]; output?: Output; by?: string }
 
 /**
- * Create the run folder and start its unit, under the dispatch lock. The lock
- * is held until the unit writes `pid`, so a second dispatch counts this run.
+ * Make the job and start its unit, under the dispatch lock. The lock
+ * is held until the unit writes `pid`, so a second dispatch counts this job.
  */
-async function dispatch(run: Omit<Run, "job" | "n"> & { job?: string }, cwd: string, command: string[], output: Output | undefined, prep: (folder: string) => void): Promise<Start> {
+async function dispatch(run: NewJob, cwd: string, command: string[], output: Output | undefined, prep: (folder: string) => void): Promise<Start> {
   const release = await lock("dispatch", 120_000); // a queue of starts, each holding it until its unit writes pid
   if (!release) refuse("another dispatch holds the lock");
   let child: ReturnType<typeof Bun.spawn> | undefined;
-  let id: string;
-  let gpu: (() => void) | null = null; // a local run holds the GPU slot from its cap check until its run record is written
+  let id: string, folder: string;
+  let gpu: (() => void) | null = null; // a local run holds the GPU slot from its cap check until its job row is written
   try {
-    if (isBuild(run.kind)) {
+    if (isBuild(run.role)) {
       // The run's model, or its tier's, names its backend: a backend the factory holds starts no run, whatever the caller.
       const f = factoryGates(undefined, run);
       if (f.backend) hold("backend", f.backend.ev!, f.backend.why);
@@ -94,24 +94,21 @@ async function dispatch(run: Omit<Run, "job" | "n"> & { job?: string }, cwd: str
         if (!gpu) hold("live-cap", { action: "gpu" }, "a local call holds the GPU");
       }
     }
-    id = makeRun(run, (folder, n) => {
-      writeFileSync(runFile(folder, "command.txt"), quote(["aleph", ...command]) + "\n");
-      prep(folder);
-      // `made` orders the land queue: never below an earlier run's, so a clock stepped back keeps the order.
-      const made = Math.max(Date.now(), ...allRuns().map((e) => (e.run.made ?? 0) + 1));
-      putRun(basename(folder), { ...run, job: run.job ?? basename(folder), made, n });
-    });
-    const folder = join(runsDir(), id);
+    ({ id, folder } = makeJob(run, (dir) => {
+      // A plain run keeps the command it runs there instead: the unit reads it from this section.
+      if (run.role !== "plain") logTo(dir, "command", quote(["aleph", ...command]));
+      prep(dir);
+    }));
     gpu?.();
     gpu = null;
 
     // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
-    const factory = isBuild(run.kind) && run.repo && loadRegistry()[run.repo]?.sandbox;
+    const factory = isBuild(run.role) && run.repo && loadRegistry()[run.repo]?.sandbox;
     const max = factory ? [`--property=RuntimeMaxSec=${jobSeconds() + 3600}`] : [];
     try {
-      child = startUnit(["unit", folder], { unit: `aleph-${id.slice(16)}`, cwd, props: max, output, attach: true });
+      child = startUnit(["unit", folder], { unit: unitOf(id), cwd, props: max, output, attach: true });
     } catch (e: any) {
-      patchRun(basename(folder), { condition: "failed", reason: e.message, ended: new Date().toISOString() });
+      setState(id, "failed", { reason: e.message, ended: new Date().toISOString() });
       refuse(e.message);
     }
     // Wait for `pid`, but not for a unit that cannot write it: one that has exited, or whose folder is gone.
@@ -124,7 +121,7 @@ async function dispatch(run: Omit<Run, "job" | "n"> & { job?: string }, cwd: str
     gpu?.();
     release();
   }
-  return { started: { run: id!, job: run.job ?? id!, folder: join(runsDir(), id!) }, child };
+  return { started: { run: id!, job: getRun(id!)!.job, folder: folder! }, child };
 }
 
 export interface JobArgs {
@@ -158,8 +155,8 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   let on = a.on;
   if (on !== undefined) {
     const p = parseId(on) ?? parseId(`${repo.key}-${on}`);
-    if (p?.repo !== repo.key) refuse("--on takes an issue number");
-    on = p.sub === undefined ? p.n : tail(p);
+    if (p?.repo !== repo.key || p.sub !== undefined) refuse("--on takes an issue number");
+    on = p.n;
     let doc: issues.Doc | null = null;
     try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
     if (!doc) refuse(`the work store has no list for ${repo.key}`);
@@ -171,8 +168,9 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   try {
     const open = openJob(name);
     const last = open?.at(-1);
-    if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${jobIdOf(last)}`);
-    if (last && isRunning(last)) refuse(`${name} is running as ${jobIdOf(last)}`);
+    if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
+    const live = open?.find(isRunning);
+    if (live) refuse(`${name} is running as ${live.id}`);
     const first = open?.[0];
     const item = on ?? (open && issueOf(open));
     const landedAs = onMain(repo, { item: first ? item : undefined, fetch: first !== undefined && item !== undefined })?.commit;
@@ -180,10 +178,13 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     const worktree = first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
     // A follow-up without --on keeps the item the job started with.
     on ??= (open && issueOf(open));
+    // A fix round follows the build that came before it; a build of a name whose last work did not land redoes that work.
+    const before = open ? counting(open).id : undefined, prior = open ? undefined : latestJob(name, repo.key);
+    const retry = prior && !["landed", "done"].includes(counting(prior).run.state) ? counting(prior).id : undefined;
     return await dispatch({
-      kind: "build", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, worktree,
-      condition: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
-      ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(a.land ? { land: true } : {}), ...(a.merge ? { merge: true as const } : {}), told: false, shown: false, started: new Date().toISOString(),
+      role: "build", by: o.by, ...(before ? { prev: before } : {}), ...(retry ? { retryOf: retry } : {}), name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, worktree,
+      state: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
+      ...(on !== undefined ? { target: key("issue", Number(on)) } : {}), ...(a.land ? { land: true } : {}), ...(a.merge ? { merge: true as const } : {}), told: false, shown: false,
     }, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
       if (!first) return writeFileSync(runFile(folder, "spec.md"), a.spec);
       addNote(open!, a.spec);
@@ -201,13 +202,13 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
   if (!release) refuse(`${name} is busy`);
   try {
     const live = openJob(name);
-    if (live) refuse(`${name} is open as ${jobIdOf(live.at(-1)!)}`);
+    if (live) refuse(`${name} is open as ${live.at(-1)!.id}`);
     // A command inside a registered repo gets that repo's env file, as scripts/job gave Sidetone's.
     const home = Object.values(loadRegistry()).find((r) => r.env && (a.cwd === r.path || a.cwd.startsWith(r.path + "/")));
     if (home?.env) process.env.ALEPH_RUN_ENV = home.env;
-    return await dispatch({ kind: "plain", name, condition: "running", phase: "command", told: false, started: new Date().toISOString() }, a.cwd,
+    return await dispatch({ role: "plain", by: o.by, name, state: "running", phase: "command", told: false }, a.cwd,
       o.command ?? ["run", name, "--", ...a.argv], o.output, (folder) => {
-        writeFileSync(runFile(folder, "command.txt"), quote(a.argv) + "\n");
+        logTo(folder, "command", quote(a.argv));
       });
   } finally {
     release();
@@ -231,29 +232,29 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const runs = openJob(name) ?? refuse(`no open job named ${name}`);
     // A unit that has not written `pid` in the dispatch's wait still counts: a second land here would land the job twice.
     const live = runs.find(isRunning);
-    if (live) refuse(`${name} is running as ${jobIdOf(live)}`);
-    const agent = agentOf(runs)!.run;
+    if (live) refuse(`${name} is running as ${live.id}`);
+    const agentEntry = agentOf(runs)!, agent = agentEntry.run;
     const terms = landTerms(agent);
     if (!terms) {
-      const needs = isWaiting(agent.condition) ? needsOf(agent.ask) : undefined;
-      refuse(`${name} is ${agent.condition}${needs ? ` (${needs})` : ""}, not passed`);
+      const needs = isWaiting(agent.state) ? needsOf(agent.ask) : undefined;
+      refuse(`${name} is ${agent.state}${needs ? ` (${needs})` : ""}, not passed`);
     }
     const { manual, held } = terms;
     const unchecked = manual && !a.checked;
     const repo = loadRegistry()[agent.repo!];
     const item = onOf(agent);
     // A land that pushed and died before it closed the item: its own `Job:` commit on main is that land, so the land unit finishes it (landing.ts). Another job's commit, or a commit by hand, that names the item still refuses.
-    const found = onMain(repo, { job: item !== undefined ? agent.job : undefined, item, fetch: item !== undefined });
+    const found = onMain(repo, { jobs: item !== undefined ? runs.map((e) => e.id) : undefined, item, fetch: item !== undefined });
     const landedAs = found?.how === "Job trailer" ? null : found?.commit;
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     return await dispatch({
-      kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
-      condition: "running", phase: "land", told: false, shown: false, started: new Date().toISOString(),
+      role: "land", by: o.by, prev: agentEntry.id, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
+      state: "running", phase: "land", told: false, shown: false,
       ...(unchecked ? { check: "open" as const, say: agent.say } : {}),
       ...(held ? { held: true, lander: a.lander ?? "Chris" } : {}),
       ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
       ...(agent.checkedTip ? { checkedTip: agent.checkedTip } : {}),
-      ...(agent.on !== undefined ? { on: agent.on } : {}),
+      ...(agent.target !== undefined ? { target: agent.target } : {}),
     }, repo.path, o.command ?? ["land", name, ...(a.checked ? ["--checked"] : [])], o.output, () => {});
   } finally {
     release();
@@ -261,18 +262,18 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
 }
 
 /** `aleph checked`: close the manual check of a job that landed with it open, and its issue. */
-export function checked(name: string): { job: string; name: string; condition: "landed"; check: "done" } {
+export function checked(name: string): { job: string; name: string; state: "landed"; check: "done" } {
   checkName(name);
   const found = latestJob(name);
   const last = found ? counting(found) : undefined;
-  if (!last || last.run.condition !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
+  if (!last || last.run.state !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
   patchRun(last.id, { check: "done" });
   const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
   const item = last.run.checkItem;
   const why = repo && item !== undefined ? store.close(repo, item, "checked by Chris") : null;
   if (why) console.error(`warn: issue ${item} not closed: ${why}`);
   dispatchDetached();
-  return { job: last.run.job, name, condition: "landed", check: "done" };
+  return { job: last.run.job, name, state: "landed", check: "done" };
 }
 
 /**
@@ -288,11 +289,11 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
   let s: Start;
   try {
     const runs = openJob(name) ?? refuse(`no open job named ${name}`);
-    const last = runs.at(-1)!;
-    if (isLive(last.folder)) refuse(`${name} is running as ${jobIdOf(last)}`);
+    const last = lastRun(runs);
+    if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const r = last.run;
-    if (!isAgentRun(r.kind)) refuse(`${name}: the last job is not an agent job`);
-    if (r.condition !== "returned" && r.condition !== "failed") refuse(`${name} is ${r.condition}, not returned or failed`);
+    if (!isAgentRun(r.role)) refuse(`${name}: the last job is not an agent job`);
+    if (r.state !== "returned" && r.state !== "failed") refuse(`${name} is ${r.state}, not returned or failed`);
     const repo = loadRegistry()[r.repo ?? ""];
     if (!repo?.sandbox) refuse(`${name} is not a factory job`);
     if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) refuse(`${name} has no branch: drop it`);
@@ -300,8 +301,8 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
     // The recheck moves the branch, so it keeps the job's worktree in step, and a drop or a land removes that worktree.
     const worktree = runs.findLast((e) => e.run.worktree)?.run.worktree;
     s = await dispatch({
-      kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, ...(worktree ? { worktree } : {}), condition: "running", phase: "starting",
-      ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
+      role: "recheck", by: o.by, prev: last.id, name, repo: repo.key, branch: r.branch, ...(worktree ? { worktree } : {}), state: "running", phase: "starting",
+      ...(on !== undefined ? { target: key("issue", Number(on)) } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false,
     }, repo.path, o.command ?? ["recheck", name], o.output, () => {});
   } finally {
     release();
@@ -315,35 +316,37 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
  * `aleph drop`: stop the job's live runs, take its branch, and mark it dropped. With `quiet`,
  * the factory's own drop: it writes the issue note and the news itself, and its dispatch goes on.
  */
-export async function drop(name: string, a: { reason?: string; quiet?: boolean; fate?: Fate } = {}): Promise<{ job: string; name: string; condition: "dropped"; reason: string }> {
+export async function drop(name: string, a: { reason?: string; quiet?: boolean; fate?: Fate } = {}): Promise<{ job: string; name: string; state: "dropped"; reason: string }> {
   checkName(name);
   const reason = a.reason || "dropped by Chris";
   const runs = openJob(name) ?? refuse(`no open job named ${name}`);
-  const last = runs.at(-1)!;
+  const last = lastRun(runs);
   const release = await lock(`job-${last.run.repo ?? ""}-${name}`);
   if (!release) refuse(`job ${name} is busy`);
   try {
-    if (runs.some((e) => e.run.kind === "land" && isLive(e.folder))) refuse("landing");
+    if (runs.some((e) => e.run.role === "land" && isLive(e.folder))) refuse("landing");
     const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
     const live = runs.filter((e) => isLive(e.folder));
     for (const e of live) {
       if (await stop(e)) continue;
       // A run whose process outlives the stop fails as `infra`.
-      patchRun(e.id, { condition: "failed", cause: "infra", reason: "cannot stop: its process still runs", phase: undefined });
-      refuse(`cannot stop ${jobIdOf(e)}: its process still runs`);
+      setState(e.id, "failed", { cause: "infra", reason: "cannot stop: its process still runs", phase: undefined });
+      refuse(`cannot stop ${e.id}: its process still runs`);
     }
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
     // Chris asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {
       markEnded(e.folder, 143);
       // The drop replaces the sentence, so a run that has only the sentence gets its cause now.
-      patchRun(e.id, { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      setState(e.id, "dropped", { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
+    // The reviewer runs inside its build's unit, so a stopped unit leaves its job running.
+    for (const e of runs) if (e.run.role === "review" && e.run.state === "running") setState(e.id, "dropped", { reason, phase: undefined, ended: new Date().toISOString() });
     const todo = issueOf(runs);
     const why = repo && todo !== undefined && !a.quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;
     if (why) console.error(`warn: issue ${todo} has no note: ${why}`);
     if (!a.quiet) dispatchDetached();
-    return { job: last.run.job, name, condition: "dropped", reason };
+    return { job: last.run.job, name, state: "dropped", reason };
   } finally {
     release();
   }
@@ -357,10 +360,10 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
 export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<Refused | null> {
   const picked = tier !== undefined ? tier : await route(spec, name);
   // A rerun of an issue whose build run failed takes the next level up; a run that did no work (credit) or hit the host (infra) does not count.
-  const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.kind) && e.run.condition === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
+  const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.role) && e.run.state === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
   const routed = picked && failed ? raise(picked) : picked;
   const model = routed ? TIER_MODEL[routed] : null;
-  logEvent({ by: "rule", subject: name, action: "started", note: `model ${model ?? "default"}` });
+  logEvent({ subject: "rule", action: "started", object: name, detail: `model ${model ?? "default"}` });
   const start = startCmd();
   if (start) {
     const p = Bun.spawn([start, repo.key, name, String(id)], { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
@@ -368,7 +371,7 @@ export async function startIssue(repo: Repo, name: string, id: number | string, 
     return code === 0 ? null : refusedBy((await new Response(p.stderr).text()).trim() || `exit ${code}`);
   }
   try {
-    await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(model ? { model } : {}) }, { output: "ignore" })).child?.exited;
+    await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(model ? { model } : {}) }, { output: "ignore", by: "rule" })).child?.exited;
     return null;
   } catch (e) {
     return refusedBy(e);

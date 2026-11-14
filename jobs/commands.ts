@@ -1,8 +1,8 @@
 /**
  * aleph <job|run|land|checked|recheck|drop|jobs|issue|idea|annotation|unit|tick|suite|report|pause|resume|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
- * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: $ALEPH_REPOS or
- * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
+ * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: the projects of $ALEPH_ITEMS or
+ * ~/.aleph/items. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
  * `run` takes the argv and gives what it printed and its exit code: jobs/cli.ts calls it for the
  * command line, and a test calls it in its own process.
  * See docs/workflow.md and docs/factory.md.
@@ -12,7 +12,7 @@ import { join, resolve } from "node:path";
 import { allRuns, loadRegistry, newsLine, type Entry, type Repo } from "./lib/records/ledger.ts";
 import { isLive } from "./lib/infra/process.ts";
 import { allJobs, findJob, isOpen, issue as issueOf, issueTitle, openJobOfIssue, readFile, view, type Job } from "./lib/records/job.ts";
-import { counting, patchRun } from "./lib/records/record.ts";
+import { counting, patchRun, setState } from "./lib/records/record.ts";
 import { unit } from "./lib/roles/unit.ts";
 import { onMain } from "./lib/records/status.ts";
 import { settleOnMain } from "./lib/land/landing.ts";
@@ -38,12 +38,14 @@ import { cutTitle, fit } from "./lib/roles/title.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
 import type { Fate } from "./lib/records/outcome.ts";
 import { refuse, Refusal } from "../lib/refusal.ts";
+import { migrateCleanup, migrateStorage } from "./lib/migrate.ts";
 import * as doctor from "./lib/infra/doctor.ts";
 import { facts, repoStages, stages } from "./lib/records/status.ts";
 import type { Stage } from "./lib/records/stage.ts";
 import { jobId } from "./lib/infra/settings.ts";
 import { readModels, setModel } from "./lib/routing/models.ts";
-import { parseId, shortText } from "../lib/naming.ts";
+import { key, parseId, parseKey, shortText, shownKey } from "../lib/naming.ts";
+import { projectName } from "../issues/lib/projects.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -80,6 +82,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   always: { usage: "aleph always <list|grant <reason> <action>|revoke <reason>|timeout [<reason> <minutes> [pick|drop]]>", purpose: "list and change the standing permissions" },
   models: { usage: "aleph models [set <tier> <model> | enable <tier> | disable <tier>]", purpose: "list and change the model of each tier" },
   judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
+  migrate: { usage: "aleph migrate <storage [--dry-run] | cleanup>", purpose: "move the old store to aleph.db, items/ and jobs/<n>/, or delete the old files after it" },
   doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
   memory: { usage: "aleph memory <init|write|adopt|recall|lint|archive|delete|compile|misses|maintain> ...", purpose: "run a vault op" },
   "doc-claims": { usage: "aleph doc-claims", purpose: "list each doc claim the code does not back" },
@@ -150,11 +153,11 @@ async function job(ctx: Ctx): Promise<void> {
   const [repo, name] = ctx.positional;
   const spec = specArg === "-" ? await ctx.stdin() : readFileSync(specArg, "utf8");
   const onArg = ctx.flag("on");
-  await started(ctx, await startJob({ repo, name, spec, on: onArg, model: ctx.flag("model"), land: ctx.rest.includes("--land") }, { command: ctx.command }));
+  await started(ctx, await startJob({ repo, name, spec, on: onArg, model: ctx.flag("model"), land: ctx.rest.includes("--land") }, { command: ctx.command, by: "human" }));
 }
 
 async function plain(ctx: Ctx): Promise<void> {
-  await started(ctx, await startPlain({ name: ctx.rest[0], argv: ctx.tail, cwd: process.cwd() }, { command: ctx.command }));
+  await started(ctx, await startPlain({ name: ctx.rest[0], argv: ctx.tail, cwd: process.cwd() }, { command: ctx.command, by: "human" }));
 }
 
 /**
@@ -171,14 +174,14 @@ function reconcile(ctx: Ctx, all: Entry[][]): Map<string, string> {
   for (const runs of all.filter(isOpen)) {
     const last = counting(runs);
     const repo = last.run.repo ? registry[last.run.repo] : undefined;
-    if (!repo || last.run.kind === "plain" || isLive(last.folder)) continue;
+    if (!repo || last.run.role === "plain" || isLive(last.folder)) continue;
     if (!fetched.has(repo.key)) {
       fetched.add(repo.key);
       fetchOrigin(repo.path);
     }
-    const found = onMain(repo, { job: last.run.job, branch: last.run.branch, fetch: false });
+    const found = onMain(repo, { jobs: runs.map((e) => e.id), branch: last.run.branch, fetch: false });
     if (found) {
-      patchRun(last.id, { condition: "landed", commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
+      setState(last.id, "landed", { commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
       const { todo } = settleOnMain(repo, last.run, found.commit, cutTitle(last.run.say ?? last.run.name));
       if (todo && todo !== "done") ctx.err(`warn: issue ${issueOf(runs)} not closed: ${todo}`);
       continue;
@@ -192,7 +195,7 @@ function reconcile(ctx: Ctx, all: Entry[][]): Map<string, string> {
 function summary(runs: Job, fates = new Map<string, string>()) {
   const v = view(runs);
   return {
-    name: v.name, repo: v.repo, kind: v.run.kind, job: v.job, run: v.run.id, goal: issueTitle(runs), condition: v.condition, needs: v.needs, phase: v.phase,
+    name: v.name, repo: v.repo, kind: v.run.role, job: v.job, run: v.run.id, goal: issueTitle(runs), state: v.state, needs: v.needs, phase: v.phase,
     reason: v.reason, say: v.say, review: v.review, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
     ...(v.lost ? { lost: true } : {}),
   };
@@ -202,7 +205,7 @@ function jobs(ctx: Ctx): void {
   if (ctx.rest.includes("--news")) {
     const news: { run: string; line: string }[] = [];
     for (const e of allRuns()) {
-      if (e.run.condition === "running" || e.run.told) continue;
+      if (e.run.state === "running" || e.run.told) continue;
       news.push({ run: e.id, line: newsLine(e, e.run.repo ? loadRegistry()[e.run.repo]?.note : undefined) });
       patchRun(e.id, { told: true });
     }
@@ -214,18 +217,18 @@ function jobs(ctx: Ctx): void {
   // A job that landed with its check open stays in the list until `aleph checked`.
   // A job that ended in the last 24 hours follows the open ones, the latest first.
   if (!name) {
-    const listed = (j: Entry[]) => isOpen(j) || (counting(j).run.condition === "landed" && counting(j).run.check === "open");
+    const listed = (j: Entry[]) => isOpen(j) || (counting(j).run.state === "landed" && counting(j).run.check === "open");
     const ended = (j: Entry[]) => Date.parse(counting(j).run.ended ?? "");
     const recent = all.filter((j) => !listed(j) && Date.now() - ended(j) < DAY_MS).sort((a, b) => ended(b) - ended(a));
-    return ctx.out([...all.filter((j) => listed(j) && counting(j).run.kind !== "chat"), ...recent].map((j) => summary(j, fates)));
+    return ctx.out([...all.filter((j) => listed(j)), ...recent].map((j) => summary(j, fates)));
   }
   const runs = findJob(name, null, all);
   if (!runs) refuse(`no job named ${name}`);
   const last = counting(runs);
-  const checks = readFile(last, "checks.log");
+  const checks = readFile(last, "checks");
   ctx.out({
     ...summary(runs, fates), question: last.run.question, result: readFile(last, "result.md"),
-    checks: checks?.trimEnd().split("\n").slice(-40).join("\n"), land: readFile(last, "land.log"),
+    checks: checks?.trimEnd().split("\n").slice(-40).join("\n"), land: readFile(last, "land"),
   });
 }
 
@@ -259,15 +262,19 @@ async function todoCmd(ctx: Ctx): Promise<void> {
   };
   const sub = verb ?? refuse(usage("issue"));
   const registry = loadRegistry();
-  const ref = parseId(repoKey);
-  if (ref && sub !== "add") {
+  const named = parseKey(repoKey);
+  const ref = named?.kind === "issue" ? null : parseId(repoKey);
+  if (named?.kind === "issue" && sub !== "add") {
+    repoKey = store.projectOfIssue(named.n) ?? refuse(`no issue ${repoKey}`);
+    args = [String(named.n), ...args];
+  } else if (ref && sub !== "add") {
     repoKey = ref.repo;
-    args = [ref.sub === undefined ? String(ref.n) : `${ref.n}.${ref.sub}`, ...args];
+    args = [String(ref.n), ...args];
   }
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(ctx, sub, registry, { status: stat, label, kind: ctx.flag("kind") }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
   verbs.checkFields(fields);
-  const id = /^\d+\.\d+$/.test(args[0] ?? "") ? args[0] : Number(args[0]);
+  const id = parseKey(args[0])?.n ?? Number(args[0]);
   const text = args.slice(1).join(" ").trim();
   const warn = (follow: string | null | undefined) => { if (follow) ctx.err(`warn: ${follow}`); };
 
@@ -275,7 +282,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     case "add": {
       const a = await verbs.add(repo, args.join(" "), fields, filing);
       warn(a.follow);
-      for (const m of a.result.maybeSame ?? []) ctx.err(`${repo.key}-${m.id} may be the same task: ${m.title}`);
+      for (const m of a.result.maybeSame ?? []) ctx.err(`${shownKey(`issue.${m.id}`, repo.code)} may be the same task: ${m.title}`);
       ctx.out(a.result);
       return;
     }
@@ -289,10 +296,10 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     case "show": {
       const i = verbs.show(repo, id);
       if (json) { ctx.out({ ...verbs.brief(repo.key)(i), request: i.request, spec: i.spec, notes: i.notes, media: store.mediaOf(i) }); return; }
-      ctx.log(`## ${issues.refOf(i)}. ${i.title}`);
+      ctx.log(`## ${shown(repo.key, i)}. ${i.title}`);
       const ask = askOf(refIn(repo.key, i));
       ctx.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${store.priorityOf(i)}   updated ${issues.updated(i) ?? "-"}`);
-      ctx.log(`after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
+      ctx.log(`after ${store.afterOf(i).map(shownRef).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
       ctx.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
       if (i.request.trim()) ctx.log(`\n## Request\n\n${i.request}`);
       if (i.spec.trim()) ctx.log(`\n${i.spec}`);
@@ -346,7 +353,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     case "retitle": {
       const r = await verbs.retitle(repo, fit);
       warn(r.follow);
-      for (const t of r.result.retitled) ctx.log(`${repo.key}-${t.id}: ${t.title}`);
+      for (const t of r.result.retitled) ctx.log(`${shownKey(`issue.${t.id}`, repo.code)}: ${t.title}`);
       return;
     }
     case "lint": {
@@ -469,15 +476,26 @@ function statusRecent(ctx: Ctx): void {
   for (const { key, rows } of ofRepo) { ctx.log(key); for (const s of rows) ctx.log(issues.localRefs(key, `  ${stageLine(s)}`)); }
 }
 
-const ready = (i: issues.Issue, key: string) => (store.afterOf(i).length ? `after ${issues.localRefs(key, store.afterOf(i).join(","))}` : "");
+/** An issue key as the terminal shows it, with the code of the project that holds that issue. */
+const shownRef = (r: string): string => {
+  const name = store.projectsAt(store.itemsDir(), "origin/main").get(parseKey(r)?.n ?? 0);
+  return shownKey(r, name && loadRegistry()[name]?.code);
+};
+const ready = (i: issues.Issue) => (store.afterOf(i).length ? `after ${store.afterOf(i).map(shownRef).join(",")}` : "");
+/** The issue's key as the terminal shows it: `a-01234`, with its project's code. */
+const shown = (key: string, i: issues.Issue): string => shownKey(`issue.${i.id}`, loadRegistry()[key]?.code);
 
 function printRows(ctx: Ctx, rows: issues.Issue[], key: string, indent = ""): void {
-  const refs = rows.map(issues.refOf);
+  const refs = rows.map((i) => shown(key, i));
   const w = refs.reduce((m, r) => Math.max(m, r.length), 0);
-  for (const [n, i] of rows.entries()) ctx.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${store.priorityOf(i).padEnd(8)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
+  for (const [n, i] of rows.entries()) ctx.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${store.priorityOf(i).padEnd(8)} ${i.title}${ready(i) ? `  (${ready(i)})` : ""}`);
 }
 
 const IDEA_USAGE = usage("idea");
+/** The idea number as text from the first argument, or a usage refusal. */
+const ideaArg = (arg: string | undefined): string => ideas.slugOf(arg ?? refuse(IDEA_USAGE));
+/** An issue named in `idea built`, as its key: `issue.5`, a shown form such as `a-01234`, or an old `aleph-5`. */
+const builtRef = (ref: string): string => { const k = parseKey(ref) ?? (parseId(ref) && { kind: "issue", n: parseId(ref)!.n }); return k && k.kind === "issue" ? key("issue", k.n) : refuse(`not an issue: ${ref}`); };
 
 /** `aleph idea ...`: the ideas store (ideas/ideas.ts). `-` as a text flag reads stdin. */
 async function ideaCmd(ctx: Ctx): Promise<void> {
@@ -490,32 +508,32 @@ async function ideaCmd(ctx: Ctx): Promise<void> {
       if (target && !loadRegistry()[target]) refuse(`no repo named ${target}`);
       const a = ideas.add(args.join(" "), await text("sketch"), target);
       warn(a.warn);
-      ctx.log(a.slug);
+      ctx.log(shownKey(key("idea", Number(a.slug))));
       return;
     }
     case "list":
-      for (const r of ideas.list(ctx.flag("status"))) ctx.log([r.idea.slug, r.idea.fm.target ?? "new project", r.lenses.join(",") || "-", r.last].join("  "));
+      for (const r of ideas.list(ctx.flag("status"))) ctx.log([shownKey(key("idea", Number(r.idea.slug))), projectName(String(r.idea.fm.project ?? "")) ?? "new project", r.lenses.join(",") || "-", r.last].join("  "));
       return;
     case "show": {
-      const slug = args[0] ?? refuse(IDEA_USAGE);
+      const slug = ideaArg(args[0]);
       ideas.read(slug);
       const results = ideas.lenses(slug).map((l) => `- ${l.lens} ${l.at} ${l.file}`);
       ctx.write(`${readFileSync(ideas.file(slug), "utf8")}\n## Lens results\n\n${results.join("\n") || "none"}\n`);
       return;
     }
-    case "edit": return warn(ideas.edit(args[0] ?? refuse(IDEA_USAGE), await text("writeup")));
-    case "note": return warn(ideas.note(args[0] ?? refuse(IDEA_USAGE), args.slice(1).join(" ")));
-    case "built": return warn(ideas.built(args[0] ?? refuse(IDEA_USAGE), args.slice(1)));
-    case "drop": return warn(ideas.drop(args[0] ?? refuse(IDEA_USAGE)));
+    case "edit": return warn(ideas.edit(ideaArg(args[0]), await text("writeup")));
+    case "note": return warn(ideas.note(ideaArg(args[0]), args.slice(1).join(" ")));
+    case "built": return warn(ideas.built(ideaArg(args[0]), args.slice(1).map(builtRef)));
+    case "drop": return warn(ideas.drop(ideaArg(args[0])));
     case "lens": {
-      const l = await ideas.lens(args[0] ?? refuse(IDEA_USAGE), args[1] ?? refuse(IDEA_USAGE));
+      const l = await ideas.lens(ideaArg(args[0]), args[1] ?? refuse(IDEA_USAGE));
       warn(l.warn);
       ctx.log(l.file);
       return;
     }
     case "save": {
       const [slug, lens, from] = args;
-      const s = ideas.save(slug ?? refuse(IDEA_USAGE), lens ?? refuse(IDEA_USAGE), resolve(from ?? refuse(IDEA_USAGE)));
+      const s = ideas.save(ideaArg(slug), lens ?? refuse(IDEA_USAGE), resolve(from ?? refuse(IDEA_USAGE)));
       warn(s.warn);
       ctx.log(s.file);
       return;
@@ -608,7 +626,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "job": await job(ctx); break;
     case "run": await plain(ctx); break;
     case "jobs": jobs(ctx); break;
-    case "recheck": await started(ctx, await recheck(ctx.positional[0], { command: ctx.command })); break;
+    case "recheck": await started(ctx, await recheck(ctx.positional[0], { command: ctx.command, by: "human" })); break;
     case "drop": {
       const quiet = ctx.rest.includes("--quiet");
       const given = ctx.flag("fate");
@@ -618,7 +636,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       break;
     }
     case "unit": await unit(resolve(ctx.positional[0])); break;
-    case "land": await started(ctx, await land(ctx.positional[0], { checked: ctx.rest.includes("--checked") }, { command: ctx.command })); break;
+    case "land": await started(ctx, await land(ctx.positional[0], { checked: ctx.rest.includes("--checked") }, { command: ctx.command, by: "human" })); break;
     case "checked": ctx.out(checked(ctx.positional[0])); break;
     case "issue": await todoCmd(ctx); break;
     case "annotation": await annotationCmd(ctx); break;
@@ -660,6 +678,13 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       if (change) { const bad = setModel(ctx.positional[1] ?? "", change); if (bad) refuse(bad); }
       else if (ctx.positional[0] !== undefined) refuse(usage("models"));
       ctx.out(readModels());
+      break;
+    }
+    case "migrate": {
+      const [sub] = ctx.positional;
+      if (sub === "storage") ctx.write(`${migrateStorage(ctx.rest.includes("--dry-run"))}\n`);
+      else if (sub === "cleanup") ctx.write(`${migrateCleanup()}\n`);
+      else refuse(usage("migrate"));
       break;
     }
     case "judge": {

@@ -1,5 +1,5 @@
 /**
- * A job over the ledger: its runs, oldest first, as `allJobs` groups them.
+ * A work over the ledger: its jobs, oldest first, as `allJobs` groups them (a work is a `prev` chain).
  * Lookups by name, its issue, its state, the files in
  * its run folders, and `view`, the one projection that `/api/factory`,
  * `/api/jobs` and `aleph jobs` show. See docs/data-model.md.
@@ -9,7 +9,7 @@ import { basename, join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
 import { allJobs, isOpen, onOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 import { isLost } from "../infra/process.ts";
-import { runFile, type RunFile } from "./run-files.ts";
+import { isSection, readSection, runFile, type RunFile, type Section } from "./run-files.ts";
 import * as record from "./record.ts";
 
 export { allJobs, isOpen };
@@ -32,20 +32,24 @@ export const jobsNamed = (name: string, repo?: string | null, jobs = allJobs()):
 /** The open job called `name`, else the newest. */
 export const findJob = (name: string, repo?: string | null, jobs = allJobs()): Job | undefined => openJob(name, repo, jobs) ?? latestJob(name, repo, jobs);
 
-/** The job whose id (its first run's folder) is `id`. */
-export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.find((j) => j[0].id === id);
+/** The work that holds the job with key `id`. */
+export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.find((j) => j.some((e) => e.id === id));
+
+/** The last job of the work that is not a reviewer's: the job its state and its folder are about. */
+export const lastRun = (j: Job): Entry => j.findLast((e) => e.run.role !== "review")!;
 
 /** The repo issue the job works on: the latest run that names one. */
-export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
+export const issue = (j: Job): number | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
 /** The first open job of issue `n` in `repo`. */
 export const openJobOfIssue = (repo: string, n: number | string | undefined, jobs = allJobs()): Job | undefined => jobs.find((j) => isOpen(j) && j[0].run.repo === repo && issue(j) === n);
 
 /** The job's state: that of the run that counts. */
-export const stateOf = (j: Job): State => record.counting(j).run.condition;
+export const stateOf = (j: Job): State => record.counting(j).run.state;
 
 /** A file in a run's folder, or undefined when it is not there. */
-export function readFile(e: Entry, file: RunFile): string | undefined {
+export function readFile(e: Entry, file: RunFile | Section): string | undefined {
+  if (isSection(file)) return readSection(e.folder, file);
   try { return readFileSync(runFile(e.folder, file), "utf8"); } catch { return undefined; }
 }
 
@@ -62,7 +66,7 @@ export function latestFile(j: Job, file: RunFile, only: (e: Entry) => boolean = 
 }
 
 /** The last `n` lines of a file in a run's folder; empty when it is not there. */
-export const tailOf = (e: Entry, file: RunFile, n: number): string => (readFile(e, file) ?? "").trimEnd().split("\n").slice(-n).join("\n");
+export const tailOf = (e: Entry, file: RunFile | Section, n: number): string => (readFile(e, file) ?? "").trimEnd().split("\n").slice(-n).join("\n");
 
 /** The notes of a job, in order: each follow-up's spec, kept in its first run's `notes/`. */
 export function notes(j: Job): { name: string; text: string }[] {
@@ -78,16 +82,16 @@ export function addNote(j: Job, text: string): void {
 }
 
 /** The first line of the job's spec, or of a plain run's command. */
-export const issueTitle = (j: Job): string => (readFile(j[0], "spec.md") ?? readFile(j[0], "command.txt") ?? "").trim().split("\n")[0];
+export const issueTitle = (j: Job): string => (readFile(j[0], "spec.md") ?? readSection(j[0].folder, "command") ?? "").trim().split("\n")[0];
 
 /** A job as the UI and `aleph jobs` show it. Run fields are the last run's; the rest is the latest run that has them. */
 export interface JobView {
   job: string; name: string; repo?: string;
-  /** The last run: its folder, kind and start. `started` is the job's first. */
-  run: { id: string; kind: Run["kind"]; started: string };
-  condition: State; needs?: ReturnType<typeof needsOf>; phase?: string; reason?: string; question?: string; say?: string; session?: string;
+  /** The last run: its key, role and start. `started` is the job's first. */
+  run: { id: string; role: Run["role"]; started: string };
+  state: State; needs?: ReturnType<typeof needsOf>; phase?: string; reason?: string; question?: string; say?: string; session?: string;
   started: string; ended?: string;
-  item?: number | string; cost?: number; model?: string; tier?: string; commit?: string; stat?: string;
+  item?: number; cost?: number; model?: string; tier?: string; commit?: string; stat?: string;
   defaults: string[]; followups: string[];
   checks?: CheckResult[];
   /** The review of the last run: its call and reason. */
@@ -102,8 +106,7 @@ export interface JobView {
 export function checkedBy(j: Job): string[] {
   const checks = j.findLast((e) => e.run.checks?.length)?.run.checks ?? [];
   const names = checks.filter((c) => c.ok).map((c) => c.name);
-  const has = (f: string) => j.some((e) => existsSync(join(e.folder, f)));
-  return [...names, ...(has("review.md") ? ["reviewer"] : [])];
+  return [...names, ...(j.some((e) => e.run.role === "review") ? ["reviewer"] : [])];
 }
 
 /** Minutes a spot check of a delivery should take, an estimate: two, and one per 200 changed lines. */
@@ -116,7 +119,7 @@ export function view(j: Job): JobView {
   const r = last.run;
   const latest = <K extends keyof Run>(k: K): Run[K] | undefined => r[k] ?? j.findLast((e) => e.run[k])?.run[k];
   const v: JobView = {
-    job: r.job, name: r.name, run: { id: last.id, kind: r.kind, started: r.started }, condition: r.condition, started: j[0].run.started,
+    job: r.job, name: r.name, run: { id: last.id, role: r.role, started: r.started }, state: r.state, started: j[0].run.started,
     defaults: j.findLast((e) => e.run.defaults !== undefined)?.run.defaults ?? [],
     followups: j.findLast((e) => e.run.followups !== undefined)?.run.followups ?? [],
   };
@@ -133,11 +136,11 @@ export function view(j: Job): JobView {
     if (val) v[k] = val;
   }
   // The latest checks that ran; a returned or failed job shows its last run's, even none.
-  const checks = r.condition === "returned" || r.condition === "failed" ? j.findLast((e) => e.run.checks)?.run.checks : j.findLast((e) => e.run.checks?.length)?.run.checks;
+  const checks = r.state === "returned" || r.state === "failed" ? j.findLast((e) => e.run.checks)?.run.checks : j.findLast((e) => e.run.checks?.length)?.run.checks;
   if (Array.isArray(checks)) v.checks = checks;
   const review = last.run.review;
   if (review) v.review = { call: review.call, ...(review.reason !== undefined && { reason: review.reason }) };
-  if (r.condition === "landed" && r.check) v.check = r.check;
+  if (r.state === "landed" && r.check) v.check = r.check;
   if (isLost(last.folder)) v.lost = true;
   return v;
 }

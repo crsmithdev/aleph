@@ -7,15 +7,14 @@
  * each one and applies it through the issue verbs. It asks nobody: where it would ask, it notes the issue and moves on.
  */
 import { writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
+import { getJson, putJson } from "../../../lib/db.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList } from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
 import { askOf, asking, refIn } from "../asks/ask.ts";
-import { factoryDir, gates } from "../gates/factory-status.ts";
+import { gates } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
 import { held, lock } from "../infra/locks.ts";
 import { OPUS_MODEL } from "../routing/models.ts";
@@ -38,8 +37,7 @@ const PATH = /(?:[\w.-]+\/)*[\w-]+\.[a-z]{1,4}\b/g;
 
 /** When the daily review last started, when the last sweep or daily review started, and the main commit of each repo at its last sweep. */
 export interface State { daily?: string; last?: string; main: Record<string, string> }
-const stateFile = () => join(factoryDir(), "housekeeper.json");
-export const readState = (): State => ({ main: {}, ...readJsonOr<Partial<State>>(stateFile(), {}) });
+export const readState = (): State => ({ main: {}, ...getJson<Partial<State>>("state", "housekeeper", {}) });
 
 /** One batch: parked issues of one repo, and the land that touched them, if a land is the trigger. */
 export interface Batch { repo: Repo; items: issues.Issue[]; land?: { from: string; to: string; files: string[] } }
@@ -262,7 +260,7 @@ export async function housekeep(now: number): Promise<Outcome[] | null> {
     const s = readState();
     const daily = dailyDue(s, now);
     const batches = daily ? repos().flatMap((repo) => chunks(parked(repo), BATCH).map((items) => ({ repo, items }))) : landBatches(s);
-    writeJson(stateFile(), { daily: daily ? new Date(now).toISOString() : s.daily, last: new Date(now).toISOString(), main: { ...s.main, ...Object.fromEntries(repos().map((r) => [r.key, headOf(r)])) } });
+    putJson("state", "housekeeper", { daily: daily ? new Date(now).toISOString() : s.daily, last: new Date(now).toISOString(), main: { ...s.main, ...Object.fromEntries(repos().map((r) => [r.key, headOf(r)])) } });
     const out: Outcome[] = [];
     for (const b of batches) out.push(await review(b, now));
     return out;

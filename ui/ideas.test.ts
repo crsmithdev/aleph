@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../jobs/commands.ts";
@@ -11,6 +11,7 @@ import { chips, count, empty, error, filterBar, loadingLine, repoIdLink, searchB
 import { renderKpis } from "./timeline.js";
 // @ts-ignore
 import { ideaView, renderIdea, renderIdeas } from "./views/ideas.js";
+import { writeRepos } from "../tests/projects.ts";
 
 // The fake lens agent: it writes result.md and ends as stream-json does, with the cost $FAKE_COST.
 const FAKE = `#!/usr/bin/env bash
@@ -27,20 +28,19 @@ beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-ideas-"));
   writeFileSync(join(base, "claude"), FAKE);
   chmodSync(join(base, "claude"), 0o755);
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ aleph: { path: base, code: "a" } }));
-  restore = withEnv({ ALEPH_IDEAS: join(base, "ideas"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "issues"), ALEPH_LENS_CMD: join(base, "claude"), FAKE_COST: "0.5", ...gitEnv });
+  writeRepos({ aleph: { path: base, code: "a" } }, join(base, "issues"));
+  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "issues"), ALEPH_LENS_CMD: join(base, "claude"), FAKE_COST: "0.5", ...gitEnv });
   add("Alpha", "sketch", "aleph");
   add("Beta", "sketch");
   add("Gamma", "sketch");
-  drop("gamma");
-  note("alpha", "? who pays");
-  note("alpha", "decided yes");
-  note("alpha", "? which repo");
-  await lens("alpha", "prior-art", "0.5");
-  await lens("alpha", "red-team", "0.25");
-  const dir = join(base, "ideas", "alpha", "lenses");
-  rmSync(dir, { recursive: true });
-  mkdirSync(dir);
+  drop("3");
+  note("1", "? who pays");
+  note("1", "decided yes");
+  note("1", "? which repo");
+  await lens("1", "prior-art", "0.5");
+  await lens("1", "red-team", "0.25");
+  const dir = join(base, "issues", "ideas", "1");
+  for (const f of readdirSync(dir).filter((f) => f !== "idea.md")) rmSync(join(dir, f));
   writeFileSync(join(dir, "prior-art-2026-11-01-0900.html"), "<p>old</p>");
   writeFileSync(join(dir, "prior-art-2026-11-02-0900.md"), "newer");
   ({ at, stop } = await withServer({ warm: false }));
@@ -49,41 +49,41 @@ afterAll(() => { stop(); restore(); rmSync(base, { recursive: true, force: true 
 
 test("the list has the exploring ideas with Spent and open questions, and ?status= picks another status", async () => {
   const rows = await json("/api/ideas");
-  expect(rows.map((r: any) => r.slug)).toEqual(["alpha", "beta"]);
+  expect(rows.map((r: any) => r.slug)).toEqual(["1", "2"]);
   expect(rows[0]).toMatchObject({ title: "Alpha", target: "aleph", status: "exploring", questions: 2, spent: 0.75 });
   expect(rows[0].lenses).toEqual(["prior-art"]);
   expect(rows[1]).toMatchObject({ questions: 0, spent: 0 });
   expect(rows[1].target).toBeUndefined();
   expect(rows[0].last).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d$/);
-  expect((await json("/api/ideas?status=dropped")).map((r: any) => r.slug)).toEqual(["gamma"]);
+  expect((await json("/api/ideas?status=dropped")).map((r: any) => r.slug)).toEqual(["3"]);
 });
 
 test("an idea lists its results newest first; a result file has a CSP with no network; a bad name is 404", async () => {
-  const d = await json("/api/ideas/alpha");
+  const d = await json("/api/ideas/1");
   expect(d).toMatchObject({ title: "Alpha", writeup: "sketch" });
-  expect(d.lenses.map((l: any) => l.file)).toEqual(["lenses/prior-art-2026-11-02-0900.md", "lenses/prior-art-2026-11-01-0900.html"]);
-  const r = await at("/api/ideas/alpha/lenses/prior-art-2026-11-02-0900.md");
+  expect(d.lenses.map((l: any) => l.file)).toEqual(["prior-art-2026-11-02-0900.md", "prior-art-2026-11-01-0900.html"]);
+  const r = await at("/api/ideas/1/lenses/prior-art-2026-11-02-0900.md");
   expect(await r.text()).toBe("newer");
   expect(r.headers.get("content-security-policy")).toContain("default-src 'none'");
-  for (const p of ["/api/ideas/alpha/lenses/..%2Fidea.md", "/api/ideas/alpha/lenses/nope.md", "/api/ideas/nope"]) expect((await at(p)).status).toBe(404);
+  for (const p of ["/api/ideas/1/lenses/..%2Fidea.md", "/api/ideas/1/lenses/nope.md", "/api/ideas/99"]) expect((await at(p)).status).toBe(404);
 });
 
 test("POST refuses an unknown lens or idea, else starts the lens and answers at once", async () => {
   const post = (p: string) => at(p, { method: "POST", headers: { "X-Aleph-UI": "1" } });
-  expect((await post("/api/ideas/alpha/lenses/nope")).status).toBe(422);
-  expect((await post("/api/ideas/nope/lenses/prior-art")).status).toBe(422);
+  expect((await post("/api/ideas/1/lenses/nope")).status).toBe(422);
+  expect((await post("/api/ideas/99/lenses/prior-art")).status).toBe(422);
   // An idea of its own: the lens adds a result and a cost that the other tests do not expect.
   add("Delta", "sketch");
   try {
     process.env.FAKE_COST = "0.1";
-    expect((await post("/api/ideas/delta/lenses/prior-art")).status).toBe(200);
-    for (let i = 0; i < 5000 && (await json("/api/ideas/delta")).lenses.length === 0; i++);
-    expect((await json("/api/ideas/delta")).lenses).toHaveLength(1);
-  } finally { rmSync(join(base, "ideas", "delta"), { recursive: true, force: true }); }
+    expect((await post("/api/ideas/4/lenses/prior-art")).status).toBe(200);
+    for (let i = 0; i < 5000 && (await json("/api/ideas/4")).lenses.length === 0; i++);
+    expect((await json("/api/ideas/4")).lenses).toHaveLength(1);
+  } finally { rmSync(join(base, "issues", "ideas", "4"), { recursive: true, force: true }); }
 }, 30000);
 
 test("a .md lens result loads behind loadingLine(), and a failed fetch puts error() in the pane", async () => {
-  const d = { slug: "alpha", title: "Alpha", status: "exploring", writeup: "", log: [], running: [], lenses: [{ lens: "prior-art", file: "lenses/p.md", at: "2026-11-02 09:00" }] };
+  const d = { slug: "alpha", title: "Alpha", status: "exploring", writeup: "", log: [], running: [], lenses: [{ lens: "prior-art", file: "p.md", at: "2026-11-02 09:00" }] };
   const h = renderIdea(d);
   expect(h).toContain(`<div class="md" data-src="/api/ideas/alpha/lenses/p.md">${loadingLine("the result")}</div>`);
   const el: any = { dataset: { src: "/x.md" }, innerHTML: "" }, was = globalThis.fetch;
@@ -120,7 +120,7 @@ test("renderIdeas puts searchBox() before the filter bar, both inside the Ideas 
 });
 
 test("renderIdea draws an empty log with empty(), built issues with repoIdLink(), a statusRow() and the renderKpis() strip", () => {
-  const d = { slug: "alpha", title: "Alpha", status: "exploring", target: "aleph", writeup: "", log: [], running: [], built: ["aleph-12"], lenses: [{ lens: "prior-art", file: "lenses/p.html", at: "2026-11-02 09:00" }, { lens: "prior-art", file: "lenses/o.html", at: "2026-11-01 09:00" }] };
+  const d = { slug: "alpha", title: "Alpha", status: "exploring", target: "aleph", writeup: "", log: [], running: [], built: ["aleph-12"], lenses: [{ lens: "prior-art", file: "p.html", at: "2026-11-02 09:00" }, { lens: "prior-art", file: "o.html", at: "2026-11-01 09:00" }] };
   const h = renderIdea(d);
   expect(h).toContain(empty());
   expect(h).toContain(repoIdLink("aleph-12", "#/issues/aleph/12"));

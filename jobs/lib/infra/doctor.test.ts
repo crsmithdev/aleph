@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { wallStepSince } from "./clock.ts";
 import { emptyObjects, fix, gitChecks, homeCheck, linkCheck, lostCheck, unitChecks, doctor } from "./doctor.ts";
-import { putRun } from "../records/record.ts";
+import { seed } from "../../job.testkit.ts";
 import { mkdirSync, readFileSync, rmSync as rm, symlinkSync } from "node:fs";
+import { writeRepos } from "../../../tests/projects.ts";
 
 let dir: string, repo: string;
 const saved = { ...process.env };
@@ -15,9 +16,9 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "doctor-"));
   repo = join(dir, "r");
   sh(dir, `git init -q -b main r && cd r && git config user.email a@b && git config user.name a && echo x > f && git add f && git commit -qm one`);
-  writeFileSync(join(dir, "repos.json"), JSON.stringify({ r: { path: repo, sandbox: true } }));
   sh(dir, `git init -q --bare -b main items.git && git clone -q items.git items 2>/dev/null && cd items && git config user.email a@b && git config user.name a && echo x > f && git add f && git commit -qm init && git push -q origin main`);
-  Object.assign(process.env, { ALEPH_ISSUES: join(dir, "items"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_JOBS_DIR: join(dir, "jobs"), ALEPH_FACTORY_DIR: join(dir, "factory") });
+  writeRepos({ r: { path: repo, sandbox: true } }, join(dir, "items"));
+  Object.assign(process.env, { ALEPH_ITEMS: join(dir, "items"), ALEPH_JOBS_DIR: join(dir, "jobs"), ALEPH_DB: join(dir, "aleph.db"), ALEPH_FACTORY_DIR: join(dir, "factory") });
   mkdirSync(join(dir, "jobs"));
 });
 afterEach(() => { process.env = { ...saved }; rmSync(dir, { recursive: true, force: true }); });
@@ -116,9 +117,7 @@ test("aleph.home fails when the JSON route's gzip body does not decode", async (
 
 test("a run with a pid, no exit and no process is lost", () => {
   expect(lostCheck().ok).toBe(true);
-  const f = join(dir, "jobs", "20261030-000000-x");
-  mkdirSync(f);
-  putRun(basename(f), { n: 1, kind: "plain", job: "x", name: "x", condition: "running", told: false, started: "2026-10-30T00:00:00Z" });
+  const { folder: f } = seed({ role: "plain", name: "x", state: "running", told: false, started: "2026-10-30T00:00:00Z" });
   writeFileSync(join(f, "pid"), "999999\n");
   expect(lostCheck()).toMatchObject({ ok: false });
 });

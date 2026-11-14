@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { conn } from "../../lib/db.ts";
+import { recordFlake } from "../../jobs/lib/gates/factory-status.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -69,22 +71,18 @@ test("smells finds each rule in test files only, and a function named fit is not
 });
 
 test("flakes groups aleph's rows for the repo by test, most often first", () => {
-  const home = join(root, "home");
-  write("home/factory/flaky.json", JSON.stringify([
+  for (const r of [
     { repo: "r", check: "test", run: "j1", at: "2026-10-01T00:00:00Z", tests: ["a > b"] },
     { repo: "r", check: "test", run: "j2", at: "2026-10-03T00:00:00Z", tests: ["a > b", "c"] },
     { repo: "other", check: "test", run: "j3", at: "2026-10-04T00:00:00Z", tests: ["c"] },
-  ]));
-  const was = process.env.ALEPH_FACTORY_DIR;
-  process.env.ALEPH_FACTORY_DIR = join(home, "factory");
+  ]) recordFlake(r);
   try {
     expect(flakes("r").tests).toEqual([
       { test: "a > b", count: 2, first: "2026-10-01", last: "2026-10-03", runs: ["j1", "j2"] },
       { test: "c", count: 1, first: "2026-10-03", last: "2026-10-03", runs: ["j2"] },
     ]);
   } finally {
-    if (was === undefined) delete process.env.ALEPH_FACTORY_DIR;
-    else process.env.ALEPH_FACTORY_DIR = was;
+    conn().run("DELETE FROM flaky");
   }
 });
 

@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, watch, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { writeRepos } from "../projects.ts";
 
 const live = process.env.ALEPH_LIVE === "1";
 const describeLive = live ? describe : describe.skip;
@@ -30,16 +31,16 @@ describeLive("live job", () => {
     sh(join(base, "seed"), "git", "commit", "-qm", "init");
     sh(join(base, "seed"), "git", "push", "-q", "origin", "main");
     sh(base, "git", "clone", "-q", "remote.git", "repo");
-    writeFileSync(join(base, "repos.json"), JSON.stringify({
+    writeRepos({
       scratch: { path: join(base, "repo"), checks: [{ name: "hello", run: "grep -q hi hello.txt" }] },
-    }));
+    }, join(base, "items"));
     writeFileSync(join(base, "spec.md"), "Create hello.txt containing the word hi, and commit it with the message \"add hello\". Do nothing else.\n");
   });
   afterAll(() => rmSync(base, { recursive: true, force: true }));
 
   test("a real job in a systemd unit ends passed with a session id", async () => {
     const env: Record<string, string | undefined> = {
-      ...process.env, ...gitEnv, ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"),
+      ...process.env, ...gitEnv, ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ITEMS: join(base, "items"), 
       SIDETONE_TELL_URL: "https://127.0.0.1:1/tell", ALEPH_JOB_FOREGROUND: undefined,
     };
     const p = Bun.spawnSync(["bun", CLI, "job", "scratch", "hello", "--spec", join(base, "spec.md"), "--model", "sonnet"], { cwd: base, env, stdout: "pipe", stderr: "pipe" });
@@ -57,7 +58,7 @@ describeLive("live job", () => {
       if (existsSync(join(folder, "exit"))) { w.close(); done(); }
     });
     const state = JSON.parse(readFileSync(join(folder, "..", ".records", `${run}.json`), "utf8")).runs[0];
-    expect(state.condition).toBe("passed");
+    expect(state.state).toBe("passed");
     expect(state.session).toMatch(/^[0-9a-f-]{36}$/);
     expect(readFileSync(join(folder, "output.log"), "utf8")).toContain(state.session);
     expect(sh(join(base, "repo", ".worktrees", "job-hello"), "git", "log", "-1", "--format=%s")).toBe("add hello");

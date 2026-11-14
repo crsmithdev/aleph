@@ -3,17 +3,16 @@
  * what each one offers, sets an Ask on an issue, says which actor (Chris or the director) may take which action on it,
  * and says what clears it. Every new Ask goes to the director first (director.ts); it reaches Chris when the director escalates it, or at once when an Always rule grants the reason `user`. Callers do not read the Ask fields or test reason names for these rules.
  *
- * The Ask of an issue and of its runs is one: `ask` of the issue's job record (record.ts). While a run awaits Chris
- * the record names that run in `askRun`, and the run reads it as its own `ask`; else the Ask is on the issue.
- * The issue store keeps no Ask. A run that set an Ask on its issue has an `asked` event in the record, with the
+ * The Ask of an issue and of its runs is one: `ask` of the issue's row in `issue_state` (record.ts). While a run awaits Chris
+ * the row names that run in `ask_job`, and the run reads it as its own `ask`; else the Ask is on the issue.
+ * The issue store keeps no Ask. A run that set an Ask on its issue has `asked` set, with the
  * spec's version when it asked about the spec.
  *
- * `always.json` in the factory dir maps a reason to `{ action, at }`.
+ * The `always` setting maps a reason to `{ action, at }`.
  */
-import { join } from "node:path";
-import { layout, logEvent } from "../../../lib/layout.ts";
-import { readJsonOr, writeJson } from "../../../lib/json.ts";
-import { FULL, SUBS, word, type Event } from "../../../lib/naming.ts";
+import { logEvent, logSetting } from "../../../lib/layout.ts";
+import { getJson, putJson } from "../../../lib/db.ts";
+import { BECAUSE, because, FULL, key, word, type Event } from "../../../lib/naming.ts";
 import { INTAKE_TRIES, RUN_CAP } from "../infra/settings.ts";
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
@@ -183,8 +182,8 @@ export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: 
 
 
 
-/** The ref of an item in repo `key`: `<key>-<n>`, the key of its job record. */
-export const refIn = (key: string, item: issues.Issue): string => `${key}-${issues.refOf(item)}`;
+/** The key of an item: `issue.<n>`, the key of its row in `issue_state`. */
+export const refIn = (_repo: string, item: issues.Issue): string => key("issue", item.id);
 
 /** The Ask on the issue `ref`, or null. A run's Ask is the run's, not the issue's. */
 export const askOf = (ref: string): Ask | null => record.issueAsk(record.read(ref));
@@ -204,18 +203,16 @@ export const askNote = (a: Ask): string =>
   (a.recommended ? ` My recommendation is ${a.recommended}.` : "") +
   (a.why.length ? ` Why: ${a.why.join("; ")}.` : "");
 
-const alwaysFile = () => join(layout().factory, "always.json");
-
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
 /** `user` sends the Ask to Chris with no director run; every reason takes it but the memory proposals. */
 const USER = "user";
 const allows = (reason: string, r: Reason, action: string): boolean => r.actions.includes(action) || action === r.always || (action === USER && !reason.startsWith("proposal-"));
 
-/** always.json. A missing file is empty; a bad one throws. An entry that grant() would refuse is ignored. */
+/** The `always` setting. A missing row is empty; An entry that grant() would refuse is ignored. */
 export const readAlways = (): Record<string, Granted> =>
-  Object.fromEntries(Object.entries(readJsonOr<Record<string, Granted>>(alwaysFile(), {})).filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(reason, r, g?.action); }));
+  Object.fromEntries(Object.entries(getJson<Record<string, Granted>>("settings", "always", {})).filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(reason, r, g?.action); }));
 
-const write = (s: Record<string, Granted>): void => writeJson(alwaysFile(), s);
+const write = (s: Record<string, Granted>): void => putJson("settings", "always", s);
 
 /** The Always rule for `reason`, or null. */
 export const always = (reason: string): Granted | null => readAlways()[reason] ?? null;
@@ -226,6 +223,7 @@ export function grant(reason: string, action: string): string | null {
   if (!r) return `unknown reason ${reason}; known: ${Object.keys(ASK_REASONS).join(", ")}`;
   if (!allows(reason, r, action)) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
   write({ ...readAlways(), [reason]: { action, at: new Date().toISOString() } });
+  logSetting(`Always: ${reason} is ${action}`);
   return null;
 }
 
@@ -234,15 +232,15 @@ export function revoke(reason: string): void {
   if (!(reason in s)) return;
   delete s[reason];
   write(s);
-  logEvent({ by: "human", subject: reason, action: "changed", sub: askSub(reason), to: "human", note: "set to Ask me" });
+  logSetting(`Always: ${reason} is Ask me`);
 }
 
-/** The sub of an event about an Ask reason: the reason, its new word or its first word, when one of them is in SUBS. `run-cap` is `capped`, `intake-failed` is `intake`. */
-export const askSub = (reason: string): string | undefined => [reason, word("ask", reason), reason.split("-")[0]].find((w) => SUBS.includes(w));
+/** The sub of an event about an Ask reason: the reason, its new word or its first word, when one of them has a phrase in BECAUSE. `run-cap` is `capped`, `intake-failed` is `intake`. */
+export const askSub = (reason: string): string | undefined => [reason, word("ask", reason), reason.split("-")[0]].find((w) => w in BECAUSE);
 
 /** The log event of an Always rule that acted on `ref`: `action` is what it did, from ACTIONS. */
 export const logAlways = (reason: string, ref: string, action: string, more: Partial<Event> = {}): void => {
-  logEvent({ by: "rule", subject: ref, action, sub: askSub(reason), ...more });
+  logEvent({ subject: "rule", action, object: ref, detail: because(askSub(reason) ?? ""), ...more });
 };
 
 /**
@@ -260,7 +258,7 @@ export function askChris(place: Place, id: number | string, ask: Ask, said: stri
       return said === null ? null : issues.note(item, text);
     });
     if (!found) return `no issue ${id}`;
-    setAsk(`${place.key}-${id}`, ask);
+    setAsk(key("issue", Number(id)), ask);
     return null;
   } catch (e: any) {
     return e?.message ?? String(e);
@@ -277,20 +275,16 @@ export function askFromRun(e: Entry, place: Place, issue: number | string | unde
   return issue === undefined ? "no issue" : askChris(place, issue, ask, said);
 }
 
-/** The `asked` event of the run in its job record: the factory set an Ask on the run's issue. */
-const askedEvent = (e: Entry) => record.read(record.keyOf(e.run))?.events.findLast((x) => x.kind === "asked" && x.run === e.id);
-
 /** The factory set an Ask on the run's issue: the run no longer holds the factory. */
-export const asked = (e: Entry): boolean => askedEvent(e) !== undefined;
+export const asked = (e: Entry): boolean => record.getRun(e.id)?.asked !== undefined;
 /** Record that the run asked `question`; `spec` is the spec version when it asked about the spec. */
 export const markAsked = (e: Entry, question: string, spec?: string): void =>
-  void record.addEvent(record.keyOf(e.run), { kind: "asked", run: e.id, what: question, ...(spec ? { data: { spec } } : {}) });
+  void record.patchRun(e.id, { asked: { at: new Date().toISOString(), question, ...(spec ? { spec } : {}) } });
 
 /** A run that asked about its issue's spec and waits for a spec edit: the spec version it asked about and its question; else null. */
 export function waitsForSpecEdit(e: Entry): { version: string; question: string } | null {
-  const a = askedEvent(e);
-  const version = (a?.data as { spec?: string } | undefined)?.spec;
-  return a && version !== undefined ? { version, question: a.what } : null;
+  const a = record.getRun(e.id)?.asked;
+  return a?.spec !== undefined ? { version: a.spec, question: a.question } : null;
 }
 
 export const PLAN_REST = "Plan the missing part";
@@ -319,7 +313,6 @@ export function askPartDropped(key: string, issue: issues.Issue, question: strin
     ],
     why: [],
   });
-  issues.touch(issue);
 }
 
 /** Who decides an Ask: the director first, and Chris when it escalates. */

@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
 import { loadRegistry, type Run } from "../records/ledger.ts";
-import { putRun } from "../records/record.ts";
+import { seed } from "../../job.testkit.ts";
 import { clock, today } from "../../../vault/lib/vault.ts";
 import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
+import { writeRepos } from "../../../tests/projects.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
@@ -18,7 +19,7 @@ function sh(cwd: string, ...args: string[]): string {
   return p.stdout.toString().trim();
 }
 
-const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_VAULT", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
+const KEYS = ["ALEPH_DB", "ALEPH_ITEMS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_VAULT", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
 let base: string;
 let saved: Record<string, string | undefined>;
 let server: ReturnType<typeof Bun.serve>;
@@ -38,12 +39,12 @@ beforeEach(() => {
     },
   });
   Object.assign(process.env, gitEnv, {
-    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"),
+    ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"),
     ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_VAULT: join(base, "vault"),
     LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk",
   });
   factoryRepos(base);
-  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "repo"), sandbox: true, autoland: false } }));
+  writeRepos({ fac: { path: join(base, "repo"), sandbox: true, autoland: false } }, join(base, "items"));
   vault(join(base, "vault"));
 });
 
@@ -69,22 +70,20 @@ const land = (id: number | string): string => {
   const repo = join(base, "repo");
   writeFileSync(join(repo, `f${id}.txt`), "x\n");
   sh(repo, "git", "add", ".");
-  sh(repo, "git", "commit", "-q", "-m", `ship thing ${id}`, "-m", `Issue: fac-${id}`);
+  sh(repo, "git", "commit", "-q", "-m", `ship thing ${id}`, "-m", `Issue: issue.${id}`);
   sh(repo, "git", "push", "-q", "origin", "main");
   return sh(repo, "git", "rev-parse", "HEAD");
 };
 
-const run = (id: string, o: Partial<Run>): void => {
-  const folder = join(base, "jobs", id);
-  mkdirSync(folder, { recursive: true });
-  putRun(basename(folder), { n: 1, kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: hoursAgo(1), ended: hoursAgo(0.5), ...o });
+const run = (o: Partial<Run>): void => {
+  seed({ role: "build", name: "fac-1", repo: "fac", state: "landed", started: hoursAgo(1), ended: hoursAgo(0.5), ...o });
 };
 
 const NOW = new Date("2026-11-04T12:00:00Z").getTime();
 const hoursAgo = (h: number) => new Date(NOW - h * 3600_000).toISOString();
 const episodes = () => join(base, "factory", "episodes");
-const pages = () => readdirSync(episodes()).filter((f) => f.endsWith(".md"));
 const section = (text: string, name: string) => text.split(`## ${name}\n`)[1].split("\n## ")[0];
+const pages = () => readdirSync(episodes()).filter((f) => f.endsWith(".md"));
 
 test("a 400-character multi-byte title is cut to fit a file name", () => {
   const repo = { key: "fac" } as any;
@@ -100,7 +99,7 @@ test("a 400-character multi-byte title is cut to fit a file name", () => {
 test("an unreachable Langfuse does not block the page", async () => {
   const id = add("ship it");
   land(id);
-  run("20261028-100000-fac-1-agent", { on: `fac-${id}` });
+  run({ target: `issue.${id}` });
   process.env.LANGFUSE_BASE_URL = "http://127.0.0.1:1";
   const r = await writeEpisodes([loadRegistry().fac]);
   expect(r.failed).toEqual([]);
@@ -110,7 +109,7 @@ test("an unreachable Langfuse does not block the page", async () => {
 test("a done issue gets a page in the factory's episodes folder and no vault commit", async () => {
   const id = add("ship it");
   land(id);
-  run("20261028-100000-fac-1-agent", { on: `fac-${id}` });
+  run({ target: `issue.${id}` });
   const head = sh(join(base, "vault"), "git", "rev-parse", "HEAD");
   const r = await writeEpisodes([loadRegistry().fac]);
   expect(r).toEqual({ written: [`fac-${id} ship it`], failed: [] });
@@ -123,8 +122,8 @@ test(`a page older than ${KEEP_DAYS} days is deleted, and an issue whose last ru
   const old = add("old one"), fresh = add("fresh one");
   land(old);
   land(fresh);
-  run("20261001-100000-fac-1-agent", { on: `fac-${old}`, started: hoursAgo(24 * (KEEP_DAYS + 1)), ended: hoursAgo(24 * (KEEP_DAYS + 1) - 1) });
-  run("20261028-100000-fac-1-agent", { on: `fac-${fresh}` });
+  run({ target: `issue.${old}`, started: hoursAgo(24 * (KEEP_DAYS + 1)), ended: hoursAgo(24 * (KEEP_DAYS + 1) - 1) });
+  run({ target: `issue.${fresh}` });
   mkdirSync(episodes(), { recursive: true });
   const stale = join(episodes(), "fac-99 gone.md");
   writeFileSync(stale, "x\n");
@@ -144,28 +143,27 @@ test(`a page older than ${KEEP_DAYS} days is deleted, and an issue whose last ru
 });
 
 /** Adds a top-level issue and `titles.length` parts under it, all done with a landed commit and a run. */
-const addParts = (titles: string[]): number => {
-  const parent = writeList({ key: "fac" }, "add", (doc) => {
+const addParts = (titles: string[]): { parent: number; ids: number[] } => {
+  const { parent, ids } = writeList({ key: "fac" }, "add", (doc) => {
     const top = issues.add(doc, "the big one", { spec: "## Goal\nShip it." });
-    for (const title of titles) addPart(doc, top, { title, spec: "## Goal\nShip it." });
-    return top.id;
+    return { parent: top.id, ids: titles.map((title) => addPart(doc, top, { title, spec: "## Goal\nShip it." }).id) };
   }, true)!.value;
-  titles.forEach((_, i) => {
-    land(`${parent}.${i + 1}`);
-    run(`20261028-1000${String(i).padStart(2, "0")}-fac-1-agent`, { on: `fac-${parent}.${i + 1}` });
+  ids.forEach((id) => {
+    land(String(id));
+    run({ target: `issue.${id}` });
   });
-  return parent;
+  return { parent, ids };
 };
 
 test("two done parts of one issue get a page each, named by their refs", async () => {
-  const parent = addParts(["first part", "second part"]);
+  const { parent, ids } = addParts(["first part", "second part"]);
   const repo = loadRegistry().fac;
   const r = await writeEpisodes([repo]);
   expect(r.failed).toEqual([]);
-  expect(pages().filter((f) => f.startsWith(`fac-${parent}.1 `)).length).toBe(1);
-  expect(pages().filter((f) => f.startsWith(`fac-${parent}.2 `)).length).toBe(1);
+  expect(pages().filter((f) => f.startsWith(`fac-${ids[0]} `)).length).toBe(1);
+  expect(pages().filter((f) => f.startsWith(`fac-${ids[1]} `)).length).toBe(1);
   expect(pages().filter((f) => f.startsWith(`fac-${parent} `)).length).toBe(0);
-  const text = readFileSync(join(episodes(), pages().find((f) => f.startsWith(`fac-${parent}.2 `))!), "utf8");
+  const text = readFileSync(join(episodes(), pages().find((f) => f.startsWith(`fac-${ids[1]} `))!), "utf8");
   expect(section(text, "Cost")).toContain("1234");
   const again = await writeEpisodes([repo]);
   expect(again.written).toEqual([]);
