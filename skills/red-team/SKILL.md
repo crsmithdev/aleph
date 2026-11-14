@@ -65,18 +65,40 @@ Each prompt must include:
   artifact's claims (don't make them hunt)
 - The instruction to walk every branch of every decision and demand specifics
 - The question categories for that lens, as concrete bullets
-- An instruction to produce 12 to 25 numbered questions or issues with
-  file:line citations and to **not propose fixes**
+- **Premise first**: do not take the plan's goal as given. Attack in this
+  order: the premise (is the problem real and measured, is the goal needed,
+  what must be true for the plan to pay off), then the design, then the
+  details.
+- An instruction to produce 12 to 25 numbered findings in the format below
+  and to **not propose fixes**
 - A length cap (under 800 words is a good default)
+
+Each finding has this format:
+
+```
+N. [fatal|high|medium|low] [premise|design|detail], evidence: read | inferred
+   Where: path:line, a plan section, or "premise"
+   Failure: what goes wrong, and for whom
+```
+
+`read` means the reviewer opened the code or data and saw it. `inferred`
+means it reasoned from the plan, names or principles. A premise or design
+finding needs no line number. Cite `path:line` when the finding is about code.
 
 Use `subagent_type: "general-purpose"` unless a specialist agent exists for
 the artifact's domain.
 
 ### 4. Synthesize the findings
 
-When all reviewers return, group findings by severity. Don't concatenate:
-cluster duplicates, elevate findings that multiple reviewers independently
-flagged, and lead with what kills the plan.
+When all reviewers return, check the findings, but do not filter them. Open
+the cited location of each fatal finding and each `read` finding about code,
+and tag every finding `verified`, `inferred` or `refuted`. Drop only a
+`refuted` finding, one that the code or data contradicts, and list it with
+its reason in one line. An `inferred` finding stays.
+
+Then group findings by severity. Don't concatenate: cluster duplicates,
+elevate findings that multiple reviewers independently flagged, and lead
+with what kills the plan.
 
 - **Fatal**: defects that invalidate the plan as written. Wrong target,
   unmeasured premise, broken invariant, existing infra already solves it.
@@ -87,8 +109,15 @@ flagged, and lead with what kills the plan.
 - **Cheaper alternatives**: interventions the plan didn't compare against,
   including a plan with a given moved, ranked by code and risk
 
-Cite files and line numbers throughout. The user should be able to verify
-every claim in two clicks.
+Cite files and line numbers wherever a finding is about code, so the user
+can verify it in two clicks. Keep each finding's tag in the report.
+
+Give one verdict, first in the report:
+
+- **REVISE**: any fatal finding that is not refuted, or 3 or more verified
+  correctness defects
+- **HARDEN**: defects that each have a clear fix inside the plan
+- **PROCEED**: no fatal finding and no verified correctness defect
 
 ### 5. Keep the agents reachable
 
