@@ -35,7 +35,7 @@ Rules:
 - **Only project terms.** General programming concepts do not belong.
 - **Group terms** under subheadings when clusters form.
 - **No implementation detail** in a definition. The model block carries code facts.
-- **Name the decision.** A term that came from a decision ends its definition with `(decision: <Title>)`. `<Title>` is the exact title of the vault note ([DECISION-FORMAT.md](./DECISION-FORMAT.md)). This works in a list, a table cell, or a table with a trailing `Decision` column if the doc already has one.
+- **Name the decision.** A term that came from a decision ends its definition with `(ADR-NNNN)`, the number of its ADR ([ADR-FORMAT.md](./ADR-FORMAT.md)). This works in a list, a table cell, or a table with a trailing `Decision` column if the doc already has one.
 
 ## Model block
 
@@ -79,4 +79,4 @@ Rules:
 - **Ordering and Billing**: share the types `CustomerId` and `Money`.
 ```
 
-If `GLOSSARY-MAP.md` exists, read it to find the contexts, and infer which one the topic belongs to. If unclear, ask. Decisions are not per context. Set the vault note's `scope` to the repo.
+If `GLOSSARY-MAP.md` exists, read it to find the contexts, and infer which one the topic belongs to. If unclear, ask. A decision for the whole system goes in the root `docs/adr/`. A decision for one context goes in that context's `docs/adr/`.

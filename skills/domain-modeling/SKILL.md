@@ -16,7 +16,7 @@ Build and sharpen the project's domain model as you design. This is the active d
 
 - **Glossary**: the first file that exists of `GLOSSARY.md`, `GLOSSARY-MAP.md`, `docs/naming.md`. Create `GLOSSARY.md` only when none exists. Layout and the multi-context map: [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
 - **Model block**: next to a group of related terms in the glossary. Format: [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
-- **Decisions**: vault notes of kind `decision`, written with `aleph memory write`. Format: [DECISION-FORMAT.md](./DECISION-FORMAT.md).
+- **Decisions**: ADRs in `docs/adr/`, or in a context's own `docs/adr/` when the decision belongs to that context only. Create the directory with the first ADR. Format: [ADR-FORMAT.md](./ADR-FORMAT.md).
 
 ## During the session
 
@@ -59,13 +59,13 @@ When a term or a model fact settles, edit the glossary right then. Do not batch.
 
 ### Record decisions sparingly
 
-Write a decision note only when all three are true:
+Write an ADR only when all three are true:
 
 1. **Hard to reverse**: changing your mind later costs a lot.
 2. **Surprising without context**: a future reader will ask why.
 3. **A real trade-off**: there were genuine alternatives.
 
-If one is false, skip the note. A decision that replaces an older one sets `supersedes`. Link each term that came from a decision with `(decision: <Title>)`.
+If one is false, skip the ADR. A decision that replaces an older one is a new ADR, and the old one's status becomes `superseded by ADR-NNNN`. Link each term that came from a decision with `(ADR-NNNN)`.
 
 ## Done when
 
@@ -78,4 +78,4 @@ Each step is done when its check passes:
 - **Cross-reference**: every claim about the system is checked against the code, and each contradiction and each two-answer case was shown to the user.
 - **Update**: every resolved term is in the glossary before you reply to the next message.
 - **Model block**: every entity discussed has all five lines. Each code fact cites a `path:line` that you read, and each unresolved two-answer case is marked `(conflict: ...)`.
-- **Decisions**: each decision is a vault note that `aleph memory write` accepted (with `supersedes` set where it replaces one), or it fails one of the three tests and you can name which. Each term from a decision names the note's exact title.
+- **Decisions**: each decision is an ADR in `docs/adr/` (with the old ADR marked superseded where it replaces one), or it fails one of the three tests and you can name which. Each term from a decision names its ADR number.
