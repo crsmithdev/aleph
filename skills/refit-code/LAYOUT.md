@@ -38,7 +38,7 @@ Then look for:
   Each part has a home next to its callers.
 - **A file with several jobs.** A file many times the median whose parts do not call each other: split it by
   concept. Its opposite is many tiny files that each have one caller: merge each one into its caller.
-- **Directories that do not match the domain.** A directory name that is not a word in `GLOSSARY.md`,
+- **Directories that do not match the domain.** A directory name that is not a word in the glossary,
   `docs/naming.md` or the README, or a concept there that no directory or file is named for. With none of
   these files, skip this signal and say so.
 - **Name drift.** Files of one kind named in more than one pattern (`x.test.ts` and `test-x.ts`, kebab and

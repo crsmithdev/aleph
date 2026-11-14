@@ -1,7 +1,7 @@
 /**
  * The skills of the agent roles. No role loads a skill of the user, a plugin or Claude Code itself
  * (`NO_SKILLS` on every `claude -p`); the one skill a role uses reaches it as text in its prompt.
- * Build worker: code-change. Reviewer: code-review. Spec check: the spec-review method, written into its prompt.
+ * Reviewer: code-review. Build worker: code-change, only in a repo with `sandbox` set. Maintainer: the `## write` section of vault.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

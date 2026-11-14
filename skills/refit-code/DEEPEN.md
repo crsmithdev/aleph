@@ -12,8 +12,8 @@ interface is proposed before this step.
 2. **Design it twice.** To compare interfaces, call the Skill tool with `aleph:codebase-design` and use its
    design-it-twice parallel subagent pattern. Done when the user picked one.
 3. **Keep the domain model current**, as decisions land, through `aleph:domain-modeling`:
-   - A deepened module named after a concept not in `GLOSSARY.md`: add the term. Create the file lazily.
-   - A fuzzy term sharpened in the conversation: update `GLOSSARY.md` there and then.
+   - A deepened module named after a concept not in the glossary: add the term. Create `GLOSSARY.md` only when no glossary exists.
+   - A fuzzy term sharpened in the conversation: update the glossary there and then.
    - The user rejects the finding with a load-bearing reason: offer an ADR, framed as "Want me to record this
      as an ADR so future reviews don't re-suggest it?" Only when a future reviewer would need the reason;
      skip ephemeral ones ("not worth it right now") and self-evident ones.

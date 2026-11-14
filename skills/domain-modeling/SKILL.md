@@ -14,7 +14,7 @@ Build and sharpen the project's domain model as you design. This is the active d
 
 ## Where things live
 
-- **Glossary**: the first file that exists of `GLOSSARY.md`, `GLOSSARY-MAP.md`, `docs/naming.md`. Create `GLOSSARY.md` only when none exists. Layout and the multi-context map: [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
+- **Glossary**: the first file that exists of `GLOSSARY.md`, `GLOSSARY-MAP.md`, `CONTEXT.md`, `docs/naming.md`. Create `GLOSSARY.md` only when none exists. Layout and the multi-context map: [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
 - **Model block**: next to a group of related terms in the glossary. Format: [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
 - **Decisions**: ADRs in `docs/adr/`, or in a context's own `docs/adr/` when the decision belongs to that context only. Create the directory with the first ADR. Format: [ADR-FORMAT.md](./ADR-FORMAT.md).
 

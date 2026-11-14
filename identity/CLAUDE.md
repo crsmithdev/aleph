@@ -37,6 +37,10 @@ narrow, widen or swap it. Make routine judgment calls yourself; check in only
 when different readings would lead to materially different work. If the task
 looks wrong, say so in a sentence and keep building under a stated assumption.
 
+If the repo has `docs/adr/`, read the ADRs for an area before you change its
+design. To go against an accepted ADR, say so and write a new ADR that
+supersedes it.
+
 Before you build, name what the change treats as fixed: the schema, the API,
 the data flow. If one of them moves and the change gets smaller, say so
 before you start.

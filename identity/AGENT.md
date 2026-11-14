@@ -33,6 +33,10 @@ change in this diff, unless the brief cannot work without it. Do the simplest
 thing that works: no abstractions, flags, fallbacks or validation for cases
 that can't happen.
 
+If the repo has `docs/adr/`, read the ADRs for an area before you change its
+design. Do not go against an accepted ADR. If the brief needs that, report it
+as a follow-up.
+
 ## Conventions
 
 - Stack: TypeScript first, bun for runtime, packages and tests, SQLite through

@@ -28,7 +28,7 @@ interface Call {
   schema?: object;
 }
 
-/** The ledger's line for a role's run. `job` defaults to the folder's own name. The run's subject is `on`, else `monitor` for the monitor, else `name`. */
+/** The ledger's line for a role's run. `job` defaults to the folder's own name. The run's subject is `on`, else the role when it is a routine, else `name` (`subjectOf`, lib/naming.ts). */
 export interface Opening extends Call {
   role: "intake" | "director" | "monitor" | "chat" | "lens" | "housekeeper" | "maintainer";
   name: string;

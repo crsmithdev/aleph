@@ -19,7 +19,7 @@ interface, depth, seam, adapter, leverage, locality) exactly.
 # Refit code
 
 One skill for the quality of a codebase. Seven **lenses** each ask one question of the code; the modes below
-decide where and how they run. Read `PRINCIPLES.md`, `GLOSSARY.md`, `docs/naming.md` and `docs/adr/` first when
+decide where and how they run. Read `PRINCIPLES.md`, `GLOSSARY.md`, `GLOSSARY-MAP.md`, `CONTEXT.md`, `docs/naming.md` and `docs/adr/` first when
 they exist: they name owners and settled decisions. Read `.refit.json` at the repo root when it exists: its
 `accepted` list holds what the repo keeps on purpose, each `{"concept", "copies": ["file[:line]", ...],
 "reason"}`, and an accepted candidate is reported as accepted, not as a finding.

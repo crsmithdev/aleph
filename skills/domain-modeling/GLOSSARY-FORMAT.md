@@ -6,9 +6,10 @@ Use the first of these that exists:
 
 1. `GLOSSARY.md`
 2. `GLOSSARY-MAP.md` (multiple contexts, see below)
-3. `docs/naming.md`
+3. `CONTEXT.md` (upstream's older name)
+4. `docs/naming.md`
 
-Edit that file in its own layout. In aleph it is `docs/naming.md`, a table of `Term | Definition`. Create `GLOSSARY.md` only when none of the three exists, and only when the first term is resolved.
+Edit that file in its own layout. In aleph it is `docs/naming.md`, a table of `Term | Definition`. Create `GLOSSARY.md` only when none of the four exists, and only when the first term is resolved.
 
 ## Terms
 

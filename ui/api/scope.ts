@@ -31,7 +31,7 @@ export const repoIn = (repo: string | undefined, project: Project) => !project |
 /** Whether an issue, job, record, hold or event subject belongs to `project`: a registry key that parseId gives as its repo. */
 export const inProject = (subject: string, project: Project) => !project || (parseId(subject)?.repo === project && known(project));
 
-/** Whether an event belongs to `project`: by its subject when that is an issue or job, else (a reason, a routine, none) to every known project. */
+/** Whether an event belongs to `project`: by its subject when that is an issue, else (a job, a reason, a routine, none) to every known project. */
 export const eventIn = (subject: string | undefined, project: Project) =>
   !project || (subject !== undefined && parseId(subject) ? inProject(subject, project) : known(project));
 
