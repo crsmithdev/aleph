@@ -20,6 +20,16 @@ refit-code does. This skill changes no `docs/design.md` text: a gap in the doc i
 | Lens | Asks | File |
 |---|---|---|
 | **apply** | Does this page follow the rules of `docs/design.md`, in its code and as drawn? | [APPLY.md](APPLY.md) |
+| **variants** | Is each component drawn one way? | [VARIANTS.md](VARIANTS.md) |
+| **states** | Does each component draw its empty, loading, error, hover, focus, disabled and phone-width state? | [STATES.md](STATES.md) |
+| **stress** | Does the page hold with long text, many rows, a missing value and no data? | [STRESS.md](STRESS.md) |
+| **seams** | Does a view override a kit class, or build kit markup by hand, instead of calling the kit helper? | [SEAMS.md](SEAMS.md) |
+| **dead** | Does each CSS rule match an element, each token have a use, and each Kit specimen draw a live component? | [DEAD.md](DEAD.md) |
+| **slop** | Is a piece of the page bigger than its job: a nested card, an extra border, shadow or icon, a label longer than the terse rule? | [SLOP.md](SLOP.md) |
+
+Report each candidate under one lens only. A value that breaks a rule is apply. Two builds of one component are
+variants. A missing empty line is states. An empty line that breaks at 200 characters is stress. A view that
+restyles a kit class is seams. A class that no element uses is dead.
 
 ## Modes
 
@@ -37,10 +47,10 @@ refit-code does. This skill changes no `docs/design.md` text: a gap in the doc i
    `git status --porcelain`. Done when the baseline is green and recorded.
 2. **Scope.** The route's view file and the shared files it imports, or every view for the whole UI. Done when you
    have a list of files and routes.
-3. **Hunt.** Follow [APPLY.md](APPLY.md): the code view, then the drawn view. For the whole UI, spawn one Explore
-   subagent per route in one message, each with APPLY.md's Signals section verbatim. Each returns candidates as:
+3. **Hunt.** Follow each lens file of the table: the code view, then the drawn view. For the whole UI, spawn one
+   Explore subagent per route in one message, each with the Signals sections of the lens files verbatim. Each returns candidates as:
    rule of `docs/design.md`, `file:line` or screenshot, the kind. Done when each route has returned.
-4. **Prove, hold and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with APPLY.md. The report goes
+4. **Prove, hold and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files. The report goes
    to `<tmpdir>/refit-design-retro-<timestamp>.html`; each finding card shows the screenshot and the Kit specimen
    side by side. Done when PROVE.md's step 3 is done.
 
@@ -59,7 +69,7 @@ refit-code's [Act](../refit-code/SKILL.md#act) with these changes:
 
 1. **List the new things.** From the plan, spec or diff: each new view, style rule, colour, size, font, format,
    component and piece of UI text.
-2. **Ask** APPLY.md's Check question of each item. Record the `docs/design.md` rule or the Kit specimen that backs it.
+2. **Ask** the Check question of each lens file of each item. Record the `docs/design.md` rule or the Kit specimen that backs it.
 3. **Judge.** Each item gets one verdict: **keep**, **reuse** (name the token, helper or component), **fix** (name
    the rule), or **amend** (the doc does not cover it: report a proposal). Done when every item has a verdict.
 
@@ -70,6 +80,12 @@ refit-code's [Act](../refit-code/SKILL.md#act) with these changes:
 | apply | A literal colour, size or font that has a token | unchecked: `inventory.ts` rows of kind `literal`, not yet wired as a test |
 | apply | A value formatted by hand that has a helper | unchecked: `inventory.ts` rows of kind `helper-bypass`, not yet wired as a test |
 | apply | A new component with no section in `docs/design.md` and no specimen on `#/kit` | model: `check` |
+| variants | A component drawn a second way from its specimen on `#/kit` | model: `check` |
+| states | A new component with no empty, loading and error state named | model: `check` |
+| stress | A new list, table or text field with no limit for long text and many rows | model: `check` |
+| seams | A view that styles a kit class or writes kit markup by hand | model: `check` |
+| dead | A CSS rule that no element matches | unchecked: no script lists unmatched rules yet |
+| slop | A note, label or caption of more than two words | model: `check` |
 
 ## Red flags
 
