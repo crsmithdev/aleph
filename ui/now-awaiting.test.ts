@@ -90,6 +90,12 @@ test("every stuck card's situation line is a sentence, not the bare state and ca
   expect(line()).toBe("The run failed.");
 });
 
+test("a stuck job with no blocker shows the Re-check hint that says it runs the checks and starts no worker", () => {
+  const card = stuckCard({ name: "aleph-30", state: "failed", cause: "check", reason: "its checks failed" });
+  expect(card).toContain("Runs the job&#39;s checks again; starts no worker.");
+  expect(card).not.toContain("Runs the job again.");
+});
+
 test("a stuck job with a blocker shows the hold action and the blocker id, and the blocker title only in Details", () => {
   setCodes({ aleph: "a" });
   const card = stuckCard({ name: "aleph-30", state: "failed", cause: "check", reason: "its checks failed", item: { id: 30, title: "T" },
