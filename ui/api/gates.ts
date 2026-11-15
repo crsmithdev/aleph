@@ -16,7 +16,7 @@ import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { readEvents } from "../../lib/layout.ts";
-import { eventIn, inProject, repoIn, scopeOf } from "./scope.ts";
+import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import type { EventRow } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, unitDir, writeCaps } from "../../jobs/lib/infra/settings.ts";
@@ -134,7 +134,7 @@ export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, projec
   const holds = collapse(allHolds().flatMap((h) => (h.event ? [h.event] : [])));
   const seen: Record<string, number> = {};
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ time: g.at, subject: "human", action: "changed", object: reason, detail: `set to ${g.action}` }));
-  return [...holds, ...set, ...tickEntries(now - ms), ...noteEntries()]
+  return withProjects([...holds, ...set, ...tickEntries(now - ms), ...noteEntries()])
     .filter((e) => now - Date.parse(e.time) < ms && eventIn(e.object, project, e.project))
     .sort((a, b) => Date.parse(b.time) - Date.parse(a.time))
     .filter((e) => (seen[e.subject] = (seen[e.subject] ?? 0) + 1) <= max);

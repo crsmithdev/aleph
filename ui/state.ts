@@ -14,6 +14,7 @@ import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/l
 import { counting } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, asking, refIn, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
+import { withProjects } from "./api/scope.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
 import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
@@ -463,7 +464,7 @@ export function state(now = new Date()): State {
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, stuck, asks: att.items, usage: summary(now.getTime()) });
   recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
   const redOf = mainRed();
-  const events = readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS), titles: Record<string, string> = {};
+  const events = withProjects(readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS)), titles: Record<string, string> = {};
   for (const e of events) {
     const issue = targetOf(e), p = parseId(issue);
     const item = p && !(issue in titles) ? lists.item(p.repo, p.sub === undefined ? p.n : `${p.n}.${p.sub}`) : undefined;

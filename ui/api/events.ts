@@ -8,7 +8,7 @@
  */
 import { eventsAfter, lastSeq } from "../../lib/layout.ts";
 import type { EventRow } from "../../lib/naming.ts";
-import { eventIn, projectOf } from "./scope.ts";
+import { eventIn, projectOf, withProjects } from "./scope.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
 import { eventTails, updater } from "../updater.ts";
@@ -40,7 +40,7 @@ let sent = 0;
 /** Send the events added since the last send, each as an `ev` event. */
 function tail(): void {
   if (!clients.size) return;
-  for (const row of eventsAfter(sent)) {
+  for (const row of withProjects(eventsAfter(sent))) {
     sent = row.seq!;
     send(encoder.encode(`event: ev\ndata: ${JSON.stringify(row)}\n\n`), row);
   }

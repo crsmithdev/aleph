@@ -5,19 +5,26 @@ import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { countsInFactory, countsInSkills } from "./updater.ts";
 import { seed, reseed, type Seed } from "../jobs/job.testkit.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { newItems, writeRepos } from "../tests/projects.ts";
+import { writeList } from "../issues/lib/store.ts";
+import { add } from "../issues/lib/todo.ts";
+import { git } from "../lib/git.ts";
 
-let base: string, runs: string, factory: string, ref: string;
+let base: string, runs: string, factory: string, ref: string, main: string;
 let server: TestServer, stop: () => void, restoreEnv: () => void;
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-events-"));
   runs = join(base, "runs"); factory = join(base, "factory");
   ref = join(base, "issues", ".git", "refs", "remotes", "origin");
-  for (const d of [join(runs, "old"), factory, ref]) mkdirSync(d, { recursive: true });
+  for (const d of [join(runs, "old"), factory]) mkdirSync(d, { recursive: true });
+  newItems(base, "issues");
   // The project filter matches only registry keys.
   writeRepos({ p: { path: join(base, "p") }, q: { path: join(base, "q") }, "p-x": { path: join(base, "p-x") } }, join(base, "issues"));
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: runs, ALEPH_ITEMS: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
+  // Issue 1 is p's and issue 2 is q's.
+  for (const repo of ["p", "q"]) writeList({ key: repo }, "seed", (doc) => { add(doc, `an issue of ${repo}`); return true; }, true);
+  main = git(join(base, "issues"), "rev-parse", "origin/main").out;
   ({ server, stop } = await withServer({ warm: false }));
   // A change names only the keys a page asked for: Status's key is kept from here on.
   expect((await get("/api/factory")).headers.get("x-aleph-keys")).toBe("/api/factory");
@@ -92,6 +99,16 @@ test("a stream with a project sends only the ev events of that project, and a ch
   expect(subjects).toContain(ids.p);
   expect(subjects).not.toContain(ids.q);
   expect(subjects).not.toContain(ids["p-x"]);
+}, 10_000);
+
+test("a stream with a project sends an ev for an event on an issue of that project, with the project, and none for another's", async () => {
+  // The test above leaves a bad ref in the items repo.
+  writeFileSync(join(ref, "main"), `${main}\n`);
+  const code = `import { logEvent } from "./lib/layout.ts"; for (const n of [1, 2]) logEvent({ subject: "human", action: "changed", object: "issue." + n });`;
+  const text = (await changeAfter(() => { Bun.spawn(["bun", "-e", code], { cwd: join(import.meta.dir, ".."), env: process.env }); }, "?project=p"))!;
+  const rows = [...text.matchAll(/event: ev\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]));
+  expect(rows.map((r) => r.object)).toEqual(["issue.1"]);
+  expect(rows[0].project).toBe("p");
 }, 10_000);
 
 // The watchers pass names relative to the folder, as the tests above show; these files must not count.

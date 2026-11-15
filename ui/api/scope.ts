@@ -4,7 +4,8 @@
  * is a filter that matches nothing.
  */
 import { once } from "../../lib/sources.ts";
-import { parseId, parseKey } from "../../lib/naming.ts";
+import { parseId, parseKey, type EventRow } from "../../lib/naming.ts";
+import { itemsDir, projectsAt } from "../../issues/lib/store.ts";
 import { DAY, FACTORY, WINDOWS } from "../../lib/windows.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { allRunRecords } from "../../jobs/lib/records/record.ts";
@@ -46,6 +47,16 @@ export const inProject = (subject: string, project: Project) => !project || (rep
 /** Whether an event belongs to `project`: by its job's `owner` when it has one, else by its object when that is an issue or job ID, else (a reason, a routine, none) to every known project. */
 export const eventIn = (object: string | undefined, project: Project, owner?: string | null) => {
   return !project || (owner ? owner === project && known(project) : object !== undefined && repoOfSubject(object) !== undefined ? inProject(object, project) : known(project));
+};
+
+/** `rows`, each with the registry key of its issue's project as `project` when its object is an issue key of the items repo and it has no project: one read of the issues for the batch, with no fetch. */
+export const withProjects = <T extends EventRow>(rows: T[]): T[] => {
+  let projects: Map<number, string> | undefined;
+  return rows.map((row) => {
+    const key = row.project ? null : parseKey(row.object);
+    const project = key?.kind === "issue" ? (projects ??= projectsAt(itemsDir(), "origin/main")).get(key.n) : undefined;
+    return project ? { ...row, project } : row;
+  });
 };
 
 /** Whether a memory item with `scope` belongs to `project`: its own project's, or global or unscoped (a rule section, a skill, a hook) in every known project. */

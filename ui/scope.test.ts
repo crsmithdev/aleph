@@ -2,17 +2,24 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eventIn, inProject, memoryIn, repoIn, scopeOf, traceIn } from "./api/scope.ts";
+import { eventIn, inProject, memoryIn, repoIn, scopeOf, traceIn, withProjects } from "./api/scope.ts";
+import { log } from "./api/gates.ts";
+import { logEvent } from "../lib/layout.ts";
+import type { EventRow } from "../lib/naming.ts";
+import { writeList } from "../issues/lib/store.ts";
+import { add } from "../issues/lib/todo.ts";
 import { SESSIONS } from "../lib/windows.ts";
 import { withEnv } from "./test-server.ts";
 import { forProject } from "./api/now.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { newItems, writeRepos } from "../tests/projects.ts";
 
 let dir: string, restore: () => void;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "scope-"));
-  writeRepos({ alpha: { path: "/repos/alpha" }, "alpha-ui": { path: "/repos/alpha-ui" } });
-  restore = withEnv({ });
+  const items = newItems(dir, "items");
+  writeRepos({ alpha: { path: "/repos/alpha" }, "alpha-ui": { path: "/repos/alpha-ui" } }, items);
+  restore = withEnv({ ALEPH_ITEMS: items, ALEPH_DB: join(dir, "aleph.db") });
+  writeList({ key: "alpha" }, "seed", (doc) => { add(doc, "an issue of alpha"); return true; }, true);
 });
 afterAll(() => { restore(); rmSync(dir, { recursive: true, force: true }); });
 
@@ -48,6 +55,20 @@ test("an event with an issue subject follows that issue; any other subject is in
   expect(eventIn("alpha-ui-3", "alpha")).toBe(false);
   expect(eventIn("protected", "alpha")).toBe(true);
   expect(eventIn(undefined, "alpha")).toBe(true);
+});
+
+test("an event on an issue key takes its issue's project, and keeps a job's project or none to give", () => {
+  const time = "2026-11-04T12:00:00Z", now = Date.parse(time) + 1000;
+  for (const n of [1, 99]) logEvent({ time, subject: "rule", action: "changed", object: `issue.${n}` });
+  const rows = (project?: string) => log(now, 10, 60_000, project);
+  const row = rows().find((e) => e.object === "issue.1")!;
+  expect(row.project).toBe("alpha");
+  expect(eventIn(row.object, "alpha", row.project)).toBe(true);
+  expect(eventIn(row.object, "alpha-ui", row.project)).toBe(false);
+  expect(rows("alpha-ui").map((e) => e.object)).not.toContain("issue.1");
+  expect(withProjects([{ ...row, project: "alpha-ui" }])[0].project).toBe("alpha-ui");
+  expect(rows().find((e) => e.object === "issue.99")!.project ?? null).toBeNull();
+  expect(withProjects<EventRow>([{ time, subject: "rule", action: "changed", object: "protected" }])[0].project ?? null).toBeNull();
 });
 
 test("a memory item is in its own project, and a global or unscoped one is in every project", () => {
