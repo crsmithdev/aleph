@@ -15,7 +15,7 @@ Read the spec as the **builder** who will build it alone: nobody answers questio
 
 ## Steps
 
-1. **Split the spec into clauses.** One clause is one requirement: each sentence of the Goal and each Oracle item. Done when every clause has a number.
+1. **Split the spec into clauses.** One clause is one requirement: each sentence of the Goal and each Oracle item. In a spec in the to-spec layout, each numbered Acceptance Criteria item counts as an Oracle item, so it is an Oracle clause for every pass below. Done when every clause has a number.
 2. **Check each clause against the code.** For each file, function, command or behaviour the clause names, open it. Done when each named thing is either found, with `file:line`, or recorded as absent with the searches you ran.
 3. **Run the passes below** over every clause. Done when every clause has passed each pass or has a problem.
 4. **Filter the problems.** Keep a problem only when a wrong guess on it would change what the builder builds or what the check observes. Done when each kept problem names that change.
@@ -27,7 +27,7 @@ Read the spec as the **builder** who will build it alone: nobody answers questio
 - **Conflict.** Two clauses that cannot both be true in this codebase, or one clause the current code makes false in a way the spec does not ask to change.
 - **One name, one thing.** The same concept under two names, or one name for two concepts.
 - **Wrong about the code.** A clause that names a file, function, flag or behaviour that does not exist or does not behave as the clause says.
-- **Out of reach.** An Oracle clause whose code lies outside the Edit surface.
+- **Out of reach.** An Oracle clause whose code lies outside the Edit surface. In a spec in the to-spec layout the Edit surface is the Implementation Decisions section.
 - **Not observable.** An Oracle clause that no check can see. A check counts when it runs normally and an assertion observes the changed output, state or error. These do not count: a read of the source text, "does not throw", a snapshot alone, a mock or log call, and a manual look.
 
 ## Evidence
