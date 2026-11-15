@@ -4,7 +4,7 @@
 // into each tool and each call; a call's input loads its result text. Every other part unfolds into its items, and
 // the compact summary into its text.
 import { get } from "../router.js";
-import { card, count, dataTable, empty, error, esc, goQuery, hashQuery, heads, loadingLine, setQuery, tag } from "../lib.js";
+import { card, count, dataTable, empty, error, esc, goQuery, hashQuery, heads, keep, kept, loadingLine, setQuery, tag } from "../lib.js";
 
 const SERIES = ["--series-1", "--series-2", "--series-3", "--chart-6", "--chart-7", "--run", "--need", "--done"];
 const colour = (i) => `var(${SERIES[i % SERIES.length]})`;
@@ -95,6 +95,14 @@ function parts(r, s) {
     `<p class="quiet">The fixed parts sum to the fill of request 1. With an Anthropic key, count_tokens counts each one and Other holds the rest. Without a key, the split is est. Each tool, and each item of a part, is its share of the part by chars, est. A message part is the usage of its request minus the usage of the request before it, exact unless one gap held more than one kind of record.</p>`);
 }
 
+/** The session the tab loaded last, through keep(): `{ n, session }`, with `n` the request of the query it was loaded for. */
+const KEPT = "memory.context";
+/** The kept session when the query names it (or none, for the newest) and the same request, else null: a redraw then needs no load. */
+export function held(m, query) {
+  const k = kept(KEPT, null);
+  return k && k.session?.id === (query.get("session") || m.sessions[0]?.id) && k.n === (query.get("n") ?? "") ? k.session : null;
+}
+
 /** The body of the tab: `m` is the /api/context body, with `session` the /api/context/:id body once loaded; `o.n` the request. */
 export function renderContext(m, o = {}) {
   if (!m.sessions.length) return empty();
@@ -109,17 +117,20 @@ export async function mountContext(root, m, query) {
   if (!m.sessions.length) return;
   const id = query.get("session") || m.sessions[0].id;
   const draw = () => { root.querySelector("#ctx-body").outerHTML = renderContext({ ...m, session }, { n: hashQuery().get("n") }); };
-  let session;
-  try {
-    const res = await get(`/api/context/${encodeURIComponent(id)}`, "ctx-session");
-    if (!res) return;
-    session = await res.json();
-    if (!res.ok) throw new Error(session.error ?? `answered ${res.status}`);
-  } catch (e) { root.querySelector("#ctx-body").innerHTML = error(`Could not load the session: ${e.message}`); return; }
-  draw();
+  let session = held(m, query);
+  if (!session) {
+    try {
+      const res = await get(`/api/context/${encodeURIComponent(id)}`, "ctx-session");
+      if (!res) return;
+      session = await res.json();
+      if (!res.ok) throw new Error(session.error ?? `answered ${res.status}`);
+    } catch (e) { root.querySelector("#ctx-body").innerHTML = error(`Could not load the session: ${e.message}`); return; }
+    keep(KEPT, { n: query.get("n") ?? "", session });
+    draw();
+  }
   root.onclick = async (e) => {
     const b = e.target.closest?.("#ctx-body button[data-n]");
-    if (b && !b.disabled) { setQuery({ n: b.dataset.n }); draw(); }
+    if (b && !b.disabled) { setQuery({ n: b.dataset.n }); keep(KEPT, { n: b.dataset.n, session }); draw(); }
     const c = e.target.closest?.("#ctx-body button[data-call]");
     if (!c) return;
     const pre = c.closest("details").querySelector("pre[data-result]");

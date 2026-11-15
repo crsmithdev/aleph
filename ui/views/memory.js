@@ -3,7 +3,7 @@
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
-import { mountContext, renderContext } from "./context.js";
+import { held, mountContext, renderContext } from "./context.js";
 import { renderProcesses } from "./processes.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel } from "../timeline.js";
@@ -270,7 +270,7 @@ function mountLog(root) {
 
 /** The Context tab: the page head and tabs around the body of `renderContext`. */
 export const renderContextTab = (m, query = new URLSearchParams()) =>
-  `<div class="page sp memory">${pageHead("Memory")}${renderTabs("context")}${renderContext(m, { n: query.get("n") })}</div>`;
+  `<div class="page sp memory">${pageHead("Memory")}${renderTabs("context")}${renderContext({ ...m, session: m.session ?? held(m, query) }, { n: query.get("n") })}</div>`;
 
 /** The Processes tab: the page head and tabs around the body of `renderProcesses`. */
 export const renderProcessesTab = (m) => `<div class="page sp memory">${pageHead("Memory")}${renderTabs("processes")}${renderProcesses(m)}</div>`;

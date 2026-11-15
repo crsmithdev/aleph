@@ -16,6 +16,8 @@ import { badge, dataTable, empty, heads, md, pageHead, priorityBadge, scope } fr
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
+import { mountContext } from "./views/context.js";
+// @ts-ignore
 import { panel } from "./timeline.js";
 // @ts-ignore
 import { noteView } from "./views/memory.js";
@@ -532,6 +534,35 @@ test("the Context tab draws one parts row per part of the selected request, fixe
   expect(v.renderContextTab({ sessions, session }, new URLSearchParams("n=9"))).toContain("Fill of request 2");
   expect(v.renderContextTab({ sessions })).toContain("Loading the session");
   expect(v.renderContextTab({ sessions: [] })).toContain(empty());
+});
+
+test("a kept session draws at once for the same session and request, and mountContext fetches only when the query changes", async () => {
+  const g = globalThis as any, store = new Map<string, string>(), saved = { localStorage: g.localStorage, fetch: g.fetch, location: g.location };
+  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, x: string) => void store.set(k, x) };
+  g.location = { hash: "#/memory?tab=context" };
+  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+  const session = (id: string) => ({ id, window: 1000, requests: [{ n: 1, fill: 10, usage, parts: [], since: 0 }], items: [], summaries: [] });
+  const sessions = [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }, { id: "s2", project: "p", updated: "2026-11-09T10:00:00Z" }];
+  let calls = 0;
+  g.fetch = async (url: string) => { calls++; return Response.json(session(url.split("/").pop()!)); };
+  const root = (m: any, q: URLSearchParams) => { const b = { outerHTML: "", innerHTML: "" }; return { html: v.renderContextTab(m, q), body: b, root: { querySelector: () => b, addEventListener() {} } as any }; };
+  try {
+    store.set("aleph.memory.context", JSON.stringify({ n: "", session: session("s1") }));
+    const same = new URLSearchParams("tab=context&session=s1"), newest = new URLSearchParams("tab=context");
+    expect(v.renderContextTab({ sessions }, same)).toContain("Fill of request 1");
+    expect(v.renderContextTab({ sessions }, same)).not.toContain("Loading the session");
+    expect(v.renderContextTab({ sessions }, newest)).toContain("Fill of request 1");
+    expect(v.renderContextTab({ sessions }, new URLSearchParams("session=s2"))).toContain("Loading the session");
+    expect(v.renderContextTab({ sessions }, new URLSearchParams("session=s1&n=1"))).toContain("Loading the session");
+    await mountContext(root({ sessions }, same).root, { sessions }, same);
+    expect(calls).toBe(0);
+    const other = new URLSearchParams("tab=context&session=s2");
+    await mountContext(root({ sessions }, other).root, { sessions }, other);
+    expect(calls).toBe(1);
+    expect(JSON.parse(store.get("aleph.memory.context")!).session.id).toBe("s2");
+    await mountContext(root({ sessions }, other).root, { sessions }, other);
+    expect(calls).toBe(1);
+  } finally { Object.assign(g, saved); }
 });
 
 test("the Context tab scales the fill line, the part segments and the chart bars to the session's window", () => {
