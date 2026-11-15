@@ -72,6 +72,7 @@ test("a pair recorded in .refit.json is not a hole", () => {
 test("the hook blocks once per session for the same findings", () => {
   write("a.ts", "export const a = 99;\n");
   const input = { hook_event_name: "Stop", session_id: "s1", cwd: root };
+  session("s1").set({ start: 1 });
   const first = JSON.parse(stop(input));
   expect(first.decision).toBe("block");
   expect(first.reason).toContain("b.ts changed with it in 12 of 12 commits");
@@ -81,6 +82,7 @@ test("the hook blocks once per session for the same findings", () => {
 test("the hook checks a stop that another hook already continued, and blocks it once", () => {
   write("a.ts", "export const a = 99;\n");
   const input = { hook_event_name: "Stop", session_id: "s2", cwd: root, stop_hook_active: true };
+  session("s2").set({ start: 1 });
   expect(JSON.parse(stop(input)).reason).toContain("b.ts changed with it in 12 of 12 commits");
   expect(stop(input)).toBe("");
 });
@@ -88,11 +90,17 @@ test("the hook checks a stop that another hook already continued, and blocks it 
 test("a hook that throws while checking prints a systemMessage with the error, and does not block", () => {
   write(".refit.json", "{");
   write("a.ts", "export const a = 99;\n");
+  session("s-crash").set({ start: 1 });
   const out = JSON.parse(stop({ hook_event_name: "Stop", session_id: "s-crash", cwd: root }));
   const parse = (() => { try { JSON.parse("{"); } catch (e) { return (e as Error).message; } })();
   expect(out.systemMessage).toContain("refit-code");
   expect(out.systemMessage).toContain(parse!);
   expect(out).not.toHaveProperty("decision");
+});
+
+test("the hook skips a session with no start record", () => {
+  write("a.ts", "export const a = 99;\n");
+  expect(stop({ hook_event_name: "Stop", session_id: "s0", cwd: root })).toBe("");
 });
 
 test("the hook skips a change from before the session started", () => {
@@ -112,6 +120,7 @@ test("a copy of code a boundary protects, in a changed file, blocks with the own
   sh("git", "commit", "-qm", "money");
   sh("git", "checkout", "-qb", "copy");
   write("ui/pay.ts", body);
+  session("s3").set({ start: 1 });
   const out = JSON.parse(stop({ hook_event_name: "Stop", session_id: "s3", cwd: root }));
   expect(out.reason).toContain('ui/pay.ts:1 (settle) copies lib/money.ts:1 (settle), which boundary "money" keeps in its owner');
 });
@@ -124,6 +133,7 @@ test("a renamed copy that the base did not have blocks as a new copy", () => {
   write("lib/money.ts", SETTLE);
   write(".jscpd.json", JSON.stringify(RENAMES));
   write("ui/pay.ts", RENAMED);
+  session("s4").set({ start: 1 });
   const out = JSON.parse(stop({ hook_event_name: "Stop", session_id: "s4", cwd: root }));
   expect(out.reason).toMatch(/lib\/money\.ts:1-\d+ \(\d+ lines\), a copy the base did not have|ui\/pay\.ts:1-\d+ \(\d+ lines\), a copy the base did not have/);
 });
@@ -137,6 +147,7 @@ test("a copy the base already had does not block, and an accepted pair does not 
   sh("git", "commit", "-qm", "two copies");
   sh("git", "checkout", "-qb", "edit");
   write("ui/pay.ts", RENAMED + "export const unit = 1;\n");
+  for (const id of ["s5", "s6", "s7"]) session(id).set({ start: 1 });
   expect(stop({ hook_event_name: "Stop", session_id: "s5", cwd: root })).toBe("");
   write("ui/web.ts", RENAMED.replaceAll("payout", "webPay"));
   expect(stop({ hook_event_name: "Stop", session_id: "s6", cwd: root })).toContain("a copy the base did not have");

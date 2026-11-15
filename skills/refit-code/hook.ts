@@ -10,7 +10,7 @@
  * owner, or records the second way in `.refit.json`. The same findings do not block twice, so a retry after its
  * own block passes. A stop that another Stop hook already continued is checked like a first stop. A change from
  * before the session started is not the agent's: the hook counts only the commits and edits since the session's
- * start.
+ * start, and a session with no start record is skipped.
  */
 import { createHash } from "node:crypto";
 import { once, session } from "../../hooks/lib/handshake.ts";
@@ -43,9 +43,11 @@ if (import.meta.main) {
   if (input.hook_event_name !== "Stop") process.exit(0);
   const top = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], { cwd: input.cwd ?? process.cwd(), stdout: "pipe", stderr: "ignore" });
   if (top.exitCode !== 0) process.exit(0);
+  const start = session(input.session_id).get()?.start;
+  if (start === undefined) process.exit(0);
   let text: string | null;
   try {
-    text = reason(top.stdout.toString().trim(), session(input.session_id).get()?.start);
+    text = reason(top.stdout.toString().trim(), start);
   } catch (e) {
     console.log(JSON.stringify({ systemMessage: `refit-code hook failed: ${(e as Error).message}` }));
     process.exit(0);
