@@ -613,24 +613,31 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a change that comes while an input has focus reloads the view after the input blurs", async () => {
-    const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/factory")).length';
-    // Count the change events the page hears, to know the change came before the check.
+    // Count the changes to the key the view reads, to know the change came before the check. Count the loads that start
+    // and end, and the stream's open, to know the quiet reload that `onopen` starts has ended before the input takes focus.
+    // The counts leave out a load of the Status page that is still in flight at the patch.
     await page.ev(`(() => {
-      const ES = window.EventSource;
-      window.heard = 0;
-      window.EventSource = class extends ES { constructor(...a) { super(...a); this.addEventListener("change", () => { window.heard++; }); } };
+      const ES = window.EventSource, rf = window.fetch;
+      window.heard = 0; window.started = 0; window.ended = 0; window.opens = null;
+      window.EventSource = class extends ES { constructor(...a) { super(...a); this.addEventListener("change", (m) => { if (JSON.parse(m.data).keys.includes("/api/factory")) window.heard++; }); this.addEventListener("open", () => { window.opens ??= window.started; }); } };
+      window.fetch = (u, o) => {
+        if (!String(u).startsWith("/api/factory")) return rf(u, o);
+        window.started++;
+        return rf(u, o).then((r) => { r.clone().arrayBuffer().finally(() => { window.ended++; }); return r; });
+      };
     })()`);
     await page.go("#/factory/agents");
     await page.when('document.querySelector("#view aleph-chart")');
+    await page.when("window.opens !== null && window.started > window.opens && window.ended === window.started");
     await page.ev(`(() => { const i = document.createElement("input"); i.id = "probe"; document.body.append(i); i.focus(); })()`);
-    const n = await page.ev<number>(loads);
+    const n = await page.ev<number>("window.started");
     writeFileSync(join(env.ALEPH_FACTORY_DIR, "nudge2.json"), "{}");
     await page.when("window.heard > 0");
-    expect(await page.ev<number>(loads)).toBe(n); // No redraw while focus stays.
+    expect(await page.ev<number>("window.started")).toBe(n); // No load starts while focus stays.
     await page.ev('document.getElementById("probe").blur()');
-    await page.when(`${loads} > ${n}`);
+    await page.when(`window.started > ${n}`);
     await page.ev('document.getElementById("probe").remove()');
-    await page.reload(); // Takes the patched EventSource away.
+    await page.reload(); // Takes the patched EventSource and fetch away.
   }, 30_000);
 
   test("an action the server refuses shows the server's reason on the row", async () => {
