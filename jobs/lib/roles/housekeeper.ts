@@ -17,7 +17,7 @@ import { askOf, asking, refIn } from "../asks/ask.ts";
 import { gates } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
 import { held, lock } from "../infra/locks.ts";
-import { OPUS_MODEL } from "../routing/models.ts";
+import { OPUS_MODEL } from "../../../lib/models.ts";
 import { dispatchAfterIssue } from "../transitions/filing.ts";
 import { refusal } from "../transitions/transitions.ts";
 import { endLost, openRun } from "./agent-run.ts";

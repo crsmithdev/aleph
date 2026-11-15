@@ -7,11 +7,11 @@
  * cost from this table is an API-equivalent estimate. Where Claude Code reports
  * a cost (`total_cost_usd` in a `claude -p` result), that cost wins for a Claude
  * model; the table prices transcript turns, and the runs of the models in
- * jobs/lib/routing/models.ts that Claude does not serve, whose prices Claude Code does not know. Langfuse's public models API keeps only input/output
+ * lib/models.ts that Claude does not serve, whose prices Claude Code does not know. Langfuse's public models API keeps only input/output
  * prices, and cache reads are most of a Claude Code request, so the hook
  * prices each generation itself and sends cost_details.
  */
-import { MODELS, type Rate } from "../jobs/lib/routing/models.ts";
+import { MODELS, type Rate } from "./models.ts";
 
 /** `long` replaces the base rate for a request whose prompt (input + cache read + cache write) exceeds `above` tokens. */
 type Price = Rate & { long?: { above: number; rate: Rate } };

@@ -9,36 +9,12 @@ import { join } from "node:path";
 import { conn, getJson, putJson } from "../../../lib/db.ts";
 import { logSetting } from "../../../lib/layout.ts";
 import { openRouterKey } from "../../../lib/env.ts";
+import { MODELS, type Via } from "../../../lib/models.ts";
 import { NO_SKILLS } from "../roles/role-skill.ts";
-
-/** USD per million tokens. */
-export interface Rate { input: number; output: number; cacheRead: number; cacheWrite: number }
-/** Who serves a model: Claude on the subscription, the llama-server of aleph-1282 on the one GPU, or OpenRouter. */
-export type Via = "claude" | "local" | "openrouter";
-export interface Model { via: Via; id: string; price?: Rate }
 
 /** The llama-server of aleph-1282. */
 const LOCAL_URL = "http://127.0.0.1:8012";
-export const OPUS_MODEL = "claude-opus-5-5";
 const OPENROUTER_URL = "https://openrouter.ai/api";
-
-/** OpenRouter list prices, read 2026-11-05 from /api/v1/models. Where a price is 0 or not listed, the input price stands in. */
-const routed = (id: string, input: number, output: number, cacheRead = input, cacheWrite = input): Model =>
-  ({ via: "openrouter", id, price: { input, output, cacheRead, cacheWrite } });
-
-/** Every model a tier can use, by the name the `models` setting and the run records carry. */
-export const MODELS: Record<string, Model> = {
-  haiku: { via: "claude", id: "haiku" },
-  sonnet: { via: "claude", id: "sonnet" },
-  opus: { via: "claude", id: OPUS_MODEL },
-  "claude-opus-5-5": { via: "claude", id: OPUS_MODEL },
-  "gpt-oss-20b": { via: "local", id: "gpt-oss-20b", price: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
-  "deepseek-v4.1-flash": routed("deepseek/deepseek-v4.1-flash", 0.045, 0.5, 0.018),
-  "gpt-6-luna": routed("openai/gpt-6-luna", 0.1, 0.5, 0.01, 0.125),
-  "minimax-m3.1-flash": routed("minimax/minimax-m3.1-flash", 0.075, 0.3, 0.0075),
-  "step-3.5-flash": routed("stepfun/step-3.5-flash", 0.1, 0.3),
-  "mimo-v2.6-flash": routed("xiaomi/mimo-v2.6-flash", 0.14, 0.28, 0.0028),
-};
 
 /** Who serves a model, by its name or its id (Langfuse has the id); a model not in MODELS (a full Claude id such as the reviewer's) is Claude's. */
 export const viaOf = (model: string | undefined): Via =>

@@ -26,6 +26,12 @@ test("every claude cache write costs twice the input rate", () => {
   expect(write("claude-sonnet-4-6")).toBe(6);
 });
 
+test("guard: an OpenRouter model has its price by name and by id", () => {
+  for (const key of ["deepseek-v4.1-flash", "deepseek/deepseek-v4.1-flash"]) {
+    expect(priceFor(key)).toMatchObject({ input: 0.045, output: 0.5 });
+  }
+});
+
 test("gpt-oss-20b costs nothing", () => {
   expect(costDetails("gpt-oss-20b", { input: 1000, output: 500, cache_read_input_tokens: 200 })?.total).toBe(0);
 });

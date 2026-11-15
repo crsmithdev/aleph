@@ -6,7 +6,8 @@
  * top-level `oneOf`, `anyOf` or `allOf`: the API refuses those.
  */
 import { closeSync, openSync, readFileSync, statSync } from "node:fs";
-import { BACKENDS, modelArgv, modelEnv, onGpu, openRouterFactor, OPUS_MODEL, viaOf } from "../routing/models.ts";
+import { OPUS_MODEL } from "../../../lib/models.ts";
+import { BACKENDS, modelArgv, modelEnv, onGpu, openRouterFactor, viaOf } from "../routing/models.ts";
 import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
 import { policyOf } from "../records/outcome.ts";
 import { roleCmd, stallSeconds } from "../infra/settings.ts";

@@ -20,7 +20,8 @@ import { isLive, isRunning } from "../infra/process.ts";
 import { causeOf, policyOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "../infra/settings.ts";
-import { BACKENDS, probeBackend, readModels, viaOfRun, type Setting, type Tier, type Via } from "../routing/models.ts";
+import type { Via } from "../../../lib/models.ts";
+import { BACKENDS, probeBackend, readModels, viaOfRun, type Setting, type Tier } from "../routing/models.ts";
 
 export const factoryDir = () => layout().factory;
 

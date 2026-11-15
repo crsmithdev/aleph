@@ -17,7 +17,7 @@ import { commitPaths, git, pushOrigin } from "../vault/lib/git.ts";
 import { openRun } from "../jobs/lib/roles/agent-run.ts";
 import { skillSection } from "../jobs/lib/roles/role-skill.ts";
 import { runFile } from "../jobs/lib/records/run-files.ts";
-import { OPUS_MODEL } from "../jobs/lib/routing/models.ts";
+import { OPUS_MODEL } from "../lib/models.ts";
 
 /** The lenses: each is the skill of the same name. */
 export const LENSES = ["prior-art", "red-team", "explainer"];

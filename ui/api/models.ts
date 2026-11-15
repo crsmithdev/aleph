@@ -1,5 +1,6 @@
 /** The model routes: each tier's enable and model, what each tier offers, which models' backends are down, and OpenRouter's spend. */
-import { backendUp, MODELS, OFFERS, openRouterSpend, readModels, setModel } from "../../jobs/lib/routing/models.ts";
+import { MODELS } from "../../lib/models.ts";
+import { backendUp, OFFERS, openRouterSpend, readModels, setModel } from "../../jobs/lib/routing/models.ts";
 import { fail, post } from "../action.ts";
 import type { Routes } from "../server.ts";
 

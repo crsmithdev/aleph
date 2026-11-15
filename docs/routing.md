@@ -60,7 +60,7 @@ The dispatch also routes when the live cap holds a goal: if a tier on the local 
 
 ## Models other than Claude's
 
-`MODELS` in `jobs/lib/routing/models.ts` lists every model a tier can use. Each row names who serves it (`claude`, `local` or `openrouter`), the id passed to `--model`, and, for a model Claude does not serve, its price per million tokens. Every call is `claude -p`, built by `modelArgv()`; a model Claude does not serve differs only in the env `modelEnv()` adds. To add a model, add a row.
+`MODELS` in `lib/models.ts` lists every model a tier can use. Each row names who serves it (`claude`, `local` or `openrouter`), the id passed to `--model`, and, for a model Claude does not serve, its price per million tokens. Every call is `claude -p`, built by `modelArgv()`; a model Claude does not serve differs only in the env `modelEnv()` adds. To add a model, add a row.
 
 | Model | Served by | Id |
 |---|---|---|

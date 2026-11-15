@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { serverArgs } from "./gpt-oss-start.ts";
 import { judge } from "../../../hooks/lib/judge.ts";
 import { writeLine } from "../roles/title.ts";
-import { AGENT_SETTINGS, MODELS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf, viaOfRun } from "./models.ts";
+import { MODELS } from "../../../lib/models.ts";
+import { AGENT_SETTINGS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf, viaOfRun } from "./models.ts";
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "models-")); process.env.ALEPH_FACTORY_DIR = dir; });
