@@ -27,7 +27,7 @@ import { keepDiff } from "../records/jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
 import { OPUS_MODEL } from "../../../lib/models.ts";
-import { readModels, viaOf, WORKER_TIER } from "../routing/models.ts";
+import { readModels, SIZE_OF, viaOf } from "../routing/models.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "../transitions/continuation.ts";
 import { oracleCommands, outsideSurface } from "./issue-spec.ts";
 import { docClaimProblems } from "../../../hooks/lib/docclaims.ts";
@@ -365,9 +365,9 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     writeFileSync(marker, "");
   }
 
-  const tier = WORKER_TIER[run.model ?? ""];
-  // A tier set to a model Claude does not serve runs on it; the run keeps its Claude model as its tier.
-  const pick = tier !== undefined ? readModels()[tier].model : undefined;
+  const size = SIZE_OF[run.model ?? ""];
+  // A size set to a model Claude does not serve runs on it; the run keeps its Claude model as its tier.
+  const pick = size !== undefined ? readModels()[size].model : undefined;
   if (pick !== undefined && viaOf(pick) !== "claude") { jobRecord.patchRun(jobOfFolder(folder), { model: pick, tier: run.model }); run = { ...run, model: pick }; }
   const text = brief(id, run, repo);
   writeFileSync(runFile(folder, "prompt.md"), text);
@@ -667,7 +667,7 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
   const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
   const diff = reviewDiff(repo.path, range, reviewDiffMax());
   const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
-  const model = readModels().reviewer?.model ?? OPUS_MODEL;
+  const model = readModels().review?.model ?? OPUS_MODEL;
   // The reviewer is a job of its own: it follows the build, which holds the unit and the process.
   const rv = jobRecord.makeJob({ role: "review", name: run.name, prev: jobOfFolder(folder), target: run.target, repo: run.repo, model }, (dir) => writeFileSync(runFile(dir, "prompt.md"), text));
   const end = (state: "done" | "failed", fields: Parameters<typeof jobRecord.setState>[2] = {}) => jobRecord.setState(rv.id, state, { ended: new Date().toISOString(), ...fields });

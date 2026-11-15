@@ -21,37 +21,38 @@ beforeAll(async () => {
 });
 afterAll(() => { globalThis.fetch = realFetch; stop(); restoreEnv(); rmSync(base, { recursive: true, force: true }); });
 
-test("GET /api/models answers each tier with enabled and model plus the local state", async () => {
+test("GET /api/models answers each size and role model under models with enabled and model plus the local state", async () => {
   healthy = true;
   conn().run("DELETE FROM settings WHERE key = 'models'");
   const b: any = await at("/api/models").then((r) => r.json());
   expect(b.local).toBe("up");
-  expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "reviewer", "intake", "director", "monitor", "maintainer", "title", "judge"]);
-  expect(b.tiers["worker-medium"]).toEqual({ enabled: true, model: "sonnet" });
+  expect(Object.keys(b.models)).toEqual(["small", "medium", "large", "review", "intake", "director", "monitor", "maintainer", "title", "judge"]);
+  expect(b.models.medium).toEqual({ enabled: true, model: "sonnet" });
+  expect(b).not.toHaveProperty("tiers");
   expect(b.spend).toEqual({ day: 1.5, week: 17.5, month: 18 });
 });
 
-test("POST /api/models writes a tier's model or enable to the models setting", async () => {
+test("POST /api/models writes an entry's model or enable to the models setting", async () => {
   healthy = true;
-  const res = await post({ tier: "reviewer", model: "gpt-oss-20b" });
+  const res = await post({ name: "review", model: "gpt-oss-20b" });
   expect(res.status).toBe(200);
-  expect(getJson<any>("settings", "models", {}).reviewer).toEqual({ enabled: true, model: "gpt-oss-20b" });
-  expect(((await post({ tier: "reviewer", model: "haiku" }).then((r) => r.json())) as any).tiers.reviewer.model).toBe("haiku");
-  expect(((await post({ tier: "worker-low", enabled: false }).then((r) => r.json())) as any).tiers["worker-low"]).toEqual({ enabled: false, model: "haiku" });
+  expect(getJson<any>("settings", "models", {}).review).toEqual({ enabled: true, model: "gpt-oss-20b" });
+  expect(((await post({ name: "review", model: "haiku" }).then((r) => r.json())) as any).models.review.model).toBe("haiku");
+  expect(((await post({ name: "small", enabled: false }).then((r) => r.json())) as any).models.small).toEqual({ enabled: false, model: "haiku" });
 });
 
-test("a missing header gives 403; a bad tier, a model the tier does not offer, and gpt-oss-20b while /health is down give 422; the models setting stays", async () => {
+test("a missing header gives 403; a bad name, a model the entry does not offer, and gpt-oss-20b while /health is down give 422; the models setting stays", async () => {
   healthy = true;
   const kept = { title: { enabled: true, model: "haiku" } };
   putJson("settings", "models", kept);
-  expect((await post({ tier: "title", model: "gpt-oss-20b" }, {})).status).toBe(403);
-  expect((await post({ tier: "nonexistent", model: "haiku" })).status).toBe(422);
-  expect((await post({ tier: "merge", model: "haiku" })).status).toBe(422);
-  expect((await post({ tier: "intake", model: "nonexistent" })).status).toBe(422);
-  expect((await post({ tier: "worker-low", model: "sonnet" })).status).toBe(422);
-  expect((await post({ tier: "title", enabled: false })).status).toBe(422);
+  expect((await post({ name: "title", model: "gpt-oss-20b" }, {})).status).toBe(403);
+  expect((await post({ name: "nonexistent", model: "haiku" })).status).toBe(422);
+  expect((await post({ name: "merge", model: "haiku" })).status).toBe(422);
+  expect((await post({ name: "intake", model: "nonexistent" })).status).toBe(422);
+  expect((await post({ name: "small", model: "sonnet" })).status).toBe(422);
+  expect((await post({ name: "title", enabled: false })).status).toBe(422);
   healthy = false;
-  expect((await post({ tier: "title", model: "gpt-oss-20b" })).status).toBe(422);
+  expect((await post({ name: "title", model: "gpt-oss-20b" })).status).toBe(422);
   expect(getJson("settings", "models", {})).toEqual(kept);
-  expect((await post({ tier: "title", model: "haiku" })).status).toBe(200);
+  expect((await post({ name: "title", model: "haiku" })).status).toBe(200);
 });

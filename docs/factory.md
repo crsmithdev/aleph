@@ -35,7 +35,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 | `aleph always timeout [<reason> <minutes> [pick\|drop]]` | Lists or sets the no-answer timeouts; 0 removes one |
 | `aleph doctor [--fix] [--json]` | After an outage: clocks, git objects, units, `aleph.home` and lost runs |
 | `aleph judge [jev\|haiku]` | Shows or sets the model that judges for the hooks |
-| `aleph models [set <tier> <model>\|enable <tier>\|disable <tier>]` | Shows or sets the model of each tier |
+| `aleph models [set <name> <model>\|enable <size>\|disable <size>]` | Shows or sets the model of each size and role model |
 | `aleph director` | Runs the director on the Asks that have no case text |
 | `aleph monitor` | Writes the monitor's report for a day |
 | `aleph housekeep` | Reviews the parked issues that a land touched, or every parked issue once a day |

@@ -21,7 +21,7 @@ import { causeOf, policyOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "../infra/settings.ts";
 import type { Via } from "../../../lib/models.ts";
-import { BACKENDS, probeBackend, readModels, viaOfRun, type Setting, type Tier } from "../routing/models.ts";
+import { BACKENDS, probeBackend, readModels, viaOfRun, type Name, type Setting } from "../routing/models.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -149,8 +149,8 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
 export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.role) && isRunning(e));
 
-/** Whether a build run is on the local backend: unit.ts sets its model to its tier's, and before that its tier's model is the local one. */
-export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Tier, Setting>): boolean => viaOfRun(run, models) === "local";
+/** Whether a build run is on the local backend: unit.ts sets its model to its size's, and before that its size's model is the local one. */
+export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Name, Setting>): boolean => viaOfRun(run, models) === "local";
 
 /** Live agent runs on Claude, the count the live cap checks: a local-backend run counts against LOCAL_CAP only. */
 export const liveRuns = (runs?: Entry[]): number => { const models = readModels(); return liveEntries(runs).filter((e) => !onLocal(e.run, models)).length; };

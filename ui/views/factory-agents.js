@@ -35,8 +35,10 @@ function scorecard(s, m, win) {
 /** A success rate under this line (0 to 1) shows in the warn tone. */
 const WARN_RATE = 0.7;
 
-/** Each tier's name; the models it offers come from /api/models. */
-const TIERS = Object.fromEntries(["reviewer", "intake", "director", "monitor", "title", "judge"].map((k) => [k, NAMES[k]]));
+/** The sizes by their label; the models each offers come from /api/models. */
+const SIZES = { small: "Small", medium: "Medium", large: "Large" };
+/** Each role model's role, whose name and outcomes its rows show; the models it offers come from /api/models. */
+const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", title: "title", judge: "judge" };
 
 function roles(a, m) {
   const num = ["Jobs", "Success", "p50", "Cost"];
@@ -58,11 +60,11 @@ function roles(a, m) {
     return rs.length ? { role: "worker", runs: n("runs"), succeeded: n("succeeded"), failed: n("failed"), stuck: n("stuck"), rate: ended ? n("succeeded") / ended : null, cost: n("cost") } : null;
   };
   const model = (t) => shortModel(t?.model);
-  const workerRow = () => row([cell("Worker", { wide: true }), cell(`${model(m.tiers["worker-low"])}, ${model(m.tiers["worker-medium"])}`), stats(allWorkers())]);
-  const pick = ([tier, name]) => row([cell(name, { wide: true }), cell(model(m.tiers[tier])), stats(find(tier, m.tiers[tier]?.model))]);
-  const tierRoles = new Set(["worker", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
-  const config = m ? workerRow() + Object.entries(TIERS).map(pick).join("") : "";
-  const rows = config + (m ? outs.filter((o) => !tierRoles.has(o.role)) : outs).map((o) => row([cell(names[o.role] ?? o.role, { wide: true }), cell(shortModel(o.model)), stats(o)])).join("");
+  const workerRow = () => row([cell("Worker", { wide: true }), cell(Object.keys(SIZES).map((k) => model(m.models[k])).join(", ")), stats(allWorkers())]);
+  const pick = ([key, role]) => row([cell(NAMES[role], { wide: true }), cell(model(m.models[key])), stats(find(role, m.models[key]?.model))]);
+  const setRoles = new Set(["worker", "merge", ...Object.values(ROLE_MODELS)]);
+  const config = m ? workerRow() + Object.entries(ROLE_MODELS).map(pick).join("") : "";
+  const rows = config + (m ? outs.filter((o) => !setRoles.has(o.role)) : outs).map((o) => row([cell(names[o.role] ?? o.role, { wide: true }), cell(shortModel(o.model)), stats(o)])).join("");
   return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty();
 }
 
@@ -70,11 +72,11 @@ const timed = (a) => a.roles.filter((r) => r.hours != null);
 /** The colour of the role at index `i` of the fixed role list, so a role keeps its colour in every window; the cost chart's keys take them in order. */
 const ROLE_COLORS = ["series-1", "series-2", "series-3", "series-4", "series-5", "chart-6", "chart-7"];
 
-/** The model of each tier, and whether each worker tier is on. A row applies on change. */
+/** The model of each size and role model, and whether small and medium are on. A row applies on change. */
 function models(m) {
-  const sel = (tier, label, id) => selectBox(`${label} model`, tier, (m.offers[tier] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), m.tiers[tier]?.model, { id, attrs: ` data-tier="${esc(tier)}"` });
-  const worker = (tier, label) => setting(label, `<input type="checkbox" data-tier="${esc(tier)}" aria-label="${label} enabled"${m.tiers[tier]?.enabled ? " checked" : ""}> ` + sel(tier, label, `model-${tier}`), { id: `model-${tier}` });
-  return settings("Models", [worker("worker-low", "Worker low"), worker("worker-medium", "Worker medium"), ...Object.entries(TIERS).map(([tier, name]) => setting(name, sel(tier, name, `model-${tier}`), { id: `model-${tier}` }))]);
+  const sel = (key, label, id) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), m.models[key]?.model, { id, attrs: ` data-name="${esc(key)}"` });
+  const size = ([key, label]) => setting(label, (key === "large" ? "" : `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${m.models[key]?.enabled ? " checked" : ""}> `) + sel(key, label, `model-${key}`), { id: `model-${key}` });
+  return settings("Models", [...Object.entries(SIZES).map(size), ...Object.entries(ROLE_MODELS).map(([key, role]) => setting(NAMES[role], sel(key, NAMES[role], `model-${key}`), { id: `model-${key}` }))]);
 }
 
 /** The live frame: agents live per point, by role. */
@@ -150,9 +152,9 @@ export const view = {
     scope().wire(root);
     if (s.flow?.agents) for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(s.flow);
     root.onchange = async (e) => {
-      const b = e.target.closest?.("#models [data-tier]");
+      const b = e.target.closest?.("#models [data-name]");
       if (!b || e.type !== "change") return;
-      const m = await postJson("/api/models", { tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => say(b, err.message));
+      const m = await postJson("/api/models", { name: b.dataset.name, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => say(b, err.message));
       if (m) await redraw(true);
     };
   },

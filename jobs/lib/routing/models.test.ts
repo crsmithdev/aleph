@@ -6,17 +6,19 @@ import { serverArgs } from "./gpt-oss-start.ts";
 import { judge } from "../../../hooks/lib/judge.ts";
 import { writeLine } from "../roles/title.ts";
 import { MODELS } from "../../../lib/models.ts";
+import { putJson } from "../../../lib/db.ts";
 import { AGENT_SETTINGS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf, viaOfRun } from "./models.ts";
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "models-")); process.env.ALEPH_FACTORY_DIR = dir; });
 afterEach(() => { delete process.env.ALEPH_FACTORY_DIR; rmSync(dir, { recursive: true, force: true }); });
 
-test("a missing file gives both worker tiers enabled on haiku and sonnet, and title and judge on Claude", () => {
+test("no setting gives small, medium and large on haiku, sonnet and Opus, and each role model on its default, each enabled", () => {
   expect(readModels()).toEqual({
-    "worker-low": { enabled: true, model: "haiku" },
-    "worker-medium": { enabled: true, model: "sonnet" },
-    reviewer: { enabled: true, model: "claude-opus-5-5" },
+    small: { enabled: true, model: "haiku" },
+    medium: { enabled: true, model: "sonnet" },
+    large: { enabled: true, model: "claude-opus-5-5" },
+    review: { enabled: true, model: "claude-opus-5-5" },
     intake: { enabled: true, model: "claude-opus-5-5" },
     director: { enabled: true, model: "claude-opus-5-5" },
     monitor: { enabled: true, model: "deepseek-v4.1-flash" },
@@ -26,24 +28,37 @@ test("a missing file gives both worker tiers enabled on haiku and sonnet, and ti
   });
 });
 
-test("a tier set to a model it offers reads back; a model it does not offer, an unknown tier or a disable of a non-worker tier is an error text", () => {
-  expect(setModel("worker-low", { model: "gpt-oss-20b" })).toBeNull();
-  expect(setModel("worker-medium", { enabled: false })).toBeNull();
+test("an entry set to a model it offers reads back; a model it does not offer, an unknown or old name, or a disable of large or a role model is an error text", () => {
+  expect(setModel("small", { model: "gpt-oss-20b" })).toBeNull();
+  expect(setModel("medium", { enabled: false })).toBeNull();
   const m = readModels();
-  expect(m["worker-low"]).toEqual({ enabled: true, model: "gpt-oss-20b" });
-  expect(m["worker-medium"]).toEqual({ enabled: false, model: "sonnet" });
-  expect(setModel("worker-low", { model: "sonnet" })).toContain("offers");
-  expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown tier");
+  expect(m.small).toEqual({ enabled: true, model: "gpt-oss-20b" });
+  expect(m.medium).toEqual({ enabled: false, model: "sonnet" });
+  expect(setModel("small", { model: "sonnet" })).toContain("offers");
+  expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown");
+  expect(setModel("worker-low", { model: "haiku" })).toContain("unknown");
   expect(setModel("intake", { model: "nonexistent" })).toContain("offers");
-  expect(setModel("reviewer", { enabled: false })).toContain("can be disabled");
-  expect(setModel("merge", { model: "haiku" })).toContain("unknown tier");
+  expect(setModel("large", { enabled: false })).toContain("can be disabled");
+  expect(setModel("review", { enabled: false })).toContain("can be disabled");
+  expect(setModel("merge", { model: "haiku" })).toContain("unknown");
   expect(readModels()).toEqual(m);
 });
 
-test("a merge run follows the worker tier of its model", () => {
-  expect(setModel("worker-low", { model: "deepseek-v4.1-flash" })).toBeNull();
+test("a models setting stored under the old names reads back under small, medium and review", () => {
+  putJson("settings", "models", { "worker-low": { enabled: false, model: "gpt-oss-20b" }, "worker-medium": { enabled: false, model: "sonnet" }, reviewer: { model: "sonnet" } });
+  const m = readModels();
+  expect(m.small).toEqual({ enabled: false, model: "gpt-oss-20b" });
+  expect(m.medium).toEqual({ enabled: false, model: "sonnet" });
+  expect(m.review).toEqual({ enabled: true, model: "sonnet" });
+});
+
+test("a merge run follows the size of its model, and an opus run follows large", () => {
+  expect(setModel("small", { model: "deepseek-v4.1-flash" })).toBeNull();
   expect(viaOfRun({ model: "haiku", merge: true }, readModels())).toBe("openrouter");
   expect(viaOfRun({ model: "sonnet", merge: true }, readModels())).toBe("claude");
+  expect(viaOfRun({ model: "opus" }, readModels())).toBe("claude");
+  expect(setModel("large", { model: "gpt-oss-20b" })).toBeNull();
+  expect(viaOfRun({ model: "opus" }, readModels())).toBe("local");
 });
 
 test("a Claude model adds no env; gpt-oss-20b adds the local server and takes the GPU slot; an OpenRouter model adds OpenRouter, the key and an empty API key", () => {
@@ -84,7 +99,7 @@ test("an agent role leaves out Chris's CLAUDE.md, runs at high effort and says i
   expect(s.env).toEqual({ ALEPH_AGENT: "1" });
 });
 
-test("every tier offers its Claude model first, then every model Claude does not serve", () => {
+test("every entry offers its Claude model first, then every model Claude does not serve", () => {
   expect(setModel("title", { model: "deepseek-v4.1-flash" })).toBeNull();
   expect(readModels().title.model).toBe("deepseek-v4.1-flash");
   const others = Object.keys(MODELS).filter((m) => viaOf(m) !== "claude");

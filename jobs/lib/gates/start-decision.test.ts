@@ -37,17 +37,17 @@ function router(tier: Tier): { stop: () => void } {
 
 test("a ready issue starts with no route asked, so the start rates the spec itself", async () => {
   const id = newIssue();
-  expect(await decide(id, "opus")).toMatchObject({ kind: "ready", tier: undefined });
+  expect(await decide(id, "large")).toMatchObject({ kind: "ready", tier: undefined });
   expect(asked).toBe(0);
 });
 
 test("with the live cap full of Claude runs, a tier on the local backend starts; a tier on Claude stays held", async () => {
   process.env.ALEPH_LIVE_CAP = "1";
-  expect(setModel("worker-low", { model: "gpt-oss-20b" })).toBeNull();
+  expect(setModel("small", { model: "gpt-oss-20b" })).toBeNull();
   mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
   const id = newIssue();
-  expect(await decide(id, "worker-low")).toMatchObject({ kind: "ready", tier: "worker-low" });
-  expect(await decide(id, "opus")).toMatchObject({ kind: "live-cap", tier: "opus", why: "1 agent runs are live" });
+  expect(await decide(id, "small")).toMatchObject({ kind: "ready", tier: "small" });
+  expect(await decide(id, "large")).toMatchObject({ kind: "live-cap", tier: "large", why: "1 agent runs are live" });
   expect(await decide(id, null)).toMatchObject({ kind: "live-cap", tier: null });
   expect(asked).toBe(1);
 });
@@ -56,19 +56,19 @@ test("the live cap with every tier on Claude asks no route", async () => {
   process.env.ALEPH_LIVE_CAP = "1";
   mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
   const id = newIssue();
-  expect(await decide(id, "worker-low")).toMatchObject({ kind: "live-cap", tier: undefined });
+  expect(await decide(id, "small")).toMatchObject({ kind: "live-cap", tier: undefined });
   expect(asked).toBe(0);
 });
 
 test("a held backend holds an issue whose tier runs on it; another tier starts; an issue with a run is held with no route", async () => {
-  expect(setModel("worker-low", { model: "deepseek-v4.1-flash" })).toBeNull();
+  expect(setModel("small", { model: "deepseek-v4.1-flash" })).toBeNull();
   await holdBackend("openrouter", CREDIT);
   const id = newIssue();
-  expect(await decide(id, "worker-low")).toMatchObject({ kind: "backend", tier: "worker-low", why: `waits for OpenRouter: ${CREDIT}` });
-  expect(await decide(id, "opus")).toMatchObject({ kind: "ready", tier: "opus" });
+  expect(await decide(id, "small")).toMatchObject({ kind: "backend", tier: "small", why: `waits for OpenRouter: ${CREDIT}` });
+  expect(await decide(id, "large")).toMatchObject({ kind: "ready", tier: "large" });
   const ran = newIssue();
   mk(`fac-${ran}`, "build", "failed", { model: "deepseek-v4.1-flash" });
-  expect(await decide(ran, "opus")).toMatchObject({ kind: "backend", tier: undefined });
+  expect(await decide(ran, "large")).toMatchObject({ kind: "backend", tier: undefined });
   expect(asked).toBe(0);
 });
 
@@ -83,7 +83,7 @@ test("stalled and the dispatch agree: a hold on Claude holds an issue with no ru
   const id = newIssue();
   expect(await decide(id, null)).toMatchObject({ kind: "backend" });
   expect(await stalled()).toEqual([]);
-  const r = router("opus");
+  const r = router("large");
   try {
     const out = await dispatchIssues(async () => null);
     expect(out.started).toEqual([]);

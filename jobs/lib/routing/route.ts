@@ -3,19 +3,19 @@ import { logEvent } from "../../../lib/layout.ts";
 import { decide, judgeChoice } from "../../../lib/jev.ts";
 import { readModels } from "./models.ts";
 
-export const TIERS = ["worker-low", "worker-medium", "opus"] as const;
+export const TIERS = ["small", "medium", "large"] as const;
 export type Tier = (typeof TIERS)[number];
-/** The Claude model a tier's run asks for; unit.ts runs a worker tier set to a model Claude does not serve on that model. */
-export const TIER_MODEL = { "worker-low": "haiku", "worker-medium": "sonnet", opus: "opus" } as const;
+/** The Claude model a tier's run asks for; unit.ts runs a size set to a model Claude does not serve on that model. */
+export const TIER_MODEL = { small: "haiku", medium: "sonnet", large: "opus" } as const;
 const CUT = 0.6;
 
 const TIER_QUESTION = {
   type: "choice" as const,
   instructions: "Which model tier fits the change that `goal` asks for?",
   criteria: {
-    "worker-low": "A small, mechanical change in one or two files whose done state is stated exactly.",
-    "worker-medium": "A typical change across several files, with a clear oracle.",
-    opus: "A design-heavy or cross-cutting change, or one whose approach the item leaves open.",
+    small: "A small, mechanical change in one or two files whose done state is stated exactly.",
+    medium: "A typical change across several files, with a clear oracle.",
+    large: "A design-heavy or cross-cutting change, or one whose approach the item leaves open.",
   },
 };
 
@@ -30,7 +30,7 @@ export async function route(spec: string, subject = "route"): Promise<Tier | nul
     try { logEvent({ subject: "rule", action: "routed", object: subject, detail: `${a.choice} by classifier ${d.model.split("/").pop()}` }); } catch { /* the cost event is a note; it never changes the tier */ }
     if (!(TIERS as readonly string[]).includes(a.choice) || p < CUT) return null;
     const models = readModels();
-    return TIERS.slice(TIERS.indexOf(a.choice as Tier)).find((t) => t === "opus" || models[t].enabled)!;
+    return TIERS.slice(TIERS.indexOf(a.choice as Tier)).find((t) => models[t].enabled)!;
   } catch {
     return null;
   }
@@ -39,5 +39,5 @@ export async function route(spec: string, subject = "route"): Promise<Tier | nul
 
 /** The next enabled tier above `tier`, or `tier` at the top: the tier of a rerun after a failed run. */
 export function raise(tier: Tier, models = readModels()): Tier {
-  return TIERS.slice(TIERS.indexOf(tier) + 1).find((t) => t === "opus" || models[t].enabled) ?? tier;
+  return TIERS.slice(TIERS.indexOf(tier) + 1).find((t) => models[t].enabled) ?? tier;
 }

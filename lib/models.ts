@@ -12,7 +12,7 @@ export const OPUS_MODEL = "claude-opus-5-5";
 const routed = (id: string, input: number, output: number, cacheRead = input, cacheWrite = input): Model =>
   ({ via: "openrouter", id, price: { input, output, cacheRead, cacheWrite } });
 
-/** Every model a tier can use, by the name the `models` setting and the run records carry. */
+/** Every model a size or role model can use, by the name the `models` setting and the run records carry. */
 export const MODELS: Record<string, Model> = {
   haiku: { via: "claude", id: "haiku" },
   sonnet: { via: "claude", id: "sonnet" },

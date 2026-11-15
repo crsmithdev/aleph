@@ -8,8 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { callAgent } from "../roles/agent-call.ts";
 
-/** The reply to `input` under `system` on the tier's model, killed after `box` ms: its exit code, its stderr, its text and whether the box killed it. */
-export async function oneShot(tier: "title" | "judge", cmd: string, system: string, input: string, box: number): Promise<{ code: number; stderr: string; result: string; timedOut: boolean }> {
+/** The reply to `input` under `system` on its role model, killed after `box` ms: its exit code, its stderr, its text and whether the box killed it. */
+export async function oneShot(role: "title" | "judge", cmd: string, system: string, input: string, box: number): Promise<{ code: number; stderr: string; result: string; timedOut: boolean }> {
   const env = {
     ...process.env, CLAUDECODE: undefined, CLAUDE_CODE_ENTRYPOINT: undefined,
     ANTHROPIC_API_KEY: undefined, // the call runs on the subscription, never the API
@@ -18,8 +18,8 @@ export async function oneShot(tier: "title" | "judge", cmd: string, system: stri
   const dir = mkdtempSync(join(tmpdir(), "aleph-one-shot-"));
   const [stdout, stderr] = [join(dir, "out"), join(dir, "err")];
   try {
-    const r = await callAgent(tier, input, {
-      model: readModels()[tier].model, cmd, flags: ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--system-prompt", system],
+    const r = await callAgent(role, input, {
+      model: readModels()[role].model, cmd, flags: ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--system-prompt", system],
       env, stdout, stderr, limit: Math.max(box, 0) / 1000, fallback: "haiku",
     });
     return { code: r.step.code, stderr: readFileSync(stderr, "utf8"), result: r.text, timedOut: r.step.timedOut };

@@ -47,10 +47,10 @@ const row = (h: string, name: string) => h.match(new RegExp(`<tr><td class="wide
 test("an outcome on a full model id joins the row of its short model; an unset model never reads not recorded", () => {
   const o = (role: string, model: string, runs: number) => ({ role, model, runs, succeeded: runs, failed: 0, stuck: 0, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 });
   const outcomes = [o("intake", "claude-opus-5-5", 151), o("worker", "claude-haiku-4-5-20251001", 7), o("reviewer", "unset", 3)];
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Intake")).toMatch(/<td>opus<\/td><td class="num">151<\/td>/);
   expect(h.match(/<td class="wide" title="Intake">Intake<\/td>/g)!.length).toBe(1);
-  expect(row(h, "Worker")).toContain("<td>haiku, sonnet</td>");
+  expect(row(h, "Worker")).toContain("<td>haiku, sonnet, opus</td>");
   expect(h).not.toMatch(/<td>claude-/);
   expect(row(h, "Reviewer")).not.toContain("<select");
   expect(h.match(/<td class="wide" title="Reviewer">Reviewer<\/td>/g)!.length).toBe(1);
@@ -59,7 +59,7 @@ test("an outcome on a full model id joins the row of its short model; an unset m
 
 test("the tiles are usage, OpenRouter spend for the window's UTC period, worker slots and the backend lights", () => {
   const keys = (h: string) => [...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1]);
-  const m = { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
+  const m = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
   expect(keys(h)).toEqual(["Usage", "Spend", "Worker slots", "Backends"]);
   for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", '<span class="event-dot fine" aria-hidden="true"></span>Local server: up', '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
@@ -148,10 +148,11 @@ test("the title is the sidebar name, whatever the data", () => {
   expect(renderFactoryAgents({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
 });
 
-const tiers = (low: string, medium: string) => ({
-  "worker-low": { enabled: true, model: low },
-  "worker-medium": { enabled: false, model: medium },
-  reviewer: { enabled: true, model: "opus" },
+const entries = (small: string, medium: string) => ({
+  small: { enabled: true, model: small },
+  medium: { enabled: false, model: medium },
+  large: { enabled: true, model: "opus" },
+  review: { enabled: true, model: "opus" },
   intake: { enabled: true, model: "opus" },
   director: { enabled: true, model: "opus" },
   monitor: { enabled: true, model: "deepseek-v4.1-flash" },
@@ -159,38 +160,39 @@ const tiers = (low: string, medium: string) => ({
   judge: { enabled: true, model: "haiku" },
 });
 
-test("the Roles table is read-only; the Models settings list holds a select per tier, a checkbox per worker tier, one Success column", () => {
-  const html = renderFactoryAgents(S, E, "live", "week", { tiers: tiers("haiku", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
+test("the Roles table is read-only; the Models settings list holds a select per size and role model, a checkbox on Small and Medium only, one Success column", () => {
+  const html = renderFactoryAgents(S, E, "live", "week", { models: entries("haiku", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
   const [roles, models] = html.split('id="models"');
   expect(roles).not.toMatch(/<td[^>]*>[^<]*<(select|input|button)/);
   expect(models).toContain(">Models</h2>");
   const row = (name: string) => models.match(new RegExp(`<label class="sl" for="model-[^"]+">${name}</label>.*?</div>`))![0];
   const opts = (r: string) => [...r.matchAll(/<option value="([^"]+)"/g)].map((x) => x[1]);
-  const w = (n: string) => row(`Worker ${n}`);
-  expect(opts(w("low").match(/<select.*?<\/select>/s)![0])).toEqual(OFFERS["worker-low"]);
-  expect(opts(w("medium").match(/<select.*?<\/select>/s)![0])).toEqual(OFFERS["worker-medium"]);
-  expect(OFFERS["worker-low"]).toContain("deepseek-v4.1-flash");
-  expect(w("low")).toContain('type="checkbox" data-tier="worker-low" aria-label="Worker low enabled" checked');
-  expect(w("medium")).toContain('type="checkbox" data-tier="worker-medium" aria-label="Worker medium enabled">');
-  expect(w("medium")).toContain('<option value="gpt-oss-20b" selected>');
+  expect(opts(row("Small").match(/<select.*?<\/select>/s)![0])).toEqual(OFFERS.small);
+  expect(opts(row("Medium").match(/<select.*?<\/select>/s)![0])).toEqual(OFFERS.medium);
+  expect(opts(row("Large").match(/<select.*?<\/select>/s)![0])).toEqual(OFFERS.large);
+  expect(OFFERS.small).toContain("deepseek-v4.1-flash");
+  expect(row("Small")).toContain('type="checkbox" data-name="small" aria-label="Small enabled" checked');
+  expect(row("Medium")).toContain('type="checkbox" data-name="medium" aria-label="Medium enabled">');
+  expect(row("Medium")).toContain('<option value="gpt-oss-20b" selected>');
   expect(roles).not.toContain(">Merge<");
-  for (const n of ["Reviewer", "Intake", "Director", "Monitor", "Title", "Judge"]) { expect(row(n)).toContain("<select"); expect(row(n)).not.toContain("checkbox"); }
+  for (const n of ["Large", "Reviewer", "Intake", "Director", "Monitor", "Title", "Judge"]) { expect(row(n)).toContain("<select"); expect(row(n)).not.toContain("checkbox"); }
+  expect(models).not.toContain("tier");
   expect(html).not.toContain(">Succeeded<");
   expect(html).not.toContain(">Failed<");
 });
 
 test("the Backends tile says the local server is up or down and the Roles table disables gpt-oss-20b to match", () => {
-  const down = renderFactoryAgents(S, D, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] });
+  const down = renderFactoryAgents(S, D, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] });
   expect(down).toContain("Local server: down");
-  expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(8);
-  const up = renderFactoryAgents(S, D, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
+  expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(9);
+  const up = renderFactoryAgents(S, D, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(up).toContain("Local server: up");
   expect(up).not.toContain("disabled");
-  expect(renderFactoryAgents(S, null, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server: down");
+  expect(renderFactoryAgents(S, null, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server: down");
 });
 
 test("the Backends tile counts the backends up out of 2", () => {
-  const m = (down: string[], local = "up") => ({ tiers: tiers("haiku", "sonnet"), local, offers: OFFERS, down });
+  const m = (down: string[], local = "up") => ({ models: entries("haiku", "sonnet"), local, offers: OFFERS, down });
   const up = renderFactoryAgents(S, D, "live", "week", m(["gpt-oss-20b"]));
   expect(up).toContain("<b>2<em> / 2</em></b>");
   expect(up).toContain('<span class="q"><span>up</span><span class="m"> / backends</span></span>');
@@ -199,20 +201,20 @@ test("the Backends tile counts the backends up out of 2", () => {
 });
 
 test("the Backends tile says OpenRouter is down when the flash model is down, and the Roles card has no status line", () => {
-  const m = (down: string[]) => ({ tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down });
+  const m = (down: string[]) => ({ models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down });
   expect(renderFactoryAgents(S, D, "live", "week", m([]))).toContain("OpenRouter: up");
   expect(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"]))).toContain("OpenRouter: down");
   expect(renderFactoryAgents(S, D, "live", "week", m([]))).not.toContain('<p class="quiet">Local server');
 });
 
-test("an outcome joins the tier row of its role and model; non-tier roles stay their own row", () => {
+test("an outcome joins the row of its role and model; roles with no model setting stay their own row", () => {
   const o = (role: string, model: string, rate: number) => ({ role, model, runs: 10, succeeded: rate * 10, failed: 10 - rate * 10, stuck: 0, rate, p50: 60, cost: 1.5, baseline: 0.7 });
   const row = (h: string, name: string) => h.match(new RegExp(`<tr><td class="wide" title="${name}">${name}</td>.*?</tr>`))![0];
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("intake", "opus", 0.95), o("triage", "opus", 0.9)] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("intake", "opus", 0.95), o("triage", "opus", 0.9)] } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Intake")).toMatch(/<td>opus<\/td><td class="num">10<\/td><td class="num">95%/);
   expect(h.match(/<td class="wide" title="Intake">Intake<\/td>/g)!.length).toBe(1);
   expect(row(h, "Triage")).toContain("90%");
-  expect(row(h, "Worker")).toContain("<td>haiku, sonnet</td>");
+  expect(row(h, "Worker")).toContain("<td>haiku, sonnet, opus</td>");
 });
 
 test("the Worker row adds up the worker outcomes and the Reviewer row has its own counts", () => {
@@ -222,7 +224,7 @@ test("the Worker row adds up the worker outcomes and the Reviewer row has its ow
     o("worker", "gpt-oss-20b", { runs: 50, succeeded: 40, failed: 10, cost: 10, firstPass: 10, built: 30, reviewPass: 1 }),
     o("reviewer", "unset", { runs: 90, succeeded: 60, failed: 30, rate: 0.6667, pass: 60, fail: 30 }),
   ];
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { tiers: tiers("haiku", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { models: entries("haiku", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
   const w = row(h, "Worker");
   expect(w).toContain('<td class="num">150</td><td class="num">80% </td>');
   expect(w).toContain('<td class="num">$30.00</td><td><a');
@@ -259,7 +261,7 @@ test("a Roles count goes through count()", () => {
 });
 
 test("a Roles row with no outcome shows a dash in every cell, with num on the number cells", () => {
-  const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
+  const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(html, "Director")).toMatch(new RegExp(`<td>opus</td>${'<td class="num"><span title="no runs in this window">–</span></td>'.repeat(4)}<td><span title="no runs in this window">–</span></td>`));
 });
 
@@ -274,7 +276,7 @@ test("a failed load shows the error state", () => {
 });
 
 test("Worker slots shows a dash for a missing cap, and the Usage card is the Status one", () => {
-  const html = renderFactoryAgents({ ...S, factory: { ...S.factory, liveCap: undefined } }, { ...D, agents }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
+  const html = renderFactoryAgents({ ...S, factory: { ...S.factory, liveCap: undefined } }, { ...D, agents }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(html).toContain("<b>1<em> / –</em></b>");
   expect(html).not.toContain("undefined");
   expect(html).toContain(usageCard(S));
@@ -287,7 +289,7 @@ test("a failed model change shows the reason beside the control", async () => {
   globalThis.fetch = ((_url: string, init?: any) =>
     Promise.resolve(init?.method === "POST" ? Response.json({ error: "the backend of x is down" }, { status: 422 }) : { ok: false, status: 500, json: async () => ({}) })) as any;
   const root: any = { innerHTML: "", querySelector: () => null };
-  const select: any = { after() {}, dataset: { tier: "worker" }, type: "select-one", value: "x", parentElement: { querySelector: () => null } };
+  const select: any = { after() {}, dataset: { name: "small" }, type: "select-one", value: "x", parentElement: { querySelector: () => null } };
   select.closest = () => select;
   try {
     await view.mount(root, S);

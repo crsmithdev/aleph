@@ -66,7 +66,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   },
   "/api/context/:id/calls/:call": { tool: "string", input: "any", text: "string" },
   "/api/projects": { "*": { code: "string?", issues: "number", onboarded: "boolean" } },
-  "/api/models": { tiers: { "*": { enabled: "boolean", model: "string" } }, offers: { "*": ["string"] }, down: ["string"], local: "string", spend: "object?" },
+  "/api/models": { models: { "*": { enabled: "boolean", model: "string" } }, offers: { "*": ["string"] }, down: ["string"], local: "string", spend: "object?" },
   "/api/sessions": {
     window: "number", project: "string?", partial: "boolean", activity: { days: ["string"], langfuse: "string", tools: "array", hooks: "array" },
     skills: "object", sessions: "object", toolSessions: { "*": ["string"] },

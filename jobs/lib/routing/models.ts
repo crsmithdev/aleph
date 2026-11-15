@@ -1,7 +1,7 @@
 /**
- * The models aleph can run and which model serves each tier. Every model call is `claude -p`; a model that Claude
- * does not serve differs only in the env the call adds, which `modelEnv` gives from MODELS. The tier map lives in
- * the `models` setting as tier -> {enabled, model}; a missing row or tier means enabled on its Claude model.
+ * The models aleph can run and which model serves each size and role model. Every model call is `claude -p`; a model
+ * that Claude does not serve differs only in the env the call adds, which `modelEnv` gives from MODELS. The map lives
+ * in the `models` setting as name -> {enabled, model}; a missing row or name means enabled on its Claude model.
  */
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
@@ -25,11 +25,11 @@ export const onGpu = (model: string | undefined): boolean => viaOf(model) === "l
 /** The name of a backend in a line Chris reads. */
 export const BACKENDS: Record<Via, string> = { claude: "Claude", local: "the local server", openrouter: "OpenRouter" };
 
-/** Who serves a run's calls: its own model's backend or, when its model is a Claude tier model, its tier's model's backend. */
-export function viaOfRun(run: { model?: string; merge?: true }, models: Record<Tier, Setting>): Via {
+/** Who serves a run's calls: its own model's backend or, when its model is a size's Claude model, its size's model's backend. */
+export function viaOfRun(run: { model?: string; merge?: true }, models: Record<Name, Setting>): Via {
   const own = viaOf(run.model);
-  const tier = WORKER_TIER[run.model ?? ""];
-  return own === "claude" && tier !== undefined ? viaOf(models[tier].model) : own;
+  const size = SIZE_OF[run.model ?? ""];
+  return own === "claude" && size !== undefined ? viaOf(models[size].model) : own;
 }
 
 const MODEL_VARS = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL",
@@ -118,13 +118,14 @@ export async function probeBackend(via: Via): Promise<boolean> {
   } catch { return false; }
 }
 
-/** The models that are not Claude's, which every tier offers after its Claude model. */
+/** The models that are not Claude's, which every size and role model offers after its Claude model. */
 const OTHERS = Object.keys(MODELS).filter((m) => MODELS[m].via !== "claude");
-/** The models each tier offers; the first is its Claude model and the default. */
+/** The models each size, then each role model, offers; the first is its Claude model and the default. */
 export const OFFERS = {
-  "worker-low": ["haiku", ...OTHERS],
-  "worker-medium": ["sonnet", ...OTHERS],
-  reviewer: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
+  small: ["haiku", ...OTHERS],
+  medium: ["sonnet", ...OTHERS],
+  large: ["claude-opus-5-5", ...OTHERS],
+  review: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   intake: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   director: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   monitor: ["deepseek-v4.1-flash", "haiku", "sonnet", "claude-opus-5-5", ...OTHERS.filter((m) => m !== "deepseek-v4.1-flash")],
@@ -132,31 +133,37 @@ export const OFFERS = {
   title: ["haiku", ...OTHERS],
   judge: ["haiku", ...OTHERS],
 };
-export type Tier = keyof typeof OFFERS;
+/** A size (small, medium, large) or a role model. */
+export type Name = keyof typeof OFFERS;
 export type Setting = { enabled: boolean; model: string };
-/** The tiers that can be disabled. */
-const WORKERS = ["worker-low", "worker-medium"] as const;
-/** The worker tier of a run's Claude model. */
-export const WORKER_TIER: Record<string, Tier | undefined> = { haiku: "worker-low", sonnet: "worker-medium" };
+/** The sizes that can be disabled. */
+const DISABLES = ["small", "medium"] as const;
+/** The size of a run's Claude model. */
+export const SIZE_OF: Record<string, Name | undefined> = { haiku: "small", sonnet: "medium", opus: "large" };
+/** The name each entry had in a models setting stored before the sizes. */
+const OLD_NAMES: Partial<Record<Name, string>> = { small: "worker-low", medium: "worker-medium", review: "reviewer" };
 
-const write = (m: Record<Tier, Setting>): void => putJson("settings", "models", m);
+const write = (m: Record<Name, Setting>): void => putJson("settings", "models", m);
 
-/** Every tier with its setting. */
-export function readModels(): Record<Tier, Setting> {
-  const m: any = getJson("settings", "models", {});
-  const all = Object.fromEntries((Object.keys(OFFERS) as Tier[]).map((t) => [t, {
-    enabled: !(WORKERS as readonly string[]).includes(t) || m[t]?.enabled !== false,
-    model: OFFERS[t].includes(m[t]?.model) ? m[t].model : OFFERS[t][0],
-  }])) as Record<Tier, Setting>;
+/** Every size and role model with its setting. */
+export function readModels(): Record<Name, Setting> {
+  const stored: any = getJson("settings", "models", {});
+  const all = Object.fromEntries((Object.keys(OFFERS) as Name[]).map((t) => {
+    const m = stored[t] ?? stored[OLD_NAMES[t] ?? ""];
+    return [t, {
+      enabled: !(DISABLES as readonly string[]).includes(t) || m?.enabled !== false,
+      model: OFFERS[t].includes(m?.model) ? m.model : OFFERS[t][0],
+    }];
+  })) as Record<Name, Setting>;
   return all;
 }
 
-/** Changes one tier; returns an error text for an unknown tier, a model the tier does not offer, or a disable of a tier that cannot be disabled, else null. */
-export function setModel(tier: string, change: Partial<Setting>): string | null {
-  if (!Object.hasOwn(OFFERS, tier)) return `unknown tier "${tier}"; tiers: ${Object.keys(OFFERS).join(", ")}`;
-  const t = tier as Tier;
+/** Changes one entry; returns an error text for an unknown name, a model the entry does not offer, or a disable of an entry that cannot be disabled, else null. */
+export function setModel(name: string, change: Partial<Setting>): string | null {
+  if (!Object.hasOwn(OFFERS, name)) return `unknown name "${name}"; names: ${Object.keys(OFFERS).join(", ")}`;
+  const t = name as Name;
   if (change.model !== undefined && !OFFERS[t].includes(change.model)) return `${t} offers ${OFFERS[t].join(", ")}, not "${change.model}"`;
-  if (change.enabled === false && !(WORKERS as readonly string[]).includes(t)) return `only ${WORKERS.join(" and ")} can be disabled`;
+  if (change.enabled === false && !(DISABLES as readonly string[]).includes(t)) return `only ${DISABLES.join(" and ")} can be disabled`;
   const m = readModels();
   write({ ...m, [t]: { ...m[t], ...change } });
   logSetting(`${t}: ${Object.entries(change).map(([k, v]) => `${k} ${v}`).join(", ")}`);

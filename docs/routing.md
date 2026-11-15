@@ -1,23 +1,23 @@
 # Routing
 
-This page states which model or command does each piece of work, with which tools, where, and for how long. Every agent role is `claude -p` on the Claude subscription, except the judge's first pass, which is Jev on OpenRouter. A local `gpt-oss-20b` or a model on OpenRouter can take some tiers.
+This page states which model or command does each piece of work, with which tools, where, and for how long. Every agent role is `claude -p` on the Claude subscription, except the judge's first pass, which is Jev on OpenRouter. A local `gpt-oss-20b` or a model on OpenRouter can take a size or a role model.
 
 ## Roles
 
 | Role | Model | Tools | Runs in | Time box | Output |
 |---|---|---|---|---|---|
 | Intake | `claude-opus-5-5` | Read, Grep, Glob | A temp clone of `origin/main` | 900 s | `INTAKE_SCHEMA`: a route |
-| Worker | The routed tier, else the CLI default | Read, Write, Edit, Bash, Grep, Glob | `<repo>/.worktrees/job-<name>` | `ALEPH_JOB_TIMEOUT` (1800 s) | `WORKER_SCHEMA` |
-| Merge worker | `haiku`, or the model of the `worker-low` tier | As the worker | As the worker | 600 s | `WORKER_SCHEMA` |
+| Worker | The routed size, else the CLI default | Read, Write, Edit, Bash, Grep, Glob | `<repo>/.worktrees/job-<name>` | `ALEPH_JOB_TIMEOUT` (1800 s) | `WORKER_SCHEMA` |
+| Merge worker | `haiku`, or the model of the `small` size | As the worker | As the worker | 600 s | `WORKER_SCHEMA` |
 | Reviewer | `claude-opus-5-5` | Read, Grep, Glob, Bash | A detached worktree at the branch tip | `ALEPH_REVIEW_TIMEOUT` (600 s) | `REVIEW_SCHEMA`: `pass` or `hold` |
 | Director | `claude-opus-5-5` | Read, Grep, Glob; read-only `git`, `ls`, `aleph jobs`, `aleph issue show\|list` | The repo's main checkout, plus the vault's decisions | 900 s | `DIRECTOR_SCHEMA`: actions and case text |
 | Monitor | `deepseek-v4.1-flash` | None | | 600 s | Numbered findings |
-| Rule writer | `haiku`, or the local `title` tier | None, 1 turn | | 30 s | One line |
-| Judge | Jev, then `haiku` or the local `judge` tier | None, 1 turn | | 30 s | `{verdict, reason}` |
+| Rule writer | `haiku`, or the `title` role model | None, 1 turn | | 30 s | One line |
+| Judge | Jev, then `haiku` or the `judge` role model | None, 1 turn | | 30 s | `{verdict, reason}` |
 
 The code: intake `jobs/lib/roles/intake.ts`, worker and reviewer `jobs/lib/roles/unit.ts`, director `jobs/lib/roles/director.ts`, monitor `jobs/lib/roles/monitor.ts`, maintainer `jobs/lib/roles/maintainer.ts`, titles `jobs/lib/roles/title.ts`, judge `hooks/lib/judge.ts`.
 
-The maintainer's daily compile starts one read-only `claude -p` run (tier `maintainer`, default `sonnet`) only on a day with something in it. Corrections, episodes and the firefighter start no agent. Corrections asks Jev typed questions; episodes read git, the ledger and Langfuse; the firefighter is code.
+The maintainer's daily compile starts one read-only `claude -p` run (role model `maintainer`, default `sonnet`) only on a day with something in it. Corrections, episodes and the firefighter start no agent. Corrections asks Jev typed questions; episodes read git, the ledger and Langfuse; the firefighter is code.
 
 ## How a run starts
 
@@ -44,23 +44,23 @@ The worker's environment (`agentEnv`) rewrites a push to `git@github.com:` to a 
 
 Every role runs with `--disable-slash-commands`, so it loads no skill. The worker gets `skills/write-code/SKILL.md` and the reviewer gets `skills/code-review/SKILL.md` as a section of the prompt (`jobs/lib/roles/role-skill.ts` `skillSection`). The other roles get no skill.
 
-## Worker tiers
+## Worker sizes
 
 `route(spec)` in `jobs/lib/routing/route.ts` asks Jev one `choice` question about the goal's spec:
 
-| Tier | Model | Fits |
+| Size | Model | Fits |
 |---|---|---|
-| `worker-low` | `haiku` | A small, mechanical change in one or two files whose done state is exact |
-| `worker-medium` | `sonnet` | A typical change across several files, with a clear Oracle |
-| `opus` | `opus` | A design-heavy or cross-cutting change, or one whose approach is open |
+| `small` | `haiku` | A small, mechanical change in one or two files whose done state is exact |
+| `medium` | `sonnet` | A typical change across several files, with a clear Oracle |
+| `large` | `opus` | A design-heavy or cross-cutting change, or one whose approach is open |
 
-Jev's answer counts when its probability is at least 0.6. Otherwise, or when Jev fails or the judge choice is `haiku`, the run gets no `--model` and uses the CLI default. A disabled tier steps up to the next enabled one; `opus` is always on.
+Jev's answer counts when its probability is at least 0.6. Otherwise, or when Jev fails or the judge choice is `haiku`, the run gets no `--model` and uses the CLI default. A disabled size steps up to the next enabled one; `large` is always on.
 
-The dispatch also routes when the live cap holds a goal: if a tier on the local model has room, the goal starts there.
+The dispatch also routes when the live cap holds a goal: if a size on the local model has room, the goal starts there.
 
 ## Models other than Claude's
 
-`MODELS` in `lib/models.ts` lists every model a tier can use. Each row names who serves it (`claude`, `local` or `openrouter`), the id passed to `--model`, and, for a model Claude does not serve, its price per million tokens. Every call is `claude -p`, built by `modelArgv()`; a model Claude does not serve differs only in the env `modelEnv()` adds. To add a model, add a row.
+`MODELS` in `lib/models.ts` lists every model a size or role model can use. Each row names who serves it (`claude`, `local` or `openrouter`), the id passed to `--model`, and, for a model Claude does not serve, its price per million tokens. Every call is `claude -p`, built by `modelArgv()`; a model Claude does not serve differs only in the env `modelEnv()` adds. To add a model, add a row.
 
 | Model | Served by | Id |
 |---|---|---|
@@ -72,22 +72,27 @@ The dispatch also routes when the live cap holds a goal: if a tier on the local 
 | `step-3.5-flash` | OpenRouter | `stepfun/step-3.5-flash` |
 | `mimo-v2.6-flash` | OpenRouter | `xiaomi/mimo-v2.6-flash` |
 
-The `models` setting maps each tier to `{enabled, model}`. Each tier offers its Claude model first, then every model Claude does not serve:
+The `models` setting maps each size and role model ([Naming](naming.md#terms)) to `{enabled, model}`. Each offers its default first and every model Claude does not serve; `review`, `intake`, `director`, `monitor` and `maintainer` also offer the other Claude models:
 
-| Tier | Claude model |
+| Size or role model | Default |
 |---|---|
-| `worker-low` | `haiku` |
-| `worker-medium` | `sonnet` |
-| `title` | `haiku` |
-| `judge` | `haiku` |
+| `small` | `haiku` |
+| `medium` | `sonnet` |
+| `large` | `claude-opus-5-5` |
+| `review`, `intake`, `director` | `claude-opus-5-5` |
+| `monitor` | `deepseek-v4.1-flash` |
+| `maintainer` | `sonnet` |
+| `title`, `judge` | `haiku` |
+
+Only `small` and `medium` can be off. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
 
 ```bash
-aleph models                          # show the tiers
-aleph models set worker-low deepseek-v4.1-flash
-aleph models disable worker-medium    # only the worker tiers can be off
+aleph models                          # show the sizes and role models
+aleph models set small deepseek-v4.1-flash
+aleph models disable medium           # only small and medium can be off
 ```
 
-A run on a worker tier set to another model records that model as `model` and its Claude model as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
+A run on a size set to another model records that model as `model` and its Claude model as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
 
 **OpenRouter.** A call gets `ANTHROPIC_BASE_URL=https://openrouter.ai/api`, `OPENROUTER_API_KEY` as `ANTHROPIC_AUTH_TOKEN` (from the environment or `~/.aleph/.env`), an empty `ANTHROPIC_API_KEY`, and the model's id in the default-model variables. OpenRouter runs count against the live cap and take no GPU slot. Without a key, the Agents page disables the OpenRouter models.
 
@@ -105,7 +110,7 @@ A run on a worker tier set to another model records that model as `model` and it
 | Verify gate | Jev scores whether the final message claims completion; under 0.05 passes, else Haiku decides | Haiku decides |
 | Vault recall | Jev scores each candidate note | Off |
 | Task type on traces | Jev tags each turn | Off |
-| Worker tier | Jev picks the tier | No `--model` |
+| Worker size | Jev picks the size | No `--model` |
 | Corrections | Jev groups signals into lessons | Jev, the same |
 
 A judge that cannot answer passes the turn (fail open).

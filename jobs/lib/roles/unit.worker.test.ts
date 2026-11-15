@@ -22,8 +22,8 @@ describe("a factory run", () => {
     await drop("fresult");
   }, 30_000);
 
-  test("a worker-medium tier set to gpt-oss-20b runs the worker on gpt-oss-20b at the local base URL with cost 0, and a sonnet tier on sonnet", async () => {
-    const slot = (backend: string) => putJson("settings", "models", { "worker-medium": { enabled: true, model: backend } });
+  test("medium set to gpt-oss-20b runs the worker on gpt-oss-20b at the local base URL with cost 0, and medium on sonnet runs it on sonnet", async () => {
+    const slot = (backend: string) => putJson("settings", "models", { medium: { enabled: true, model: backend } });
     const spec = (n: string) => `Goal: ${n}\nACTION: commit ${n}.txt\n`;
     slot("gpt-oss-20b");
     const local = await aleph(["job", "fac", "flocal", "--spec", "-", "--model", "sonnet"], { ALEPH_FIX_ROUNDS: "0" }, spec("flocal"));
@@ -39,8 +39,8 @@ describe("a factory run", () => {
     await drop("fclaude");
   }, 60_000);
 
-  test("a worker-medium tier set to an OpenRouter model runs the worker on OpenRouter with the key, and prices the run from the table, not Claude Code's cost", async () => {
-    putJson("settings", "models", { "worker-medium": { enabled: true, model: "deepseek-v4.1-flash" } });
+  test("medium set to an OpenRouter model runs the worker on OpenRouter with the key, and prices the run from the table, not Claude Code's cost", async () => {
+    putJson("settings", "models", { medium: { enabled: true, model: "deepseek-v4.1-flash" } });
     const r = await aleph(["job", "fac", "frouted", "--spec", "-", "--model", "sonnet"], { ALEPH_FIX_ROUNDS: "0", OPENROUTER_API_KEY: "sk-or-test" }, "Goal: frouted\nACTION: commit frouted.txt\n");
     expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--model deepseek/deepseek-v4.1-flash");
     const env = readFileSync(join(fakeLog, "env"), "utf8");
@@ -57,8 +57,8 @@ describe("a factory run", () => {
     await drop("fnomodel");
   }, 30_000);
 
-  test("a worker-low tier set to gpt-oss-20b leaves a run record with model gpt-oss-20b and tier haiku", async () => {
-    putJson("settings", "models", { "worker-low": { enabled: true, model: "gpt-oss-20b" } });
+  test("small set to gpt-oss-20b leaves a run record with model gpt-oss-20b and tier haiku", async () => {
+    putJson("settings", "models", { small: { enabled: true, model: "gpt-oss-20b" } });
     const r = await aleph(["job", "fac", "flowtier", "--spec", "-", "--model", "haiku"], { ALEPH_FIX_ROUNDS: "0" }, "Goal: flowtier\nACTION: commit flowtier.txt\n");
     expect(state(r.json.run)).toMatchObject({ model: "gpt-oss-20b", tier: "haiku" });
     await drop("flowtier");

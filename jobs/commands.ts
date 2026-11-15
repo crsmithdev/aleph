@@ -80,7 +80,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   pause: { usage: "aleph pause", purpose: "stop the factory from starting work" },
   resume: { usage: "aleph resume", purpose: "let the factory start work again" },
   always: { usage: "aleph always <list|grant <reason> <action>|revoke <reason>|timeout [<reason> <minutes> [pick|drop]]>", purpose: "list and change the standing permissions" },
-  models: { usage: "aleph models [set <tier> <model> | enable <tier> | disable <tier>]", purpose: "list and change the model of each tier" },
+  models: { usage: "aleph models [set <name> <model> | enable <size> | disable <size>]", purpose: "list and change the model of each size and role model" },
   judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
   migrate: { usage: "aleph migrate <storage [--dry-run] | asks | cleanup>", purpose: "move the old store to aleph.db, items/ and jobs/<n>/, or delete the old files after it" },
   doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
