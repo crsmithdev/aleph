@@ -9,6 +9,9 @@ import { dirname, join } from "node:path";
 
 const CHROME = "/usr/bin/google-chrome";
 
+/** The time Chrome has to answer a command. It is under the 30 s test timeout, so a hung call names its method in the test that made it. */
+const ANSWER_LIMIT = 10_000;
+
 /** The argv that runs Chrome headless on a pipe (no debugging port), with a profile of its own. */
 function chromeArgv(profileDir: string): string[] {
   return [CHROME, "--headless=new", "--remote-debugging-pipe", `--user-data-dir=${profileDir}`,
@@ -44,17 +47,21 @@ class Pipe {
     input.on("close", () => this.close(new Error("Chrome closed its pipe")));
     input.on("error", () => this.close(new Error("Chrome closed its pipe")));
   }
-  /** A page's command still waiting never settles: Bun kills Chrome after a test times out, and a rejection then would add a second error. A command of the rig fails, so a reset can restart Chrome. */
+  /** A command of the rig fails at once, so a reset can restart Chrome. A page's command waits for its limit: the test that left it running owns its failure. */
   close(e: Error) {
     this.closed = true;
     for (const w of this.waiting.values()) if (!w.page) w.no(e);
     this.waiting.clear();
   }
-  send(method: string, params: object = {}, sessionId?: string): Promise<any> {
+  /** Chrome must answer within `limit` ms, or the command fails with the name of the method; 0 waits without end. */
+  send(method: string, params: object = {}, sessionId?: string, limit = ANSWER_LIMIT): Promise<any> {
     if (this.closed) return Promise.reject(new Error("Chrome closed its pipe"));
     const id = this.next++;
     return new Promise((ok, no) => {
-      this.waiting.set(id, { ok, no, page: !!sessionId });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = (f: () => void) => { clearTimeout(timer); this.waiting.delete(id); f(); };
+      this.waiting.set(id, { ok: (v) => done(() => ok(v)), no: (e) => done(() => no(e)), page: !!sessionId });
+      if (limit) timer = setTimeout(() => done(() => no(new Error(`${method}: no answer from Chrome within ${limit} ms`))), limit);
       this.out.write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + "\0");
     });
   }
@@ -151,10 +158,16 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
     cdp.on((m) => { if (m.sessionId === sessionId && m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails?.exception?.description?.split("\n")[0] ?? m.params.exceptionDetails?.text); });
     await cdp.send("Page.enable", {}, sessionId);
     await cdp.send("Runtime.enable", {}, sessionId);
-    const ev = async <T>(expression: string): Promise<T> => {
-      const r = await cdp.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId);
-      if (r.exceptionDetails) throw new Error(`${expression}: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
-      return r.result.value;
+    /** `limit` 0 waits without end: the wait of `when` outlives the limit of a call a test makes. */
+    const evaluate = (expression: string, limit?: number) => cdp.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId, limit);
+    const ev = <T>(expression: string): Promise<T> => {
+      const p = evaluate(expression).then((r) => {
+        if (r.exceptionDetails) throw new Error(`${expression}: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
+        return r.result.value;
+      });
+      // A test that leaves this call waiting on a hung page adds no unhandled rejection to a later test.
+      p.catch(() => {});
+      return p;
     };
     /** A promise for the next load event of the page, and the call that stops the wait. */
     const load = (): [Promise<void>, () => void] => {
@@ -165,7 +178,7 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
       for (;;) {
         const [again, off] = load();
         // A reload destroys the context under an evaluate: wait for the load and ask again.
-        try { await ev(`new Promise((ok) => { const f = () => { let t = false; try { t = !!(${expression}); } catch {} t ? ok() : requestAnimationFrame(f); }; f(); })`); return; } catch { await again; } finally { off(); }
+        try { await evaluate(`new Promise((ok) => { const f = () => { let t = false; try { t = !!(${expression}); } catch {} t ? ok() : requestAnimationFrame(f); }; f(); })`, 0); return; } catch { await again; } finally { off(); }
       }
     };
     const loaded = `document.querySelector("#nav li") && !/^\\s*Loading/.test(document.querySelector("#view").textContent) && document.querySelector("#view").textContent.trim()`;

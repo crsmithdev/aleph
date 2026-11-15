@@ -1353,4 +1353,10 @@ describe.skipIf(!chromeUsable)("Resetting the page", () => {
     await rig.kill();
     await clean();
   });
+
+  test("a call Chrome never answers fails with the name of the method, and the reset gives a clean page", async () => {
+    // Not `expect().rejects`: when its promise never settles, Bun hangs past the test timeout.
+    expect(await page.ev("for (;;) {}").then(() => "", (e: Error) => e.message)).toContain("Runtime.evaluate");
+    await clean();
+  }, 30_000);
 });

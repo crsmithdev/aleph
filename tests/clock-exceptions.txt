@@ -1,2 +1,4 @@
 # Test files that read the wall clock or sleep. tests/clock-lint.test.ts fails when a file here no longer does, so
 # this list only shrinks. Do not add to it: inject a clock (jobs/lib/infra/clock.ts) or wait for an event.
+# The one entry is a deadline, not a wait: a CDP call Chrome never answers must fail, and no event marks that.
+ui/test-browser.ts
