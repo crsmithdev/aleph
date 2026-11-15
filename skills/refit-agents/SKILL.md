@@ -18,9 +18,7 @@ description: >
 [refit-code](../refit-code/SKILL.md) for agents. refit-code asks whether the code is good; this asks whether an agent can
 use and change the repo without help, and what the repo costs the agent's context. Nine **lenses** each ask one
 question; the modes decide where and how they run. Read `PRINCIPLES.md` and `.refit.json` at the repo root
-when they exist: its `accepted` list, shared with refit-code, holds what the repo keeps on purpose, each
-`{"concept", "copies": ["file[:line]", ...], "reason"}`, and
-an accepted candidate is reported as accepted, not as a finding.
+when they exist: its `accepted` list, shared with refit-code, holds what the repo keeps on purpose.
 
 **Agent files** are every file an agent loads as instructions: `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`,
 `.cursorrules`, `.github/copilot-instructions.md`, `llms.txt`, skills (`SKILL.md` and the files it links), subagents,
@@ -120,7 +118,8 @@ asks it) or **unchecked** (only a retro finds it). A finding that comes back mov
 | valid | An agent file that breaks its spec | tool | `agnix` with `tools = ["claude-code"]` in `.githooks/pre-commit` |
 | load | Always-loaded tokens grow past the last total | tool | `load.test.ts`: "the always-loaded tokens inside the repo stay at or under the recorded total" |
 | structure | A body over 500 lines, a reference more than one link deep | tool | agnix `AS-012`, `AS-013` in `.githooks/pre-commit` |
-| structure | A body over 5,000 tokens, an orphan, a chain from a reference | unchecked | none |
+| structure | A body over 5,000 tokens | tool | `load.test.ts`: "no skill body inside the repo is over 5,000 tokens" |
+| structure | An orphan, a chain from a reference | unchecked | none |
 | triggers | Two descriptions that claim one branch | model | `check` |
 | drift | A command, flag or path in an agent file that does not resolve | unchecked | `aleph doc-claims` in aleph; elsewhere a test that runs each named command |
 | adherence | Emphasis, scaffolding, vague bars, unreasoned rules, dated text | unchecked | `content.ts` counts as a shrink-only ratchet, not yet wired |

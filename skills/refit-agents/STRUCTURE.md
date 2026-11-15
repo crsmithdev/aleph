@@ -53,8 +53,9 @@ Split a skill with two jobs. Record the body tokens before and after.
 
 ## Hold
 
-agnix `AS-012` and `AS-013` in `.githooks/pre-commit` hold the line limit and the link depth. The 5,000-token body,
-orphans and chains are unchecked: only a retro finds them.
+agnix `AS-012` and `AS-013` in `.githooks/pre-commit` hold the line limit and the link depth. The `load.test.ts`
+test "no skill body inside the repo is over 5,000 tokens" holds the body size. Orphans and chains are unchecked: only
+a retro finds them.
 
 ## Check
 

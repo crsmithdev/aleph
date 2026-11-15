@@ -11,8 +11,7 @@ description: >
 # Refit tests
 
 [refit-code](../refit-code/SKILL.md) for the test suite. Nine **lenses** each ask one question. Read `.refit.json`
-at the repo root when it exists: its `accepted` list, shared with refit-code, holds what the repo keeps on purpose,
-each `{"concept", "copies": ["file[:line]", ...], "reason"}`.
+at the repo root when it exists: its `accepted` list, shared with refit-code, holds what the repo keeps on purpose.
 
 The order of the lenses is the order of harm. A suite that does not gate, or that cries wolf, teaches people to
 ignore it; flakes come mostly from async waits, concurrency and test order (Luo et al., FSE 2014), and half of the

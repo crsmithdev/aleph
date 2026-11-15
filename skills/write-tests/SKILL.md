@@ -12,13 +12,13 @@ Adapted from Matt Pocock's `tdd` skill (github.com/mattpocock/skills @4ae2317).
 
 TDD is the red → green loop. This skill is the reference that makes that loop produce tests worth keeping: what a good test is, where tests go, the anti-patterns, and the rules of the loop. Every section applies on every cycle: consult them before and during the loop, not after.
 
-When exploring the codebase, read the glossary (the first of `GLOSSARY.md`, `GLOSSARY-MAP.md`, `CONTEXT.md` and `docs/naming.md` that exists) so test names and interface vocabulary match the project's domain language, and respect ADRs in the area you're touching.
+When exploring the codebase, read the [glossary](../domain-modeling/SKILL.md) so test names and interface vocabulary match the project's domain language, and respect ADRs in the area you're touching.
 
 ## What a good test is
 
 Tests verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't. A good test reads like a specification: "user can checkout with valid cart" tells you exactly what capability exists, and it survives refactors because it doesn't care about internal structure.
 
-See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
+Before you mock, read [mocking.md](mocking.md). When unsure whether a test is good, compare it with [tests.md](tests.md).
 
 ## Seams: where tests go
 

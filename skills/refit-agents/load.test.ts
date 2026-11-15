@@ -52,3 +52,8 @@ test("the always-loaded tokens inside the repo stay at or under the recorded tot
   const sum = r.always.filter((i) => !i.file.startsWith("/") && !i.file.startsWith("~")).reduce((n, i) => n + i.tokens, 0);
   expect(sum).toBeLessThanOrEqual(ALWAYS_TOTAL);
 });
+
+test("no skill body inside the repo is over 5,000 tokens", () => {
+  const r = load(join(import.meta.dir, "..", ".."), mkdtempSync(join(tmpdir(), "home-")));
+  expect(r.lazy.filter((i) => i.kind === "skill body" && i.tokens > 5000).map((i) => i.file)).toEqual([]);
+});
