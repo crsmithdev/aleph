@@ -52,7 +52,7 @@ const DAY_MS = 24 * 3600_000;
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day", "--url", "--selector", "--by", "--target", "--sketch", "--writeup"];
+const VALUED = ["--media", "--source", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--refs", "--reopened-since", "--before", "--undo", "--fate", "--day", "--url", "--selector", "--by", "--target", "--sketch", "--writeup"];
 const FATES: Fate[] = ["duplicate", "met", "manual"];
 
 /** One row per command of route(): its usage line and its purpose. `help`, `--help`, and each usage refusal read this table. */
@@ -246,7 +246,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
   // `--request -` or `--spec -` reads that part from stdin: it is prose of several lines.
   const requestArg = ctx.flag("request"), specArg = ctx.flag("spec");
   const labelsArg = ctx.flag("labels");
-  const afterArg = ctx.flag("after");
+  const afterArg = ctx.flag("after"), refsArg = ctx.flag("refs");
   const fields: verbs.Fields = {
     title: ctx.flag("title"),
     kind: ctx.flag("kind"),
@@ -257,6 +257,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     source: ctx.flag("source"),
     status: stat,
     ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
+    ...(refsArg === undefined ? {} : { refs: refsArg.split(",").map((s) => s.trim()).filter(Boolean) }),
     // `--media <file>` may repeat.
     media: ctx.rest.flatMap((a, i) => (a === "--media" && ctx.rest[i + 1] !== undefined ? [ctx.rest[i + 1]] : [])),
   };
@@ -299,7 +300,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
       ctx.log(`## ${shown(repo.key, i)}. ${i.title}`);
       const ask = askOf(refIn(repo.key, i));
       ctx.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${store.priorityOf(i)}   updated ${issues.updated(i) ?? "-"}`);
-      ctx.log(`after ${store.afterOf(i).map(shownRef).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
+      ctx.log(`after ${store.afterOf(i).map(shownRef).join(", ") || "-"}   refs ${store.refsOf(i).map(shownRef).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
       ctx.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
       if (i.request.trim()) ctx.log(`\n## Request\n\n${i.request}`);
       if (i.spec.trim()) ctx.log(`\n${i.spec}`);

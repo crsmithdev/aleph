@@ -15,7 +15,7 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, readList, readLists } from "../../issues/lib/store.ts";
+import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -24,7 +24,7 @@ import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, logOnce } from "../state.ts";
 import { card, row, stageOf, type Row } from "../issue.ts";
-import { issueHref, jobHref, parseId } from "../../lib/naming.ts";
+import { issueHref, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { filed } from "./speed.ts";
 import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
@@ -127,12 +127,24 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const blockers = jobProjector().blockers(repo.key, ref);
 
+  // Plain references both ways, across every project: issue numbers are global.
+  const everyRepo = Object.values(loadRegistry());
+  let lists: (todos.Doc | null)[];
+  try { lists = readLists(everyRepo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+  const where = new Map(lists.flatMap((d, k) => (d?.items ?? []).map((i) => [i.id, { repo: everyRepo[k].key, item: i }] as const)));
+  const link = (n: number | undefined) => {
+    const w = n === undefined ? undefined : where.get(n), id = w && `${w.repo}-${w.item.id}`;
+    return w && id ? [{ id, title: w.item.title, status: todos.status(w.item), href: issueHref(id) }] : [];
+  };
+  const refs = refsOf(item).flatMap((k) => link(parseKey(k)?.n));
+  const referencedBy = referrersOf(lists, item).flatMap((i) => link(i.id));
+
   // The Ask row of an issue that waits for Chris: the item `attend` builds, from the NewIssue as the state builds it.
   const stored = askOf(refIn(repo.key, item));
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") ask = attend({ runs: [], issues: [card(repo.key, item, "waiting", stored)] }, []).items[0];
 
-  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 /**

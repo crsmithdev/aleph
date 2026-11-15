@@ -251,6 +251,11 @@ export const isBuildable = (doc: Doc, item: Issue, repo: Place = { key: "" }): b
   && (issues.parentRef(item) !== undefined || !repo.author || takenIn(item));
 /** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
+/** The issues an issue names as plain references: its `refs`. They hold nothing. */
+export const refsOf = (item: Issue): string[] => list(item.fm.refs);
+/** The issues across `docs` whose `refs` name `item`. Numbers are global, so a ref can cross projects. */
+export const referrersOf = (docs: (Doc | null)[], item: Issue): Issue[] =>
+  docs.flatMap((d) => d?.items ?? []).filter((i) => refsOf(i).includes(`issue.${item.id}`));
 /** The item's areas: its `areas`. */
 export const areasOf = (item: Issue): string[] => list(item.fm.areas);
 

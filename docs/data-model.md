@@ -112,6 +112,7 @@ The Status page shows the wrong weekly usage.
 | `areas` | list | Labels |
 | `from` | `issue.<n>` | The parent: intake split this issue from it |
 | `after` | list of keys | The issues that must be done first, as `issue.<n>` |
+| `refs` | list of keys | Plain references to other issues, as `issue.<n>`, in any project. They hold nothing. An issue's "Referenced by" is derived from the other issues' `refs` and is not stored |
 | `media` | list of names | The attached images and PDFs, in `items/issues/<n>/` beside `issue.md` ([Media](issues.md#media)) |
 | `parked` | `"true"` | Stops all work on the issue |
 | `closed_as`, `closed_at`, `closed_why` | `done`, `dropped`; ISO 8601 UTC; the reason | How, when and why it closed |

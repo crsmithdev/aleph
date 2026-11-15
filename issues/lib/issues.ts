@@ -30,11 +30,13 @@ export interface Fields {
   source?: string;
   status?: string;
   after?: string[];
+  /** Issues it names as plain references; they hold nothing. */
+  refs?: string[];
   /** Local image or PDF files to attach. */
   media?: string[];
 }
 
-export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: issues.updated(i) ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
+export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: issues.updated(i) ?? null, source: store.sourceOf(i), after: store.afterOf(i), refs: store.refsOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
@@ -43,11 +45,11 @@ export function checkFields(f: Fields): void {
   if (f.status !== undefined && !(STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${STATUSES.join(", ")}`);
 }
 
-/** Set what an issue waits for (`after`), checked for form and for existence in the items repo. */
-function setAfter(i: issues.Issue, after: string[]): void {
-  const keys = checkAfter(after);
-  for (const r of keys) if (!store.hasIssue(parseKey(r)!.n)) refuse(`--after ${r} names no issue`);
-  i.fm.after = keys;
+/** Set what an issue waits for (`after`) or names (`refs`), checked for form and for existence in the items repo. */
+function setKeys(i: issues.Issue, field: "after" | "refs", refs: string[]): void {
+  const keys = checkKeys(field, refs);
+  for (const r of keys) if (!store.hasIssue(parseKey(r)!.n)) refuse(`--${field} ${r} names no issue`);
+  i.fm[field] = keys;
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
@@ -118,9 +120,9 @@ export function attach(repo: store.Place, id: number | string, paths: string[]) 
   return { result: { repo: repo.key, id: w.value.id, media: w.value.media, commit: w.commit }, follow: w.follow };
 }
 
-/** A ref for `--after`: the key `issue.<n>`, or a shown ID such as `a-01234`. */
-function checkAfter(after: string[]): string[] {
-  return after.map((r) => parseKey(r)?.kind === "issue" ? key("issue", parseKey(r)!.n) : refuse(`--after takes issue keys like issue.5: ${r}`));
+/** The refs of `--after` or `--refs`: each the key `issue.<n>`, or a shown ID such as `a-01234`. */
+function checkKeys(field: "after" | "refs", refs: string[]): string[] {
+  return refs.map((r) => parseKey(r)?.kind === "issue" ? key("issue", parseKey(r)!.n) : refuse(`--${field} takes issue keys like issue.5: ${r}`));
 }
 
 /** Who runs this command: a factory agent (`ALEPH_AGENT`), a Claude Code session (`CLAUDECODE`), else Chris at a shell. */
@@ -138,7 +140,8 @@ export async function add(repo: store.Place, title: string, fields: Fields, effe
   if (problem) refuse(problem);
   const spec = fields.spec?.trim();
   if (fields.spec !== undefined && !spec) refuse("--spec - needs the spec on stdin");
-  checkAfter(fields.after ?? []);
+  checkKeys("after", fields.after ?? []);
+  checkKeys("refs", fields.refs ?? []);
   const files = readMedia(fields.media ?? []);
   const blobs: Record<string, Uint8Array> = {};
   const t = await triage(store.reader().list(repo.key), title, fields.request ?? spec ?? "");
@@ -147,7 +150,8 @@ export async function add(repo: store.Place, title: string, fields: Fields, effe
     // Claude Code sets CLAUDECODE in its shells; a label that implies a source still wins over it.
     const implied = labels.some((l) => ["followup", "memory"].includes(l));
     const issue = file({ title, kind: fields.kind, priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined, parked: fields.status === "parked" });
-    if (fields.after?.length) setAfter(issue, fields.after);
+    if (fields.after?.length) setKeys(issue, "after", fields.after);
+    if (fields.refs?.length) setKeys(issue, "refs", fields.refs);
     if (files.length) attachTo(issue, files, blobs);
     return { issue };
   }, true, blobs))!;
@@ -200,7 +204,7 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
     if (issues.status(i) !== "open" || !ask) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     issues.note(i, text);
     decideAsk(ask, i, text);
-    if (fields.after !== undefined) setAfter(i, fields.after);
+    if (fields.after !== undefined) setKeys(i, "after", fields.after);
     return i;
   })!;
   clearAsk(refIn(repo.key, w.value));
@@ -210,14 +214,15 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
 export function edit(repo: store.Place, id: number | string, fields: Fields, reason = "") {
   checkFields(fields);
   const title = fields.title?.trim();
-  const { kind, request, spec, priority, labels, source, status, after } = fields;
+  const { kind, request, spec, priority, labels, source, status, after, refs } = fields;
   if (source !== undefined && !["chris", "worker", "deps", "memory", "agent"].includes(source)) refuse("--source takes chris, worker, deps, memory, agent");
-  if (title === undefined && kind === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after (or --status, --kind)");
+  if (title === undefined && kind === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined && refs === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after, --refs (or --status, --kind)");
   if (title === "") refuse("the title cannot be empty");
-  const kept = after?.filter((r) => r !== "none");
+  const kept = after?.filter((r) => r !== "none"), named = refs?.filter((r) => r !== "none");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     for (const r of kept ?? []) if (parseKey(r)?.n === i.id) refuse("an issue cannot wait for itself");
+    for (const r of named ?? []) if (parseKey(r)?.n === i.id) refuse("an issue cannot reference itself");
     issues.edit(i, { kind, title, request, spec, priority, areas: labels });
     if (priority !== undefined) for (const p of store.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
     if (source !== undefined) i.fm.source = source;
@@ -225,7 +230,8 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
     else if (status === "open") store.reopen(doc, i, mainHead(repo));
     else if (status !== undefined) issues.setStatus(i, status as issues.Status);
     if (reason) issues.note(i, reason);
-    if (kept !== undefined) setAfter(i, kept);
+    if (kept !== undefined) setKeys(i, "after", kept);
+    if (named !== undefined) setKeys(i, "refs", named);
     return i;
   })!;
   return { result: { repo: repo.key, ...brief(repo.key)(w.value), commit: w.commit }, item: w.value, follow: w.follow };

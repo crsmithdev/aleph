@@ -157,6 +157,21 @@ describe("GET /api/issues", () => {
     }
   });
 
+  // Breaks if the detail API drops refs or the backlink, or the page does not draw them.
+  test("the issue page lists its refs and the issues that reference it, across projects", async () => {
+    const target = writeList({ key: "oth" }, "seed", (doc) => add(doc, "referenced thing").id, true)!.value;
+    const n = writeList({ key: "fac" }, "seed", (doc) => { const i = add(doc, "refers to it"); i.fm.refs = [`issue.${target}`]; return i.id; }, true)!.value;
+    const d = await getJson(`/api/issues/fac-${n}`);
+    expect(d.refs).toMatchObject([{ id: `oth-${target}`, title: "referenced thing", status: "open" }]);
+    expect(d.referencedBy).toEqual([]);
+    const t = await getJson(`/api/issues/oth-${target}`);
+    expect(t.referencedBy).toMatchObject([{ id: `fac-${n}`, title: "refers to it" }]);
+    expect(v.renderIssue(d)).toContain('<span class="quiet">Refs</span>');
+    expect(v.renderIssue(d)).not.toContain("Referenced by");
+    expect(v.renderIssue(t)).toContain('<span class="quiet">Referenced by</span>');
+    expect(v.renderIssue(d)).not.toContain("refs: issue.");
+  });
+
   test("a row carries its stage", async () => {
     const rows = await rowsOf("fac");
     expect(rows[0].stage).toBe("done");

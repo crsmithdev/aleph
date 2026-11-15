@@ -67,6 +67,17 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   expect(issues.lint(doc).filter((f) => f.fixable)).toEqual([]);
 });
 
+// Breaks if lint stops checking refs the way it checks after.
+test("lint flags a refs entry that is not issue.<n>, and passes one that is", () => {
+  const doc = issues.blank("r", "project.1");
+  const good = issues.add(doc, "Good refs"), bad = issues.add(doc, "Bad refs");
+  good.fm.refs = ["issue.3"];
+  bad.fm.refs = ["issue.3", "a-7"];
+  const found = (i: issues.Issue) => issues.lint(doc).filter((f) => f.id === issues.refOf(i)).map((f) => f.problem);
+  expect(found(good)).toEqual([]);
+  expect(found(bad)).toEqual(["refs: issue.3, a-7 is not issue.<n>"]);
+});
+
 test("add and addPart store the filing time, and setStatus stores the closing time and a reopen removes it", () => {
   const doc = issues.blank("r");
   const a = issues.add(doc, "Do a thing", { now: new Date(2026, 10, 4, 14, 5) });

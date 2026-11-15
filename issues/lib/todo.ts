@@ -92,7 +92,7 @@ const unescapeHeads = (text: string): string => text.split("\n").map((l) => (HEA
 const trimmed = (text: string): string => text.replace(/^\n+/, "").replace(/\n+$/, "");
 
 /** The frontmatter fields in the order a file lists them; any other field follows. */
-const ORDER = ["project", "title", "kind", "priority", "source", "created", "closed_as", "closed_at", "closed_why", "from", "after"];
+const ORDER = ["project", "title", "kind", "priority", "source", "created", "closed_as", "closed_at", "closed_why", "from", "after", "refs"];
 
 /** One issue as its file: the frontmatter, then each part that has text under its heading. */
 export function renderItem(item: Issue): string {
@@ -269,10 +269,11 @@ export function lint(doc: Doc): Finding[] {
       const v = item.fm[key];
       if (typeof v === "string" && v && !ISO.test(v)) findings.push({ id, problem: `${key} "${v}" is not an ISO UTC time`, fixable: false });
     }
-    const after = item.fm.after;
-    if (after !== undefined) {
-      const refs = Array.isArray(after) ? after : [after];
-      if (refs.some((r) => !KEYS.test(String(r)))) findings.push({ id, problem: `after: ${refs.join(", ")} is not issue.<n>`, fixable: false });
+    for (const field of ["after", "refs"] as const) {
+      const v = item.fm[field];
+      if (v === undefined) continue;
+      const keys = Array.isArray(v) ? v : [v];
+      if (keys.some((r) => !KEYS.test(String(r)))) findings.push({ id, problem: `${field}: ${keys.join(", ")} is not issue.<n>`, fixable: false });
     }
     if (item.fm.from !== undefined && !KEYS.test(String(item.fm.from))) findings.push({ id, problem: `from: ${item.fm.from} is not issue.<n>`, fixable: false });
     const source = item.fm.source;

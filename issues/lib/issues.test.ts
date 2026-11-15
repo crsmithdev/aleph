@@ -119,6 +119,39 @@ describe("issue verbs without argv", () => {
     expect(refusal(() => issueOps.edit(r, r.ids[0], {}))).toContain("give --title, --request, --spec, --priority, --labels, --after");
   });
 
+  // Breaks if --refs is not stored, is not replaced, or "none" does not clear it.
+  test("add --refs stores plain references, edit --refs replaces them, and none clears them", async () => {
+    const r = repo([{ title: "one" }, { title: "two" }, { title: "three" }]);
+    const [a, b, c] = r.ids;
+    const added = await issueOps.add(r, "with refs", { refs: [`issue.${a}`, `issue.${b}`] }, quiet);
+    const n = added.result.added;
+    expect(store.refsOf(item(r, n))).toEqual([`issue.${a}`, `issue.${b}`]);
+    issueOps.edit(r, n, { refs: [`issue.${c}`] });
+    expect(store.refsOf(item(r, n))).toEqual([`issue.${c}`]);
+    issueOps.edit(r, n, { refs: ["none"] });
+    expect(store.refsOf(item(r, n))).toEqual([]);
+  });
+
+  // Breaks if a bad ref is written: the form, a missing issue, or the issue itself.
+  test("--refs refuses a malformed key, an issue that does not exist and the issue itself", async () => {
+    const r = repo([{ title: "one" }]);
+    const [a] = r.ids;
+    expect(await issueOps.add(r, "bad", { refs: ["nope"] }, quiet).then(() => "", (e) => e.message)).toContain("--refs takes issue keys");
+    expect(refusal(() => issueOps.edit(r, a, { refs: ["issue.999999"] }))).toContain("--refs issue.999999 names no issue");
+    expect(refusal(() => issueOps.edit(r, a, { refs: [`issue.${a}`] }))).toContain("cannot reference itself");
+  });
+
+  // Breaks if refs is read as a wait: an issue with a spec and a ref to an open issue must stay buildable.
+  test("a ref to an open issue holds nothing, and the referenced issue lists the referrer across projects", () => {
+    const r = repo([{ title: "target" }]), o = repo();
+    const [target] = r.ids;
+    const n = store.writeList(o, "ref", (doc) => { const i = issues.add(doc, "refers", { spec: "Do it." }); i.fm.refs = [`issue.${target}`]; return i.id; }, true)!.value;
+    const doc = store.readList(o)!;
+    expect(store.isBuildable(doc, issues.find(doc, n)!)).toBe(true);
+    expect(store.afterOf(issues.find(doc, n)!)).toEqual([]);
+    expect(store.referrersOf([store.readList(r), doc], item(r, target)).map((i) => i.id)).toEqual([n]);
+  });
+
   test("edit reads the issue for the group prefix: a child with a from link takes it, a top-level issue refuses it", () => {
     const r = repo([{ title: "parent" }]);
     const [parent] = r.ids;

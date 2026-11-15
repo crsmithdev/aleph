@@ -27,10 +27,10 @@ An issue added with `--spec -` is ready to build in a repo without `"author": tr
 
 | Command | Does |
 |---|---|
-| `add <repo> "<title>" [--request -] [--spec -] [--priority p] [--labels a,b] [--after <key>] [--media <file>]...` | Adds an issue; `-` reads stdin |
+| `add <repo> "<title>" [--request -] [--spec -] [--priority p] [--labels a,b] [--after <key>] [--refs <key,…>] [--media <file>]...` | Adds an issue; `-` reads stdin |
 | `list [<repo>] [--status open\|done\|dropped] [--label <area>] [--json]` | Lists issues |
 | `show <repo> <id> [--json]` | Prints one issue, its spec and its notes |
-| `edit <repo> <id> [--title t] [--request -] [--spec -] [--priority p] [--labels a,b] [--source s] [--after <key>]` | Changes fields |
+| `edit <repo> <id> [--title t] [--request -] [--spec -] [--priority p] [--labels a,b] [--source s] [--after <key>] [--refs <key,…>]` | Changes fields |
 | `note <repo> <id> "<text>"` | Adds one line with a time stamp; it never rewrites a line |
 | `attach <repo> <id> <file>...` | Attaches images or PDFs |
 | `decide <repo> <id> "<text>"` | Answers an issue that waits for Chris, and clears its Ask |

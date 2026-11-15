@@ -596,7 +596,7 @@ function issueKpis(d, segments, now = Date.now()) {
 }
 
 /** Front-matter keys the page shows elsewhere, or that are the store's own. */
-const HIDE = ["labels", "id", "from", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
+const HIDE = ["labels", "id", "from", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "refs", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
 
 /** The Issue page: the header and its pills, the KPI strip, the Timeline, the Description and the Spec, then Notes and Commits. Shared with views/issue.js. */
 export function renderIssue(d) {
@@ -612,6 +612,9 @@ export function renderIssue(d) {
     field("Priority", choose("priority", PRIORITIES, priority)) + field("Source", choose("source", SOURCES, source)) +
     field("Areas", inputBox("areas", areas.join(", "), { attrs: ` ${FORM} aria-label="areas" placeholder="comma separated"` })) + `</div></section>`;
   const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
+  // Plain references: they hold nothing, so each row shows the issue's status, not a wait.
+  const linked = (label, rows) => (rows?.length ? `<div class="dp-blocked"><span class="quiet">${label}</span>${blockersHtml(rows.map((r) => ({ ...r, state: r.status })), d.repo, d.ref ?? d.id)}</div>` : "");
+  const references = linked("Refs", d.refs) + linked("Referenced by", d.referencedBy);
   const partList = d.goals ?? [];
   const part = (id, title, name, text) => (text || !partList.length
     ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
@@ -633,7 +636,7 @@ export function renderIssue(d) {
   // An entry for each panel the view shows: an empty Description or Spec shows only while editing.
   const contents = [timeline && ["h-timeline", "Timeline"], d.request && ["h-request", "Description"], d.spec && ["h-spec", "Spec"],
     ["issue-media", "Media"], ["issue-notes", "Notes"], commits && ["issue-commits", "Commits"]].filter(Boolean);
-  return `<div class="page dp-page issue-page editable">${crumb(inventory, place)}` + issueHead(d, ref) + pills + toc(contents, fields + blocked + undecided(d.ask ? [d.ask] : [], [`${d.repo}-${ref}`]).map((a) => askCard(a)).join("") +
+  return `<div class="page dp-page issue-page editable">${crumb(inventory, place)}` + issueHead(d, ref) + pills + toc(contents, fields + blocked + references + undecided(d.ask ? [d.ask] : [], [`${d.repo}-${ref}`]).map((a) => askCard(a)).join("") +
     issueKpis(d, segments) + timeline +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
     `<div class="dp-detail">${detailPanel("Media", esc(count((d.media ?? []).length)), renderMedia(d, ref), "issue-media")}${detailPanel("Notes", esc(count(d.notes.length)), notes, "issue-notes")}${commits && detailPanel("Commits", esc(count(d.commits.length)), commits, "issue-commits")}</div>`) + `</div>`;
