@@ -40,8 +40,9 @@ state in `ui/app.css` from tokens.
 
 ## Hold
 
-A model hold in `check`: a new component in a plan names its empty, loading and error state. The tool hold is a
-Kit test of empty and loading specimens. It waits for a retro finding, so the lens does not claim it.
+A model hold in `check`: a new component in a plan names its empty, loading and error state. A tool hold: the Kit
+test in `ui/browser.test.ts` fails when `#kit-states`, `#kit-table-empty` or `#kit-chart-empty` stops drawing its
+empty or loading line.
 
 ## Check
 

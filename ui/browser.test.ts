@@ -377,6 +377,11 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     })`)).toEqual({ ids: [true, true], list: 2, gap: "16px", lede: "One sentence that sums up the card.", cell: "A title that takes the spare width, with its text as its title", kinds: [true, true, true], acts: true, failed: ["stuck", "stuck"] });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
+    // The empty and loading states are drawn: a line, a status line and a loading metric value, and the empty table and chart.
+    expect(await page.ev(`({
+      states: ["#kit-states .empty", "#kit-states p[role=status]", "#kit-states .tile b[role=status]"].map((q) => !!document.querySelector(q)),
+      empties: ["kit-table-empty", "kit-chart-empty"].map((i) => !!document.querySelector("#" + i + " .empty")),
+    })`)).toEqual({ states: [true, true, true], empties: [true, true] });
     // Every :root token (the --wa- and --kit- bridges aside) is named by a code element of a specimen, not of its rules.
     expect(await page.ev(`(() => {
       const named = new Set([...document.querySelectorAll(".kit-specimen code")].flatMap((c) => c.textContent.match(/--[\\w-]+/g) ?? [])), bare = new Set();

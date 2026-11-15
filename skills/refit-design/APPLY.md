@@ -55,8 +55,9 @@ One change per finding, in the view or style file. Use the token, helper or comp
 
 ## Hold
 
-Unchecked: the inventory counts of kind `literal` and `helper-bypass` rise or fall only with a change you can
-see. A model hold in `check`: a new component has a section in the doc and a specimen on `#/kit`.
+A tool hold: the `guard:` test in `skills/refit-design/refit-design.test.ts` fails when the inventory count of kind
+`literal` over `ui` rises, so the count only shrinks. The count of kind `helper-bypass` stays unchecked. A model hold
+in `check`: a new component has a section in the doc and a specimen on `#/kit`.
 
 ## Check
 

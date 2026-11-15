@@ -77,11 +77,12 @@ refit-code's [Act](../refit-code/SKILL.md#act) with these changes:
 
 | Lens | Hold | Kind |
 |---|---|---|
-| apply | A literal colour, size or font that has a token | unchecked: `inventory.ts` rows of kind `literal`, not yet wired as a test |
+| apply | A literal colour, size or font that has a token | tool: the `guard:` test in `skills/refit-design/refit-design.test.ts` fails when the `inventory.ts` rows of kind `literal` rise |
 | apply | A value formatted by hand that has a helper | unchecked: `inventory.ts` rows of kind `helper-bypass`, not yet wired as a test |
 | apply | A new component with no section in `docs/design.md` and no specimen on `#/kit` | model: `check` |
 | variants | A component drawn a second way from its specimen on `#/kit` | model: `check` |
 | states | A new component with no empty, loading and error state named | model: `check` |
+| states | The Kit draws the empty and loading states | tool: the Kit test in `ui/browser.test.ts` |
 | stress | A new list, table or text field with no limit for long text and many rows | model: `check` |
 | seams | A view that styles a kit class or writes kit markup by hand | model: `check` |
 | dead | A CSS rule that no element matches | unchecked: no script lists unmatched rules yet |
