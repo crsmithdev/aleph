@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { readList } from "../../../issues/lib/store.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
+import { read } from "../records/record.ts";
 import { setModel } from "../routing/models.ts";
 import type { Size } from "../routing/route.ts";
 import { holdBackend, issueFacts } from "./factory-status.ts";
@@ -65,6 +66,7 @@ test("a held backend holds an issue whose size runs on it; another size starts; 
   await holdBackend("openrouter", CREDIT);
   const id = newIssue();
   expect(await decide(id, "small")).toMatchObject({ kind: "waiting", size: "small", why: `waits for OpenRouter: ${CREDIT}` });
+  expect(read(`issue.${id}`)).toBeNull();
   expect(await decide(id, "large")).toMatchObject({ kind: "ready", size: "large" });
   const ran = newIssue();
   mk(`fac-${ran}`, "build", "failed", { model: "deepseek-v4.1-flash" });

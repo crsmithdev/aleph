@@ -130,7 +130,7 @@ test("the plan numbers the jobs by start order and maps the old keys", () => {
   expect(returned).toMatchObject({ commit_sha: landed, was: expect.stringMatching(/^a3#2 /), pid: 4242, exit_code: 0 });
   expect(JSON.parse(build2.extra!)).toMatchObject({ touched: ["issue.4"], review: { call: "passed" } });
   expect(JSON.parse(returned.extra!)).toMatchObject({ rescued: "claimed", failed: "review" });
-  expect(p.issueState).toEqual([expect.objectContaining({ issue: "issue.3", ask_job: "job.5", wait_kind: "red" })]);
+  expect(p.issueState).toEqual([{ issue: "issue.3", ask: expect.any(String), ask_job: "job.5", ci: null }]);
 });
 
 test("--dry-run prints the counts and the unmapped keys, and writes nothing", () => {

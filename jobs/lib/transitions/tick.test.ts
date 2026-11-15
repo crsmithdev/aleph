@@ -183,9 +183,9 @@ test("the sweep deletes the row of a closed issue and the Ask of a job that no l
   // The Ask put back after the close is a stale row, as the 22 on the live store.
   writeList({ key }, "close", (doc) => { issues.setStatus(issues.find(doc, 1)!, "done"); return true; });
   setAsk(`issue.1`, plainAsk("question", "which module?"));
-  const wait = { kind: "after", reason: "waits", since: "2026-11-14T00:00:00Z" };
-  record.editIssueState(`issue.1`, (s) => { s.wait = wait; s.ci = { url: "u", commit: "c", failure: "f" }; });
-  record.editIssueState(`issue.2`, (s) => { s.wait = wait; });
+  const ci = { url: "u", commit: "c", failure: "f" };
+  record.editIssueState(`issue.1`, (s) => { s.ci = ci; });
+  record.editIssueState(`issue.2`, (s) => { s.ci = ci; });
   const gone = seedJob({ role: "plain", name: "job", state: "waiting", ask: plainAsk("question", "which?") });
   const live = seedJob({ role: "plain", name: "job", state: "waiting", ask: plainAsk("question", "which?") });
   record.setState(gone.id, "done");
@@ -193,7 +193,7 @@ test("the sweep deletes the row of a closed issue and the Ask of a job that no l
   await sweep(NOW, readTick(), p);
   expect(record.read(`issue.1`)).toBeNull();
   expect(askOf(`issue.2`)?.question).toBe("which module?");
-  expect(record.read(`issue.2`)?.wait).toEqual(wait);
+  expect(record.read(`issue.2`)?.ci).toEqual(ci);
   expect(record.read(gone.id)).toBeNull();
   expect(record.read(live.id)?.ask?.question).toBe("which?");
 });

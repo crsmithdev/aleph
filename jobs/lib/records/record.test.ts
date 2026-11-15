@@ -133,9 +133,12 @@ test("a land or build of the work that joins after the run an Ask is on clears t
   expect(mine("issue.7").map((e) => e.action).filter((x) => x === "question" || x === "answered")).toEqual(["question", "answered"]);
 });
 
-test("the wait of an issue is kept in issue_state", () => {
-  record.editIssueState("issue.8", (s) => { s.wait = { kind: "after", reason: "after issue.6", since: AT }; });
-  expect(record.read("issue.8")).toEqual({ ask: null, wait: { kind: "after", reason: "after issue.6", since: AT } });
+test("issue_state has no wait column, and a row with only a CI result reads back with it", () => {
+  const cols = (conn().query("PRAGMA table_info(issue_state)").all() as { name: string }[]).map((c) => c.name);
+  expect(cols).toEqual(["issue", "ask", "ask_job", "ci"]);
+  const ci = { url: "u", commit: "c", failure: "f" };
+  record.editIssueState("issue.8", (s) => { s.ci = ci; });
+  expect(record.read("issue.8")).toEqual({ ask: null, ci });
 });
 
 test("copyEnd copies the pid and exit files of the folder to the row", () => {
@@ -161,7 +164,7 @@ const nx = (xs: Partial<Run>[], live?: record.Live) => record.next(runs(xs), liv
 const job = (xs: Partial<Run>[]): Entry[] => runs(xs).map((r) => ({ id: r.id, folder: `/jobs/${r.id}`, run: r }));
 
 test("next: an Ask waits for Chris before anything else", () => {
-  expect(nx([{ state: "passed" }], { ask: ASK, wait: null }).step).toBe("ask");
+  expect(nx([{ state: "passed" }], { ask: ASK }).step).toBe("ask");
   expect(nx([{ state: "waiting" }]).step).toBe("ask");
 });
 
@@ -187,7 +190,7 @@ test("next: each run state gives its step", () => {
 });
 
 test("next: each case gives its step as event words", () => {
-  expect(nx([{ state: "passed" }], { ask: ASK, wait: null })).toEqual({ step: "ask", action: "waiting", to: "human" });
+  expect(nx([{ state: "passed" }], { ask: ASK })).toEqual({ step: "ask", action: "waiting", to: "human" });
   expect(nx([{ state: "running" }])).toEqual({ step: "run", action: "running", on: ["job.1"] });
   expect(nx([{ state: "returned", failed: "check", cause: "check", next: "worker" }])).toEqual({ step: "worker", action: "returned", sub: "check", count: `1 / ${fixRounds()}` });
   expect(nx([{ role: "build", state: "returned", failed: "tests" }, { state: "returned", failed: "check", cause: "check", next: "worker" }]).count).toBe(`2 / ${fixRounds()}`);
@@ -211,8 +214,7 @@ test("next: a land asked about while it was live (a slow land) and failed later 
   expect(nx([{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T09:30:00.000Z", asked }]).step).toBe("wait");
 });
 
-test("next: an issue with no run waits for its hold, else starts", () => {
-  expect(nx([], { ask: null, wait: { kind: "after", reason: "after issue.6", since: AT } })).toEqual({ step: "wait", action: "waiting" });
+test("next: an issue with no run starts", () => {
   expect(nx([]).step).toBe("start");
 });
 

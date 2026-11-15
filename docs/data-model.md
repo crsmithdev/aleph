@@ -132,14 +132,13 @@ An issue's children are the issues whose `from` names it (`partsOf` in `issues/l
 
 A work is a `prev` chain of jobs. `rounds` and `cost` are queries over the jobs of one target, not stored.
 
-`issue_state` has one row for a key while an Ask, a wait or a CI result is live, and no row otherwise. The key is an issue key, or the job key of a run on no issue.
+`issue_state` has one row for a key while an Ask or a CI result is live, and no row otherwise. The key is an issue key, or the job key of a run on no issue.
 
 | Column | Holds |
 |---|---|
 | `issue` | The key |
 | `ask` | The open Ask, as JSON |
 | `ask_job` | The job that holds the Ask; empty when the Ask is on the issue |
-| `wait_kind`, `wait_reason`, `wait_since` | Why the issue does not start |
 | `ci` | A CI failure that filed the issue, as JSON: `{url, commit, failure, landed?}` |
 
 A change of the Ask logs `question` or `answered` on the key. The other events (holds, starts, reruns, rescues, director steps) are rows of `events`; [Observability](observability.md) lists them.

@@ -137,7 +137,7 @@ test("a hold writes its held event, and the log shows it with the file and the j
   const was = allHolds();
   try {
     const d = issueDecision({ name: "issue.1420", item: { id: 1420, notes: [], spec: "", fm: {} } as any, done: () => false, busy: { why: "waits for issue.1372: both change the busy file ui/views/issues.js", on: "issue.1372", job: "job.1372", file: "ui/views/issues.js" } });
-    recordHold("issue.1420", d.kind as any, d.why, d.ev);
+    recordHold("issue.1420", d.kind as any, d.ev);
     const e = log().find((x) => x.object === "issue.1420")!;
     expect(e).toMatchObject({ subject: "gate", action: "held", detail: "file: ui/views/issues.js: job.1372" });
     // The registry of this test has no code: the page gets the codes with the body.

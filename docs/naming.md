@@ -76,8 +76,8 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
   - Relations: one reason. At most one project.
 - **Issue state**
   - Identity: the issue key. A row exists only while something is live.
-  - Lifecycle: set when an Ask, a wait or a CI result starts. Deleted when none is live.
-  - Owner: `aleph.db`. It holds `ask`, `ask_job`, the wait (`wait_kind`, `wait_reason`, `wait_since`) and `ci`.
+  - Lifecycle: set when an Ask or a CI result starts. Deleted when none is live.
+  - Owner: `aleph.db`. It holds `ask`, `ask_job` and `ci`.
   - Invariants: at most one Ask per issue. The Ask history is in the events (`question` and `answered`).
   - Relations: one issue. At most one job, the one that asked.
 

@@ -231,15 +231,14 @@ describe("the writes", () => {
 
 describe("an issue's ask", () => {
   const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [], why: [] };
-  const wait = { kind: "after", reason: "waits", since: "2026-11-14T00:00:00Z" };
 
-  test("closing an issue deletes its whole state row: its Ask or its run's Ask, its wait and its ci", () => {
+  test("closing an issue deletes its whole state row: its Ask or its run's Ask, and its ci", () => {
     const r = repo([{ title: "on issue" }, { title: "on run" }]);
     const [a, b] = r.ids;
     setAsk(`issue.${a}`, ask);
-    record.editIssueState(`issue.${a}`, (s) => { s.wait = wait; s.ci = { url: "u", commit: "c", failure: "f" }; });
+    record.editIssueState(`issue.${a}`, (s) => { s.ci = { url: "u", commit: "c", failure: "f" }; });
     seedJob({ role: "build", name: `issue.${b}`, repo: r.key, target: `issue.${b}`, state: "waiting", ask });
-    record.editIssueState(`issue.${b}`, (s) => { s.wait = wait; });
+    record.editIssueState(`issue.${b}`, (s) => { s.ci = { url: "u", commit: "c", failure: "f" }; });
     expect(record.read(`issue.${b}`)?.askJob).toBeDefined();
     expect(store.close(r, a, "x")).toBeNull();
     expect(store.close(r, b, "x", "dropped")).toBeNull();

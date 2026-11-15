@@ -99,8 +99,8 @@ test("an issue with no run that the hold held stays held with no new routing, un
 
 test("recordHold logs its hold event once, and not again for the same kind and text", () => {
   const ev = { action: "held", detail: "full: 3 / 3 jobs" };
-  recordHold("fac-3", "full", "3 agent runs are live", ev);
-  recordHold("fac-3", "full", "3 agent runs are live", ev);
+  recordHold("fac-3", "full", ev);
+  recordHold("fac-3", "full", ev);
   expect(readEvents().filter((e) => e.object === "fac-3").map((e) => e.action)).toEqual(["held"]);
 });
 

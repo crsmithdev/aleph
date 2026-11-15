@@ -431,12 +431,12 @@ function planJobs(r: Roots, p: Plan, h: Helpers): void {
   p.counts.jobs = p.jobs.length;
   p.counters.job = p.jobs.length;
 
-  // issue_state: the Ask, the wait and `ci` of each record that holds one.
+  // issue_state: the Ask and `ci` of each record that holds one.
   for (const rec of records.filter((x) => !FIXTURE.test(x.issue))) {
-    if (!rec.ask && !rec.wait && !rec.ci) continue;
+    if (!rec.ask && !rec.ci) continue;
     const k = issueKey(rec.issue) ?? jobKey.get(rec.issue);
     if (!k) { if (rec.runs.length) um(`record key: ${rec.issue}`); else bump(p.dropped, "issue_state of a record with no issue and no runs"); continue; }
-    p.issueState.push({ issue: k, ask: rec.ask ? JSON.stringify(rec.ask) : null, ask_job: rec.askRun ? jobKey.get(rec.askRun) ?? null : null, wait_kind: rec.wait?.kind ?? null, wait_reason: rec.wait?.reason ?? null, wait_since: rec.wait?.since ?? null, ci: rec.ci ? JSON.stringify(rec.ci) : null });
+    p.issueState.push({ issue: k, ask: rec.ask ? JSON.stringify(rec.ask) : null, ask_job: rec.askRun ? jobKey.get(rec.askRun) ?? null : null, ci: rec.ci ? JSON.stringify(rec.ci) : null });
   }
   p.counts.issue_state = p.issueState.length;
 
@@ -663,7 +663,7 @@ function apply(r: Roots, p: Plan): void {
     ins("INSERT INTO jobs (id, role, by, state, project, made, started, ended, model, size, cost, commit_sha, pid, exit_code, target, prev, retry_of, was, extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       p.jobs.map(({ row: x }) => [x.id, x.role, x.by, x.state, x.project, x.made, x.started, x.ended, x.model, x.size, x.cost, x.commit_sha, x.pid, x.exit_code, x.target, x.prev, x.retry_of, x.was, x.extra]));
     ins("INSERT INTO events (time, subject, action, object, detail) VALUES (?, ?, ?, ?, ?)", p.events.map((e) => [e.time, e.subject, e.action, e.object, e.detail]));
-    ins("INSERT INTO issue_state (issue, ask, ask_job, wait_kind, wait_reason, wait_since, ci) VALUES (?, ?, ?, ?, ?, ?, ?)", p.issueState.map((s) => [s.issue, s.ask, s.ask_job, s.wait_kind, s.wait_reason, s.wait_since, s.ci]));
+    ins("INSERT INTO issue_state (issue, ask, ask_job, ci) VALUES (?, ?, ?, ?)", p.issueState.map((s) => [s.issue, s.ask, s.ask_job, s.ci]));
     ins("INSERT INTO tick (step, last, result) VALUES (?, ?, ?)", p.tick.map(([s, v]) => { const j = JSON.parse(v); return [s, j.last, j.result]; }));
     ins("INSERT INTO settings (key, value) VALUES (?, ?)", p.settings);
     ins("INSERT INTO state (key, value) VALUES (?, ?)", p.state);

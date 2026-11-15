@@ -57,10 +57,10 @@ export function readHolds(names: string[]): HoldRecord[] {
 
 /**
  * Records why an issue waits (or, with kind `started`, that it no longer does): its hold event by `gate` on the issue, unless it
- * repeats the last one, and `wait` in its issue state, which a hold that stops a start sets and any other clears. A `started` record logs
+ * repeats the last one. A `started` record logs
  * nothing: the start logs its own event. `ev` gives the hold's log event. A done or dropped issue has no hold to record.
  */
-export function recordHold(name: string, kind: Gate | "started", text: string, ev?: Hold): void {
+export function recordHold(name: string, kind: Gate | "started", ev?: Hold): void {
   const at = new Date().toISOString();
   tx(() => {
     if (kind !== "started") {
@@ -69,7 +69,6 @@ export function recordHold(name: string, kind: Gate | "started", text: string, e
       if (last && e && last.subject === "gate" && last.object === e.object && last.action === e.action && (last.detail ?? "") === (e.detail ?? "")) return;
       if (e) logEvent(e);
     }
-    record.editIssueState(name, (s) => { s.wait = stopsStart({ at, name, kind, text }) ? { kind, reason: text, since: at } : null; });
   });
 }
 

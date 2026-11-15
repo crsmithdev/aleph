@@ -70,6 +70,11 @@ CREATE VIEW event_rows AS SELECT e.seq, e.time, e.subject, e.action, e.object, e
   s.role AS subject_role, o.role AS object_role, o.target AS object_target, coalesce(o.project, s.project) AS project,
   o.model, o.cost, o.commit_sha, o.started, o.ended
   FROM events e LEFT JOIN jobs s ON s.id = e.subject LEFT JOIN jobs o ON o.id = e.object;
+`, `
+DELETE FROM issue_state WHERE ask IS NULL AND ask_job IS NULL AND ci IS NULL;
+ALTER TABLE issue_state DROP COLUMN wait_kind;
+ALTER TABLE issue_state DROP COLUMN wait_reason;
+ALTER TABLE issue_state DROP COLUMN wait_since;
 `];
 const VERSION = SCHEMAS.length;
 

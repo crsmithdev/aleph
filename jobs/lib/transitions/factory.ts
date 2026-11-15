@@ -93,7 +93,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
   /** Records the hold and the skip line of an issue no start reached. The pause, the backend and the live cap each log their own change, so a skip for one records no hold. */
   const skip = (name: string, kind: Gate, why: string, ev: Hold) => {
     if (kind === "waiting") holdGoal(name);
-    if (kind !== "paused" && kind !== "waiting" && kind !== "full" && kind !== "done") recordHold(name, kind, why, ev);
+    if (kind !== "paused" && kind !== "waiting" && kind !== "full" && kind !== "done") recordHold(name, kind, ev);
     skipped.push(`${name}: ${why}`);
   };
   /** Skips an issue the store no longer has open, with its status; true when it did, so the caller stops. */
@@ -152,7 +152,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
       const no = await start(repo, name, ref, spec, d.size);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
       if (no) skip(name, no.gate, no.why, no.ev);
-      else { recordHold(name, "started", "started"); started.push(name); }
+      else { recordHold(name, "started"); started.push(name); }
     } finally {
       release();
     }

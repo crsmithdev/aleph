@@ -4,8 +4,8 @@
  * job's state, and each logs the state as an event in the same transaction as the write (`endRun` writes the state, the end and `next` together). The columns hold what every job has; the rest of a run's
  * fields are the row's `extra`, a JSON object. The folder of a job, `<jobs>/<n>/`, holds its files (run-files.ts).
  *
- * What the issue and its jobs share lives in `issue_state` (one row while an Ask, a wait or a CI result is live): the Ask
- * of the issue and of the run that waits, the wait, and `ci`. A job's work is its `prev` chain: `Run.job` is the first
+ * What the issue and its jobs share lives in `issue_state` (one row while an Ask or a CI result is live): the Ask
+ * of the issue and of the run that waits, and `ci`. A job's work is its `prev` chain: `Run.job` is the first
  * job of the chain, derived on read. `rounds` and `cost` are queries over the jobs of one target.
  *
  * It also owns a run's life: its end (`endRun`), the run that counts in a work (`counting`) and the work's next step (`next`, `stepOf`).
@@ -228,14 +228,12 @@ export const decisions = <T>(): T[] =>
 
 // What the issue and its jobs share.
 
-/** The live machine state of one issue: its Ask, its wait and its CI result. */
+/** The live machine state of one issue: its Ask and its CI result. */
 export interface IssueState {
   /** What the issue or its run waits on from Chris, or null. */
   ask: Ask | null;
   /** The run whose Ask `ask` is, while that run waits for Chris; absent when the Ask is on the issue. */
   askJob?: string;
-  /** Why the issue waits to start, or null. */
-  wait: { kind: string; reason: string; since: string } | null;
   /**
    * The red GitHub CI on main the issue was filed for (firefighter.ts): its run, its commit and the failure the briefs
    * quote. `landed` is the commit the job landed as: the issue closes when a CI run at or after it is green.
@@ -243,11 +241,11 @@ export interface IssueState {
   ci?: { url: string; commit: string; failure: string; landed?: string };
 }
 
-interface StateRow { issue: string; ask: string | null; ask_job: string | null; wait_kind: string | null; wait_reason: string | null; wait_since: string | null; ci: string | null }
+interface StateRow { issue: string; ask: string | null; ask_job: string | null; ci: string | null }
 
 const stateOfRow = (r: StateRow): IssueState => ({
   ask: r.ask ? JSON.parse(r.ask) : null, ...(r.ask_job ? { askJob: r.ask_job } : {}),
-  wait: r.wait_kind ? { kind: r.wait_kind, reason: r.wait_reason ?? "", since: r.wait_since ?? "" } : null, ...(r.ci ? { ci: JSON.parse(r.ci) } : {}),
+  ...(r.ci ? { ci: JSON.parse(r.ci) } : {}),
 });
 
 /** The state of `key` (an issue key, or the job key of a run on no issue), or null when nothing is live. */
@@ -266,12 +264,12 @@ export const allIssueStates = (): Map<string, IssueState> =>
  */
 function editState(d: Database, key: string, fn: (s: IssueState) => void): void {
   const r = d.query("SELECT * FROM issue_state WHERE issue = ?").get(key) as StateRow | null;
-  const s = r ? stateOfRow(r) : { ask: null, wait: null } as IssueState, had = s.ask ? `${s.askJob ?? ""}:${s.ask.reason}` : null, was = s.ask;
+  const s = r ? stateOfRow(r) : { ask: null } as IssueState, had = s.ask ? `${s.askJob ?? ""}:${s.ask.reason}` : null, was = s.ask;
   fn(s);
   const has = s.ask ? `${s.askJob ?? ""}:${s.ask.reason}` : null;
-  if (!s.ask && !s.wait && !s.ci) d.query("DELETE FROM issue_state WHERE issue = ?").run(key);
-  else d.query("INSERT INTO issue_state (issue, ask, ask_job, wait_kind, wait_reason, wait_since, ci) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (issue) DO UPDATE SET ask = excluded.ask, ask_job = excluded.ask_job, wait_kind = excluded.wait_kind, wait_reason = excluded.wait_reason, wait_since = excluded.wait_since, ci = excluded.ci")
-    .run(key, s.ask ? JSON.stringify(s.ask) : null, s.askJob ?? null, s.wait?.kind ?? null, s.wait?.reason ?? null, s.wait?.since ?? null, s.ci ? JSON.stringify(s.ci) : null);
+  if (!s.ask && !s.ci) d.query("DELETE FROM issue_state WHERE issue = ?").run(key);
+  else d.query("INSERT INTO issue_state (issue, ask, ask_job, ci) VALUES (?, ?, ?, ?) ON CONFLICT (issue) DO UPDATE SET ask = excluded.ask, ask_job = excluded.ask_job, ci = excluded.ci")
+    .run(key, s.ask ? JSON.stringify(s.ask) : null, s.askJob ?? null, s.ci ? JSON.stringify(s.ci) : null);
   if (has === had) return;
   if (was) logEvent({ subject: "gate", action: "answered", object: key });
   if (s.ask) logEvent({ subject: "gate", action: "question", object: key, detail: s.ask.facts ? `${s.ask.reason}: ${s.ask.facts}` : s.ask.reason });
@@ -291,8 +289,8 @@ export function setIssueAsk(key: string, ask: Ask | null): void {
   });
 }
 
-/** Delete the row of `key` when its issue closes: the Ask (the run's too), the wait and the CI result. */
-export const clearIssueState = (key: string): void => editIssueState(key, (s) => { s.ask = null; s.askJob = undefined; s.wait = null; s.ci = undefined; });
+/** Delete the row of `key` when its issue closes: the Ask (the run's too) and the CI result. */
+export const clearIssueState = (key: string): void => editIssueState(key, (s) => { s.ask = null; s.askJob = undefined; s.ci = undefined; });
 
 // The next step.
 
@@ -323,18 +321,18 @@ const counts = (run: Run): boolean => run.role !== "director" && run.role !== "r
  */
 export const counting = (j: Entry[]): Entry => j.findLast((e) => counts(e.run)) ?? j.at(-1)!;
 
-/** What `next` reads besides the runs: the issue's Ask and wait. */
-export interface Live { ask: Ask | null; wait: IssueState["wait"] }
+/** What `next` reads besides the runs: the issue's Ask. */
+export interface Live { ask: Ask | null }
 
 /**
  * The next step of the work. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
  * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a returned or failed run
  * goes to the rescue, unless the factory asked Chris about it after it ended or its cause is not `rescuable` (`POLICY`): then it
  * waits; a landed, done or dropped work does nothing; an issue
- * with no open run waits for its `wait`, else starts. The run that counts is the newest one that `counts`: a director
+ * with no open run starts. The run that counts is the newest one that `counts`: a director
  * run changes the step through the Ask and the decision it writes, never as the run that counts.
  */
-export function next(runs: RunRecord[], live: Live = { ask: null, wait: null }): Step {
+export function next(runs: RunRecord[], live: Live = { ask: null }): Step {
   if (live.ask) return { step: "ask", action: "waiting", to: "human" };
   const last = runs.findLast(counts);
   const rounds = runs.filter((x) => x.role === "build" && x.failed).length;
@@ -353,12 +351,11 @@ export function next(runs: RunRecord[], live: Live = { ask: null, wait: null }):
   if (last?.state === "landed") return { step: "none", action: "landed", ...(last.commit ? { on: [last.commit.slice(0, 7)] } : {}) };
   if (last?.state === "dropped") return { step: "none", action: "dropped" };
   if (last?.state === "done") return { step: "none", action: "done" };
-  if (live.wait) return { step: "wait", action: "waiting" };
   return { step: "start", action: "starting" };
 }
 
-/** The work's next step: `next` over its runs, with the Ask and wait of its run that counts. */
+/** The work's next step: `next` over its runs, with the Ask of its run that counts. */
 export function stepOf(j: Entry[]): Step {
   const target = counting(j).run.target ?? counting(j).id, s = read(target);
-  return next(j.map((e) => ({ ...e.run, id: e.id })), { ask: s?.ask ?? null, wait: s?.wait ?? null });
+  return next(j.map((e) => ({ ...e.run, id: e.id })), { ask: s?.ask ?? null });
 }
