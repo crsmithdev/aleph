@@ -8,15 +8,16 @@
  *
  * A finding blocks the stop once per session, with the evidence, so the agent changes the companion, calls the
  * owner, or records the second way in `.refit.json`. The same findings do not block twice, so a retry after its
- * own block passes. A stop that another Stop hook already continued is checked like a first stop. A change from
+ * own block passes. A session blocks at most 3 times in all; after that the hook stays silent. A stop that another Stop hook already continued is checked like a first stop. A change from
  * before the session started is not the agent's: the hook counts only the commits and edits since the session's
  * start, and a session with no start record is skipped.
  */
 import { createHash } from "node:crypto";
-import { once, session } from "../../hooks/lib/handshake.ts";
+import { denials, once, session } from "../../hooks/lib/handshake.ts";
 import { scan } from "./clones.ts";
 import { accepted, base, changed, history, holes, isAccepted, rules } from "./cochange.ts";
 
+const MAX_BLOCKS = 3;
 const at = (s: { name: string; start: number; function?: string }) => `${s.name}:${s.start}${s.function ? ` (${s.function})` : ""}`;
 
 /** The block reason for the findings, or null when there are none. */
@@ -45,6 +46,8 @@ if (import.meta.main) {
   if (top.exitCode !== 0) process.exit(0);
   const start = session(input.session_id).get()?.start;
   if (start === undefined) process.exit(0);
+  const blocks = denials(`oneway:${input.session_id}`);
+  if (blocks.count() >= MAX_BLOCKS) process.exit(0);
   let text: string | null;
   try {
     text = reason(top.stdout.toString().trim(), start);
@@ -56,5 +59,6 @@ if (import.meta.main) {
   const blocked = once(`oneway:${input.session_id}:${createHash("sha1").update(text).digest("hex").slice(0, 12)}`);
   if (blocked.seen()) process.exit(0);
   blocked.mark();
+  blocks.add();
   console.log(JSON.stringify({ decision: "block", reason: text }));
 }

@@ -87,6 +87,30 @@ test("the hook checks a stop that another hook already continued, and blocks it 
   expect(stop(input)).toBe("");
 });
 
+test("the hook blocks at most 3 times per session across different findings, and the cap is per session", () => {
+  sh("git", "checkout", "-q", "main");
+  for (let i = 0; i < 12; i++) {
+    write("d.ts", `export const d = ${i};\n`);
+    write("e.ts", `export const e = ${i};\n`);
+    sh("git", "add", "-A");
+    sh("git", "commit", "-qm", `second pair ${i}`);
+  }
+  sh("git", "checkout", "-q", "work");
+  sh("git", "rebase", "-q", "main");
+  session("cap").set({ start: 1 });
+  session("other").set({ start: 1 });
+  const input = { hook_event_name: "Stop", session_id: "cap", cwd: root };
+  const outputs = ["a.ts", "b.ts", "d.ts", "e.ts"].map((file) => {
+    sh("git", "checkout", "--", ".");
+    write(file, `export const x = "${file}";\n`);
+    return stop(input);
+  });
+  expect(outputs.slice(0, 3).map((o) => JSON.parse(o).decision)).toEqual(["block", "block", "block"]);
+  expect(new Set(outputs.slice(0, 3)).size).toBe(3);
+  expect(outputs[3]).toBe("");
+  expect(JSON.parse(stop({ ...input, session_id: "other" })).decision).toBe("block");
+});
+
 test("a hook that throws while checking prints a systemMessage with the error, and does not block", () => {
   write(".refit.json", "{");
   write("a.ts", "export const a = 99;\n");

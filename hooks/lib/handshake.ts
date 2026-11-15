@@ -52,7 +52,7 @@ export const agent = (agentId: string) => slot<{ start: number; spanId: string; 
 /** The repo's snapshot at the prompt, for the verify gate at Stop. */
 export const snap = (promptId: string) => slot<Snapshot>(`snap:${promptId}`);
 
-/** The verify gate's denials of this turn. */
+/** A count of denials: the verify gate's of a turn, or the refit-code hook's blocks of a session. */
 export function denials(promptId: string) {
   const s = slot<number>(`denials:${promptId}`);
   return {
