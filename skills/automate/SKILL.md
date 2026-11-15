@@ -4,7 +4,8 @@ description: >
   Automate: search sessions for work to automate: errors that repeat and are
   never fixed (a hook that fails, a gate that blocks good turns, a skill listed
   twice), work done by hand again and again, and the turns one session lost.
-  Use when asked what keeps breaking, what to automate, what a session learned,
+  Use when asked what keeps breaking, what to automate, what should be
+  memorized, which notes are wrong, what a session learned,
   or to scan sessions, Langfuse, git or the factory for recurring problems, and
   to fix the findings picked (act). NOT for: one bug (use
   /aleph:diagnosing-bugs), code quality (use /aleph:refit-code).
@@ -20,7 +21,7 @@ one repo's agent files; automate reads what happened, in every repo on the machi
 The argument sets the scope:
 
 - A window (`3d`, `30d`), or none for 14 days: steps 1 to 5. A **finding** is one cause seen in two or more
-  sessions (three for work done by hand). Claude Code deletes transcripts after 30 days by default, so a
+  sessions (three for work done by hand, one for a `misled` note). Claude Code deletes transcripts after 30 days by default, so a
   longer window sees less than it says.
 - `session [<id>]`, or none at the end of a session: the [Session](#session) steps, for this session or a past
   one.
@@ -32,7 +33,7 @@ The argument sets the scope:
    transcript under `~/.claude/projects` (about 15 s for 14 days). Each finding has a `kind`, a `key`, its
    `count`, `sessions`, `days`, `cli` (sessions that are Chris's; the rest are headless workers), `first`,
    `last`, the raw `sample` and `cwd` of the latest hit, and `ids` (the latest sessions it was seen in). `cut`
-   counts the findings past `--top`. The scan leaves out commands that only read and errors with no word in
+   counts the findings past `--top`. Commands that only read are `lookup` findings, not `command` ones. The scan leaves out errors with no word in
    them. Drop hits from your own session: its id is in the path of the transcript it writes now. Done when
    the JSON is saved and you have read every finding in it.
 
@@ -46,6 +47,8 @@ The argument sets the scope:
    | `reload` | One skill loaded twice in a session |
    | `command` | One Bash command shape in three or more sessions |
    | `prompt` | One prompt from Chris in three or more sessions |
+   | `lookup` | One read-only lookup (a Read, Grep or Glob call, or a Bash command that only reads) in three or more sessions, keyed by the path or the command shape. A path the same session edits or writes is left out |
+   | `misled` | The first prompt Chris typed after the assistant read a vault note (a Read of `~/.aleph/vault/wiki/**.md`, or an `aleph memory recall` result without `--episodes`), keyed by the note's title. One session is enough |
 
 2. **Read the other sources** for the same window. Done when each one has a count or a reason it has none.
    - Git, for each project in `~/.aleph/items/projects/*/project.md` (the `path:` line of its frontmatter): reverts, and fixes to code
@@ -75,10 +78,18 @@ The argument sets the scope:
    from the `ids` sessions, the latest in each. For each one, decide whether the claim was unverified (the gate was right) or was
    verified or was not a claim (the gate was too strict).
 
-4. **Judge each repeated-work finding** (`command`, `prompt`). A command that only reads (`sed -n`, `cat`,
-   `git diff`) is normal work, not a finding. A command or prompt is a finding when the same steps produce the same
+4. **Judge each repeated-work finding** (`command`, `prompt`). A command or prompt is a finding when the same steps produce the same
    kind of result each time, or when Chris has to type the same thing to keep the agent moving
    (`continue`, `go`). For a prompt, read the turn before it, and name why the agent stopped.
+
+4b. **Judge each memory finding** (`lookup`, `misled`). The scan only counts them; you decide.
+   - `lookup`: read the `ids` sessions. A lookup is a **memory gap** when the same fact is looked up again each
+     time (a path, a command, a convention) and no vault note holds it (`aleph memory recall "<key>"`). A lookup of
+     a file the task needs is normal work: drop it.
+   - `misled`: the key is a note the assistant read, the sample is the prompt that followed. Read the turn before
+     it in the `ids` session. The note is **wrong** when the prompt pushes back on something the note said
+     (a correction, a "no", a different fact) and the code or the transcript shows the note was the cause. A
+     prompt that moves on, or pushes back on something else, drops the finding.
 
 5. **Report** in the terminal, in two lists: findings in Chris's sessions (`cli` above 0), then findings
    only in headless workers. Rank each list by sessions ×
@@ -104,7 +115,9 @@ File nothing and change nothing until Chris picks findings for `act`.
    - **Code**, when it can carry it (an **interface** finding): a script or CLI subcommand for a fixed
      sequence of commands, a hook for a step that must happen every time, a usage line or an error message.
    - **Permission rule**: a command that Chris approves each time.
-   - **Vault** (`aleph:vault`): a fact about the user, or one that holds across repos.
+   - **Vault** (`aleph:vault`): a fact about the user, or one that holds across repos. A `lookup` memory gap
+     goes to `write` (a missing note). A `misled` wrong note goes to a rewrite of it or a new note that
+     `supersedes` it; a note about an out-of-date subject goes to `archive`.
    - **Agent file**: the root memory file when every task needs it, a nested `CLAUDE.md` or a skill when only
      some do. A worker's prompt or schema when only headless workers hit it.
 

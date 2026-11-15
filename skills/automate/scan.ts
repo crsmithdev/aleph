@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { git } from "../../lib/git.ts";
 
-export type Kind = "hook" | "tool" | "gate" | "loop" | "reload" | "dupe" | "command" | "prompt";
+export type Kind = "hook" | "tool" | "gate" | "loop" | "reload" | "dupe" | "command" | "prompt" | "lookup" | "misled";
 export interface Signal { kind: Kind; key: string; session: string; at: string; cli: boolean; cwd: string; text: string }
 export interface Finding {
   kind: Kind; key: string; count: number; sessions: number; days: number; cli: number;
@@ -20,11 +20,13 @@ export interface Finding {
 }
 
 /** Errors count from two sessions; work done by hand counts from three. */
-const MIN: Record<Kind, number> = { hook: 2, tool: 2, gate: 2, loop: 2, reload: 2, dupe: 2, command: 3, prompt: 3 };
+const MIN: Record<Kind, number> = { hook: 2, tool: 2, gate: 2, loop: 2, reload: 2, dupe: 2, command: 3, prompt: 3, lookup: 3, misled: 1 };
 const LOOP = 3; // gate denials in a row, with no prompt from Chris between them
 const HOME = homedir();
 const PATH = /\/(?:[\w.@+-]+\/)+[\w.@+-]+\.\w+/g;
-const READS = /^(sed -n|cat|head|tail|ls|grep|rg|find|wc|jq|echo|git (diff|log|status|show))\b/; // reading is work, not a finding
+const READS = /^(sed -n|cat|head|tail|ls|grep|rg|find|wc|jq|echo|git (diff|log|status|show))\b/; // a lookup, not a command
+const WIKI = join(HOME, ".aleph/vault/wiki/");
+const EDITS = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
 const CAUSE = /[a-z]{3}/i; // a key with no word in it names no cause
 
 /** The text with the parts that differ between occurrences replaced, so one cause gives one key. */
@@ -53,6 +55,9 @@ export const signals = (text: string): Signal[] => {
   const out: Signal[] = [];
   const tools = new Map<string, string>();
   const loads = new Map<string, number>();
+  const recalls = new Set<string>(); // ids of `aleph memory recall` calls
+  const edited = new Set<string>(); // paths this session changes
+  const notes = new Set<string>(); // vault notes read since the last typed prompt
   let denials = 0, listed = false, session = "", at = "", cli = false, cwd = "";
   const add = (kind: Kind, key: string, body = key) => out.push({ kind, key, session, at, cli, cwd, text: body.slice(0, 400) });
   for (const line of text.split("\n")) {
@@ -74,7 +79,17 @@ export const signals = (text: string): Signal[] => {
     if (r.type === "assistant" && Array.isArray(content))
       for (const b of content.filter((b) => b?.type === "tool_use")) {
         tools.set(b.id, b.name);
-        if (b.name === "Bash" && typeof b.input?.command === "string" && !READS.test(shape(b.input.command))) add("command", shape(b.input.command), b.input.command);
+        const path = b.input?.file_path ?? b.input?.notebook_path ?? b.input?.path ?? b.input?.pattern;
+        if (b.name === "Bash" && typeof b.input?.command === "string") {
+          const cmd: string = b.input.command;
+          add(READS.test(shape(cmd)) ? "lookup" : "command", shape(cmd), cmd);
+          if (/\baleph memory recall\b/.test(cmd) && !cmd.includes("--episodes")) recalls.add(b.id);
+        }
+        if (typeof path === "string") {
+          if (["Read", "Grep", "Glob"].includes(b.name)) add("lookup", norm(path), path);
+          if (EDITS.includes(b.name)) edited.add(norm(path));
+          if (b.name === "Read" && path.startsWith(WIKI) && path.endsWith(".md")) notes.add(path.slice(WIKI.length).split("/").at(-1)!.slice(0, -3));
+        }
         if (b.name === "Skill") loads.set(b.input?.skill, (loads.get(b.input?.skill) ?? 0) + 1);
       }
     if (r.type !== "user") continue;
@@ -85,6 +100,9 @@ export const signals = (text: string): Signal[] => {
         if (hook) add("hook", `${hook[1]} hook: ${norm(body.slice(hook[0].length))}`, body);
         else if (CAUSE.test(norm(body))) add("tool", `${tools.get(b.tool_use_id) ?? "tool"}: ${norm(body)}`, body);
       }
+    if (Array.isArray(content))
+      for (const b of content.filter((b) => b?.type === "tool_result" && recalls.has(b.tool_use_id)))
+        try { for (const n of JSON.parse(said(b.content))) notes.add(n.title); } catch {} // a piped or failed recall has no titles
     const s = said(content);
     if (s.startsWith("Stop hook feedback:")) {
       add("gate", `denied by ${norm(s.slice(19)).split(":")[0]}`, s);
@@ -92,10 +110,12 @@ export const signals = (text: string): Signal[] => {
     } else if (cli && !r.isMeta && typed(s)) {
       denials = 0;
       add("prompt", norm(s).toLowerCase().slice(0, 60), s);
+      for (const n of notes) add("misled", n, s);
+      notes.clear();
     }
   }
   for (const [skill, n] of loads) if (n > 1) add("reload", `${skill} loaded ${n > 2 ? "3+" : 2} times in one session`);
-  return out;
+  return out.filter((s) => s.kind !== "lookup" || !edited.has(s.key));
 };
 
 /** The newest commit time of a path that exists, or that a repo once had, as UTC ISO 8601. */
@@ -129,7 +149,7 @@ export const findings = (all: Signal[], top: number): { findings: Finding[]; cut
     if (fs.length > top) cut[kind] = fs.length - top;
     return fs.slice(0, top);
   });
-  for (const f of out.filter((f) => f.kind !== "command" && f.kind !== "prompt")) {
+  for (const f of out.filter((f) => !["command", "prompt", "lookup", "misled"].includes(f.kind))) {
     const times = [...new Set(f.sample.match(PATH) ?? [])].map(changed).filter(Boolean) as string[];
     if (!times.length) continue;
     f.changed = times.toSorted().at(-1);

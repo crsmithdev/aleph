@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { findings, norm, signals } from "./scan.ts";
 
@@ -32,13 +32,53 @@ test("signals reads hook errors from attachments and from PreToolUse results", (
   ]);
 });
 
-test("signals skips commands that only read and errors that name no cause", () => {
+test("signals keys a read-only command as a lookup, not a command, and skips errors that name no cause", () => {
   const ss = signals([
     bash("a", "2026-11-10T00:00:00Z", "t1", "cd ~/x && sed -n 1,5p a.ts"),
     bash("a", "2026-11-10T00:00:01Z", "t2", "git diff"),
     user("a", "2026-11-10T00:00:02Z", [{ type: "tool_result", tool_use_id: "t2", is_error: true, content: "Exit code 1\n" }]),
   ].join("\n"));
-  expect(ss).toEqual([]);
+  expect(ss.map((s) => [s.kind, s.key])).toEqual([["lookup", "sed -n N,Np a.ts"], ["lookup", "git diff"]]);
+});
+
+const tool = (s: string, at: string, id: string, name: string, input: object) =>
+  line(s, at, { type: "assistant", message: { content: [{ type: "tool_use", id, name, input }] } });
+
+test("signals leaves out a lookup of a path the session edits or writes", () => {
+  const ss = signals([
+    tool("a", "2026-11-10T00:00:00Z", "t1", "Read", { file_path: "/w/a.ts" }),
+    tool("a", "2026-11-10T00:00:01Z", "t2", "Edit", { file_path: "/w/a.ts" }),
+    tool("a", "2026-11-10T00:00:02Z", "t3", "Write", { file_path: "/w/b.ts" }),
+    tool("a", "2026-11-10T00:00:03Z", "t4", "Read", { file_path: "/w/b.ts" }),
+    tool("a", "2026-11-10T00:00:04Z", "t5", "Grep", { pattern: "x", path: "/w/c.ts" }),
+  ].join("\n"));
+  expect(ss.map((s) => [s.kind, s.key])).toEqual([["lookup", "/w/c.ts"]]);
+});
+
+test("findings keeps a lookup from three sessions", () => {
+  const read = (s: string) => tool(s, "2026-11-10T00:00:00Z", "t1", "Read", { file_path: "/w/a.ts" });
+  const keep = (ids: string[]) => findings(signals(ids.map(read).join("\n")), 25).findings.map((f) => [f.kind, f.key, f.sessions]);
+  expect(keep(["a", "b", "c"])).toEqual([["lookup", "/w/a.ts", 3]]);
+  expect(keep(["a", "b"])).toEqual([]);
+});
+
+test("signals and findings count the first prompt after a vault note read as misled", () => {
+  const note = join(homedir(), ".aleph/vault/wiki/gotchas/Docker Runs Natively.md");
+  const recall = (id: string, cmd: string) => [bash("a", "2026-11-10T00:00:03Z", id, cmd),
+    user("a", "2026-11-10T00:00:04Z", [{ type: "tool_result", tool_use_id: id, content: JSON.stringify([{ title: "Use bun" }, { title: "Pin ports" }]) }])];
+  const ss = signals([
+    user("a", "2026-11-10T00:00:00Z", "first, before any read"),
+    tool("a", "2026-11-10T00:00:01Z", "t1", "Read", { file_path: note }),
+    user("a", "2026-11-10T00:00:02Z", "no, docker does not run natively"),
+    ...recall("t2", "aleph memory recall --episodes docker"),
+    ...recall("t3", 'aleph memory recall "docker"'),
+    user("a", "2026-11-10T00:00:05Z", "that is wrong"),
+    user("a", "2026-11-10T00:00:06Z", "second prompt after the notes"),
+  ].join("\n"));
+  expect(ss.filter((s) => s.kind === "misled").map((s) => [s.key, s.text])).toEqual([
+    ["Docker Runs Natively", "no, docker does not run natively"], ["Use bun", "that is wrong"], ["Pin ports", "that is wrong"],
+  ]);
+  expect(findings(ss, 25).findings.filter((f) => f.kind === "misled").map((f) => [f.key, f.sessions])).toEqual([["Docker Runs Natively", 1], ["Use bun", 1], ["Pin ports", 1]]);
 });
 
 test("signals finds a gate loop, a duplicate skill and a skill loaded twice", () => {
