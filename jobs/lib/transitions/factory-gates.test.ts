@@ -180,6 +180,26 @@ test("with the live cap full of Claude runs and the GPU free, the dispatch start
   }
 });
 
+test("an issue with the red-main area starts on size medium with no Jev request and no routed event", async () => {
+  let requests = 0;
+  const server = Bun.serve({ port: 0, fetch: () => { requests++; return Response.json({ answers: { size: { type: "choice", choice: "small", probabilities: { small: 1 } } } }); } });
+  const saved = { url: process.env.ALEPH_JEV_URL, key: process.env.OPENROUTER_API_KEY };
+  Object.assign(process.env, { ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
+  try {
+    const id = newIssue(["red-main"]);
+    const sizes: unknown[] = [];
+    const out = await dispatchIssues(async (_r, _n, _id, _spec, size) => { sizes.push(size); return null; });
+    expect(out.started).toEqual([`issue.${id}`]);
+    expect(sizes).toEqual(["medium"]);
+    expect(requests).toBe(0);
+    expect(readEvents().filter((e) => e.action === "routed")).toEqual([]);
+  } finally {
+    server.stop(true);
+    process.env.ALEPH_JEV_URL = saved.url;
+    process.env.OPENROUTER_API_KEY = saved.key;
+  }
+});
+
 /** A `systemd-run` that does nothing, first on PATH, so a start reaches its run record and starts no unit. */
 function stubUnit(): () => void {
   const bin = join(ctx.base, "bin");

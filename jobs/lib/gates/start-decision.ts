@@ -7,6 +7,7 @@
 import { issueDecision, type IssueDecision, type IssueFacts } from "./issue-decision.ts";
 import { backendHold, factoryGates, heldGoal, nextRun } from "./factory-status.ts";
 import { SIZES, type Size } from "../routing/route.ts";
+import { areasOf, labels } from "../../../issues/lib/store.ts";
 import type { Job } from "../records/job.ts";
 import type { Repo } from "../records/ledger.ts";
 
@@ -19,8 +20,10 @@ export const unrouted: Route = async () => null;
 /** `size`: the size the start runs on, or undefined when no route was asked, so the start rates the spec itself. */
 export type StartDecision = IssueDecision & { size?: Size | null };
 
-/** The decision for the issue of `f`, with its size. */
+/** The decision for the issue of `f`, with its size. A red-main fix issue has the fixed size medium, and `route` is not asked. */
 export async function decideStart(repo: Repo, f: IssueFacts, jobs: Job[], route: Route): Promise<StartDecision> {
+  const fixed = areasOf(f.item).includes("red-main") || labels(f.item).includes("red-main");
+  if (fixed) route = async () => "medium";
   const run = nextRun(repo.key, f.name, jobs);
   const on = (size: Size | null) => issueDecision({ ...f, ...factoryGates(jobs, size ? { model: size } : {}) });
   let d = issueDecision({ ...f, ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { waiting: heldGoal(f.name) }) });
@@ -35,5 +38,5 @@ export async function decideStart(repo: Repo, f: IssueFacts, jobs: Job[], route:
     size = await route();
     if (size) d = on(size);
   }
-  return { ...d, size };
+  return { ...d, size: fixed ? "medium" : size };
 }

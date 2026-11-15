@@ -56,6 +56,8 @@ Every role runs with `--disable-slash-commands`, so it loads no skill. The worke
 
 Jev's answer counts when its probability is at least 0.6. Otherwise, or when Jev fails or the judge choice is `haiku`, the run gets no `--model` and uses the CLI default. A disabled size steps up to the next enabled one; `large` is always on.
 
+A goal with the `red-main` area or label is not routed: it starts on `medium`, with no Jev call. A rerun after a failed build still steps up.
+
 The dispatch also routes when the live cap holds a goal: if a size on the local model has room, the goal starts there.
 
 ## Models other than Claude's
