@@ -488,6 +488,15 @@ test("the Automation page has no explaining aside; the controls panel holds the 
   for (const t of ["What can stop, hold or ask", "Every goal passes these in order", "Who decides each kind of Ask"]) expect(h).not.toContain(t);
 });
 
+test("the Deviations row of docs/design.md drops the held-path chips and names the aligned list in their place", async () => {
+  const row = (await Bun.file(new URL("../docs/design.md", import.meta.url)).text()).split("\n").find((l) => l.startsWith("| Parts of the Automation page written by hand"))!;
+  expect(row).not.toContain("div.held");
+  expect(row).not.toContain("held-path chips");
+  expect(row).toContain("tr.rule");
+  expect(row).toContain("renderLog()");
+  expect(row).toContain("held-paths");
+});
+
 test("rules() has one row per Ask reason; renderRules is one table with a row per rule", () => {
   const r = rules().map((x) => x.reason);
   expect(r).toEqual(Object.keys(ASK_REASONS));
