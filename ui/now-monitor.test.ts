@@ -372,6 +372,22 @@ test("a housekeeper run with 2 changes is one row reading 2 changes, with a line
   expect(h).not.toContain("j-00056");
 });
 
+test("a housekeeper run whose changes all have a verb counts each verb, and each line is labelled with the verb's past word", () => {
+  const h = feed([
+    hk("2026-11-15T13:10:00Z", "done"), changed("2026-11-15T13:07:00Z", "aleph-9", "note: second look"), changed("2026-11-15T13:06:00Z", "aleph-8", "note: first look"),
+    changed("2026-11-15T13:05:00Z", "aleph-5", "retitle: New title"), hk("2026-11-15T13:00:00Z", "running"),
+  ]);
+  expect(h).toContain('<span class="event-title" title="retitled 1 · commented 2">retitled 1 · commented 2</span>');
+  const lines = h.split('<div class="herald-older">')[1].split('<div class="event-brief').slice(1);
+  expect(lines[0]).toContain('<span class="brief-label" title="retitled">retitled</span>');
+  expect(lines[0]).toContain("aleph-5");
+  expect(lines[0]).toContain("New title");
+  expect(lines[0]).not.toContain("retitle:");
+  expect(lines[1]).toContain('<span class="brief-label" title="commented">commented</span>');
+  expect(lines[1]).toContain("first look");
+  expect(lines[2]).toContain("second look");
+});
+
 test("a housekeeper job whose only event is running draws one row that links its job", () => {
   const h = feed([hk("2026-11-15T13:00:00Z", "running")]);
   expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);

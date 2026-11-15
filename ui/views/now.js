@@ -292,6 +292,9 @@ const grouped = (groups, row, runs) => groups.map(([id, events]) => {
   return { at: head.at, key: `event ${hash(eventKey(head))}`, html: inner.length ? fold(row(head, inner.length), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(head, 0) };
 });
 
+/** The past word of each verb a housekeeper change's detail starts with (`retitle: New title`). */
+const VERBS = { close: "closed", drop: "dropped", retitle: "retitled", reprioritize: "reprioritized", note: "commented", unpark: "unparked" };
+
 /** A routine run that ended and changed nothing has no row; one still running, or one that failed, has. */
 const FAILED = ["failed", "returned", "dropped"];
 
@@ -313,8 +316,12 @@ function eventRows(events, titles = {}, runs = {}, attempts = {}) {
   const runRows = [...routine].flatMap(([job, evs]) => {
     const head = evs.find((e) => e.action !== "changed") ?? evs[0], changes = evs.filter((e) => e.action === "changed");
     if (!changes.length && !FAILED.includes(head.action) && !evs.every((e) => e.action === "running")) return [];
-    const lines = [...changes].reverse().map((c) => briefRow({ ev: c, label: stateWord(c), text: `${idLink(shownId(c.subject, c.project), issueHref(c.subject, c.project))}${c.note ? ` ${esc(c.note)}` : ""}` }));
-    const row = eventRow(head, titles, changes.length, changes.length ? plural(changes.length, "change") : "");
+    const verb = (c) => { const m = /^(\w+): ([\s\S]*)$/.exec(c.note ?? ""); return m && Object.hasOwn(VERBS, m[1]) ? m : null; };
+    const lines = [...changes].reverse().map((c) => { const m = verb(c), note = m ? m[2] : c.note;
+      return briefRow({ ev: c, label: m ? VERBS[m[1]] : stateWord(c), text: `${idLink(shownId(c.subject, c.project), issueHref(c.subject, c.project))}${note ? ` ${esc(note)}` : ""}` }); });
+    const count = (v) => changes.filter((c) => verb(c)?.[1] === v).length;
+    const said = !changes.length ? "" : changes.every(verb) ? Object.keys(VERBS).filter(count).map((v) => `${VERBS[v]} ${count(v)}`).join(" · ") : plural(changes.length, "change");
+    const row = eventRow(head, titles, changes.length, said);
     return [{ at: head.at, key: `event ${hash(eventKey(head))}`, html: lines.length ? fold(row, `<div class="herald-older">${lines.join("")}</div>`, { cls: "herald-group", id: `issue:${head.subject}:${job}` }) : row }];
   });
   return [...grouped([...issues].map(([k, v]) => [`issue:${k}`, v]), (ev, more) => eventRow(ev, titles, more), runs), ...runRows];

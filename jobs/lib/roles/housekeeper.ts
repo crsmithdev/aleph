@@ -237,7 +237,7 @@ export async function review(b: Batch, now: number): Promise<Outcome> {
     const why = await applyOne(b, a);
     if (!why) {
       did.push(a);
-      logEvent({ subject: run.id, action: "changed", object: `issue.${a.id}`, detail: a.why });
+      logEvent({ subject: run.id, action: "changed", object: `issue.${a.id}`, detail: `${a.do}: ${a.do === "retitle" ? a.title : a.do === "reprioritize" ? a.priority : a.why}` });
     }
     (why ? out.refused : out.applied).push(why ? `${describe(a)}: refused: ${why}` : describe(a));
   }
