@@ -106,8 +106,8 @@ const ASK = {
   actions: [{ label: "Oct 28", act: "kit", path: "/api/kit", primary: true }, { label: "10/28", act: "kit", path: "/api/kit" }, { label: "Deny", act: "kit", path: "/api/kit", input: { name: "reason" } }],
 };
 const FEED = [
-  { at: "2026-11-10T16:58:00Z", subject: "aleph-1700", action: "landed", by: "agent", sub: "build 2" },
-  { at: "2026-11-10T16:40:00Z", subject: "aleph-1701", action: "returned", by: "agent", sub: "build 1", note: "checks failed" },
+  { at: "2026-11-10T16:58:00Z", subject: "issue.1700", action: "landed", by: "job.1", on: ["job.1"], row: { time: "2026-11-10T16:58:00Z", subject: "job.1", action: "landed", object: "job.1" } },
+  { at: "2026-11-10T16:40:00Z", subject: "issue.1701", action: "returned", by: "job.2", on: ["job.2"], note: "checks failed", row: { time: "2026-11-10T16:40:00Z", subject: "job.2", action: "returned", object: "job.2", detail: "checks failed" } },
 ];
 const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }] };
 

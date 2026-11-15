@@ -153,14 +153,14 @@ test("renderLog links an issue key to its page when the entry carries its projec
   expect(j).toContain('href="#/issues/aleph/1420"');
 });
 
-test("a director decision shows its action and its detail", () => {
+test("a director decision shows its action, and its long detail only behind the row's button", () => {
   const note = `Director: landed over the reviewer hold. ${"word ".repeat(60)}`.trim();
   try {
     logEvent({ subject: "director", action: "landed", object: "r-12", detail: `over review: ${note}` });
     const e = log().find((x) => x.object === "r-12")!;
     expect(line(e)).toBe(`director | r-12 | landed | over review: ${note}`);
     const h = gates.renderLog({ log: { entries: [e] } });
-    expect(h).toContain(`<td>landed</td><td class="wide" title="over review: ${note}">over review: ${note}</td>`);
+    expect(h).toContain(`<td>landed</td><td class="wide" title="over review: ${note}"><div class="clamp">over review: ${note}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
   } finally { clearEvents(); }
 });
 

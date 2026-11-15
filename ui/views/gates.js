@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, undecided, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, undecided, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 import { askCard } from "./cards.js";
@@ -187,6 +187,8 @@ function idHtml(id, repo, target) {
 }
 
 /** The detail of an event with each key and issue ID as a link. */
+/** A detail longer than this shows behind its Show more button: it is a note, not a phrase. */
+const CLAMP_CHARS = 120;
 const detailHtml = (e) => linked(e.detail ?? "").map((p) => (typeof p === "string" ? esc(p) : idHtml(p.id, p.id === e.object ? e.project : undefined))).join("");
 
 /** The log, newest first, filtered by `by` (a subject) from the address; page `page` shows. */
@@ -197,7 +199,7 @@ export function renderLog(d, by, page = 1) {
   const rows = pageRows(entries, page, PAGE).map((e) => {
     const object = e.action === "changed" && !parseId(e.object) ? `<a href="#rules">${esc(e.object)}</a>` : idHtml(e.object, e.project, e.object_target);
     return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.time)}` : when(e.time))}</td><td>${object}</td><td>${tag(e.subject, tone(e.subject))}</td><td>${e.action ? esc(e.action) : miss("no action")}</td>` +
-      `<td class="wide"${contentText(e) ? ` title="${esc(contentText(e))}"` : ""}>${detailHtml(e)}</td><td class="num">${e.times || 1}</td></tr>`;
+      `<td class="wide"${contentText(e) ? ` title="${esc(contentText(e))}"` : ""}>${(e.detail ?? "").length > CLAMP_CHARS ? clamp(detailHtml(e)) : detailHtml(e)}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return card("Log", filter +
     (rows ? dataTable(heads(["Logged", "Object", "Subject", "Action", "Detail", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty()), { id: "gates-log" });

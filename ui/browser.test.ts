@@ -1,11 +1,16 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } from "bun:test";
-import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { Database } from "bun:sqlite";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
 
 /** The last test to start, and whether it ran to its end: one that threw or timed out leaves `ok` false, and the next test gets a clean page. */
 let last = { ok: true };
 const test = (name: string, fn: () => unknown, timeout?: number) => bunTest(name, async () => { const run = { ok: false }; last = run; await fn(); run.ok = true; }, timeout);
+
+/** Log one director answer whose detail is a long note of `word` repeated, into the rig database at `db`. */
+const logTo = (db: string, time: string, word: string) =>
+  new Database(db).query("INSERT INTO events (time, subject, action, object, detail) VALUES (?, ?, ?, ?, ?)").run(time, "director", "answered", "issue.1", word.repeat(60));
 
 describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   let rig: Rig, page: Page, env: Record<string, string>;
@@ -148,7 +153,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("Automation: a log row's clamp button opens and closes the text from the keyboard", async () => {
-    const own = await startRig((env) => { const ev = join(env.ALEPH_FACTORY_DIR, "events"); mkdirSync(ev, { recursive: true }); const at = new Date(statSync(env.ALEPH_FACTORY_DIR).mtimeMs).toISOString(); writeFileSync(join(ev, `${at.slice(0, 10)}.jsonl`), `${JSON.stringify({ at, by: "director", subject: "aleph-1", action: "answered", note: "word ".repeat(60) })}\n`); });
+    const own = await startRig((env) => { const at = new Date(statSync(env.ALEPH_FACTORY_DIR).mtimeMs).toISOString(); logTo(env.ALEPH_DB, at, "word "); });
     try {
       const pg = await own.open("#/automation");
       const btn = "#gates-log .clamp-btn";
@@ -166,16 +171,14 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("Automation: a redraw keeps focus on an open clamp button and keeps its text open, with a new row above it", async () => {
     let dir = "", at = 0;
-    const own = await startRig((env) => { dir = env.ALEPH_FACTORY_DIR; mkdirSync(join(dir, "events"), { recursive: true }); at = statSync(dir).mtimeMs; const iso = new Date(at).toISOString(); writeFileSync(join(dir, "events", `${iso.slice(0, 10)}.jsonl`), `${JSON.stringify({ at: iso, by: "director", subject: "aleph-1", action: "answered", note: "word ".repeat(60) })}\n`); });
+    const own = await startRig((env) => { dir = env.ALEPH_DB; at = statSync(env.ALEPH_FACTORY_DIR).mtimeMs; logTo(dir, new Date(at).toISOString(), "word "); });
     try {
       const pg = await own.open("#/automation");
       const btn = "#gates-log .clamp-btn";
       await pg.when(`document.querySelector("${btn}")`);
       await pg.ev(`(() => { const b = document.querySelector("${btn}"); b.focus(); b.click(); b.old = true; })()`);
       // A newer row with its own note lands above the open one; the redraw must keep the same button, not the first one.
-      // The fixture logs other events on the same day, so the test takes the one row with the note.
-      const day = join(dir, "events", `${new Date(at).toISOString().slice(0, 10)}.jsonl`), ev = JSON.parse(readFileSync(day, "utf8").split("\n").find((l) => l.includes("word "))!);
-      appendFileSync(day, `${JSON.stringify(ev).replaceAll("word ", "other ").replace(ev.at, new Date(Date.parse(ev.at) + 1000).toISOString())}\n`);
+      logTo(dir, new Date(at + 1000).toISOString(), "other ");
       await pg.ev('document.dispatchEvent(new Event("visibilitychange"))');
       await pg.when(`document.querySelectorAll("${btn}").length === 2 && !document.querySelector("${btn}").old`);
       expect(await pg.ev<unknown[]>(`(() => { const b = document.activeElement; return [b.matches("${btn}"), b.previousElementSibling.textContent.startsWith("word"), b.getAttribute("aria-expanded"), b.previousElementSibling.classList.contains("clamp"), b.textContent]; })()`)).toEqual([true, true, "true", false, "Show less"]);
