@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 
@@ -31,8 +31,8 @@ export const redirect = (hash) => {
 export const MODES = { resolve: "Take the pick" };
 const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 
-/** The log's actors, in filter order, with the badge tone of each from `tone()`. */
-export const BY = Object.fromEntries(["human", "rule", "director", "firefighter", "gate"].map((a) => [a, tone(a)]));
+/** The log's actors, in filter order. */
+export const BY = Object.fromEntries(["human", "rule", "director", "firefighter", "gate"].map((a) => [a, a]));
 
 const PAGE = 50;
 
@@ -196,12 +196,13 @@ export function renderLog(d, by, page = 1) {
   const filter = filterBar([{ name: "by", label: "By", value: pick, options: [{ value: "", label: "All" }, ...Object.keys(BY).map((k) => ({ value: k, label: k }))] }]);
   const entries = d.log.entries.filter((e) => !pick || e.subject === pick);
   const rows = pageRows(entries, page, PAGE).map((e) => {
-    const object = e.action === "changed" && !parseId(e.object) ? `<a href="#rules">${esc(e.object)}</a>` : idHtml(e.object, e.project, e.object_target);
-    return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.time)}` : when(e.time))}</td><td>${object}</td><td>${tag(e.subject, tone(e.subject))}</td><td>${e.action ? esc(e.action) : miss("no action")}</td>` +
-      `<td class="wide"${contentText(e) ? ` title="${esc(contentText(e))}"` : ""}>${(e.detail ?? "").length > CLAMP_CHARS ? clamp(detailHtml(e)) : detailHtml(e)}</td><td class="num">${e.times || 1}</td></tr>`;
+    const object = !e.object ? miss("no object") : e.action === "changed" && !parseId(e.object) ? `<a href="#rules">${esc(e.object)}</a>` : idHtml(e.object, e.project, e.object_target);
+    return `<tr><td class="time lead">${esc(e.times ? `${when(e.first)} – ${when(e.time)}` : when(e.time))}</td><td>${object}</td>` +
+      `<td class="wide"${contentText(e) ? ` title="${esc(contentText(e))}"` : ""}>${(e.detail ?? "").length > CLAMP_CHARS ? clamp(detailHtml(e)) : detailHtml(e)}</td>` +
+      `<td>${e.action ? esc(e.action) : miss("no action")}</td><td>${chip(e.subject)}</td><td class="num">${count(e.times || 1)}</td></tr>`;
   }).join("");
   return card("Log", filter +
-    (rows ? dataTable(heads(["Logged", "Object", "Subject", "Action", "Detail", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty()), { id: "gates-log" });
+    (rows ? dataTable(heads(["Logged", "Object", "Detail", "Action", "Subject", "Times"], ["Times"]), rows) + pager(page, entries.length, PAGE) : empty()), { id: "gates-log" });
 }
 
 /** What each settings form posts, by its `data-` key: the URL, the body and the word for an error line. */

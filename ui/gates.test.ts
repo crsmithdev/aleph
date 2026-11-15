@@ -8,7 +8,7 @@ import { LOG_MAX, askHistory, gatesBody, log, metrics, rules, securityFacts } fr
 import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { day, pct, tone, when } from "./lib.js";
+import { day, pct, when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
 import { allHolds, recordHold, setTick, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
@@ -145,9 +145,9 @@ test("a hold writes its held event, and the log shows it with the file and the j
     expect(contentText(e)).toBe("file: ui/views/issues.js: job.1372");
     const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
     // An issue key names no repo, so the log shows its shown form and links nothing.
-    expect(h).toContain("</td><td>i-01420</td><td>");
+    expect(h).toContain("<td>i-01420</td><td class=\"wide\" title=");
     expect(h).toContain('<tr><td class="time lead">');
-    expect(h).toContain('</td><td>held</td><td class="wide" title="file: ui/views/issues.js: job.1372">file: ui/views/issues.js: j-01372</td>');
+    expect(h).toContain('title="file: ui/views/issues.js: job.1372">file: ui/views/issues.js: j-01372</td><td>held</td><td><span class="chip">gate</span></td>');
   } finally { setHolds(was); }
 });
 
@@ -167,7 +167,7 @@ test("a director decision shows its action, and its long detail only behind the 
     const e = log().find((x) => x.object === "r-12")!;
     expect(line(e)).toBe(`director | r-12 | landed | over review: ${note}`);
     const h = gates.renderLog({ log: { entries: [e] } });
-    expect(h).toContain(`<td>landed</td><td class="wide" title="over review: ${note}"><div class="clamp">over review: ${note}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
+    expect(h).toContain(`<td class="wide" title="over review: ${note}"><div class="clamp">over review: ${note}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td><td>landed</td>`);
   } finally { clearEvents(); }
 });
 
@@ -295,21 +295,50 @@ test("the log filter keeps one actor's entries", () => {
   const h = gates.renderLog(data(), "human");
   expect(h).toMatch(/class="seg"[^>]*>.*aria-pressed="true">human</);
   expect(h).not.toContain("fchip");
-  expect(h).toContain('</td><td><a href="#rules">rescue</a></td><td>');
-  expect(h).toContain(`</td><td>changed</td><td class="wide"`);
+  expect(h).toContain('<td><a href="#rules">rescue</a></td><td class="wide"');
+  expect(h).toContain('<td class="wide" title="set to resolve">set to resolve</td><td>changed</td><td><span class="chip">human</span></td>');
   expect(h).not.toContain("r-5");
-  expect(h).toContain('<tr><th>Logged</th><th>Object</th><th>Subject</th><th>Action</th><th>Detail</th><th class="num">Times</th></tr>');
-  expect(h).toContain(`<td class="wide" title="set to resolve">set to resolve</td>`);
+  expect(h).toContain('<tr><th>Logged</th><th>Object</th><th>Detail</th><th>Action</th><th>Subject</th><th class="num">Times</th></tr>');
   expect(gates.renderLog(data(), "rule")).not.toContain("set to resolve");
 });
 
-test("renderLog shows a missing action, and each By badge takes its tone from tone()", () => {
+test("renderLog shows a missing action, and keeps the By filter over the five actors", () => {
   const time = new Date(NOW).toISOString();
   const h = gates.renderLog({ log: { entries: [{ time, subject: "rule", object: "x-1" }] } } as any);
   expect(h.match(/<td><span title="no action">–<\/span><\/td>/g)).toHaveLength(1);
   expect(Object.keys(gates.BY)).toEqual(["human", "rule", "director", "firefighter", "gate"]);
-  for (const by of Object.keys(gates.BY)) expect(gates.renderLog({ log: { entries: [{ time, subject: by, object: "x-1", action: "a" }] } } as any)).toContain(`<span class="badge ${tone(by)}">${by}</span>`);
-  expect(new Set(Object.keys(gates.BY).map(tone)).size).toBe(5);
+});
+
+test("renderLog shows each actor as a chip, and no badge", () => {
+  const time = new Date(NOW).toISOString();
+  for (const by of Object.keys(gates.BY)) {
+    const h = gates.renderLog({ log: { entries: [{ time, subject: by, object: "x-1", action: "a" }] } } as any);
+    expect(h).toContain(`<span class="chip">${by}</span>`);
+    expect(h).not.toContain("badge");
+  }
+});
+
+test("renderLog heads the columns time first, then id, title, action, subject and number", () => {
+  const h = gates.renderLog(data());
+  expect(h).toContain('<tr><th>Logged</th><th>Object</th><th>Detail</th><th>Action</th><th>Subject</th><th class="num">Times</th></tr>');
+  expect(h.match(/<th class="num">/g)).toHaveLength(1);
+  const rows = h.match(/<tr><td class="time lead">.*?<\/tr>/g)!;
+  expect(rows).toHaveLength(2);
+  for (const row of rows) expect([...row.matchAll(/<td([^>]*)>/g)].map((m) => (m[1].includes("wide") ? "wide" : m[1].includes("num") ? "num" : "cell"))).toEqual(["cell", "cell", "wide", "cell", "cell", "num"]);
+});
+
+test("renderLog writes the Times number through count()", () => {
+  const time = new Date(NOW).toISOString();
+  const e = (times?: number) => ({ time, subject: "gate", object: "x-1", action: "held", ...(times ? { times } : {}) });
+  expect(gates.renderLog({ log: { entries: [e(1200)] } } as any)).toContain('<td class="num">1,200</td>');
+  expect(gates.renderLog({ log: { entries: [e()] } } as any)).toContain('<td class="num">1</td>');
+});
+
+test("renderLog shows a missing object with miss()", () => {
+  const time = new Date(NOW).toISOString();
+  const h = gates.renderLog({ log: { entries: [{ time, subject: "rule", action: "reran" }] } } as any);
+  expect(h).toContain('<td><span title="no object">–</span></td>');
+  expect(h).not.toContain("undefined");
 });
 
 test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times", () => {
