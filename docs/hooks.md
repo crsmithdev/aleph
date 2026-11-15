@@ -19,7 +19,7 @@ After you change a hook, run `/reload-plugins`.
 | `PreToolUse` | `Bash` | `secret-scan.ts` | 10 | Denies a commit that adds a secret or a debug leftover |
 | `PreToolUse` | `Bash` | `gh-guard.ts` | 15 | Asks before a `gh` write to a repo of another owner |
 | `PreToolUse` | `Bash` | `bash-allow.ts` | 10 | Denies a Bash command outside the run's own `Bash(...)` list |
-| `PostToolUse` | `Write` | `handoff-saved.ts` | 10 | Ends the turn after a handoff file is written; in Herdr, also clears and picks up |
+| `PostToolUse` | `Write` | `handoff-saved.ts` | 10 | Ends the turn after a handoff file is written; in Herdr or its desktop app, also clears and picks up |
 | `Stop` | | `verify-gate.ts` | 45 | Blocks a claim of completion that no run supports |
 | `Stop` | | `context-gate.ts` | 10 | Warns on context fill; asks for a handoff after a compaction |
 | `Stop` | | `skills/refit-code/hook.ts` | 20 | Blocks once per set of findings, at most 3 times per session, when a change leaves out a file that history changes with it, copies code a `.jscpd.json` boundary protects, or adds a copy of code the base did not have |
@@ -40,7 +40,7 @@ All other hooks **fail open**. An error exits without a block, or prints nothing
 
 ### handoff-start
 
-`hooks/handoff-start.ts` looks for `<handoffs>/projects/<repo>.md`. Inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set), it also looks for `<handoffs>/projects/<repo>/<HERDR_PANE_ID>.md`, and it never offers the file of another live pane. It lists each other file of that folder whose pane `herdr pane list` no longer shows as orphaned: Claude asks Chris before it picks one up. When a file exists, the hook prints a `systemMessage` and tells Claude to run `aleph:pickup`. Inside Herdr, it passes the path of `<repo>.md` as the argument, because `aleph:pickup` with no argument reads the pane's file. When the handoff text, `git status` and `git log -5` fit in 10,000 characters, the hook injects them too. `ALEPH_HANDOFFS_DIR` sets the folder (default `~/.aleph/handoffs`). The hook does nothing in a factory run (`ALEPH_JOB_ID` set) or an SDK session.
+`hooks/handoff-start.ts` looks for `<handoffs>/projects/<repo>.md`. Inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set), it also looks for `<handoffs>/projects/<repo>/<HERDR_PANE_ID>.md`, and it never offers the file of another live pane. Inside the Herdr desktop app (`HC_RUNTIME=1` and `HC_TERMINAL_ID` set, no Herdr pane), it looks for `<handoffs>/projects/<repo>/hc-<HC_TERMINAL_ID>.md` instead and never offers a pane's file; it lists each other `hc-` file of that folder as orphaned when `hc get <terminal>` exits non-zero. Inside Herdr, an `hc-` file is never listed as orphaned. It lists each other file of that folder whose pane `herdr pane list` no longer shows as orphaned: Claude asks Chris before it picks one up. When a file exists, the hook prints a `systemMessage` and tells Claude to run `aleph:pickup`. Inside Herdr, it passes the path of `<repo>.md` as the argument, because `aleph:pickup` with no argument reads the pane's file. When the handoff text, `git status` and `git log -5` fit in 10,000 characters, the hook injects them too. `ALEPH_HANDOFFS_DIR` sets the folder (default `~/.aleph/handoffs`). The hook does nothing in a factory run (`ALEPH_JOB_ID` set) or an SDK session.
 
 ### aleph report
 
@@ -122,6 +122,7 @@ The design is in [the context gate decision](context-gate.md).
 
 - Outside Herdr, the stop reason tells Chris to run `/clear`, and no process starts.
 - Inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set), when the file is this pane's `<handoffs>/projects/<repo>/<HERDR_PANE_ID>.md`, the stop reason says the session clears and picks up on its own. The hook also starts `hooks/handoff-cycle.ts` detached, so it outlives the hook. That process waits until Herdr reports the pane `idle` or `done` (idle after unseen work, as in an unfocused tab), then runs `herdr agent prompt <pane> /clear --wait` and `herdr agent prompt <pane> "/aleph:pickup <path>" --wait`. A failed step stops the cycle.
+- Inside the Herdr desktop app (`HC_RUNTIME=1` and `HC_TERMINAL_ID` set, no Herdr pane, which wins when both are set), when the file is this terminal's `<handoffs>/projects/<repo>/hc-<HC_TERMINAL_ID>.md`, the stop reason is the same and the detached cycle runs `hc wait <terminal>`, `hc send <terminal> /clear`, `hc wait <terminal>` and `hc send <terminal> "/aleph:pickup <path>"`, in that order. A step that exits non-zero stops the cycle.
 
 ## Tracing
 

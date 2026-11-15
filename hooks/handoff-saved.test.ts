@@ -15,7 +15,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 function run(file_path: string, env: Record<string, string | undefined> = {}) {
   const r = Bun.spawnSync(["bun", HOOK], {
     stdin: Buffer.from(JSON.stringify({ hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path } })),
-    env: { ...process.env, ALEPH_HANDOFFS_DIR: root, HERDR_ENV: undefined, HERDR_PANE_ID: undefined, ...env },
+    env: { ...process.env, ALEPH_HANDOFFS_DIR: root, HERDR_ENV: undefined, HERDR_PANE_ID: undefined, HC_RUNTIME: undefined, HC_TERMINAL_ID: undefined, ...env },
     stdout: "pipe", stderr: "pipe",
   });
   expect(r.exitCode).toBe(0);
@@ -77,5 +77,22 @@ describe("the clear and pickup cycle", () => {
     await Bun.spawn(["sh", "-c", `echo go > ${join(root, "gate")}`]).exited;
     await Bun.file(join(root, "done")).text();
     expect(log().trim().split("\n")).toEqual(["agent wait p7 --until idle --until done", "agent prompt p7 /clear --wait", `agent prompt p7 /aleph:pickup ${path} --wait`]);
+  });
+
+  test("in the desktop app this terminal's hc file runs the hc cycle, and another terminal's file or the flat file starts nothing", async () => {
+    mkdirSync(join(root, "bin"));
+    Bun.spawnSync(["mkfifo", join(root, "done")]);
+    writeFileSync(join(root, "bin", "hc"), `#!/bin/sh\necho "$@" >> "${root}/log"\ncase "$3" in /aleph:pickup*) echo > "${root}/done";; esac\nexit 0\n`, { mode: 0o755 });
+    const env = { HC_RUNTIME: "1", HC_TERMINAL_ID: "t12", PATH: `${join(root, "bin")}:${process.env.PATH}` };
+    for (const path of [join(root, "projects", "proj.md"), join(root, "projects", "proj", "hc-t99.md")]) {
+      expect(JSON.parse(run(path, env)).stopReason).toContain("Run /clear");
+    }
+    expect(log()).toBe("");
+    const path = join(root, "projects", "proj", "hc-t12.md");
+    const out = JSON.parse(run(path, env));
+    expect(out.stopReason).toContain("on its own");
+    expect(out.stopReason).toContain("do not run /clear");
+    await Bun.file(join(root, "done")).text();
+    expect(log().trim().split("\n")).toEqual(["wait t12", "send t12 /clear", "wait t12", `send t12 /aleph:pickup ${path}`]);
   });
 });

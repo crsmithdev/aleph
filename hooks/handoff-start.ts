@@ -12,6 +12,10 @@
  * hook lists each other file of that folder whose pane Herdr no longer has
  * as orphaned: Claude asks before it picks one up. There the flat file is
  * picked up by its path, as pickup with no argument reads the pane's file.
+ * Inside the Herdr desktop app (HC_RUNTIME=1, HC_TERMINAL_ID set, and no Herdr
+ * pane) the same holds for <scope>/hc-<HC_TERMINAL_ID>.md: the hook lists each
+ * other hc- file of that folder whose terminal `hc get` does not find as orphaned.
+ * Each runtime ignores the other's files.
  * No handoff, no output.
  * Headless (`claude -p`) sessions and factory jobs are skipped.
  */
@@ -36,9 +40,13 @@ const pane = process.env.HERDR_ENV === "1" ? process.env.HERDR_PANE_ID : undefin
 const folder = join(dir, "projects", scope);
 const live = pane ? Bun.spawnSync(["herdr", "pane", "list"], { stdout: "pipe", stderr: "ignore" }) : undefined;
 const has = (id: string) => new RegExp(`(^|[^\\w:-])${id.replace(/\W/g, "\\$&")}([^\\w:-]|$)`).test(live!.stdout.toString());
-const panes = pane && existsSync(folder) ? readdirSync(folder).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)) : [];
-const mine = panes.filter((id) => id === pane);
-const orphans = live?.exitCode === 0 ? panes.filter((id) => id !== pane && !has(id)) : [];
+const term = !pane && process.env.HC_RUNTIME === "1" ? process.env.HC_TERMINAL_ID : undefined;
+const me = pane ?? (term ? `hc-${term}` : undefined);
+// A pane's file is <pane>.md, a desktop terminal's is hc-<terminal>.md; each runtime sees only its own.
+const ids = me && existsSync(folder) ? readdirSync(folder).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).filter((id) => !!pane !== id.startsWith("hc-")) : [];
+const mine = ids.filter((id) => id === me);
+const gone = (id: string) => pane ? !has(id) : Bun.spawnSync(["hc", "get", id.slice(3)], { stdout: "ignore", stderr: "ignore" }).exitCode !== 0;
+const orphans = pane && live?.exitCode !== 0 ? [] : ids.filter((id) => id !== me && gone(id));
 const named = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md") && !/^\d{4}-\d\d-\d\d-/.test(f)) : [];
 const pick = (id: string, orphan: boolean) => ({ path: join(folder, `${id}.md`), name: "", orphan, text: readFileSync(join(folder, `${id}.md`), "utf8") });
 const handoffs = [
@@ -56,7 +64,7 @@ const when = (path: string) => {
 };
 const summary = (text: string) => text.match(/^summary:\s*(.+)$/m)?.[1].trim() ?? "no summary line";
 
-const short = handoffs.map((h) => h.orphan ? `An orphaned handoff waits at ${h.path}: ${summary(h.text)}. Its Herdr pane is gone. Ask Chris whether to pick it up. Do not run the aleph:pickup skill on your own; if Chris says yes, run it with the argument ${h.path}.` : `A handoff ${h.name ? `named ${h.name}` : "for this project"} waits at ${h.path}: ${summary(h.text)}. On the user's first prompt, run the aleph:pickup skill ${h.name || (pane && h.path === own) ? `with the argument ${h.name || own}` : "with no argument"} before anything else, unless that prompt is plainly about other work; then do that work and say in one line that the handoff still waits.`).join("\n");
+const short = handoffs.map((h) => h.orphan ? `An orphaned handoff waits at ${h.path}: ${summary(h.text)}. Its ${pane ? "Herdr pane" : "terminal"} is gone. Ask Chris whether to pick it up. Do not run the aleph:pickup skill on your own; if Chris says yes, run it with the argument ${h.path}.` : `A handoff ${h.name ? `named ${h.name}` : "for this project"} waits at ${h.path}: ${summary(h.text)}. On the user's first prompt, run the aleph:pickup skill ${h.name || (me && h.path === own) ? `with the argument ${h.name || own}` : "with no argument"} before anything else, unless that prompt is plainly about other work; then do that work and say in one line that the handoff still waits.`).join("\n");
 const status = probe(cwd, "status");
 const gitPart = status.ok ? `\n\ngit status:\n${status.out}\n\ngit log -5:\n${probe(cwd, "log", "-5").out}` : "";
 const texts = handoffs.map((h) => `${h.path}:\n\n${h.text.trim()}`).join("\n\n");

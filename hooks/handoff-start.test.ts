@@ -17,7 +17,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 function run(cwd: string, env: Record<string, string | undefined> = {}) {
   const r = Bun.spawnSync(["bun", HOOK], {
     stdin: Buffer.from(JSON.stringify({ hook_event_name: "SessionStart", source: "clear", cwd })),
-    env: { ...process.env, ALEPH_HANDOFFS_DIR: join(root, "handoffs"), CLAUDE_CODE_ENTRYPOINT: "cli", ALEPH_JOB_ID: undefined, HERDR_ENV: undefined, HERDR_PANE_ID: undefined, ...env },
+    env: { ...process.env, ALEPH_HANDOFFS_DIR: join(root, "handoffs"), CLAUDE_CODE_ENTRYPOINT: "cli", ALEPH_JOB_ID: undefined, HERDR_ENV: undefined, HERDR_PANE_ID: undefined, HC_RUNTIME: undefined, HC_TERMINAL_ID: undefined, ...env },
     stdout: "pipe", stderr: "pipe",
   });
   expect(r.exitCode).toBe(0);
@@ -153,4 +153,25 @@ describe("inside Herdr", () => {
     expect(JSON.parse(run(join(root, "proj"), herdr())).hookSpecificOutput.additionalContext).toContain(`run the aleph:pickup skill with the argument ${flat}`);
   });
 
+  test("an hc file is never orphaned inside the Herdr TUI", () => {
+    pane("hc-t9", "summary: s9\n");
+    expect(run(join(root, "proj"), herdr())).toBe("");
+  });
+});
+
+describe("inside the desktop app", () => {
+  test("this terminal's file waits, a file of a terminal hc lacks is orphaned, and a pane's file is ignored", () => {
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "hc"), `#!/bin/sh\n[ "$1" = get ] && [ "$2" = t12 ]\n`, { mode: 0o755 });
+    mkdirSync(join(root, "handoffs", "projects", "proj"), { recursive: true });
+    for (const [id, text] of [["hc-t12", "s12"], ["hc-t9", "s9"], ["p8", "s8"]]) writeFileSync(join(root, "handoffs", "projects", "proj", `${id}.md`), `summary: ${text}\n`);
+    const out = JSON.parse(run(join(root, "proj"), { HC_RUNTIME: "1", HC_TERMINAL_ID: "t12", PATH: `${bin}:${process.env.PATH}` }));
+    const lines = out.systemMessage.split("\n");
+    expect(lines.find((l: string) => l.includes("s12"))).toMatch(/^handoff waiting/);
+    expect(lines.find((l: string) => l.includes("s9"))).toMatch(/^handoff orphaned/);
+    expect(out.hookSpecificOutput.additionalContext).toContain("Ask Chris");
+    expect(out.hookSpecificOutput.additionalContext).toContain(join(root, "handoffs", "projects", "proj", "hc-t9.md"));
+    expect(out.hookSpecificOutput.additionalContext).not.toContain("p8.md");
+  });
 });

@@ -12,6 +12,7 @@ Find the handoff file, where `<handoffs dir>` is `$ALEPH_HANDOFFS_DIR` if set, e
 - If `$ARGUMENTS` holds the path of a handoff file (it contains `/`), read that file. `<scope>` is the folder of the file under `projects/`, else the file name without `.md`.
 - If `$ARGUMENTS` holds a name, that name is `<name>`: read `<handoffs dir>/<name>.md`.
 - If `$ARGUMENTS` is empty inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set: `!`echo "HERDR_ENV=${HERDR_ENV:-} HERDR_PANE_ID=${HERDR_PANE_ID:-}"``), read this pane's handoff, `<handoffs dir>/projects/<scope>/<HERDR_PANE_ID>.md`.
+- If `$ARGUMENTS` is empty inside the Herdr desktop app (`HC_RUNTIME=1` and `HC_TERMINAL_ID` set, and no Herdr pane: `!`echo "HC_RUNTIME=${HC_RUNTIME:-} HC_TERMINAL_ID=${HC_TERMINAL_ID:-}"``), read this terminal's handoff, `<handoffs dir>/projects/<scope>/hc-<HC_TERMINAL_ID>.md`.
 - If `$ARGUMENTS` is empty otherwise, read the project's handoff, `<handoffs dir>/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`. `<scope>` is that name: the main repo's directory, or the current directory outside git.
 
 If the session start already holds the handoff text, use it and skip the Read. Otherwise read the file in full. If it does not exist, say so and stop. Do not guess.
