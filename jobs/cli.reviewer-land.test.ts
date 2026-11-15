@@ -50,3 +50,13 @@ test("the report hook marks no run shown and rewrites no episodes-seen file", as
   expect(readFileSync(seen, "utf8")).toBe("old\n");
   await drop("fhook");
 }, 60_000);
+
+test("guard: the report hook prints nothing to a factory agent, and its lines to anyone else", async () => {
+  await cli(["pause"]);
+  const agent = await cli(["report", "--hook"], { ALEPH_AGENT: "1" });
+  expect(agent.stdout.trim()).toBe("");
+  expect(agent.code).toBe(0);
+  const chris = await cli(["report", "--hook"]);
+  expect(chris.json.hookSpecificOutput.additionalContext).toContain("factory paused");
+  await cli(["resume"]);
+}, 60_000);

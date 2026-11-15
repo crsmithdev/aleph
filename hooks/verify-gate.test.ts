@@ -263,4 +263,24 @@ describe("verify gate", () => {
       else expect(out).toBe("");
     }
   });
+
+  test("guard: a factory agent's turn is skipped: no outcome, no span", async () => {
+    const before = posted.length;
+    process.env.ALEPH_AGENT = "1";
+    try {
+      transcript(transcriptPath, "pa", [user("change a"), toolUse("t1", "Write", { file_path: join(root, "agent.ts") }), toolResult("t1", "ok"), say("Done.")]);
+      expect(await fire("UserPromptSubmit", "pa")).toBeNull();
+      writeFileSync(join(root, "agent.ts"), "a");
+      expect(await fire("Stop", "pa", { last_assistant_message: "Done." })).toBeNull();
+      expect(posted.length).toBe(before);
+    } finally {
+      delete process.env.ALEPH_AGENT;
+    }
+    // The same turn from anyone else: the gate takes its snapshot and judges the Stop.
+    verdict = says("pass", "bun test ran after the edit and passed.");
+    await fire("UserPromptSubmit", "pb");
+    writeFileSync(join(root, "agent.ts"), "b");
+    transcript(transcriptPath, "pb", [user("change it"), toolUse("t1", "Write", { file_path: join(root, "agent.ts") }), toolResult("t1", "ok"), say("Done.")]);
+    expect(await fire("Stop", "pb", { last_assistant_message: "Done." })).toMatchObject({ verdict: "pass", kind: "judged" });
+  });
 });
