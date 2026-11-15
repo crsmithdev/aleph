@@ -939,7 +939,7 @@ mark { color: inherit; background: var(--need-bg); border-radius: var(--r-hair);
 /* Memory: the search, the type dots, the result rows by type, the inspector's forms and the recall strip. */
 .memory .mdot { display: inline-block; width: var(--dot-m); height: var(--dot-m); border-radius: var(--r-pill); margin-right: var(--sp-6); vertical-align: baseline; background: var(--muted); }
 .mdot.t-semantic { background: var(--run); } .mdot.t-procedural { background: var(--done); } .mdot.t-episodic { background: var(--focus); }
-.mdot.t-working { background: var(--chart-7); } .mdot.t-prospective { background: var(--hot); } .mdot.t-retrieval { background: var(--need); }
+.mdot.t-working { background: var(--chart-7); } .mdot.t-prospective { background: var(--hot); }
 .mgroup { margin-bottom: var(--sp-20); }
 .mrows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--sp-8); }
 .mrows .mrow { padding: var(--sp-10) var(--sp-12); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); cursor: pointer; min-width: 0; }

@@ -244,11 +244,11 @@ async function processes(): Promise<Response> {
 const allNotes = async (root: string) => (existsSync(join(root, "Home.md")) ? await vaultNotes(root) : []);
 
 /** Every memory item of every type, built once until one of its sources changes. */
-const ITEM_SOURCES = ["vault", "handoffs", "episodes", "usage", "later:memory:misses", "later:memory:calls", "later:memory:sessions", "store", "registry", "factory", "action"];
+const ITEM_SOURCES = ["vault", "handoffs", "episodes", "usage", "later:memory:calls", "later:memory:sessions", "store", "registry", "factory", "action"];
 async function memoryItems(root: string) {
   return once(`memory:items:${root}`, ITEM_SOURCES, async () => {
     const wiki = wikiNotes(await allNotes(root));
-    return { wiki, items: await items(root, wiki, readLog(root), await misses()) };
+    return { wiki, items: await items(root, wiki, readLog(root)) };
   });
 }
 

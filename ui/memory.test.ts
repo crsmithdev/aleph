@@ -279,7 +279,7 @@ test("prospective issues carry their priority, medium when they have none", asyn
       delete b.fm.priority;
       return true;
     }, true);
-    const all = await items(join(base, "vault"), [], {}, null);
+    const all = await items(join(base, "vault"), [], {});
     expect(all.filter((i) => i.source === "issue").map((i) => i.priority)).toEqual(["critical", "medium"]);
   } finally {
     writeRepos(JSON.parse(REPOS), join(base, "items"));
@@ -292,7 +292,7 @@ test("a project handoff shows its summary line", async () => {
   writeFileSync(join(dir, "projects", "aleph.md"), "summary: Fix the memory tab\n\nBody.\n");
   const restore = withEnv({ ALEPH_HANDOFFS_DIR: dir });
   try {
-    const all = await items(join(base, "vault"), [], {}, null);
+    const all = await items(join(base, "vault"), [], {});
     expect(all.filter((i) => i.source === "handoff").map((i) => [i.key, i.scope, i.text])).toEqual([["projects/aleph.md", "aleph", "Fix the memory tab"]]);
   } finally {
     restore();
@@ -329,7 +329,7 @@ const it = (over: object) => ({ type: "semantic", source: "note", key: "N", titl
 const page = { exists: true, total: 1, byKind: {}, byScope: {}, scopes: ["aleph", "other"], home: [], lint: { refuse: [], warn: [] }, writes: [], notes: [row({ title: "N", read: "2026-11-03" }), row({ title: "Never" })],
   start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c" }] } } };
 
-test("the page is the search, the freshness filter, seven type tiles, the results and the inspector, then health", () => {
+test("the page is the search, the freshness filter, six type tiles, the results and the inspector, then health", () => {
   const h = v.renderMemory(page, v.options(new URLSearchParams("q=work")), [it({}), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" })]);
   for (const t of ['data-ui="mem-search"', 'value="work"', "Read in 7 days", 'id="mem-inspector"', "<h2>Health</h2>", "2.9KiB / 5.9KiB, 1 core lines", '<div class="msearch">', '<datalist id="mem-titles"><option value="N"><option value="Never"></datalist>', '<option value="other">other</option>'])
     expect(h).toContain(t);
@@ -341,7 +341,8 @@ test("the page is the search, the freshness filter, seven type tiles, the result
   const at = ["<h1>Memory</h1>", 'name="project"', 'id="mem-board"', 'data-ui="mem-search"', 'id="mem-fresh"', 'id="mem-results"'].map((t) => h.indexOf(t));
   expect(at).toEqual([...at].sort((x, y) => x - y));
   expect(at[0]).toBeGreaterThanOrEqual(0);
-  expect(h.match(/data-tile=/g)).toHaveLength(7);
+  expect(h.match(/data-tile=/g)).toHaveLength(6);
+  expect(h).not.toContain('data-tile="retrieval"');
   expect(h).toMatch(/data-tile="working" aria-pressed="false"><span class="r1"><span class="k">Working<\/span><\/span><b>1<\/b>/);
   expect(h).toMatch(/data-tile="parametric"[^]*?<b>–<\/b>/);
   expect(v.renderMemory(page, v.options(), null)).toContain("Loading memory");
@@ -397,7 +398,7 @@ test("the procedural table is dataTable's, so it has the tscroll wrapper, the tb
 });
 
 test("the overview writes its counts through count() and its sizes through bytes()", () => {
-  const big = { ...page, misses: { recalls: 12345, days: 30, empty: 1000, empty_share: 0.1, reformulated: 2000 }, lint: { refuse: [], warn: Array.from({ length: 1200 }, () => ({ rule: "r", note: "N", detail: "d" })) },
+  const big = { ...page, misses: { recalls: 12345, days: 30, empty: 1000, empty_share: 0.1, reformulated: 2000, unoffered_reads: 0, hook: { runs: 0 } }, lint: { refuse: [], warn: Array.from({ length: 1200 }, () => ({ rule: "r", note: "N", detail: "d" })) },
     start: { aleph: { bytes: 2048, budget: 4096, cut: 1500, core: [] } } };
   const rs = Array.from({ length: 1000 }, (_, i) => it({ key: `n${i}`, title: `n${i}` }));
   const h = v.renderMemory(big, v.options(), rs);
@@ -437,7 +438,6 @@ test("the inspector says how a memory reaches the agent, shows its recall histor
   expect(hand).not.toContain("Recall history");
   expect(v.renderInspector(it({ type: "working", source: "handoff", key: "current.md" }), null, "", [1])).not.toContain("aleph-chart");
   expect(v.renderInspector(it({ type: "procedural", source: "skill", key: "vault", href: "#/skills/vault" }))).toContain("change it on a branch");
-  expect(v.renderInspector(it({ type: "retrieval", source: "miss" }))).toContain('data-mact="alias"');
   expect(v.renderInspector(it({ type: "procedural", source: "proposal", key: "p1" }))).toContain('data-mact="approve"');
   expect(v.renderInspector(it({ type: "prospective", source: "issue", key: "a/1" }))).toContain('data-mact="drop"');
   expect(v.renderInspector(it({ title: "<x>" }))).toContain("&lt;x&gt;");
@@ -560,4 +560,14 @@ test("the Context tab unfolds Tools into each tool and Tool results into each to
   expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 66.7%", "Read 1 calls · 30 · 33.3%"]);
   expect(h).toContain('data-call="b"');
   expect(h).not.toContain('data-call="d"');
+});
+
+test("Health shows the recall misses card after Lint's: unoffered reads, empty of all recalls and hook runs, or No data", () => {
+  const h = v.renderMemory({ ...page, misses: { days: 7, recalls: 7, empty: 0, empty_share: 0, reformulated: 0, unoffered_reads: 1234, hook: { runs: 1194 } } }, v.options(), []);
+  const card = h.slice(h.indexOf('aria-label="Recall misses"'));
+  for (const t of ["1,234", "0 empty", "7 recalls", "1,194"]) expect(card.slice(0, card.indexOf("</section>"))).toContain(t);
+  expect(h.indexOf('aria-label="Recall misses"')).toBeGreaterThan(h.indexOf('aria-label="Lint"'));
+  const none = v.renderMemory(page, v.options(), []);
+  const body = none.slice(none.indexOf('aria-label="Recall misses"'));
+  expect(body.slice(0, body.indexOf("</section>"))).toContain(empty());
 });

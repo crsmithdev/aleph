@@ -24,7 +24,7 @@ import { later } from "../lib/sources.ts";
 import { handoffsDir } from "../lib/paths.ts";
 import { memoryIn } from "./api/scope.ts";
 
-const TYPES = ["semantic", "procedural", "episodic", "working", "prospective", "retrieval"] as const;
+const TYPES = ["semantic", "procedural", "episodic", "working", "prospective"] as const;
 type Type = (typeof TYPES)[number];
 
 /** One memory. `body` is the text a search matches; the page gets `text`, a line of it. */
@@ -194,17 +194,10 @@ function prospective(): Item[] {
   }));
 }
 
-function retrieval(misses: any): Item[] {
-  return (Array.isArray(misses?.missed) ? misses.missed : []).map((m: { query: string; at: string }) => ({
-    type: "retrieval", source: "miss", key: `${m.at} ${m.query}`, title: m.query, text: "vault recall returned nothing", scope: "", at: m.at, read: null, body: m.query,
-    effect: "A recall that found nothing. An alias on the note it wanted fixes the next one.",
-  }));
-}
-
 /** Every memory in the order the page groups them. */
-export async function items(root: string, wiki: Note[], log: Record<string, string>, misses: unknown): Promise<Item[]> {
+export async function items(root: string, wiki: Note[], log: Record<string, string>): Promise<Item[]> {
   const [proc, epi] = await Promise.all([procedural(), episodic(root)]);
-  return [...semantic(root, wiki, log), ...proc, ...epi, ...working(), ...prospective(), ...retrieval(misses)];
+  return [...semantic(root, wiki, log), ...proc, ...epi, ...working(), ...prospective()];
 }
 
 /** The first line of `body` that holds `q`, else `text`. */

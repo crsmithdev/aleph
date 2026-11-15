@@ -1,4 +1,4 @@
-// The Memory view: one search over the seven memory types. Tiles count the matches of each type and filter by it;
+// The Memory view: one search over the six memory types. Tiles count the matches of each type and filter by it;
 // the results come grouped by type, each type in its own layout; the inspector shows the selected memory, how it
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
@@ -28,14 +28,13 @@ const DAY = 86_400_000, STEP = 50;
 const shortDay = (s) => (s ? day(localMs(String(s).slice(0, 10))) : "");
 const ago = (ts) => (ts ? esc(when(ts) || String(ts).slice(0, 10)) : "never");
 
-/** The seven types in the page's order: what each holds. Parametric has no rows: aleph does not store the weights. */
+/** The six types in the page's order: what each holds. Parametric has no rows: aleph does not store the weights. */
 export const TYPES = [
   { id: "semantic", name: "Semantic", holds: "notes, MEMORY.md" },
   { id: "procedural", name: "Procedural", holds: "rules, skills, hooks, lessons" },
   { id: "episodic", name: "Episodic", holds: "episodes, daily log, sessions" },
   { id: "working", name: "Working", holds: "handoffs" },
   { id: "prospective", name: "Prospective", holds: "issues with an after" },
-  { id: "retrieval", name: "Retrieval", holds: "recall misses" },
   { id: "parametric", name: "Parametric", holds: "model weights, not stored" },
 ];
 const typeName = (id) => TYPES.find((t) => t.id === id)?.name ?? id;
@@ -97,7 +96,7 @@ export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mon
 /** An event in time: when first, then what. */
 const eventRow = (it, o) => `<li class="mrow mev" ${sel(it, o)}><span class="time">${shortDay(it.at) ? esc(shortDay(it.at)) : miss("No date")}</span><div><b>${titleLink(it)}</b>${it.scope ? ` ${q(esc(it.scope))}` : ""}<p>${codeText(it.text)}</p></div></li>`;
 
-/** A handoff, an issue or a miss: what it is and what it does next. */
+/** A handoff or an issue: what it is and what it does next. */
 const cardRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${titleLink(it)}${it.priority ? ` ${priorityBadge(it.priority)}` : ""}</b><span class="quiet">${esc([it.scope, it.at && ago(it.at)].filter(Boolean).join(" · "))}</span></div><p>${codeText(it.text)}</p><p class="mm eff">${esc(it.effect)}</p></li>`;
 
 /** Rows past STEP start hidden; the pager turns the page in place, as under `pagedTable()`. */
@@ -110,7 +109,6 @@ const LAYOUT = {
   episodic: (xs, o) => list([...xs].sort((a, b) => String(b.at).localeCompare(String(a.at))).map((it) => eventRow(it, o)), " tl"),
   working: (xs, o) => list(xs.map((it) => cardRow(it, o))),
   prospective: (xs, o) => list(xs.map((it) => cardRow(it, o))),
-  retrieval: (xs, o) => list(xs.map((it) => cardRow(it, o))),
 };
 
 export function renderResults(results, o, status) {
@@ -149,7 +147,6 @@ function actions(it) {
     episode: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete")}`,
     issue: `${act("Drop", "drop")}`,
     proposal: `${act("Approve", "approve", { primary: true })}${act("Decline", "decline")}`,
-    miss: setting("Add as an alias of", inputBox("target", "", { id: "mem-alias", attrs: ' list="mem-titles" placeholder="Note title"' }), { id: "mem-alias", save: "Add alias", attrs: ' data-mact="alias"' }),
   }[it.source];
   const ro = ["rules", "skill", "hook"].includes(it.source) ? note("A file in the repo: change it on a branch.") : "";
   return `<div class="macts" data-file="${file}">${rows ?? ""}${it.href && it.source !== "note" ? linkButton("Open", it.href) : ""}</div>${ro}`;
@@ -220,11 +217,13 @@ function renderBroad(m, rows) {
   const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
   const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${count(r.refused)} refused`, r.warned && `${count(r.warned)} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty()) +
     fold("Every finding", renderHealth(m), { cls: "fold" }), { count: count(lint.refuse.length + lint.warn.length) });
+  const med = m.misses;
+  const missCard = card("Recall Misses", med ? statCard({ k: "Unoffered reads", v: count(med.unoffered_reads), q: [`${count(med.empty)} empty`, `${count(med.recalls)} recalls`] }) + facts([["Hook runs", count(med.hook.runs)]]) : empty(), { label: "Recall misses" });
   const reads = card("When Recall Last Returned Each Note", readChart(rows), { label: "When recall last returned each note" });
   const start = Object.entries(m.start ?? {});
   const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${bytes(x.bytes)} / ${bytes(x.budget)}, ${count(x.core.length)} core lines${x.cut ? `, ${count(x.cut)} cut` : ""}`)).join("")) : empty(), { label: "Start context" });
   const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: count((m.writes ?? []).length), label: "Recent writes" });
-  return `<div class="pair">${lintCard}${reads}</div><div class="pair">${budget}${writes}</div>`;
+  return `<div class="pair">${lintCard}${missCard}</div><div class="pair">${reads}${budget}</div>${writes}`;
 }
 
 const freshBar = (o) => filterBar([{ label: "Freshness", name: "fresh", value: o.fresh, options: FRESH }]);
