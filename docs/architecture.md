@@ -92,7 +92,7 @@ The tests, fixtures and testkits of a module are in its folder.
 
 1. `SessionStart`: `vault-context` injects memory, `handoff-start` offers a handoff, `aleph report --hook` injects the factory report.
 2. `UserPromptSubmit`: `verify-gate` snapshots the repo; `vault-recall` injects notes.
-3. `PreToolUse`: `git-guard`, `secret-scan` and `gh-guard` allow, deny or ask.
+3. `PreToolUse`: `git-guard`, `secret-scan`, `gh-guard` and `bash-allow` allow, deny or ask.
 4. `Stop`: `verify-gate` compares against the snapshot and may block; `context-gate` may warn or ask for a handoff.
 5. Every event: `obs.ts` adds a span to the turn's trace.
 
