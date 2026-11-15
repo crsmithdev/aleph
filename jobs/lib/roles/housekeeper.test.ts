@@ -137,3 +137,22 @@ test("a held lock stops both triggers, and a reply with no actions list applies 
   expect(o.applied).toEqual([]);
   expect(runs().at(-1)!.run.reason).toStartWith("failed:");
 });
+
+test("each applied change logs an event of its job on its issue, and a run with no actions logs none", async () => {
+  seed([{ title: "Close this one" }, { title: "Retitle this one" }, { title: "Leave this one" }]);
+  const head = sh(repoPath(), "git", "rev-parse", "main");
+  act([
+    { do: "retitle", id: "2", why: "stale", title: "Retitle the stale issue" },
+    { do: "retitle", id: "2", why: "bad", title: "Retitle it." },
+    { do: "close", id: "1", why: "done on main", how: "done", evidence: head },
+  ]);
+  await review({ repo: repo(), items: readList(repo())!.items }, NOW);
+  const job = runs().at(-1)!.id;
+  const mine = (j: string) => readEvents().filter((e) => e.subject === j && e.object.startsWith("issue."));
+  expect(mine(job).map((e) => [e.object, e.detail])).toEqual([["issue.2", "stale"], ["issue.1", "done on main"]]);
+  act([]);
+  await review({ repo: repo(), items: readList(repo())!.items.filter((i) => issues.status(i) === "parked") }, NOW);
+  const idle = runs().at(-1)!.id;
+  expect(idle).not.toBe(job);
+  expect(mine(idle)).toEqual([]);
+});

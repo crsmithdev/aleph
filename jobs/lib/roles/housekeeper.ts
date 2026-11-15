@@ -8,6 +8,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { getJson, putJson } from "../../../lib/db.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList } from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
@@ -234,7 +235,10 @@ export async function review(b: Batch, now: number): Promise<Outcome> {
   const did: Action[] = [];
   for (const a of reply.actions as Action[]) {
     const why = await applyOne(b, a);
-    if (!why) did.push(a);
+    if (!why) {
+      did.push(a);
+      logEvent({ subject: run.id, action: "changed", object: `issue.${a.id}`, detail: a.why });
+    }
     (why ? out.refused : out.applied).push(why ? `${describe(a)}: refused: ${why}` : describe(a));
   }
   writeFileSync(runFile(run.folder, "result.md"), [`# Applied`, ...out.applied.map((l) => `- ${l}`), "", `# Refused`, ...out.refused.map((l) => `- ${l}`), ""].join("\n"));
