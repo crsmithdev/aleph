@@ -263,6 +263,8 @@ test("a tick records the time and result of each due step in its tick row and ke
   for (const k of ["ci", "episodes", "sweep", "hold", "smoke", "retention", "firefighter", "timeout"]) {
     expect(ran[k]).toEqual({ last: at, result: expect.stringMatching(/\S/) });
   }
+  // The preload points ALEPH_UI_PORT at port 1: the smoke step reaches a refusing port, not the live UI on 3020.
+  expect(ran.smoke.result).toStartWith("failed: /: ");
   expect(ran["suite tk1"]).toEqual(kept["suite tk1"]);
   expect(ran.monitor).toEqual(kept.monitor);
 });
@@ -271,10 +273,16 @@ test("a step that fails in a tick records a result that starts with failed and i
   seed([]);
   // A ci row that is not JSON: the CI read throws.
   conn().run("INSERT OR REPLACE INTO state VALUES ('ci', 'not json')");
-  // An aleph-ui that answers 503: the smoke test fails without a throw.
+  // An aleph-ui that answers 503: the smoke test fails without a throw. The port goes back afterwards, so the
+  // tests after this one keep the refusing port the preload set rather than the live 3020.
   const ui = Bun.serve({ port: 0, fetch: () => new Response("", { status: 503 }) });
+  const before = process.env.ALEPH_UI_PORT;
   process.env.ALEPH_UI_PORT = String(ui.port);
-  try { await runTick(NOW, quiet()); } finally { delete process.env.ALEPH_UI_PORT; ui.stop(true); }
+  try { await runTick(NOW, quiet()); } finally {
+    if (before === undefined) delete process.env.ALEPH_UI_PORT; else process.env.ALEPH_UI_PORT = before;
+    ui.stop(true);
+  }
+  expect(process.env.ALEPH_UI_PORT).toBe(before);
   const ran = tickRows();
   expect(ran.ci.result).toMatch(/^failed: \S/);
   expect(ran.smoke.result).toBe("failed: / answered 503");

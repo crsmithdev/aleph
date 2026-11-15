@@ -74,13 +74,14 @@ for (const name of ["spawn", "spawnSync"] as const) {
 }
 
 // No test reaches a live service through a key or URL it inherits from the shell or ~/.aleph/.env: Langfuse,
-// OpenRouter (the Jev screen), the Anthropic API and its usage endpoint, GitHub (`gh`), and the phone (Sidetone).
-// ALEPH_ENV_FILE names a file that does not exist, so no test reads ~/.aleph/.env. Port 1 refuses each connection.
-// A test that needs one of these points it at a fake server of its own. The live tests (ALEPH_LIVE=1) keep them.
+// OpenRouter (the Jev screen), the Anthropic API and its usage endpoint, GitHub (`gh`), the phone (Sidetone) and
+// aleph-ui, which the tick's smoke step calls. ALEPH_ENV_FILE names a file that does not exist, so no test reads
+// ~/.aleph/.env. Port 1 refuses each connection. A test that needs one of these points it at a fake server of its
+// own. The live tests (ALEPH_LIVE=1) keep them.
 if (process.env.ALEPH_LIVE !== "1") {
   const nowhere = "http://127.0.0.1:1";
   Object.assign(process.env, {
-    ALEPH_ENV_FILE: join(dir, ".env"),
+    ALEPH_ENV_FILE: join(dir, ".env"), ALEPH_UI_PORT: "1",
     LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: nowhere,
     OPENROUTER_API_KEY: "", ALEPH_JEV_URL: `${nowhere}/jev`, ALEPH_USAGE_URL: `${nowhere}/usage`,
     SIDETONE_TELL_URL: `${nowhere}/tell`, GH_CONFIG_DIR: join(dir, "gh"),
