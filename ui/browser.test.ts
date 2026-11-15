@@ -1254,6 +1254,40 @@ describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
   }, 60_000);
 });
 
+describe.skipIf(!chromeUsable)("Flow and Sessions redraw", () => {
+  let rig: Rig, page: Page;
+  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/flow"); }, 150_000);
+  afterAll(() => rig?.stop());
+
+  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())'); };
+  // Langfuse is off in the rig, so the sessions come from a fetch that answers with two of them.
+  const sessions = `(() => { const f = window.fetch, at = "2026-11-15T10:00:00Z", s = (id, cost) => ({ id, label: id, firstPrompt: "prompt " + id, project: "p", taskTypes: [], turns: 1, cost, start: at, last: at });
+    window.fetch = (u, o) => String(u).startsWith("/api/sessions") ? Promise.resolve(new Response(JSON.stringify({ sessions: { sessions: [s("aaa", 1), s("bbb", 2)], projects: [] }, activity: { langfuse: "ok", tools: [], hooks: [] }, skills: { skills: [] } }), { headers: { "content-type": "application/json" } })) : f(u, o); })()`;
+
+  test("a redraw keeps a marked element connected on Flow and on Sessions", async () => {
+    await page.ev(sessions);
+    for (const [hash, sel] of [["#/flow", "#eff .tiles"], ["#/sessions", "#ag-live"]]) {
+      await page.go(hash);
+      await page.when(`document.querySelector("#view ${sel}")`);
+      await page.ev(`window.mark = document.querySelector("#view ${sel}"); window.mark.old = 1`);
+      await redraws();
+      expect(await page.ev(`[document.querySelector("#view ${sel}") === window.mark, window.mark.isConnected]`)).toEqual([true, true]);
+    }
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
+  test("after two redraws one click on a sort header runs its handler once and the search box keeps its typed text", async () => {
+    await page.go("#/sessions");
+    await page.when('document.querySelector("#view button[data-sort=turns]") && document.querySelector("#view [data-ui=ag-search]")');
+    await page.ev('document.querySelector("#view [data-ui=ag-search]").focus(); document.execCommand("insertText", false, "pro")');
+    await redraws();
+    await page.ev('window.n = 0; const r = history.replaceState.bind(history); history.replaceState = (...a) => { window.n++; return r(...a); }; document.querySelector("#view button[data-sort=turns]").click()');
+    await page.when('location.hash.includes("sort=turns")');
+    expect(await page.ev('[window.n, document.querySelector("#view [data-ui=ag-search]").value, document.activeElement === document.querySelector("#view [data-ui=ag-search]")]')).toEqual([1, "pro", true]);
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+});
+
 describe.skipIf(!chromeUsable)("Resetting the page", () => {
   let rig: Rig, page: Page, width: number;
   beforeAll(async () => { rig = await startRig(); page = await rig.open(); width = await page.ev<number>("innerWidth"); }, 150_000);
