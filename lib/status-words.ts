@@ -6,7 +6,7 @@ const FINE = "Everything is fine";
 /** The start of the sentence when something is wrong. */
 const ALERT = "Alert: ";
 /** The parts of the sentence. A part that leads the sentence starts with a capital: see `lead`. */
-const ASK = "your attention is needed";
+const ASK = "attention is needed";
 const PAUSED = "the factory is paused";
 const TICK_STOPPED = "the factory tick has stopped";
 const JOBS_UNHEALTHY = "jobs are unhealthy";

@@ -67,12 +67,12 @@ const proposal = (name: string, line: string): Reason =>
  */
 const REASONS = {
   "held-path": { actions: ["land", "drop"], always: "", needs: "protected", card: "approve", name: "Lands on held paths",
-    line: "A job that changes a held path, after its checks and review pass.", problem: "The run for {id} changes a path the repo holds for your review, so the factory did not land it." },
+    line: "A job that changes a held path, after its checks and review pass.", problem: "The run for {id} changes a path the repo holds for review, so the factory did not land it." },
   "review-held": { actions: ["land", "drop"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
     line: "The reviewer held the job and no fix rounds are left.", problem: "The reviewer could not reach a verdict on {id} in two tries." },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
   "question": { actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question", card: "decide", name: "Questions",
-    line: "A job or an intake stopped on a choice that the spec leaves open.", problem: "Your answer is needed." },
+    line: "A job or an intake stopped on a choice that the spec leaves open.", problem: "An answer is needed." },
   "no-commit": { actions: ["rerun", "close"], always: "", card: "unstick", name: "Jobs with no commit",
     get line() { return `The last ${NO_COMMIT_LIMIT} jobs of an issue ended with nothing committed.`; },
     get problem() { return `The last ${NO_COMMIT_LIMIT} runs of {id} ended with no commit, so the factory stopped starting it.`; },
@@ -85,11 +85,11 @@ const REASONS = {
     get line() { return `Intake of an issue failed ${INTAKE_TRIES() === 2 ? "twice" : `${INTAKE_TRIES()} times`}.`; },
     problem: "Intake of {id} failed: it gave no verdict, so no one has decided what to do with this issue." },
   "rescue": { actions: ["decide", "drop"], always: "recommended", card: "unstick", name: "Rescue of a stuck job",
-    line: "A stuck job with more than one way out.", problem: "Your answer is needed." },
+    line: "A stuck job with more than one way out.", problem: "An answer is needed." },
   // Not Ask reasons of the spec; no new home is named for them.
   "run-cap": { actions: ["rerun", "close"], always: "", card: "unstick", name: "Job cap",
     get line() { return `An issue started ${RUN_CAP()} times in one hour.`; },
-    get problem() { return `The factory started {id} ${RUN_CAP()} times in one hour, so it stopped starting it until you run it again.`; },
+    get problem() { return `The factory started {id} ${RUN_CAP()} times in one hour, so it stopped starting it until it is run again.`; },
     rerun: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
   // Held by the memory re-check on a core note; the director never decides it. Its issue is parked, so no work starts on it.
   "core-change": { actions: ["approve", "decline"], always: "", card: "approve", name: "Core note changes",

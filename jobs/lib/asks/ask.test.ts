@@ -248,6 +248,7 @@ test("every reason has a card, a name, a line and a problem text, and one that o
   for (const [reason, r] of Object.entries(ASK_REASONS)) {
     expect([reason, ["approve", "decide", "unstick"].includes(r.card)]).toEqual([reason, true]);
     expect([reason, !!r.name && !!r.line && !!r.problem]).toEqual([reason, true]);
+    expect(r.problem).not.toMatch(/\byour?\b/i);
     const offers = [...actionsOn(reason, { run: false, decision: false }), ...actionsOn(reason, { run: true, decision: false })];
     expect([reason, offers.includes("rerun") ? !!r.rerun : true]).toEqual([reason, true]);
   }

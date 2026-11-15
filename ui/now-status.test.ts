@@ -79,10 +79,11 @@ test("the sentence says at most three parts, the most serious first", () => {
 test("what asks for you leads the status sentence, in the warning colour", () => {
   const asks = (n: number) => ({ asks: Array.from({ length: n }, () => ({})) });
   const raw = (top: object, o: object = {}) => view.renderLede({ ...calmState, ...top, factory: { ...calmState.factory, ...o } });
-  expect(raw(asks(1))).toBe('<span class="say warning"><a href="#awaiting">Your attention is needed</a>.</span>');
+  expect(raw(asks(1))).toBe('<span class="say warning"><a href="#awaiting">Attention is needed</a>.</span>');
+  expect(raw(asks(1))).not.toMatch(/\byour?\b/i);
   expect(raw(asks(2))).toBe(raw(asks(1)));
   expect(raw({}, { runsToday: 12 })).toBe('<span class="say fine">Everything is fine.</span>');
-  expect(raw(asks(1), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">The build is failing on main</a>; <a href="#awaiting">your attention is needed</a>.');
+  expect(raw(asks(1), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">The build is failing on main</a>; <a href="#awaiting">attention is needed</a>.');
 });
 
 test("a paused factory does not say everything is fine", () => {
@@ -133,11 +134,11 @@ test("the page has one head, built by pageHead: the time, the status sentence, t
   view.view.outOfDate(root, false);
 });
 
-test("the status line says your attention is needed when the Issues section has an item", () => {
+test("the status line says attention is needed when the Issues section has an item", () => {
   const calm = { ...state, asks: [], stuck: [], issues: [], factory: { ...state.factory, health: [], paused: false } };
   for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }]) {
     const h = view.renderLede({ ...calm, ...o });
-    expect(h).toMatch(/your attention is needed/i);
+    expect(h).toMatch(/attention is needed/i);
     expect(h).not.toContain("Awaiting");
   }
 });
@@ -145,10 +146,10 @@ test("the status line says your attention is needed when the Issues section has 
 test("a held run asks for your attention once the director escalates it, and not while the director holds it", () => {
   const calm = { ...state, stuck: [], factory: { ...state.factory, health: [] } };
   const withDirector = attend({ runs: [held], issues: [] }, []).items;
-  expect(view.renderLede({ ...calm, asks: withDirector })).not.toMatch(/your attention is needed/i);
+  expect(view.renderLede({ ...calm, asks: withDirector })).not.toMatch(/attention is needed/i);
   const asks = attend({ runs: [{ ...held, ask: { ...held.ask, situation: "It changes hooks/lib/digest.ts." } }], issues: [] }, []).items;
   const h = view.renderLede({ ...calm, asks });
-  expect(h).toMatch(/your attention is needed/i);
+  expect(h).toMatch(/attention is needed/i);
   expect(h).toContain('class="say warning"');
 });
 
@@ -195,7 +196,7 @@ test("the status-line links point at anchors in the rendered Alerts section", ()
 
 test("one mapping gives each status sentence its Herald label, on the page too", () => {
   expect(labelOf("warning", "The factory is paused")).toBe("Wait");
-  expect(labelOf("warning", "Your attention is needed")).toBe("Ask");
+  expect(labelOf("warning", verdict({ ...calmState, asks: asksOf([], [{ ...issue(7), question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }).text)).toBe("Ask");
   expect(labelOf("alert", "Alert: The build is failing on main")).toBe("Alert");
   expect(labelOf("fine", "Everything is fine")).toBe("Fine");
   expect(verdict({ ...calmState, factory: { ...calmState.factory, paused: true } }).label).toBe("Wait");
