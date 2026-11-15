@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, pageHead, pct, row, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, tone, scope } from "../lib.js";
+import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, pageHead, pct, row, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard } from "./speed.js";
@@ -91,37 +91,32 @@ export const liveFrame = (d) => ({
   rows: d.agents.points.map((p) => ({ ...p })),
 });
 
-/** The outcomes frame: succeeded, failed and stuck runs per role, summed over the models. */
-export function outcomesFrame(d) {
-  const rows = d.agents.outcomes ?? [], sum = (r, k) => rows.filter((o) => o.role === r.key).reduce((n, o) => n + (o[k] ?? 0), 0);
-  return {
-    measure: { name: "Outcomes", unit: "count", agg: "sum" },
-    over: { kind: "category", name: "Role" },
-    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: tone("failed") }, { key: "stuck", name: "Stuck", color: "stuck" }] },
-    rows: d.agents.roles.filter((r) => rows.some((o) => o.role === r.key)).map((r) => ({ name: r.name, succeeded: sum(r, "succeeded"), failed: sum(r, "failed"), stuck: sum(r, "stuck") })),
-  };
-}
-
-/** The cost frame: cost per bucket, by model. */
-export function costFrame(d) {
-  const all = [...new Set((d.buckets ?? []).flatMap((b) => Object.keys(b.cost ?? {})))].sort();
+/** A per-bucket frame by model: `field` is the bucket's value per model, `measure` what the chart plots. */
+function modelFrame(d, field, measure) {
+  const all = [...new Set((d.buckets ?? []).flatMap((b) => Object.keys(b[field] ?? {})))].sort();
   // At most seven keys: past that, the models after the sixth fold into Other.
   const rest = all.length > ROLE_COLORS.length ? all.slice(ROLE_COLORS.length - 1) : [];
   const keys = all.slice(0, all.length - rest.length).map((m) => ({ key: m, name: shortModel(m) }));
   if (rest.length) keys.push({ key: "Other", name: "Other" });
   return {
-    measure: { name: "Cost", unit: "usd", agg: "sum" },
+    measure,
     over: { kind: "time", window: d.window },
     by: { name: "Model", keys: keys.map((k, i) => ({ ...k, color: ROLE_COLORS[i] })) },
     rows: (d.buckets ?? []).map((b) => {
-      const row = { at: b.at, ...b.cost };
+      const row = { at: b.at, ...b[field] };
       if (rest.length) { row.Other = rest.reduce((n, m) => n + (row[m] ?? 0), 0); for (const m of rest) delete row[m]; }
       return row;
     }),
   };
 }
 
-const FRAMES = { live: liveFrame, outcomes: outcomesFrame, cost: costFrame };
+/** The cost frame: cost per bucket, by model. */
+export const costFrame = (d) => modelFrame(d, "cost", { name: "Cost", unit: "usd", agg: "sum" });
+
+/** The tokens frame: tokens per bucket, by model. */
+export const tokensFrame = (d) => modelFrame(d, "tokens", { name: "Tokens", unit: "count", agg: "sum" });
+
+const FRAMES = { live: liveFrame, tokens: tokensFrame, cost: costFrame };
 const key = (k) => `factory/agents/${k}`;
 
 /** The page body. `d` is /api/flow for the window, or null while it loads. `m` is /api/models: undefined while it loads, null when it failed. */

@@ -57,10 +57,10 @@ export interface Speed {
   /** Asks set in the window: `count` all of them, `manual` those that came to Chris (a director event "escalated" from the set time until the Ask cleared). */
   asks: { count: number; manual: number };
   checks: { name: string; count: number; p50: number; p90: number }[];
-  /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string; `cost` is the recorded cost of the agent runs that started in it, per model. */
+  /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string; `cost` is the recorded cost of the agent runs that started in it, per model, and `tokens` their saved tokens (0 for a run with none). */
   /** Issues in each stage per bucket, for the Status page's chart. */
   active: Active[];
-  buckets: ({ at: string; runs: number; cost: Record<string, number>; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
+  buckets: ({ at: string; runs: number; cost: Record<string, number>; tokens: Record<string, number>; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
   /** Every issue with a phase that ended in the window. */
   times: IssueTimes[];
   slowest: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[];
@@ -634,12 +634,15 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const recent = inp.flakes.filter((f) => Date.parse(f.at) >= since.getTime() && repoIn(f.repo, project));
   const started = Array.from({ length: n }, () => 0);
   const costs = Array.from({ length: n }, () => ({} as Record<string, number>));
+  const tokens = Array.from({ length: n }, () => ({} as Record<string, number>));
   for (const e of entries) {
     const t = Date.parse(e.run.started);
     if (t >= since.getTime() && t < now.getTime()) started[b.slotOf(t)]++;
     if (!isAgentRun(e.run.role) || !(t >= since.getTime() && t < now.getTime())) continue;
     const spent = costs[b.slotOf(t)], model = e.run.model || "unset";
     spent[model] = round((spent[model] ?? 0) + (e.run.cost ?? 0), 4);
+    const used = tokens[b.slotOf(t)];
+    used[model] = (used[model] ?? 0) + (e.run.tokens ?? 0);
   }
   return {
     window,
@@ -648,7 +651,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     phases: Object.fromEntries(PHASE_KEYS.map((k) => [k, phaseStat(ended[k].map((x) => x.secs))])) as Speed["phases"],
     asks: asksOf(inp, project, since.getTime(), now.getTime()),
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
-    buckets: b.starts.map((at, i) => ({ at: new Date(at).toISOString(), runs: started[i], cost: costs[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) }) as Speed["buckets"][number]),
+    buckets: b.starts.map((at, i) => ({ at: new Date(at).toISOString(), runs: started[i], cost: costs[i], tokens: tokens[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) }) as Speed["buckets"][number]),
     times: ended.issues,
     active: activeIssues(all, inp.filed, b, now.getTime(), (k) => inProject(k, project) && statusOf(k) === "open"),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),

@@ -584,6 +584,20 @@ test("a bucket's cost per model is the recorded cost of the agent runs that star
   expect(d.buckets.find((b) => b.at === h(12))!.cost).toEqual({});
 });
 
+test("a bucket's tokens per model are the saved tokens of the agent runs that started in it, 0 for a run with none", () => {
+  const now3 = new Date(2026, 4, 10, 15), h = (hh: number, m = 0) => new Date(2026, 4, 10, hh, m).toISOString();
+  run({ role: "build", repo: "pc", state: "passed", model: "opus", tokens: 1000, started: h(9, 5), ended: h(9, 10) });
+  run({ role: "build", repo: "pc", state: "passed", model: "opus", tokens: 500, started: h(9, 40), ended: h(10, 10) });
+  run({ role: "build", repo: "pc", state: "passed", model: "sonnet", tokens: 2000, started: h(9, 20), ended: h(9, 30) });
+  run({ role: "build", repo: "pc", state: "passed", tokens: 40, started: h(11), ended: h(11, 5) });
+  run({ role: "build", repo: "pc", state: "passed", model: "sonnet", started: h(13), ended: h(13, 5) });
+  const d = speed("day", now3, null, "pc");
+  expect(d.buckets.find((b) => b.at === h(9))!.tokens).toEqual({ opus: 1500, sonnet: 2000 });
+  expect(d.buckets.find((b) => b.at === h(11))!.tokens).toEqual({ unset: 40 });
+  expect(d.buckets.find((b) => b.at === h(13))!.tokens).toEqual({ sonnet: 0 });
+  expect(d.buckets.find((b) => b.at === h(12))!.tokens).toEqual({});
+});
+
 test("every Status card with a second value has a qualifier, Lost time too, and none prints undefined", () => {
   const d = { asks: { count: 4, manual: 1 }, figures: { lost: 0.3, hours: 6, leadP50: 60, leadP90: 600, asks: 4, landed: 5, firstPass: 0.8 } };
   const s = { now: "2026-11-01T08:00:00Z", factory: {}, usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } };

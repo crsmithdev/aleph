@@ -378,6 +378,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     limit: workSeconds(run), slot: false, onSpawn: (p) => { child = p; },
   });
   child = null;
+  if (w.tokens !== undefined) jobRecord.patchRun(jobOfFolder(folder), { tokens: w.tokens });
   // A run with no --model ran on the CLI's default: record the one its init event names.
   if (!run.model && w.model) { jobRecord.patchRun(jobOfFolder(folder), { model: w.model }); run = { ...run, model: w.model }; }
   if (repo.sandbox) return factoryVerdict(id, folder, run, repo, w, env);
@@ -682,13 +683,13 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
       child = null;
       const v = parseReview(w.data);
       writeFileSync(runFile(rv.folder, "result.md"), typeof v === "string" ? w.text : v.text);
-      const cost = w.cost;
-      const none = (why: string) => { end("failed", { reason: why, cost }); return { reason: `reviewer: no verdict (${why})`, cost, none: true, model, session: w.session }; };
+      const cost = w.cost, tokens = w.tokens;
+      const none = (why: string) => { end("failed", { reason: why, cost, tokens }); return { reason: `reviewer: no verdict (${why})`, cost, none: true, model, session: w.session }; };
       if (w.cause?.kind === "credit") return { ...none(w.cause.reason), credit: w.cause.reason };
       if (w.cause) return none(w.cause.reason);
       if (typeof v === "string") return none(v);
       writeFileSync(runFile(rv.folder, "review.json"), JSON.stringify({ ...v.json, model }));
-      end("done", { cost });
+      end("done", { cost, tokens });
       return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost, model, session: w.session };
     });
   } catch (e) {

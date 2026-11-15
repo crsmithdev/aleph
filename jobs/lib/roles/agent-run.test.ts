@@ -75,6 +75,21 @@ test("a run records the cost of its result event, also when the command fails, a
   expect(getRun(none.id)!.cost).toBeUndefined();
 });
 
+test("a run records the sum of the tokens of its calls, and has none when its result event has no usage", async () => {
+  const result = (n: number) => JSON.stringify({ type: "result", is_error: false, result: "ok", session_id: "s", usage: { input_tokens: n, output_tokens: n, cache_read_input_tokens: n, cache_creation_input_tokens: n } });
+  fake(`echo '${result(10)}'`);
+  const two = openRun(opening);
+  await two.ask("x");
+  fake(`echo '${result(5)}'`);
+  await two.askAgain("y");
+  expect(getRun(two.id)!.tokens).toBe(60);
+
+  fake(`echo '${JSON.stringify({ type: "result", is_error: false, result: "ok" })}'`);
+  const none = openRun(opening);
+  await none.ask("x");
+  expect(getRun(none.id)!.tokens).toBeUndefined();
+});
+
 test("a run past its time box is killed and says it timed out", async () => {
   fake("exec tail -f /dev/null");
   process.env.ALEPH_INTAKE_TIMEOUT = "2";

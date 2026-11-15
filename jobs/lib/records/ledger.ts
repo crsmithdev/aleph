@@ -101,6 +101,8 @@ export interface Run {
   next?: "worker" | "land" | "recheck";
   /** A factory run: the price of its worker's `result` event, at API rates. */
   cost?: number;
+  /** An agent run: the tokens of its calls (input, output, cache read and cache creation), summed. A run whose calls reported no usage has none. */
+  tokens?: number;
   /** A factory run: the worker's `defaults`, each as `<choice> -> <what it chose>`. */
   defaults?: string[];
   /** A factory run: the titles of the worker's `followups`. */

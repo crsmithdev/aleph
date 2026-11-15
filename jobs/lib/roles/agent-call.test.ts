@@ -36,6 +36,13 @@ test("a call with a schema gives the structured output, the session and the cost
   expect(readFileSync(join(base, "args"), "utf8")).toContain('--model m-1 --output-format stream-json --verbose --tools Read --json-schema {"type":"object"}');
 });
 
+test("a call's tokens are its result event's input, output, cache read and cache creation, and none without usage", async () => {
+  const ev = { type: "result", is_error: false, result: "ok", usage: { input_tokens: 1000, output_tokens: 200, cache_read_input_tokens: 300, cache_creation_input_tokens: 50 } };
+  expect((await callAgent("intake", "x", ask(fake(`echo '${JSON.stringify(ev)}'`)))).tokens).toBe(1550);
+  const bare = { type: "result", is_error: false, result: "ok" };
+  expect((await callAgent("intake", "x", ask(fake(`echo '${JSON.stringify(bare)}'`)))).tokens).toBeUndefined();
+});
+
 test("a call on a model Claude does not serve is priced from its tokens, not from Claude Code's cost", async () => {
   const ev = { type: "result", is_error: false, result: "ok", total_cost_usd: 9, usage: { input_tokens: 1_000_000, output_tokens: 1_000_000 } };
   const r = await callAgent("monitor", "x", ask(fake(`echo '${JSON.stringify(ev)}'`), "deepseek-v4.1-flash"));

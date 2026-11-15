@@ -47,8 +47,8 @@ export interface Ask {
   onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void;
 }
 
-/** A call's reply: its text, its structured output, its session, its cost in USD, how it ended, and why it gave no usable reply, or null. */
-export interface Reply { text: string; data: unknown; session?: string; cost?: number; model?: string; step: Step; cause: AgentCause | null }
+/** A call's reply: its text, its structured output, its session, its cost in USD, its tokens (input, output, cache read and cache creation), how it ended, and why it gave no usable reply, or null. */
+export interface Reply { text: string; data: unknown; session?: string; cost?: number; tokens?: number; model?: string; step: Step; cause: AgentCause | null }
 
 /** How long a call that the time box or the stall watch stopped gets after SIGTERM before SIGKILL. */
 const KILL_AFTER_MS = 30_000;
@@ -149,7 +149,7 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   const res = resultOf(out);
   const cause = agentCause(step, res);
   if (cause && policyOf(cause.kind).holdsBackend) await holdBackend(viaOf(model), cause.reason);
-  return { text: step.code === 0 && !res.found ? out : res.result, data: res.data, session: res.session, cost: costOf(model, res), ...(res.model ? { model: res.model } : {}), step, cause };
+  return { text: step.code === 0 && !res.found ? out : res.result, data: res.data, session: res.session, cost: costOf(model, res), ...(res.usage ? { tokens: Object.values(res.usage).reduce((n, t) => n + t, 0) } : {}), ...(res.model ? { model: res.model } : {}), step, cause };
 }
 
 /**

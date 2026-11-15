@@ -78,6 +78,7 @@ export function openRun(o: Opening): AgentRun {
   });
   let prev: { input: string; session?: string } | undefined;
   let spent: number | undefined;
+  let tokens: number | undefined;
   let credit = false;
   const call = async (input: string, cwd?: string, again = false) => {
     const write = again ? appendFileSync : writeFileSync;
@@ -93,6 +94,7 @@ export function openRun(o: Opening): AgentRun {
     });
     prev = { input: sent, session: r.session };
     if (!o.session && r.session) patchRun(id, { session: r.session });
+    if (r.tokens !== undefined) { tokens = (tokens ?? 0) + r.tokens; patchRun(id, { tokens }); }
     if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; patchRun(id, { cost: spent }); }
     if (r.cause?.kind === "credit") credit = true;
     const failure = r.step.stalled ? stallReason() : r.step.timedOut ? `${o.who} timed out` : r.step.code !== 0 ? `${o.who} exited ${r.step.code}` : undefined;

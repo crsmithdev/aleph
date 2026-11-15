@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { OFFERS } from "../jobs/lib/routing/models.ts";
 // @ts-ignore plain JS shared with the page
-import { costFrame, liveFrame, outcomesFrame, renderFactoryAgents, view } from "./views/factory-agents.js";
+import { costFrame, liveFrame, renderFactoryAgents, tokensFrame, view } from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import { label, option } from "./chart.js";
 // @ts-ignore plain JS shared with the page
-import { dur, shortModel, tone } from "./lib.js";
+import { dur, shortModel } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import { pace, usageCard, weekGone } from "./views/speed.js";
 
@@ -84,7 +84,7 @@ test("no usage data shows a dash; while the speed data loads the page says so", 
 });
 
 const T: any = { done: "#d", need: "#n", stuck: "#s", "series-1": "#1", "series-2": "#2" };
-const buckets = [{ at: new Date(2026, 9, 27).toISOString(), cost: { opus: 1.5, sonnet: 0.25 } }, { at: new Date(2026, 9, 28).toISOString(), cost: { opus: 2 } }];
+const buckets = [{ at: new Date(2026, 9, 27).toISOString(), cost: { opus: 1.5, sonnet: 0.25 }, tokens: { opus: 1200, sonnet: 300 } }, { at: new Date(2026, 9, 28).toISOString(), cost: { opus: 2 }, tokens: { opus: 800 } }];
 const outcomes = [
   { role: "worker", model: "haiku", succeeded: 6, failed: 2, stuck: 1 },
   { role: "worker", model: "sonnet", succeeded: 4, failed: 0, stuck: 0 },
@@ -95,14 +95,15 @@ const E: any = { window: "week", buckets, agents: { ...agents, outcomes } };
 test("the page has three chart panels in one row, each with role img and an aria-label from its frame", () => {
   const html = renderFactoryAgents(S, E);
   const row = html.slice(html.indexOf('<div class="trio">'), html.indexOf('id="roles"'));
-  expect([...row.matchAll(/<aleph-chart key="factory\/agents\/(\w+)">/g)].map((m) => m[1])).toEqual(["live", "outcomes", "cost"]);
+  expect([...row.matchAll(/<aleph-chart key="factory\/agents\/(\w+)">/g)].map((m) => m[1])).toEqual(["live", "tokens", "cost"]);
   const labels = [...row.matchAll(/<div class="chartbox" role="img" aria-label="([^"]+)"><\/div>/g)].map((m) => m[1]);
-  expect(labels).toEqual(["Agents Live by Role: Worker peak 1, Triage peak 0.5", "Outcomes by Role: Succeeded 15, Failed 2, Stuck 1", "Cost by Model: opus $3.50, sonnet $0.25"]);
-  for (const t of ["Agents Live by Role", "Outcomes by Role", "Cost by Model"]) expect(row).toContain(`<h2>${t}</h2>`);
+  expect(labels).toEqual(["Agents Live by Role: Worker peak 1, Triage peak 0.5", "Tokens by Model: opus 2,000, sonnet 300", "Cost by Model: opus $3.50, sonnet $0.25"]);
+  for (const t of ["Agents Live by Role", "Tokens by Model", "Cost by Model"]) expect(row).toContain(`<h2>${t}</h2>`);
+  expect(row).not.toContain("Outcomes by Role");
 });
 
-test("a chart with no outcomes or cost shows the empty line under its title", () => {
-  const html = renderFactoryAgents(S, { ...E, buckets: [{ at: buckets[0].at, cost: {} }], agents: { ...agents, outcomes: [] } });
+test("a chart with no tokens or cost shows the empty line under its title", () => {
+  const html = renderFactoryAgents(S, { ...E, buckets: [{ at: buckets[0].at, cost: {}, tokens: {} }] });
   const row = html.slice(html.indexOf('<div class="trio">'), html.indexOf('id="roles"'));
   expect(row.match(/class="chartbox"/g)!.length).toBe(1);
   expect(row.match(/class="empty"/g)!.length).toBe(2);
@@ -118,11 +119,10 @@ test("the live frame has one key per timed role, and a role's colour comes from 
   expect(late.by.keys).toEqual([{ key: "triage", name: "Triage", color: "series-2" }]);
 });
 
-test("the outcomes frame sums succeeded, failed and stuck per role, as horizontal stacked bars", () => {
-  const o = option(outcomesFrame(E), "stacked", T);
-  expect(o.yAxis.type).toBe("category");
-  expect(o.yAxis.data).toEqual(["Worker", "Triage"]);
-  expect(o.series.map((s: any) => [s.name, s.stack, s.color, s.data])).toEqual([["Succeeded", "all", "#d", [10, 5]], ["Failed", "all", "#s", [2, 0]], ["Stuck", "all", "#s", [1, 0]]]);
+test("the tokens frame has one key per model with the bucket token sums, and a model with none in a bucket counts 0", () => {
+  const o = option(tokensFrame(E), "columns", T);
+  expect(o.series.map((s: any) => [s.name, s.type, s.stack, s.data])).toEqual([["opus", "bar", "all", [1200, 800]], ["sonnet", "bar", "all", [300, 0]]]);
+  expect(label(tokensFrame(E))).toBe("Tokens by Model: opus 2,000, sonnet 300");
 });
 
 test("the cost frame has one key per model with the bucket costs, and its axis goes through money()", () => {
@@ -130,10 +130,6 @@ test("the cost frame has one key per model with the bucket costs, and its axis g
   expect(o.series.map((s: any) => [s.name, s.type, s.stack, s.data])).toEqual([["opus", "bar", "all", [1.5, 2]], ["sonnet", "bar", "all", [0.25, 0]]]);
   expect(o.yAxis.axisLabel.formatter(1.5)).toBe("$1.50");
   expect(label(costFrame(E))).toBe("Cost by Model: opus $3.50, sonnet $0.25");
-});
-
-test("the outcomes frame takes the colour of Failed from tone()", () => {
-  expect(outcomesFrame(E).by.keys.find((k: any) => k.key === "failed")!.color).toBe(tone("failed"));
 });
 
 test("the cost frame names keys by shortModel(), colours each, and folds the models past the sixth into Other", () => {
