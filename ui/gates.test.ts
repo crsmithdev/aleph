@@ -585,18 +585,17 @@ test("the Monitor draws **text** as bold in the summary and the list, and escape
 
 test("the body has the tick, the suite and the monitor with their last run from the tick table; with no record each has not run", async () => {
   const none: any = (await body()).schedules;
-  expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d" }]);
+  expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d", hour: 0 }]);
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
   expect(h).toContain(">Schedules</h2>");
   expect(h).toContain(`<th>Schedule</th><th>Every</th><th>Result</th><th class="num">Last Run</th>`);
   expect(h).toContain('<td class="wide" title="tick">tick</td>');
   expect(h).not.toContain("<td><input");
-  // The interval sits in its row: a locked number and unit with an Edit button, and none for the monitor.
+  // The interval sits in its row: a locked number and unit with an Edit button; the monitor's is a locked hour.
   expect(h).toMatch(/<form class="every" data-schedule="tick"><input name="n" type="number" id="every-tick" value="1"[^>]* disabled[^>]*><select name="unit"[^>]* disabled><option value="s">seconds<\/option><option value="min" selected>minutes/);
   expect(h).toContain('<button type="button" class="act" data-edit>Edit</button></form>');
   expect(h).toMatch(/data-schedule="suite"><input[^>]*value="1"[^>]*>.*<option value="h" selected>hours/);
-  expect(h).not.toContain('data-schedule="monitor"');
-  expect(h).toContain("<td>1d</td>");
+  expect(h).toMatch(/<form class="every" data-schedule="monitor"><input name="n" type="number" id="every-monitor" value="0"[^>]* disabled[^>]*><button type="button" class="act" data-edit>Edit<\/button><\/form>/);
   expect(h).not.toContain("has not run");
   expect(h.indexOf("Last Run")).toBeLessThan(h.indexOf("<tbody>"));
   const tbody = h.split("<tbody>")[1].split("</tbody>")[0];
@@ -610,7 +609,7 @@ test("the body has the tick, the suite and the monitor with their last run from 
     expect(d).toEqual([
       { name: "tick", last: ago(2), result: "1 missed", every: "1min" },
       { name: "suite", last: ago(10), result: "held: green; plain: green", every: "1h" },
-      { name: "monitor", last: ago(50), result: "7 findings", every: "1d" },
+      { name: "monitor", last: ago(50), result: "7 findings", every: "1d", hour: 0 },
     ]);
     expect(gates.renderSchedules({ ...(await body()), schedules: d })).not.toContain("has not run");
     const t = gates.renderSchedules({ ...(await body()), schedules: d });
@@ -706,6 +705,16 @@ test("POST /api/automation/schedules writes a drop-in that keeps the boot and st
   expect(wrote.join("\n")).toContain("--user daemon-reload\n--user restart aleph-tick.timer\n");
   expect((await send({ name: "tick", every: "5 minutes" })).status).toBe(422);
   expect((await send({ name: "monitor", every: "1h" })).status).toBe(422);
+});
+
+test("POST /api/automation/schedules stores the monitor's hour, which the next GET shows; a value that is not a whole number from 0 to 23 is 422 and leaves it", async () => {
+  const send = (b: unknown) => at("/api/automation/schedules", { method: "POST", headers: { "X-Aleph-UI": "1" }, body: JSON.stringify(b) });
+  const hour = async () => ((await (await at("/api/automation")).json()) as any).schedules.find((s: any) => s.name === "monitor").hour;
+  expect((await send({ name: "monitor", hour: 9 })).status).toBe(200);
+  expect(await hour()).toBe(9);
+  for (const bad of [24, -1, "x", 1.5]) expect((await send({ name: "monitor", hour: bad })).status).toBe(422);
+  expect(await hour()).toBe(9);
+  putJson("settings", "monitorHour", 0);
 });
 
 test("the Automation page names the held backend and its reason, and no line when none is held", () => {

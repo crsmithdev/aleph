@@ -107,9 +107,15 @@ function everyForm(s) {
     `<button type="button" class="act" data-edit>Edit</button></form>`;
 }
 
-/** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran. The monitor runs in the tick, once a day, so only the other two have an interval to edit. */
+/** The Every cell of the monitor: the local hour from which its daily step runs, locked until Edit opens it, then Save posts it. */
+function hourForm(s) {
+  return `<form class="every" data-schedule="monitor">${inputBox("n", s.hour, { id: "every-monitor", type: "number", attrs: ` min="0" max="23" step="1" inputmode="numeric" required disabled aria-label="monitor hour"` })}` +
+    `<button type="button" class="act" data-edit>Edit</button></form>`;
+}
+
+/** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran. The monitor runs in the tick, once a day from its hour, so its cell holds that hour. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${s.name === "monitor" ? esc(s.every) : everyForm(s)}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
+  const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${s.name === "monitor" ? hourForm(s) : everyForm(s)}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
   return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) : empty(), { id: "gates-schedules" });
 }
 
@@ -200,7 +206,7 @@ export function renderLog(d, by, page = 1) {
 
 /** What each settings form posts, by its `data-` key: the URL, the body and the word for an error line. */
 const SAVES = {
-  schedule: (f) => ["/api/automation/schedules", { name: f.dataset.schedule, every: `${f.elements.n.value}${f.elements.unit.value}` }, "interval"],
+  schedule: (f) => ["/api/automation/schedules", { name: f.dataset.schedule, ...(f.elements.unit ? { every: `${f.elements.n.value}${f.elements.unit.value}` } : { hour: Number(f.elements.n.value) }) }, "interval"],
   cap: (f) => ["/api/automation/caps", { [f.dataset.cap]: Number(f.elements[f.dataset.cap].value) }, "cap"],
 };
 

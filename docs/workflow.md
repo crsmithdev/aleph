@@ -286,7 +286,7 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 | Suite | `aleph-suite` timer, hourly; the sweep after a red main moves | Runs the full checks on `origin/main` and records the baseline | Runs only when main moved |
 | Maintainer | Tick, daily from 03:00; `aleph memory maintain [--dry]` | Runs the mechanical vault pass, groups signals into lessons and proposes a check, a rule or a skill as a `proposal-*` Ask, and compiles yesterday into vault notes | Signals already in a lesson are skipped; the vault run record and `compiledDays` |
 | Episodes | Tick, each 30 minutes | Writes a page for each finished issue | `episodes-seen` |
-| Monitor | Tick, daily | Reads the day's records and writes numbered findings for the Status page | One per day |
+| Monitor | Tick, daily from its local hour (0 to 23, 0 by default; set on the Automation page) | Reads the day's records and writes numbered findings for the Status page | One per day |
 
 ## Where to look
 

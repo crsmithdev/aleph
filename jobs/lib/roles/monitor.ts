@@ -10,7 +10,7 @@ import { lock } from "../infra/locks.ts";
 import { writeJson } from "../../../lib/json.ts";
 import { recordRan } from "../gates/factory-status.ts";
 import { addDays, measure, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
-import { monitorOn } from "../infra/settings.ts";
+import { monitorHour, monitorOn } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readModels } from "../routing/models.ts";
 
@@ -19,8 +19,9 @@ const SECONDS = 600;
 /** The model of the monitor reader: a run on OpenRouter, priced from its tokens. */
 const MONITOR_MODEL = () => readModels().monitor?.model ?? "deepseek-v4.1-flash";
 
-/** The day a report is due for: yesterday, when it has no report yet; else null. */
+/** The day a report is due for: yesterday, from the monitor hour (local) on, when it has no report yet; else null. */
 export function monitorDue(now = new Date()): string | null {
+  if (now.getHours() < monitorHour()) return null;
   const day = addDays(issues.today(now), -1);
   return existsSync(reportFile(day)) ? null : day;
 }

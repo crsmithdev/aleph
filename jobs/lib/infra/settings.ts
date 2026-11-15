@@ -98,6 +98,13 @@ export const loadLimit = () => cap("ALEPH_LOAD_LIMIT", "loadLimit", availablePar
 export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
 /** The tick's daily monitor step; tests turn it off, as a tick there must not start the reader. */
 export const monitorOn = () => process.env.ALEPH_MONITOR !== "off";
+/** The local hour from which the tick's monitor step may run: the `monitorHour` setting, 0 by default. */
+export const monitorHour = (): number => getJson<number>("settings", "monitorHour", 0);
+/** Stores the monitor hour. Throws on a value that is not a whole number from 0 to 23. */
+export function writeMonitorHour(hour: unknown): void {
+  if (!(typeof hour === "number" && Number.isInteger(hour) && hour >= 0 && hour <= 23)) throw new Error("the hour is a whole number from 0 to 23");
+  putJson("settings", "monitorHour", hour);
+}
 export const rescueOn = () => process.env.ALEPH_RESCUE !== "off";
 
 export const workerCmd = () => process.env.ALEPH_WORKER_CMD ?? "claude";

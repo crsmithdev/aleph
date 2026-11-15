@@ -19,7 +19,7 @@ import { readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import type { EventRow } from "../../lib/naming.ts";
-import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, unitDir, writeCaps } from "../../jobs/lib/infra/settings.ts";
+import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, unitDir, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 import { noteOf } from "../../issues/lib/todo.ts";
 import { systemctl } from "../../jobs/lib/infra/systemd.ts";
@@ -192,7 +192,7 @@ export function setTimerInterval(name: string, every: string): string | null {
   return null;
 }
 
-export function schedules(): { name: string; last: string | null; result: string | null; every: string | null }[] {
+export function schedules(): { name: string; last: string | null; result: string | null; every: string | null; hour?: number }[] {
   // tick.ts is not read here: it loads the factory's actions, which the server must not.
   const rows = tickRows(), missed = getJson<string[]>("state", "tick.missed", []);
   const times = ["ci", "firefight", "episodes"].map((k) => Date.parse(rows[k]?.last ?? "")).filter((x) => !Number.isNaN(x));
@@ -203,7 +203,7 @@ export function schedules(): { name: string; last: string | null; result: string
   return [
     { name: "tick", last: times.length ? new Date(Math.max(...times)).toISOString() : null, result: times.length ? (missed.length ? `${missed.length} missed` : "no key missed") : null, every: intervalOf(TIMERS.tick) },
     { name: "suite", last: runs.map(([, r]) => r.at).sort().at(-1) ?? null, result: runs.length ? runs.map(([k, r]) => `${k}: ${r.result}`).join("; ") : null, every: intervalOf(TIMERS.suite) },
-    { name: "monitor", last: monitor?.at ?? null, result: monitor?.result ?? null, every: "1d" },
+    { name: "monitor", last: monitor?.at ?? null, result: monitor?.result ?? null, every: "1d", hour: monitorHour() },
   ];
 }
 
@@ -283,6 +283,10 @@ export const routes: Routes = {
     return { live: LIVE_CAP(), run: RUN_CAP(), ...settingsNow() };
   }),
   "POST /api/automation/schedules": post((body) => {
+    if (body.name === "monitor") {
+      try { writeMonitorHour(body.hour); } catch (e) { fail(422, (e as Error).message); }
+      return { hour: monitorHour() };
+    }
     const e = setTimerInterval(String(body.name), String(body.every));
     if (e) fail(422, e);
     return { every: intervalOf(TIMERS[body.name]) };

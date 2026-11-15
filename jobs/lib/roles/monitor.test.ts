@@ -6,6 +6,7 @@ import { findingsOf, monitorDue, monitorStep, readerPrompt } from "./monitor.ts"
 import { monitorPanel, reportFile, reportLine, type Report } from "../learning/monitor-table.ts";
 import { allRuns } from "../records/ledger.ts";
 import { setPaused, setTick, tickRows } from "../gates/factory-status.ts";
+import { writeMonitorHour } from "../infra/settings.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_ITEMS", "ALEPH_VAULT", "ALEPH_MONITOR_CMD", "ALEPH_MONITOR", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -68,6 +69,16 @@ test("the tick's step reads yesterday's table with a tool-less reader once a day
   expect(monitorDue(now)).toBeNull();
   expect(await monitorStep(now)).toBeNull();
   expect(allRuns().filter((e) => e.run.role === "monitor")).toHaveLength(1);
+});
+
+test("the monitor hour holds the step until that local hour; with none stored it is due from 00:00", async () => {
+  expect(monitorDue(new Date("2026-10-21T00:30:00"))).toBe("2026-10-20");
+  writeMonitorHour(9);
+  expect(monitorDue(new Date("2026-10-21T08:00:00"))).toBeNull();
+  expect(await monitorStep(new Date("2026-10-21T08:00:00"))).toBeNull();
+  expect(allRuns().filter((e) => e.run.role === "monitor")).toHaveLength(0);
+  expect(existsSync(reportFile("2026-10-20"))).toBe(false);
+  expect(monitorDue(new Date("2026-10-21T09:00:00"))).toBe("2026-10-20");
 });
 
 test("monitorStep writes its own tick row and keeps the rows the tick wrote", async () => {
