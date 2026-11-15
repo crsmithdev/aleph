@@ -44,7 +44,7 @@ export const norm = (s: string): string =>
 /** A shell command without its leading cd, as a key. */
 const shape = (cmd: string) => norm(cmd.replace(/^cd\s+\S+\s*(&&|;)\s*/, ""));
 
-const said = (c: unknown): string =>
+export const said = (c: unknown): string =>
   typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : "")).join("") : "";
 
 /** Text Chris typed, not a hook, a command wrapper or a relay. */

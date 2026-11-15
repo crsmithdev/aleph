@@ -1,0 +1,80 @@
+---
+name: sweep
+description: >
+  Find unhandled follow-ups in this repo's handoffs and recent sessions. Use when asked to sweep.
+argument-hint: "[--since <ISO time>]"
+---
+
+# Sweep
+
+Go through this repo's handoffs and Chris's recent session transcripts, find the items nobody handled, explain
+them, and ask Chris about the ones that need him. A pickup archives a handoff when a session reads it, not when its
+items are done, and a session can end with a follow-up nobody filed. So judge each item from the current state,
+never from the handoff or transcript text alone.
+
+## Find the items
+
+1. Set `<handoffs dir>` to `$ALEPH_HANDOFFS_DIR` if set, else `~/.aleph/handoffs`. Get `<scope>` from
+   `d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.
+   The ledger is `<handoffs dir>/handled.jsonl`.
+2. **Handoffs.** Read the waiting `<handoffs dir>/projects/<scope>.md`, if it exists, and every
+   `<YYYY-MM-DD-HHMMSS>-<scope>.md` in `<handoffs dir>`, newest first. A handoff item is one bullet of **Open
+   questions**, one step of **Active plan** that the handoff does not mark done, or the next action of **Resume
+   instructions**.
+3. **Transcripts.** Set `<since>` to the argument's `--since`, else the `at` of the newest ledger line with
+   `"verdict": "swept"`, else 7 days ago. Run this from the main checkout and write the output to the scratchpad:
+
+   ```bash
+   bun <this skill's dir>/turns.ts --since <since> --repo "$(dirname "$d")" > <scratchpad>/turns.md
+   ```
+
+   It prints one `## <session id> <start> to <end>` block per session that Chris drove, with what he typed or
+   answered (`Chris:`), each question put to him (`Asks:`) and the reply that ended each turn (`Reply:`). A long
+   reply keeps its start and its end. A transcript item is one of these:
+   - A follow-up, risk, `Left out:` or `Not verified:` line that a reply names and no issue, commit or later
+     session holds.
+   - A question to Chris that he did not answer in that session or a later one.
+   - A request from Chris that the session did not finish: it ended mid-work, or its branch or worktree did not
+     land.
+   - The next action at the end of a session that no later session took.
+
+   Skip a transcript item that a handoff item already covers. Skip this session.
+4. Skip an item when the ledger has a line with the same `file` and the same item. For a transcript item, `file` is
+   `<session id>.jsonl`, and the same item is the same follow-up in other words.
+
+## Judge each item
+
+Judge each item from the state now. Use `git log` since the item's time, `git worktree list`, `git branch`,
+`aleph issue list <scope>` and `aleph issue show <scope> <n>`, the newer handoffs and sessions, and the files the
+item names. Give each item one verdict:
+
+| Verdict | When |
+|---|---|
+| `done` | A commit, an issue or a file shows it is done or filed. Name that evidence. |
+| `superseded` | A newer handoff, session, decision or commit replaces it. Name what replaces it. |
+| `open-work` | It needs no decision, but the work is not done and no issue holds it. |
+| `open-decision` | Chris must choose. |
+
+If more than 5 handoffs have items, or `turns.md` is over 100 KB, split the work and give it to Explore agents,
+all in one message: about 5 handoffs, or about 100 KB of `turns.md` cut at `## ` lines, each. Give each agent the
+paths, the item rules and the verdict table, and ask for each item's text, source file, time, verdict and evidence.
+Otherwise judge them yourself.
+
+Append each `done` and `superseded` item to the ledger at once, one JSON line each:
+`{"at": "<ISO time>", "file": "<handoff file name or session id>.jsonl", "item": "<item text>", "verdict": "<verdict>", "note": "<evidence>"}`.
+For a handoff, `file` is the handoff file name.
+
+## Explain, then ask
+
+1. Write one message. Number every open item, newest first. For each item, give its date and source (handoff or
+   session id), what the item is, why it is still open with its evidence, and your recommendation. End with one
+   line that counts the `done` and `superseded` items. Do not list those items.
+2. If no item is open, say so in one line, and go to step 5.
+3. Ask in the question UI, up to 4 items per call, with the recommended option first. An `open-decision` item gets
+   its real options. An `open-work` item gets "Do it", "File it" and "Drop it".
+4. Act on each answer as the session's work mode says (`/aleph:mode`, factory if none is set). Append it to the
+   ledger with the verdict `decided` or `dropped` and the answer in `note`.
+5. Append one line that marks the transcripts as swept up to the time `turns.ts` ran:
+   `{"at": "<that ISO time>", "file": "transcripts", "item": "sweep", "verdict": "swept", "note": "<n> sessions"}`.
+6. If every item of the waiting `projects/<scope>.md` is now in the ledger, archive it the way a pickup does: move it
+   to `<handoffs dir>/$(date +%Y-%m-%d-%H%M%S)-<scope>.md`.

@@ -4,10 +4,8 @@ description: >
   Pick up a saved handoff in a fresh context. Use when the user asks to pick
   up or resume where they left off, or when the session start says a handoff
   waits for this project.
-argument-hint: "[<name> | sweep]"
+argument-hint: "[<name>]"
 ---
-
-If the argument is `sweep`, read [SWEEP.md](SWEEP.md) and follow it, not this page.
 
 Find the handoff file, where `<handoffs dir>` is `$ALEPH_HANDOFFS_DIR` if set, else `~/.aleph/handoffs`:
 
