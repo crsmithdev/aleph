@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,7 +17,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 function run(cwd: string, env: Record<string, string | undefined> = {}) {
   const r = Bun.spawnSync(["bun", HOOK], {
     stdin: Buffer.from(JSON.stringify({ hook_event_name: "SessionStart", source: "clear", cwd })),
-    env: { ...process.env, ALEPH_HANDOFFS_DIR: join(root, "handoffs"), CLAUDE_CODE_ENTRYPOINT: "cli", ALEPH_JOB_ID: undefined, ...env },
+    env: { ...process.env, ALEPH_HANDOFFS_DIR: join(root, "handoffs"), CLAUDE_CODE_ENTRYPOINT: "cli", ALEPH_JOB_ID: undefined, HERDR_ENV: undefined, HERDR_PANE_ID: undefined, ...env },
     stdout: "pipe", stderr: "pipe",
   });
   expect(r.exitCode).toBe(0);
@@ -112,4 +112,45 @@ test("a project handoff and a named handoff both show", () => {
   expect(out.systemMessage.split("\n")).toHaveLength(2);
   expect(out.hookSpecificOutput.additionalContext).toContain("with no argument");
   expect(out.hookSpecificOutput.additionalContext).toContain("with the argument voice");
+});
+
+describe("inside Herdr", () => {
+  const bin = () => {
+    const dir = join(root, "bin");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "herdr"), `#!/bin/sh\necho '{"result":{"panes":[{"pane_id":"p7"},{"pane_id":"p8"}]}}'\n`, { mode: 0o755 });
+    return dir;
+  };
+  const herdr = () => ({ HERDR_ENV: "1", HERDR_PANE_ID: "p7", PATH: `${bin()}:${process.env.PATH}` });
+  const pane = (id: string, text: string) => {
+    mkdirSync(join(root, "handoffs", "projects", "proj"), { recursive: true });
+    writeFileSync(join(root, "handoffs", "projects", "proj", `${id}.md`), text);
+  };
+
+  test("this pane's file asks for a pickup and a live pane's file or a session outside Herdr prints nothing", () => {
+    pane("p7", "summary: s1\n");
+    pane("p8", "summary: s8\n");
+    const out = JSON.parse(run(join(root, "proj"), herdr()));
+    expect(out.systemMessage).toMatch(/^handoff waiting \(proj, \d\d:\d\d\): s1$/);
+    expect(out.hookSpecificOutput.additionalContext).toContain("aleph:pickup");
+    expect(out.hookSpecificOutput.additionalContext).not.toContain("p8.md");
+    expect(run(join(root, "proj"), { ...herdr(), HERDR_ENV: undefined })).toBe("");
+    rmSync(join(root, "handoffs", "projects", "proj", "p7.md"));
+    expect(run(join(root, "proj"), herdr())).toBe("");
+  });
+
+  test("a file of a pane Herdr lacks is orphaned and needs Chris's word", () => {
+    pane("p9", "summary: s2\n");
+    const out = JSON.parse(run(join(root, "proj"), herdr()));
+    expect(out.systemMessage).toMatch(/orphaned.*s2/);
+    expect(out.hookSpecificOutput.additionalContext).toContain(join(root, "handoffs", "projects", "proj", "p9.md"));
+    expect(out.hookSpecificOutput.additionalContext).toContain("Ask Chris");
+  });
+
+  test("the flat file asks for a pickup by its path, since no argument reads this pane's file", () => {
+    write("proj", "summary: flat\n");
+    const flat = join(root, "handoffs", "projects", "proj.md");
+    expect(JSON.parse(run(join(root, "proj"), herdr())).hookSpecificOutput.additionalContext).toContain(`run the aleph:pickup skill with the argument ${flat}`);
+  });
+
 });

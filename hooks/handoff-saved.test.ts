@@ -41,3 +41,11 @@ test("hooks.json runs the hook after a Write", () => {
   const entry = hooks.find((h: any) => h.matcher === "Write");
   expect(JSON.stringify(entry)).toContain("hooks/handoff-saved.ts");
 });
+
+test("a pane's handoff in the repo's folder ends the turn, a deeper file prints nothing", () => {
+  const path = join(root, "projects", "proj", "p7.md");
+  const out = JSON.parse(run(path));
+  expect(out.continue).toBe(false);
+  expect(out.stopReason).toContain(path);
+  expect(run(join(root, "projects", "proj", "sub", "x.md"))).toBe("");
+});

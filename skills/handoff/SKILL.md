@@ -11,7 +11,7 @@ Write a handoff for the next session. The next session reads it with no other co
 Path, where `<handoffs dir>` is `!`echo "${ALEPH_HANDOFFS_DIR:-$HOME/.aleph/handoffs}"``:
 
 - With an argument `<name>` (the Sidetone bridge passes `sidetone`): `<handoffs dir>/<name>.md`.
-- With no argument: `<handoffs dir>/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`.
+- With no argument: `<handoffs dir>/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`. Inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set), the file is `<handoffs dir>/projects/<repo>/<HERDR_PANE_ID>.md` instead, where `<repo>` is that same name: `!`echo "HERDR_ENV=${HERDR_ENV:-} HERDR_PANE_ID=${HERDR_PANE_ID:-}"``.
 
 Speed matters: the user waits for this file.
 

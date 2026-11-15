@@ -40,7 +40,7 @@ All other hooks **fail open**. An error exits without a block, or prints nothing
 
 ### handoff-start
 
-`hooks/handoff-start.ts` looks for `<handoffs>/projects/<repo>.md`. When the file exists, the hook prints a `systemMessage` and tells Claude to run `aleph:pickup`. When the handoff text, `git status` and `git log -5` fit in 10,000 characters, the hook injects them too. `ALEPH_HANDOFFS_DIR` sets the folder (default `~/.aleph/handoffs`). The hook does nothing in a factory run (`ALEPH_JOB_ID` set) or an SDK session.
+`hooks/handoff-start.ts` looks for `<handoffs>/projects/<repo>.md`. Inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set), it also looks for `<handoffs>/projects/<repo>/<HERDR_PANE_ID>.md`, and it never offers the file of another live pane. It lists each other file of that folder whose pane `herdr pane list` no longer shows as orphaned: Claude asks Chris before it picks one up. When a file exists, the hook prints a `systemMessage` and tells Claude to run `aleph:pickup`. Inside Herdr, it passes the path of `<repo>.md` as the argument, because `aleph:pickup` with no argument reads the pane's file. When the handoff text, `git status` and `git log -5` fit in 10,000 characters, the hook injects them too. `ALEPH_HANDOFFS_DIR` sets the folder (default `~/.aleph/handoffs`). The hook does nothing in a factory run (`ALEPH_JOB_ID` set) or an SDK session.
 
 ### aleph report
 
@@ -118,7 +118,7 @@ The design is in [the context gate decision](context-gate.md).
 
 ### handoff-saved
 
-`hooks/handoff-saved.ts` watches `Write`. When the path is `<handoffs>/projects/*.md`, it returns `{continue: false}` with a stop reason that says to run `/clear`.
+`hooks/handoff-saved.ts` watches `Write`. When the path is `<handoffs>/projects/*.md` or `<handoffs>/projects/<repo>/*.md`, it returns `{continue: false}` with a stop reason that says to run `/clear`.
 
 ## Tracing
 

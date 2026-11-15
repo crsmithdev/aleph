@@ -17,7 +17,7 @@ never from the handoff or transcript text alone.
 1. Set `<handoffs dir>` to `$ALEPH_HANDOFFS_DIR` if set, else `~/.aleph/handoffs`. Get `<scope>` from
    `d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.
    The ledger is `<handoffs dir>/handled.jsonl`.
-2. **Handoffs.** Read the waiting `<handoffs dir>/projects/<scope>.md`, if it exists, and every
+2. **Handoffs.** Read the waiting `<handoffs dir>/projects/<scope>.md` and every `<handoffs dir>/projects/<scope>/<pane>.md`, if they exist, and every
    `<YYYY-MM-DD-HHMMSS>-<scope>.md` in `<handoffs dir>`, newest first. A handoff item is one bullet of **Open
    questions**, one step of **Active plan** that the handoff does not mark done, or the next action of **Resume
    instructions**.
@@ -77,5 +77,5 @@ For a handoff, `file` is the handoff file name.
    ledger with the verdict `decided` or `dropped` and the answer in `note`.
 5. Append one line that marks the transcripts as swept up to the time `turns.ts` ran:
    `{"at": "<that ISO time>", "file": "transcripts", "item": "sweep", "verdict": "swept", "note": "<n> sessions"}`.
-6. If every item of the waiting `projects/<scope>.md` is now in the ledger, archive it the way a pickup does: move it
+6. If every item of a waiting `projects/<scope>.md` or `projects/<scope>/<pane>.md` is now in the ledger, archive it the way a pickup does: move it
    to `<handoffs dir>/$(date +%Y-%m-%d-%H%M%S)-<scope>.md`.
