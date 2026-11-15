@@ -17,3 +17,15 @@ for (const file of readdirSync(DIR).filter((name) => name.endsWith(".yml"))) {
     expect(parsed).toHaveProperty("jobs");
   });
 }
+
+test("ci.yml bails the test step after three failures, and no script bails", () => {
+  const ci = Bun.YAML.parse(readFileSync(join(DIR, "ci.yml"), "utf8")) as {
+    jobs: { test: { steps: { run?: string }[] } };
+  };
+  const run = ci.jobs.test.steps.map((step) => step.run).find((text) => text?.includes("bun run test:all"));
+  expect(run).toContain("--bail=3");
+  // A local `bun run test` must run every test, so --bail stays out of the scripts.
+  const { scripts } = JSON.parse(readFileSync(join(import.meta.dir, "..", "package.json"), "utf8"));
+  expect(scripts.test).not.toContain("--bail");
+  expect(scripts["test:all"]).not.toContain("--bail");
+});

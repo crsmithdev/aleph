@@ -13,4 +13,5 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       # The firefighter quotes this line in a CI issue: a failure that depends on the core count can then be reproduced.
-      - run: 'echo "runner cores: $(nproc)" && bun run test:all'
+      # --bail=3 stops a red run after the third failing test; the firefighter still gets 3 (fail) lines to group by.
+      - run: 'echo "runner cores: $(nproc)" && bun run test:all --bail=3'
