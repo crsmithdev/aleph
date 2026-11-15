@@ -199,7 +199,11 @@ export const askNote = (a: Ask): string =>
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.replace(/:[^:]*$/, "")];
 /** `user` sends the Ask to Chris with no director run; every reason takes it but the memory proposals. */
 const USER = "user";
-const allows = (reason: string, r: Reason, action: string): boolean => r.actions.some((x) => x === action) || (action === USER && !reason.startsWith("proposal-"));
+const PROPOSAL = "proposal-";
+/** The grants some code acts on: the reason's first verb, `user`, `discontinue` for intake-failed and `disapprove` for the memory proposals. */
+const allows = (reason: string, r: Reason, action: string): boolean =>
+  action === r.always || (action === USER && !reason.startsWith(PROPOSAL)) ||
+  (action === "discontinue" && reason.startsWith("intake-failed")) || (action === "disapprove" && reason.startsWith(PROPOSAL));
 
 /** The old words of a stored grant and the verbs they read as. */
 const RENAMED: Record<string, string> = { recommended: "resolve", retry: "continue" };

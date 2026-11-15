@@ -127,9 +127,9 @@ test("a grant of reason:project holds for that project only, and a bare grant ho
   expect(always("held-path", "aleph")?.action).toBe("approve");
   expect(always("held-path", "other")).toBeNull();
   expect(always("held-path")).toBeNull();
-  expect(grant("held-path", "disapprove")).toBeNull();
+  expect(grant("held-path", "approve")).toBeNull();
   expect(always("held-path", "aleph")?.action).toBe("approve");
-  expect(always("held-path", "other")?.action).toBe("disapprove");
+  expect(always("held-path", "other")?.action).toBe("approve");
   expect(grant("held-path", "land")).toContain("has no action land");
   expect(grant("held-path:aleph", "land")).toContain("has no action land");
   expect(grant("proposal-skill:aleph", "approve")).toBeNull();
@@ -153,6 +153,21 @@ test("grant refuses the old words, and readAlways reads a stored recommended as 
   expect(readAlways()).toEqual({ question: { action: "resolve", at }, "intake-failed": { action: "continue", at }, "proposal-check:aleph": { action: "approve", at }, rescue: { action: "user", at } });
   expect(grant("blocker-dropped", "resolve")).toBeNull();
   expect(getJson("settings", "always", {})).toMatchObject({ question: { action: "resolve" }, "intake-failed": { action: "continue" } });
+});
+
+test("grant takes only the verbs some code acts on, and refuses the other verb of a pair", () => {
+  for (const [reason, verb] of [["held-path", "disapprove"], ["review-held", "disapprove"], ["core-change", "disapprove"], ["question", "dismiss"], ["rescue", "dismiss"],
+    ["part-dropped", "dismiss"], ["blocker-dropped", "dismiss"], ["no-commit", "discontinue"], ["run-cap", "discontinue"]]) {
+    expect([reason, grant(reason, verb)]).toEqual([reason, expect.stringContaining(`has no action ${verb}`)]);
+    expect([reason, always(reason)]).toEqual([reason, null]);
+  }
+  for (const [reason, r] of Object.entries(ASK_REASONS)) { expect([reason, grant(reason, r.always)]).toEqual([reason, null]); expect(always(reason)?.action).toBe(r.always); }
+  expect(grant("intake-failed", "discontinue")).toBeNull();
+  expect(always("intake-failed")?.action).toBe("discontinue");
+  expect(grant("proposal-skill:aleph", "disapprove")).toBeNull();
+  expect(always("proposal-skill:aleph")?.action).toBe("disapprove");
+  expect(grant("question", "user")).toBeNull();
+  expect(always("question")?.action).toBe("user");
 });
 
 test("user is granted on any reason but a memory proposal, and a stored grant stays", () => {
@@ -198,6 +213,8 @@ test("readAlways ignores a grant that grant() would refuse, and the next write d
   const at = "2026-11-04T12:00:00Z";
   const dead = Object.fromEntries(["held-path", "review-held", "no-commit", "run-cap"].map((k) => [k, { action: "firefighter", at }]));
   putJson("settings", "always", { ...dead, rescue: { action: "resolve", at } });
+  expect(Object.keys(readAlways())).toEqual(["rescue"]);
+  putJson("settings", "always", { "held-path": { action: "disapprove", at }, rescue: { action: "resolve", at } });
   expect(Object.keys(readAlways())).toEqual(["rescue"]);
   expect(always("held-path")).toBeNull();
   expect(grant("rescue", "resolve")).toBeNull();
