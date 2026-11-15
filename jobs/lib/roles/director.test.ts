@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { writeList } from "../../../issues/lib/store.ts";
-import { grant, markAsked, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
+import { grant, markAsked, PART_DROPPED, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
 import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "../transitions/factory.ts";
@@ -318,6 +318,60 @@ test("a user grant scoped to the Ask's project escalates it with no director run
   await direct();
   expect(directorRuns()).toHaveLength(0);
   expect(asked(1)!.situation).toContain("a rule sends this Ask to the user");
+});
+
+const HELD = { reason: "held-path", question: "Land it?", options: [], why: [] };
+
+test("a held-path grant lands the run with no director run only in the run's project, and logs a rule event", async () => {
+  fresh([{ title: "held", specced: true }]);
+  run({ name: "issue.1", target: "issue.1", ask: HELD });
+  expect(grant("held-path:elsewhere", "approve")).toBeNull();
+  replyWith({ case: TEXT });
+  await direct();
+  expect(directorRuns()).toHaveLength(1);
+  expect(landed).toEqual([]);
+  fresh([{ title: "held", specced: true }]);
+  run({ name: "issue.1", target: "issue.1", ask: HELD });
+  expect(grant(`held-path:${key}`, "approve")).toBeNull();
+  await direct();
+  expect(landed).toEqual(["issue.1"]);
+  expect(directorRuns()).toHaveLength(0);
+  expect(events()).toContainEqual(expect.objectContaining({ subject: "rule", action: "landed", object: "issue.1" }));
+});
+
+test("a review-held grant does not land a run that changes bun.lock: the refused approve goes to Chris", async () => {
+  fresh([{ title: "lock", specced: true }]);
+  branch(`lock${n}`, "bun.lock");
+  run({ name: "issue.1", target: "issue.1", ask: { reason: "review-held", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
+  expect(grant(`review-held:${key}`, "approve")).toBeNull();
+  const [d] = await direct();
+  expect(landed).toEqual([]);
+  expect(directorRuns()).toHaveLength(0);
+  expect(d).toMatchObject({ outcome: "escalated", why: expect.stringContaining("it changes bun.lock, a security path or bun.lock") });
+});
+
+test("a no-commit grant for the issue's project clears the Ask with no director run", async () => {
+  fresh([{ title: "stuck", specced: true, ask: plainAsk("no-commit", "3 runs ended with no commit") }]);
+  expect(grant(`no-commit:${key}`, "continue")).toBeNull();
+  await direct();
+  expect(asked(1)).toBeNull();
+  expect(directorRuns()).toHaveLength(0);
+  expect(events()).toContainEqual(expect.objectContaining({ subject: "rule", action: "reran", object: "issue.1" }));
+});
+
+test("a part-dropped grant with no recommended option leaves the Ask to the director; with one it answers with that option", async () => {
+  const dropped = { ...plainAsk("part-dropped", "A sub-issue was dropped. What now?"), options: PART_DROPPED };
+  fresh([{ title: "parent", specced: true, ask: dropped }]);
+  expect(grant(`part-dropped:${key}`, "resolve")).toBeNull();
+  replyWith({ case: TEXT });
+  await direct();
+  expect(directorRuns()).toHaveLength(1);
+  fresh([{ title: "parent", specced: true, ask: { ...dropped, recommended: "Keep open" } }]);
+  expect(grant(`part-dropped:${key}`, "resolve")).toBeNull();
+  await direct();
+  expect(directorRuns()).toHaveLength(0);
+  expect(asked(1)).toBeNull();
+  expect(item(1).notes.at(-1)).toContain("Keep open");
 });
 
 test("an edit-goal with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {

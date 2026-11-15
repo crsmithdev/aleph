@@ -19,7 +19,7 @@ import { afterFiling } from "../transitions/filing.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
-import { always, ASK_REASONS, askSub, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
+import { always, ASK_REASONS, askSub, logAlways, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
 import { allRuns, isAgentRun, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
@@ -32,6 +32,7 @@ import { NO_OUTPUT, securityChange } from "../gates/gate.ts";
 import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
+import { answerHeld } from "./recheck.ts";
 import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { because, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
@@ -51,6 +52,8 @@ const SECONDS = 900;
 export const MAX_ACTIONS = 10;
 /** The reasons whose Ask the director decides once per issue: a second one on the same issue goes to Chris. */
 const ONCE_PER_ISSUE = ["run-cap", "rescue"];
+/** The reasons whose first verb a grant takes in `direct`: the other reasons have a rule site of their own. */
+const FIRST_VERB = ["held-path", "review-held", "core-change", "no-commit", "run-cap", "part-dropped"];
 /** Changed files that put a run's land on the escalation list besides the security paths. */
 const HELD_FILES = ["bun.lock"];
 const TAIL = 40;
@@ -655,7 +658,19 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
     const rec = readRecord();
     const base = { at: new Date().toISOString(), ref: refOf(c), on: c.on, reason: reasonName(c), question: questionOf(c), applied: [] as string[], refused: [] as string[] };
     // An Always rule granted `user` for the reason sends the Ask to Chris with no run.
-    if (always(base.reason, c.repo?.key)?.action === "user") return escalate(c, base, undefined, "a rule sends this Ask to the user");
+    const granted = always(base.reason, c.repo?.key)?.action;
+    if (granted === "user") return escalate(c, base, undefined, "a rule sends this Ask to the user");
+    // An Always rule granted the reason's first verb takes it with no run, and logs it as a rule event. `resolve` needs the Ask's recommended option; an Ask with none goes on to the director.
+    if (c.at !== "lesson" && FIRST_VERB.includes(base.reason) && granted === ASK_REASONS[base.reason].always && (granted !== "resolve" || c.ask.recommended)) {
+      const ref = c.at === "item" ? `${c.repo.key}-${idOf(c.item)}` : c.entry.run.name;
+      let why: string | null;
+      // A review-held run lands through the land action, so a run that changes a security path or bun.lock stays Chris's.
+      if (granted === "approve" && base.reason !== "review-held") why = base.reason === "core-change" ? await answerHeld(ref, true) : await ports.land(ref);
+      else { const o = await applyOne(c, granted === "approve" ? { do: "land" } : granted === "continue" ? { do: "rerun" } : { do: "answer", option: c.ask.recommended, note: "the recommended answer" }, ports); why = "refused" in o ? o.refused : null; }
+      if (why) return escalate(c, base, undefined, `a rule's ${granted} was refused: ${why}`);
+      logAlways(base.reason, base.ref, granted === "continue" ? "reran" : granted === "approve" && c.at === "run" ? "landed" : "answered");
+      return { ...base, outcome: "decided", applied: [granted] };
+    }
     // One run per Ask: an Ask the director escalated before, whose case text was not written, goes to Chris with no second run.
     if (escalatedBefore(c, rec)) return escalate(c, base, undefined, "the director escalated this Ask before");
     const listed = escalation(c, rec);
