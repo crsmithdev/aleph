@@ -106,7 +106,7 @@ The Status page shows the wrong weekly usage.
 |---|---|---|
 | `project` | `project.<n>` | The project that owns the issue |
 | `title` | | An imperative of at most 60 characters |
-| `kind` | `task`, `bug`, `check`, `flake`, `proposal`, `acceptance` | `flake` becomes a tracker note at intake |
+| `kind` | `task`, `bug`, `check`, `flake` | `flake` becomes a tracker note at intake |
 | `priority` | `low`, `medium`, `high`, `critical` | Dispatch order; none ranks as `medium` |
 | `source` | `chris`, `worker`, `memory`, `agent`, `deps` | Who filed it; the director cannot close Chris's |
 | `areas` | list | Labels |

@@ -124,7 +124,7 @@ same turn you name it, and quote the issue number after that.
 Write through `aleph issue`, never by hand; `aleph issue --help` gives its syntax.
 A title is an imperative of at most 60 characters that says what changes, not
 how, with no final period and no `<words>: ` prefix. `--kind` is `task` (the
-default), `bug`, `check`, `flake` or `acceptance`.
+default), `bug`, `check` or `flake`.
 Each write is a commit on `origin/main`, so it reaches main at once, not with
 your branch. Measurements and write-ups go in a findings file or the spec, and
 a note links them.

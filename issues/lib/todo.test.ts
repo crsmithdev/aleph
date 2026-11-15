@@ -47,6 +47,8 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   const goal = item("Old goal", { kind: "goal", areas: ["deps"] });
   const bug = item("Fix the bug", { areas: ["bug"] });
   item("Teach the gate", { kind: "proposal", areas: ["proposal"] });
+  const acceptance = item("Accept the lane", { kind: "acceptance", areas: ["flakes"] });
+  const proposal = item("Plan the gate", { kind: "proposal", areas: ["bug"] });
   const part = addPart(doc, bug, { title: "[Bug] Find the cause", spec: "x" });
   part.title = "[Bug] Find the cause: first";
   delete part.fm.kind;
@@ -57,13 +59,15 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   expect(found(closed)).toEqual([]);
   expect(found(noKind)).toEqual(["kind is missing"]);
   expect(found(goal)[0]).toContain('unknown kind "goal"');
+  expect(found(acceptance)[0]).toContain('unknown kind "acceptance"');
   expect(found(part)).toEqual(["kind is missing"]);
 
   issues.fix(doc);
   expect(doc.items.map((i): unknown[] => [i.fm.kind, i.fm.areas])).toEqual([
     ["task", ["ui"]], ["task", []], ["task", []], ["task", []],
-    ["flake", ["tests"]], ["bug", ["red-main"]], ["task", []], ["bug", []], ["task", []], ["bug", []],
+    ["flake", ["tests"]], ["bug", ["red-main"]], ["task", []], ["bug", []], ["task", []], ["task", []], ["task", []], ["bug", []],
   ]);
+  expect([acceptance, proposal].map((i) => i.fm.kind)).toEqual(["task", "task"]);
   expect(issues.lint(doc).filter((f) => f.fixable)).toEqual([]);
 });
 

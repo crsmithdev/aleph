@@ -112,6 +112,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Set | Stored | Values |
 |---|---|---|
 | Issue status | yes | open, parked, done, dropped |
+| Issue kind | yes | task, bug, check, flake |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
 | Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
@@ -119,6 +120,8 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |
 | Flow class | derived | landed, returned, failed, reran, dropped |
+
+An issue kind is `task` (any work), `bug` (something broken), `check` (a manual check after a land) or `flake` (a flaky-test sighting, noted on the tracker and never built).
 
 `done` is a job that ended with no land: an intake, director, monitor, review or plain job. `returned` is a job that a reviewer or a check sent back. `failed` is a job that broke. `stalled` is a job that wrote no output for its stall time. The last six subjects of the Subject row are role words of events written before jobs had keys: code reads them and writes only `gate`, `rule`, `human`, `claude` and job keys, except where live code still names a role.
 

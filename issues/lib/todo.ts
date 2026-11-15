@@ -304,7 +304,7 @@ export function fix(doc: Doc): string[] {
     const areas = areaList(item.fm.areas);
     if (!item.fm.kind || kindProblem(String(item.fm.kind))) {
       const up = parentRef(item), parent = up === undefined ? undefined : find(doc, up);
-      item.fm.kind = item.fm.kind === "goal" ? "task" : KIND_AREAS.find(([a]) => areas.includes(a))?.[1] ?? (parent?.fm.kind as Kind | undefined) ?? "task";
+      item.fm.kind = ["goal", "acceptance", "proposal"].includes(String(item.fm.kind)) ? "task" : KIND_AREAS.find(([a]) => areas.includes(a))?.[1] ?? (parent?.fm.kind as Kind | undefined) ?? "task";
       fixed.push(`${id}: kind set to ${item.fm.kind}`);
     }
     const kept = areas.filter((a) => !MOVED_AREAS.includes(a));

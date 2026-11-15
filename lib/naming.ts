@@ -16,7 +16,7 @@ export const SUBJECTS = ["gate", "rule", "human", "claude"] as const;
 const OLD_ROLES = ["worker", "reviewer", "check", "intake", "director", "monitor", "firefighter"] as const;
 export const ACTORS: readonly string[] = [...SUBJECTS, ...OLD_ROLES];
 /** The kinds of an issue. */
-export const ISSUE_KINDS = ["task", "bug", "check", "flake", "acceptance"] as const;
+export const ISSUE_KINDS = ["task", "bug", "check", "flake"] as const;
 /** The roles of a job: what it does. `review` is the reviewer's job, its `prev` the build it reviews. */
 export const ROLES = ["build", "plain", "land", "review", "intake", "recheck", "director", "monitor", "lens", "housekeeper", "maintainer"] as const;
 export type State = (typeof STATES)[number];

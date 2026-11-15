@@ -55,9 +55,11 @@ test("--kind reaches add, edit and list, and an unknown kind is refused", () => 
   for (const k of ["task", "bug", "check", "flake"]) expect(bad.err).toContain(k);
   expect(bad.err).not.toContain("proposal");
   expect(aleph("issue", "add", "proj", "Fix the lane", "--kind", "proposal").code).toBe(1);
+  expect(aleph("issue", "add", "proj", "Fix the lane", "--kind", "acceptance").code).toBe(1);
   for (const usage of [aleph("issue"), aleph("issue", "nope", "proj")]) {
     expect(usage.code).toBe(1);
-    expect(usage.err).toContain("--kind task|bug|check|flake|acceptance");
+    expect(usage.err).toContain("--kind task|bug|check|flake");
+    expect(usage.err).not.toContain("acceptance");
   }
   expect(aleph("issue", "add", "proj", "Fix the lane height", "--kind", "bug").code).toBe(0);
   expect(remoteItem(4)).toContain("kind: bug\n");
