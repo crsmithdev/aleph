@@ -17,7 +17,7 @@ import { INTAKE_TRIES, RUN_CAP } from "../infra/settings.ts";
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { parentOf, partsOf, writeList, type Place } from "../../../issues/lib/store.ts";
+import { afterOf, DROP_WAITER, isDropped, parentOf, partsOf, writeList, type Place } from "../../../issues/lib/store.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 
@@ -96,6 +96,9 @@ const REASONS = {
   // Held by the memory re-check on a core note; the director never decides it. Its issue is parked, so no work starts on it.
   "core-change": { kind: "approval", actions: ["approve", "decline"], always: "", card: "approve", name: "Core note changes",
     line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}." },
+  // The issue is parked; its decision option `Remove the link` opens it, `Drop the waiter` drops it (decideAsk).
+  "blocker-dropped": { kind: "input", actions: ["decide"], always: "recommended", card: "decide", name: "Dropped blockers",
+    line: "An issue waits after an issue that was dropped.", problem: "{id} waits after an issue that was dropped, so it is parked." },
   "proposal-check": proposal("Proposed checks", "The correction memory proposes a check for a repo."),
   "proposal-claude-md": proposal("Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."),
   "proposal-skill": proposal("Proposed skill changes", "The correction memory proposes a change to a skill."),
@@ -132,9 +135,9 @@ export const ASK_REASONS: Record<string, Reason> = REASONS;
 /** A stored reason as a known one: a reason the table does not name reads as a plain question. */
 export const reasonOf = (given: string | undefined): string => (given && ASK_REASONS[given] ? given : "question");
 
-/** An issue whose Ask waits for Chris: open, or parked with a core-change Ask. */
+/** An issue whose Ask waits for Chris: open, or parked with a core-change or blocker-dropped Ask. */
 export const asking = (item: issues.Issue, ask: Ask | null): ask is Ask =>
-  !!ask && (issues.status(item) === "open" || (issues.status(item) === "parked" && ask.reason === "core-change"));
+  !!ask && (issues.status(item) === "open" || (issues.status(item) === "parked" && (ask.reason === "core-change" || ask.reason === "blocker-dropped")));
 
 /** The kind of an Ask: the ask's own, else from its reason. */
 export const kindOf = (reason: string, given?: string): Ask["kind"] =>
@@ -338,9 +341,16 @@ export function may(actor: Actor, action: string, ask: Ask | null | undefined, o
 
 /**
  * What a decision on `ask` does to the item, in the write that notes the decision `said`: on the part-dropped Ask, the
- * plan option sets `plan`, and any other answer closes the issue. The caller clears the Ask after that write.
+ * plan option sets `plan`, and any other answer closes the issue. On the blocker-dropped Ask, the drop option drops the
+ * issue, and any other answer opens it without its links to dropped issues. The caller clears the Ask after that write.
  */
 export function decideAsk(ask: Ask | null, item: issues.Issue, said: string): void {
+  if (ask?.reason === "blocker-dropped") {
+    const drop = ask.options.find((o) => o.label === DROP_WAITER);
+    if (drop && (said.includes(drop.label) || said.includes(drop.line))) issues.setStatus(item, "dropped", undefined, said);
+    else { item.fm.after = afterOf(item).filter((r) => !isDropped(r)); issues.setStatus(item, "open"); }
+    return;
+  }
   if (ask?.reason !== "part-dropped") return;
   const planRest = ask.options.find((o) => o.label === PLAN_REST);
   if (planRest && (said.includes(planRest.label) || said.includes(planRest.line))) item.fm.plan = "true";

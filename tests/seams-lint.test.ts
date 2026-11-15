@@ -37,8 +37,8 @@ test("roles, land and gates do not import the orchestrator", () => {
   expect(offenders(/from "\.\.\/transitions\/factory\.ts"/, [], ["jobs/lib/roles/**", "jobs/lib/land/**", "jobs/lib/gates/**"])).toEqual([]);
 });
 
-test("the issue store reads from jobs/ only an issue's Ask in its job record", () => {
-  expect(offenders(/from "(?:\.\.\/)+jobs\/(?!lib\/records\/record\.ts")/, ["issues/lib/issues.ts"], ["issues/**"])).toEqual([]);
+test("the issue store reads from jobs/ only an issue's Ask: its job record and the Ask module", () => {
+  expect(offenders(/from "(?:\.\.\/)+jobs\/(?!lib\/records\/record\.ts"|lib\/asks\/ask\.ts")/, ["issues/lib/issues.ts"], ["issues/**"])).toEqual([]);
 });
 
 test("only lib/day.ts writes a date as toISOString().slice(0, 10)", () => {

@@ -174,6 +174,15 @@ test("a core-change Ask on a parked issue is escalated to Chris with case text, 
   expect(readRecord().map((r) => r.outcome)).toEqual(["escalated"]);
 });
 
+test("a blocker-dropped Ask on a parked waiter is escalated to Chris, whatever actions the director replies, and decides nothing", async () => {
+  fresh([{ title: "Waiter", ask: { kind: "input", reason: "blocker-dropped", question: "issue.9 was dropped.", options: [{ label: "Remove the link", line: "Opens it." }, { label: "Drop the waiter", line: "Drops it." }], recommended: "Remove the link", why: [] } }]);
+  writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
+  replyWith({ case: { situation: "The blocker was dropped.", effects: [], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
+  const [d] = await direct();
+  expect(d).toMatchObject({ ref: `issue.1`, reason: "blocker-dropped", outcome: "escalated", why: "an after link to a dropped issue is Chris's", applied: [] });
+  expect(issues.status(item(1))).toBe("parked");
+});
+
 test("a proposed lesson with no issue is no case", async () => {
   fresh();
   const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", signals: [] };

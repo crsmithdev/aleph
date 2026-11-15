@@ -228,7 +228,7 @@ const drop = post((b, params) => {
 const decide = post((b, params) => {
   const { repo, n, item } = target(params);
   const d = askOf(refIn(repo.key, item));
-  if (todos.status(item) !== "open" || !d) return fail(409, "this issue is not waiting for a decision");
+  if (!d || (todos.status(item) !== "open" && d.reason !== "blocker-dropped")) return fail(409, "this issue is not waiting for a decision");
   const o = d.options.find((x) => x.label === b.label);
   if (d.options.length && !o) fail(400, `no option named ${JSON.stringify(b.label ?? null)}`);
   const rec = b.recommendation === true ? proseDecision(todos.noteOf(item.notes.at(-1) ?? "").text).recommendation : null;

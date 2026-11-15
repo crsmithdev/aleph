@@ -13,6 +13,7 @@ import * as record from "../../jobs/lib/records/record.ts";
 import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
 import { layout, logEvent } from "../../lib/layout.ts";
 import { next } from "../../lib/db.ts";
+import { always, logAlways } from "../../jobs/lib/asks/ask.ts";
 import { key as keyOf } from "../../lib/naming.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
@@ -159,6 +160,32 @@ function logClosed(item: Issue, by: string): void {
 /** The `created` time of each issue at `rev` that has a parsable one, in ms by issue number, with no fetch. */
 export const createdAt = (dir: string, rev: string): Map<number, number> => new Map(loadAll(dir, rev).flatMap((i) => { const at = Date.parse(String(i.fm.created)); return Number.isNaN(at) ? [] : [[i.id, at] as [number, number]]; }));
 
+export const REMOVE_LINK = "Remove the link", DROP_WAITER = "Drop the waiter";
+
+/**
+ * Called after the write that dropped issue `blocker`, for each open issue whose `after` names it: with the Always rule
+ * `recommended` for blocker-dropped the link is removed and the issue stays open; else the issue is parked with the
+ * blocker-dropped Ask (ask.ts decides it).
+ */
+function parkWaiter(repo: Place, waiter: Issue, blocker: string): void {
+  const ref = keyOf("issue", waiter.id);
+  const standing = always("blocker-dropped")?.action === "recommended";
+  const w = writeList(repo, `todo: item ${waiter.id}: blocker ${blocker} dropped`, (doc) => {
+    const item = issues.find(doc, waiter.id);
+    if (!item || status(item) !== "open" || !afterOf(item).includes(blocker)) return null;
+    if (standing) item.fm.after = afterOf(item).filter((r) => r !== blocker);
+    else issues.setStatus(item, "parked");
+    return true;
+  });
+  if (!w) return;
+  if (standing) { logAlways("blocker-dropped", ref, "answered", { detail: "the recommended answer" }); return; }
+  record.setIssueAsk(ref, {
+    kind: "input", reason: "blocker-dropped", question: `${blocker} was dropped, so this issue is parked. What now?`, recommended: REMOVE_LINK, why: [],
+    options: [{ label: REMOVE_LINK, line: "Takes the dropped issue out of after and opens this issue." }, { label: DROP_WAITER, line: "Drops this issue too." }],
+  });
+  logEvent({ subject: "rule", action: "parked", object: ref, detail: `blocker ${blocker} dropped` });
+}
+
 /**
  * Apply `change` to the project's list on the store's origin/main and push it as one commit. When the push is refused
  * because main moved, fetch and apply `change` again. `change` returns null to write nothing. A project the items repo
@@ -202,6 +229,12 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
         if (!CLOSED.includes(status(item)) || !(open.has(item.id) || !before.has(item.id))) continue;
         logClosed(item, by);
         record.clearIssueAsk(`issue.${issues.refOf(item)}`);
+        if (status(item) !== "dropped") continue;
+        const blocker = keyOf("issue", item.id);
+        for (const w of loadAll(dir, commit.out)) {
+          const name = projectName(String(w.fm.project));
+          if (name && status(w) === "open" && afterOf(w).includes(blocker)) parkWaiter({ key: name }, w, blocker);
+        }
       }
       return { value, commit: commit.out, follow: followMain(dir, MAIN) };
     }
@@ -270,6 +303,8 @@ export const isBuildable = (doc: Doc, item: Issue, repo: Place = { key: "" }): b
   && (issues.parentRef(item) !== undefined || !repo.author || takenIn(item));
 /** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
+/** Whether issue `ref` (`issue.<n>`) is dropped on the store's origin/main as last fetched. */
+export const isDropped = (ref: string): boolean => loadAll(itemsDir(), `origin/${MAIN}`).some((i) => keyOf("issue", i.id) === ref && status(i) === "dropped");
 /** The issues an issue names as plain references: its `refs`. They hold nothing. */
 export const refsOf = (item: Issue): string[] => list(item.fm.refs);
 /** The issues of `all` whose `refs` name `item`. Numbers are global, so a ref can cross projects. */

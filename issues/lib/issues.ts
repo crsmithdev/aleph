@@ -193,7 +193,7 @@ export function note(repo: store.Place, id: number | string, text: string, answe
 /**
  * Chris's answer to an issue that asks him something, in one write: the decision note, and the Ask cleared. The issue is
  * left to the intake that follows a note. `fields.after` (the UI's option that waits for an issue) sets `after`. On the
- * part-dropped Ask, the plan option sets `plan` and the close option closes the issue.
+ * part-dropped Ask, the plan option sets `plan` and the close option closes the issue. A parked issue with the blocker-dropped Ask can be decided.
  */
 export function decide(repo: store.Place, id: number | string, text: string, fields: Fields = {}) {
   checkFields(fields);
@@ -201,7 +201,7 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
   const w = write(repo, `todo: item ${id}: decided`, (doc) => {
     const i = pick(repo, doc, id);
     const ask = askOf(refIn(repo.key, i));
-    if (issues.status(i) !== "open" || !ask) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
+    if (!ask || (issues.status(i) !== "open" && ask.reason !== "blocker-dropped")) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     issues.note(i, text);
     decideAsk(ask, i, text);
     if (fields.after !== undefined) setKeys(i, "after", fields.after);

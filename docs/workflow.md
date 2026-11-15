@@ -231,6 +231,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 | `question` | input | answer, drop, decide, deny | `recommended` (intake's own Asks only) |
 | `no-commit` | input | rerun, close | none |
 | `part-dropped` | input | rerun, close | none |
+| `blocker-dropped` | input | decide | `recommended` |
 | `intake-failed` | input | retry, close | `retry` |
 | `rescue` | input | decide, drop | `recommended` |
 | `run-cap` | input | rerun, close | none |

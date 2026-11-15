@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
 import { readList } from "../../../issues/lib/store.ts";
@@ -249,4 +249,11 @@ test("every reason has a card, a name, a line and a problem text, and one that o
     const offers = [...actionsOn(reason, { run: false, decision: false }), ...actionsOn(reason, { run: true, decision: false })];
     expect([reason, offers.includes("rerun") ? !!r.rerun : true]).toEqual([reason, true]);
   }
+});
+
+test("a parked issue with a blocker-dropped Ask is asking, and its Always rule can be recommended", () => {
+  const blocker: Ask = { kind: "input", reason: "blocker-dropped", question: "q?", options: [{ label: "Remove the link", line: "l" }, { label: "Drop the waiter", line: "d" }], why: [] };
+  expect(asking(item({ parked: "true" }), blocker)).toBe(true);
+  expect(asking(item({ parked: "true" }), { ...blocker, reason: "question" })).toBe(false);
+  expect(grant("blocker-dropped", "recommended")).toBeNull();
 });

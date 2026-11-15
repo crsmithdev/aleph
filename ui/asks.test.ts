@@ -32,6 +32,7 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "intake-failed": () => ofIssues(issue({ reason: "intake-failed", question: "Intake failed: no verdict in 2 runs: failed: its process ended before a verdict" })),
   "part-dropped": () => ofIssues(issue({ reason: "part-dropped", decision: { ...decision, options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed" }, question: "A goal was dropped." })),
   rescue: () => ofIssues(issue({ reason: "rescue", decision, question: "Should it be A or B?" })),
+  "blocker-dropped": () => ofIssues(issue({ status: "parked", reason: "blocker-dropped", decision: { ...decision, options: [{ label: "Remove the link", line: "open" }, { label: "Drop the waiter", line: "drop" }], recommended: "Remove the link" }, question: "issue.9 was dropped, so this issue is parked. What now?" })),
   "core-change": () => ofIssues(issue({ reason: "core-change", question: "Apply the archive verdict to the core note X?" })),
   "proposal-check": () => asks({ runs: [], issues: [] }, [lesson("check")]),
   "proposal-claude-md": () => asks({ runs: [], issues: [] }, [lesson("claude-md")]),

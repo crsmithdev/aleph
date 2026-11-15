@@ -46,7 +46,7 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
   - Identity: `issue.<n>`. One counter covers every project. The counter never falls below the highest issue folder.
   - Lifecycle: open, parked, done, dropped. The status is derived from the stored `closed_as` and `parked` fields. Any move is allowed. A close clears `parked`. A trailer commit on main never sets it: done is the stored status; the sweep closes an issue whose work is on main and reopens one whose commits are all reverted.
   - Owner: the work store. One door files a new issue. Every close logs `done` or `dropped`.
-  - Invariants: each new issue logs one `filed` event. A part of a parked parent is not buildable.
+  - Invariants: each new issue logs one `filed` event. A part of a parked parent is not buildable. An `after` link to a dropped issue parks the waiter and asks.
   - Relations: one project. Many links. Many jobs, through the `target` column of each job. At most one issue state.
 - **Job**
   - Identity: `job.<n>`, in start order. A job covers one execution, so a build, its fix round and its land are three jobs. A migrated job keeps its old key in a `was` column, for search only.
