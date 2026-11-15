@@ -16,7 +16,7 @@ describe("a factory run", () => {
   test("a change to an existing test goes to the reviewer; its hold needs a review; drop leaves the item open", async () => {
     const id = (await issueAdd("fac", "tests")).json.added;
     const r = await job("fac", "ftest", "Goal: ftest REVIEW:hold\nACTION: commit old.test.ts\n", { on: String(id) }, { ALEPH_FIX_ROUNDS: "0" });
-    expect(state(r.json.run)).toMatchObject({ state: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "review" }), reason: expect.stringMatching(/^reviewer: hold|^reviewer: tests do not/) });
+    expect(state(r.json.run)).toMatchObject({ state: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "review-held" }), reason: expect.stringMatching(/^reviewer: hold|^reviewer: tests do not/) });
     expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).toContain("The diff changes the test old.test.ts");
     expect((await drop("ftest")).code).toBe(0);
     expect((await issueShow("fac", id)).json.status).toBe("open");

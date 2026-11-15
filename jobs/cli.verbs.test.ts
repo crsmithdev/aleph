@@ -10,9 +10,9 @@ afterAll(teardown);
 describe("always", () => {
   test("grant, timeout and revoke each print the rules after the change; a bad reason or minute count exits 1", async () => {
     expect((await aleph(["always", "list"])).json).toEqual({});
-    const g = await aleph(["always", "grant", "review", "land"]);
+    const g = await aleph(["always", "grant", "review-held", "land"]);
     expect(g.code).toBe(0);
-    expect(g.json).toEqual({ review: { action: "land", at: expect.any(String) } });
+    expect(g.json).toEqual({ "review-held": { action: "land", at: expect.any(String) } });
     expect((await aleph(["always"])).json).toEqual(g.json);
     const bad = await aleph(["always", "grant", "nonsense", "land"]);
     expect(bad.code).toBe(1);
@@ -22,10 +22,10 @@ describe("always", () => {
     expect(held.stderr).toContain("held-path has no timeout");
     expect((await aleph(["always", "timeout", "question", "30"])).json).toEqual({ question: { minutes: 30, then: "pick" } });
     expect((await aleph(["always", "timeout"])).json).toEqual({ question: { minutes: 30, then: "pick" } });
-    const late = await aleph(["always", "timeout", "review", "-1"]);
+    const late = await aleph(["always", "timeout", "review-held", "-1"]);
     expect(late.code).toBe(1);
     expect(late.stderr).toContain("minutes must be a whole number of at least 0, not -1");
-    expect((await aleph(["always", "revoke", "review"])).json).toEqual({});
+    expect((await aleph(["always", "revoke", "review-held"])).json).toEqual({});
   });
 });
 

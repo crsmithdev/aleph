@@ -10,7 +10,7 @@ import type { Job, NewIssue } from "./state.ts";
 let STORE: Partial<Ask> | undefined;
 const run = (reason: string, extra: Partial<Job> = {}): Job => ({
   name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, state: "waiting", started: "2026-10-28T00:00:00Z",
-  ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason, ...STORE },
+  ask: { kind: reason === "held-path" || reason === "review-held" ? "approval" : "input", reason, ...STORE },
   run: { role: "build", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
 } as Job);
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra,
@@ -25,7 +25,7 @@ const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, []);
 
 const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "held-path": () => ofRuns(run("held-path", { reason: "changes hooks/x.ts" })),
-  review: () => ofRuns(run("review", { reviewCall: { call: "returned", reason: "tests are missing" } })),
+  "review-held": () => ofRuns(run("review-held", { reviewCall: { call: "returned", reason: "tests are missing" } })),
   question: () => ofRuns(run("question", { question: "Which port?" })),
   "no-commit": () => ofIssues(issue({ reason: "no-commit", question: "the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal." })),
   "run-cap": () => ofIssues(issue({ reason: "run-cap", question: RUN_CAP })),

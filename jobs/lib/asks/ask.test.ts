@@ -66,7 +66,7 @@ test("normalizeAsk takes after, 2 to 4 options and a recommended label that is o
   expect(normalizeAsk({ ...raw, recommended: "C" })).toBeNull();
   expect(normalizeAsk({ ...raw, options: raw.options.slice(0, 1) })).toBeNull();
   expect(normalizeAsk({ ...raw, question: " " })).toBeNull();
-  expect(normalizeAsk(raw, { kind: "approval", reason: "review" })).toMatchObject({ kind: "approval", reason: "review" });
+  expect(normalizeAsk(raw, { kind: "approval", reason: "review-held" })).toMatchObject({ kind: "approval", reason: "review-held" });
 });
 
 test("normalizeAsk drops an after that is not an issue ID", () => {
@@ -87,7 +87,7 @@ test("the table gives the kind, the wait and the plain Ask of a reason", () => {
   expect(needsOf(plainAsk("held-path", "q"))).toBe("protected");
   expect(needsOf(plainAsk("no-commit", "q"))).toBeUndefined();
   expect(needsOf(undefined)).toBeUndefined();
-  expect(plainAsk("review", "q", ["w"])).toEqual({ kind: "approval", reason: "review", question: "q", options: [], why: ["w"] });
+  expect(plainAsk("review-held", "q", ["w"])).toEqual({ kind: "approval", reason: "review-held", question: "q", options: [], why: ["w"] });
 });
 
 test("waitOf reads a run with no ask as a question", () => {
@@ -100,7 +100,7 @@ test("actionsOn picks by context for a question and a dropped part", () => {
   expect(actionsOn("question", { run: false, decision: true })).toEqual(["decide", "deny"]);
   expect(actionsOn("part-dropped", { run: false, decision: true })).toEqual(["decide", "close"]);
   expect(actionsOn("part-dropped", { run: false, decision: false })).toEqual(["rerun", "close"]);
-  expect(actionsOn("review", { run: true, decision: false })).toEqual(["land", "drop"]);
+  expect(actionsOn("review-held", { run: true, decision: false })).toEqual(["land", "drop"]);
 });
 
 
@@ -121,6 +121,9 @@ test("user is granted on any reason but a memory proposal, and a stored grant st
   expect(grant("question", "user")).toBeNull();
   expect(always("question")?.action).toBe("user");
   expect(readAlways().question?.action).toBe("user");
+  expect(grant("review", "user")).toContain("unknown reason review;");
+  expect(grant("review-held", "user")).toBeNull();
+  revoke("review-held");
   expect(grant("proposal-skill", "user")).not.toBeNull();
   expect(grant("proposal-skill:aleph", "user")).not.toBeNull();
   revoke("question");
@@ -155,7 +158,7 @@ test("no reason can be handed to the firefighter: an Ask is the director's, then
 
 test("readAlways ignores a grant that grant() would refuse, and the next write drops it", () => {
   const at = "2026-11-04T12:00:00Z";
-  const dead = Object.fromEntries(["held-path", "review", "no-commit", "run-cap"].map((k) => [k, { action: "firefighter", at }]));
+  const dead = Object.fromEntries(["held-path", "review-held", "no-commit", "run-cap"].map((k) => [k, { action: "firefighter", at }]));
   putJson("settings", "always", { ...dead, rescue: { action: "recommended", at } });
   expect(Object.keys(readAlways())).toEqual(["rescue"]);
   expect(always("held-path")).toBeNull();

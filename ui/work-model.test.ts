@@ -70,7 +70,7 @@ beforeAll(async () => {
   }, true);
   run("", { kind: "build", job: "fac-3", name: "fac-3", state: "running", on: "fac-3" });
   run("", { kind: "triage", job: "triage-fac-99", name: "triage-fac-99", state: "waiting", on: "fac-99", ask: { kind: "input", reason: "no-commit", question: "Triage gave no verdict.", options: [], why: [] } });
-  run("", { kind: "build", job: "fac-6-r", name: "fac-6-r", state: "waiting", on: "fac-6", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "waiting", reason: "judgement" } });
+  run("", { kind: "build", job: "fac-6-r", name: "fac-6-r", state: "waiting", on: "fac-6", ask: { kind: "approval", reason: "review-held", question: "Land it?", options: [], why: [] }, review: { call: "waiting", reason: "judgement" } });
   run("", { kind: "build", job: "fac-2", name: "fac-2", state: "landed", on: "fac-2", commit: "abcdef1234567", ended: ago(1) });
   ({ server, stop } = await withServer({ warm: false }));
 });

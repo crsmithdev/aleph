@@ -70,7 +70,7 @@ const proposal = (name: string, line: string): Reason =>
 const REASONS = {
   "held-path": { kind: "approval", actions: ["land", "drop"], always: "", needs: "protected", card: "approve", name: "Lands on held paths",
     line: "A job that changes a held path, after its checks and review pass.", problem: "The run for {id} changes a path the repo holds for your review, so the factory did not land it." },
-  "review": { kind: "approval", actions: ["land", "drop"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
+  "review-held": { kind: "approval", actions: ["land", "drop"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
     line: "The reviewer held the job and no fix rounds are left.", problem: "The reviewer could not reach a verdict on {id} in two tries." },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
   "question": { kind: "input", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question", card: "decide", name: "Questions",

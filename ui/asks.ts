@@ -70,7 +70,7 @@ const askIn = (c: Ctx): Pick<Ask, "headline" | "situation" | "details" | "effect
 const asked = (c: Ctx): string => { const q = clean(c.issue?.decision?.question ?? c.issue?.question); return q && sentence(q); };
 /** The problem text of a reason whose case the context says more about than the fixed text of ASK_REASONS. */
 const PROBLEM: Record<string, (c: Ctx) => string | undefined> = {
-  review: (c) => {
+  "review-held": (c) => {
     const r = c.run?.reviewCall;
     if (r?.call === "returned") return `The reviewer sent ${c.id} back twice${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
     if (r?.call === "waiting") return `The reviewer left ${c.id} to the user${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;

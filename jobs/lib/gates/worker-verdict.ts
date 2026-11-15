@@ -146,10 +146,10 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
     if (rule) return { outcome: { ...waiting("held-path", rule, [stat]), reason: rule, stat, review: review("passed"), ...facts }, code: 0 };
     return { outcome: { state: "passed", review: review("passed"), ...facts }, code: 0 };
   }
-  if (rv.none) return { outcome: { ...waiting("review", rv.reason, [stat]), cause: "review", reason: rv.reason, stat, review: review("failed"), ...facts }, code: 0 };
+  if (rv.none) return { outcome: { ...waiting("review-held", rv.reason, [stat]), cause: "review", reason: rv.reason, stat, review: review("failed"), ...facts }, code: 0 };
   const hold = reviewHold(done, earlier, rv.reason, rounds);
   if ("round" in hold) return { outcome: { state: "returned", cause: "review", reason: rv.reason, stat, review: review("returned"), ...facts, failed: "review", round: hold.round }, code: 1 };
-  return { outcome: { ...waiting("review", hold.reason, [stat]), cause: "review", reason: hold.reason, stat, review: review("waiting"), ...facts }, code: 0 };
+  return { outcome: { ...waiting("review-held", hold.reason, [stat]), cause: "review", reason: hold.reason, stat, review: review("waiting"), ...facts }, code: 0 };
 }
 
 /** Why a held run cannot land yet: the reviewer has given no verdict; null once it has (`review` is its review.json). */

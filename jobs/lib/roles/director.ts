@@ -540,7 +540,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
       if (missing) return no(a, missing);
     }
     const why = await ports.land(c.entry.run.name);
-    return why ? no(a, why) : done(a, { action: "landed", sub: c.ask.reason === "review" ? "override" : sub });
+    return why ? no(a, why) : done(a, { action: "landed", sub: c.ask.reason === "review-held" ? "override" : sub });
   }
   if (a.do === "drop" || (a.do === "answer" && c.at === "run")) {
     const name = jobOf(c, n);

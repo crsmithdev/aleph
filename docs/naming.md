@@ -116,6 +116,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
 | Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
+| Ask reason | yes | held-path, review-held, question, no-commit, part-dropped, intake-failed, rescue, run-cap, core-change, blocker-dropped, proposal-check, proposal-claude-md, proposal-skill |
 | Role | yes, never shown | build, plain, land, review, intake, recheck, director, monitor, lens, housekeeper, maintainer |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |
@@ -135,7 +136,6 @@ A writer writes only the new words, and a reader reads the stored words as they 
 | Cause | time-box → timeout; lock-busy → locked; reviewer → review; no-answer → unanswered; own-list → other |
 | Fate | already-met → met; by-hand → manual |
 | Review call | land → passed; back → returned; ask → waiting; pending → running; error → failed |
-| Ask reason | held-path → protected; review → returned; no-commit → failed; part-dropped → incomplete; intake-failed → failed; rescue → waiting; run-cap → capped; proposal-* → proposal |
 | Gate | pause → paused; baseline → red; live-cap → full; busy-file → busy; loop-guard → looping; credit-wait → credit |
 | Actor | You → human; Rule → rule; Gate → gate; Director → director; Firefighter → firefighter; triage, planner → intake |
 | Kind | agent → build; triage, plan → intake; explain → director; firefighter → director; facts stays, since readers tell it from the job's real runs |

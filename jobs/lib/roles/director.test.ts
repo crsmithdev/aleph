@@ -127,7 +127,7 @@ test("the escalation list: a land on a security path gets case text and no actio
 test("a review Ask on a run that changes bun.lock or a security path is Chris's; one that changes neither the director lands", async () => {
   fresh([{ title: "lock", specced: true }]);
   branch(`lock${n}`, "bun.lock");
-  run({ name: "issue.1", target: "issue.1", ask: { kind: "approval", reason: "review", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
+  run({ name: "issue.1", target: "issue.1", ask: { kind: "approval", reason: "review-held", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
   reply([{ do: "land" }]);
   const [d] = await direct();
   expect(d).toMatchObject({ outcome: "escalated", why: "the run changes bun.lock, a security path or bun.lock, so its land is Chris's" });
@@ -135,7 +135,7 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
 
   fresh([{ title: "plain", specced: true }]);
   branch(`ok${n}`, "src/a.ts");
-  const folder = run({ name: "issue.1", target: "issue.1", ask: { kind: "approval", reason: "review", question: "Land?", options: [], why: [] }, branch: `ok${n}` });
+  const folder = run({ name: "issue.1", target: "issue.1", ask: { kind: "approval", reason: "review-held", question: "Land?", options: [], why: [] }, branch: `ok${n}` });
   const [e] = await direct();
   expect(e).toMatchObject({ outcome: "decided", applied: ["land"] });
   expect(landed).toEqual([`issue.1`]);

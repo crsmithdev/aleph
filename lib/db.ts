@@ -48,6 +48,10 @@ CREATE VIEW event_rows AS SELECT e.seq, e.time, e.subject, e.action, e.object, e
   s.role AS subject_role, o.role AS object_role, o.target AS object_target, coalesce(o.project, s.project) AS project,
   o.model, o.cost, o.commit_sha, o.started, o.ended
   FROM events e LEFT JOIN jobs s ON s.id = e.subject LEFT JOIN jobs o ON o.id = e.object;
+`, `
+UPDATE issue_state SET ask = json_set(ask, '$.reason', 'review-held') WHERE json_extract(ask, '$.reason') = 'review';
+UPDATE events SET detail = 'review-held' WHERE action = 'question' AND detail = 'review';
+UPDATE settings SET value = json_insert(json_remove(value, '$.review'), '$."review-held"', json_extract(value, '$.review')) WHERE key = 'always' AND json_type(value, '$.review') IS NOT NULL;
 `];
 const VERSION = SCHEMAS.length;
 

@@ -37,7 +37,7 @@ export const SPEEDS = ["landed", "returned", "failed", "reran", "dropped"] as co
 /** Old words, per set, that live code still writes or reads, and the new word each reads as. A word not listed is already new. */
 export const OLD: Record<string, Record<string, string>> = {
   ask: {
-    "held-path": "protected", review: "returned", "no-commit": "failed", "part-dropped": "incomplete",
+    "held-path": "protected", "review-held": "returned", "no-commit": "failed", "part-dropped": "incomplete",
     "intake-failed": "failed", rescue: "waiting", "run-cap": "capped",
   },
   gate: { pause: "paused", baseline: "red", "live-cap": "full", "busy-file": "busy", "loop-guard": "looping", "credit-wait": "credit" },

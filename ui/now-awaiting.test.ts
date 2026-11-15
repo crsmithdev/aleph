@@ -30,9 +30,9 @@ test("an old prose note gets a Problem with no tag or lead, Approve recommendati
 /** The case text the director writes when it escalates: until then, the row offers no action. */
 const CASE = { situation: "The director sent it to you." };
 const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } => {
-  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", state: "waiting", ask: { kind: why === "held-path" || why === "review" ? "approval" : "input", reason: why, ...CASE }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
+  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", state: "waiting", ask: { kind: why === "held-path" || why === "review-held" ? "approval" : "input", reason: why, ...CASE }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
   const iss = (o: any) => ({ runs: [] as any[], issues: [{ ...issue(7), title: "T", ...o, ask: { kind: "input", reason: o.reason, question: o.question, options: [], why: [], ...CASE } }], lessons: [] as any[] });
-  if (["held-path", "review"].includes(reason)) return run(reason, reason === "review" ? { reviewCall: { call: "waiting", reason: "r" } } : {});
+  if (["held-path", "review-held"].includes(reason)) return run(reason, reason === "review-held" ? { reviewCall: { call: "waiting", reason: "r" } } : {});
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
   if (reason.startsWith("proposal-")) return { runs: [] as any[], issues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {

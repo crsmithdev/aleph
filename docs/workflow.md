@@ -170,8 +170,8 @@ It holds only when the issue does not call for the change.
 | Outcome | Result |
 |---|---|
 | `pass` | Go to the held-path check |
-| `hold` | A fix round, like a failed check. After the last round, a `review` Ask |
-| No verdict, error or time box (`ALEPH_REVIEW_TIMEOUT`, 600 s) | The reviewer runs once more. A second miss sets a `review` Ask |
+| `hold` | A fix round, like a failed check. After the last round, a `review-held` Ask |
+| No verdict, error or time box (`ALEPH_REVIEW_TIMEOUT`, 600 s) | The reviewer runs once more. A second miss sets a `review-held` Ask |
 
 A diff over `ALEPH_REVIEW_DIFF_MAX` (200,000 characters) goes in as the `--stat` plus the cut diff. A merge run gets a review of its merge commit only.
 
@@ -227,7 +227,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 | Reason | Kind | Actions | Always action |
 |---|---|---|---|
 | `held-path` | approval | land, drop | none |
-| `review` | approval | land, drop | none |
+| `review-held` | approval | land, drop | none |
 | `question` | input | answer, drop, decide, deny | `recommended` (intake's own Asks only) |
 | `no-commit` | input | rerun, close | none |
 | `part-dropped` | input | rerun, close | none |

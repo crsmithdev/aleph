@@ -96,7 +96,7 @@ test("an old Ask with none of the new fields still renders: the item's title, th
 
 test("one Ask per reason: the card, its label and its tag come from the server item", () => {
   const want: Record<string, [string, string, string]> = {
-    "held-path": ["approve", "Approve", "protected"], review: ["approve", "Approve", "returned"], question: ["decide", "Decide", "question"],
+    "held-path": ["approve", "Approve", "protected"], "review-held": ["approve", "Approve", "returned"], question: ["decide", "Decide", "question"],
     "no-commit": ["unstick", "Unstick", "failed"], "part-dropped": ["decide", "Decide", "incomplete"], "intake-failed": ["unstick", "Unstick", "failed"],
     rescue: ["unstick", "Unstick", "waiting"], "run-cap": ["unstick", "Unstick", "capped"],
     "core-change": ["approve", "Approve", "core-change"], "blocker-dropped": ["decide", "Decide", "blocker-dropped"],

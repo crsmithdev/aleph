@@ -12,7 +12,7 @@ import { dueAt, issueAsks, readTimeouts, setTimeoutOf, timeoutStep } from "./tim
 let dir = "";
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "timeout-")); process.env.ALEPH_FACTORY_DIR = dir; process.env.ALEPH_DB = join(dir, "aleph.db"); });
 
-const ask = (recommend = "land"): Ask => ({ kind: "approval", reason: "review", question: "Land it?", options: [], why: [], situation: "It changes hooks/.", recommend: { action: recommend, why: "w" } });
+const ask = (recommend = "land"): Ask => ({ kind: "approval", reason: "review-held", question: "Land it?", options: [], why: [], situation: "It changes hooks/.", recommend: { action: recommend, why: "w" } });
 const NOW = Date.parse("2026-11-10T12:00:00Z");
 let n = 0;
 /** A director job whose decision escalated the Ask of `on`, `at` ms. */
@@ -25,16 +25,16 @@ function waiting(ago: number, a: Ask = ask(), now = NOW): Entry {
 }
 
 test("setTimeoutOf writes minutes and pick or drop for any reason in the table, 0 removes them, and other reasons are refused", () => {
-  expect(setTimeoutOf("review", 30)).toBeNull();
+  expect(setTimeoutOf("review-held", 30)).toBeNull();
   expect(setTimeoutOf("question", 20, "drop")).toBeNull();
   expect(setTimeoutOf("no-commit", 10, "pick")).toBeNull();
-  expect(readTimeouts()).toEqual({ review: { minutes: 30, then: "pick" }, question: { minutes: 20, then: "drop" }, "no-commit": { minutes: 10, then: "pick" } });
+  expect(readTimeouts()).toEqual({ "review-held": { minutes: 30, then: "pick" }, question: { minutes: 20, then: "drop" }, "no-commit": { minutes: 10, then: "pick" } });
   expect(setTimeoutOf("question", 40)).toBeNull();
   expect(readTimeouts().question).toEqual({ minutes: 40, then: "drop" });
   expect(setTimeoutOf("nonsense", 30)).toContain("has no timeout");
   expect(setTimeoutOf("question", 30, "wait")).toContain("pick or drop");
-  expect(setTimeoutOf("review", -1)).toContain("whole number");
-  expect(setTimeoutOf("review", 0)).toBeNull();
+  expect(setTimeoutOf("review-held", -1)).toContain("whole number");
+  expect(setTimeoutOf("review-held", 0)).toBeNull();
   expect(getJson("settings", "timeouts", {})).toEqual({ question: { minutes: 40, then: "drop" }, "no-commit": { minutes: 10, then: "pick" } });
 });
 
@@ -42,13 +42,13 @@ test("dueAt is the escalation time plus the minutes, only when the case text rec
   const now = NOW;
   const e = waiting(10, ask(), now);
   expect(dueAt(e, {})).toBeNull();
-  expect(dueAt(e, { review: { minutes: 30, then: "pick" } })).toBe(now - 10 * 60_000 + 30 * 60_000);
-  expect(dueAt(waiting(10, { ...ask(), recommend: undefined }), { review: { minutes: 30, then: "pick" } })).toBeNull();
-  expect(dueAt(waiting(10, { ...ask(), situation: undefined }), { review: { minutes: 30, then: "pick" } })).toBeNull();
+  expect(dueAt(e, { "review-held": { minutes: 30, then: "pick" } })).toBe(now - 10 * 60_000 + 30 * 60_000);
+  expect(dueAt(waiting(10, { ...ask(), recommend: undefined }), { "review-held": { minutes: 30, then: "pick" } })).toBeNull();
+  expect(dueAt(waiting(10, { ...ask(), situation: undefined }), { "review-held": { minutes: 30, then: "pick" } })).toBeNull();
 });
 
 test("timeoutStep lands a due run once, and leaves a run that is not due", async () => {
-  setTimeoutOf("review", 30);
+  setTimeoutOf("review-held", 30);
   const due = waiting(31), early = waiting(5);
   const started: string[] = [];
   const start = async (name: string) => { started.push(name); return null; };
@@ -58,7 +58,7 @@ test("timeoutStep lands a due run once, and leaves a run that is not due", async
 });
 
 test("timeoutStep does not try a refused land again", async () => {
-  setTimeoutOf("review", 1);
+  setTimeoutOf("review-held", 1);
   const e = waiting(2);
   let tries = 0;
   const start = async () => { tries++; return "not passed"; };
@@ -91,7 +91,7 @@ test("timeoutStep takes the recommended decide:A on an issue's question Ask once
 test("a due drop timeout takes the reason's drop, close or deny; an Ask not due, or with no recommendation under pick, gets nothing", async () => {
   setTimeoutOf("question", 30, "drop");
   setTimeoutOf("no-commit", 30, "drop");
-  setTimeoutOf("review", 30, "drop");
+  setTimeoutOf("review-held", 30, "drop");
   const deny = onIssue(31, question("decide:A")), early = onIssue(5, question("decide:A"));
   const close = onIssue(31, { kind: "input", reason: "no-commit", question: "Rerun?", options: [], why: [], situation: "No commit." });
   const run = waiting(31);

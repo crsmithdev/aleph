@@ -148,7 +148,7 @@ describe("the reviewer", () => {
     const { p, calls } = ports({ reviews: [miss, miss] });
     const v = await workerVerdict(branch(), p);
     expect(calls.filter((c) => c === "review")).toHaveLength(2);
-    expect(v).toMatchObject({ code: 0, outcome: { state: "waiting", cause: "review", reason: miss.reason, ask: { reason: "review" }, review: { call: "failed", cost: 2, reason: miss.reason } } });
+    expect(v).toMatchObject({ code: 0, outcome: { state: "waiting", cause: "review", reason: miss.reason, ask: { reason: "review-held" }, review: { call: "failed", cost: 2, reason: miss.reason } } });
     expect((await workerVerdict(branch(), ports({ reviews: [miss, { reason: null }] }).p)).outcome.state).toBe("passed");
   });
 
@@ -180,7 +180,7 @@ describe("the reviewer", () => {
 
   test("a hold after the last round waits for Chris, and says how often it went back", async () => {
     const reason = async (earlier: Run[] | undefined) => (await workerVerdict(branch({ earlier }), ports({ reviews: [{ reason: "reviewer: still no test" }] }).p)).outcome;
-    expect(await reason([run({ failed: "review" }), run({ failed: "tests" })])).toMatchObject({ state: "waiting", reason: "the reviewer sent it back once: still no test", ask: { reason: "review" } });
+    expect(await reason([run({ failed: "review" }), run({ failed: "tests" })])).toMatchObject({ state: "waiting", reason: "the reviewer sent it back once: still no test", ask: { reason: "review-held" } });
     expect((await reason(two)).review).toEqual({ call: "waiting", reason: "reviewer: still no test", seconds: 0 });
     expect((await reason(two)).reason).toBe("reviewer: still no test");
     expect((await reason(undefined)).reason).toBe("reviewer: still no test");
