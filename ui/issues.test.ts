@@ -995,15 +995,15 @@ describe("the Issue timeline names why a wait waited", () => {
     timeline: { filed: "2026-11-01T10:00:00Z", runs: [run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"), run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z")] } });
   const evs = (x: any) => v.issueSegments(x).flatMap((s: any) => s.rows).flatMap((r: any) => r.events);
   const html = (x: any) => evs(x).map((e: any) => e.html).join("\n");
-  test("a wait with hold records of the issue's job in its span names the hold's action, its content and its minutes", () => {
+  test("a wait with hold records of the issue's job in its span names the hold word, its content and its minutes", () => {
     setCodes({ aleph: "a" });
     try {
       const holds = [
-        { at: "2026-11-01T10:05:00Z", name: "fac-1", kind: "busy-file", text: "both jobs change the busy file", event: { action: "busy", detail: "aleph-1372 holds ui/views/issues.js" } },
-        { at: "2026-11-01T10:06:00Z", name: "fac-2", kind: "baseline", text: "other job" },
+        { at: "2026-11-01T10:05:00Z", name: "fac-1", kind: "file", text: "both jobs change the busy file", event: { action: "held", detail: "file: ui/views/issues.js: job.1372" } },
+        { at: "2026-11-01T10:06:00Z", name: "fac-2", kind: "red", text: "other job" },
       ];
-      expect(evs(d(holds)).map((e: any) => e.tag)).toContain("busy");
-      expect(html(d(holds))).toContain("a1372 holds ui/views/issues.js · 28m 00s");
+      expect(evs(d(holds)).map((e: any) => e.tag)).toContain("file");
+      expect(html(d(holds))).toContain("file: ui/views/issues.js: job.1372 · 28m 00s");
       expect(html(d(holds))).not.toContain("other job");
     } finally { setCodes({}); }
   });

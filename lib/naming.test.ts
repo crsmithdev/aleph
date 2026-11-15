@@ -50,11 +50,12 @@ describe("words", () => {
     expect(n.word("act", "landed")).toBe("landed");
   });
   test("OLD keeps only the sets that live code still writes", () => {
-    expect(Object.keys(n.OLD).sort()).toEqual(["act", "actor", "ask", "gate"]);
+    expect(Object.keys(n.OLD).sort()).toEqual(["act", "actor", "ask"]);
   });
-  test("the credit wait reads as the hold word credit", () => {
-    expect(n.word("gate", "credit-wait")).toBe("credit");
-    expect(n.event({ subject: "gate", action: "credit", object: "aleph-1" }).action).toBe("credit");
+  test("an issue hold is one held event, and the hold actions of old events are no longer written", () => {
+    expect(n.event({ subject: "gate", action: "held", object: "issue.3", detail: "credit: job.1 hit the API credit error" }).action).toBe("held");
+    for (const action of n.OLD_HOLDS) expect(() => n.event({ subject: "gate", action, object: "issue.3" })).toThrow(/action/);
+    expect(n.OLD_HOLDS).toContain("looping");
   });
   test("credit is a cause with a phrase", () => expect(n.because("credit")).toBe("out of credit"));
   test("every set is lower case with no separator marks", () => {
@@ -137,6 +138,7 @@ test("sayText says an event in the active voice, its object first, the detail af
     [{ subject: "gate", action: "returned", object: "job.6802" }, "j-06802 returned"],
     [{ subject: "gate", action: "waiting", object: "issue.3" }, "i-00003 waits for you"],
     [{ subject: "gate", action: "after", object: "issue.3", detail: "issue.2" }, "i-00003 waits for i-00002"],
+    [{ subject: "gate", action: "held", object: "issue.2994", detail: "after: issue.2985 issue.2993" }, "i-02994 held: after i-02985 i-02993"],
     [{ subject: "gate", action: "waiting", object: "issue.3", project: "aleph" }, "a-00003 waits for you"],
     [{ subject: "gate", action: "busy", object: "issue.3", detail: "job.6802 holds src/x.ts" }, "i-00003 waits: j-06802 holds src/x.ts"],
     [{ subject: "gate", action: "red", object: "issue.3", detail: "at abc1234" }, "i-00003 waits: main is red: at abc1234"],

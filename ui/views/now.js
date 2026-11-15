@@ -174,7 +174,7 @@ const saidHtml = (p, row) => {
 };
 
 /** The holds: an issue's state while it waits, not an event, so the feed leaves them out. The ones that need Chris are alerts. */
-const WAITS = new Set(["waiting", "paused", "red", "after", "full", "gpu", "busy", "parent", "credit"]);
+const WAITS = new Set(["held", "waiting", "paused", "red", "after", "full", "gpu", "busy", "parent", "credit"]);
 /** An issue's subject (`aleph-2118`, `issue.2118`), not a routine's (`housekeeper`). */
 const isIssue = (subject) => Boolean(parseId(subject) || parseKey(subject)?.kind === "issue");
 /** The word for a run kind in a row's line: a build run implements the issue. */

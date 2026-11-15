@@ -178,3 +178,22 @@ test("a rescue that finds the lock taken waits, then acts once on the state it f
   expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);
   expect(notes(id)).toContain("the time box ran out");
 });
+
+test("a rescue whose lock stays taken skips the run and logs it", async () => {
+  const id = newIssue();
+  const name = `issue.${id}`;
+  mk(`fac-${id}`, "build", "failed", { cause: "timeout", reason: "time box" });
+  const release = (await lock(`rescue-fac-${name}`, 0))!;
+  const wait = process.env.ALEPH_RESCUE_WAIT_MS;
+  process.env.ALEPH_RESCUE_WAIT_MS = "0";
+  const f = fakes();
+  try {
+    await dispatch(f);
+  } finally {
+    if (wait === undefined) delete process.env.ALEPH_RESCUE_WAIT_MS;
+    else process.env.ALEPH_RESCUE_WAIT_MS = wait;
+    release();
+  }
+  expect(f.calls).toEqual([]);
+  expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "gate", object: name, action: "skipped", detail: "the rescue lock stayed busy" }));
+});

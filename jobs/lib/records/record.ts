@@ -274,7 +274,7 @@ function editState(d: Database, key: string, fn: (s: IssueState) => void): void 
     .run(key, s.ask ? JSON.stringify(s.ask) : null, s.askJob ?? null, s.wait?.kind ?? null, s.wait?.reason ?? null, s.wait?.since ?? null, s.ci ? JSON.stringify(s.ci) : null);
   if (has === had) return;
   if (was) logEvent({ subject: "gate", action: "answered", object: key });
-  if (s.ask) logEvent({ subject: "gate", action: "question", object: key, detail: s.ask.reason });
+  if (s.ask) logEvent({ subject: "gate", action: "question", object: key, detail: s.ask.facts ? `${s.ask.reason}: ${s.ask.facts}` : s.ask.reason });
 }
 
 /** Read-modify-write the state of `key` under the write lock. */

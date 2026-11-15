@@ -100,7 +100,7 @@ describe("the event tags", () => {
 
   test("a wait's tone is the tone of its state: a red hold is stuck", () => {
     const w = { start: Date.parse(iso(0)), end: Date.parse(iso(9)) };
-    const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "x" }]);
+    const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "x" }]);
     expect([e.tag, e.tone]).toEqual(["red", "stuck"]);
   });
 
@@ -224,21 +224,23 @@ describe("waitEvent", () => {
   test("a hold's event gives the tag, its content and the wait's length", () => {
     setCodes({ aleph: "a" });
     try {
-      const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "busy-file", text: "both change the busy file", event: { action: "busy", detail: "aleph-1372 holds ui/views/issues.js" } }]);
+      const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "busy", text: "both change the busy file", event: { action: "busy", detail: "aleph-1372 holds ui/views/issues.js" } }]);
       expect(e.tag).toBe("busy");
       expect(e.html).toContain("a1372 holds ui/views/issues.js");
       expect(e.html).toContain("9m 00s");
     } finally { setCodes({}); }
   });
-  test("an old record with no event gives its gate kind as the tag, and its text as the note", () => {
-    const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "main checks are red" }]);
-    expect(e.tag).toBe("red");
-    expect(e.html).toContain("9m 00s");
-    expect(e.html).toContain("main checks are red");
+  test("a held event gives its hold word as the tag and takes that word's tone; an old event gives its action", () => {
+    const held = waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "at 298a44e: tests", event: { action: "held", detail: "red: at 298a44e: tests" } }]);
+    expect([held.tag, held.tone]).toEqual(["red", "stuck"]);
+    expect(held.html).toContain("9m 00s · at 298a44e: tests");
+    const old = waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "", event: { action: "red" } }]);
+    expect([old.tag, old.tone]).toEqual(["red", "stuck"]);
+    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "after", text: "", event: { action: "held", detail: "after: issue.2985" } }]).tag).toBe("after");
   });
   test("the hold in force the longest gives the tag, and a started record ends one", () => {
-    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "x" }, { at: iso(2), name: "a", kind: "loop-guard", text: "y" }]).tag).toBe("looping");
-    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "x" }, { at: iso(3), name: "a", kind: "started", text: "" }]).tag).toBe("red");
+    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "x" }, { at: iso(2), name: "a", kind: "after", text: "y" }]).tag).toBe("after");
+    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "x" }, { at: iso(3), name: "a", kind: "started", text: "" }]).tag).toBe("red");
   });
   test("a wait with no hold record shows only its length", () => {
     expect(waitEvent(w).tag).toBe("waiting");
@@ -248,7 +250,7 @@ describe("waitEvent", () => {
   });
   test("no wait event reads Waited or because", () => {
     expect(waitEvent(w).html).not.toMatch(/Waited|because/);
-    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "main checks are red" }]).html).not.toMatch(/Waited|because/);
+    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "main checks are red" }]).html).not.toMatch(/Waited|because/);
   });
 });
 

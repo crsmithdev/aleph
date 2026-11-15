@@ -44,10 +44,10 @@ test("a first run that ended with the API credit error is no start, and the issu
   const credit = { cause: "credit", reason: "API Error: 402 This request would exceed your available credits" } as const;
   mk(`fac-${id}`, "build", "failed", { started: ago(50 * MIN), ended: ago(45 * MIN), ...credit });
   mk(`fac-${id}`, "build", "failed", { started: ago(30 * MIN), ended: ago(25 * MIN) });
-  mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN), ...credit });
+  const last = mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN), ...credit });
   const f = allFacts(id);
   expect(f.startsInHour).toBe(1);
-  expect(f.creditWait).toBe(5 * MIN);
+  expect(f.creditWait).toEqual({ job: last.job, ago: 5 * MIN });
 });
 
 test("first runs that ended with the API credit error set no run-cap Ask: past the credit wait, the hour count stays below the cap", () => {
@@ -69,7 +69,7 @@ test("a run whose stderr holds the credit error but that states no credit cause 
 test("a held backend binds the gates for a run on its own model and not for a Claude run", async () => {
   await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
   const held = gates({ run: { model: "deepseek-v4.1-flash" } });
-  expect(held?.gate).toBe("backend");
+  expect(held?.gate).toBe("waiting");
   expect(held?.why).toBe("waits for OpenRouter: API Error: 402 This request would exceed your available credits");
   expect(gates({ run: { model: "haiku" } })).toBeNull();
   expect(gates({ run: { model: "sonnet" } })).toBeNull();
@@ -98,10 +98,10 @@ test("an issue with no run that the hold held stays held with no new routing, un
 });
 
 test("recordHold logs its hold event once, and not again for the same kind and text", () => {
-  const ev = { action: "paused" };
-  recordHold("fac-3", "live-cap", "3 agent runs are live", ev);
-  recordHold("fac-3", "live-cap", "3 agent runs are live", ev);
-  expect(readEvents().filter((e) => e.object === "fac-3").map((e) => e.action)).toEqual(["paused"]);
+  const ev = { action: "held", detail: "full: 3 / 3 jobs" };
+  recordHold("fac-3", "full", "3 agent runs are live", ev);
+  recordHold("fac-3", "full", "3 agent runs are live", ev);
+  expect(readEvents().filter((e) => e.object === "fac-3").map((e) => e.action)).toEqual(["held"]);
 });
 
 test("firefighterLines returns the line of a firefighter event", () => {
@@ -131,6 +131,6 @@ test("an open job whose last run ended with the API credit error holds the issue
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN), cause: "credit", reason: "API Error: 402" });
   const decide = (at: number) => issueDecision({ ...issueFacts(loadRegistry().fac, readList({ key: "fac" })!.items.find((i) => i.id === id)!, allJobs(), at), done: () => false }).kind;
-  expect(decide(NOW)).toBe("credit-wait");
+  expect(decide(NOW)).toBe("credit");
   expect(decide(NOW + 6 * MIN)).toBe("ready");
 });

@@ -9,7 +9,7 @@ flowchart LR
   I[Issue] -->|intake| G[Issue + spec]
   I -->|intake: large| P[Sub-issues] --> G
   I -->|intake: close / done| X[Closed]
-  G -->|dispatch, 7 gates| W[Worker]
+  G -->|dispatch, gates| W[Worker]
   W --> V[Verify]
   V -->|fail| W
   V --> R[Reviewer]
@@ -97,7 +97,7 @@ Each dispatch first does its steps, in this order:
 4. close parents whose sub-issues are done (`closeIssues`);
 5. send `plan` issues to intake to split.
 
-Then it asks each queued issue 7 gates, in order (`issue-decision.ts`, `factory-status.ts`). The first gate that binds skips the issue for this dispatch and adds a `hold` event, naming the gate, to the issue's job record in `~/.aleph/jobs/`. The next dispatch asks again.
+Then it asks each queued issue its gates, in order (`issue-decision.ts`, `factory-status.ts`). The first gate that binds skips the issue for this dispatch and logs a `held` event on the issue, its detail the hold word and then its facts, when that detail changes. The next dispatch asks again.
 
 | Gate | Binds when | Result |
 |---|---|---|
@@ -107,9 +107,9 @@ Then it asks each queued issue 7 gates, in order (`issue-decision.ts`, `factory-
 | Not ready | The issue is done, waits on `after`, or has an open job | Skip |
 | Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the issue to a tier with room |
 | Busy file | A file in the Edit surface had 3 land conflicts in 7 days and another open job names it | Skip |
-| Loop guard | The issue's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or the `caps` setting sets | A `no-commit` or `run-cap` Ask in place of a start |
+| Loop guard | The issue's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or the `caps` setting sets | A `no-commit` or `run-cap` Ask in place of a start; its `question` event is the only event |
 
-Between Busy file and Loop guard a goal whose last build run ended with the API credit error (`API Error: 402`) less than 10 minutes ago (`waitMs` of `POLICY` in `jobs/lib/records/outcome.ts`) is skipped with a `credit-wait` hold. The credit wait is not one of the 7 gates in `GATES`, because the goal's own last run decides it.
+Between Busy file and Loop guard a goal whose last build run ended with the API credit error (`API Error: 402`) less than 10 minutes ago (`waitMs` of `POLICY` in `jobs/lib/records/outcome.ts`) is skipped with a `credit` hold.
 
 An issue that no gate holds starts. Each start holds the lock `goal-<name>`, so two dispatches start it once. GitHub CI on main does not gate.
 

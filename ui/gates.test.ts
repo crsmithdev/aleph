@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
-import { LOG_MAX, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
+import { LOG_MAX, askHistory, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
 import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
@@ -58,8 +58,8 @@ beforeAll(async () => {
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake, ALEPH_SYSTEMCTL: systemctl, ALEPH_UNIT_DIR: join(base, "config/systemd/user") });
   setHolds([
     // The log shows a hold's stored event, not its text; a hold with no event has no row.
-    { at: ago(5), name: "issue.3", kind: "gate", text: "5 agent runs are live", event: { time: ago(5), subject: "gate", object: "issue.3", action: "full", detail: "local" } },
-    { at: ago(6), name: "issue.13", kind: "pause", text: "paused" },
+    { at: ago(5), name: "issue.3", kind: "gate", text: "5 agent runs are live", event: { time: ago(5), subject: "gate", object: "issue.3", action: "held", detail: "full: local" } },
+    { at: ago(6), name: "issue.13", kind: "paused", text: "paused" },
     { at: ago(4), name: "issue.3", kind: "started", text: "started" },
     { at: ago(60 * 24 * 9), name: "issue.4", kind: "gate", text: "too old" },
   ]);
@@ -96,7 +96,7 @@ test("the body names the held backend and the line it holds with, and the backen
     putJson("state", "backend-hold", { via: "openrouter", why, since: ago(10) });
     const d: any = await body();
     expect(d.backend).toEqual({ via: "OpenRouter", why });
-    expect(d.gated).toEqual({ gate: "backend", why: `waits for OpenRouter: ${why}`, text: `Waiting for OpenRouter: ${why}` });
+    expect(d.gated).toEqual({ gate: "waiting", why: `waits for OpenRouter: ${why}`, text: `Waiting for OpenRouter: ${why}` });
   } finally { putJson("state", "backend-hold", null); }
   // No hold: the body names no backend, and no factory gate binds.
   const d: any = await body();
@@ -107,8 +107,15 @@ test("the body names the held backend and the line it holds with, and the backen
 /** An entry as one line: subject, object, action and detail. */
 const line = (x: any) => [x.subject, x.object, x.action, x.detail ?? "-"].join(" | ");
 
+test("an Ask's reason in the history is its question event's detail before the facts", () => {
+  logEvent({ time: ago(3), subject: "gate", action: "question", object: "issue.31", detail: "no-commit: 3 / 3 jobs with no commit" });
+  try {
+    expect(askHistory().filter((a) => a.issue === "issue.31").map((a) => a.reason)).toEqual(["no-commit"]);
+  } finally { conn().run("DELETE FROM events WHERE object = 'issue.31'"); }
+});
+
 test("the log reads the hold, the rules Chris set, and the old rule, director and firefighter lines as events, newest first, 7 days back", async () => {
-  logEvent({ time: ago(5), subject: "gate", action: "full", object: "issue.3", detail: "local" });
+  logEvent({ time: ago(5), subject: "gate", action: "held", object: "issue.3", detail: "full: local" });
   logEvent({ time: ago(3), subject: "rule", action: "reran", object: "issue.5", detail: "rescue" });
   logEvent({ time: ago(2), subject: "firefighter", action: "answered", object: "issue.6", detail: "issue.6: picked the plain option" });
   logEvent({ time: ago(2.5), subject: "director", action: "reran", object: "issue.8", detail: "the cause is fixed" });
@@ -119,28 +126,28 @@ test("the log reads the hold, the rules Chris set, and the old rule, director an
     "firefighter | issue.6 | answered | issue.6: picked the plain option",
     "director | issue.8 | reran | the cause is fixed",
     "rule | issue.5 | reran | rescue",
-    "gate | issue.3 | full | local",
+    "gate | issue.3 | held | full: local",
     "human | rescue | changed | set to resolve",
     "human | run-cap | changed | set to continue",
     "human | proposal-claude-md:global | changed | set to approve",
   ]);
 });
 
-test("a hold writes its event, and the log shows it as busy with the job and the file's base name", () => {
+test("a hold writes its held event, and the log shows it with the file and the job", () => {
   const was = allHolds();
   try {
-    const d = issueDecision({ name: "issue.1420", item: { id: 1420, notes: [], spec: "", fm: {} } as any, done: () => false, busy: { why: "waits for issue.1372: both change the busy file ui/views/issues.js", on: "issue.1372", file: "ui/views/issues.js" } });
+    const d = issueDecision({ name: "issue.1420", item: { id: 1420, notes: [], spec: "", fm: {} } as any, done: () => false, busy: { why: "waits for issue.1372: both change the busy file ui/views/issues.js", on: "issue.1372", job: "job.1372", file: "ui/views/issues.js" } });
     recordHold("issue.1420", d.kind as any, d.why, d.ev);
     const e = log().find((x) => x.object === "issue.1420")!;
-    expect(e).toMatchObject({ subject: "gate", action: "busy", detail: "issue.1372 holds ui/views/issues.js" });
+    expect(e).toMatchObject({ subject: "gate", action: "held", detail: "file: ui/views/issues.js: job.1372" });
     // The registry of this test has no code: the page gets the codes with the body.
     setCodes({ aleph: "a" });
-    expect(contentText(e)).toBe("issue.1372 holds ui/views/issues.js");
+    expect(contentText(e)).toBe("file: ui/views/issues.js: job.1372");
     const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
     // An issue key names no repo, so the log shows its shown form and links nothing.
     expect(h).toContain("</td><td>i-01420</td><td>");
     expect(h).toContain('<tr><td class="time lead">');
-    expect(h).toContain('</td><td>busy</td><td class="wide" title="issue.1372 holds ui/views/issues.js">i-01372 holds ui/views/issues.js</td>');
+    expect(h).toContain('</td><td>held</td><td class="wide" title="file: ui/views/issues.js: job.1372">file: ui/views/issues.js: j-01372</td>');
   } finally { setHolds(was); }
 });
 
@@ -320,7 +327,7 @@ const withHolds = (rows: HoldRecord[], f: () => void) => {
   setHolds(rows);
   try { f(); } finally { setHolds(was); }
 };
-const hold = (min: number, name = "issue.9", text = "busy") => ({ at: ago(min), name, kind: "gate", text, event: { time: ago(min), subject: "gate", object: name, action: "busy" } });
+const hold = (min: number, name = "issue.9", text = "busy") => ({ at: ago(min), name, kind: "gate", text, event: { time: ago(min), subject: "gate", object: name, action: "held" } });
 const gateLines = () => log().filter((e) => e.subject === "gate");
 
 test("log collapses a run of identical gate events into one with times, first and last time", () => {

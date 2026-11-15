@@ -522,7 +522,7 @@ export async function intakeIssue(repo: Repo, id: number, done: (ref: string) =>
   const counts: Counts = {};
   const skipped: string[] = [];
   await endLostIntakes();
-  const blocked = gates({ only: ["live-cap"] });
+  const blocked = gates({ only: ["full"] });
   if (blocked) { skipped.push(`intake: ${blocked.why}`); return { counts, skipped }; }
   await intakeItem(repo, id, done, counts, skipped, effects);
   return { counts, skipped };

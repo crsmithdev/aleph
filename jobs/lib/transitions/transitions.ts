@@ -23,7 +23,7 @@ import { factoryGates, liveEntries, onLocal } from "../gates/factory-status.ts";
 import { readModels } from "../routing/models.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { raise, route, type Size } from "../routing/route.ts";
-import type { Gate, Hold } from "../gates/issue-decision.ts";
+import { heldEvent, type Gate, type Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import { key, parseId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -54,7 +54,7 @@ export interface Refused { why: string; gate: Gate; ev: Hold }
 /** The hold of a start that threw `e`. A refusal with no gate is a job that runs already. */
 const refusedBy = (e: any): Refused => {
   const why = String(e?.message ?? e).trim() || "refused";
-  return e instanceof Held ? { why, gate: e.gate, ev: { ...e.ev, detail: why } } : { why, gate: "not-ready", ev: { action: "running", detail: why } };
+  return e instanceof Held ? { why, gate: e.gate, ev: { ...e.ev, detail: why } } : { why, gate: "job", ev: heldEvent("job", why) };
 };
 
 export function checkName(name: string | undefined): string {
@@ -87,11 +87,11 @@ async function dispatch(run: NewJob, cwd: string, command: string[], output: Out
     if (isBuild(run.role)) {
       // The run's model, or its size's, names its backend: a backend the factory holds starts no run, whatever the caller.
       const f = factoryGates(undefined, run);
-      if (f.backend) hold("backend", f.backend.ev!, f.backend.why);
-      if (f["live-cap"]) hold("live-cap", { action: "full" }, `${f["live-cap"].why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
+      if (f.waiting) hold("waiting", f.waiting.ev!, f.waiting.why);
+      if (f.full) hold("full", heldEvent("full"), `${f.full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
       if (onLocal(run, readModels())) {
         gpu = await lock("gpu", 0);
-        if (!gpu) hold("live-cap", { action: "gpu" }, "a local call holds the GPU");
+        if (!gpu) hold("full", heldEvent("gpu"), "a local call holds the GPU");
       }
     }
     ({ id, folder } = makeJob(run, (dir) => {
@@ -174,7 +174,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     const first = open?.[0];
     const item = on ?? (open && issueOf(open));
     const landedAs = onMain(repo, { item: first ? item : undefined, fetch: first !== undefined && item !== undefined })?.commit;
-    if (landedAs) hold("not-ready", { action: "done" }, `${name}: the item already landed as ${landedAs}`);
+    if (landedAs) hold("done", heldEvent("done"), `${name}: the item already landed as ${landedAs}`);
     const worktree = first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
     // A follow-up without --on keeps the item the job started with.
     on ??= (open && issueOf(open));

@@ -5,7 +5,9 @@
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"] as const;
-const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"] as const;
+const HOLDS = ["held", "gpu", "starting", "parent", "parked"] as const;
+/** The hold actions of events written before an issue hold was one `held` event: old events carry them and the readers still read them, and no code writes them. */
+export const OLD_HOLDS = ["paused", "red", "after", "full", "busy", "looping", "credit"] as const;
 const ASKS = ["protected", "question", "incomplete", "capped", "proposal"] as const;
 /** The verbs of an Ask card, each pair the verb that goes ahead and then the verb that drops the issue: the only actions an Ask offers, a rule grants or a timeout takes. */
 export const ASK_ACTIONS = ["approve", "disapprove", "resolve", "dismiss", "continue", "discontinue"] as const;
@@ -43,7 +45,6 @@ export const OLD: Record<string, Record<string, string>> = {
     "held-path": "protected", "review-held": "returned", "no-commit": "failed", "part-dropped": "incomplete",
     "intake-failed": "failed", rescue: "waiting", "run-cap": "capped",
   },
-  gate: { pause: "paused", baseline: "red", "live-cap": "full", "busy-file": "busy", "loop-guard": "looping", "credit-wait": "credit" },
   actor: { You: "human", Rule: "rule", Gate: "gate", Director: "director", Firefighter: "firefighter", triage: "intake", planner: "intake" },
   act: {
     land: "landed", drop: "dropped", "drop-issue": "dropped", decline: "dropped", rerun: "reran", retry: "reran", add: "filed",
@@ -153,7 +154,7 @@ export const contentText = (e: Partial<Event>): string => shortText(e.detail ?? 
 const SAY: Record<string, string> = {
   running: "{object} started", waiting: "{object} waits for you", passed: "{object} passed its checks", returned: "{object} returned", failed: "{object} failed",
   landed: "{object} landed", dropped: "{object} dropped", done: "{object} done",
-  paused: "{object} waits: the factory is paused", red: "{object} waits: main is red", after: "{object} waits for {detail}",
+  held: "{object} held: {detail}", paused: "{object} waits: the factory is paused", red: "{object} waits: main is red", after: "{object} waits for {detail}",
   full: "{object} waits: run slots are full", gpu: "{object} waits for the GPU", busy: "{object} waits: {detail}",
   looping: "{object} stopped: it restarts in a loop", starting: "{object} is starting", parent: "{object} waits for its parts",
   parked: "{object} parked", credit: "{object} waits: out of credit",
@@ -195,7 +196,9 @@ export const targetOf = (e: Partial<EventRow>): string => e.object_target ?? e.o
 /** The sentence of an event in pieces, as `[{id: "job.6802"}, " landed"]`. */
 export function say(e: Partial<EventRow>): Said[] {
   const tpl = SAY[String(e.action)] ?? `{object} ${e.action}`, inline = tpl.includes("{detail}");
-  const fill: Record<string, Said[]> = { object: [{ id: e.object ?? "" }], by: [whoOf(e.subject ?? "", e.subject_role)], detail: linked(e.detail ?? "") };
+  // A held event's detail is the hold word, a colon and its facts: the sentence reads `held: after issue.2985`.
+  const detail = e.action === "held" ? (e.detail ?? "").replace(": ", " ") : e.detail ?? "";
+  const fill: Record<string, Said[]> = { object: [{ id: e.object ?? "" }], by: [whoOf(e.subject ?? "", e.subject_role)], detail: linked(detail) };
   const out = tpl.split(/(\{\w+\})/).filter(Boolean).flatMap((p) => fill[p.slice(1, -1)] ?? [p]);
   if (e.action === "returned" && (e.subject_role === "review" || e.subject === "reviewer")) out.push(" by review");
   return !inline && e.detail ? [...out, ": ", ...fill.detail] : out;

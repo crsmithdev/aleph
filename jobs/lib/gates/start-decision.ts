@@ -23,7 +23,7 @@ export type StartDecision = IssueDecision & { size?: Size | null };
 export async function decideStart(repo: Repo, f: IssueFacts, jobs: Job[], route: Route): Promise<StartDecision> {
   const run = nextRun(repo.key, f.name, jobs);
   const on = (size: Size | null) => issueDecision({ ...f, ...factoryGates(jobs, size ? { model: size } : {}) });
-  let d = issueDecision({ ...f, ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { backend: heldGoal(f.name) }) });
+  let d = issueDecision({ ...f, ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { waiting: heldGoal(f.name) }) });
   let size: Size | null | undefined;
   // An issue with no run yet starts on its size's backend: while a backend is held, rate the issue, and check that backend.
   if (!run && d.kind === "ready" && backendHold()) {
@@ -31,7 +31,7 @@ export async function decideStart(repo: Repo, f: IssueFacts, jobs: Job[], route:
     d = on(size);
   }
   // The live cap held the issue, but a size on the local backend has room: rate the issue, and check its size's cap.
-  if (d.kind === "live-cap" && size === undefined && SIZES.some((s) => !factoryGates(jobs, { model: s })["live-cap"])) {
+  if (d.kind === "full" && size === undefined && SIZES.some((s) => !factoryGates(jobs, { model: s }).full)) {
     size = await route();
     if (size) d = on(size);
   }

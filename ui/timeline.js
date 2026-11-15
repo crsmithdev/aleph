@@ -2,7 +2,7 @@
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
 import { clamp, codeText, legendHtml, dur, esc, money, sectionHead, shortModel, tag, tone, when } from "./lib.js";
-import { word, contentText } from "../lib/naming.ts";
+import { contentText } from "../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -96,12 +96,12 @@ function topHold(w, holds) {
   return best?.[0] ?? null;
 }
 
-/** A wait's event: the hold's action as the tag, its content and the wait's length, and the hold's text as the note. */
+/** A wait's event: the hold's action as the tag (a `held` event's hold word, the detail before its first colon), its content and the wait's length, and the hold's text as the note. */
 export function waitEvent(w, holds = []) {
   const h = topHold(w, Array.isArray(holds) ? holds : []); // `waits.map(waitEvent)` passes an index
   const e = h?.event ?? {};
   const text = [contentText(e), dur((w.end - w.start) / 1000), h?.text].filter(Boolean).join(" · ");
-  const state = e.action ?? (h ? word("gate", h.kind) : "waiting");
+  const state = e.action === "held" ? (e.detail ?? "").split(":")[0] : e.action ?? h?.kind ?? "waiting";
   return { at: w.start, tag: state, tone: tone(state), html: esc(text) };
 }
 

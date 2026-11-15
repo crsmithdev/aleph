@@ -47,8 +47,8 @@ test("with the live cap full of Claude runs, a size on the local backend starts 
   mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
   const id = newIssue();
   expect(await decide(id, "small")).toMatchObject({ kind: "ready", size: "small" });
-  expect(await decide(id, "large")).toMatchObject({ kind: "live-cap", size: "large", why: "1 agent runs are live" });
-  expect(await decide(id, null)).toMatchObject({ kind: "live-cap", size: null });
+  expect(await decide(id, "large")).toMatchObject({ kind: "full", size: "large", why: "1 agent runs are live" });
+  expect(await decide(id, null)).toMatchObject({ kind: "full", size: null });
   expect(asked).toBe(1);
 });
 
@@ -56,7 +56,7 @@ test("the live cap with every size on Claude asks no route", async () => {
   process.env.ALEPH_LIVE_CAP = "1";
   mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
   const id = newIssue();
-  expect(await decide(id, "small")).toMatchObject({ kind: "live-cap", size: undefined });
+  expect(await decide(id, "small")).toMatchObject({ kind: "full", size: undefined });
   expect(asked).toBe(0);
 });
 
@@ -64,24 +64,24 @@ test("a held backend holds an issue whose size runs on it; another size starts; 
   expect(setModel("small", { model: "deepseek-v4.1-flash" })).toBeNull();
   await holdBackend("openrouter", CREDIT);
   const id = newIssue();
-  expect(await decide(id, "small")).toMatchObject({ kind: "backend", size: "small", why: `waits for OpenRouter: ${CREDIT}` });
+  expect(await decide(id, "small")).toMatchObject({ kind: "waiting", size: "small", why: `waits for OpenRouter: ${CREDIT}` });
   expect(await decide(id, "large")).toMatchObject({ kind: "ready", size: "large" });
   const ran = newIssue();
   mk(`fac-${ran}`, "build", "failed", { model: "deepseek-v4.1-flash" });
-  expect(await decide(ran, "large")).toMatchObject({ kind: "backend", size: undefined });
+  expect(await decide(ran, "large")).toMatchObject({ kind: "waiting", size: undefined });
   expect(asked).toBe(0);
 });
 
 test("the run cap and the no-commit streak stop a start that the factory gates let through", async () => {
   const id = newIssue();
-  expect(await decide(id, null, { startsInHour: 3 })).toMatchObject({ kind: "loop-guard", ask: "run-cap", starts: 3 });
-  expect(await decide(id, null, { noCommits: 3 })).toMatchObject({ kind: "loop-guard", ask: "no-commit" });
+  expect(await decide(id, null, { startsInHour: 3 })).toMatchObject({ kind: "ask", ask: "run-cap", starts: 3 });
+  expect(await decide(id, null, { noCommits: 3 })).toMatchObject({ kind: "ask", ask: "no-commit" });
 });
 
 test("stalled and the dispatch agree: a hold on Claude holds an issue with no run for both", async () => {
   await holdBackend("claude", CREDIT);
   const id = newIssue();
-  expect(await decide(id, null)).toMatchObject({ kind: "backend" });
+  expect(await decide(id, null)).toMatchObject({ kind: "waiting" });
   expect(await stalled()).toEqual([]);
   const r = router("large");
   try {

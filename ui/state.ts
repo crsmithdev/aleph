@@ -492,7 +492,7 @@ export function state(now = new Date()): State {
       // The stage already says when an issue is to plan.
       const w = issueDecision({ ...issueFacts(repo, item, jobs, now.getTime(), lists), done: isDone, red, ...gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), kind: w.kind,
-        ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}),
+        ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "after" && w.ids ? { waits: w.ids.map(blocker) } : {}),
       };
     }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q),
   };

@@ -1,6 +1,6 @@
 /**
  * An issue's spec: the Markdown sections an issue must have, how intake writes them, the paths of its Edit surface,
- * the commands of its Oracle, and its version. Intake, the director, the rescue, the reviewer and the busy-file wait
+ * the commands of its Oracle, and its version. Intake, the director, the rescue, the reviewer and the busy file wait
  * all read a spec through this module.
  */
 import { createHash } from "node:crypto";

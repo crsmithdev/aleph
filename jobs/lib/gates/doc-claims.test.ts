@@ -30,7 +30,7 @@ describe("a doc that does not match fails, quoting the claim", () => {
       "docs/naming.md:5: the Report lane row of the Word sets table lacks failed, against lib/naming.ts",
       "docs/naming.md:6: the Flow class row of the Word sets table adds lost, against lib/naming.ts",
     ]);
-    expect(naming("| Action | yes | the job states; paused |")[0]).toMatch(/^docs\/naming\.md:5: the Action row of the Word sets table lacks red, after,.* started, missed, skipped,.* routed.*, against lib\/naming\.ts$/);
+    expect(naming("| Action | yes | the job states; held |")[0]).toMatch(/^docs\/naming\.md:5: the Action row of the Word sets table lacks gpu, starting,.* started, missed, skipped,.* routed.*, against lib\/naming\.ts$/);
   });
 
   test("the Ask action row against ASK_ACTIONS", () => {

@@ -128,7 +128,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Issue status | yes | open, parked, done, dropped |
 | Issue kind | yes | task, bug, check, flake |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
+| Action | yes | the job states; held, gpu, starting, parent, parked, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
 | Ask action | yes | approve, disapprove, resolve, dismiss, continue, discontinue |
 | Ask reason | yes | held-path, review-held, question, no-commit, part-dropped, intake-failed, rescue, run-cap, core-change, blocker-dropped, proposal-check, proposal-claude-md, proposal-skill |
@@ -143,7 +143,7 @@ An issue kind is `task` (any work), `bug` (something broken), `check` (a manual 
 
 ### Old words
 
-A writer writes only the new words, and a reader reads the stored words as they are. `OLD` in `lib/naming.ts` keeps the ask, gate, actor and act maps that live code still uses. The migration of the storage plan rewrites the old words and then removes the maps.
+A writer writes only the new words, and a reader reads the stored words as they are. `OLD` in `lib/naming.ts` keeps the ask, actor and act maps that live code still uses. `OLD_HOLDS` lists the hold actions of events written before an issue hold was one `held` event (paused, red, after, full, busy, looping, credit): readers read them, and no code writes them. The migration of the storage plan rewrites the old words and then removes the maps.
 
 | Set | Old → new |
 |---|---|
@@ -151,7 +151,6 @@ A writer writes only the new words, and a reader reads the stored words as they 
 | Cause | time-box → timeout; lock-busy → locked; reviewer → review; no-answer → unanswered; own-list → other |
 | Fate | already-met → met; by-hand → manual |
 | Review call | land → passed; back → returned; ask → waiting; pending → running; error → failed |
-| Gate | pause → paused; baseline → red; live-cap → full; busy-file → busy; loop-guard → looping; credit-wait → credit |
 | Actor | You → human; Rule → rule; Gate → gate; Director → director; Firefighter → firefighter; triage, planner → intake |
 | Kind | agent → build; triage, plan → intake; explain → director; firefighter → director; facts stays, since readers tell it from the job's real runs |
 | Log act | land → landed; drop, drop-issue, decline → dropped; rerun, retry → reran; add, approve → filed; answer, recommended → answered; close → done; edit-goal → changed |

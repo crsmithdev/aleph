@@ -129,7 +129,7 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
     const release = await lock(`rescue-${first[0].run.repo}-${name}`, rescueWaitMs());
-    if (!release) { logEvent({ subject: "gate", action: "busy", object: name, detail: "the rescue lock stayed busy; the rescue is skipped" }); continue; }
+    if (!release) { logEvent({ subject: "gate", action: "skipped", object: name, detail: "the rescue lock stayed busy" }); continue; }
     try {
       // Read again under the lock: another dispatch may have acted on it.
       const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);

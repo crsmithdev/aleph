@@ -9,7 +9,8 @@ import { dispatchIssues, suiteStep } from "./factory.ts";
 import { holdBackend, readHolds } from "../gates/factory-status.ts";
 import * as record from "../records/record.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { change, ctx, newIssue, notes, setup, sh, teardown } from "./factory.helpers.ts";
+import { lock } from "../infra/locks.ts";
+import { change, ctx, mk, newIssue, notes, setup, sh, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -29,7 +30,9 @@ test("an issue that a red main holds gets one hold record; the suite runs main's
   }
   const recs = readHolds([`issue.${id}`]);
   expect(recs).toHaveLength(1);
-  expect(recs[0].kind).toBe("baseline");
+  expect(recs[0].kind).toBe("red");
+  const held = readEvents().filter((e) => e.object === `issue.${id}` && e.action === "held");
+  expect(held.map((e) => e.detail)).toEqual([expect.stringMatching(/^red: at [0-9a-f]{7}: tests$/)]);
 });
 
 test("a red main holds issues after main moves, until a suite run on the new commit is green", async () => {
@@ -80,6 +83,21 @@ test("a parent whose sub-issues are all done closes with a note that names them"
   expect(notes(parent)).toMatch(new RegExp(`its sub-issues are done: fac-${child} \\([0-9a-f]{7}\\)$`, "m"));
 });
 
+test("a done parent whose lock another dispatch holds is skipped, and the dispatch goes on", async () => {
+  const parent = newIssue();
+  const child = writeList({ key: "fac" }, "split", (doc) => issues.add(doc, "the first sub-issue", { from: `issue.${parent}`, spec: "Do it." }).id, true)!.value;
+  sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: issue.${child}`);
+  sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
+  const release = (await lock(`issue-issue.${parent}`, 0))!;
+  try {
+    const out = await dispatchIssues(async () => null, undefined, undefined);
+    expect(out.skipped).toContain(`issue.${parent}: another dispatch holds it`);
+  } finally {
+    release();
+  }
+  expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "rule", object: `issue.${parent}`, action: "skipped", detail: "another dispatch holds it" }));
+});
+
 test("a main that no suite run has checked, or whose checks gave no verdict, does not hold an issue", async () => {
   const id = newIssue();
   expect(await suiteStep(async () => ({ cause: "infra" as const, reason: "no runner" }))).toEqual({ fac: "main is unchecked: no runner" });
@@ -104,7 +122,7 @@ describe("each skip in the issue loop gets one hold record", () => {
     } finally {
       spy.mockRestore();
     }
-    expect(readHolds([name])).toMatchObject([{ kind: "not-ready", event: { action: "parked" } }]);
+    expect(readHolds([name])).toMatchObject([{ kind: "parked", event: { action: "parked" } }]);
   });
 
 });
@@ -180,4 +198,15 @@ test("a held backend skips an issue with no run with no hold event and no issue 
     if (saved.url === undefined) delete process.env.ALEPH_JEV_URL; else process.env.ALEPH_JEV_URL = saved.url;
     if (saved.key === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = saved.key;
   }
+});
+
+test("the loop guard logs its Ask as one question event with its facts, no looping event and no held event, and the next dispatch sets no second Ask", async () => {
+  const id = newIssue();
+  const name = `issue.${id}`;
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: `2026-10-0${i + 1}T00:00:00.000Z` });
+  const before = readEvents().length;
+  await dispatchIssues(async () => null, undefined, undefined);
+  await dispatchIssues(async () => null, undefined, undefined);
+  const mine = readEvents().slice(before).filter((e) => e.object === name && e.subject === "gate");
+  expect(mine.map((e) => [e.action, e.detail])).toEqual([["question", "no-commit: 3 / 3 jobs with no commit"]]);
 });

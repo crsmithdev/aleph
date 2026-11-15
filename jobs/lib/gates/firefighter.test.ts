@@ -79,6 +79,7 @@ test("a second failing commit while the first issue is open is one note on it; o
   baselineRed(B);
   const f = await firefight(ports());
   expect(f!.filed).toEqual([{ repo: key, commit: B, source: "baseline", noted: 1 }]);
+  expect(readEvents().filter((e) => e.action !== "filed").map((e) => [e.action, e.detail])).toEqual([["changed", expect.stringContaining(`also red at ${B.slice(0, 7)}`)]]);
   await firefight(ports());
   expect(reds().length).toBe(1);
   expect(reds()[0].notes.filter((n) => n.includes(`Failing commit: ${B}`)).length).toBe(1);

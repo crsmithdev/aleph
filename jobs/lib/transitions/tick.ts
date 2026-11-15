@@ -121,7 +121,7 @@ const summary = (r: Json): string => {
  */
 export async function maintainStep(now = Date.now()): Promise<Json | null> {
   const root = resolve(vaultDir()), at = readRun(root, "maintain")?.at;
-  if (new Date(now).getHours() < 3 || gates({ only: ["pause"] })) return null;
+  if (new Date(now).getHours() < 3 || gates({ only: ["paused"] })) return null;
   const mech = existsSync(join(root, "Home.md")) && !(at && today(new Date(at)) === today(new Date(now)));
   const corr = correctionsDue(now);
   if (!mech && !corr) return null;
@@ -151,7 +151,7 @@ function clearDeadAsks(lists: Reader): void {
  * by hand) starts the suite once per commit. It reads the store and the repos as last fetched. Returns the missed keys.
  */
 export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPorts): Promise<string[]> {
-  if (gates({ only: ["pause"] })) { writeStalls({}); s.missed = []; return []; }
+  if (gates({ only: ["paused"] })) { writeStalls({}); s.missed = []; return []; }
   const jobs = allJobs(), runs = jobs.flat(), lists = reader({ fetch: false });
   clearDeadAsks(lists);
   const keys = await stalled(jobs, lists, doneChecker(false));

@@ -118,11 +118,11 @@ describe("Asks, reopens and holds", () => {
     expect(t.today.held).toEqual({ goals: 2, seen: 3 });
   });
 
-  test("the 7 gate kinds count as the old kinds did: not-ready on an open job or a done issue holds nothing, the other gates hold", () => {
+  test("the hold words count as the old kinds did: job or a done issue holds nothing, the other holds hold", () => {
     const rec = (name: string, kind: string, text: string) => ({ at: at(DAY, 10), name, kind, text });
     const v6 = measure({ ...empty, holds: [
-      rec("g-1", "not-ready", "its job is running"), rec("g-2", "not-ready", "the item is already done"),
-      rec("g-3", "not-ready", "blocked: after g-1"), rec("g-4", "baseline", "main baseline running"), rec("g-5", "red", "an old record"),
+      rec("g-1", "job", "job.1"), rec("g-2", "done", ""),
+      rec("g-3", "after", "blocked: after g-1"), rec("g-4", "red", "main baseline running"), rec("g-5", "red", "an old record"),
     ] }, DAY, Date.parse(at(DAY, 23)));
     expect(v6.today.held).toEqual({ goals: 3, seen: 5 });
   });

@@ -5,6 +5,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import * as record from "../records/record.ts";
 import { readHolds } from "../gates/factory-status.ts";
+import { readEvents } from "../../../lib/layout.ts";
 import { newIssue, change, mk, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
@@ -36,7 +37,8 @@ test("an issue set to done while an earlier issue starts is skipped as done", as
   expect(calls).toEqual([`issue.${first}`]);
   expect(out.started).toEqual([`issue.${first}`]);
   expect(out.skipped).toEqual([`issue.${second}: the item is done`]);
-  expect(readHolds([`issue.${second}`])).toMatchObject([{ kind: "not-ready", event: { action: "done" } }]);
+  expect(readHolds([`issue.${second}`])).toEqual([]);
+  expect(readEvents().filter((e) => e.object === `issue.${second}` && e.action === "held")).toEqual([]);
   expect(record.read(`issue.${second}`)).toBeNull();
 });
 

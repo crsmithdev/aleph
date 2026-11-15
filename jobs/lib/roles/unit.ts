@@ -89,7 +89,7 @@ function recorder(folder: string): (c: CheckResult) => void {
  * while the factory is paused, as the dispatch would not land them.
  */
 async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
-  if (gates({ only: ["pause"] })) return;
+  if (gates({ only: ["paused"] })) return;
   const jobs = allJobs();
   const names = waitingToLand(jobs).filter((n) => {
     const last = openJob(n, null, jobs)?.at(-1)!.run;
@@ -261,7 +261,7 @@ export async function startKept(go: typeof start = start): Promise<string[]> {
 
 /** Start the next run as `aleph land` or `aleph job` would, in-process. What it prints and its refusal go to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
-  if (gates({ only: ["pause"] })) {
+  if (gates({ only: ["paused"] })) {
     logTo(folder, "dispatch", `paused: no ${next} started; the first dispatch after the resume starts it\n`);
     writeFileSync(runFile(folder, PAUSED_NEXT), `${next}\n`);
     return;

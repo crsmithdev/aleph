@@ -28,19 +28,19 @@ afterEach(teardown);
 const entry = (role: string, state: string, reason?: string): any =>
   ({ id: `job.1`, folder: join(ctx.base, "none", `${role}-${state}`), run: { role, job: "job.1", name: "issue.1", repo: "fac", state: state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
 
-test("gates returns the first factory gate, in the order pause, live cap", () => {
+test("gates returns the first factory gate, in the order paused, full", () => {
   const order = () => gates({ jobs: [] })?.gate;
   process.env.ALEPH_LIVE_CAP = "0";
   setPaused(true);
-  expect(order()).toBe("pause");
+  expect(order()).toBe("paused");
   setPaused(false);
-  expect(order()).toBe("live-cap");
+  expect(order()).toBe("full");
   process.env.ALEPH_LIVE_CAP = "5";
   expect(gates({ jobs: [] })).toBeNull();
   // `only` leaves the others out.
   process.env.ALEPH_LIVE_CAP = "0";
-  expect(gates({ jobs: [], only: ["pause"] })).toBeNull();
-  expect(gates({ jobs: [], only: ["live-cap"] })?.gate).toBe("live-cap");
+  expect(gates({ jobs: [], only: ["paused"] })).toBeNull();
+  expect(gates({ jobs: [], only: ["full"] })?.gate).toBe("full");
 });
 
 /** The `settings` events logged after `from`, as subject and detail. */
@@ -138,7 +138,7 @@ test("with one live local-backend run a second local run is held by the local ca
     // Made just now with no pid yet: the run is starting, so it is live.
     mk("local-1", "build", "running", { model: "gpt-oss-20b", made: NOW });
     expect(liveRuns()).toBe(0);
-    expect(gates({ run: { model: "haiku" } })).toMatchObject({ gate: "live-cap", why: "1 local agent runs are live", text: "Waiting for the GPU slot (1 of 1 running)" });
+    expect(gates({ run: { model: "haiku" } })).toMatchObject({ gate: "full", why: "1 local agent runs are live", text: "Waiting for the GPU slot (1 of 1 running)" });
     expect(gates({ run: { model: "sonnet" } })).toBeNull();
     expect(gates()).toBeNull();
   } finally {
@@ -150,7 +150,7 @@ test("while a title or judge call holds the GPU slot, a local agent run is held 
   expect(setModel("small", { model: "gpt-oss-20b" })).toBeNull();
   const release = (await gpuSlot(0))!;
   try {
-    expect(gates({ run: { model: "haiku" } })).toMatchObject({ gate: "live-cap", why: "a local call holds the GPU", text: "Waiting for the GPU slot (1 of 1 running)" });
+    expect(gates({ run: { model: "haiku" } })).toMatchObject({ gate: "full", why: "a local call holds the GPU", text: "Waiting for the GPU slot (1 of 1 running)" });
     expect(gates({ run: { model: "sonnet" } })).toBeNull();
   } finally {
     release();

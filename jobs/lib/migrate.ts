@@ -14,7 +14,7 @@ import { git } from "../../lib/git.ts";
 import { layout } from "../../lib/layout.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { readJsonOr } from "../../lib/json.ts";
-import { ACTIONS, ACTORS, because, FULL, key, ROLES, STATES, word } from "../../lib/naming.ts";
+import { ACTIONS, ACTORS, because, FULL, key, OLD_HOLDS, ROLES, STATES, word } from "../../lib/naming.ts";
 import { expand } from "../../lib/paths.ts";
 import { refuse } from "../../lib/refusal.ts";
 import { renderItem, type Issue } from "../../issues/lib/todo.ts";
@@ -458,7 +458,7 @@ function planEvents(r: Roots, p: Plan, records: Json[], h: Helpers & { jobKey: M
     if (!ACTORS.includes(by)) um(`event by: ${e.by}`);
     if (action === "routed" || e.subject === "route") return "route and routed events";
     if (action === "refused") return "refused events";
-    if (!ACTIONS.includes(action)) um(`event action: ${e.action}`);
+    if (!ACTIONS.includes(action) && !(OLD_HOLDS as readonly string[]).includes(action)) um(`event action: ${e.action}`);
     const on: string[] = [e.on ?? []].flat();
     if (FIXTURE.test(e.subject) || on.some((o) => FIXTURE.test(o))) return "fixture events";
     if (e.subject === "chat" || [e.subject, ...on].some((o) => dropped.has(o))) return "events of chat runs";

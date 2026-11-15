@@ -22,17 +22,17 @@ The vault also logs its own writes in `daily/<date>.md` (`appendDaily` in `vault
 
 ## Event log
 
-An event has the 6 fields of `Event` in `lib/naming.ts:130`: `seq`, `time`, `subject`, `action`, `object` and `detail`; a start's event also has a `tier`, the Size the factory routed it to. [Naming](naming.md#events) defines the words. `event()` in `lib/naming.ts:138` checks `subject` and `action` against their sets, so a bad word throws. `logEvent` inserts one row into the `events` table of `aleph.db`. A row never changes. `readEvents` in `lib/layout.ts:35` reads the view `event_rows` from `since` on, in `seq` order. No code writes the event log by any other means.
+An event has the 6 fields of `Event` in `lib/naming.ts:131`: `seq`, `time`, `subject`, `action`, `object` and `detail`; a start's event also has a `tier`, the Size the factory routed it to. [Naming](naming.md#events) defines the words. `event()` in `lib/naming.ts:139` checks `subject` and `action` against their sets, so a bad word throws. `logEvent` inserts one row into the `events` table of `aleph.db`. A row never changes. `readEvents` in `lib/layout.ts:35` reads the view `event_rows` from `since` on, in `seq` order. No code writes the event log by any other means.
 
 ### Who writes events
 
-The count is 53 direct `logEvent(` calls in code that is not a test, and one helper, `logAlways` in `jobs/lib/asks/ask.ts:238`, that eight call sites use.
+The count is 53 direct `logEvent(` calls in code that is not a test, and one helper, `logAlways` in `jobs/lib/asks/ask.ts:240`, that eight call sites use.
 
 | `subject` | Action (detail) | Logged at |
 |---|---|---|
 | `gate` | A run's state: `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` | `jobs/lib/records/record.ts:182` |
-| `gate` | `question` when an Ask is set, `answered` when it is cleared | `jobs/lib/records/record.ts:168` |
-| `gate` | A hold when a new one is written: `red`, `after`, `busy`, `looping`, `credit`, `running` and others. The pause, the backend and the live cap write none: each logs its own `changed` event on `settings` | `jobs/lib/gates/factory-status.ts:73`, from `jobs/lib/transitions/factory.ts:93` and `:136` |
+| `gate` | `question` when an Ask is set (its detail the reason, and its facts when the factory counted some), `answered` when it is cleared | `jobs/lib/records/record.ts:168` |
+| `gate` | `held`, one for an issue hold when its detail changes: the detail is the hold word and then its facts (`after: issue.2985 issue.2993`, `job: job.8910`, `file: docs/design.md: job.8890`, `red: at 298a44e: tests`, `credit: job.8870 hit the API credit error`). A done or dropped issue gets none. The pause, the backend and the live cap write none: each logs its own `changed` event on `settings`; the loop guard writes only its Ask as a `question` event whose detail adds its facts (`no-commit: 3 / 3 jobs with no commit`) | `jobs/lib/gates/factory-status.ts:63`, from `jobs/lib/transitions/factory.ts:96` |
 | `gate` | `changed` on the object `settings`, when the live cap (`cap: on: 5 / 5 jobs`, `cap: on: 1 / 1 local jobs`, `cap: off`) or the held backend (`credit: on: claude: <the call's line>`, `credit: off`) starts or ends; a gate that stays on logs nothing more | `jobs/lib/gates/factory-status.ts:95`, `:133`, `:143` |
 | `rule` | `routed`, its `detail` the Size and the classifier model (`medium by classifier <model>`), on the issue key | `jobs/lib/routing/route.ts:28` |
 | `rule` | `started`, `busy`, `done`, `failed` (`error`) for the dispatch steps | `jobs/lib/transitions/factory.ts:74`, `:112`, `:142`, `:146`, `:182`, `:190`, `:275`, `:484`, `:538` |
@@ -40,7 +40,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `rule` | `missed` for a stalled key, `started` (`check`) for a suite on a moved main, `failed` (`error`) for a tick step | `jobs/lib/transitions/tick.ts:156`, `:165`, `:219` |
 | `rule` | `gpu`, when the GPU slot stays taken and the call falls back | `jobs/lib/roles/agent-call.ts:120` |
 | `rule` | `failed` for a filing, a detached start, a land start, a job diff, a correction, a UI read | `jobs/lib/transitions/filing.ts:29`, `jobs/lib/transitions/launch.ts:89`, `jobs/lib/roles/unit.ts:101`, `jobs/lib/records/jobdiff.ts:47`, `jobs/lib/learning/corrections.ts:17`, `ui/state.ts:36` |
-| `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:238`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:259`, `jobs/lib/asks/timeout.ts:100`, `jobs/lib/learning/corrections.ts`, `issues/lib/store.ts` |
+| `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:240`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:259`, `jobs/lib/asks/timeout.ts:100`, `jobs/lib/learning/corrections.ts`, `issues/lib/store.ts` |
 | `firefighter` | `reran`, `red`, `changed`, `failed` for red CI and slow lands | `jobs/lib/gates/firefighter.ts:217` to `:244` |
 | `firefighter` | `waiting`, `busy`, `failed` (`rescue`) for a rescue of a slow land | `jobs/lib/land/rescue.ts:111` to `:320` |
 | `director` | The action of each applied decision: `landed`, `dropped`, `done`, `changed`, `answered`, `escalated` (with `to: human`) | `jobs/lib/roles/director.ts:144` |
@@ -51,7 +51,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `human` | `changed`, when an Always rule is set back to Ask me | `jobs/lib/asks/ask.ts:237` |
 | `human` | `changed` on the object `settings`: `pause: on` and `pause: off`, from the pause and resume commands | `jobs/lib/gates/factory-status.ts:88`, through `logSetting` in `lib/layout.ts:32` |
 
-The set `ACTORS` in `lib/naming.ts:20` also holds `worker`, `reviewer`, `check` and `monitor`. No `logEvent` call uses `reviewer`, `check` or `monitor`. `worker` and `claude` appear only as the filer or closer of an issue. An issue's events have the object `issue.<n>`.
+The set `ACTORS` in `lib/naming.ts:22` also holds `worker`, `reviewer`, `check` and `monitor`. No `logEvent` call uses `reviewer`, `check` or `monitor`. `worker` and `claude` appear only as the filer or closer of an issue. An issue's events have the object `issue.<n>`.
 
 ## Job record events
 

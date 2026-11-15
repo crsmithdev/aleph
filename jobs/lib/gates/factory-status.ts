@@ -9,8 +9,8 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { isOpen, openJob, type Job } from "../records/job.ts";
-import type { Bound, Gate, Hold } from "./issue-decision.ts";
-import { event, type Event } from "../../../lib/naming.ts";
+import { heldEvent, type Bound, type Gate, type Hold } from "./issue-decision.ts";
+import { event, OLD_HOLDS, type Event } from "../../../lib/naming.ts";
 import { eventsOf, layout, logEvent, logSetting, readEvents } from "../../../lib/layout.ts";
 import { conn, getJson, putJson, tx } from "../../../lib/db.ts";
 import * as record from "../records/record.ts";
@@ -25,27 +25,24 @@ import { BACKENDS, probeBackend, readModels, viaOfRun, type Name, type Setting }
 
 export const factoryDir = () => layout().factory;
 
-/** One record of why an issue waits: `kind` is the gate that bound, or `started`; `event` its log event, which a `started` record lacks. */
+/** One record of why an issue waits: `kind` is the hold word, or `started`; `event` its log event, which a `started` record lacks. */
 export interface HoldRecord { at: string; name: string; kind: string; text: string; event?: Event }
 
-/** The hold record kinds from before the 7 gates that did not stop a start: the issue was done, or its job was open. */
-const OLD_NOT_HELD = new Set(["open", "start", "done"]);
+/** The hold record kinds that did not stop a start: the issue was done or dropped, or its job was open. */
+const NOT_HELD = new Set(["open", "start", "done", "dropped", "job"]);
 
 /** Whether a record stopped an issue that could have started: not `started`, not a done issue, not an issue whose job is open. */
-export const stopsStart = (r: HoldRecord): boolean =>
-  r.kind !== "started" && !OLD_NOT_HELD.has(r.kind) && !(r.kind === "not-ready" && /^(its job is |the item is already done$)/.test(r.text));
+export const stopsStart = (r: HoldRecord): boolean => r.kind !== "started" && !NOT_HELD.has(r.kind);
 
-/** The gate that a hold's log event came from, by its action: an action no gate owns is `not-ready`. */
-const GATE_OF: Record<string, string> = { paused: "pause", red: "baseline", full: "live-cap", gpu: "live-cap", busy: "busy-file", looping: "loop-guard", credit: "credit-wait" };
-/** The actions of the hold events of an issue. A job-state action is the hold "its job is open" and is on the job's key. */
-const HOLD_ACTIONS = [...Object.keys(GATE_OF), "waiting", "after", "parent", "parked", "starting", "done", "dropped"];
+/** The actions of the hold events of an issue: `held`, and the older actions and refusals each its own. */
+const HOLD_ACTIONS = ["held", ...OLD_HOLDS, "gpu", "waiting", "parent", "parked", "starting", "done", "dropped"];
 
-/** The hold of an event: a `started` event of the rule, or an event of the gate in HOLD_ACTIONS on an issue; else null. The text is the event's detail. */
+/** The hold of an event: a `started` event of the rule, or an event of the gate in HOLD_ACTIONS on an issue; else null. The text is the event's detail, and the kind the hold word: that of a `held` event is its detail before the first colon. */
 function holdOf(e: Event): HoldRecord | null {
   if (!e.object.startsWith("issue.")) return null;
   if (e.subject === "rule" && e.action === "started") return { at: e.time, name: e.object, kind: "started", text: e.detail ?? "" };
   if (e.subject !== "gate" || !HOLD_ACTIONS.includes(e.action)) return null;
-  return { at: e.time, name: e.object, kind: e.action === "waiting" ? "backend" : GATE_OF[e.action] ?? "not-ready", text: e.detail ?? "", event: e };
+  return { at: e.time, name: e.object, kind: e.action === "held" ? (e.detail ?? "").split(":")[0] : e.action, text: e.detail ?? "", event: e };
 }
 
 /** Every hold record of every issue, oldest first. */
@@ -61,7 +58,7 @@ export function readHolds(names: string[]): HoldRecord[] {
 /**
  * Records why an issue waits (or, with kind `started`, that it no longer does): its hold event by `gate` on the issue, unless it
  * repeats the last one, and `wait` in its issue state, which a hold that stops a start sets and any other clears. A `started` record logs
- * nothing: the start logs its own event. `ev` gives the hold's log event. The hold of a done or dropped issue writes no `wait`.
+ * nothing: the start logs its own event. `ev` gives the hold's log event. A done or dropped issue has no hold to record.
  */
 export function recordHold(name: string, kind: Gate | "started", text: string, ev?: Hold): void {
   const at = new Date().toISOString();
@@ -72,7 +69,6 @@ export function recordHold(name: string, kind: Gate | "started", text: string, e
       if (last && e && last.subject === "gate" && last.object === e.object && last.action === e.action && (last.detail ?? "") === (e.detail ?? "")) return;
       if (e) logEvent(e);
     }
-    if (ev?.action === "done" || ev?.action === "dropped") return;
     record.editIssueState(name, (s) => { s.wait = stopsStart({ at, name, kind, text }) ? { kind, reason: text, since: at } : null; });
   });
 }
@@ -106,7 +102,7 @@ export function backendHold(): BackendHold | null {
 
 /** The line the hold gives a run on its backend. */
 const holdBound = (h: BackendHold): Bound =>
-  ({ why: `waits for ${BACKENDS[h.via]}: ${h.why}`, text: `Waiting for ${BACKENDS[h.via]}: ${h.why}`, ev: { action: "waiting", detail: `for ${BACKENDS[h.via]}` } });
+  ({ why: `waits for ${BACKENDS[h.via]}: ${h.why}`, text: `Waiting for ${BACKENDS[h.via]}: ${h.why}`, ev: heldEvent("waiting", `for ${BACKENDS[h.via]}`) });
 
 /**
  * The backend hold of an issue with no run yet, whose backend only routing names: it binds when this hold already held
@@ -190,10 +186,10 @@ export async function gpuSlot(waitMs: number): Promise<(() => void) | null> {
   }
 }
 
-const PAUSED: Bound = { why: "paused", text: "The factory is paused", ev: { action: "paused" } };
+const PAUSED: Bound = { why: "paused", text: "The factory is paused", ev: heldEvent("paused") };
 
 /** The gates of the whole factory, in the order of GATES: the others are each issue's own. */
-const FACTORY_GATES = ["pause", "backend", "live-cap"] as const satisfies readonly Gate[];
+const FACTORY_GATES = ["paused", "waiting", "full"] as const satisfies readonly Gate[];
 
 export type FactoryGate = (typeof FACTORY_GATES)[number];
 
@@ -210,12 +206,12 @@ export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): 
   const call = local && held("gpu");
   const live = local ? liveLocal(jobs?.flat(), models) + (call ? 1 : 0) : liveRuns(jobs?.flat());
   const bound: Bound = local
-    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)`, ev: { action: call ? "gpu" : "full", detail: `${live} / ${LOCAL_CAP} local jobs` } }
-    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)`, ev: { action: "full", detail: `${live} / ${LIVE_CAP()} jobs` } };
+    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)`, ev: heldEvent(call ? "gpu" : "full", `${live} / ${LOCAL_CAP} local jobs`) }
+    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)`, ev: heldEvent("full", `${live} / ${LIVE_CAP()} jobs`) };
   return {
-    pause: paused() ? PAUSED : null,
-    backend: hold && run !== undefined && viaOfRun(run, models) === hold.via ? holdBound(hold) : null,
-    "live-cap": live >= (local ? LOCAL_CAP : LIVE_CAP()) ? bound : null,
+    paused: paused() ? PAUSED : null,
+    waiting: hold && run !== undefined && viaOfRun(run, models) === hold.via ? holdBound(hold) : null,
+    full: live >= (local ? LOCAL_CAP : LIVE_CAP()) ? bound : null,
   };
 }
 
@@ -226,8 +222,8 @@ export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): 
 export function gates(opts: { only?: readonly FactoryGate[]; jobs?: Job[]; run?: Pick<Run, "model" | "merge"> } = {}): ({ gate: FactoryGate } & Bound) | null {
   const on = (g: FactoryGate) => !opts.only || opts.only.includes(g);
   // Each gate is read only when asked: the pause is one stat, and the dispatch asks it first.
-  if (on("pause") && paused()) return { gate: "pause", ...PAUSED };
-  const rest = FACTORY_GATES.filter((g) => g !== "pause" && on(g));
+  if (on("paused") && paused()) return { gate: "paused", ...PAUSED };
+  const rest = FACTORY_GATES.filter((g) => g !== "paused" && on(g));
   if (!rest.length) return null;
   const all = factoryGates(opts.jobs, opts.run);
   for (const g of rest) if (all[g]) return { gate: g, ...all[g]! };
@@ -385,7 +381,7 @@ const BUSY_CONFLICTS = 3;
 const BUSY_MS = 7 * 86_400_000;
 
 /** The first open job of the repo, not waiting for Chris, whose issue `shares` something with the issue; `file` says what. */
-function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => { file: string; what: string } | undefined): { why: string; on: string; file: string } | null {
+function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => { file: string; what: string } | undefined): { why: string; on: string; job: string; file: string } | null {
   const lists = reader({ fetch: false });
   for (const j of jobs) {
     const last = record.counting(j).run;
@@ -393,7 +389,7 @@ function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => { f
     if (last.repo !== repo.key || on === undefined || !isOpen(j) || isWaiting(last.state)) continue;
     const theirs = lists.item(repo.key, on);
     const s = theirs && shares(theirs);
-    if (s) return { why: `waits for ${last.name}: ${s.what}`, on: last.name, file: s.file };
+    if (s) return { why: `waits for ${last.name}: ${s.what}`, on: last.name, job: record.counting(j).id, file: s.file };
   }
   return null;
 }
@@ -434,7 +430,7 @@ export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null 
 /** The facts of an issue that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
 export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now(), lists: Reader = reader()) {
   const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat();
-  // A job whose last run ended with the API credit error is not open work: the credit-wait gate holds the issue for its wait, then it starts again.
+  // A job whose last run ended with the API credit error is not open work: the credit hold keeps the issue for its wait, then it starts again.
   const found = openJob(name, null, jobs), open = found && policyOf(causeOf(record.counting(found).run)).waitMs > 0 ? null : found;
   return {
     name, ref: `${repo.key}-${issues.idOf(item)}`, item, parent: parentIn(repo.key, item, lists),
@@ -448,9 +444,12 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
   };
 }
 
+/** The reason of a `question` event's detail: the detail before its facts (`no-commit: 3 / 3 jobs with no commit`). */
+export const askReason = (detail?: string | null): string => (detail ?? "").split(": ")[0];
+
 /** When an Ask of `reason` was last set on the issue (ms), or null: the time of its latest `question` event. Setting the no-commit streak's Ask is what marks the streak. */
 const askedAt = (name: string, reason: string): number | null => {
-  const e = eventsOf(name, "question").findLast((x) => x.detail === reason);
+  const e = eventsOf(name, "question").findLast((x) => askReason(x.detail) === reason);
   return e ? Date.parse(e.time) : null;
 };
 
@@ -473,11 +472,11 @@ const capMarked = (name: string): boolean => {
   return at !== null && !eventsOf(name, "started").some((e) => Date.parse(e.time) > at);
 };
 
-/** How long ago the issue's newest build run whose cause has a wait (`waitMs`: the API credit error) ended, or null when it has none. */
-function creditWait(repoKey: string, name: string, all: Entry[], now: number): number | null {
+/** The issue's newest build run whose cause has a wait (`waitMs`: the API credit error): its key, and how long ago it ended; null when it has none. */
+function creditWait(repoKey: string, name: string, all: Entry[], now: number): { job: string; ago: number } | null {
   const last = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.role) && e.run.ended && policyOf(causeOf(e.run)).waitMs > 0)
     .sort(byId).at(-1);
-  return last ? now - Date.parse(last.run.ended!) : null;
+  return last ? { job: last.id, ago: now - Date.parse(last.run.ended!) } : null;
 }
 
 /** How many jobs of the issue started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not, and a first run whose cause does not count to the cap (`countsToCap`: the API credit error) does not count. */

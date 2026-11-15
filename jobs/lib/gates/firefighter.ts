@@ -222,7 +222,7 @@ export interface Fired { filed: Filed[]; asked: string[] }
  * line, never thrown.
  */
 export async function firefight(ports: Ports = defaultPorts, now = Date.now()): Promise<Fired | null> {
-  if (gates({ only: ["pause"] })) return null;
+  if (gates({ only: ["paused"] })) return null;
   const filed: Filed[] = [];
   for (const r of (() => { try { return reds(ports); } catch (e: any) { logEvent({ subject: "gate", action: "failed", object: "reds", detail: `failed: ${e?.message ?? e}` }); return []; } })()) {
     try {
@@ -231,7 +231,7 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
       if (!f) continue;
       filed.push(f);
       // A new issue's `filed` event is the filing's own.
-      if ("noted" in f) logEvent({ subject: "gate", action: "red", object: `${f.repo}-${f.noted}`, detail: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
+      if ("noted" in f) logEvent({ subject: "gate", action: "changed", object: `${f.repo}-${f.noted}`, detail: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
     } catch (e: any) {
       logEvent({ subject: "gate", action: "failed", object: r.repo, detail: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}` });
     }

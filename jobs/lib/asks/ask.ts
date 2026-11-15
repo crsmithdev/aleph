@@ -27,6 +27,8 @@ export interface Ask {
   options: { label: string; line: string; after?: string }[];
   recommended?: string;
   why: string[];
+  /** What the factory counted when it set the Ask, as `3 / 3 jobs with no commit`: the `question` event's detail takes it after the reason. */
+  facts?: string;
   /** A short noun phrase for the card's title, after the kind: "the TypeScript 5.9 to 7.0 upgrade". */
   headline?: string;
   /** Plain sentences on what this item is about and why it waits for Chris. */
