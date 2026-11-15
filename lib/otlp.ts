@@ -91,9 +91,9 @@ export async function postSpans(cfg: LangfuseConfig, spans: Span[], timeoutMs = 
   }
 }
 
-export interface Score { traceId: string; name: string; value: number; comment?: string; environment?: string }
+export type Score = ({ traceId: string; sessionId?: never } | { sessionId: string; traceId?: never }) & { name: string; value: number; comment?: string; environment?: string };
 
-/** A score on a trace, through the scores API: OTLP has no score. */
+/** A score on a trace or on a session, through the scores API: OTLP has no score. */
 export async function postScore(cfg: LangfuseConfig, score: Score, timeoutMs = 3000): Promise<PostResult> {
   try {
     const res = await fetch(`${cfg.baseUrl}/api/public/scores`, {

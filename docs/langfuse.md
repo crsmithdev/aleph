@@ -45,6 +45,11 @@ At `Stop`, the hook reads the generations from the transcript, one per `requestI
 |---|---|---|
 | `rating` | A prompt that contains `N/10` | N, on the previous turn's trace, with the prompt as the comment |
 | `verified` | The verify gate, on each turn it judges | 1 pass, 0 deny, 0.5 forced pass |
+| the judge's names, and `cost` | `evals/ab.ts`, on each run's session | the judge's 1 to 10, and the run's `total_cost_usd` |
+
+## Skill A/B
+
+`bun evals/ab.ts --variant a=<plugin dir> --variant b=<plugin dir> --cases cases.json [--runs N]` runs each case in `cases.json` (an array of `{prompt, cwd}`) `N` times per variant (default 3) as `claude -p --plugin-dir <variant>`. A judge sees a case's outputs under shuffled anonymous labels, and its scores go to Langfuse on each run's session, with the run's cost. One headless prompt per case: there is no simulated user.
 
 ## Factory traces
 
