@@ -17,6 +17,7 @@ import { specVersion } from "../roles/issue-spec.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { seed as seedJob } from "../../job.testkit.ts";
+import * as record from "../records/record.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
@@ -175,6 +176,22 @@ test("the sweep logs a job that waits for a spec edit as missed once the spec mo
   expect(await sweep(NOW + 3 * MIN, s, p)).toEqual([`edited:issue.1`]);
   expect(missedKeys()).toEqual([`edited:issue.1`]);
   expect(p.dispatches).toBe(1);
+});
+
+test("the sweep clears an Ask on a closed issue and on a job that no longer waits, and keeps the rest", async () => {
+  seed([{ body: "closed", ask: true }, { body: "open", ask: true }]);
+  // The Ask put back after the close is a stale row, as the 22 on the live store.
+  writeList({ key }, "close", (doc) => { issues.setStatus(issues.find(doc, 1)!, "done"); return true; });
+  setAsk(`issue.1`, plainAsk("question", "which module?"));
+  const gone = seedJob({ role: "plain", name: "job", state: "waiting", ask: plainAsk("question", "which?") });
+  const live = seedJob({ role: "plain", name: "job", state: "waiting", ask: plainAsk("question", "which?") });
+  record.setState(gone.id, "done");
+  const p = sweepPorts();
+  await sweep(NOW, readTick(), p);
+  expect(askOf(`issue.1`)).toBeNull();
+  expect(askOf(`issue.2`)?.question).toBe("which module?");
+  expect(record.read(gone.id)).toBeNull();
+  expect(record.read(live.id)?.ask?.question).toBe("which?");
 });
 
 test("the sweep with nothing to move starts nothing", async () => {

@@ -198,7 +198,11 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
     const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
     if (push.ok) {
-      for (const item of doc.items) if (CLOSED.includes(status(item)) && (open.has(item.id) || !before.has(item.id))) logClosed(item, by);
+      for (const item of doc.items) {
+        if (!CLOSED.includes(status(item)) || !(open.has(item.id) || !before.has(item.id))) continue;
+        logClosed(item, by);
+        record.clearIssueAsk(`issue.${issues.refOf(item)}`);
+      }
       return { value, commit: commit.out, follow: followMain(dir, MAIN) };
     }
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);

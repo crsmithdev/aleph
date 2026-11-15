@@ -7,6 +7,8 @@ import { addPart } from "./parts.fixture.ts";
 import * as store from "./store.ts";
 import * as verbs from "./issues.ts";
 import { askChris, askOf, setAsk, refIn, clearAsk } from "../../jobs/lib/asks/ask.ts";
+import * as record from "../../jobs/lib/records/record.ts";
+import { seed as seedJob } from "../../jobs/job.testkit.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { lockRetry } from "../../lib/git.ts";
@@ -224,6 +226,35 @@ describe("the writes", () => {
     expect(store.sort(r, fresh, "intake", (i) => { i.spec = "Do it."; })).toBe(true);
     expect(item(r, fresh).spec).toBe("Do it.");
     clearAsk(`issue.${live}`);
+  });
+});
+
+describe("an issue's ask", () => {
+  const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [], why: [] };
+  const wait = { kind: "after", reason: "waits", since: "2026-11-14T00:00:00Z" };
+
+  test("closing an issue clears its Ask or its run's Ask, and keeps its wait", () => {
+    const r = repo([{ title: "on issue" }, { title: "on run" }]);
+    const [a, b] = r.ids;
+    setAsk(`issue.${a}`, ask);
+    record.editIssueState(`issue.${a}`, (s) => { s.wait = wait; });
+    seedJob({ role: "build", name: `issue.${b}`, repo: r.key, target: `issue.${b}`, state: "waiting", ask });
+    expect(record.read(`issue.${b}`)?.askJob).toBeDefined();
+    expect(store.close(r, a, "x")).toBeNull();
+    expect(store.close(r, b, "x", "dropped")).toBeNull();
+    expect(record.read(`issue.${a}`)).toEqual({ ask: null, wait });
+    expect(record.read(`issue.${b}`)).toBeNull();
+  });
+
+  test("a parked issue keeps its Ask; one write that parks one and drops another clears only the dropped one's", () => {
+    const r = repo([{ title: "parked" }, { title: "dropped" }]);
+    const [a, b] = r.ids;
+    setAsk(`issue.${a}`, ask);
+    setAsk(`issue.${b}`, ask);
+    store.writeList(r, "park and drop", (doc) => { issues.setStatus(issues.find(doc, a)!, "parked"); issues.setStatus(issues.find(doc, b)!, "dropped"); return true; });
+    expect(record.read(`issue.${a}`)?.ask?.question).toBe("A or B?");
+    expect(record.read(`issue.${b}`)).toBeNull();
+    clearAsk(`issue.${a}`);
   });
 });
 

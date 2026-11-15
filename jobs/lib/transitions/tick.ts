@@ -19,7 +19,9 @@ import { alias } from "../roles/alias.ts";
 import { addDays } from "../learning/monitor-table.ts";
 import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { holdsWork } from "../infra/process.ts";
-import { reader } from "../../../issues/lib/store.ts";
+import { reader, type Reader } from "../../../issues/lib/store.ts";
+import { refOf, status } from "../../../issues/lib/todo.ts";
+import { allIssueStates, clearIssueAsk, getRun } from "../records/record.ts";
 import { ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
@@ -132,6 +134,14 @@ export interface SweepPorts { dispatch(): Promise<unknown>; suite(): void }
 const sweepPorts: SweepPorts = { dispatch: runDispatch, suite: suiteDetached };
 
 
+/** Clear the Ask of a closed issue and of a job-keyed row whose job no longer waits: a close or an end that missed it leaves it. */
+function clearDeadAsks(lists: Reader): void {
+  const closed = new Set(sandboxRepos().flatMap((r) => (lists.list(r.key)?.items ?? []).filter((i) => ["done", "dropped"].includes(status(i))).map((i) => `issue.${refOf(i)}`)));
+  for (const [key, s] of allIssueStates()) {
+    if (s.ask && (closed.has(key) || (key.startsWith("job.") && getRun(key)?.state !== "waiting"))) clearIssueAsk(key);
+  }
+}
+
 /**
  * The safety net. It records what could move now and does not, each key with the time a tick first saw it: `stalled`
  * (land, issue, ingest), an Ask with no case text and no director run (`ask:`), and a job to rescue (`rescue:`). A key
@@ -142,6 +152,7 @@ const sweepPorts: SweepPorts = { dispatch: runDispatch, suite: suiteDetached };
 export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPorts): Promise<string[]> {
   if (gates({ only: ["pause"] })) { writeStalls({}); s.missed = []; return []; }
   const jobs = allJobs(), runs = jobs.flat(), lists = reader({ fetch: false });
+  clearDeadAsks(lists);
   const keys = await stalled(jobs, lists, doneChecker(false));
   for (const c of pendingCases(sandboxRepos(), runs, lists)) if (!holdsWork(runs, "director", subjectOfCase(c))) keys.push(`ask:${c.on}`);
   for (const j of toRescue(jobs)) keys.push(`rescue:${j[0].run.name}`);

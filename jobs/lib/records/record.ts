@@ -291,6 +291,9 @@ export function setIssueAsk(key: string, ask: Ask | null): void {
   });
 }
 
+/** Take the Ask off `key`, the run's too, when its issue closes. The row keeps its wait and its CI result. */
+export const clearIssueAsk = (key: string): void => editIssueState(key, (s) => { s.ask = null; s.askJob = undefined; });
+
 // The next step.
 
 /** What the work does next: a function of its runs and its issue's state only. The fields are the event fields of docs/naming.md. */
