@@ -9,7 +9,7 @@ import { setAsk, refIn } from "../jobs/lib/asks/ask.ts";
 import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
-import { renderIssue } from "./views/issues.js";
+import { refHits, renderIssue } from "./views/issues.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { writeRepos } from "../tests/projects.ts";
 
@@ -115,6 +115,36 @@ describe("the Issue page", () => {
     expect((await post("edit", { title: "t", priority: "high", source: "nobody", areas: "", description: "x" })).status).toBe(422);
     await post("edit", { title: before.title, priority: before.priority ?? "medium", source: before.frontmatter.source ?? "chris", areas: before.labels.join(","), description: before.request ?? before.body });
   }, 60_000);
+
+  // Breaks if the edit route drops the picker's refs, clears them when the form sends none, or fails to clear an empty list.
+  test("the page's edit sets refs from the picker, keeps them when it sends no refs, and an empty list clears them", async () => {
+    const post = (body: unknown) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/edit`, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(body) });
+    const d = await getJson("/api/issues/fac-1");
+    const same = { title: d.title, priority: d.priority ?? "medium", source: d.frontmatter.source ?? "chris", areas: d.labels.join(","), description: d.request ?? "" };
+    expect((await post({ ...same, refs: ["issue.2"] })).status).toBe(200);
+    expect((await getJson("/api/issues/fac-1")).refs.map((r: any) => r.key)).toEqual(["issue.2"]);
+    expect((await post(same)).status).toBe(200);
+    expect((await getJson("/api/issues/fac-1")).refs.map((r: any) => r.key)).toEqual(["issue.2"]);
+    expect((await post({ ...same, refs: [] })).status).toBe(200);
+    expect((await getJson("/api/issues/fac-1")).refs).toEqual([]);
+  }, 60_000);
+
+  // Breaks if the picker leaves out the chosen refs or their keys, or the search ranks or skips wrongly.
+  test("the edit mode's Refs picker holds the chosen refs, and refHits ranks by id and title and skips the chosen", async () => {
+    const pageBase = await getJson("/api/issues/fac-1");
+    const html = renderIssue({ ...pageBase, refs: [{ id: "fac-2", key: "issue.2", title: "second", status: "open", href: "#/issues/fac/2" }] });
+    expect(html).toContain('class="chip ref-chip" data-key="issue.2"');
+    expect(html).toContain('name="refs" form="issue-edit" value="issue.2"');
+    const rows = [
+      { n: 2, id: "fac-2", title: "Fix the cache key", status: "open", project: "fac", labels: [], stage: "new", priority: "medium" },
+      { n: 3, id: "fac-3", title: "Document the cache", status: "open", project: "fac", labels: [], stage: "new", priority: "medium" },
+      { n: 4, id: "oth-4", title: "Unrelated", status: "done", project: "oth", labels: [], stage: "done", priority: "medium" },
+    ];
+    expect(refHits(rows, "cache", new Set()).map((h: any) => h.key)).toEqual(["issue.2", "issue.3"]);
+    expect(refHits(rows, "cache", new Set(["issue.2"])).map((h: any) => h.key)).toEqual(["issue.3"]);
+    expect(refHits(rows, "oth-4", new Set()).map((h: any) => h.key)).toEqual(["issue.4"]);
+    expect(refHits(rows, "cahce", new Set()).map((h: any) => h.key)).toEqual(["issue.2", "issue.3"]);
+  });
 
   test("the Issue page has a breadcrumb, the stage first among the pills, a timeline, and links a spec it has", async () => {
     const base = await getJson("/api/issues/fac-1");

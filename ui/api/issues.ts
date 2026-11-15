@@ -15,7 +15,7 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
+import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -127,17 +127,14 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const blockers = jobProjector().blockers(repo.key, ref);
 
-  // Plain references both ways, across every project: issue numbers are global.
-  const everyRepo = Object.values(loadRegistry());
-  let lists: (todos.Doc | null)[];
-  try { lists = readLists(everyRepo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
-  const where = new Map(lists.flatMap((d, k) => (d?.items ?? []).map((i) => [i.id, { repo: everyRepo[k].key, item: i }] as const)));
+  // Plain references both ways, across every project: issue numbers are global. readList above fetched, so this reads with no fetch.
+  const fetched = everyFetched(), where = new Map(fetched.map((w) => [w.item.id, w]));
   const link = (n: number | undefined) => {
     const w = n === undefined ? undefined : where.get(n), id = w && `${w.repo}-${w.item.id}`;
-    return w && id ? [{ id, title: w.item.title, status: todos.status(w.item), href: issueHref(id) }] : [];
+    return w && id ? [{ id, key: `issue.${w.item.id}`, title: w.item.title, status: todos.status(w.item), href: issueHref(id) }] : [];
   };
   const refs = refsOf(item).flatMap((k) => link(parseKey(k)?.n));
-  const referencedBy = referrersOf(lists, item).flatMap((i) => link(i.id));
+  const referencedBy = referrersOf(fetched.map((w) => w.item), item).flatMap((i) => link(i.id));
 
   // The Ask row of an issue that waits for Chris: the item `attend` builds, from the NewIssue as the state builds it.
   const stored = askOf(refIn(repo.key, item));
@@ -251,7 +248,9 @@ const unblock = post(async (_b, params) => {
 /** `aleph issue edit` from the Issue page: the CLI stays the one writer. */
 const edit = post((b, params) => {
   const { repo, n } = target(params);
-  const flags = ["--title", String(b.title ?? ""), "--priority", String(b.priority ?? ""), "--source", String(b.source ?? ""), "--labels", String(b.areas ?? ""), "--request", "-", ...(typeof b.spec === "string" ? ["--spec", b.spec] : [])];
+  const flags = ["--title", String(b.title ?? ""), "--priority", String(b.priority ?? ""), "--source", String(b.source ?? ""), "--labels", String(b.areas ?? ""), "--request", "-", ...(typeof b.spec === "string" ? ["--spec", b.spec] : []),
+    // The refs picker sends the whole list, as `issue.<n>` keys; an empty list clears it.
+    ...(Array.isArray(b.refs) ? ["--refs", b.refs.map(String).join(",") || "none"] : [])];
   return aleph(["issue", "edit", ...flags, "--", repo.key, String(n)], { stdin: String(b.description ?? "").trim() });
 });
 

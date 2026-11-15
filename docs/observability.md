@@ -47,7 +47,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `director` | `failed`, when a case text or a decision fails | `jobs/lib/roles/director.ts:634`, `:704`, `:707` |
 | `intake` | `skipped` (`intake`) for an issue that intake skips | `jobs/lib/transitions/factory.ts:531` |
 | the filer: `intake`, `firefighter`, `human`, `claude`, `worker` | `filed`, one event per new issue | `issues/lib/store.ts:411` |
-| the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `issues/lib/store.ts:142` |
+| the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `issues/lib/store.ts:154` |
 | `human` | `changed`, when an Always rule is set back to Ask me | `jobs/lib/asks/ask.ts:237` |
 
 The set `ACTORS` in `lib/naming.ts:17` also holds `worker`, `reviewer`, `check` and `monitor`. No `logEvent` call uses `reviewer`, `check` or `monitor`. `worker` and `claude` appear only as the filer or closer of an issue. An issue's events have the object `issue.<n>`.

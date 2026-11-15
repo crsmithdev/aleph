@@ -595,6 +595,27 @@ function issueKpis(d, segments, now = Date.now()) {
   ]);
 }
 
+/** A chosen ref in the picker: its id, and a button that removes it. */
+const refChip = (key, id, title) =>
+  `<span class="chip ref-chip" data-key="${esc(key)}" title="${esc(title)}">${esc(shortText(id))} <button type="button" class="ref-x" aria-label="Remove ${esc(shortText(id))}">×</button></span>`;
+
+/** The Refs field of edit mode: the chosen refs, a search over every issue by id and title, and the keys the form sends. */
+function refsPicker(d) {
+  const refs = d.refs ?? [];
+  return `<div class="field ref-field"><span>Refs</span><div class="ref-picker" data-self="issue.${esc(d.id)}">` +
+    `<input type="hidden" name="refs" ${FORM} value="${esc(refs.map((r) => r.key).join(","))}">` +
+    `<span class="ref-chosen">${refs.map((r) => refChip(r.key, r.id, r.title)).join("")}</span>` +
+    `<input type="search" class="ref-search" placeholder="id or title" autocomplete="off" role="combobox" aria-label="Find an issue to reference" aria-expanded="false" aria-controls="ref-hits">` +
+    `<ul class="ref-hits" id="ref-hits" role="listbox" hidden></ul></div></div>`;
+}
+
+/** The issues that fit `q` best, at most `max`, leaving out the keys in `skip`: each `{ key, id, title, status, hits }`. */
+export function refHits(rows, q, skip, max = 8) {
+  return rows.filter((r) => !skip.has(`issue.${r.n}`)).flatMap((r) => { const m = fuzzyMatch(q, r); return m ? [{ r, m }] : []; })
+    .sort((a, b) => b.m.score - a.m.score).slice(0, max)
+    .map(({ r, m }) => ({ key: `issue.${r.n}`, id: r.id, title: r.title, status: r.status, hits: m.hits }));
+}
+
 /** Front-matter keys the page shows elsewhere, or that are the store's own. */
 const HIDE = ["labels", "id", "from", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "refs", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
 
@@ -610,10 +631,11 @@ export function renderIssue(d) {
   const pills = statusRow(d.derived ? badge(d.derived.stage) : badge(d.status), priorityBadge(priority), `${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}${idLink(shortText(`${d.repo}-${ref}`))}`);
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     field("Priority", choose("priority", PRIORITIES, priority)) + field("Source", choose("source", SOURCES, source)) +
-    field("Areas", inputBox("areas", areas.join(", "), { attrs: ` ${FORM} aria-label="areas" placeholder="comma separated"` })) + `</div></section>`;
+    field("Areas", inputBox("areas", areas.join(", "), { attrs: ` ${FORM} aria-label="areas" placeholder="comma separated"` })) + refsPicker(d) + `</div></section>`;
   const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
   // Plain references: they hold nothing, so each row shows the issue's status, not a wait.
-  const linked = (label, rows) => (rows?.length ? `<div class="dp-blocked"><span class="quiet">${label}</span>${blockersHtml(rows.map((r) => ({ ...r, state: r.status })), d.repo, d.ref ?? d.id)}</div>` : "");
+  // The picker shows the refs in edit mode, so these lines show only in view mode.
+  const linked = (label, rows) => (rows?.length ? `<div class="dp-blocked view-only"><span class="quiet">${label}</span>${blockersHtml(rows.map((r) => ({ ...r, state: r.status })), d.repo, d.ref ?? d.id)}</div>` : "");
   const references = linked("Refs", d.refs) + linked("Referenced by", d.referencedBy);
   const partList = d.goals ?? [];
   const part = (id, title, name, text) => (text || !partList.length
@@ -670,7 +692,7 @@ if (typeof document !== "undefined") {
     e.preventDefault();
     const edit = form.dataset.ui === "issue-edit", el = form.elements;
     const body = edit
-      ? { title: el.title.value, priority: el.priority.value, source: el.source.value, areas: el.areas.value, description: el.request?.value ?? "", spec: el.spec?.value ?? "" }
+      ? { title: el.title.value, priority: el.priority.value, source: el.source.value, areas: el.areas.value, description: el.request?.value ?? "", spec: el.spec?.value ?? "", refs: el.refs.value.split(",").filter(Boolean) }
       : { text: el.text.value };
     try {
       await postJson(`${issueApi(form.dataset.repo, form.dataset.ref)}/${edit ? "edit" : "note"}`, body);
@@ -692,6 +714,64 @@ if (typeof document !== "undefined") {
 }
 
 if (typeof document !== "undefined") {
+  // The Refs picker: every issue loads once, on the first focus of the search box.
+  let refRows = null;
+  const pickerOf = (el) => el.closest?.(".ref-picker");
+  const chosen = (p) => new Set([p.dataset.self, ...p.querySelectorAll(".ref-chip")].map((c) => (typeof c === "string" ? c : c.dataset.key)));
+  const sync = (p) => { p.querySelector('input[name="refs"]').value = [...p.querySelectorAll(".ref-chip")].map((c) => c.dataset.key).join(","); };
+  const close = (p) => { const ul = p.querySelector(".ref-hits"); ul.hidden = true; ul.innerHTML = ""; p.querySelector(".ref-search").setAttribute("aria-expanded", "false"); };
+  const pick = (p, li) => {
+    p.querySelector(".ref-chosen").insertAdjacentHTML("beforeend", refChip(li.dataset.key, li.dataset.id, li.dataset.title));
+    sync(p);
+    const box = p.querySelector(".ref-search");
+    box.value = "";
+    close(p);
+    box.focus();
+  };
+  const show = async (p) => {
+    const box = p.querySelector(".ref-search"), q = box.value.trim(), ul = p.querySelector(".ref-hits");
+    if (!q) return close(p);
+    const rows = await (refRows ??= fetch("/api/issues", { cache: "no-store" }).then((r) => r.json()).then(issueRows).catch(() => (refRows = null, [])));
+    if (box.value.trim() !== q) return;
+    const hits = refHits(rows, q, chosen(p));
+    ul.innerHTML = hits.length
+      ? hits.map((h, i) => `<li role="option" id="ref-hit-${i}" aria-selected="${i === 0}" data-key="${esc(h.key)}" data-id="${esc(h.id)}" data-title="${esc(h.title)}"><span class="mono">${esc(shortText(h.id))}</span> ${markHits(h.title, h.hits)} ${tag(h.status)}</li>`).join("")
+      : `<li class="quiet" aria-disabled="true">No match</li>`;
+    ul.hidden = false;
+    box.setAttribute("aria-expanded", "true");
+  };
+  document.addEventListener("focusin", (e) => { if (e.target.matches?.(".ref-search")) refRows ??= fetch("/api/issues", { cache: "no-store" }).then((r) => r.json()).then(issueRows).catch(() => (refRows = null, [])); });
+  document.addEventListener("input", (e) => { const p = e.target.matches?.(".ref-search") && pickerOf(e.target); if (p) show(p); });
+  document.addEventListener("keydown", (e) => {
+    const p = e.target.matches?.(".ref-search") && pickerOf(e.target);
+    if (!p) return;
+    const opts = [...p.querySelectorAll('.ref-hits li[role="option"]')], at = opts.findIndex((o) => o.getAttribute("aria-selected") === "true");
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!opts.length) return;
+      const next = (at + (e.key === "ArrowDown" ? 1 : opts.length - 1)) % opts.length;
+      opts.forEach((o, i) => o.setAttribute("aria-selected", String(i === next)));
+      e.target.setAttribute("aria-activedescendant", opts[next].id);
+    } else if (e.key === "Enter") {
+      // Enter picks the selected issue; it must not submit the edit form.
+      e.preventDefault();
+      if (at >= 0) pick(p, opts[at]);
+    } else if (e.key === "Escape") close(p);
+  });
+  // mousedown, not click: the search box's blur would close the list before a click lands.
+  document.addEventListener("mousedown", (e) => {
+    const li = e.target.closest?.('.ref-hits li[role="option"]');
+    if (li) { e.preventDefault(); pick(pickerOf(li), li); }
+  });
+  document.addEventListener("click", (e) => {
+    const x = e.target.closest?.(".ref-x");
+    if (!x) return;
+    const p = pickerOf(x);
+    x.closest(".ref-chip").remove();
+    sync(p);
+  });
+  document.addEventListener("focusout", (e) => { const p = e.target.matches?.(".ref-search") && pickerOf(e.target); if (p) close(p); });
+
   const MEDIA_FORMS = 'form[data-ui="issue-form"], form[data-ui="issue-media"]';
   const accepted = (f) => /^image\/(png|jpeg|gif|webp)$|^application\/pdf$/.test(f.type);
   // A pasted screenshot goes to the media input of the form it was pasted in.

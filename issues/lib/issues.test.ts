@@ -149,7 +149,7 @@ describe("issue verbs without argv", () => {
     const doc = store.readList(o)!;
     expect(store.isBuildable(doc, issues.find(doc, n)!)).toBe(true);
     expect(store.afterOf(issues.find(doc, n)!)).toEqual([]);
-    expect(store.referrersOf([store.readList(r), doc], item(r, target)).map((i) => i.id)).toEqual([n]);
+    expect(store.referrersOf([...store.readList(r)!.items, ...doc.items], item(r, target)).map((i) => i.id)).toEqual([n]);
   });
 
   test("edit reads the issue for the group prefix: a child with a from link takes it, a top-level issue refuses it", () => {
