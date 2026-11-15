@@ -29,7 +29,7 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
 
 4. **Trace the diff.** Read `git diff` against the base line by line. Done when each changed line traces to the goal, or you reverted it.
 
-5. **Check the diff.** Read the `## Check` section of [refit-code](../refit-code/SKILL.md) and run its steps on the diff. When the diff adds or changes a test, do the same with [refit-tests](../refit-tests/SKILL.md). Done when your summary lists each item with its verdict, and each verdict other than keep is applied.
+5. **Check the diff.** Read the `## Check` section of [refit-code](../refit-code/SKILL.md) and run its steps on the diff. When the diff adds or changes a test, do the same with [refit-tests](../refit-tests/SKILL.md). When it changes an event, a record field, a migration or a number a page shows, do the same with [refit-data](../refit-data/SKILL.md). Done when your summary lists each item with its verdict, and each verdict other than keep is applied.
 
 ## Rules
 
