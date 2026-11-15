@@ -80,6 +80,20 @@ and as the bar for a card. Sections are by lens.
 - **Proof**: each read encodes the field's meaning again; the owner `issues/lib/todo.ts` exists.
 - **Fix**: accessors in `issues/lib/todo.ts`; the readers call them. Landed as 71d048577.
 
+# Layout
+
+## Model table: shared code with a feature's address
+
+- **Signal**: a layer pointing the wrong way. `lib/pricing.ts` imported `MODELS` from
+  `jobs/lib/routing/models.ts`, so the shared directory depended on a feature directory.
+- **Measurement**: 26 files imported `jobs/lib/routing/models.ts` on main at 5f3285e9: 19 in `jobs/`,
+  5 in `ui/`, 1 in `lib/` (`pricing.ts:14`) and 1 in `ideas/`.
+- **Look-first**: the concept is the model table. `docs/routing.md` documents it, and the four importing
+  directories make it shared code, which this tree keeps in `lib/`. It was at
+  `jobs/lib/routing/models.ts`, a feature's address.
+- **Fix**: `jobs/lib/routing/models.ts` → `lib/models.ts`; the routing file keeps the reads and probes and
+  imports the table. Landed as 8609f7b6.
+
 # Dead
 
 ## Cloud Chamber tidy, 2026-09-27
