@@ -5,7 +5,8 @@
  * `aleph migrate cleanup` (step 9) deletes the old files once the check passed. All paths come from `lib/layout.ts`
  * and `ALEPH_DB`, so the tool runs on a copy of the store.
  */
-import { existsSync, linkSync, copyFileSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { conn, dbFile } from "../../lib/db.ts";
 import { today } from "../../lib/day.ts";
@@ -776,4 +777,34 @@ export function migrateCleanup(): string {
   const by: Counter = {};
   for (const g of gone) bump(by, dirname(g).slice(r.root.length + 1) || ".");
   return `deleted ${gone.length} paths\n${Object.entries(by).sort().map(([d, n]) => `  ${d}: ${n}`).join("\n")}`;
+}
+
+/**
+ * `aleph migrate asks`: set `detail` to the Ask reason on each `question` event that has none, from the `asks` of the old job
+ * records in the backup tar that the `migrated` row names. An entry belongs to the issue of its record's runs and to the event of
+ * the same issue and time. Writes nothing else; a second run fills 0.
+ */
+export function migrateAsks(): string {
+  const done = conn().query("SELECT value FROM state WHERE key = 'migrated'").get() as { value: string } | null;
+  if (!done) refuse("run `aleph migrate storage` first: no migration has passed its check");
+  const { tar } = JSON.parse(done.value) as { tar: string };
+  const dir = mkdtempSync(join(tmpdir(), "aleph-asks-"));
+  try {
+    const x = Bun.spawnSync(["tar", "-xzf", tar, "-C", dir, "--wildcards", "--no-wildcards-match-slash", "./jobs/*.json", "./jobs-archive/*.json"], { stdout: "pipe", stderr: "pipe" });
+    if (x.exitCode !== 0) refuse(`cannot read the old records from ${tar}: ${x.stderr.toString()}`);
+    const issueOfRun = new Map<string, string>();
+    for (const j of conn().query("SELECT was, target FROM jobs WHERE was IS NOT NULL AND target LIKE 'issue.%'").all() as { was: string; target: string }[]) issueOfRun.set(j.was.split(" ").pop()!, j.target);
+    const reasons = new Map<string, string>();
+    for (const d of ["jobs", "jobs-archive"]) for (const f of readdirSync(join(dir, d))) {
+      const rec = readJsonOr<Json>(join(dir, d, f), {});
+      const issue = (rec.runs ?? []).map((x: Json) => issueOfRun.get(x.id)).find(Boolean);
+      for (const a of issue ? rec.asks ?? [] : []) if (a.reason) reasons.set(`${issue} ${a.set}`, a.reason);
+    }
+    let filled = 0, missing = 0;
+    for (const e of conn().query("SELECT seq, object, time FROM events WHERE action = 'question' AND detail IS NULL").all() as { seq: number; object: string; time: string }[]) {
+      const reason = reasons.get(`${e.object} ${e.time}`);
+      if (reason) { conn().query("UPDATE events SET detail = ? WHERE seq = ?").run(reason, e.seq); filled++; } else missing++;
+    }
+    return `filled ${filled} events, no reason found for ${missing}`;
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 }

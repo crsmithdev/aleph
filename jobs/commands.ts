@@ -38,7 +38,7 @@ import { cutTitle, fit } from "./lib/roles/title.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
 import type { Fate } from "./lib/records/outcome.ts";
 import { refuse, Refusal } from "../lib/refusal.ts";
-import { migrateCleanup, migrateStorage } from "./lib/migrate.ts";
+import { migrateAsks, migrateCleanup, migrateStorage } from "./lib/migrate.ts";
 import * as doctor from "./lib/infra/doctor.ts";
 import { facts, repoStages, stages } from "./lib/records/status.ts";
 import type { Stage } from "./lib/records/stage.ts";
@@ -82,7 +82,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   always: { usage: "aleph always <list|grant <reason> <action>|revoke <reason>|timeout [<reason> <minutes> [pick|drop]]>", purpose: "list and change the standing permissions" },
   models: { usage: "aleph models [set <tier> <model> | enable <tier> | disable <tier>]", purpose: "list and change the model of each tier" },
   judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
-  migrate: { usage: "aleph migrate <storage [--dry-run] | cleanup>", purpose: "move the old store to aleph.db, items/ and jobs/<n>/, or delete the old files after it" },
+  migrate: { usage: "aleph migrate <storage [--dry-run] | asks | cleanup>", purpose: "move the old store to aleph.db, items/ and jobs/<n>/, or delete the old files after it" },
   doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
   memory: { usage: "aleph memory <init|write|adopt|recall|lint|archive|delete|compile|misses|maintain> ...", purpose: "run a vault op" },
   "doc-claims": { usage: "aleph doc-claims", purpose: "list each doc claim the code does not back" },
@@ -684,6 +684,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "migrate": {
       const [sub] = ctx.positional;
       if (sub === "storage") ctx.write(`${migrateStorage(ctx.rest.includes("--dry-run"))}\n`);
+      else if (sub === "asks") ctx.write(`${migrateAsks()}\n`);
       else if (sub === "cleanup") ctx.write(`${migrateCleanup()}\n`);
       else refuse(usage("migrate"));
       break;

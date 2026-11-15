@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { conn } from "../../lib/db.ts";
 import { git } from "../../lib/git.ts";
-import { migrateCleanup, migrateStorage, plan, roots } from "./migrate.ts";
+import { migrateAsks, migrateCleanup, migrateStorage, plan, roots } from "./migrate.ts";
 
 // A small old store in the shapes of the live one (names and texts made up): two projects, a part, media, an idea, one
 // work with a build that a reviewer sent back, a second build, a land with no commit and a plain run, a chat run and a
@@ -61,7 +61,7 @@ beforeAll(() => {
   repo(join(root, "ideas"), { "idea.md": "---\ntitle: \"\"\nstatus: exploring\nbuilt: []\n---\n", "first-idea/idea.md": "---\ntitle: First idea\ntarget: aleph\nstatus: exploring\nbuilt: []\n---\n\n# First\n\n## Log\n", "first-idea/explainer-2026-11-02-0300.html": "<p>lens</p>" });
   const ids = ["20261102-030000-aleph-aleph-3-intake", "20261102-030100-aleph-aleph-3-agent", "20261102-030400-aleph-aleph-3-agent", "20261102-030900-aleph-aleph-3-land"];
   put(join(root, "jobs", "aleph-3.json"), {
-    issue: "aleph-3", ask: { kind: "input", reason: "question", question: "Which?", options: [], why: [] }, askRun: ids[2], wait: { kind: "red", reason: "main is red", since: "2026-11-02T03:00:00.000Z" }, rounds: 1, cost: 1, asks: [],
+    issue: "aleph-3", ask: { kind: "input", reason: "question", question: "Which?", options: [], why: [] }, askRun: ids[2], wait: { kind: "red", reason: "main is red", since: "2026-11-02T03:00:00.000Z" }, rounds: 1, cost: 1, asks: [{ set: "2026-11-02T03:04:30.000Z", reason: "question" }],
     runs: [
       run(ids[0], { kind: "intake", job: ids[0], name: "intake-aleph-3", started: "2026-11-02T03:00:00.000Z", n: 1, route: "build" }),
       run(ids[1], { job: ids[1], condition: "returned", started: "2026-11-02T03:01:00.000Z", ended: "2026-11-02T03:03:00.000Z", n: 2, cost: 0.5, failed: "review", next: "worker", review: { call: "returned", reason: "no test", model: "opus", cost: 0.2, seconds: 30 } }),
@@ -86,6 +86,8 @@ beforeAll(() => {
   // The event log, with the events decision 14 drops.
   put(join(root, "factory", "events", "2026-11-02.jsonl"), jl([
     { at: "2026-11-02T03:00:00.000Z", by: "gate", subject: "aleph-3", action: "running", on: ["a3#1"] },
+    { at: "2026-11-02T03:04:30.000Z", by: "gate", subject: "aleph-3", action: "question" },
+    { at: "2026-11-02T03:04:40.000Z", by: "gate", subject: "aleph-3", action: "question" },
     { at: "2026-11-02T03:09:00.000Z", by: "gate", subject: "aleph-3", action: "landed", on: ["a3#4"], commit: landed, cost: 0.1 },
     { at: "2026-11-02T03:09:30.000Z", by: "rule", subject: "aleph-3", action: "done", note: "its sub-issues are done" },
     { at: "2026-11-02T03:09:40.000Z", by: "rule", subject: "aleph-3.1", action: "busy", on: ["aleph-3"], file: "x.ts", sub: "protected" },
@@ -151,6 +153,10 @@ test("cleanup refuses before a migration has passed its check", () => {
   expect(() => migrateCleanup()).toThrow(/no migration has passed/);
 });
 
+test("the asks backfill refuses before a migration has passed its check", () => {
+  expect(() => migrateAsks()).toThrow(/no migration has passed/);
+});
+
 test("the real run backs up, converts, checks and pushes, with the counts of the dry run", () => {
   const dry = migrateStorage(true);
   const out = migrateStorage(false);
@@ -169,6 +175,8 @@ test("the real run backs up, converts, checks and pushes, with the counts of the
     { time: "2026-11-02T03:00:30.000Z", subject: "rule", action: "started", object: "issue.3", detail: null },
     { time: "2026-11-02T03:01:00.000Z", subject: "rule", action: "reran", object: "issue.3", detail: "try again" },
     { time: "2026-11-02T03:02:20.000Z", subject: "gate", action: "after", object: "issue.3", detail: "issue.4" },
+    { time: "2026-11-02T03:04:30.000Z", subject: "gate", action: "question", object: "issue.3", detail: null },
+    { time: "2026-11-02T03:04:40.000Z", subject: "gate", action: "question", object: "issue.3", detail: null },
     { time: "2026-11-02T03:09:00.000Z", subject: "gate", action: "landed", object: "job.7", detail: null },
     { time: "2026-11-02T03:09:30.000Z", subject: "rule", action: "done", object: "issue.3", detail: "its sub-issues are done" },
     { time: "2026-11-02T03:09:40.000Z", subject: "rule", action: "busy", object: "issue.4", detail: "a protected file: x.ts: issue.3" },
@@ -200,6 +208,16 @@ test("the real run backs up, converts, checks and pushes, with the counts of the
   // The old files are in place until cleanup, and a second run refuses.
   expect(existsSync(join(root, "runs"))).toBe(true);
   expect(() => migrateStorage(false)).toThrow(/already migrated|already holds jobs/);
+});
+
+test("the asks backfill sets the reason of a question event from the backup's records, once", () => {
+  const events = () => conn().query("SELECT seq, time, subject, action, object, detail FROM events ORDER BY seq").all() as Record<string, any>[];
+  const at = "2026-11-02T03:04:30.000Z";
+  conn().query("UPDATE events SET detail = NULL WHERE action = 'question' AND time = ?").run(at);
+  const before = events();
+  expect(migrateAsks()).toBe("filled 1 events, no reason found for 1");
+  expect(events()).toEqual(before.map((e) => (e.time === at ? { ...e, detail: "question" } : e)));
+  expect(migrateAsks()).toBe("filled 0 events, no reason found for 1");
 });
 
 test("cleanup deletes the old files and keeps the live ones", () => {
