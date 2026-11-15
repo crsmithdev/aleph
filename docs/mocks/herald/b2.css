@@ -1,0 +1,7 @@
+.m-B .m-subs { margin: 0 0 4px 44px; padding: 1px 0 1px 8px; border-left: 2px solid var(--rule); border-bottom: 0; }
+.m-B .m-subs + .m-row, .m-B .m-subsend { border-top: 1px solid var(--rule-2); }
+.B.m-B .m-s { grid-template-columns: 72px 52px minmax(0,1fr); gap: 8px; padding: 1px 0; }
+.m-B .m-s .m-t { display: none; }
+.B.m-B .m-s.tm { grid-template-columns: 36px 72px 52px minmax(0,1fr); }
+.m-B .m-s.tm .m-t { display: inline; }
+.m-B .m-s .m-x { color: var(--ink-2); }

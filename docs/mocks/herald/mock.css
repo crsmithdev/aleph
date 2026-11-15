@@ -1,0 +1,60 @@
+body { background: var(--bg); padding: 16px; font-family: var(--sans); color: var(--ink); }
+
+.m-cap { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+.m-sub { font-size: 12px; color: var(--muted); margin: 0 0 8px; min-height: 48px; }
+.m-panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-card); padding: 12px 14px; font-size: 13px; }
+.m-ph { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+.m-t { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.m-m { color: var(--muted); }
+.m-mono { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.m-ok { color: var(--done); }
+.m-more { font-size: 11px; font-weight: 600; color: var(--muted); padding: 0 6px; border-radius: var(--r-tag); background: var(--sunk); margin-left: 6px; }
+.m-more.m-open { background: var(--rule); color: var(--ink); }
+.badge { font-size: 11px; }
+.m-ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.m-dot { width: 6px; height: 6px; border-radius: 9px; background: var(--run); display: inline-block; }
+.m-runs { display: grid; gap: 2px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--rule); font-size: 12px; }
+.m-runrow { display: grid; grid-template-columns: 8px auto auto minmax(0,1fr) auto; gap: 8px; align-items: center; }
+.m-rl { color: var(--run); font-size: 11px; font-weight: 600; }
+
+/* ---------- Current (as live) is the screenshot; these are the options ---------- */
+
+/* A: tighten. Same two-line rows; no stripe; subs share the head's text column. */
+.A .m-row { display: grid; grid-template-columns: 36px minmax(0,1fr); gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--rule-2); align-items: baseline; }
+.A .m-title { display: block; }
+.A .m-line { display: block; color: var(--ink-2); }
+.A .m-subs { grid-column: 2; margin: 3px 0 1px; padding-left: 8px; border-left: 2px solid var(--rule); display: grid; gap: 1px; font-size: 12px; color: var(--ink-2); }
+.A .m-s { display: grid; grid-template-columns: 34px 66px minmax(0,1fr); gap: 6px; align-items: baseline; }
+.A .m-s .m-k { font-size: 11px; font-weight: 600; color: var(--muted); }
+.A .m-stat { color: var(--ink); }
+
+/* B: one-line ledger. Every row and sub-row is one grid line: time | chip | id | text. */
+.B .m-row, .B .m-s { display: grid; grid-template-columns: 36px 72px 52px minmax(0,1fr) auto; gap: 8px; align-items: baseline; padding: 3px 0; }
+.B .m-row { border-bottom: 1px solid var(--rule-2); }
+.B .m-row.m-open { border-bottom: 0; }
+.B .badge { justify-self: start; }
+.B .m-subs { padding: 0 0 4px; border-bottom: 1px solid var(--rule-2); font-size: 12px; color: var(--ink-2); }
+.B .m-s .m-k { font-size: 11px; font-weight: 600; color: var(--muted); }
+.B .m-wide { grid-column: 2 / -1; }
+.B .m-w3 { grid-column: 3 / -1; }
+
+/* C: thread. One event-line component; an issue adds a header line above its events. */
+.C .m-grp { padding: 5px 0; border-bottom: 1px solid var(--rule-2); }
+.C .m-hd { display: grid; grid-template-columns: 52px minmax(0,1fr) auto; gap: 8px; align-items: baseline; }
+.C .m-hd .m-title { font-weight: 500; }
+.C .m-ev { display: grid; grid-template-columns: 52px 66px minmax(0,1fr) auto; gap: 8px; align-items: baseline; padding: 1px 0; font-size: 12px; color: var(--ink-2); }
+.C .m-older .m-ev { color: var(--muted); }
+.C .m-older { border-top: 1px dashed var(--rule-2); margin-top: 2px; padding-top: 2px; }
+.C .m-solo { display: grid; grid-template-columns: 52px 66px minmax(0,1fr) auto; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--rule-2); }
+
+/* D: rail. A coloured dot timeline on the left; subs are smaller dots on the same rail. */
+.D .m-feed { position: relative; }
+.D .m-feed::before { content: ""; position: absolute; left: 41px; top: 6px; bottom: 6px; width: 1px; background: var(--rule); }
+.D .m-row { display: grid; grid-template-columns: 36px 12px minmax(0,1fr); gap: 0 6px; padding: 4px 0; align-items: baseline; }
+.D .m-pip { width: 8px; height: 8px; border-radius: 9px; background: var(--muted); position: relative; top: 0; justify-self: center; align-self: start; margin-top: 5px; box-shadow: 0 0 0 3px var(--surface); }
+.D .m-pip.done { background: var(--done); } .D .m-pip.m-runrow { background: var(--run); } .D .m-pip.stuck { background: var(--stuck); } .D .m-pip.quiet { background: var(--muted); }
+.D .m-pip.m-sm { width: 5px; height: 5px; margin-top: 6px; }
+.D .m-w { color: var(--ink-2); }
+.D .m-w b { font-weight: 600; }
+.D .m-done-w { color: var(--done); font-weight: 600; } .D .m-run-w { color: var(--run); font-weight: 600; } .D .m-q-w { color: var(--muted); font-weight: 600; } .D .m-stuck-w { color: var(--stuck); font-weight: 600; }
+.D .m-s { font-size: 12px; color: var(--ink-2); padding: 1px 0; }

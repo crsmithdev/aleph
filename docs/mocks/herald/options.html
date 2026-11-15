@@ -1,0 +1,141 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Herald mocks</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="mock.css">
+<style>
+.m-cols { display: grid; grid-template-columns: repeat(4, 511px); gap: 20px; align-items: start; }
+</style></head><body>
+<div class="m-cols">
+
+<!-- ================= A ================= -->
+<div>
+<p class="m-cap">A · Tighten</p>
+<p class="m-sub">Same two-line rows. Drop the 3px stripe (the chip carries the tone), the run word after the chip and the housekeeper's inline IDs. Sub-rows hang under the text column with a thin guide line, not in an indented box.</p>
+<div class="m-panel A">
+<div class="m-ph">Herald <span class="badge done">OK</span></div>
+<div class="m-runs">
+  <div class="m-runrow"><span class="m-dot"></span><a class="idl">a2141#2</a><span class="m-rl">implement · low</span><span class="m-ell m-m">Fold a run's facts into its row</span><span class="m-t">12:58</span></div>
+  <div class="m-runrow"><span class="m-dot"></span><a class="idl">housekeeper#57</a><span class="m-rl">aleph</span><span></span><span class="m-t">12:59</span></div>
+</div>
+<div class="m-row"><span class="m-t">13:00</span><span class="m-stat">Everything is fine.</span></div>
+<div class="m-row"><span class="m-t">12:59</span><span class="m-line"><span class="badge run">started</span> <a class="idl">housekeeper#57</a></span></div>
+<div class="m-row"><span class="m-t">12:59</span><span><span class="m-title m-ell">Rename the build status to name the worker's job</span><span class="m-line"><span class="badge done">closed</span> <a class="idl">a2131</a></span></span></div>
+<div class="m-row"><span class="m-t">12:57</span><span><span class="m-title m-ell">Chip an issue's finished run as ended, not closed</span><span class="m-line"><span class="badge done">closed</span> <a class="idl">a2140#1</a> intake ✓ · 41s · $0.38<span class="m-more">+2</span></span></span></div>
+<div class="m-row"><span class="m-t">12:43</span><span><span class="m-title m-ell">Check a parked issue once when sorting the Herald's Running</span><span class="m-line"><span class="badge done">landed</span> <a class="idl">a2138#3</a> · cac50cf · 17s<span class="m-more m-open">+3</span></span></span>
+  <div class="m-subs">
+    <div class="m-s"><span class="m-t">12:43</span><span class="m-k">implement</span><span><a class="idl">a2138#2</a> <span class="m-ok">✓</span> worker-low · haiku · 2m 43s · $0.20</span></div>
+    <div class="m-s"><span class="m-t">12:40</span><span class="m-k">intake</span><span><a class="idl">a2138#1</a> <span class="m-ok">✓</span> 29s · $0.24</span></div>
+    <div class="m-s"><span class="m-t">12:39</span><span class="m-k">filed</span><span>by Claude Code</span></div>
+  </div></div>
+<div class="m-row"><span class="m-t">12:12</span><span><span class="m-line"><span class="badge quiet">ended</span> <a class="idl">housekeeper#56</a> · reviewed 10 · retitled 2 · commented 5 · unparked 1<span class="m-more m-open">+5</span></span></span>
+  <div class="m-subs">
+    <div class="m-s"><span></span><a class="idl">a2099</a><span>commented</span></div>
+    <div class="m-s"><span></span><a class="idl">a2101</a><span>commented</span></div>
+    <div class="m-s"><span></span><a class="idl">a2123</a><span>retitled · commented</span></div>
+    <div class="m-s"><span></span><a class="idl">a2124</a><span>commented</span></div>
+    <div class="m-s"><span></span><a class="idl">a2130</a><span>commented · retitled · unparked</span></div>
+  </div></div>
+<div class="m-row"><span class="m-t">12:11</span><span class="m-line"><span class="badge stuck">missed</span> <span class="m-mono">ingest:aleph-2072</span></span></div>
+</div>
+</div>
+
+<!-- ================= B ================= -->
+<div>
+<p class="m-cap">B · One-line ledger</p>
+<p class="m-sub">Every row is one line: time, chip, ID, title. The facts (model, time, cost, commit) move into the fold. Head and sub-rows share one 5-column grid. About 2x the rows per screen.</p>
+<div class="m-panel B">
+<div class="m-ph">Herald <span class="badge done">OK</span></div>
+<div class="m-runs">
+  <div class="m-runrow"><span class="m-dot"></span><a class="idl">a2141#2</a><span class="m-rl">implement · low</span><span class="m-ell m-m">Fold a run's facts into its row</span><span class="m-t">12:58</span></div>
+  <div class="m-runrow"><span class="m-dot"></span><a class="idl">housekeeper#57</a><span class="m-rl">aleph</span><span></span><span class="m-t">12:59</span></div>
+</div>
+<div class="m-row"><span class="m-t">13:00</span><span class="m-wide">Everything is fine.</span></div>
+<div class="m-row"><span class="m-t">12:59</span><span class="badge run">started</span><span class="m-w3"><a class="idl">housekeeper#57</a></span></div>
+<div class="m-row"><span class="m-t">12:59</span><span class="badge done">closed</span><a class="idl">a2131</a><span class="m-ell">Rename the build status to name the worker's job</span><span></span></div>
+<div class="m-row"><span class="m-t">12:57</span><span class="badge done">closed</span><a class="idl">a2140</a><span class="m-ell">Chip an issue's finished run as ended, not closed</span><span class="m-more">+3</span></div>
+<div class="m-row m-open"><span class="m-t">12:43</span><span class="badge done">landed</span><a class="idl">a2138</a><span class="m-ell">Check a parked issue once when sorting the Herald's Running</span><span class="m-more m-open">+4</span></div>
+<div class="m-subs">
+  <div class="m-s"><span class="m-t">12:43</span><span class="m-k">land</span><a class="idl">#3</a><span class="m-ell"><span class="m-ok">✓</span> cac50cf · 17s</span><span></span></div>
+  <div class="m-s"><span class="m-t">12:43</span><span class="m-k">implement</span><a class="idl">#2</a><span class="m-ell"><span class="m-ok">✓</span> worker-low · haiku · 2m 43s · $0.20</span><span></span></div>
+  <div class="m-s"><span class="m-t">12:40</span><span class="m-k">intake</span><a class="idl">#1</a><span class="m-ell"><span class="m-ok">✓</span> 29s · $0.24</span><span></span></div>
+  <div class="m-s"><span class="m-t">12:39</span><span class="m-k">filed</span><span></span><span class="m-ell">by Claude Code</span><span></span></div>
+</div>
+<div class="m-row m-open"><span class="m-t">12:12</span><span class="badge quiet">ended</span><span class="m-w3 m-ell"><a class="idl">housekeeper#56</a> · reviewed 10 · changed 5<span class="m-more m-open">+5</span></span></div>
+<div class="m-subs">
+  <div class="m-s"><span></span><span class="m-k">commented</span><a class="idl">a2099</a><span></span><span></span></div>
+  <div class="m-s"><span></span><span class="m-k">commented</span><a class="idl">a2101</a><span></span><span></span></div>
+  <div class="m-s"><span></span><span class="m-k">retitled</span><a class="idl">a2123</a><span class="m-m">commented</span><span></span></div>
+  <div class="m-s"><span></span><span class="m-k">commented</span><a class="idl">a2124</a><span></span><span></span></div>
+  <div class="m-s"><span></span><span class="m-k">unparked</span><a class="idl">a2130</a><span class="m-m">commented · retitled</span><span></span></div>
+</div>
+<div class="m-row"><span class="m-t">12:11</span><span class="badge stuck">missed</span><span class="m-w3 m-mono">ingest:aleph-2072</span></div>
+<div class="m-row"><span class="m-t">12:09</span><span class="badge done">closed</span><a class="idl">a2073</a><span class="m-ell">Exclude held core-change issues from housekeeper</span><span></span></div>
+<div class="m-row"><span class="m-t">12:09</span><span class="badge done">closed</span><a class="idl">a2071</a><span class="m-ell">Show and clear held core verdicts</span><span></span></div>
+<div class="m-row"><span class="m-t">12:09</span><span class="badge done">landed</span><a class="idl">a2137</a><span class="m-ell">Keep a live job on a parked issue in the Herald's Running</span><span class="m-more">+1</span></div>
+</div>
+</div>
+
+<!-- ================= C ================= -->
+<div>
+<p class="m-cap">C · Thread</p>
+<p class="m-sub">One event line everywhere: time, chip, text. An issue adds one header line (ID and title) above its events. The fold shows the older events in the same line, muted, so the head and the subs read as one timeline.</p>
+<div class="m-panel C">
+<div class="m-ph">Herald <span class="badge done">OK</span></div>
+<div class="m-runs">
+  <div class="m-runrow"><span class="m-dot"></span><a class="idl">a2141#2</a><span class="m-rl">implement · low</span><span class="m-ell m-m">Fold a run's facts into its row</span><span class="m-t">12:58</span></div>
+  <div class="m-runrow"><span class="m-dot"></span><a class="idl">housekeeper#57</a><span class="m-rl">aleph</span><span></span><span class="m-t">12:59</span></div>
+</div>
+<div class="m-solo"><span class="m-t">13:00</span><span style="grid-column:2/-1">Everything is fine.</span></div>
+<div class="m-solo"><span class="m-t">12:59</span><span class="badge run">started</span><span><a class="idl">housekeeper#57</a></span><span></span></div>
+<div class="m-grp"><div class="m-hd"><a class="idl">a2131</a><span class="m-ell m-title">Rename the build status to name the worker's job</span><span></span></div>
+  <div class="m-ev"><span class="m-t">12:59</span><span class="badge done">closed</span><span></span><span></span></div></div>
+<div class="m-grp"><div class="m-hd"><a class="idl">a2140</a><span class="m-ell m-title">Chip an issue's finished run as ended, not closed</span><span class="m-more">+2</span></div>
+  <div class="m-ev"><span class="m-t">12:57</span><span class="badge done">closed</span><span class="m-ell">intake <a class="idl">#1</a> <span class="m-ok">✓</span> 41s · $0.38</span><span></span></div></div>
+<div class="m-grp"><div class="m-hd"><a class="idl">a2138</a><span class="m-ell m-title">Check a parked issue once when sorting the Herald's Running</span><span class="m-more m-open">+3</span></div>
+  <div class="m-ev"><span class="m-t">12:43</span><span class="badge done">landed</span><span class="m-ell">land <a class="idl">#3</a> <span class="m-ok">✓</span> cac50cf · 17s</span><span></span></div>
+  <div class="m-older">
+  <div class="m-ev"><span class="m-t">12:43</span><span class="badge quiet">passed</span><span class="m-ell">implement <a class="idl">#2</a> <span class="m-ok">✓</span> worker-low · haiku · 2m 43s · $0.20</span><span></span></div>
+  <div class="m-ev"><span class="m-t">12:40</span><span class="badge quiet">passed</span><span class="m-ell">intake <a class="idl">#1</a> <span class="m-ok">✓</span> 29s · $0.24</span><span></span></div>
+  <div class="m-ev"><span class="m-t">12:39</span><span class="badge quiet">filed</span><span class="m-ell">by Claude Code</span><span></span></div>
+  </div></div>
+<div class="m-grp"><div class="m-hd"><span style="grid-column:1/3" class="m-ell m-m"><a class="idl">housekeeper#56</a> · reviewed 10 · retitled 2 · commented 5 · unparked 1</span><span class="m-more m-open">+5</span></div>
+  <div class="m-ev"><span class="m-t">12:12</span><span class="badge quiet">ended</span><span></span><span></span></div>
+  <div class="m-older">
+  <div class="m-ev"><span></span><a class="idl">a2099</a><span>commented</span><span></span></div>
+  <div class="m-ev"><span></span><a class="idl">a2101</a><span>commented</span><span></span></div>
+  <div class="m-ev"><span></span><a class="idl">a2123</a><span>retitled · commented</span><span></span></div>
+  <div class="m-ev"><span></span><a class="idl">a2124</a><span>commented</span><span></span></div>
+  <div class="m-ev"><span></span><a class="idl">a2130</a><span>commented · retitled · unparked</span><span></span></div>
+  </div></div>
+<div class="m-solo"><span class="m-t">12:11</span><span class="badge stuck">missed</span><span class="m-mono">ingest:aleph-2072</span><span></span></div>
+</div>
+</div>
+
+<!-- ================= D ================= -->
+<div>
+<p class="m-cap">D · Rail</p>
+<p class="m-sub">A vertical timeline: a dot in the tone replaces the chip and the stripe, and the state word leads the sentence in its tone. Sub-rows are small dots on the same rail. Least chrome; tone is quieter.</p>
+<div class="m-panel D">
+<div class="m-ph">Herald <span class="badge done">OK</span></div>
+<div class="m-runs">
+  <div class="m-runrow"><span class="m-dot"></span><a class="idl">a2141#2</a><span class="m-rl">implement · low</span><span class="m-ell m-m">Fold a run's facts into its row</span><span class="m-t">12:58</span></div>
+  <div class="m-runrow"><span class="m-dot"></span><a class="idl">housekeeper#57</a><span class="m-rl">aleph</span><span></span><span class="m-t">12:59</span></div>
+</div>
+<div class="m-feed">
+<div class="m-row"><span class="m-t">13:00</span><span class="m-pip done"></span><span>Everything is fine.</span></div>
+<div class="m-row"><span class="m-t">12:59</span><span class="m-pip run"></span><span class="m-w"><span class="m-run-w">started</span> <a class="idl">housekeeper#57</a></span></div>
+<div class="m-row"><span class="m-t">12:59</span><span class="m-pip done"></span><span><span class="m-ell" style="display:block">Rename the build status to name the worker's job</span><span class="m-w"><span class="m-done-w">closed</span> <a class="idl">a2131</a></span></span></div>
+<div class="m-row"><span class="m-t">12:57</span><span class="m-pip done"></span><span><span class="m-ell" style="display:block">Chip an issue's finished run as ended, not closed</span><span class="m-w"><span class="m-done-w">closed</span> <a class="idl">a2140</a> · intake ✓ 41s · $0.38<span class="m-more">+2</span></span></span></div>
+<div class="m-row"><span class="m-t">12:43</span><span class="m-pip done"></span><span><span class="m-ell" style="display:block">Check a parked issue once when sorting the Herald's Running</span><span class="m-w"><span class="m-done-w">landed</span> <a class="idl">a2138#3</a> · cac50cf · 17s<span class="m-more m-open">+3</span></span></span></div>
+<div class="m-row m-s"><span class="m-t">12:43</span><span class="m-pip m-sm done"></span><span>implement <a class="idl">#2</a> <span class="m-ok">✓</span> worker-low · haiku · 2m 43s · $0.20</span></div>
+<div class="m-row m-s"><span class="m-t">12:40</span><span class="m-pip m-sm done"></span><span>intake <a class="idl">#1</a> <span class="m-ok">✓</span> 29s · $0.24</span></div>
+<div class="m-row m-s"><span class="m-t">12:39</span><span class="m-pip m-sm quiet"></span><span>filed by Claude Code</span></div>
+<div class="m-row"><span class="m-t">12:12</span><span class="m-pip quiet"></span><span class="m-w"><span class="m-q-w">ended</span> <a class="idl">housekeeper#56</a> · reviewed 10 · retitled 2 · commented 5 · unparked 1<span class="m-more m-open">+5</span></span></div>
+<div class="m-row m-s"><span></span><span class="m-pip m-sm quiet"></span><span><a class="idl">a2099</a> commented · <a class="idl">a2101</a> commented · <a class="idl">a2123</a> retitled, commented · <a class="idl">a2124</a> commented · <a class="idl">a2130</a> commented, retitled, unparked</span></div>
+<div class="m-row"><span class="m-t">12:11</span><span class="m-pip stuck"></span><span class="m-w"><span class="m-stuck-w">missed</span> <span class="m-mono">ingest:aleph-2072</span></span></div>
+</div>
+</div>
+</div>
+
+</div>
+</body></html>
