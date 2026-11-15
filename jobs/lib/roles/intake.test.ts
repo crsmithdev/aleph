@@ -44,6 +44,7 @@ const VERDICTS: Record<string, object> = {
   structured: { route: "ask", reason: "a product choice", question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["one", "two"] },
   chris: { route: "ask", reason: "a product choice", question: "Which plan, A or B?" },
   missing: { route: "build", reason: "one run", spec: spec({ edit_surface: [{ path: "nope.ts", new: false }] }) },
+  leftout: { route: "build", reason: "one run", left_out: "the page head and the audit", spec: spec() },
   testonly: { route: "build", reason: "one run", spec: spec({ edit_surface: [{ path: "x.test.ts", new: false }] }) },
   bad: { route: "maybe", reason: "x" },
 };
@@ -256,6 +257,23 @@ test("a build drops an after-link to an item that waits for Chris and keeps one 
   expect(item(3).fm.after).toEqual([`issue.2`]);
 });
 
+test("a build that names what it leaves out of the request notes it on the issue; one that leaves nothing out adds no note", async () => {
+  reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:leftout" }]);
+  await run();
+  expect(item(1).notes).toEqual([]);
+  expect(item(2).notes.at(-1)).toContain("the page head and the audit");
+  expect(item(2).fm.intake).toBe("build");
+});
+
+test("parseRoute keeps the left-out text of a build verdict, and the schema takes it as optional", () => {
+  const named = parseRoute({ verdict: { route: "build", reason: "r", left_out: "the page head", spec: spec() } }) as any;
+  expect(named.left_out).toBe("the page head");
+  expect(parseRoute({ verdict: { route: "build", reason: "r", spec: spec() } }) as any).not.toHaveProperty("left_out");
+  const build = INTAKE_SCHEMA.properties.verdict.oneOf.find((r) => r.properties.route.const === "build")!;
+  expect((build.properties as any).left_out.type).toBe("string");
+  expect(build.required).not.toContain("left_out");
+});
+
 describe("a repo with author", () => {
   test("an issue filed with a spec is taken in before it builds; in a repo without author it builds as filed", async () => {
     reset([{ title: "a", body: "VERDICT:goal", spec: "## Goal\nOld.\n## Edit surface\nx.ts\n## Oracle\n`bun test x.test.ts`" }], { author: true });
@@ -337,6 +355,12 @@ test("parseRoute keeps an issue key in an ask option's after", () => {
   const options = [{ label: "A", line: "do a", after: "issue.2" }, { label: "B", line: "do b" }];
   const r = parseRoute({ verdict: { route: "ask", reason: "r", question: "A or B?", options, recommended: "B", why: ["w"] } }) as any;
   expect(r.ask.options[0].after).toBe("issue.2");
+});
+
+test("the prompt tells intake to cover the whole request and to name what it leaves out", () => {
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
+  expect(p).toContain("together cover the whole request");
+  expect(p).toContain('name it in "left_out"');
 });
 
 test("the prompt has intake search past work for the issue's title, quoted for the shell", () => {

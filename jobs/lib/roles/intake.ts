@@ -37,7 +37,7 @@ const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;
 export interface Part { title: string; spec: Spec; after: number[] }
 
 export type Route =
-  | { route: "build"; reason: string; spec?: Spec; parts?: Part[]; after: string[] }
+  | { route: "build"; reason: string; spec?: Spec; parts?: Part[]; after: string[]; left_out?: string }
   | { route: "close"; reason: string }
   | { route: "done"; reason: string; commit: string }
   | { route: "ask"; reason: string; ask: Ask };
@@ -92,7 +92,8 @@ export const INTAKE_SCHEMA = {
             },
           },
           after: refs,
-        }, ["spec", "parts", "after"]),
+          left_out: { type: "string", minLength: 1, description: "What the spec or the parts leave out of the issue's request, one sentence. Omit it when they cover the whole request." },
+        }, ["spec", "parts", "after", "left_out"]),
         route("close", {}),
         route("done", { commit: { type: "string", pattern: "^[0-9a-f]{7,40}$" } }),
         route("ask", {
@@ -129,7 +130,8 @@ export function parseRoute(reply: any): Route | string {
       const parts = Array.isArray(raw.parts) && raw.parts.length
         ? raw.parts.map((p: any) => ({ title: (text(p?.title) ?? "").replace(/\s+/g, " "), spec: specOf(p?.spec) ?? { goal: "", surface: [], oracle: [] }, after: Array.isArray(p?.after) ? p.after : [] }))
         : undefined;
-      return { route: "build", reason, ...(raw.spec ? { spec: specOf(raw.spec) } : {}), ...(parts ? { parts } : {}), after };
+      const left_out = text(raw.left_out);
+      return { route: "build", reason, ...(raw.spec ? { spec: specOf(raw.spec) } : {}), ...(parts ? { parts } : {}), after, ...(left_out ? { left_out } : {}) };
     }
     case "close": return { route: "close", reason };
     case "ask": {
@@ -299,7 +301,7 @@ ${pastWork(item.title)}
 
 One "verdict", with a "reason": one sentence that says why.
 
-- "build": factory runs do the work. Give one "spec" when one run of under an hour can do it all; a small change in several folders is still one spec. Else give 2 to 6 "parts" and no spec: each part is work one run can do alone, and together they do the whole issue. "after" names the issues (an issue key like \`issue.5\`) that must be done first, only when the work needs that issue's change, not just because the two issues touch the same file or table.
+- "build": factory runs do the work. Give one "spec" when one run of under an hour can do it all; a small change in several folders is still one spec. Else give 2 to 6 "parts" and no spec: each part is work one run can do alone, and together they do the whole issue. The "spec" or the "parts" together cover the whole request: when they leave anything out, name it in "left_out", one sentence, and code records it as a note on the issue. Give "left_out" only when something is left out. "after" names the issues (an issue key like \`issue.5\`) that must be done first, only when the work needs that issue's change, not just because the two issues touch the same file or table.
 - "close": it is already fixed, a duplicate of an open issue above (name it: "duplicate of <repo>-<n>"), stale, or not worth doing.
 - "done": a commit on main already makes the change: give its sha as "commit". Before a "build", read the commits above, and grep main for the names the issue gives. When unsure, "build".
 - "ask": a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first; or a check against a live system that he runs. The "question" is one plain sentence. Give 2 to 4 "options", each with a short "label", a "line" that says what it does, and an "after" (an issue key like \`issue.5\`) only when it means waiting for that issue; 2 to 4 short "why" lines; and "recommended", one option's label exactly. Use plain words: no file paths, function names or code. Each option must be something a factory run can do.
@@ -372,6 +374,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
       item.fm.intake = "build";
       if (v.parts) addParts(file, item, v.parts, after);
       else item.spec = specText(v.spec!);
+      if (v.left_out) issues.note(item, `intake left out of the request: ${v.left_out}`);
     } else if (v.route === "done") {
       issues.setStatus(item, "done", undefined, v.reason);
     } else if (v.route === "close") {
