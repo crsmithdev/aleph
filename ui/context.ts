@@ -162,7 +162,8 @@ function scan(jsonl: string): Scan {
         since = out.length + 1;
       }
       else if (prev) {
-        const delta = fill - prev.fill, kinds = [...gap];
+        // A fill below the one before is not a smaller gap: the records since hold 0 tokens, never fewer.
+        const delta = Math.max(0, fill - prev.fill), kinds = [...gap];
         const turn = kinds.length ? Math.min(prev.usage.output, delta) : delta;
         hold("assistant", turn, 1, false);
         // The transcript keeps a thinking block's signature, not its text: thinking is the turn less its other blocks at chars ÷ 4.

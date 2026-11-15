@@ -84,6 +84,24 @@ test("a gap of one later attachment gives the assistant turn the output and the 
   expect(r[3].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[3].fill);
 });
 
+test("a fill below the request before gives request 2's parts, items and calls 0 tokens, never less", () => {
+  // request 2's fill (73) is below request 1's (1002), and the gap holds an assistant reply with a tool call, its
+  // result and a later attachment: no part of it may go negative
+  const fall = [
+    ...lines.slice(0, 5),
+    { type: "assistant", message: { content: [{ type: "text", text: "t".repeat(40) }, { type: "tool_use", id: "u9", name: "Read", input: { file_path: "/x" } }] } },
+    res("u9", "y".repeat(80)),
+    { attachment: { type: "skill_listing", content: "s".repeat(60) } },
+    req("r2", 3, 50, 20),
+  ];
+  const s = parse(fall.map((o) => JSON.stringify(o)).join("\n"));
+  expect(s.requests[1].fill).toBe(73);
+  expect(s.requests[1].parts.slice(4).map((p) => [p.rec, p.tokens])).toEqual([["assistant", 0], ["tool_result", 0], ["attachment", 0]]);
+  expect(s.requests[1].parts.every((p) => p.tokens >= 0)).toBe(true);
+  expect(s.items.every((i) => i.tokens >= 0)).toBe(true);
+  expect(s.calls.every((c) => c.tokens >= 0)).toBe(true);
+});
+
 test("each fixed part splits into items by chars: the system prompt by heading, instructions by file, memory by hook", () => {
   const fixed = [
     { attachment: { type: "instructions", files: [{ path: "/a/CLAUDE.md", content: "a".repeat(300) }, { path: "/b/CLAUDE.md", content: "b".repeat(100) }] } },
