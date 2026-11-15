@@ -85,8 +85,8 @@ export interface Job {
   part?: Part;
   /** Awaiting: what the run asks of Chris, and why. */
   ask?: Ask;
-  /** Awaiting: when the Ask timeout lands the run, with no answer from Chris (jobs/lib/asks/timeout.ts). */
-  due?: string;
+  /** Awaiting: when the Ask timeout acts on the run with no answer from Chris, and what it does then (jobs/lib/asks/timeout.ts). */
+  due?: string; dueAction?: string;
   /** Awaiting: the reviewer's call on the held run. */
   reviewCall?: { call: string; reason?: string };
   /** A landed job whose manual check is still open. */
@@ -273,7 +273,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     const asked = isWaiting(counting(runs).run.state) ? (stored ?? plainAsk("question", "")) : undefined;
     if (asked) job.ask = asked;
     const due = asked ? dueAt(counting(runs)) : null;
-    if (due !== null) job.due = new Date(due).toISOString();
+    if (due) { job.due = new Date(due.at).toISOString(); job.dueAction = due.action; }
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
     if (v.check === "open") job.check = "open";
@@ -469,7 +469,7 @@ export function state(now = new Date()): State {
     if (j.item) a.on = `${j.repo}-${j.item.id}`;
     a.agent = j.agent ?? false; a.defaults = j.defaults; a.followups = j.followups;
     if (j.trailers) a.trailers = j.trailers;
-    if (j.due) a.due = j.due;
+    if (j.due) { a.due = j.due; a.dueAction = j.dueAction; }
   }
   const timers = tickTimer();
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, stuck, asks: att.items, usage: summary(now.getTime()) });

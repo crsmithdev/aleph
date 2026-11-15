@@ -42,7 +42,8 @@ test("dueAt is the escalation time plus the minutes, only when the case text rec
   const now = NOW;
   const e = waiting(10, ask(), now);
   expect(dueAt(e, {})).toBeNull();
-  expect(dueAt(e, { "review-held": { minutes: 30, then: "pick" } })).toBe(now - 10 * 60_000 + 30 * 60_000);
+  expect(dueAt(e, { "review-held": { minutes: 30, then: "pick" } })).toEqual({ at: now - 10 * 60_000 + 30 * 60_000, action: "land" });
+  expect(dueAt(waiting(10, { ...ask(), reason: "question" }), { question: { minutes: 30, then: "drop" } })?.action).toBe("drop");
   expect(dueAt(waiting(10, { ...ask(), recommend: undefined }), { "review-held": { minutes: 30, then: "pick" } })).toBeNull();
   expect(dueAt(waiting(10, { ...ask(), situation: undefined }), { "review-held": { minutes: 30, then: "pick" } })).toBeNull();
 });

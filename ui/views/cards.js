@@ -79,6 +79,9 @@ function askDetails(i) {
 }
 
 
+/** What the no-answer timeout does, as the card's verb. */
+const DUE_VERB = { land: "Lands", drop: "Drops", close: "Closes", deny: "Denies", rerun: "Reruns", retry: "Retries", decide: "Decides", approve: "Approves", decline: "Declines", answer: "Answers" };
+
 /** One choice of an Ask card: the button, then what it does and the recommended mark, shown when the card is open. */
 const askChoice = (a, input, name) =>
   `<div class="choice${a.recommended ? " rec" : ""}">${actionButton(a, name)}<div class="choice-text"><span class="effect">${codeText(a.hint)}</span>${a.recommended ? '<span class="rec-note">Recommended</span>' : ""}${input}</div></div>`;
@@ -104,7 +107,7 @@ export function askCard(i, now = new Date().toISOString()) {
   const key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
-  const desc = `<p class="situation">${esc(shortText(i.situation ?? i.problem))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to the user with its case text.</span>' : ""}${i.due ? ` <span class="muted">Lands at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
+  const desc = `<p class="situation">${esc(shortText(i.situation ?? i.problem))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to the user with its case text.</span>' : ""}${i.due ? ` <span class="muted">${esc(DUE_VERB[i.dueAction?.split(":")[0]] ?? "Acts")} at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
   return askShell(esc(i.reason), `data-ask="${esc(i.id)}" data-annotate="${esc(shortId(i.id))}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, shortText(i.headline || i.title), i.tag, desc,
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
 }

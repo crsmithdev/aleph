@@ -76,10 +76,10 @@ function due(w: Waiting, timeouts: Record<string, Timeout>): { at: number; actio
   return { at: Date.parse(up.at) + t.minutes * 60_000, action };
 }
 
-/** When the timeout acts on this waiting run (ms), or null. */
-export const dueAt = (e: Entry, timeouts = readTimeouts()): number | null => {
+/** When the timeout acts on this waiting run (ms) and its action, or null. */
+export const dueAt = (e: Entry, timeouts = readTimeouts()): { at: number; action: string } | null => {
   const w = ofRun(e);
-  return w ? due(w, timeouts)?.at ?? null : null;
+  return w ? due(w, timeouts) : null;
 };
 
 /** The log word of what an action did. */

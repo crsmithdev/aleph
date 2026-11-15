@@ -47,6 +47,14 @@ test("one card per kind: the title opens with the kind label, and the tag names 
   }
 });
 
+test("a card with a due time names the action the timeout takes", () => {
+  const at = "2026-10-27T17:00:00Z", i = four()[0];
+  const drop = card(askCard({ ...i, due: at, dueAction: "drop" }, at)), land = card(askCard({ ...i, due: at, dueAction: "land" }, at));
+  expect(drop).toContain("Drops at");
+  expect(drop).not.toContain("Lands at");
+  expect(land).toContain("Lands at");
+});
+
 test("the compact face is the title and the buttons; the open face adds the description and what each button does", () => {
   const row = askCard(four()[0], "2026-10-27T17:00:00Z");
   const fold = row.match(/<details class="ask-fold"[^>]*>[^]*?<\/details>/)![0];
