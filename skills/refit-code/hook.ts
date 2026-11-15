@@ -7,9 +7,10 @@
  *   new copies  a changed file holds a copy of code (renamed copies too) that the branch's base did not have
  *
  * A finding blocks the stop once per session, with the evidence, so the agent changes the companion, calls the
- * owner, or records the second way in `.refit.json`. The same findings do not block twice, and a stop that a
- * Stop hook already continued is never blocked. A change from before the session started is not the agent's: the
- * hook counts only the commits and edits since the session's start.
+ * owner, or records the second way in `.refit.json`. The same findings do not block twice, so a retry after its
+ * own block passes. A stop that another Stop hook already continued is checked like a first stop. A change from
+ * before the session started is not the agent's: the hook counts only the commits and edits since the session's
+ * start.
  */
 import { createHash } from "node:crypto";
 import { once, session } from "../../hooks/lib/handshake.ts";
@@ -39,7 +40,7 @@ function reason(root: string, since = 0): string | null {
 
 if (import.meta.main) {
   const input = JSON.parse(await Bun.stdin.text());
-  if (input.hook_event_name !== "Stop" || input.stop_hook_active === true) process.exit(0);
+  if (input.hook_event_name !== "Stop") process.exit(0);
   const top = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], { cwd: input.cwd ?? process.cwd(), stdout: "pipe", stderr: "ignore" });
   if (top.exitCode !== 0) process.exit(0);
   const text = reason(top.stdout.toString().trim(), session(input.session_id).get()?.start);

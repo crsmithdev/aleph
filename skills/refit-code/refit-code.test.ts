@@ -69,14 +69,20 @@ test("a pair recorded in .refit.json is not a hole", () => {
   expect(holes(root, changed(root), rules(history(root)), accepted(root))).toEqual([]);
 });
 
-test("the hook blocks once per session for the same findings, and never a stop a hook already continued", () => {
+test("the hook blocks once per session for the same findings", () => {
   write("a.ts", "export const a = 99;\n");
   const input = { hook_event_name: "Stop", session_id: "s1", cwd: root };
   const first = JSON.parse(stop(input));
   expect(first.decision).toBe("block");
   expect(first.reason).toContain("b.ts changed with it in 12 of 12 commits");
   expect(stop(input)).toBe("");
-  expect(stop({ ...input, session_id: "s2", stop_hook_active: true })).toBe("");
+});
+
+test("the hook checks a stop that another hook already continued, and blocks it once", () => {
+  write("a.ts", "export const a = 99;\n");
+  const input = { hook_event_name: "Stop", session_id: "s2", cwd: root, stop_hook_active: true };
+  expect(JSON.parse(stop(input)).reason).toContain("b.ts changed with it in 12 of 12 commits");
+  expect(stop(input)).toBe("");
 });
 
 test("the hook skips a change from before the session started", () => {
