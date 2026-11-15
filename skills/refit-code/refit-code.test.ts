@@ -85,6 +85,16 @@ test("the hook checks a stop that another hook already continued, and blocks it 
   expect(stop(input)).toBe("");
 });
 
+test("a hook that throws while checking prints a systemMessage with the error, and does not block", () => {
+  write(".refit.json", "{");
+  write("a.ts", "export const a = 99;\n");
+  const out = JSON.parse(stop({ hook_event_name: "Stop", session_id: "s-crash", cwd: root }));
+  const parse = (() => { try { JSON.parse("{"); } catch (e) { return (e as Error).message; } })();
+  expect(out.systemMessage).toContain("refit-code");
+  expect(out.systemMessage).toContain(parse!);
+  expect(out).not.toHaveProperty("decision");
+});
+
 test("the hook skips a change from before the session started", () => {
   write("a.ts", "export const a = 99;\n");
   const input = { hook_event_name: "Stop", session_id: "s3", cwd: root };

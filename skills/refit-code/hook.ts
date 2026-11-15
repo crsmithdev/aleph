@@ -43,7 +43,13 @@ if (import.meta.main) {
   if (input.hook_event_name !== "Stop") process.exit(0);
   const top = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], { cwd: input.cwd ?? process.cwd(), stdout: "pipe", stderr: "ignore" });
   if (top.exitCode !== 0) process.exit(0);
-  const text = reason(top.stdout.toString().trim(), session(input.session_id).get()?.start);
+  let text: string | null;
+  try {
+    text = reason(top.stdout.toString().trim(), session(input.session_id).get()?.start);
+  } catch (e) {
+    console.log(JSON.stringify({ systemMessage: `refit-code hook failed: ${(e as Error).message}` }));
+    process.exit(0);
+  }
   if (!text) process.exit(0);
   const blocked = once(`oneway:${input.session_id}:${createHash("sha1").update(text).digest("hex").slice(0, 12)}`);
   if (blocked.seen()) process.exit(0);
