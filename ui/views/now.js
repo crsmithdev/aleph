@@ -140,6 +140,9 @@ function feedRow({ tone, at, body, by, cls = "", bodyCls = "", attrs = "" }) {
     `<span class="event-body${bodyCls}">${body}</span></div>`;
 }
 
+/** A Herald row's element id from its key, so a redraw by morph keeps the row's node and does not reuse it for another row. */
+const rowId = (key) => esc(`h-${key.replace(/\s+/g, "-")}`);
+
 /** A short hash of a text, to key a row by its text. */
 const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString(36);
 
@@ -289,7 +292,7 @@ const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.act
 const grouped = (groups, row, runs) => groups.map(([id, events]) => {
   const head = events.find((e) => e.action !== "stalled") ?? events[0];
   const inner = briefs([head, ...events.filter((e) => e !== head)], runs).map(briefRow);
-  return { at: head.at, key: `event ${hash(eventKey(head))}`, html: inner.length ? fold(row(head, inner.length), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(head, 0) };
+  return { at: head.at, key: id, html: inner.length ? fold(row(head, inner.length), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(head, 0) };
 });
 
 /** The past word of each verb a housekeeper change's detail starts with (`retitle: New title`). */
@@ -332,7 +335,7 @@ const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
 /** The running jobs as rows of the feed's grid under the alerts: the start time, the action word, the ID, the title, a build's size with the breathing dot. Each is keyed by `data-job` so a job that ends leaves the section. A job leaves the state when it ends, so the rows are the state's. */
 function runNow(s) {
-  const row = (id, who, word, title, t, model, size = "") => feedRow({ tone: "run", at: t, cls: " run-now", attrs: ` data-job="${esc(id)}"`,
+  const row = (id, who, word, title, t, model, size = "") => feedRow({ tone: "run", at: t, cls: " run-now", attrs: ` data-job="${esc(id)}" id="${rowId(`job ${id}`)}"`,
     body: `<span class="event-line">${tag(word, "run")}${who}<span class="event-title run-title" title="${esc(title)}">${esc(title)}</span>` +
       `<span class="run-size"${model ? ` title="${esc(model)}"` : ""}><span class="run-dot"></span>${esc(size)}</span></span>` });
   const rows = (s.runningIssues ?? []).map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat((s.running ?? []).map((j) => {
@@ -379,7 +382,7 @@ export function renderHerald(s) {
   const chats = (s.herald?.chats ?? []).map((c) => ({ at: c.last, key: `chat ${c.id}`, html: feedRow({ tone: "quiet", at: c.last, by: "claude",
     body: `<span class="event-line">${tag("chat", "quiet")}${idLink(c.id.slice(0, 8))}<span class="event-title" title="${esc(c.title)}">${esc(c.title)}</span><span></span></span>` }) }));
   const rows = [...status, ...chats, ...eventRows(events, s.herald?.titles, s.herald?.runs, s.herald?.attempts, s.herald?.reviewed)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
-  const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}"`)).join("");
+  const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
   const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", stuck.length || errors ? "stuck" : "need") : tag("OK", "done");
@@ -394,7 +397,8 @@ const rowKey = (r) => (r.dataset.job ? `job ${r.dataset.job}` : r.dataset.key);
 /**
  * Record the Herald's rows before a redraw; the function it returns animates them from there to where the redraw put them.
  * A new feed row grows and holds a tint. A new running row grows and its parts drop in. A running row that ends fades out
- * in place while the new feed rows fade in. Every other row glides to its new place. Nothing moves under reduced motion.
+ * in place while the new feed rows fade in; a feed row that leaves fades out the same way. Every other row glides to its new place. Nothing moves under reduced motion.
+ * The rows' running animations stop once every box is read, so a second redraw measures the row where it is and no old glide is left on it.
  */
 function heraldMotion(root) {
   const h = root.querySelector("#herald");
@@ -402,13 +406,16 @@ function heraldMotion(root) {
   if (!h || !globalThis.matchMedia || matchMedia("(prefers-reduced-motion: reduce)").matches) return () => {};
   // A copy of each row, for a redraw by morph reuses a row's node for another row.
   const was = new Map([...heraldRows(h)].map((r) => [rowKey(r), { r: r.cloneNode(true), box: r.getBoundingClientRect() }]));
+  // Only once every box is read: a stopped growth moves the rows below it. CSS animations, as the run dot's breath, do not start again once stopped, so they stay.
+  for (const r of heraldRows(h)) for (const a of r.getAnimations({ subtree: true })) if (a.constructor === Animation) a.cancel();
   return () => {
     const now = root.querySelector("#herald");
     if (!now) return;
     const css = getComputedStyle(now), mid = parseFloat(css.getPropertyValue("--t-mid")), easing = css.getPropertyValue("--ease").trim();
     const rows = [...heraldRows(now)], keys = new Set(rows.map(rowKey));
-    const ended = [...was].filter(([k]) => k.startsWith("job ") && !keys.has(k)).map(([, v]) => v);
-    const grow = (r) => r.animate([{ height: "0px", opacity: 0, paddingTop: "0px", paddingBottom: "0px" }, { height: `${r.getBoundingClientRect().height}px`, opacity: 1 }], { duration: mid, easing });
+    const gone = [...was].filter(([k]) => !keys.has(k)), ended = gone.filter(([k]) => k.startsWith("job "));
+    // A growing row clips its content, which the shrunk height would cut off.
+    const grow = (r) => r.animate([{ height: "0px", opacity: 0, paddingTop: "0px", paddingBottom: "0px", overflow: "clip" }, { height: `${r.getBoundingClientRect().height}px`, opacity: 1, overflow: "clip" }], { duration: mid, easing });
     // The new rows start first, at height 0, so the glide below measures the rows from where the growth starts.
     for (const r of rows.filter((r) => !was.has(rowKey(r)))) {
       if (r.dataset.job) {
@@ -417,18 +424,18 @@ function heraldMotion(root) {
       } else if (ended.length) r.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 80, easing: "ease-out", fill: "backwards" });
       else {
         grow(r);
-        r.animate([{ background: "var(--run-bg)" }, { background: "var(--run-bg)", offset: 0.35 }, { background: "transparent" }], { duration: 1500, easing: "ease-out" });
+        r.animate([{ background: "var(--run-bg)" }, { background: "var(--run-bg)", offset: 0.35 }, { background: "var(--surface)" }], { duration: 1500, easing: "ease-out" });
       }
     }
     for (const r of rows) {
       const old = was.get(rowKey(r)), dy = old ? old.box.top - r.getBoundingClientRect().top : 0;
       if (Math.abs(dy) > 0.5) r.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: mid, easing });
     }
-    // A ghost of each ended row fades where the row was; the card is its containing block.
+    // A ghost of each row that left fades where the row was; the card is its containing block.
     const base = now.getBoundingClientRect();
-    for (const { r, box } of ended) {
+    for (const [, { r, box }] of gone) {
       const ghost = r.cloneNode(true);
-      ghost.removeAttribute("data-job");
+      for (const a of ["data-job", "data-key", "id"]) ghost.removeAttribute(a);
       Object.assign(ghost.style, { position: "absolute", left: `${box.left - base.left - now.clientLeft}px`, top: `${box.top - base.top - now.clientTop}px`, width: `${box.width}px`, margin: "0", pointerEvents: "none" });
       now.append(ghost);
       ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: mid, easing: "ease-out" }).finished.then(() => ghost.remove());

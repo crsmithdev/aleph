@@ -81,7 +81,7 @@ test("the Herald lists each running job as a row on the feed grid between the al
   const h = view.renderHerald({ ...calm, asks: [ask], running, runningIssues: [{ id: "aleph-9", stage: "intake", title: "Sort it", at: "2026-11-09T11:30:00Z" }] });
   expect(h.match(/class="event-row run run-now"/g)).toHaveLength(2);
   // The start time, the action word in the run tone, the job's ID, its title, then the size after the breathing dot; the model is in the size's title.
-  expect(h).toContain('<div class="event-row run run-now" data-job="job.0"><span class="event-time">' + clock("2026-11-09T11:00:00Z") + '</span><span class="event-body"><span class="event-line"><span class="badge run">implement</span><a class="idl" href="#/jobs/job.0">j-00000</a><span class="event-title run-title" title="Fix the thing">Fix the thing</span><span class="run-size" title="deepseek-v4.1-flash"><span class="run-dot"></span>small</span></span></span></div>');
+  expect(h).toContain('<div class="event-row run run-now" data-job="job.0" id="h-job-job.0"><span class="event-time">' + clock("2026-11-09T11:00:00Z") + '</span><span class="event-body"><span class="event-line"><span class="badge run">implement</span><a class="idl" href="#/jobs/job.0">j-00000</a><span class="event-title run-title" title="Fix the thing">Fix the thing</span><span class="run-size" title="deepseek-v4.1-flash"><span class="run-dot"></span>small</span></span></span></div>');
   expect(h).not.toContain("intake-aleph-7");
   expect(h).toContain('data-job="aleph-9"');
   expect(h).toContain('<span class="badge run">intake</span>');
@@ -244,7 +244,7 @@ test("the Herald hides an older start of a run with a newer event, leaves out th
   // The fold has the build's line only: its start is hidden by its result, and the routing is drawn as the build's facts.
   expect(h.match(/<div class="event-brief/g)).toHaveLength(1);
   expect(h).not.toContain("aleph-8");
-  expect(h).toMatch(/<div data-key="[^"]*" class="event-row quiet sys" data-by="rule">/);
+  expect(h).toMatch(/<div data-key="[^"]*" id="[^"]*" class="event-row quiet sys" data-by="rule">/);
   expect(h).toContain("worker-medium · jev-1.13 · p 0.83");
 });
 
@@ -457,4 +457,21 @@ test("two chat turns of one session are one feed row, titled by its first prompt
   const h = feed([], { chats: [chat] });
   expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
   expect(h).toContain('<span class="badge quiet">chat</span><span class="idp">5a5a4e9b</span><span class="event-title" title="why is the build red">why is the build red</span>');
+});
+
+test("a new event for an issue keeps its grouped row's key and id, and each Herald row has its own id", () => {
+  const e = (at: string, action: string, job: string) => row({ at, by: "gate", subject: "aleph-9", action, on: [job] });
+  const old = [e("2026-11-09T11:00:00Z", "done", "aleph-9#1"), e("2026-11-09T12:00:00Z", "done", "aleph-9#2")], newer = [e("2026-11-09T13:00:00Z", "done", "aleph-9#3"), ...old];
+  const draw = (events: any[]) => view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", running: [{ id: "a1#1", name: "a1", started: "2026-11-09T13:30:00Z", item: { title: "Run" } }], herald: { history: [], events, titles: {}, chats: [{ id: "chat-1", last: "2026-11-09T09:00:00Z", title: "Chat" }], runs: {} } });
+  const [a, b] = [draw(old), draw(newer)];
+  const ids = (h: string) => [...h.matchAll(/<(?:div|details) data-key="([^"]*)" id="([^"]*)"/g)].map((m) => m.slice(1));
+  const group = (h: string) => ids(h).find(([k]) => k.startsWith("issue:aleph-9"));
+  expect(group(a)).toBeTruthy();
+  expect(group(b)).toEqual(group(a));
+  for (const h of [a, b]) {
+    const all = [...h.matchAll(/ id="([^"]*)"/g)].map((m) => m[1]);
+    expect(all.length).toBeGreaterThan(2);
+    expect(new Set(all).size).toBe(all.length);
+    expect(h).toMatch(/class="event-row run run-now" data-job="a1#1" id="[^"]+"/);
+  }
 });

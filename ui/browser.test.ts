@@ -1095,16 +1095,86 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   test("when the first of two running jobs ends, a redraw by morph fades a ghost of that job where its row was", async () => {
     await page.go("#/");
     await page.when('document.querySelector("#view #herald")');
-    const ghost = await page.ev<string>(`Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
+    const ghost = await page.ev<string[]>(`Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
       const root = document.querySelector("#view"), job = (name) => ({ name, started: "2026-11-15T10:00:00Z", item: { title: name } });
       const draw = (running) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
       draw([job("first job"), job("second job")]);
       const moved = view.swap(root);
       draw([job("second job")]);
       moved();
-      return root.querySelector("#herald .run-now:not([data-job]) .run-title").textContent;
+      // The redraw stops only the animations it started: the run dot's breath goes on.
+      return [root.querySelector("#herald .run-now:not([data-job]) .run-title").textContent, ...root.querySelector("#herald .run-now[data-job] .run-dot").getAnimations().filter((a) => a.playState === "running").map((a) => a.animationName)];
     })`);
-    expect(ghost).toBe("first job");
+    expect(ghost).toEqual(["first job", "breathe"]);
+  }, 60_000);
+
+  // The Herald drawn from `chats` (one feed row each, keyed `chat <id>`) by morph, as a redraw does; `window.herald(ids)` puts the rows in that order, newest first.
+  const heraldRig = `Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
+    const root = document.querySelector("#view");
+    window.view = view; window.root = root;
+    window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, events: [], chats: ids.map((id, i) => ({ id, last: "2026-11-15T10:0" + (9 - i) + ":00Z", title: "chat " + id })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
+    window.rows = () => Object.fromEntries([...root.querySelectorAll("#herald .herald-feed > [data-key]")].map((r) => [r.dataset.key, r]));
+    window.herald(["a", "b", "c"]);
+  })`;
+
+  test("a redraw by morph that reorders the Herald's feed rows keeps each row's node", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald")');
+    await page.ev(heraldRig);
+    expect(await page.ev<boolean[]>(`(() => {
+      const before = rows(), moved = view.swap(root);
+      herald(["c", "a", "b"]); moved();
+      const after = rows();
+      return [Object.keys(after).join() === "chat c,chat a,chat b", ...Object.keys(before).map((k) => before[k] === after[k])];
+    })()`)).toEqual([true, true, true, true]);
+  }, 60_000);
+
+  test("a second redraw by swap and morph leaves no animation of the first on any row, and glides each row from where it is", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald")');
+    await page.ev(heraldRig);
+    // The second redraw comes 60 ms into the first: row d grows and row c glides up.
+    const [count, left, before, after] = await page.ev<number[][]>(`(() => {
+      const first = [], tops = () => Object.values(rows()).map((r) => r.getBoundingClientRect().top);
+      let moved = view.swap(root);
+      herald(["d", "c", "a", "b"]); moved();
+      for (const r of Object.values(rows())) for (const a of r.getAnimations({ subtree: true })) { a.currentTime = 60; first.push(a); }
+      const before = tops();
+      moved = view.swap(root);
+      herald(["d", "c", "a", "b"]); moved();
+      return [[first.length], Object.values(rows()).map((r) => r.getAnimations({ subtree: true }).filter((a) => first.includes(a)).length), before, tops()];
+    })()`);
+    expect(count[0]).toBeGreaterThan(0);
+    expect(left).toEqual([0, 0, 0, 0]);
+    after.forEach((t, i) => expect(t).toBeCloseTo(before[i], 0));
+  }, 60_000);
+
+  test("a feed row that a redraw removes fades out as an exit element with its text", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald")');
+    await page.ev(heraldRig);
+    const exit = await page.ev<[string, boolean]>(`(() => {
+      const moved = view.swap(root);
+      herald(["a", "c"]); moved();
+      const ghost = [...root.querySelectorAll("#herald > .event-row")].find((r) => r.textContent.includes("chat b"));
+      return [ghost?.textContent ?? "", ghost?.getAnimations().some((a) => a.playState === "running" && a.effect.getKeyframes().some((k) => "opacity" in k || "height" in k))];
+    })()`);
+    expect(exit[0]).toContain("chat b");
+    expect(exit[1]).toBe(true);
+  }, 60_000);
+
+  test("a Herald feed row has the card background, and clips its content while it grows", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald")');
+    await page.ev(heraldRig);
+    const [bg, overflow] = await page.ev<string[]>(`(() => {
+      const moved = view.swap(root);
+      herald(["d", "a", "b", "c"]); moved();
+      const row = root.querySelector('#herald [data-key="chat d"]');
+      return [getComputedStyle(root.querySelector("#herald .event-row")).backgroundColor, getComputedStyle(row).overflow];
+    })()`);
+    expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+    expect(["clip", "hidden"]).toContain(overflow);
   }, 60_000);
 
   test("guard: a Herald row keeps its 3px tone stripe", async () => {

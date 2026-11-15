@@ -210,7 +210,7 @@ const at = (m: number) => `2026-10-27T17:${String(m).padStart(2, "0")}:00Z`;
 const entry = (m: number, tone: string, text: string) => ({ at: at(m), tone, label: tone, text });
 /** The state at minute `m` with a live tick, so its own status is the fine one, and the server's `history`. */
 const at_ = (m: number, history: object[], paused = false) => ({ ...calmState, now: at(m), factory: { ...calmState.factory, nextTick: "2026-10-27T18:59:00Z", paused }, herald: { history, events: [], titles: {}, chats: [], runs: {} } });
-const statusRows = (h: string) => [...h.matchAll(/<div data-key="status[^"]*" class="event-row (?:fine|warning|alert)[^"]*"><span class="event-time">[^<]*<\/span><span class="event-body[^"]*">(.*?)<\/span><\/div>/g)].map((m) => m[1].replace(/<[^>]*>/g, ""));
+const statusRows = (h: string) => [...h.matchAll(/<div data-key="status[^"]*" id="[^"]*" class="event-row (?:fine|warning|alert)[^"]*"><span class="event-time">[^<]*<\/span><span class="event-body[^"]*">(.*?)<\/span><\/div>/g)].map((m) => m[1].replace(/<[^>]*>/g, ""));
 
 test("the first render of a page load draws no status row, whatever its history holds", async () => {
   const v = await fresh();
