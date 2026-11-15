@@ -21,7 +21,7 @@ class FakeStream {
 /** A loader on a fake page: each fetch waits until the test answers it with `answer(i, body, keys)`. */
 function page() {
   const asked: { url: string; done: (r: Response) => void }[] = [], drawn: unknown[] = [], firsts: boolean[] = [];
-  let focused = false;
+  let focused = false, opened = 0;
   const env = {
     fetch: (url: string) => new Promise<Response>((done) => asked.push({ url, done })),
     EventSource: FakeStream,
@@ -32,11 +32,12 @@ function page() {
     fail: () => {},
     draw: async (_route: unknown, data: unknown, first: boolean) => { drawn.push(data); firsts.push(first); },
     event: () => {},
+    opened: () => { opened++; },
   };
   const answer = (i: number, body: unknown, keys = "") =>
     asked[i].done(new Response(JSON.stringify(body), { headers: keys ? { "x-aleph-keys": keys } : {} }));
   const route = { view: { title: "Status", api: "/api/factory", live: true }, params: {}, query: new URLSearchParams() };
-  return { router: loader(env), asked, drawn, firsts, answer, route, focus: (on: boolean) => { focused = on; } };
+  return { router: loader(env), asked, drawn, firsts, answer, route, focus: (on: boolean) => { focused = on; }, opened: () => opened };
 }
 
 test("an older answer never draws over a newer one", async () => {
@@ -230,4 +231,76 @@ test("the stream calls env.opened when it opens, and the loader passes each chan
   FakeStream.last.onopen();
   FakeStream.last.send("change", { keys: ["/api/status"] });
   expect(seen).toEqual(["opened", "/api/status"]);
+});
+
+const tick = () => new Promise((r) => setTimeout(r));
+
+test("opening the stream of a live view loads it again, and draws only when the data differs", async () => {
+  const p = page();
+  const shown = p.router.show(p.route);
+  p.answer(0, { n: 1 });
+  await shown;
+  FakeStream.last.onopen();
+  await tick();
+  expect(p.asked.map((a) => a.url)).toEqual(["/api/factory", "/api/factory"]);
+  p.answer(1, { n: 1 });
+  await tick();
+  expect(p.drawn).toEqual([{ n: 1 }]);
+  FakeStream.last.onopen();
+  await tick();
+  p.answer(2, { n: 2 });
+  await tick();
+  expect(p.drawn).toEqual([{ n: 1 }, { n: 2 }]);
+});
+
+test("guard: opening the stream of a view that is not live loads nothing, and still calls env.opened", async () => {
+  const p = page();
+  const shown = p.router.show({ ...p.route, view: { title: "Jobs", api: "/api/jobs" } });
+  p.answer(0, { n: 1 });
+  await shown;
+  FakeStream.last.onopen();
+  await tick();
+  expect([p.asked.length, p.opened()]).toEqual([1, 1]);
+  // A live view's stream opens while its first load waits, then the reader goes to a view that is not live.
+  const live = p.router.show(p.route);
+  FakeStream.last.onopen();
+  const jobs = p.router.show({ ...p.route, view: { title: "Jobs", api: "/api/jobs" } });
+  p.answer(1, { n: 2 });
+  await live;
+  p.answer(2, { n: 3 });
+  await jobs;
+  await tick();
+  expect([p.asked.map((a) => a.url), p.drawn, p.firsts]).toEqual([["/api/jobs", "/api/factory", "/api/jobs"], [{ n: 1 }, { n: 3 }], [true, true]]);
+});
+
+test("a check on open that meets a load still drawing does not drop that load's draw", async () => {
+  const p = page();
+  const shown = p.router.show(p.route);
+  p.answer(0, { n: 1 });
+  await shown;
+  const fresh = p.router.redraw(new URLSearchParams(), true);
+  FakeStream.last.onopen();
+  await tick();
+  expect(p.asked.length).toBe(3);
+  p.answer(1, { n: 2 });
+  await fresh;
+  p.answer(2, { n: 2 });
+  await tick();
+  expect(p.drawn).toEqual([{ n: 1 }, { n: 2 }]);
+});
+
+test("a reconnect's full reload keeps the check on open, and the two draw identical data once", async () => {
+  const p = page();
+  const shown = p.router.show(p.route);
+  p.answer(0, { n: 1 });
+  await shown;
+  p.router.follow();
+  p.router.reload();
+  FakeStream.last.onopen();
+  for (let i = 1; i < 4; i++) {
+    await tick();
+    if (p.asked[i]) p.answer(i, { n: 1 });
+  }
+  await tick();
+  expect([p.asked.length, p.drawn]).toEqual([3, [{ n: 1 }, { n: 1 }]]);
 });
