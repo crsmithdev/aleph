@@ -33,8 +33,8 @@ The factory does every piece of work. You file each one and do not build it.
 
 You do all the work, and the factory gets none of it.
 
-- File no new issues. Do not run `aleph issue add` or `done`. Put new follow-ups in the summary, under a line
-  `Not filed:`.
+- File no new issues. Do not run `aleph issue add`. Run `aleph issue done` only for an issue this session finished.
+  Put new follow-ups in the summary, under a line `Not filed:`.
 - If the work changes an existing issue, update it with `aleph issue note` or `aleph issue edit`.
 - If an item is trivial, do it yourself in a worktree. Trivial means one file, a few lines, and a check that runs
   in under a minute.
