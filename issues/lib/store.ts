@@ -228,7 +228,7 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
       for (const item of doc.items) {
         if (!CLOSED.includes(status(item)) || !(open.has(item.id) || !before.has(item.id))) continue;
         logClosed(item, by);
-        record.clearIssueAsk(`issue.${issues.refOf(item)}`);
+        record.clearIssueState(`issue.${issues.refOf(item)}`);
         if (status(item) !== "dropped") continue;
         const blocker = keyOf("issue", item.id);
         for (const w of loadAll(dir, commit.out)) {

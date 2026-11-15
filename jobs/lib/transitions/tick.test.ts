@@ -178,18 +178,22 @@ test("the sweep logs a job that waits for a spec edit as missed once the spec mo
   expect(p.dispatches).toBe(1);
 });
 
-test("the sweep clears an Ask on a closed issue and on a job that no longer waits, and keeps the rest", async () => {
+test("the sweep deletes the row of a closed issue and the Ask of a job that no longer waits, and keeps the rest", async () => {
   seed([{ body: "closed", ask: true }, { body: "open", ask: true }]);
   // The Ask put back after the close is a stale row, as the 22 on the live store.
   writeList({ key }, "close", (doc) => { issues.setStatus(issues.find(doc, 1)!, "done"); return true; });
   setAsk(`issue.1`, plainAsk("question", "which module?"));
+  const wait = { kind: "after", reason: "waits", since: "2026-11-14T00:00:00Z" };
+  record.editIssueState(`issue.1`, (s) => { s.wait = wait; s.ci = { url: "u", commit: "c", failure: "f" }; });
+  record.editIssueState(`issue.2`, (s) => { s.wait = wait; });
   const gone = seedJob({ role: "plain", name: "job", state: "waiting", ask: plainAsk("question", "which?") });
   const live = seedJob({ role: "plain", name: "job", state: "waiting", ask: plainAsk("question", "which?") });
   record.setState(gone.id, "done");
   const p = sweepPorts();
   await sweep(NOW, readTick(), p);
-  expect(askOf(`issue.1`)).toBeNull();
+  expect(record.read(`issue.1`)).toBeNull();
   expect(askOf(`issue.2`)?.question).toBe("which module?");
+  expect(record.read(`issue.2`)?.wait).toEqual(wait);
   expect(record.read(gone.id)).toBeNull();
   expect(record.read(live.id)?.ask?.question).toBe("which?");
 });

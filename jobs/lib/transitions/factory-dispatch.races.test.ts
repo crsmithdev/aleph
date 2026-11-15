@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
+import * as record from "../records/record.ts";
 import { readHolds } from "../gates/factory-status.ts";
 import { newIssue, change, mk, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 
@@ -36,6 +37,7 @@ test("an issue set to done while an earlier issue starts is skipped as done", as
   expect(out.started).toEqual([`issue.${first}`]);
   expect(out.skipped).toEqual([`issue.${second}: the item is done`]);
   expect(readHolds([`issue.${second}`])).toMatchObject([{ kind: "not-ready", event: { action: "done" } }]);
+  expect(record.read(`issue.${second}`)).toBeNull();
 });
 
 // The label gap is between the read of the list and an issue's lock: an earlier issue's start removes it.

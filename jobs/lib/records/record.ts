@@ -291,8 +291,8 @@ export function setIssueAsk(key: string, ask: Ask | null): void {
   });
 }
 
-/** Take the Ask off `key`, the run's too, when its issue closes. The row keeps its wait and its CI result. */
-export const clearIssueAsk = (key: string): void => editIssueState(key, (s) => { s.ask = null; s.askJob = undefined; });
+/** Delete the row of `key` when its issue closes: the Ask (the run's too), the wait and the CI result. */
+export const clearIssueState = (key: string): void => editIssueState(key, (s) => { s.ask = null; s.askJob = undefined; s.wait = null; s.ci = undefined; });
 
 // The next step.
 

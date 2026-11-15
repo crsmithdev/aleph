@@ -21,7 +21,7 @@ import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { holdsWork } from "../infra/process.ts";
 import { reader, type Reader } from "../../../issues/lib/store.ts";
 import { refOf, status } from "../../../issues/lib/todo.ts";
-import { allIssueStates, clearIssueAsk, getRun } from "../records/record.ts";
+import { allIssueStates, clearIssueState, getRun } from "../records/record.ts";
 import { ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
@@ -134,11 +134,11 @@ export interface SweepPorts { dispatch(): Promise<unknown>; suite(): void }
 const sweepPorts: SweepPorts = { dispatch: runDispatch, suite: suiteDetached };
 
 
-/** Clear the Ask of a closed issue and of a job-keyed row whose job no longer waits: a close or an end that missed it leaves it. */
+/** Delete the row of a closed issue, and the Ask of a job-keyed row whose job no longer waits: a close or an end that missed it leaves it. */
 function clearDeadAsks(lists: Reader): void {
   const closed = new Set(sandboxRepos().flatMap((r) => (lists.list(r.key)?.items ?? []).filter((i) => ["done", "dropped"].includes(status(i))).map((i) => `issue.${refOf(i)}`)));
   for (const [key, s] of allIssueStates()) {
-    if (s.ask && (closed.has(key) || (key.startsWith("job.") && getRun(key)?.state !== "waiting"))) clearIssueAsk(key);
+    if (closed.has(key) || (s.ask && key.startsWith("job.") && getRun(key)?.state !== "waiting")) clearIssueState(key);
   }
 }
 
