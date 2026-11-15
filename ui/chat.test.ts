@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer } from "./test-server.ts";
@@ -87,6 +87,13 @@ test("the turns of one session go to one process, with the session the first tur
   // The process has its argv from the first turn: a second turn on the open process does not resume.
   expect(argv(second)).toContain(`--session-id ${first.session}`);
   expect(who(await turn({ text: "other" })).pid).not.toBe(first.pid);
+});
+
+test("a turn makes the folder of its session, and a refused turn makes none", async () => {
+  const { session } = who(await turn({ text: "hello" }));
+  expect(existsSync(join(base, "sessions", session))).toBe(true);
+  expect((await turn({ text: "", session: "refused" })).status).toBe(400);
+  expect(existsSync(join(base, "sessions", "refused"))).toBe(false);
 });
 
 test("after the idle time the process ends, and the next turn on the session resumes it in a new process", async () => {

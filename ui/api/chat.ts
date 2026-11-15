@@ -12,14 +12,16 @@
  * The answer is a server-sent stream: each line of the process's stream-json output as it comes until the turn's `result`,
  * then `end` with `{ error? }`. A comment line every 20 s keeps the stream open under the server's idle timeout while a tool runs.
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { MEDIA_BYTES, MEDIA_TYPES } from "../../issues/lib/store.ts";
 import { startChat } from "../../jobs/lib/roles/agent-call.ts";
 import { chatIdleMs } from "../../jobs/lib/infra/settings.ts";
 import { read, type Note } from "../../lib/annotations.ts";
 import { alephPath } from "../../lib/paths.ts";
+import { clip } from "../../lib/naming.ts";
 import { file as ideaFile } from "../../ideas/ideas.ts";
 import { sameSite } from "../http.ts";
 import type { Routes } from "../server.ts";
@@ -44,6 +46,27 @@ function notesOn(page: string | undefined, ids: string[]): string {
     (open.length ? `\n\nOpen annotations on this page (${page}):\n${open.map(line).join("\n")}` : "");
 }
 
+/** The folder of each conversation the server ran, named by its session ID: a turn makes it, so the conversations are known when the process is gone. */
+const sessions = () => alephPath("ALEPH_SESSIONS_DIR", "sessions");
+
+/** One conversation as the Herald lists it: the session, when it started and had its last turn, and its first prompt. */
+export interface Chat { id: string; start: string; last: string; title: string }
+
+/** The conversations with a turn at or after `since` (ms), oldest first, each read from its Claude Code transcript; one with no transcript is left out. */
+export function chats(since: number): Chat[] {
+  const root = process.env.ALEPH_CLAUDE_PROJECTS ?? join(homedir(), ".claude", "projects");
+  if (!existsSync(sessions()) || !existsSync(root)) return [];
+  const out: Chat[] = [];
+  for (const id of readdirSync(sessions())) {
+    const file = [...new Bun.Glob(`*/${id}.jsonl`).scanSync({ cwd: root })][0];
+    if (!file) continue;
+    const records = readFileSync(join(root, file), "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } }).filter((r) => r?.timestamp);
+    const first = records.find((r) => r.type === "user" && !r.isMeta && !r.isSidechain && typeof r.message?.content === "string");
+    if (records.length && records.at(-1).timestamp >= new Date(since).toISOString()) out.push({ id, start: records[0].timestamp, last: records.at(-1).timestamp, title: clip(String(first?.message.content ?? "").split("\n")[0], 80) });
+  }
+  return out.sort((a, b) => a.start.localeCompare(b.start));
+}
+
 /** The part of the system prompt for the idea `slug`: its file, the idea commands and the steps to build it. */
 const building = (slug: string) => `
 
@@ -58,7 +81,7 @@ const IMAGES = Object.keys(MEDIA_TYPES).filter((x) => MEDIA_TYPES[x].startsWith(
 /** Save `images` in the images folder of `session` and return the part of the prompt that names them; "" when there are none. */
 function attached(session: string, images: { ext: string; bytes: Buffer }[]): string {
   if (!images.length) return "";
-  const dir = join(alephPath("ALEPH_SESSIONS_DIR", "sessions"), session, "images");
+  const dir = join(sessions(), session, "images");
   mkdirSync(dir, { recursive: true });
   // The turns of a session share the folder, so a name carries the time.
   const at = Date.now();
@@ -158,6 +181,7 @@ export const routes: Routes = {
     const resumed = typeof session === "string" && session !== "";
     const id = resumed ? session : randomUUID();
     if (agents.get(id)?.turn) return Response.json({ error: "this conversation has a turn running" }, { status: 409 });
+    mkdirSync(join(sessions(), id), { recursive: true });
     try {
       const ids = Array.isArray(annotations) ? annotations.filter((x): x is string => typeof x === "string") : [];
       // The idea's steps go with the turn, not the process, because a conversation can move to another idea.

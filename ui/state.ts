@@ -15,6 +15,7 @@ import { counting } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, asking, refIn, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withProjects } from "./api/scope.ts";
+import { chats, type Chat } from "./api/chat.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
 import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
@@ -43,6 +44,16 @@ const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.de
 
 /** A part of an issue as a flat card says it: "n/m" with a link to the parent. */
 interface Part { n: number; m: number; parent: string; href: string }
+
+/** The attempt of each job an issue event names, by its job ID: the first job of its `prev` chain. */
+function heraldAttempts(events: EventRow[], runs: Entry[]): Record<string, string> {
+  const attempts: Record<string, string> = {};
+  for (const e of events) {
+    const run = parseKey(e.object)?.kind === "job" && !(e.object in attempts) ? runOfJob(e.object, runs) : undefined;
+    if (run) attempts[e.object] = run.run.job;
+  }
+  return attempts;
+}
 
 /** The title of each run an issue event names, by its job ID: the run's kind, or "merge" for a merge-only run. */
 export function heraldRuns(events: EventRow[], runs: Entry[]): Record<string, string> {
@@ -169,7 +180,9 @@ export interface State {
   doneStamps: { id: string; at: number }[];
   /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
   herald?: { history: HeraldHistoryItem[]; events: EventRow[]; /** The title of each issue the events name, by its full ID. */ titles: Record<string, string>;
-    /** The title of each run an issue event names, by its job ID. */ runs: Record<string, string> };
+    /** The title of each run an issue event names, by its job ID. */ runs: Record<string, string>;
+    /** The attempt of each job an issue event names, by its job ID: its first job of the `prev` chain. */ attempts: Record<string, string>;
+    /** The UI chat conversations with a turn in the last day, oldest first. */ chats: Chat[] };
 }
 
 const DONE = 10;
@@ -473,7 +486,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), events, titles, runs: heraldRuns(events, jobs.flat()) },
+    herald: { history: currentStatusHistory(), events, titles, runs: heraldRuns(events, jobs.flat()), attempts: heraldAttempts(events, jobs.flat()), chats: chats(now.getTime() - 86_400_000) },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {

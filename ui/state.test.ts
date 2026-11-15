@@ -18,6 +18,7 @@ import { state as fixture } from "./fixtures/status-state.ts";
 import { rows, withAttn } from "./test-now.ts";
 import { setAsk } from "../jobs/lib/asks/ask.ts";
 import { writeRepos } from "../tests/projects.ts";
+import { logEvent } from "../lib/layout.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -275,6 +276,33 @@ describe("a passed job whose issue is parked", () => {
       set("open");
       expect(names(state(now).running)).toContain(`fac-${id}`);
     } finally { set("dropped"); }
+  });
+});
+
+describe("the Herald's attempts and chats", () => {
+  test("an intake, a build, a review and a land job linked by prev are one attempt: the intake's job", () => {
+    const ids = (["intake", "build", "review", "land"] as const).map((kind, i) => run(`20261027-00019${i}-a`, { job: "fac-90", kind, name: "fac-90", on: "fac-90", state: "done" }));
+    const other = run("20261027-000199-a", { job: "fac-91", name: "fac-91", on: "fac-91", state: "done" });
+    for (const id of [...ids, other]) logEvent({ subject: "gate", action: "running", object: id });
+    const h = state(now).herald!;
+    expect(ids.map((id) => h.attempts[id])).toEqual([ids[0], ids[0], ids[0], ids[0]]);
+    expect(h.attempts[other]).toBe(other);
+  });
+
+  test("two turns on one chat session are one conversation: its session, start, last turn and first prompt", () => {
+    const projects = join(base, "projects"), sessions = process.env.ALEPH_SESSIONS_DIR!;
+    const turn = (type: string, timestamp: string, content: unknown) => JSON.stringify({ type, timestamp, message: { content } });
+    mkdirSync(join(projects, "-repo"), { recursive: true });
+    writeFileSync(join(projects, "-repo", "chat-1.jsonl"), [
+      turn("user", ago(3), "fix the footer\n\nChris points at these annotations:"), turn("assistant", ago(3), [{ type: "text", text: "done" }]),
+      turn("user", ago(2), "and the header"), turn("assistant", ago(2), [{ type: "text", text: "done" }]),
+    ].join("\n"));
+    // A session the server did not run as a chat, and a chat whose last turn is older than the feed's day.
+    writeFileSync(join(projects, "-repo", "terminal-1.jsonl"), turn("user", ago(1), "typed in a terminal"));
+    writeFileSync(join(projects, "-repo", "old-1.jsonl"), turn("user", ago(30), "yesterday's"));
+    for (const id of ["chat-1", "old-1"]) mkdirSync(join(sessions, id), { recursive: true });
+    const end = withEnv({ ALEPH_CLAUDE_PROJECTS: projects });
+    try { expect(state(now).herald!.chats).toEqual([{ id: "chat-1", start: ago(3), last: ago(2), title: "fix the footer" }]); } finally { end(); rmSync(sessions, { recursive: true, force: true }); }
   });
 });
 

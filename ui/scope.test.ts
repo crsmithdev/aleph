@@ -4,13 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eventIn, inProject, memoryIn, repoIn, scopeOf, traceIn, withProjects } from "./api/scope.ts";
 import { log } from "./api/gates.ts";
-import { logEvent } from "../lib/layout.ts";
+import { logEvent, readEvents } from "../lib/layout.ts";
 import type { EventRow } from "../lib/naming.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 import { SESSIONS } from "../lib/windows.ts";
 import { withEnv } from "./test-server.ts";
 import { forProject } from "./api/now.ts";
+import { seed } from "../jobs/job.testkit.ts";
 import { newItems, writeRepos } from "../tests/projects.ts";
 
 let dir: string, restore: () => void;
@@ -82,6 +83,17 @@ test("the Status answer for a project keeps its Herald events and the ones of no
   const events = ["alpha-1", "alpha-ui-2", "protected"].map((object) => ({ time: "2026-11-04T12:00:00Z", subject: "rule", object, action: "changed" }));
   const s: any = { stuck: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events, titles: {} } };
   expect(forProject(s, "alpha").herald!.events.map((e) => e.object)).toEqual(["alpha-1", "protected"]);
+});
+
+test("an event of a factory-wide job, with no project, is in the Herald of no project filter and not in a project's", () => {
+  const { id } = seed({ role: "director", name: "director", state: "running" });
+  const own = seed({ role: "build", repo: "alpha", name: "issue.1", state: "running" }).id;
+  const before = readEvents().length;
+  for (const job of [id, own]) logEvent({ subject: job, action: "running", object: job });
+  const s: any = { stuck: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events: readEvents().slice(before), titles: {}, runs: {}, attempts: {}, chats: [{ id: "c", start: "x", last: "x", title: "t" }] } };
+  expect(forProject(s, null).herald!.events.map((e) => e.object)).toEqual([id, own]);
+  expect(forProject(s, "alpha").herald!.events.map((e) => e.object)).toEqual([own]);
+  expect(forProject(s, "alpha").herald!.chats).toEqual([]);
 });
 
 test("scopeOf reads the project and the window by name, with the route's default, and refuses another window", async () => {

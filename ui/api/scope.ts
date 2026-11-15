@@ -49,6 +49,9 @@ export const eventIn = (object: string | undefined, project: Project, owner?: st
   return !project || (owner ? owner === project && known(project) : object !== undefined && repoOfSubject(object) !== undefined ? inProject(object, project) : known(project));
 };
 
+/** Whether an event is of a factory-wide job (director, monitor, maintainer): it names a job and has no project. It shows only with no project filter. */
+export const factoryWide = (e: EventRow) => !e.project && !!(e.subject_role || e.object_role);
+
 /** `rows`, each with the registry key of its issue's project as `project` when its object is an issue key of the items repo and it has no project: one read of the issues for the batch, with no fetch. */
 export const withProjects = <T extends EventRow>(rows: T[]): T[] => {
   let projects: Map<number, string> | undefined;

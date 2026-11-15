@@ -1,17 +1,17 @@
 /** `GET /api/factory`: the Status view's data, narrowed to one project by `?project=<key>`. */
 import type { Routes } from "../server.ts";
 import { proposals } from "../../jobs/lib/learning/corrections.ts";
-import { eventIn, inProject, known, repoIn, scopeOf } from "./scope.ts";
+import { eventIn, factoryWide, inProject, known, repoIn, scopeOf } from "./scope.ts";
 import { state, type State } from "../state.ts";
 import { verdict } from "../../lib/status-words.ts";
 import { annotate, currentFit, summaryOff } from "../usage.ts";
 
-/** The state with only `project`'s jobs, issues, asks and Herald events; the factory and ticks stay whole. */
+/** The state with only `project`'s jobs, issues, asks and Herald events (none of a factory-wide job, no chat); the factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
   if (!project) return s;
   const mine = <T extends { repo?: string }>(a: T[]) => a.filter((x) => repoIn(x.repo, project));
   const ours = <T extends { id: string }>(a: T[]) => a.filter((x) => inProject(x.id, project));
-  const herald = s.herald && { ...s.herald, events: s.herald.events.filter((e) => eventIn(e.object, project, e.project)) };
+  const herald = s.herald && { ...s.herald, events: s.herald.events.filter((e) => !factoryWide(e) && eventIn(e.object, project, e.project)), chats: [] };
   return { ...s, stuck: mine(s.stuck), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
 }
 
