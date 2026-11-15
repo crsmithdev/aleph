@@ -8,11 +8,11 @@ import { join } from "node:path";
 import { today } from "../../../lib/day.ts";
 import { LANES, lane, shownId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, buildableIssue, buildableIssues, close, partsOf, planSet, priorityOf, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
+import { afterOf, buildableIssue, buildableIssues, close, partsOf, planSet, priorityOf, readLists, reader, reopenReverted, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { itemOnMain } from "../records/status.ts";
+import { itemOnMain, landedIndex, revertedIn } from "../records/status.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
 import { allRuns, isWaiting, loadRegistry, onOf, type Entry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -84,8 +84,9 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
   const skipped: string[] = [];
   const redOf = mainRed();
   const done = doneChecker(true, (key, id) => reader({ fetch: false }).item(key, id));
-  // A parent whose parts all landed closes without a green main.
-  for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
+  // A parent whose parts all landed closes without a green main, after the sweep closes the parts.
+  const lists = reader();
+  for (const repo of sandboxRepos()) { sweepMain(repo, lists); for (const l of await closeIssues(repo, done)) skipped.push(l); }
   const ready = openIssues();
   /** Records the hold and the skip line of an issue no start reached. */
   const skip = (name: string, kind: Gate, why: string, ev: Hold) => { recordHold(name, kind, why, ev); skipped.push(`${name}: ${why}`); };
@@ -106,12 +107,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
     const red = redOf(repo);
-    // An open issue whose work is on main is done: the store closes it, so no dispatch lists it again.
-    if (done(`${repo.key}-${ref}`)) {
-      const bad = close(repo, ref, `its work is on origin/${repo.main}: ${itemOnMain(repo, ref) ?? "no commit"}`);
-      if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `not closed: ${bad}` });
-      continue;
-    }
+    if (done(`${repo.key}-${ref}`)) continue;
     // The cheap facts first: the pause was asked above.
     const first = issueDecision({ name, ref: `${repo.key}-${ref}`, item: listed, done, red });
     if (first.kind !== "ready") { held(name, repo, first); continue; }
@@ -156,6 +152,26 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
     }
   }
   return { started, skipped, ...(landed.length ? { landed } : {}) };
+}
+
+/**
+ * The sweep of a repo's list against origin/<main>: an open issue with no Ask whose work is on main closes as done, so no dispatch
+ * lists it again, and a done issue whose `Issue:` trailer commits are all reverted reopens. Nothing else reads a trailer for done.
+ */
+function sweepMain(repo: Repo, lists: Reader): void {
+  fetchOrigin(repo.path);
+  const doc = lists.list(repo.key);
+  if (!doc) return;
+  const main = `origin/${repo.main}`;
+  const index = landedIndex(repo.path, main, repo.key, (n) => { const i = issues.find(doc, n); return i ? issues.sinceOf(i) : undefined; });
+  const reverted = revertedIn(index);
+  for (const item of doc.items) {
+    const n = String(item.id), status = issues.status(item), hit = index.get(n)?.[0];
+    let bad: string | null = null;
+    if (status === "open" && hit && !askOf(refIn(repo.key, item))) bad = close(repo, item.id, `its work is on origin/${repo.main}: ${hit.slice(0, 7)}`);
+    else if (status === "done" && reverted.has(n)) bad = reopenReverted(repo, item.id, `its commits on origin/${repo.main} are all reverted: the goal runs again`, git(repo.path, "rev-parse", main).out);
+    if (bad) logEvent({ subject: "rule", action: "failed", object: issueJob(repo, item.id), detail: `not swept: ${bad}` });
+  }
 }
 
 /** Whether every part is done or dropped, at least one is done, and the parent is neither asking nor to plan: then it closes. */

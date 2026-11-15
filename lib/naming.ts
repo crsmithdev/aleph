@@ -7,7 +7,7 @@ export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"] as const;
 const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"] as const;
 const ASKS = ["protected", "question", "incomplete", "capped", "proposal"] as const;
-export const ACTIONS: readonly string[] = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed", "stalled"];
+export const ACTIONS: readonly string[] = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed", "stalled", "reopened"];
 /** Why a run stopped: the closed set of causes (outcome.ts `Cause`). */
 export const CAUSES = ["no-commit", "timeout", "stalled", "infra", "locked", "credit", "check", "conflict", "moved", "review", "unanswered", "other"] as const;
 /** The subjects that are not a job: code (`gate`, `rule`), Chris and an interactive session. */
@@ -155,7 +155,7 @@ const SAY: Record<string, string> = {
   protected: "{object} asks to change a protected file", question: "{object} asks a question", incomplete: "{object} has a dropped part",
   capped: "{object} hit its run cap", proposal: "{object} proposes a change",
   reran: "{object} reran", started: "{object} picked up", missed: "{object} missed", skipped: "{object} skipped", filed: "{object} filed by {by}",
-  escalated: "{object} escalated to you", changed: "{object} changed", answered: "{object} answered by {by}", routed: "{object} routed", stalled: "{object} stalled",
+  escalated: "{object} escalated to you", changed: "{object} changed", answered: "{object} answered by {by}", routed: "{object} routed", stalled: "{object} stalled", reopened: "{object} reopened",
 };
 /** What a cause adds as an event's detail: its phrase; "" adds nothing. */
 export const BECAUSE: Record<string, string> = {

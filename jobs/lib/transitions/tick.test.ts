@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { readList, writeList } from "../../../issues/lib/store.ts";
+import { close, readList, writeList } from "../../../issues/lib/store.ts";
 import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
@@ -285,6 +285,7 @@ test("a tick where an episode page fails to write records the episodes result as
   git(dir, "add", ".");
   git(dir, "commit", "-q", "-m", "ship it", "-m", `Issue: issue.${id}`);
   git(dir, "push", "-q", "origin", "main");
+  close({ key }, id, "landed");
   seedJob({ role: "build", name: `issue.${id}`, repo: key, target: `issue.${id}`, state: "landed", told: true, started: new Date(NOW - 60 * MIN).toISOString(), ended: new Date(NOW - 30 * MIN).toISOString() });
   // An episodes folder the tick cannot write in.
   const episodes = join(process.env.ALEPH_FACTORY_DIR!, "episodes");

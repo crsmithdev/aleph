@@ -13,7 +13,7 @@ import { isOpen } from "./job.ts";
 import { counting } from "./record.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { parseId, parseKey, sayText, tail, type StageName } from "../../../lib/naming.ts";
+import { parseKey, sayText, type StageName } from "../../../lib/naming.ts";
 
 
 /** Why an item stands where it does: the event fields of docs/naming.md. A field the naming sets have no word for is left out. */
@@ -42,8 +42,6 @@ export interface Subject {
   /** `plan` is set. */
   plan: boolean;
   tracker: boolean;
-  /** Only trailers after this commit count: `landedIndex` applies it. */
-  since?: string;
 }
 
 /** What stage() needs of one job of an item: its ID and its last real run. */
@@ -52,10 +50,6 @@ export interface RunView { id: string; kind: Run["role"]; state: State; open: bo
 export interface Ctx {
   /** The repo is a factory repo (`sandbox: true`): intake reads it, so an issue with no spec gets sorted. */
   sandbox: boolean;
-  /** The not-reverted `Issue:` trailer commits on origin/<main>, by item number: `landedIndex`. */
-  landed: Map<string, string[]>;
-  /** Items whose trailer commits are all reverted. */
-  reverted: Set<string>;
   /** The repo's other items, by ref (`<repo>-<n>`). */
   item(ref: string): Subject | undefined;
   /** The jobs of an item, oldest first. */
@@ -68,7 +62,7 @@ export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Sub
     id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
     after: store.afterOf(item).map((r) => r.replace(/^issue\./, `${key}-`)), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
     ...(a ? { ask: { kind: a.kind, reason: a.reason } } : {}),
-    spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item), ...(issues.sinceOf(item) ? { since: issues.sinceOf(item) } : {}),
+    spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item),
   };
 }
 
@@ -77,18 +71,11 @@ export function runViewOf(job: Job): RunView {
     return { id: last.id, kind: run.role, state: run.state, open: isOpen(job), ...(isWaiting(run.state) ? { ask: waitOf(run.ask) } : {}) };
 }
 
-/** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */
-const partOf = (ref: string): string | undefined => { const p = parseId(ref); return p ? tail(p) : undefined; };
 const SORTING: Run["role"][] = ["intake"];
 
-/** The item is done: the store says so, or a not-reverted trailer commit on main names it. Returns the reason. */
-function doneWhy(item: Subject, ctx: Ctx): Reason | null {
-  const part = partOf(item.id);
-  const hit = part === undefined ? undefined : ctx.landed.get(part)?.[0];
-  if (hit) return { action: "landed", on: [hit.slice(0, 7)] };
-  // The store's done stands, unless a revert undid the item's only trailer commits.
-  if (item.status === "done" && !(part !== undefined && ctx.reverted.has(part))) return { action: "done" };
-  return null;
+/** The item is done: the store says so. Returns the reason. */
+function doneWhy(item: Subject): Reason | null {
+  return item.status === "done" ? { action: "done" } : null;
 }
 
 export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new Set()): Stage {
@@ -99,7 +86,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   if (item.status === "dropped") return out("dropped", { action: "dropped" });
   // An open item that asks is waiting, even when a trailer commit on main names it (a reopened issue can have one).
   if (item.status === "open" && item.ask) return out("waiting", { action: "waiting", to: "human" });
-  const done = doneWhy(item, ctx);
+  const done = doneWhy(item);
   if (done) return out("done", done);
   if (item.status === "parked") return out("parked", { action: "parked" });
   const live = ctx.runs(id).filter((r) => r.open);
@@ -124,7 +111,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   if (last) return out("working", { action: last.state, on: [last.id] });
   const blockers = item.after.filter((ref) => {
     const s = ctx.item(ref);
-    return s !== undefined && (s.status === "dropped" || (s.status === "open" && !doneWhy(s, ctx)));
+    return s !== undefined && (s.status === "dropped" || (s.status === "open" && !doneWhy(s)));
   });
   if (blockers.length) return out("held", { action: "after", on: blockers });
   if (item.plan) return out("working", { action: "starting", sub: "intake" });

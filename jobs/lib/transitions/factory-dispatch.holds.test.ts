@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, suiteStep } from "./factory.ts";
 import { readHolds } from "../gates/factory-status.ts";
+import { readEvents } from "../../../lib/layout.ts";
 import { change, ctx, newIssue, notes, setup, sh, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
@@ -51,6 +53,21 @@ test("an open issue whose work is on main closes as done, and no later dispatch 
   expect(notes(id)).toMatch(/its work is on origin\/main: [0-9a-f]{7}$/m);
   const second = await dispatchIssues(async () => null, undefined, undefined);
   expect(second.skipped.filter((l) => l.startsWith(`issue.${id}:`))).toEqual([]);
+});
+
+test("a done issue whose trailer commit on main is reverted reopens, with one event on its key", async () => {
+  const id = newIssue();
+  writeList({ key: "fac" }, "close", (doc) => { issues.setStatus(issues.find(doc, id)!, "done"); return true; });
+  const before = readEvents().length;
+  const repo = join(ctx.base, "repo");
+  writeFileSync(join(repo, "work.txt"), "the work\n");
+  sh(repo, "git", "add", "work.txt");
+  sh(repo, "git", "commit", "-q", "-m", `the work\n\nIssue: issue.${id}`);
+  sh(repo, "git", "revert", "--no-edit", "HEAD");
+  sh(repo, "git", "push", "-q", "origin", "main");
+  await dispatchIssues(async () => null, undefined, undefined);
+  expect(issues.status(store.readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+  expect(readEvents().slice(before).filter((e) => e.object === `issue.${id}`).map((e) => e.action)).toEqual(["reopened"]);
 });
 
 test("a parent whose sub-issues are all done closes with a note that names them", async () => {

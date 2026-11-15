@@ -374,6 +374,23 @@ export function close(repo: Place, id: number | string, text: string, how: "done
   }
 }
 
+/** Item `id` reopened as one commit because its trailer commits on main are all reverted: `since` as `reopen` sets it, `text` as a note, and one `reopened` event as `by`. Returns why it could not, or null. */
+export function reopenReverted(repo: Place, id: number, text: string, since: string | null, by = "rule"): string | null {
+  try {
+    const w = writeList(repo, `todo: item ${id} reopened: ${text}`, (doc) => {
+      const item = issues.find(doc, id);
+      if (!item || status(item) !== "done") return null;
+      reopen(doc, item, since);
+      issues.note(item, text);
+      return item;
+    });
+    if (w) logEvent({ subject: by, action: "reopened", object: keyOf("issue", id), detail: text });
+    return null;
+  } catch (e) {
+    return reason(e);
+  }
+}
+
 /**
  * Change item `id` with `change` as one commit, while it is still open and not
  * sorted: intake's write. False when the item is gone, closed or sorted. A

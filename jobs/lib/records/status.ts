@@ -132,11 +132,11 @@ export function onMain(repo: { path: string; key: string; main: string } | undef
   return null;
 }
 
-/** The items of `ns` that the facts hold, with the stage() context for them: one `landedIndex` for all. */
-export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<string, string[]> = landedIndex(cwd, main, f.repo, (n) => f.items[n]?.since)): Stage[] {
+/** The items of `refs` that the facts hold, with the stage() context for them. */
+export function stages(f: Facts, refs: (number | string)[]): Stage[] {
   const num = (ref: string) => { const p = parseId(ref); return p?.repo === f.repo ? tail(p) : undefined; };
   const ctx: Ctx = {
-    landed, reverted: revertedIn(landed), sandbox: f.sandbox,
+    sandbox: f.sandbox,
     item: (ref) => f.items[num(ref) ?? ""],
     runs: (ref) => f.runs[num(ref) ?? ""] ?? [],
   };
@@ -152,7 +152,7 @@ export function stages(cwd: string, main: string, f: Facts, refs: (number | stri
 export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: issues.Doc | null; items?: (number | string)[] }): Stage[] {
   if (opts.fetch) fetchOrigin(repo.path);
   const f = facts(repo, opts.doc);
-  return stages(repo.path, `refs/remotes/origin/${f.main}`, f, opts.items ?? Object.keys(f.items));
+  return stages(f, opts.items ?? Object.keys(f.items));
 }
 
 const DAY_MS = 24 * 3600_000;

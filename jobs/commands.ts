@@ -465,8 +465,7 @@ function statusRecent(ctx: Ctx): void {
     try {
       fetchOrigin(repo.path);
       const f = facts(repo, doc);
-      const main = `refs/remotes/origin/${f.main}`;
-      const rows = stages(repo.path, main, f, open.map((i) => issues.refOf(i)));
+      const rows = stages(f, open.map((i) => issues.refOf(i)));
       states.push(...rows);
       if (rows.length) ofRepo.push({ key: repo.key, code: repo.code, rows });
     }

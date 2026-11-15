@@ -83,6 +83,7 @@ describe("milestone 2", () => {
   test("aleph status inside a factory worker says what it says outside", async () => {
     const done = (await issueAdd("fac", "landed one")).json.added;
     pushFromOther(`landed\n\nIssue: issue.${done}`, "landed-one.txt");
+    await issueClose("fac", done, "done");
     const open = (await issueAdd("fac", "open one")).json.added;
     const items = [`fac-${done}`, `fac-${open}`];
     const r = await startJob("fac", "finside", `Goal: inside\nACTION: status ${CLI} ${items.join(" ")}\n`);

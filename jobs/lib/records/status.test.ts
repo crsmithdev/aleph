@@ -39,7 +39,7 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
-test("a touched item the store closed is done without a fresh trailer commit, unless a revert undid its trailer", () => {
+test("a touched item the store closed is done without a fresh trailer commit, and a revert does not undo it", () => {
   const sandbox: Repo = { ...repo, sandbox: true };
   const closed: Doc = { items: [item(11, "done"), item(12, "done"), item(13, "done")] };
   for (const n of [11, 12, 13]) {
@@ -54,9 +54,9 @@ test("a touched item the store closed is done without a fresh trailer commit, un
   sh(clone, "git", "revert", "--no-edit", "HEAD");
   sh(clone, "git", "push", "-q", "origin", "HEAD:main");
   const states = (items?: number[]) => repoStages(sandbox, { fetch: true, doc: closed, items }).map((s) => [s.id, s.stage]);
-  expect(states()).toEqual([["demo-11", "done"], ["demo-12", "done"], ["demo-13", "new"]]);
+  expect(states()).toEqual([["demo-11", "done"], ["demo-12", "done"], ["demo-13", "done"]]);
   expect(states([11])).toEqual([["demo-11", "done"]]);
-  expect(states([13])).toEqual([["demo-13", "new"]]);
+  expect(states([13])).toEqual([["demo-13", "done"]]);
 });
 
 test("facts carry what stage() needs: status, spec, after, parts, ask kind and each job's last run", () => {

@@ -43,7 +43,7 @@ No transition waits for the tick. Each step starts the next one directly. The ti
 |---|---|
 | dropped | The store says dropped |
 | waiting | The issue, one of its runs or one of its sub-issues has an Ask |
-| done | A commit on main names it in an `Issue:` trailer, or the store says done |
+| done | The store says done: the sweep closes an issue that a commit on main names in an `Issue:` trailer |
 | parked | The store says parked |
 | failed | Its job or a sub-issue's job is returned or failed |
 | working | It has sub-issues in progress |
@@ -60,7 +60,7 @@ A job has one state: `running`, `waiting`, `passed`, `returned`, `failed`, `land
 Code decides first, with no agent run (`byCode`):
 
 - An issue of kind `flake` becomes a note on the repo's flake tracker.
-- An issue that a commit on main names in an `Issue:` trailer is done.
+- An issue that a commit on main names in an `Issue:` trailer is closed as done by the sweep.
 
 Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 

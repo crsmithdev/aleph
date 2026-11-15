@@ -19,7 +19,7 @@ import { chats, type Chat } from "./api/chat.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
 import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
-import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
+import { facts, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import { summary, type Wk } from "./usage.ts";
 import { card, stageOf } from "./issue.ts";
@@ -288,7 +288,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     if (trailers.length) job.trailers = trailers;
     return job;
   };
-  // One landedIndex per repo per request: the stage of each item of a repo, by number.
+  // One stages read per repo per request: the stage of each item of a repo, by number.
   const staged = new Map<string, Map<string, Stage>>();
   const stagesOf = (repo: Repo): Map<string, Stage> => {
     let m = staged.get(repo.key);
@@ -297,8 +297,8 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       const doc = lists.list(repo.key);
       if (doc) {
         try {
-          const f = facts(repo, doc, jobs), main = `refs/remotes/origin/${f.main}`;
-          for (const st of stages(repo.path, main, f, Object.keys(f.items), landedIndex(repo.path, main, repo.key, (n) => f.items[n]?.since))) m.set(st.id.slice(repo.key.length + 1), st);
+          const f = facts(repo, doc, jobs);
+          for (const st of stages(f, Object.keys(f.items))) m.set(st.id.slice(repo.key.length + 1), st);
         } catch (e: any) { logOnce("stages", e); }
       }
       staged.set(repo.key, m);

@@ -44,7 +44,7 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
 
 - **Issue**
   - Identity: `issue.<n>`. One counter covers every project. The counter never falls below the highest issue folder.
-  - Lifecycle: open, parked, done, dropped. The status is derived from the stored `closed_as` and `parked` fields. Any move is allowed. A close clears `parked`.
+  - Lifecycle: open, parked, done, dropped. The status is derived from the stored `closed_as` and `parked` fields. Any move is allowed. A close clears `parked`. A trailer commit on main never sets it: done is the stored status; the sweep closes an issue whose work is on main and reopens one whose commits are all reverted.
   - Owner: the work store. One door files a new issue. Every close logs `done` or `dropped`.
   - Invariants: each new issue logs one `filed` event. A part of a parked parent is not buildable.
   - Relations: one project. Many links. Many jobs, through the `target` column of each job. At most one issue state.
@@ -114,7 +114,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Issue status | yes | open, parked, done, dropped |
 | Issue kind | yes | task, bug, check, flake |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled |
+| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
 | Role | yes, never shown | build, plain, land, review, intake, recheck, director, monitor, lens, housekeeper, maintainer |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |

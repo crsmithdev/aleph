@@ -177,7 +177,8 @@ describe("GET /api/issues", () => {
 
   test("a row carries its stage", async () => {
     const rows = await rowsOf("fac");
-    expect(rows[0].stage).toBe("done");
+    // The first goal has a trailer commit on main, and a trailer does not make it done.
+    expect(rows[0].stage).toBe("queued");
     expect(rows[2].stage).toBe("held");
   });
 });

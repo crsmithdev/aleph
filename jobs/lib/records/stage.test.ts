@@ -39,6 +39,12 @@ const ISSUES_NEW: Row[] = [
     sh(repo, "git", "push", "-q", "origin", "main");
     return n;
   } },
+  { name: "new issue: open with a spec while a trailer commit on main names it", stage: "queued", action: "starting", build: async () => {
+    const n = newIssue();
+    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: issue.${n}`);
+    sh(repo, "git", "push", "-q", "origin", "main");
+    return n;
+  } },
 ];
 
 const PARTS_NEW: Row[] = [

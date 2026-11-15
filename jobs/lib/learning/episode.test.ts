@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeList } from "../../../issues/lib/store.ts";
+import { close, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
@@ -72,6 +72,7 @@ const land = (id: number | string): string => {
   sh(repo, "git", "add", ".");
   sh(repo, "git", "commit", "-q", "-m", `ship thing ${id}`, "-m", `Issue: issue.${id}`);
   sh(repo, "git", "push", "-q", "origin", "main");
+  close({ key: "fac" }, id, "landed");
   return sh(repo, "git", "rev-parse", "HEAD");
 };
 
