@@ -1,6 +1,6 @@
 # Naming
 
-This page is the standard for the names, keys and status words that aleph shows and stores. `lib/naming.ts` owns every set and format on this page. No other file defines a key pattern, a state list or an event phrase. The plan is `docs/specs/2026-11-14-storage-ids.md`.
+This page is the standard for the names, keys and status words that aleph shows and stores. `lib/naming.ts` owns every set and format on this page. No other file defines a key pattern, a state list or an event phrase. The plan is `docs/specs/2026-11-14-storage-ids.md`, and the hold model is decided in [Holds are events](adr/0001-holds-are-events.md).
 
 ## Terms
 
@@ -14,7 +14,7 @@ This page is the standard for the names, keys and status words that aleph shows 
 | Size | Which model a build job's worker runs on, as the router picks it: `small` (`haiku`), `medium` (`sonnet`) or `large` (`opus`). Each has an entry in the `models` setting. A build's job row and its start event hold the size word in `size`. |
 | Role model | The model of one role other than the worker: `review`, `intake`, `director`, `monitor`, `maintainer`, `title` or `judge`. Each has an entry in the `models` setting. |
 | Link | A relation between two stored things. A job has `target`, `prev` and `retry_of`. An issue has `from`, `after` and `related`. A hierarchy is a link, never part of a key. |
-| Issue state | The live machine state of one issue: its Ask, its wait and its CI result. It outlives each job on the issue. |
+| Issue state | The live machine state of one issue: its Ask and its CI result. It outlives each job on the issue. |
 | Event | One sentence of 6 fields that says who did what to which thing. |
 | Subject | Who acted in an event. |
 | Object | The thing an event acted on. |
@@ -74,6 +74,12 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
   - Owner: the `always` setting, in the `settings` table.
   - Invariants: a grant takes a verb of the reason's pair, or `user` (not for a proposal reason). The Always action of a card is the first verb of its pair. The lookup for a reason in a project returns the project grant, else the all grant.
   - Relations: one reason. At most one project.
+- **Hold**
+  - Identity: the issue key. A Hold has no key and no row of its own: it is an event of the issue.
+  - Lifecycle: a gate that binds writes one `held` event on the issue, and only when its detail changes; a start ends it. The factory gates write none: each logs one `changed` event on `settings` when it starts and one when it ends.
+  - Owner: `aleph.db`, through `recordHold` in `jobs/lib/gates/factory-status.ts`.
+  - Invariants: the subject is `gate`, the object the issue key, and the detail the hold word and then its facts (`after: issue.2985 issue.2993`). A done or dropped issue gets no hold, and the loop guard writes only its Ask. A hold reads `issue.2994 held: after issue.2985 issue.2993`.
+  - Relations: one issue. One event. The hold a reader takes is the issue's latest `held` event, unless a later `started` event ended it.
 - **Issue state**
   - Identity: the issue key. A row exists only while something is live.
   - Lifecycle: set when an Ask or a CI result starts. Deleted when none is live.
@@ -129,6 +135,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Issue kind | yes | task, bug, check, flake |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
 | Action | yes | the job states; held, gpu, starting, parent, parked, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
+| Hold | yes | factory gates: pause, credit, cap; issue holds: after, job, file, red, credit |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
 | Ask action | yes | approve, disapprove, resolve, dismiss, continue, discontinue |
 | Ask reason | yes | held-path, review-held, question, no-commit, part-dropped, intake-failed, rescue, run-cap, core-change, blocker-dropped, proposal-check, proposal-claude-md, proposal-skill |
@@ -152,5 +159,6 @@ A writer writes only the new words, and a reader reads the stored words as they 
 | Fate | already-met → met; by-hand → manual |
 | Review call | land → passed; back → returned; ask → waiting; pending → running; error → failed |
 | Actor | You → human; Rule → rule; Gate → gate; Director → director; Firefighter → firefighter; triage, planner → intake |
+| Gate | pause (`paused`), backend (`waiting`), live-cap (`full`, `gpu`) → a `changed` event on `settings`, and no hold; baseline (`red`) → `held: red`; not-ready (`done`, `after`, or the open job's state) → `held: after` or `held: job`, and a done issue gets no hold; busy-file (`busy`) → `held: file`; credit-wait (`credit`) → `held: credit`; loop-guard (`looping`) → the Ask's `question` event, and no hold |
 | Kind | agent → build; triage, plan → intake; explain → director; firefighter → director; facts stays, since readers tell it from the job's real runs |
 | Log act | land → landed; drop, drop-issue, decline → dropped; rerun, retry → reran; add, approve → filed; answer, recommended → answered; close → done; edit-goal → changed |
