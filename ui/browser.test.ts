@@ -1303,6 +1303,17 @@ describe.skipIf(!chromeUsable)("Automation redraw", () => {
       document.querySelector('#view form.rule-form[data-rule="' + CSS.escape(window.edit.dataset.editRule) + '"]').closest("td")]`)).toEqual([true, "true", false, null]);
     expect(page.errors).toEqual([]);
   }, 60_000);
+
+  test("the page head keeps its controls at the right, past the title", async () => {
+    await page.go("#/automation");
+    await ready();
+    const [[phL, phR], [asideL, asideR], [, h1R]] = await page.ev<[number, number][]>(
+      `[".ph", ".ph .aside", ".ph h1"].map((s) => { const b = document.querySelector("#view " + s).getBoundingClientRect(); return [b.left, b.right]; })`);
+    expect(Math.abs(asideR - phR)).toBeLessThanOrEqual(1);
+    expect(asideL).toBeGreaterThan(h1R);
+    expect(phL).toBeLessThan(h1R);
+    expect(page.errors).toEqual([]);
+  }, 60_000);
 });
 
 describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
