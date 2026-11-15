@@ -45,7 +45,6 @@ test("the page and the status sentence show a health line's issue id in its shor
   setCodes({ aleph: "a" });
   try {
     const page = view.view.render(withFactory({ health: [alert("health: the land run of aleph-5 is live for over 30 minutes", "lands-stuck")] }));
-    expect(page).toContain("the land run of a5 is live for over 30 minutes");
     expect(page).not.toContain("aleph-5");
     expect(said({ health: [warn("health: koans main is red at def5678: aleph-6 is the cause")] })).toBe("Everything is fine; koans main is red at def5678: a6 is the cause.");
   } finally {
@@ -202,4 +201,32 @@ test("one mapping gives each status sentence its Herald label, on the page too",
   expect(labelOf("alert", "Alert: The build is failing on main")).toBe("Alert");
   expect(labelOf("fine", "Everything is fine")).toBe("Fine");
   expect(verdict({ ...calmState, factory: { ...calmState.factory, paused: true } }).label).toBe("Wait");
+});
+
+// The Herald keeps the text of its first render for the page's life: each such test takes a copy of the module of its own.
+let copies = 0;
+const fresh = () => import(`./views/now.js?status=${++copies}`);
+
+const at = (m: number) => `2026-10-27T17:${String(m).padStart(2, "0")}:00Z`;
+const entry = (m: number, tone: string, text: string) => ({ at: at(m), tone, label: tone, text });
+/** The state at minute `m` with a live tick, so its own status is the fine one, and the server's `history`. */
+const at_ = (m: number, history: object[], paused = false) => ({ ...calmState, now: at(m), factory: { ...calmState.factory, nextTick: "2026-10-27T18:59:00Z", paused }, herald: { history, events: [], titles: {}, chats: [], runs: {} } });
+const statusRows = (h: string) => [...h.matchAll(/<div data-key="status[^"]*" class="event-row (?:fine|warning|alert)[^"]*"><span class="event-time">[^<]*<\/span><span class="event-body[^"]*">(.*?)<\/span><\/div>/g)].map((m) => m[1].replace(/<[^>]*>/g, ""));
+
+test("the first render of a page load draws no status row, whatever its history holds", async () => {
+  const v = await fresh();
+  const h = v.renderHerald(at_(10, [entry(5, "warning", "The factory is paused."), entry(1, "alert", "Alert: The build is failing on main.")]));
+  expect(h).not.toContain('data-key="status');
+});
+
+test("a status row is drawn where the text changes, with the new text only; the same text in another tone draws none", async () => {
+  const v = await fresh();
+  const fine = "Everything is fine.", paused = "The factory is paused.";
+  v.renderHerald(at_(10, [entry(0, "fine", fine)]));
+  // The tone changes and the text does not: no row.
+  expect(statusRows(v.renderHerald(at_(20, [entry(15, "warning", fine), entry(0, "fine", fine)])))).toEqual([]);
+  // The text changes: one row, the new text only, with no label or reason; the page's own status, the same text as the server's newest, adds none.
+  const h = v.renderHerald(at_(30, [{ ...entry(25, "warning", paused), reason: "health: x" }, entry(15, "warning", fine), entry(0, "fine", fine)], true));
+  expect(statusRows(h)).toEqual([paused]);
+  expect(h).not.toContain("health: x");
 });

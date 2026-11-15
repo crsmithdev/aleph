@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, money, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, undecided, when, scope } from "../lib.js";
+import { actButton, fold, keep, kept, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, money, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, undecided, when, scope } from "../lib.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, parseId, parseKey, say as sayParts, targetOf, whoOf } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { share, flowOf, statusCards, usable } from "./speed.js";
@@ -24,23 +24,33 @@ export const view = {
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => {
     scope(q).wire(root); wireHeraldJump(root);
+    root.onchange = (e) => {
+      if (!e.target.matches?.('#herald input[name="show"]')) return;
+      keep(SHOW, { ...kept(SHOW, ALL), [e.target.value]: e.target.checked });
+      redrawHerald(root);
+    };
     if (usable(s.flow)) root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow);
   },
   // An event from the stream goes into the Herald at once; the reload that follows draws it from the state.
   event: (root, ev) => {
     streamed.push(ev);
     if (streamed.length > HERALD_KEEP) streamed.shift();
-    const h = root.querySelector("#herald");
-    if (!h || !lastState) return;
-    const saved = recordState(h), moved = heraldMotion(root);
-    h.outerHTML = renderHerald(lastState);
-    restoreState(root.querySelector("#herald"), saved);
-    moved();
+    redrawHerald(root);
   },
   swap: (root) => heraldMotion(root),
 };
 
 let lastState = null, outOfDateNow = false;
+
+/** The Herald drawn again from the last state, with its folds and motion kept. */
+function redrawHerald(root) {
+  const h = root.querySelector("#herald");
+  if (!h || !lastState) return;
+  const saved = recordState(h), moved = heraldMotion(root);
+  h.outerHTML = renderHerald(lastState);
+  restoreState(root.querySelector("#herald"), saved);
+  moved();
+}
 
 const EFFICIENCY = "#/flow", PERFORMANCE = "#/factory/jobs";
 /** A link to another page that keeps the window; week is the default and stays out of the address. */
@@ -123,9 +133,9 @@ export function findingHtml(text) {
 /** The findings of a Monitor report as a numbered list, each through findingHtml(). */
 export const findingsList = (findings) => `<ol class="findings">${findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`;
 
-/** A feed row in two columns: the time (the clock, or the day), then the body's HTML. `cls` is added to the row's class, `bodyCls` to the body's, `by` is the actor. */
-function feedRow({ tone, at, body, by, cls = "", bodyCls = "" }) {
-  return `<div class="event-row ${tone}${cls}"${by === undefined ? "" : ` data-by="${esc(by)}"`}>` +
+/** A feed row in two columns: the time (the clock, or the day), then the body's HTML. `cls` is added to the row's class, `bodyCls` to the body's, `by` is the actor, `attrs` more attributes. */
+function feedRow({ tone, at, body, by, cls = "", bodyCls = "", attrs = "" }) {
+  return `<div class="event-row ${tone}${cls}"${by === undefined ? "" : ` data-by="${esc(by)}"`}${attrs}>` +
     `<span class="event-time">${esc(at ? (clock(at) || when(at)) : "")}</span>` +
     `<span class="event-body${bodyCls}">${body}</span></div>`;
 }
@@ -138,6 +148,12 @@ const shaped = (r) => ({ row: r, at: r.time, by: r.subject, subject: targetOf(r)
 
 /** An event's identity: the same event from the stream and from the state has the same key. */
 const eventKey = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
+
+/** The text and time of the first Herald render of the page load, which no status row repeats or precedes. */
+let loaded = null;
+
+/** The key of the Herald's Work and Factory toggles in keep(): whether each shows its events. */
+const SHOW = "herald.show", ALL = { work: true, factory: true };
 
 /** The events the stream sent since the page loaded, oldest first; the Herald merges them with the state's. */
 let streamed = [];
@@ -307,17 +323,16 @@ function eventRows(events, titles = {}, runs = {}, attempts = {}) {
 /** A status text without the "health: " of each health line, which older history entries carry. */
 const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
-/** The running jobs as compact rows under the alerts, each keyed by `data-job` so a job that ends leaves the section. A job leaves the state when it ends, so the rows are the state's. */
+/** The running jobs as rows of the feed's grid under the alerts: the start time, the action word, the ID, the title, the tier with the breathing dot. Each is keyed by `data-job` so a job that ends leaves the section. A job leaves the state when it ends, so the rows are the state's. */
 function runNow(s) {
-  const at = (t) => esc(clock(t) || when(t));
-  const row = (id, who, label, title, t, model) => `<div class="run-now" data-job="${esc(id)}"><span class="run-dot"></span>${who}<span class="run-label"${model ? ` title="${esc(model)}"` : ""}>${esc(label)}</span>` +
-    `<span class="run-title" title="${esc(title)}">${esc(title)}</span><span class="event-time">${at(t)}</span></div>`;
+  const row = (id, who, word, title, t, model, tier = "") => feedRow({ tone: "run", at: t, cls: " run-now", attrs: ` data-job="${esc(id)}"`,
+    body: `<span class="event-line">${tag(word, "run")}${who}<span class="event-title run-title" title="${esc(title)}">${esc(title)}</span>` +
+      `<span class="run-tier"${model ? ` title="${esc(model)}"` : ""}><span class="run-dot"></span>${esc(tier)}</span></span>` });
   const rows = (s.runningIssues ?? []).map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat((s.running ?? []).map((j) => {
     const run = j.run ?? { role: "build", started: j.started };
     // A job's tier is the Claude model it asked for: its model, or, when another backend served it, its recorded tier.
-    const tier = TIERS[j.tier ?? shortModel(j.model)];
-    const label = run.role === "build" ? [role("build"), tier].filter(Boolean).join(" · ") : run.role;
-    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), label, j.item?.title || j.name, run.started ?? j.started, j.model);
+    const tier = run.role === "build" ? TIERS[j.tier ?? shortModel(j.model)] : "";
+    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), run.role === "build" ? role("build") : run.role, j.item?.title || j.name, run.started ?? j.started, j.model, tier);
   }));
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
 }
@@ -328,7 +343,7 @@ export function renderHerald(s) {
   // An error is not pinned: the newest event already says it, and is marked live instead.
   const asks = undecided(s.asks ?? []).map((i) => askCard(i, s.now));
   const stuck = (s.stuck ?? []).map(stuckRow(s));
-  const errs = cur.errors, errors = errs.length;
+  const errors = cur.errors.length;
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
 
   const sticky = asks.length + stuck.length > 0
@@ -342,25 +357,28 @@ export function renderHerald(s) {
   const history = [...(s.herald?.history ?? [])];
   if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
 
-  // A status row is an ordinary event row with the status sentence as its body; the live row is a card that adds each error line the sentence lacks.
-  const status = history.map((ev, i) => ({ at: ev.at ?? "", key: `status ${hash(`${ev.tone} ${ev.text}`)}`, html: feedRow({ tone: esc(ev.tone), at: ev.at, cls: i === 0 && errors ? " live" : "", bodyCls: i === 0 && errors ? ` ${esc(ev.tone)}` : "",
-    body: `<span class="event-say">${esc(statusText(ev.text))}</span>${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).map(statusText).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason" title="${esc(l)}">${esc(l)}</span>`).join("")}` }) }));
-  // The status changes and the events in one feed, newest first; the live status row stays on top.
+  // A status row is an event row with the new status text only, drawn where the text changes after the page loaded; the page's first render has none.
+  loaded ??= { at: s.now, text: history[0].text };
+  const after = [...history.filter((ev) => ev.at >= loaded.at), loaded];
+  const status = after.slice(0, -1).filter((ev, i) => statusText(ev.text) !== statusText(after[i + 1].text))
+    .map((ev) => ({ at: ev.at, key: `status ${hash(`${ev.tone} ${ev.text}`)}`, html: feedRow({ tone: esc(ev.tone), at: ev.at, body: `<span class="event-say">${esc(statusText(ev.text))}</span>` }) }));
+  // The status changes and the events in one feed, newest first.
   // A status row's key is its tone and text, numbered from the oldest, so a new status on top does not rename the rows below it.
   const seen = new Map();
   for (const r of [...status].reverse()) { const n = (seen.get(r.key) ?? 0) + 1; seen.set(r.key, n); r.key += ` ${n}`; }
-  const live = errors ? status.shift() : null;
-  const events = heraldEvents(s);
+  // The Work and Factory toggles: an event whose target is an issue is Work, any other is Factory.
+  const show = kept(SHOW, ALL);
+  const events = heraldEvents(s).filter((e) => show[isIssue(e.subject) ? "work" : "factory"]);
   // A chat conversation is one row, read from its session: its last turn's time, its first prompt.
   const chats = (s.herald?.chats ?? []).map((c) => ({ at: c.last, key: `chat ${c.id}`, html: feedRow({ tone: "quiet", at: c.last, by: "claude",
     body: `<span class="event-line">${tag("chat", "quiet")}${idLink(c.id.slice(0, 8))}<span class="event-title" title="${esc(c.title)}">${esc(c.title)}</span><span></span></span>` }) }));
   const rows = [...status, ...chats, ...eventRows(events, s.herald?.titles, s.herald?.runs, s.herald?.attempts)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
-  const feed = (live ? [live, ...rows] : rows).map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}"`)).join("");
+  const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}"`)).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
   const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", stuck.length || errors ? "stuck" : "need") : tag("OK", "done");
 
-  return card("Herald", `${sticky}${runNow(s)}<div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
+  return card("Herald", `${sticky}${runNow(s)}<div class="herald-show">${["work", "factory"].map((k) => `<label><input type="checkbox" name="show" value="${k}"${show[k] ? " checked" : ""}> ${k === "work" ? "Work" : "Factory"}</label>`).join("")}</div><div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
 }
 
 /** The Herald's animated rows: the running jobs and the feed's top rows. */

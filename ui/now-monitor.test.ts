@@ -10,6 +10,8 @@ import { withEnv } from "./test-server.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
 import { seed } from "../jobs/job.testkit.ts";
 import { setCodes } from "../lib/naming.ts";
+// @ts-ignore lib.js is plain JS, shared with the page
+import { clock } from "./lib.js";
 
 const calm = { ...withFactory({}), asks: [], stuck: [] };
 test("the Pipeline card shows the 6 stages in order, each a ring of runs per issue in its health tone with its p90 time, and no other role", () => {
@@ -68,22 +70,21 @@ test("the Herald shows its alerts under a Not OK badge in the worst alert's tone
   expect(h).toContain('id="awaiting"');
   expect(h).not.toContain("Sticky Alerts");
   expect(h).not.toContain("data-herald-tab");
-  expect(h).toContain('class="event-row');
+  expect(h).toContain('class="herald-feed"');
   const red = view.renderHerald({ ...calm, asks: [ask], factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }] } });
   expect(red).toContain('<span class="badge stuck">Not OK</span>');
 });
 
-test("the Herald lists each running job as a compact row between the alerts and the feed, and no section with none", () => {
+test("the Herald lists each running job as a row on the feed grid between the alerts and the feed, and no section with none", () => {
   const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
-  const running = [{ id: "aleph-7#1", name: "intake-aleph-7", tier: "haiku", model: "deepseek-v4.1-flash", started: "2026-11-09T11:00:00Z", item: { title: "Fix the thing" } }];
+  const running = [{ id: "job.0", name: "intake-aleph-7", tier: "haiku", model: "deepseek-v4.1-flash", started: "2026-11-09T11:00:00Z", item: { title: "Fix the thing" } }];
   const h = view.renderHerald({ ...calm, asks: [ask], running, runningIssues: [{ id: "aleph-9", stage: "intake", title: "Sort it", at: "2026-11-09T11:30:00Z" }] });
-  expect(h.match(/class="run-now"/g)).toHaveLength(2);
-  expect(h).toContain('data-job="aleph-7#1"');
-  // The row names the job and its tier; the model is in the label's title.
-  expect(h).toMatch(/<a class="idl" href="#\/jobs\/aleph-7%231">aleph-7#1<\/a><span class="run-label" title="deepseek-v4.1-flash">implement · low<\/span>/);
+  expect(h.match(/class="event-row run run-now"/g)).toHaveLength(2);
+  // The start time, the action word in the run tone, the job's ID, its title, then the tier after the breathing dot; the model is in the tier's title.
+  expect(h).toContain('<div class="event-row run run-now" data-job="job.0"><span class="event-time">' + clock("2026-11-09T11:00:00Z") + '</span><span class="event-body"><span class="event-line"><span class="badge run">implement</span><a class="idl" href="#/jobs/job.0">j-00000</a><span class="event-title run-title" title="Fix the thing">Fix the thing</span><span class="run-tier" title="deepseek-v4.1-flash"><span class="run-dot"></span>low</span></span></span></div>');
   expect(h).not.toContain("intake-aleph-7");
   expect(h).toContain('data-job="aleph-9"');
-  expect(h).toContain("Fix the thing");
+  expect(h).toContain('<span class="badge run">intake</span>');
   expect(h.indexOf('id="awaiting"')).toBeLessThan(h.indexOf('class="herald-running"'));
   expect(h.indexOf('class="herald-running"')).toBeLessThan(h.indexOf('class="herald-feed"'));
   expect(view.renderHerald({ ...calm, running: [], runningIssues: [] })).not.toContain("herald-running");
@@ -94,49 +95,40 @@ test("the Herald panel shows an OK badge with no alerts and no alert row", () =>
   expect(h).not.toContain("No active alerts");
   expect(h).not.toContain("herald-sticky");
   expect(h).toContain('<span class="badge done">OK</span>');
-  expect(h).toContain('Everything is fine');
 });
 
-test("the Herald panel shows weekly usage and warning tone in event history when weekly usage is high", () => {
-  const h = view.renderHerald({ ...calm, usage: { now: { seven_day: 93 } } });
+test("high weekly usage draws a warning status row after the page loaded, with its text only", async () => {
+  const v = await fresh();
+  v.renderHerald(calm);
+  const h = v.renderHerald({ ...calm, usage: { now: { seven_day: 93 } } });
   expect(h).toContain("weekly usage is at 93%");
   expect(h).not.toContain(">Warn<");
   expect(h).toContain('class="event-row warning"');
   expect(h).toContain('<span class="event-body"><span class="event-say">');
 });
 
-test("an error is not pinned: the newest event is marked live and carries the error lines its text lacks, and no row repeats its label or a health prefix", () => {
-  const herald = { history: [{ at: "2026-11-01T00:00:00Z", tone: "alert", label: "Alert", text: "Alert: Health: aleph main is red", reason: "health: aleph main is red" }] };
-  const h = view.renderHerald({ ...calm, herald, factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }, { text: "health: koans main is red", kind: "warn" }] } });
+test("an error is not pinned: the badge says Not OK, and no row repeats the error lines or a health prefix", async () => {
+  const v = await fresh();
+  const herald = { history: [{ at: "2026-10-01T00:00:00Z", tone: "alert", label: "Alert", text: "Alert: Health: aleph main is red", reason: "health: aleph main is red" }] };
+  const h = v.renderHerald({ ...calm, herald, factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }, { text: "health: koans main is red", kind: "warn" }] } });
   expect(h).not.toContain("ask-head");
   expect(h).not.toContain("No active alerts");
   expect(h).toContain('<span class="badge stuck">Not OK</span>');
-  expect(h).toMatch(/class="event-row alert live"/);
   expect(h).not.toContain("Alert: Health:");
-  // The status sentence sums up aleph's red main, so the live event lists that line; it already says koans's.
-  expect(h).toMatch(/class="event-row alert live">.*?koans main is red\.<\/span><span class="reason" title="aleph main is red">aleph main is red<\/span>/);
-  expect(h).not.toContain('<span class="reason">koans main is red</span>');
+  expect(h).not.toContain("aleph main is red");
 });
 
-test("a server history entry for the attention status gives one event row; a different status gives two", () => {
-  const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
-  const base = { ...calm, asks: [ask], stuck: [], running: [], runningIssues: [], done: [], queued: [] };
-  const now = "2026-10-27T12:00:00Z", at = "2026-10-27T11:58:00Z";
-  const same = view.renderHerald({ ...base, now, herald: { history: [{ at, tone: "ask", label: "Ask", text: "Your attention is needed." }] } });
-  expect(same.match(/class="event-row/g)?.length).toBe(1);
-  const other = view.renderHerald({ ...base, now, herald: { history: [{ at, tone: "alert", label: "Alert", text: "Alert: Health: aleph main is red" }] } });
-  expect(other.match(/class="event-row/g)?.length).toBe(2);
-});
-
-test("the Herald merges the state's events and the streamed ones, each once, newest first, with the status rows", () => {
+test("the Herald merges the state's events and the streamed ones, each once, newest first, with the status rows", async () => {
   const ev = (at: string, action: string, o: object = {}) => (row({ at, by: "gate", subject: "aleph-5", action, on: ["aleph-5#1"], ...o }));
-  const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { history: [{ at: "2026-11-09T11:00:00Z", tone: "fine", label: "Fine", text: "Everything is fine" }], events: [ev("2026-11-09T11:30:00Z", "running")] } };
+  const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { history: [{ at: "2026-11-09T11:00:00Z", tone: "warning", label: "Wait", text: "The factory is paused" }], events: [ev("2026-11-09T11:30:00Z", "running")] } };
+  const v = await fresh();
+  v.renderHerald({ ...calm, now: "2026-11-09T10:00:00Z" });
   const merged = view.heraldEvents(s, [ev("2026-11-09T11:30:00Z", "running"), ev("2026-11-09T11:45:00Z", "failed", { note: "past its time box" })]);
   expect(merged.map((e: any) => e.action)).toEqual(["failed", "running"]);
-  const h = view.renderHerald(s);
-  const order = [...h.matchAll(/class="event-row (\w+)/g)].map((m) => m[1]);
+  const h = v.renderHerald(s);
+  const order = [...h.slice(h.indexOf("herald-feed")).matchAll(/class="event-row (\w+)/g)].map((m) => m[1]);
   // The fixture's status now (12:00) is newest, then the event at 11:30, then the status at 11:00.
-  expect(order).toEqual(["alert", "run", "fine"]);
+  expect(order).toEqual(["alert", "run", "warning"]);
   const line = view.eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
   // Two columns: the time, then one line: the chip, the issue linked, the title.
   expect(line).toContain('<div class="event-row stuck" data-by="gate"><span class="event-time">');
