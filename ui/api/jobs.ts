@@ -16,6 +16,7 @@ import { issueHref, parseId, shownId } from "../../lib/naming.ts";
 import { isSection, readSection } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
+import { runNowOf } from "./issues.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
@@ -91,18 +92,21 @@ interface JobDetail extends Job {
   open: boolean;
   /** The job's issue is parked. */
   parked?: boolean;
+  /** Run now for the job's issue (see `runNowOf`): null when it starts the issue, else why not. Absent when the issue is closed or has an open job. */
+  runNow?: string | null;
 }
 
 /** The item's spec and, for a part, its issue and its place among the parts. Nothing when the store cannot be read. */
-function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | "parent" | "parked"> {
+function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | "parent" | "parked" | "runNow"> {
   const place = loadRegistry()[repo];
   let doc: todos.Doc | null = null;
   try { doc = place ? readList(place) : null; } catch { return {}; }
   const item = doc && todos.find(doc, id);
   if (!doc || !item) return {};
-  const out: Pick<JobDetail, "spec" | "parent" | "parked"> = {};
+  const out: Pick<JobDetail, "spec" | "parent" | "parked" | "runNow"> = {};
   if (item.spec) out.spec = item.spec;
   if (todos.status(item) === "parked") out.parked = true;
+  if (place) Object.assign(out, runNowOf(place, doc, item));
   const up = parentOf(doc, item);
   if (!up) return out;
   const parts = partsOf(doc, up).map(todos.refOf);

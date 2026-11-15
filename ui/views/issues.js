@@ -470,10 +470,15 @@ const choose = (name, all, cur) => selectBox(name, name, !cur || all.includes(cu
 
 const FORM = 'form="issue-edit"';
 
+/** The Run now button of an issue (`runNow` from the API: null when it starts the issue, else the gate's text), or nothing when `runNow` is absent. A gate that binds shows it disabled, its text in a short note and as the title. */
+export const runNowButton = (repo, ref, runNow) => (runNow === undefined ? "" : `<span class="run-now">${runNow === null
+  ? `${actButton("Run now", { act: "run", path: `${issueApi(repo, ref)}/run`, label: "Run now" })}<span class="act-msg" role="status"></span>`
+  : `<button class="act" type="button" disabled title="${esc(runNow)}">Run now</button> <span class="quiet">${esc(runNow.split(":")[0])}</span>`}</span>`);
+
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
 const issueHead = (d, ref) => pageHead("", {
   after: `<h1>${editable(esc(d.title), inputBox("title", d.title, { attrs: ` class="title-edit" ${FORM} required aria-label="Title"` }))}</h1>`,
-  aside: actButton("Edit", { editor: "start" }, { cls: "view-only" }) +
+  aside: runNowButton(d.repo, ref, d.runNow) + actButton("Edit", { editor: "start" }, { cls: "view-only" }) +
   `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="act-msg" role="status"></span> ${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true, type: "submit" })}</form>` });
 
 /** The form that appends a note. */

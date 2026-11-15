@@ -99,7 +99,7 @@ beforeAll(() => {
   sh(base, "git", "clone", "-q", itemsRemote, items);
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
-  writeRepos({ fac: { path: fac }, oth: { path: oth } }, items);
+  writeRepos({ fac: { path: fac, sandbox: true }, oth: { path: oth } }, items);
   restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, LANGFUSE_PUBLIC_KEY: "", ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => { add(doc, "old title"); return true; }, true);
   // fac-9: a worker, a fix round with a reviewer, then a land.
@@ -125,6 +125,20 @@ afterEach(() => {
 afterAll(() => {
   restore();
   rmSync(base, { recursive: true, force: true });
+});
+
+describe("Run now on the Job page", () => {
+  test("a closed job whose issue is open has the Run now button, and an open running job has none", async () => {
+    const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "to run", { spec: "Do it." }).id)!.value;
+    const closed = run("", { job: `fac-${n}`, name: `issue.${n}`, repo: "fac", state: "dropped", started: ago(2), ended: ago(1), on: `fac-${n}` });
+    const j = await (await get(jp(closed))).json();
+    expect(j.runNow).toBeNull();
+    expect(v.renderJob(j)).toContain(`data-path="/api/issues/fac-${n}/run" data-label="Run now">Run now</button>`);
+    const open = run("", { job: `fac-${n}`, name: `issue.${n}`, repo: "fac", state: "running", started: ago(0.5), on: `fac-${n}` });
+    const o = await (await get(jp(open))).json();
+    expect(o.runNow).toBeUndefined();
+    expect(v.renderJob(o)).not.toContain("Run now");
+  });
 });
 
 describe("a land that found the job lock busy", () => {
@@ -414,6 +428,10 @@ describe("render", () => {
     expect(head({ open: true, state: "running" })).toContain('data-path="/api/jobs/fac-9%233/park"');
     expect(head({ open: false })).not.toContain("<button");
     expect(head({ open: true, item: undefined })).not.toContain("<button");
+  });
+  test("a job whose issue's gate binds shows the button disabled with the gate's text", () => {
+    const h = v.renderJob({ ...job, runNow: "Waits on issue.3" });
+    expect(h).toContain('<button class="act" type="button" disabled title="Waits on issue.3">Run now</button> <span class="quiet">Waits on issue.3</span>');
   });
   test("the Cancel dialog offers park, restart and drop, with park chosen", () => {
     const h = v.renderJob({ ...job, open: true, state: "running" });

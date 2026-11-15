@@ -2,6 +2,7 @@
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
 import { actButton, fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, pageOf, pageRows, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkHtml, scope } from "../lib.js";
+import { runNowButton } from "./issues.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
@@ -192,7 +193,7 @@ export function renderJob(j) {
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
-    pageHead(j.item?.title || j.title || id, { aside: nav + lifecycle(j) }) + `${pills}${next}${blocked}` +
+    pageHead(j.item?.title || j.title || id, { aside: nav + lifecycle(j) + (j.open ? "" : runNowButton(j.repo, j.item?.id, j.runNow)) }) + `${pills}${next}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? note(j.reason) : "") +
     jobKpis(j) + renderTimeline(jobSegments(j)) +
     (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +

@@ -15,7 +15,7 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
+import { afterOf, isBuildable, reader, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -28,7 +28,8 @@ import { issueHref, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { filed } from "./speed.ts";
 import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
-import { readHolds, suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
+import { issueFacts, mainRed, readHolds, suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
+import { issueDecision } from "../../jobs/lib/gates/issue-decision.ts";
 import { projectOf, repoIn } from "./scope.ts";
 
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
@@ -75,6 +76,19 @@ function jobRow(runs: ReturnType<typeof allJobs>[number]) {
   const last = counting(runs), r = last.run;
   const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
   return { id: last.id, name: r.name, state: r.state, kind: r.role, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
+}
+
+/**
+ * What `aleph dispatch <key>` (Run now) would do with an open issue that has no open job: `runNow` is null when it starts the issue, else the text of
+ * the gate that binds. Nothing for a closed issue or one with an open job, which have no Run now.
+ */
+export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue): { runNow?: string | null } {
+  if (todos.status(item) !== "open") return {};
+  const f = issueFacts(repo, item, allJobs(), Date.now(), reader({ fetch: false }));
+  if (f.open) return {};
+  if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${f.name} is not a queued issue` };
+  const d = issueDecision({ ...f, done: jobProjector().isDone, red: mainRed()(repo) });
+  return { runNow: d.kind === "ready" ? null : d.text };
 }
 
 function detail(params: Record<string, string>, url: URL): Response {
@@ -142,7 +156,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") ask = attend({ runs: [], issues: [card(repo.key, item, "waiting", stored)] }, []).items[0];
 
-  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 /**
@@ -237,6 +251,9 @@ const decide = post((b, params) => {
   return aleph(["issue", "decide", ...(o?.after ? ["--after", o.after] : []), "--", repo.key, String(n), note]);
 });
 
+/** `aleph dispatch <key>`: Run now starts the issue at once. The key never starts with `--`, so it is no flag; after `--` the CLI would read it as the tail and run the whole dispatch. */
+const runNow = post((_b, params) => aleph(["dispatch", `issue.${target(params).n}`]));
+
 /** Stop Waiting: removes the waits that never end, and keeps the others. */
 const unblock = post(async (_b, params) => {
   const { repo, n, item } = target(params);
@@ -288,6 +305,7 @@ export const routes: Routes = {
   "POST /api/issues/:id/retriage": answer("note", "Chris: run intake again"),
   "POST /api/issues/:id/rerun": answer("decide", "Chris: run it again"),
   "POST /api/issues/:id/checked": answer("done", "Chris: checked on the host"),
+  "POST /api/issues/:id/run": runNow,
   "POST /api/issues/:id/unblock": unblock,
   "POST /api/issues/:id/edit": edit,
   "POST /api/issues/:id/note": addNote,

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
-import { appendSuiteHistory } from "../jobs/lib/gates/factory-status.ts";
+import { appendSuiteHistory, setPaused } from "../jobs/lib/gates/factory-status.ts";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,7 @@ import * as todos from "../issues/lib/todo.ts";
 import { askOf, setAsk, refIn, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { updater } from "./updater.ts";
+import { run as alephRun } from "../jobs/commands.ts";
 
 // The fixtures change between tests, with no watcher to see it: each test starts with no kept answer.
 beforeEach(() => updater.reset());
@@ -89,7 +90,7 @@ beforeAll(async () => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   mkdirSync(join(base, "none"));
-  writeRepos({ fac: { path: repo }, oth: { path: join(base, "none") } }, items);
+  writeRepos({ fac: { path: repo, sandbox: true }, oth: { path: join(base, "none") } }, items);
   argvFile = join(base, "argv"); stdinFile = join(base, "stdin");
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\nprintf '%s\\n' "$@" > ${argvFile}\ncat > ${stdinFile}\necho '{"repo":"fac","added":7}'\n`);
@@ -243,6 +244,58 @@ describe("GET /api/issues/:id", () => {
     expect((await at("/api/issues/fac-99")).status).toBe(404);
     expect((await at("/api/issues/fac-1?project=oth")).status).toBe(404);
     expect((await at("/api/issues/fac-1?project=fac")).status).toBe(200);
+  });
+});
+
+describe("Run now", () => {
+  /** An issue with a spec, and one that waits on it: their ids. */
+  const pair = () => {
+    const ids: number[] = [];
+    writeList({ key: "fac" }, "seed", (doc) => {
+      const ready = add(doc, "ready one", { spec: "Do it." });
+      const waits = add(doc, "waits one", { spec: "Do it." });
+      waits.fm.after = [`issue.${ready.id}`];
+      ids.push(ready.id, waits.id);
+      return true;
+    }, true);
+    return ids;
+  };
+  test("GET /api/issues/:id: runNow is null for a ready issue and the gate's text for one that waits", async () => {
+    const [ready, waits] = pair();
+    expect((await getJson(`/api/issues/fac-${ready}`)).runNow).toBeNull();
+    expect((await getJson(`/api/issues/fac-${waits}`)).runNow).toBe(`Waits on issue.${ready}`);
+  });
+  test("a closed issue and one in a repo that is no sandbox have no Run now", async () => {
+    expect((await getJson("/api/issues/fac-2")).runNow).toBeUndefined();
+    const n = writeList({ key: "oth" }, "seed", (doc) => add(doc, "other spec", { spec: "Do it." }).id)!.value;
+    expect((await getJson(`/api/issues/oth-${n}`)).runNow).toBe(`issue.${n} is not a queued issue`);
+  });
+  test("POST /api/issues/:id/run runs `aleph dispatch issue.N`, and the real parser reads the key as the one issue to start", async () => {
+    const [ready, waits] = pair();
+    rmSync(argvFile, { force: true });
+    expect((await at(`/api/issues/fac-${waits}/run`, { method: "POST" })).status).toBe(403);
+    expect((await at("/api/issues/fac-99/run", { method: "POST", headers: { "x-aleph-ui": "1" } })).status).toBe(404);
+    expect(existsSync(argvFile)).toBe(false);
+    const r = await at(`/api/issues/fac-${waits}/run`, { method: "POST", headers: { "x-aleph-ui": "1" } });
+    expect(r.status).toBe(200);
+    const argv = readFileSync(argvFile, "utf8").trim().split("\n");
+    expect(argv).toEqual(["dispatch", `issue.${waits}`]);
+    // A `--` before the key makes it the tail: the parse then runs the whole dispatch (paused here, so it starts nothing), not Run now for the issue.
+    setPaused(true);
+    try {
+      const err: string[] = [];
+      const out = await alephRun(argv, { stderr: (t) => err.push(t) });
+      expect([out.code, err.join("")]).toEqual([1, `Waits on issue.${ready}\n`]);
+    } finally { setPaused(false); }
+  });
+  test("the Issue page has an enabled Run now button when runNow is null, and a disabled one with the reason when it is set", async () => {
+    const [ready, waits] = pair();
+    const on = v.renderIssue(await getJson(`/api/issues/fac-${ready}`));
+    expect(on).toContain(`<button class="act" type="button" data-act="run" data-path="/api/issues/fac-${ready}/run" data-label="Run now">Run now</button>`);
+    const off = v.renderIssue(await getJson(`/api/issues/fac-${waits}`));
+    expect(off).toContain(`<button class="act" type="button" disabled title="Waits on issue.${ready}">Run now</button> <span class="quiet">Waits on issue.${ready}</span>`);
+    expect(off).not.toContain('data-act="run"');
+    expect(v.renderIssue(await getJson("/api/issues/fac-2"))).not.toContain("Run now");
   });
 });
 
