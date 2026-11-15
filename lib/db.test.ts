@@ -20,7 +20,7 @@ test("a file at user_version 1 gains only the new tables and the event size", ()
   old.run("CREATE TABLE counters (kind TEXT PRIMARY KEY, last INTEGER NOT NULL)");
   old.run("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT)");
-  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT)");
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT)");
   old.run("CREATE VIEW event_rows AS SELECT * FROM events");
   old.run("CREATE TABLE issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)");
   old.run("INSERT INTO settings VALUES ('keep', '1')");
@@ -41,7 +41,7 @@ test("a file at user_version 3 has the Ask reason review read as review-held", (
   const old = new Database(file, { create: true });
   old.run("CREATE TABLE issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)");
   old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT, tier TEXT)");
-  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT)");
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT)");
   old.run("CREATE VIEW event_rows AS SELECT * FROM events");
   old.run("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   old.run("CREATE TABLE usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, five_hour REAL, seven_day REAL NOT NULL, seven_day_resets_at TEXT)");
@@ -100,7 +100,7 @@ test("a file at user_version 4 loses the leaked fixture events and usage rows", 
   const file = join(mkdtempSync(join(tmpdir(), "aleph-db-")), "v4.db");
   const old = new Database(file, { create: true });
   old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT, tier TEXT)");
-  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT)");
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT)");
   old.run("CREATE VIEW event_rows AS SELECT * FROM events");
   old.run("CREATE TABLE issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)");
   old.run("CREATE TABLE usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, five_hour REAL, seven_day REAL NOT NULL, seven_day_resets_at TEXT)");
