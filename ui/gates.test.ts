@@ -82,7 +82,7 @@ test("the body of /api/automation has every section, one rule per Ask reason wit
   expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "capEnv", "gated", "held", "log", "metrics", "monitor", "now", "repoHeld", "rules", "schedules", "settings"]);
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
-  for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
+  for (const r of d.rules) { expect(r.mode).not.toBe(""); expect(r.mode).toBe(ASK_REASONS[r.reason].always); }
   const by = (k: string) => d.rules.find((r: any) => r.reason === k);
   expect(by("rescue").granted.action).toBe("resolve");
   expect(by("proposal-claude-md").places).toEqual(["proposal-claude-md:global"]);
@@ -460,7 +460,7 @@ test("a stored firefighter grant for held-path is dead: rules() shows no grant a
   const saved = getJson("settings", "always", {});
   try {
     putJson("settings", "always", { "held-path": { action: "firefighter", at: ago(5) } });
-    const row = rules().find((x) => x.reason === "held-path")!;
+    const row: any = rules().find((x) => x.reason === "held-path")!;
     expect(row.granted).toBeNull();
     const h = gates.renderRules({ rules: [row] });
     expect(h).not.toContain("always.json grants");
@@ -479,6 +479,17 @@ test("a reason granted user shows User in Decides, and the proposal-skill row of
     expect(held).toMatch(/data-value="user" aria-pressed="true">User</);
     const skill = gates.renderRules({ rules: all.filter((x) => x.reason === "proposal-skill") });
     expect(skill).not.toContain('data-value="user"');
+  } finally { putJson("settings", "always", saved); }
+});
+
+test("a grant of reason:project is listed in that reason's row with its project, and not as the row's own grant", () => {
+  const saved = getJson("settings", "always", {});
+  try {
+    putJson("settings", "always", { "held-path:aleph": { action: "approve", at: ago(5) } });
+    const row: any = rules().find((x) => x.reason === "held-path")!;
+    expect(row.projects).toEqual([{ project: "aleph", action: "approve", at: ago(5) }]);
+    expect(row.granted).toBeNull();
+    expect((rules().find((x) => x.reason === "review-held") as any).projects).toEqual([]);
   } finally { putJson("settings", "always", saved); }
 });
 

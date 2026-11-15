@@ -78,7 +78,8 @@ export function rules(entries: LogEntry[] = [], asks = askHistory(), now = Date.
       reason, ...reasonText(reason), mode: r.always, fired: mine.length, decided, outcome,
       granted: g ? { action: g.action, at: g.at } : null,
       ...(TIMED.includes(reason) ? { timeout: timeouts[reason]?.minutes ?? 0, noAnswer: timeouts[reason]?.then ?? "pick" } : {}),
-      ...(perPlace ? { places: Object.keys(granted).filter((k) => k.startsWith(`${reason}:`)) } : {}),
+      ...(perPlace ? { places: Object.keys(granted).filter((k) => k.startsWith(`${reason}:`)) }
+        : { projects: Object.entries(granted).filter(([k]) => k.startsWith(`${reason}:`)).map(([k, x]) => ({ project: k.slice(reason.length + 1), action: x.action, at: x.at })) }),
     };
   });
 }

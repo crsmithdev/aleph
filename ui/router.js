@@ -404,6 +404,12 @@ export async function start() {
     if (f) f.value ? denyReasons.set(`${f.dataset.repo}-${f.dataset.id}`, f.value) : denyReasons.delete(`${f.dataset.repo}-${f.dataset.id}`);
   });
 
+  // The Always hint's revoke command names the key the picked scope grants.
+  document.addEventListener("change", (e) => {
+    const s = e.target.closest && e.target.closest("select.scope"), c = s?.closest(".choice")?.querySelector(".effect code");
+    if (c) c.textContent = `aleph always revoke ${s.value}`;
+  });
+
   // Enter in a reason or answer box does what the box's Confirm button does.
   document.addEventListener("keydown", (e) => {
     const f = e.key === "Enter" && e.target.closest && e.target.closest("input.reason");
@@ -454,7 +460,7 @@ async function dispatch(e) {
   clearTimeout(b._t);
   if (act === "always") {
     // Grant the standing permission, then click the row's first action (its second-click confirm applies).
-    const { reason, action, first } = b.dataset;
+    const { action, first } = b.dataset, reason = b.parentElement.querySelector("select.scope")?.value ?? b.dataset.reason;
     b.disabled = true;
     try {
       await postJson(`/api/automation/rules/${encodeURIComponent(reason)}/grant`, { action });

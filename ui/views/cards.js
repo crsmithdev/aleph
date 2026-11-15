@@ -103,7 +103,11 @@ export function askCard(i, now = new Date().toISOString()) {
   };
   const name = i.key?.startsWith("run:") ? i.id : undefined;
   const choices = acts.map((a) => askChoice(a, inputFor(a), name));
-  if (i.always) choices.splice(acts.length ? 1 : 0, 0, `<div class="choice">${actButton(i.always.label, { act: "always", reason: i.always.reason ?? i.reason, action: i.always.action, first: acts[0]?.act ?? "", label: i.always.label }, { kind: "always" })}<div class="choice-text"><span class="effect">${codeText(i.always.hint)}</span></div></div>`);
+  if (i.always) {
+    const { reason: own, scope, risk } = i.always, kinds = own ? "" : [["project", i.repo], ["all", "All"]].filter(([, t]) => t);
+    const pick = kinds ? `<select class="scope" aria-label="Scope of Always">${kinds.map(([k, t]) => `<option value="${esc(k === "project" ? `${i.reason}:${i.repo}` : i.reason)}"${k === scope ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>` : "";
+    choices.splice(acts.length ? 1 : 0, 0, `<div class="choice"><span class="always-pick">${actButton(i.always.label, { act: "always", reason: own ?? i.reason, action: i.always.action, first: acts[0]?.act ?? "", label: i.always.label }, { kind: "always" })}${pick}</span><div class="choice-text"><span class="effect">${codeText(i.always.hint)}</span>${risk ? ` <span class="effect risk">${esc(risk)}</span>` : ""}</div></div>`);
+  }
   const key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });

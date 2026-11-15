@@ -368,6 +368,9 @@ p.note { margin: var(--sp-4) 0; font-size: var(--fs-sm); color: var(--ink-2); }
 a.act { text-decoration: none; }
 .choice .act { white-space: normal; text-align: center; }
 .issue-row[data-card] .act.always { border-color: var(--k); color: var(--k); }
+.always-pick { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); }
+.always-pick select { min-height: var(--ctl-h); }
+.choice .risk { color: var(--need); }
 .issue-row .choices > .act-msg { grid-column: 1 / -1; }
 @media (max-width: 720px) { .choice .act { justify-self: start; } }
 .issue-row[data-card] .act { font: var(--fw-mid) var(--fs-md) var(--sans); padding: var(--sp-8) var(--sp-16); min-height: 40px; border-radius: var(--r-ctl); background: var(--surface); color: var(--ink); border: 1px solid var(--rule); }

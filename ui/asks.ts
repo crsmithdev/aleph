@@ -23,7 +23,7 @@ export interface AskItem {
   card: Card; label: string; headline: string; tag: string;
   /** The stored situation when the Ask holds one, else the fixed problem text. */ situation: string;
   /** True once the director escalated the Ask: `situation` and the hints are its case text. Until then the row offers no action. */ escalated: boolean;
-  actions: Action[]; /** What the limits moved out of the card's text, and the director's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
+  actions: Action[]; /** What the limits moved out of the card's text, and the director's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string; /** What the grant covers by default: the item's project or every project. */ scope: "project" | "all"; /** The one-line risk of the grant, for the reasons that act on work or code. */ risk?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
   /** The priority of the issue or run's item it is about; none for a proposal. */
@@ -194,19 +194,29 @@ function detailsFor(c: Ctx): Details {
   return d;
 }
 
+/** The risk of an Always on a reason that acts on work or code; it defaults to one project. */
+const RISK: Record<string, string> = {
+  "held-path": "Lands held-path changes unseen.",
+  "review-held": "Lands work the reviewer held.",
+  "no-commit": "Restarts a goal that commits nothing.",
+  "run-cap": "Restarts a goal at its hourly cap.",
+};
+
 /** The auto-yes choice: the first choice's label with the mark, and a hint that names the rule it grants. No rule, no choice. */
-function alwaysFor(reason: string, action: string, first: string | undefined): AskItem["always"] {
+function alwaysFor(reason: string, action: string, first: string | undefined, repo: string | undefined): AskItem["always"] {
   if (!action) return undefined;
   const label = `${first ?? action} [auto-yes]`;
-  const revoke = `Revoke with \`aleph always revoke ${reason}\`.`;
-  if (action === "resolve") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking. ${revoke}` };
-  return { label, action, hint: `Does this one now. From now on, the factory does this without asking. ${revoke}` };
+  const risk = RISK[reason];
+  const scope = risk && repo ? "project" : "all";
+  const revoke = `Revoke with \`aleph always revoke ${scope === "project" ? `${reason}:${repo}` : reason}\`.`;
+  if (action === "resolve") return { label, action, scope, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking. ${revoke}` };
+  return { label, action, scope, ...(risk ? { risk } : {}), hint: `Does this one now. From now on, the factory does this without asking. ${revoke}` };
 }
 
 function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
   const key = standingKey(l);
   return {
-    label: `${words(l).approve} [auto-yes]`, action: "approve", reason: key,
+    label: `${words(l).approve} [auto-yes]`, action: "approve", reason: key, scope: "all",
     hint: `From now on, the factory reopens the issue for every ${words(l).every} without asking. Revoke with \`aleph always revoke ${key}\`.`,
   };
 }
@@ -230,7 +240,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   const headline = (escalated && askIn(c)?.headline?.trim()) || title;
   return {
     key, reason, card: r.card, label: r.card[0].toUpperCase() + r.card.slice(1), headline, tag: escalated ? word("ask", reason) : word("actor", "Director"), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
-    ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
+    ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label, repo) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };
 }

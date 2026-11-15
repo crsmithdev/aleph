@@ -72,6 +72,22 @@ describe("asks", () => {
     });
   }
 
+  test("every escalated item has an Always on the reason's first verb; the risky reasons add a risk line and default to the project, the rest to all", () => {
+    STORE = { situation: "Stored situation." };
+    try {
+      for (const [reason, r] of Object.entries(ASK_REASONS)) {
+        const a = CASES[reason]()[0].always!;
+        expect([reason, a.action]).toEqual([reason, r.actions[0]]);
+        const risky = ["held-path", "review-held", "no-commit", "run-cap"].includes(reason);
+        expect([reason, a.scope]).toEqual([reason, risky ? "project" : "all"]);
+        expect([reason, a.hint]).toEqual([reason, expect.stringContaining(`Revoke with \`aleph always revoke ${a.reason ?? (risky ? `${reason}:aleph` : reason)}\`.`)]);
+        if (risky) expect(a.risk).toMatch(/^[^.]+\.$/);
+        else expect(a.risk).toBeUndefined();
+      }
+      expect(CASES["held-path"]()[0].repo).toBe("aleph");
+    } finally { STORE = undefined; }
+  });
+
   test("each action carries the POST its button sends", () => {
     STORE = { situation: "Stored situation." };
     try {
