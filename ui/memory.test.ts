@@ -360,7 +360,8 @@ test("the page is the search, the freshness filter, six type tiles, the results 
   expect(out).not.toContain('<section class="card" id="links"');
   expect(out).not.toContain("<span>Linked from</span>");
   expect(nh).toContain(panel("note", "Note", `<div class="md">${md("see [[U]]")}</div>`));
-  for (const t of ["<dt>Kind</dt>", "<dt>Written by</dt>", "<dt>Last Verified</dt>"]) expect(nh).toContain(t);
+  for (const t of ["<dt>Kind</dt>", "<dt>Written by</dt>", "<dt>Last verified</dt>"]) expect(nh).toContain(t);
+  expect(nh).not.toContain("<dt>Last Verified</dt>");
   expect(nh).not.toContain("<dt>kind</dt>");
 });
 

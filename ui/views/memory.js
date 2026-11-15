@@ -422,9 +422,8 @@ function mount(root, m) {
   search();
 }
 
-// A frontmatter key in Title Case: written_by is "Written by", last_verified is "Last Verified" (docs/design.md, Words).
-const SMALL = new Set("a an the and but or nor as at by for from in of on per to vs with".split(" "));
-const titleKey = (k) => k.split(/[_-]/).map((w, i) => (i && SMALL.has(w) ? w : w[0].toUpperCase() + w.slice(1))).join(" ");
+// A frontmatter key in sentence case: written_by is "Written by", last_verified is "Last verified" (docs/design.md, Words).
+const titleKey = (k) => { const s = k.split(/[_-]/).join(" "); return s[0].toUpperCase() + s.slice(1); };
 const crumbs = (t) => `<ul>${t.map((n) => `<li>${link(n.title)}${meta([esc(n.kind), esc(n.scope)])}</li>`).join("")}</ul>`;
 
 /** One note: frontmatter, body (Markdown, [[links]] to notes), outgoing links and backlinks. A panel with no links is left out. */
