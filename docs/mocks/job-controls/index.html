@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mock: job lifecycle controls</title>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style>
+  /* Mock chrome only: the switcher bar and the notes. Everything under it uses app.css as the UI does. */
+  body { margin: 0; }
+  .mockbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+    padding: 10px 24px; background: var(--sunk); border-bottom: 1px solid var(--rule); font: 500 13px var(--sans); }
+  .mockbar .grp { display: flex; gap: 4px; align-items: center; }
+  .mockbar .lbl { color: var(--muted); margin-right: 4px; }
+  .mockbar button { font: inherit; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .mockbar button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 8px 24px 60px; }
+  .mocknote { margin: 10px 0 0; padding: 10px 14px; border-left: 3px solid var(--run); background: var(--surface); font: 13px/1.5 var(--sans); color: var(--ink-2); }
+  .mocknote b { color: var(--ink); }
+
+  /* Option B: the lifecycle strip. */
+  .lc { display: flex; align-items: center; gap: 16px; margin: 12px 0 4px; padding: 10px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+  .lc ol { display: flex; gap: 0; margin: 0; padding: 0; list-style: none; font: 500 12px var(--sans); }
+  .lc li { display: flex; align-items: center; color: var(--muted); }
+  .lc li + li::before { content: ""; width: 26px; height: 1px; margin: 0 8px; background: var(--rule); }
+  .lc li i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid currentColor; margin-right: 6px; }
+  .lc li.past { color: var(--ink-2); } .lc li.past i { background: currentColor; }
+  .lc li.now { color: var(--ink); font-weight: 600; } .lc li.now i { background: var(--k, var(--run)); border-color: var(--k, var(--run)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k, var(--run)) 25%, transparent); }
+  .lc .why { color: var(--muted); font: 12px var(--sans); }
+  .lc .acts { margin-left: auto; display: flex; gap: 8px; }
+
+  /* Option C: the overflow menu. */
+  .more { position: relative; display: inline-block; }
+  .more .menu { position: absolute; right: 0; top: calc(100% + 4px); min-width: 230px; padding: 4px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); box-shadow: 0 6px 24px rgb(0 0 0 / .18); z-index: 5; }
+  .more .menu button { display: block; width: 100%; text-align: left; padding: 7px 10px; border: 0; background: none; color: var(--ink); font: 13px var(--sans); border-radius: 6px; cursor: pointer; }
+  .more .menu button:hover { background: var(--sunk); }
+  .more .menu button.danger { color: var(--stuck); }
+  .more .menu button:disabled { opacity: .45; cursor: not-allowed; }
+  .more .menu small { display: block; color: var(--muted); font-size: 11px; }
+  .more .menu hr { border: 0; border-top: 1px solid var(--rule); margin: 4px 0; }
+
+  .act[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+  .hold { font: 12px var(--sans); color: var(--muted); margin: 6px 0 0; }
+  .hold code { font-size: 11px; }
+
+  /* The cancel dialog. */
+  dialog { border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); color: var(--ink); padding: 18px 20px; width: 440px; font: 14px var(--sans); }
+  dialog::backdrop { background: rgb(0 0 0 / .35); }
+  dialog h3 { margin: 0 0 10px; font: 600 15px var(--sans); }
+  dialog label { display: flex; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  dialog label:hover { background: var(--sunk); }
+  dialog label small { display: block; color: var(--muted); font-size: 12px; }
+  dialog textarea { width: 100%; box-sizing: border-box; margin-top: 10px; min-height: 54px; font: 13px var(--sans); background: var(--sunk); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; }
+  dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  .decide { margin-top: 28px; }
+  .decide table { border-collapse: collapse; width: 100%; font: 13px/1.45 var(--sans); }
+  .decide th, .decide td { text-align: left; vertical-align: top; padding: 8px 10px; border-top: 1px solid var(--rule); }
+  .decide th { color: var(--muted); font-weight: 500; }
+  .decide td:first-child { font-weight: 600; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="mockbar">
+  <div class="grp" data-k="opt"><span class="lbl">Layout</span>
+    <button data-v="A">A · header buttons</button><button data-v="B">B · lifecycle strip</button><button data-v="C">C · one action + menu</button></div>
+  <div class="grp" data-k="state"><span class="lbl">Job state</span>
+    <button data-v="queued">queued</button><button data-v="blocked">queued, waits on a dep</button><button data-v="running">running</button>
+    <button data-v="paused">paused</button><button data-v="waiting">waiting for you</button><button data-v="landed">landed</button></div>
+  <div class="grp" data-k="pause"><span class="lbl">Pause means</span>
+    <button data-v="finish">finish, no land</button><button data-v="stop">stop now, keep branch</button></div>
+</div>
+<div class="wrap"><div id="note" class="mocknote"></div><div id="page"></div>
+<section class="decide dp-panel"><div class="dp-ph"><h2>Open decisions</h2></div>
+<table>
+<tr><th></th><th>Options</th><th>Recommendation</th></tr>
+<tr><td>Pause vs parked</td><td>(1) Pause on the job page sets the issue's <code>parked</code>, one state under two labels. (2) Rename <code>parked</code> to <code>paused</code> everywhere. (3) Keep two states.</td><td>(2), with one fix: the factory-wide <code>aleph pause</code> already uses <code>paused</code> as a hold word. That one becomes <code>stopped</code> or keeps <code>paused</code> with the scope in the text ("factory paused").</td></tr>
+<tr><td>Pause a live run</td><td>Finish, no land: the run goes to its end, the branch waits (aleph-1964 already decided this for parked). Stop now: kill the run, keep the worktree and branch, Resume starts a fix round on it.</td><td>Stop now. "Pause" that lets the agent spend 20 more minutes reads as broken. Not verified: that a fix round can start from a kept branch after a kill.</td></tr>
+<tr><td>Cancel</td><td><code>aleph drop</code> today stops the runs and removes the branch, but the issue stays open, so the dispatch starts it again. Cancel must say what happens to the issue.</td><td>One Cancel, a dialog with three outcomes: restart, park, drop the issue. Default: park.</td></tr>
+<tr><td>Run now</td><td>Skips the priority order and the live cap. It cannot skip <code>after</code> (an unfinished dep). Busy file, red baseline and the factory pause are open.</td><td>Skip order and live cap only. Show it disabled with the gate that binds.</td></tr>
+<tr><td>Where Run now lives</td><td>A job page exists once a job starts. A queued issue with no job yet has only its issue page.</td><td>The same control set on the issue page for an issue with no job.</td></tr>
+</table></section>
+</div>
+
+<dialog id="cancel"><form method="dialog">
+  <h3>Cancel job issue.2852</h3>
+  <label><input type="radio" name="then" value="park" checked><span>Cancel and park the issue<small>The run stops. The branch goes. The issue waits for Resume.</small></span></label>
+  <label><input type="radio" name="then" value="restart"><span>Restart<small>The run stops. The branch goes. The issue goes back to the queue. This is <code>aleph drop</code> today.</small></span></label>
+  <label><input type="radio" name="then" value="drop"><span>Cancel and drop the issue<small>The run stops. The branch goes. The issue closes as dropped.</small></span></label>
+  <textarea placeholder="Reason (optional)"></textarea>
+  <div class="row"><button class="act" value="no">Keep running</button><button class="act danger" value="yes">Cancel job</button></div>
+</form></dialog>
+
+<script type="module">
+const page = await (await fetch("page.html")).text();
+const st = { opt: "A", state: "running", pause: "stop" };
+const B = (label, o = {}) => `<button class="act${o.primary ? " primary" : ""}${o.danger ? " danger" : ""}" type="button"${o.off ? ` aria-disabled="true" title="${o.off}"` : ""}${o.cancel ? " data-cancel" : ""}>${label}</button>`;
+const nav = `<a class="act" href="#">Issue</a><a class="act" href="#">Trace</a>`;
+
+// Per state: the badge, the tone, the line under the badges, and the lifecycle actions, primary first.
+const S = {
+  queued:  { badge: "queued", tone: "quiet", line: () => `<span class="quiet">Held</span> live cap 3 / 3 · 2nd of 4 in the queue`,
+             acts: [["Run now", { primary: true }], ["Pause"], ["Cancel", { danger: true, cancel: true }]] },
+  blocked: { badge: "queued", tone: "quiet", line: () => `<span class="quiet">Waits on</span> <a href="#">a2849</a> Split the dispatch lock (running)`,
+             acts: [["Run now", { primary: true, off: "Waits on a2849: it must land first" }], ["Pause"], ["Cancel", { danger: true, cancel: true }]] },
+  running: { badge: "running", tone: "run", line: () => `<span class="quiet">Now</span> implement, round 3 · 12m 40s`,
+             acts: [["Pause"], ["Cancel", { danger: true, cancel: true }]] },
+  paused:  { badge: "paused", tone: "parked", line: () => st.pause === "stop"
+               ? `<span class="quiet">Paused</span> 18:31 by you · run stopped at round 3 · branch kept at <code>4be1c0a</code>`
+               : `<span class="quiet">Paused</span> 18:31 by you · round 3 runs to its end, then waits · it will not land`,
+             acts: [["Resume", { primary: true }], ["Cancel", { danger: true, cancel: true }]] },
+  waiting: { badge: "waiting", tone: "need", line: () => `<span class="quiet">Next</span> land: the review passed, a held path needs you`,
+             acts: [["Land", { primary: true }], ["Recheck"], ["Pause"], ["Cancel", { danger: true, cancel: true }]] },
+  landed:  { badge: "landed", tone: "done", line: () => `<span class="quiet">Landed</span> as <code>bf4265d</code> 18:47`, acts: [] },
+};
+const STEPS = ["queued", "running", "waiting", "landed"];
+const stepOf = { queued: 0, blocked: 0, running: 1, paused: 1, waiting: 2, landed: 3 };
+
+function render() {
+  const s = S[st.state], acts = s.acts.map(([l, o]) => B(l, o)).join("");
+  const pills = `<div class="status-row"><span class="badge ${s.tone}">${s.badge}</span><span class="badge quiet">medium</span><span class="idp">issue.2852</span></div>`;
+  let aside = nav, slot = pills;
+  if (st.opt === "A") {
+    aside = nav + (acts ? `<span style="width:14px"></span>` + acts : "");
+    slot += `<p class="q">${s.line()}</p>`;
+  } else if (st.opt === "B") {
+    const at = stepOf[st.state], k = { run: "var(--run)", need: "var(--need)", done: "var(--done, var(--run))", quiet: "var(--muted)", parked: "var(--muted)" }[s.tone];
+    const steps = STEPS.map((n, i) => `<li class="${i < at ? "past" : i === at ? "now" : ""}" ${i === at ? `style="--k:${k}"` : ""}><i></i>${i === at && st.state === "paused" ? "paused" : n}</li>`).join("");
+    slot += `<div class="lc"><ol>${steps}</ol><span class="why">${s.line()}</span><div class="acts">${acts}</div></div>`;
+  } else {
+    const [first, ...rest] = s.acts;
+    const menu = rest.length || first ? `<span class="more"><button class="act" type="button" data-more aria-label="More">⋯</button><div class="menu" hidden>` +
+      rest.map(([l, o = {}]) => (o.danger ? "<hr>" : "") + `<button type="button" class="${o.danger ? "danger" : ""}"${o.cancel ? " data-cancel" : ""}>${l}<small>${HELP[l] ?? ""}</small></button>`).join("") + `</div></span>` : "";
+    aside = nav + (first ? `<span style="width:14px"></span>` + B(first[0], { ...first[1], primary: !first[1]?.danger }) + (rest.length ? menu : "") : "");
+    slot += `<p class="q">${s.line()}</p>`;
+  }
+  document.getElementById("page").innerHTML = page.replace('<div class="aside" id="aside"></div>', `<div class="aside">${aside}</div>`).replace('<div id="slot"></div>', slot);
+  document.getElementById("note").innerHTML = NOTES[st.opt];
+  for (const g of document.querySelectorAll(".mockbar .grp")) for (const b of g.querySelectorAll("button")) b.setAttribute("aria-pressed", String(st[g.dataset.k] === b.dataset.v));
+}
+const HELP = { Pause: "Stop work. Resume picks it up.", Recheck: "Run the checks again", Cancel: "Choose what happens to the issue" };
+const NOTES = {
+  A: "<b>A · header buttons.</b> The lifecycle buttons replace the copy-command chips in the header, beside Issue and Trace. Each state shows only the buttons that apply. One line under the badges says why the job is where it is. Fewest new parts.",
+  B: "<b>B · lifecycle strip.</b> A strip under the title shows where the job is in queued, running, waiting, landed, with the reason and the actions on the same line. Most legible state; one new component.",
+  C: "<b>C · one action + menu.</b> The header shows the one next action (Run now, Pause, Resume, Land); the rest sit in a ⋯ menu with a line of help each, and Cancel is last, apart. Calmest header; the second action costs a click.",
+};
+document.querySelector(".mockbar").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-v]"); if (!b) return;
+  st[b.closest(".grp").dataset.k] = b.dataset.v; render();
+});
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-cancel]")) return document.getElementById("cancel").showModal();
+  const m = e.target.closest("[data-more]");
+  for (const x of document.querySelectorAll(".more .menu")) if (!m || x !== m.nextElementSibling) x.hidden = true;
+  if (m) m.nextElementSibling.hidden = !m.nextElementSibling.hidden;
+});
+render();
+</script>
+</body>
+</html>
