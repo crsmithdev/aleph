@@ -218,7 +218,7 @@ const data = () => ({
 
 test("the view draws the sections in order, a closed gate, and an Edit row with only Director and the reason's mode", () => {
   const h = gates.renderGates(data());
-  const order = ["Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
+  const order = ["Schedules", "Controls", "Rules", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   expect(h).not.toContain(">Waiting for the User</h2>");
   expect(h).not.toContain('id="gates-waiting"');
@@ -520,7 +520,9 @@ test("the Automation page has no explaining aside; the controls panel holds the 
     expect(panel).toContain('data-cap="live"');
     expect(panel).toContain('data-cap="run"');
     expect(h).not.toContain("gates-two");
-    expect(h).not.toContain('<div class="pair">');
+    expect(h.match(/<div class="pair">/g)).toHaveLength(1);
+    const pair = h.slice(h.indexOf('<div class="pair">'));
+    expect(pair.slice(0, pair.indexOf("</div></section></div>"))).toMatch(/id="gates-schedules".*id="gates-caps"/s);
     expect(h.indexOf('id="gates-caps"')).toBeLessThan(h.indexOf('id="gates-held"'));
   }
   const h = gates.renderGates(data());
@@ -677,28 +679,16 @@ test("the body has the tick, the suite and the monitor with their last run from 
   expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d", hour: 0 }]);
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
   expect(h).toContain(">Schedules</h2>");
-  expect(h).toContain(`<th>Schedule</th><th>Every</th><th>Result</th><th class="num">Last Run</th>`);
-  expect(h).toContain('<td class="wide" title="tick">tick</td>');
-  // The table is text: no control, no disabled and no Edit step. The intervals and the monitor's hour are one settings list below it.
-  const cells = h.match(/<td[^>]*>.*?<\/td>/g)!;
-  expect(cells).toHaveLength(12);
-  expect(cells.filter((c: string) => /<(input|select|button)/.test(c))).toEqual([]);
-  expect(h).not.toContain("disabled");
-  expect(h).not.toContain("data-edit");
+  // One settings list: no table, a row per schedule with its control and Save, and a miss text for the run it has not had.
+  expect(h).not.toContain("<table");
   expect(h.match(/<div class="settings"/g)).toHaveLength(1);
+  expect(h.match(/<form class="srow" data-schedule="(tick|suite|monitor)"/g)).toHaveLength(3);
+  expect(h.match(/<form class="srow"/g)).toHaveLength(3);
+  expect(h.match(/<small class="hint">no run<\/small>/g)).toHaveLength(3);
   expect(h).toMatch(/<form class="srow" data-schedule="tick"><label class="sl" for="every-tick">Tick every<\/label><span class="sctl"><input name="n" type="number" id="every-tick" value="1"[^>]*><select name="unit"[^>]*><option value="s">seconds<\/option><option value="min" selected>minutes.*?<button[^>]*type="submit"[^>]*>Save<\/button>/);
   expect(h).toMatch(/<form class="srow" data-schedule="suite"><label class="sl" for="every-suite">Suite every<\/label>.*<input name="n"[^>]*id="every-suite" value="1".*<option value="h" selected>hours/);
-  // The monitor runs once a day from its hour: its Every cell stays text and its hour is a setting beside the intervals.
   expect(h).toMatch(/<form class="srow" data-schedule="monitor"><label class="sl" for="hour-monitor">Monitor hour<\/label><span class="sctl"><input name="n" type="number" id="hour-monitor" value="0"[^>]*><button[^>]*type="submit"[^>]*>Save<\/button>/);
-  expect(h.match(/<form class="srow"/g)).toHaveLength(3);
-  expect(h).toContain("<td>1d</td>");
-  // A tick with no timer installed has no interval: its Every cell is miss(), not an empty cell.
-  expect(gates.renderSchedules({ schedules: [{ name: "tick", last: null, result: null, every: null }] })).toContain(`<td><span title="no timer">–</span></td>`);
   expect(h).not.toContain("has not run");
-  expect(h.indexOf("Last Run")).toBeLessThan(h.indexOf("<tbody>"));
-  const tbody = h.split("<tbody>")[1].split("</tbody>")[0];
-  expect(tbody.match(/<tr>/g)).toHaveLength(3);
-  expect(tbody).toContain(`<td class="time"></td></tr>`);
   const ran = { "suite plain": { last: ago(11), result: "green" }, "suite held": { last: ago(10), result: "green" }, monitor: { last: ago(50), result: "7 findings" }, ci: { last: ago(9), result: null }, firefight: { last: ago(2), result: null } };
   for (const [k, v] of Object.entries(ran)) setTick(k, v);
   putJson("state", "tick.missed", ["stalled:x"]);
@@ -711,7 +701,8 @@ test("the body has the tick, the suite and the monitor with their last run from 
     ]);
     expect(gates.renderSchedules({ ...(await body()), schedules: d })).not.toContain("has not run");
     const t = gates.renderSchedules({ ...(await body()), schedules: d });
-    expect(t).toContain("<td>7 findings</td>");
+    const hint = t.match(/data-schedule="monitor".*?<small class="hint">(.*?)<\/small>/)![1];
+    expect(hint).toBe(`7 findings · ${when(ago(50))}`);
   } finally {
     conn().run("DELETE FROM tick");
     conn().run("DELETE FROM state");

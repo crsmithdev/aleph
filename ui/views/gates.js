@@ -36,13 +36,13 @@ export const BY = Object.fromEntries(["human", "rule", "director", "firefighter"
 
 const PAGE = 50;
 
-const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"],
-  ["rules", "Rules"], ["gates-caps", "Controls"], ["gates-held", "Held Paths"], ["gates-log", "Log"]];
+const CONTENTS = [["gates-schedules", "Schedules"], ["gates-caps", "Controls"], ["monitor", "Monitor"],
+  ["rules", "Rules"], ["gates-held", "Held Paths"], ["gates-log", "Log"]];
 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { aside: scope(q).bar() })}` + toc(CONTENTS,
-    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + renderSchedules(d) + renderMonitor(d) + renderRules(d) +
-    renderCaps(d) + renderHeld(d) + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
+    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + `<div class="pair">${renderSchedules(d)}${renderCaps(d)}</div>` + renderMonitor(d) + renderRules(d) +
+    renderHeld(d) + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
 }
 
 /** The environment variable that overrides each key of the `caps` setting, as jobs/lib/infra/settings.ts names it. */
@@ -99,24 +99,23 @@ export function renderMonitor(d) {
 const UNITS = [["s", "seconds"], ["min", "minutes"], ["h", "hours"]];
 const splitEvery = (every) => { const m = /^([1-9]\d*)(s|min|h)$/.exec(every ?? ""); return m ? { n: m[1], unit: m[2] } : null; };
 
-/** The interval of a schedule with a timer as a setting: a number and a unit, with a Save button that posts them. */
-function everySetting(s) {
+/** The interval of a schedule as a setting: a number and a unit, with a Save button that posts them. The hint gives the last run's result and when it ran. */
+function everySetting(s, hint) {
   const v = splitEvery(s.every) ?? { n: "", unit: "min" }, id = `every-${s.name}`;
   return setting(`${s.name[0].toUpperCase()}${s.name.slice(1)} every`, inputBox("n", v.n, { id, type: "number", attrs: ` min="1" step="1" inputmode="numeric" required` }) +
-    selectBox(`${s.name} unit`, "unit", UNITS.map(([value, label]) => ({ value, label })), v.unit), { id, save: "Save", attrs: ` data-schedule="${esc(s.name)}"` });
+    selectBox(`${s.name} unit`, "unit", UNITS.map(([value, label]) => ({ value, label })), v.unit), { id, save: "Save", hint, attrs: ` data-schedule="${esc(s.name)}"` });
 }
 
 /** The monitor's hour as a setting: the local hour 0 to 23 from which the tick runs its monitor step. */
-function hourSetting(s) {
+function hourSetting(s, hint) {
   return setting("Monitor hour", inputBox("n", s.hour ?? 0, { id: "hour-monitor", type: "number", attrs: ` min="0" max="23" step="1" inputmode="numeric" required aria-label="monitor hour"` }),
-    { id: "hour-monitor", save: "Save", attrs: ` data-schedule="monitor"` });
+    { id: "hour-monitor", save: "Save", hint, attrs: ` data-schedule="monitor"` });
 }
 
-/** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran, as text; then their intervals, and the monitor's hour, as settings. The monitor runs in the tick, once a day from its hour. */
+/** The tick, the suite and the monitor as one settings list: each row has its interval (the monitor its hour) and Save, and a hint with what came of its last run and when it ran. The monitor runs in the tick, once a day from its hour. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${s.every ? esc(s.every) : miss("no timer")}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
-  const edit = d.schedules.map((s) => (s.name === "monitor" ? hourSetting(s) : everySetting(s)));
-  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) + settings("Schedule intervals", edit) : empty(), { id: "gates-schedules" });
+  const rows = d.schedules.map((s) => (s.name === "monitor" ? hourSetting : everySetting)(s, [s.result, when(s.last)].filter(Boolean).join(" · ") || "no run"));
+  return card("Schedules", rows.length ? settings("Schedules", rows) : empty(), { id: "gates-schedules" });
 }
 
 /** The units of an Ask's wait, largest first: a stored number of minutes shows in the largest unit that divides it. */
