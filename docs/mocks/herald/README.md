@@ -31,4 +31,4 @@ consistency and readability. Mocks only; no change to the UI until a choice is m
 - Short names for scheduled runs: call signs (`HK57`) or another pitch.
 
 - Filter: chip click (option 1), group toggle (option 2) or both.
-- Action as a chip or as a tone-coloured word; design.md's feed row spec says a word.
+- Action as a chip or as a tone-coloured word; design.md's feed row spec and the Herald draw a chip.

@@ -848,27 +848,36 @@ An ask card asks Chris a question. It shows the question, the choices and the bu
 
 #### Feed row
 
-A feed row shows one event in a feed. The newest event is first.
+A feed row shows one event in a feed on one line. The newest event is first.
 
-**Use:** in the feed of the Status page. **Not for:** the events of one run; use the timeline.
+**Use:** in the feed of the Status page, the Herald. **Not for:** the events of one run; use the timeline.
 
 | Helper | Reference |
 |---|---|
-| `eventRow(ev, titles)` in `ui/views/now.js`; the Herald's status rows are plain event rows made with its `feedRow()`, and a non-issue subject such as the housekeeper folds per run, not per subject | `ui/views/now.js` |
+| `feedRow()` draws every row of the Herald: the time, then the body. `eventRow(ev, titles)` fills the body of an event; `runNow(s)` draws the Running line; `briefRow()` draws a line of a fold | `ui/views/now.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Time | The time of the event | | `--mono` `--fs-xs` tabular, `--muted`; 55px |
-| 2 | Action | What happened, in lower case | | `--fw-mid`, the colour of its tone; 70px |
-| 3 | Id | The item | | `--mono` tabular; 64px; one line |
-| 4 | Body | The title, then what happened | | title `--ink`, one line; what `--muted` |
-| 5 | Live row | The event in progress | yes | `--unstick-bg`, border `--unstick-ring`, radius `--r-card` |
+| 1 | Time | The time of the event, from `clock()`, else `when()` | | `--mono` `--fs-xs` tabular, `--muted`; 44px |
+| 2 | Chip | What happened, in lower case: `started`, `landed`, `closed`, `ended`, `filed` | | the tag of its tone |
+| 3 | Id | The issue, else the run's job, in its shown form (`a-01234`, `j-06802`), linked | | `--mono` tabular; one line |
+| 4 | Title | The issue's title; for a routine run, "N changes"; else what the sentence adds | yes | `--ink`, one line, cut with an ellipsis |
+| 5 | Count | `+N`, the lines in the row's fold | yes | `--fs-2xs` `--muted` on `--sunk`, `--r-tag` |
+| 6 | Fold | The older events of the row, one line each | yes | `--rule` guide line on the left; opens from the row |
 
-- Format the time with `clock()`, else `when()`.
+- One row per attempt of an issue: the first job of a job's `prev` chain. Its older events are in the fold, newest first: the time, a label (the run's kind, or the chip word) and a text (the job's link, its mark `✓` or `✗`, then its tier, model, commit, time and cost).
+- A routine's run is one row, a job like any other: its Id is the run's job (`j-06802`), its title says "3 changes", and each change is a line in the fold with the issue's link. A run that ended and changed nothing has no row; one still running, or one that failed, has.
+- A status row has the time and the new status text only. It is drawn where the text changes after the page loaded, as the old text gives way to the new; the first render has none.
+- A chat is one row: the chip `chat`, the first 8 characters of its id, its first prompt.
+- A routing event is a quiet system row: the tier, the model and the cost in muted text. A routed start's choice is in the fold, not the head.
+- The Work and Factory toggles above the feed show or hide the rows: an issue's events are Work, any other is Factory.
+
+**Running line:** the jobs and issues in progress sit above the feed, on its grid. Each row has the start time, the chip (`implement`, or the run's kind), the Id, the title, and the tier with a breathing dot. A job that ends leaves the line; its row appears in the feed.
 
 | Do | Don't |
 |---|---|
-| `14:05 landed a1700` | `2026-11-10T14:05:00Z Landed` |
+| `14:05 landed a-01700` | `2026-11-10T14:05:00Z Landed` |
+| `12:59 started j-06802 aleph` | a routine's run by its name and a count, `housekeeper#57` |
 
 #### Findings list
 
