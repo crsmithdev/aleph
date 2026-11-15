@@ -690,6 +690,15 @@ describe("recall", () => {
     await run({ ALEPH_VAULT: vault, CLAUDE_CODE_SESSION_ID: "sess-1" }, "recall", "log probe", "--unlogged");
     expect(lines()).toHaveLength(2);
   });
+  test("a bare flag keeps the word after it in the query, wherever the flag stands", async () => {
+    const file = join(vault, ".recall-log.jsonl");
+    (await cli("write", note("Log Probe"), "--why", "x"));
+    const plain = (await cli("recall", "log probe")).json;
+    expect(plain[0]).toMatchObject({ title: "Log Probe", rank: 0 });
+    const logged = readFileSync(file, "utf8");
+    expect((await cli("recall", "--unlogged", "log", "probe")).json).toEqual(plain);
+    expect(readFileSync(file, "utf8")).toBe(logged);
+  });
   test("ranks title, alias, contains, body; empty list otherwise", async () => {
     // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     (await cli("write", note("Verify Gate", { aliases: "[stop gate]" }, "**Claim.** judged at Stop, as of 2026-09-04.\n\n## Details\nnested claude -p haiku\n\n## Evidence\n\n## Related\n[[Home]]\n"), "--why", "x"));

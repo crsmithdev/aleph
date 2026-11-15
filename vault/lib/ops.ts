@@ -274,9 +274,9 @@ const TOP = 10;
 
 async function recall(): Promise<void> {
   requireVault();
-  // `--episodes` takes no value, so the word after it stays in the query.
-  const args = rest.filter((a) => a !== "--episodes");
-  const q = args.filter((a, i) => !a.startsWith("--") && args[i - 1]?.startsWith("--") !== true).join(" ").trim().toLowerCase();
+  // Only `--scope` takes a value, so only the word after it leaves the query: a bare flag such as
+  // `--episodes` or `--unlogged` leaves the word after it in, wherever the flag stands.
+  const q = rest.filter((a, i) => !a.startsWith("--") && rest[i - 1] !== "--scope").join(" ").trim().toLowerCase();
   const scope = flag("scope");
   if (!q && !scope) { console.error('usage: aleph memory recall [--episodes] <query> [--scope <name>]  |  aleph memory recall [--episodes] --scope <name>'); exit(1); }
   // The episode pages are the factory's, not the vault's: they get a throwaway index and no read log.
