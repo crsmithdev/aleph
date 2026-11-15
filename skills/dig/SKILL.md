@@ -25,24 +25,28 @@ Chris's taste.
 ## Steps
 
 1. **Start.** State the symptom in one sentence. Open a trail file in the scratchpad, or in the plan file if
-   one exists. Done when the symptom and the first question are written down.
+   one exists. In a headless run (`claude -p`) there is no scratchpad: the reply is the trail, and you write
+   each step into it as you finish it. Done when the symptom and the first question are written down.
 2. **Look.** Read the real code and the real data. Count: tally every distinct shape (event subjects, ID
-   formats, folder names, file formats) and how many of each. Do not reason from docs alone. Docs and comments
-   lie.
+   formats, folder names, file formats) and how many of each; in a headless run (`claude -p`) take each count
+   with one command. Do not reason from docs alone. Docs and comments lie.
 3. **Question.** Ask why each odd thing is as it is. Treat a convention that looks arbitrary as a question, not
    a given. Example: ask why a file uses HTML comment markers when a markdown heading would do.
 4. **Record.** Write the step to the trail now: question, evidence, finding. If the data disproves an earlier
    claim, correct it in the open in the trail. Do not edit it away.
 5. **Go down.** Turn the finding into the next question, one level deeper. Stop going down when the question
-   is about a model, not a surface: identity and keys, storage, ownership, or formats. Done when a further
-   "why" has no answer in the data, only a choice.
+   is about a model, not a surface: identity and keys, storage, ownership, or formats. In a headless run
+   (`claude -p`) stop after six trail steps, whatever the data still holds. Done when a further "why" has no
+   answer in the data, only a choice.
 6. **Research.** Before you decide anything structural, run `aleph:prior-art` and search the web. Then check
    each performance or safety claim with a cheap scratch benchmark. Examples: concurrent SQLite writers, WAL
    growth under a long reader, one synthetic year of queries. Keep the benchmarks in the scratchpad and
-   record the numbers.
+   record the numbers; in a headless run (`claude -p`) skip `aleph:prior-art` and the web survey, say so under
+   "Not verified", and keep the benchmarks in `/tmp`.
 7. **Choose a rule.** Prefer one simple rule that is self-describing and covers many cases. Example: ID is
    `<kind>.<n>` and the path is the key. Consolidate: fewer stores, fewer file formats, fewer files. Then run
-   `aleph:red-team` on the proposal and fix what it finds.
+   `aleph:red-team` on the proposal and fix what it finds; in a headless run (`claude -p`) run its lenses
+   yourself in one pass, without dispatching reviewers.
 8. **Decide.** Settle each open question with a reason. Write a vault note for each decision and each learned
    behavior with `aleph:vault`. In a headless run (`claude -p`) write no note: name each note you would write in
    Decisions.
@@ -54,7 +58,8 @@ Chris's taste.
 
 Report these parts, each in full:
 
-1. **Trail.** Each step as question, evidence, finding.
+1. **Trail.** Each step, the first included, as three labeled lines: Question, Evidence, Finding. The
+   evidence is a command, a `file:line` or a count, not a restatement.
 2. **Fundamental finding.** The model the symptom came from, in one or two sentences.
 3. **Proposal.** The consolidated change. List what moves and what stays fixed (name the schema, the API, the
    data flow).
