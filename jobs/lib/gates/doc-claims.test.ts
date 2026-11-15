@@ -33,6 +33,13 @@ describe("a doc that does not match fails, quoting the claim", () => {
     expect(naming("| Action | yes | the job states; paused |")[0]).toMatch(/^docs\/naming\.md:5: the Action row of the Word sets table lacks red, after,.* started, missed, skipped,.* routed.*, against lib\/naming\.ts$/);
   });
 
+  test("the Ask action row against ASK_ACTIONS", () => {
+    const row = (vs: string) => docProblems([{ file: "docs/naming.md", text: ["## Word sets", "", "| Set | Stored | Values |", "|---|---|---|", `| Ask action | yes | ${vs} |`].join("\n") }], repoTruth());
+    expect(row("approve, disapprove, resolve, dismiss, continue, discontinue")).toEqual([]);
+    expect(row("approve, disapprove, resolve, continue, discontinue")).toEqual(["docs/naming.md:5: the Ask action row of the Word sets table lacks dismiss, against lib/naming.ts"]);
+    expect(row("approve, disapprove, resolve, dismiss, continue, discontinue, deny")).toEqual(["docs/naming.md:5: the Ask action row of the Word sets table adds deny, against lib/naming.ts"]);
+  });
+
   test("a file:line past the end of the file, or a bare name no file has", () => {
     expect(one("`jobs/lib/infra/settings.ts:99999`, `settings.ts:1`, `jobs/lib/infra/settings.ts:2-3`, `nosuchfile.ts:5`")).toEqual([
       expect.stringMatching(/^docs\/x\.md:1: "`jobs\/lib\/infra\/settings\.ts:99999`" cites line 99999 of jobs\/lib\/infra\/settings\.ts, which has \d+ lines$/),

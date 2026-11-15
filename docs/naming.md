@@ -62,6 +62,12 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
   - Owner: one door, `logEvent` in `lib/layout.ts`, which checks the words through `event()` in `lib/naming.ts`. Readers read the view `event_rows`, which adds the role, target, project, model, size, cost, commit and times of the job on each side. An event's own size wins over its job's.
   - Invariants: `subject` is a job key or one of `gate`, `rule`, `human`, `claude`. `action` is in the action set. `object` is a key, or `settings` for a settings event.
   - Relations: one subject. One object. Record events (`hold`, `started`, `streak`, `cap`, `rerun`, `rescued`, `director`) are events with the issue or job as object.
+- **Ask**
+  - Identity: the issue key. An Ask has no key of its own.
+  - Lifecycle: set with a reason, then answered by one verb of its pair (approve or disapprove, resolve or dismiss, continue or discontinue), by an Always rule or by a timeout. The answer clears it.
+  - Owner: `issue_state`, in the `ask` column.
+  - Invariants: at most one Ask per issue. The first verb of a pair goes ahead and the second drops the issue.
+  - Relations: one issue. At most one job, the one that asked.
 - **Issue state**
   - Identity: the issue key. A row exists only while something is live.
   - Lifecycle: set when an Ask, a wait or a CI result starts. Deleted when none is live.
@@ -118,6 +124,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
 | Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
+| Ask action | yes | approve, disapprove, resolve, dismiss, continue, discontinue |
 | Ask reason | yes | held-path, review-held, question, no-commit, part-dropped, intake-failed, rescue, run-cap, core-change, blocker-dropped, proposal-check, proposal-claude-md, proposal-skill |
 | Role | yes, never shown | build, plain, land, review, intake, recheck, director, monitor, lens, housekeeper, maintainer |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |

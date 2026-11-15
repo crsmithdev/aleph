@@ -93,7 +93,7 @@ export function repoTruth(root = ROOT): Truth {
   const code = (f: string) => /^(hooks|jobs|issues|ui|vault|lib|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
   return {
     defaults: DEFAULTS,
-    wordSets: { "Issue status": n.STATUSES, "Job state": n.STATES, Action: n.ACTIONS, "Ask reason": Object.keys(ASK_REASONS), Subject: n.ACTORS, Role: n.ROLES, Stage: n.STAGES, "Report lane": n.LANES, "Flow class": n.SPEEDS },
+    wordSets: { "Issue status": n.STATUSES, "Job state": n.STATES, Action: n.ACTIONS, "Ask action": n.ASK_ACTIONS, "Ask reason": Object.keys(ASK_REASONS), Subject: n.ACTORS, Role: n.ROLES, Stage: n.STAGES, "Report lane": n.LANES, "Flow class": n.SPEEDS },
     root,
     files,
     source: read(files.filter((f) => (code(f) || f === "package.json" || /^compose\/[^/]+$/.test(f) || f === ".env.example") && !f.startsWith("jobs/lib/gates/doc-claims"))),
