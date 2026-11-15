@@ -1,7 +1,7 @@
 # Triggers lens
 
 Does each description fire on its branches, and only there? A description is the pointer to its skill, subagent
-or command. [writing-for-agents](../writing-for-agents/SKILL.md) has the rules for pointers; this lens applies them
+or command. [write-agents](../write-agents/SKILL.md) has the rules for pointers; this lens applies them
 across all descriptions at once.
 
 ## Signals

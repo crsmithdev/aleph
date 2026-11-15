@@ -1,7 +1,7 @@
 # Clear lens
 
 Does each sentence have one reading? Ambiguity is the doc problem developers rated most severe (Uddin and
-Robillard 2015). The page-level rules are [docs-writing](../docs-writing/SKILL.md)'s `voice-`, `clarity-` and
+Robillard 2015). The page-level rules are [write-docs](../write-docs/SKILL.md)'s `voice-`, `clarity-` and
 `code-` rules; load them by prefix. This lens adds no rules of its own.
 
 ## Signals

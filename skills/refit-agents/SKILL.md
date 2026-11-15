@@ -9,7 +9,8 @@ description: >
   improve, lint, audit, debloat or clean up agent files or skills, check they
   will be followed, cut context load, run agnix, make a repo agent-ready,
   before you add a skill, a CLAUDE.md line or a CLI command (check), or when
-  an agent had to guess or look up how to use the repo.
+  an agent had to guess or look up how to use the repo. NOT for: writing
+  one (use write-agents).
 ---
 
 # Refit agents
@@ -84,7 +85,7 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 refit-code's [Act](../refit-code/SKILL.md#act), in this order: valid, safety, install, drift, load, structure,
 triggers, adherence, then interface. Each file then has one source before its text is edited, text is right before
 it is cut and cut before it is reworded, and code changes come last. A
-cut moves material down the ladder of [writing-for-agents](../writing-for-agents/SKILL.md) before it deletes it.
+cut moves material down the ladder of [write-agents](../write-agents/SKILL.md) before it deletes it.
 After each finding, run agnix, `load.ts` and `content.ts` with the baseline: a new agnix error is red, and the commit records
 the always-loaded total before and after.
 

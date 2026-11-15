@@ -1,7 +1,7 @@
 # Voice
 
 How every reply, commit message, doc and code comment reads. A repo's own style guide wins for its docs, and
-[docs-writing](../skills/docs-writing/SKILL.md) holds the page-level rules for docs. Blog posts, essays, letters
+[write-docs](../skills/write-docs/SKILL.md) holds the page-level rules for docs. Blog posts, essays, letters
 and other writing for people to read as writing keep the writer's voice: run `aleph:humanizer` over them.
 
 ## Shape of a reply

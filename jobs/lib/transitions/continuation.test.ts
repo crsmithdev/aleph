@@ -207,20 +207,20 @@ describe("the issue's brief", () => {
 });
 
 describe("the worker brief", () => {
-  test("a sandbox repo's brief carries the code-change method as text; the fixed brief does not", () => {
+  test("a sandbox repo's brief carries the write-code method as text; the fixed brief does not", () => {
     const first = jobWith({}, { "spec.md": "# Spec\n" });
     const r = run({ job: first.id, worktree: "/w", branch: "factory/fac-1" });
     const sandboxed = brief(first.id, r, { ...repo, sandbox: true } as Repo);
-    expect(sandboxed).toContain("follow the code-change method at the end of this brief");
+    expect(sandboxed).toContain("follow the write-code method at the end of this brief");
     expect(sandboxed).toContain("link it from the repo's main checkout path");
     expect(sandboxed).toContain("do not run the full\nsuite again to get a clean run");
     expect(sandboxed).toContain("do not add a test for a helper that the\nexisting tests already reach");
     expect(sandboxed).toContain("## Code-change method\n\nAdapted from karpathy-guidelines");
-    expect(sandboxed).not.toContain("name: code-change");
+    expect(sandboxed).not.toContain("name: write-code");
     expect(sandboxed).not.toContain("Skill tool");
     expect(sandboxed).toMatch(/\]\(\/[^)]*\/skills\/diagnosing-bugs\/SKILL\.md\)/);
     expect(sandboxed).not.toContain("](../");
-    expect(brief(first.id, r, repo)).not.toContain("code-change");
+    expect(brief(first.id, r, repo)).not.toContain("write-code");
   });
 
   test("an issue's brief has the worker search past work for its title; a spec with no title gets no search", () => {

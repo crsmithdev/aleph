@@ -44,7 +44,7 @@ Write these sections, and leave out a section that has nothing in it:
 - **Out of scope**.
 - **Assumptions**: each fill from step 2, one line each.
 
-Where a step fits a skill in this session's skill list, name the skill in the step (`aleph:tdd` for a test-first fix, `aleph:diagnosing-bugs` for a bug).
+Where a step fits a skill in this session's skill list, name the skill in the step (`aleph:write-tests` for a test-first fix, `aleph:diagnosing-bugs` for a bug).
 
 Keep the brief's scope equal to the draft's. A requirement the draft did not name enters only as a line under Assumptions.
 

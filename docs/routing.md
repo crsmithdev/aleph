@@ -42,7 +42,7 @@ The worker's environment (`agentEnv`) rewrites a push to `git@github.com:` to a 
 
 ## Skills in roles
 
-Every role runs with `--disable-slash-commands`, so it loads no skill. The worker gets `skills/code-change/SKILL.md` and the reviewer gets `skills/code-review/SKILL.md` as a section of the prompt (`jobs/lib/roles/role-skill.ts` `skillSection`). The other roles get no skill.
+Every role runs with `--disable-slash-commands`, so it loads no skill. The worker gets `skills/write-code/SKILL.md` and the reviewer gets `skills/code-review/SKILL.md` as a section of the prompt (`jobs/lib/roles/role-skill.ts` `skillSection`). The other roles get no skill.
 
 ## Worker tiers
 

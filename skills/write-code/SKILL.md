@@ -1,5 +1,5 @@
 ---
-name: code-change
+name: write-code
 description: >
   Code change: the smallest diff that meets the goal, each line traced to it
   and each step proved by a run. Use when you write, edit or delete code for a
@@ -10,7 +10,7 @@ Adapted from karpathy-guidelines (github.com/multica-ai/andrej-karpathy-skills @
 
 # Code change
 
-Make a **surgical** change: the fewest lines that meet the goal, and every changed line traces to it. The four steps run in order; the rules apply during step 3.
+Make a **surgical** change: the fewest lines that meet the goal, and every changed line traces to it. The five steps run in order; the rules apply during step 3.
 
 ## Steps
 
@@ -28,6 +28,8 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
 3. **Make the change** under the rules below. Done when each `verify:` from step 1 shows its result in a run after your last edit.
 
 4. **Trace the diff.** Read `git diff` against the base line by line. Done when each changed line traces to the goal, or you reverted it.
+
+5. **Check the diff.** Read the `## Check` section of [refit-code](../refit-code/SKILL.md) and run its steps on the diff. When the diff adds or changes a test, do the same with [refit-tests](../refit-tests/SKILL.md). Done when your summary lists each item with its verdict, and each verdict other than keep is applied.
 
 ## Rules
 
@@ -50,7 +52,7 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
 - Run a new test before the fix, and see it fail for the reason you expect: not a typo, an import error or a missing fixture.
 - A run in which no test ran proves nothing. Check the count in the output.
 - Assert on what the code returns or leaves behind, not on which calls it made. Prefer the real code, then a fake, then a stub, then a mock.
-- For test-first work, follow [tdd](../tdd/SKILL.md). For a bug whose cause you do not know, follow [diagnosing-bugs](../diagnosing-bugs/SKILL.md) before you change code.
+- For test-first work, follow [write-tests](../write-tests/SKILL.md). For a bug whose cause you do not know, follow [diagnosing-bugs](../diagnosing-bugs/SKILL.md) before you change code.
 
 ### Interfaces
 

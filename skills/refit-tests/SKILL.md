@@ -5,7 +5,7 @@ description: >
   the code is wrong, reach the network or clock, sleep, miss code, run slow,
   repeat each other, or grow faster than the code. Use when asked to audit,
   speed up, clean up or deflake tests, or before you add tests (check). NOT
-  for: writing tests (use tdd); one failing test (use diagnosing-bugs).
+  for: writing tests (use write-tests); one failing test (use diagnosing-bugs).
 ---
 
 # Refit tests

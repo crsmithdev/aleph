@@ -21,7 +21,7 @@ wrong result. Generated code, a type, and a log line drop with that reason.
 
 ## Fix
 
-Write the test through the public interface, red first ([tdd](../tdd/SKILL.md)). One test per behaviour, not one
+Write the test through the public interface, red first ([write-tests](../write-tests/SKILL.md)). One test per behaviour, not one
 per line.
 
 ## Hold

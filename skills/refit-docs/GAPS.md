@@ -25,7 +25,7 @@ Name the thing and show that no doc and no usage text covers it: the search and 
 
 ## Fix
 
-Document it on the page whose reader needs it (the [docs-writing](../docs-writing/SKILL.md) type of that page), or
+Document it on the page whose reader needs it (the [write-docs](../write-docs/SKILL.md) type of that page), or
 in the CLI's usage text, and point at that.
 
 ## Hold

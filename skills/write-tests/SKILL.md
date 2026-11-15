@@ -1,9 +1,9 @@
 ---
-name: tdd
+name: write-tests
 description: >
-  Test-driven development: red before green, one vertical slice at a time. Use
-  when the user wants to build a feature or fix a bug test-first, or wants
-  integration tests.
+  TDD, test-first: red before green, one vertical slice at a time. Use when
+  the user wants to build a feature or fix a bug test-first, or wants
+  integration tests. NOT for: auditing a test suite (use refit-tests).
 ---
 
 Adapted from Matt Pocock's `tdd` skill (github.com/mattpocock/skills @4ae2317).
@@ -44,4 +44,5 @@ When the shape of that interface is itself in question (how deep the module is, 
 - **Red is a run, not a plan.** Done when you have run the new test and seen it fail for the reason you expect (show the command and the failure line). Write no implementation before that run.
 - **Count the tests.** A run in which no test ran proves nothing. Check the count in the output.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
+- **Check the tests.** After the last cycle, read the `## Check` section of [refit-tests](../refit-tests/SKILL.md) and run its steps on the tests you wrote. Done when your summary lists each item with its verdict, and each verdict other than keep is applied.
 - **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.

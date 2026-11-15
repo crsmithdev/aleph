@@ -1,8 +1,9 @@
 ---
-name: writing-for-agents
+name: write-agents
 description: >
   Writing for agents: skills, AGENTS.md or CLAUDE.md, and any doc an agent
-  reaches by a pointer. Use when creating, editing or auditing one.
+  reaches by a pointer. Use when creating or editing one. NOT for: auditing
+  agent files (use refit-agents); user docs (use write-docs).
 ---
 
 Adapted from Matt Pocock's `writing-for-agents` skill (github.com/mattpocock/skills @4ae2317).
@@ -55,13 +56,7 @@ Every step ends on a **completion criterion**, the condition that tells the agen
 
 The strongest criteria are both checkable and exhaustive.
 
-This skill ends each task on one criterion. When you create, edit or audit a document, you are done when:
-
-- **Pointers**: every pointer states what the material is and lists one trigger per branch.
-- **Steps**: every step names its completion criterion, and you can check it by an observation.
-- **Duplication**: no meaning appears in more than one place.
-- **No-ops**: every sentence changes behavior against the default, or you deleted it.
-- **Report**: you list each rule above with the line you changed, or "no change".
+When you create or edit a document, read the `## Check` section of [refit-agents](../refit-agents/SKILL.md) and run its steps on the files you changed. Done when your summary lists each item with its verdict, and each verdict other than keep is applied.
 
 ## When to split
 

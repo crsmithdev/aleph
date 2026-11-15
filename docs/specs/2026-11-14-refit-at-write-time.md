@@ -1,53 +1,62 @@
 # Refit at write time
 
-Status: draft 2026-11-14. Source: a review of `writing-for-agents` against upstream and prior art, then of the four refit skills, in one session on 2026-11-14.
+Status: approved 2026-11-14. Source: a review of `write-agents` (then `writing-for-agents`) against upstream and prior art, a review of the four refit skills, and a red team of the first draft (08af93cb), in one session on 2026-11-14.
 
-## Problem
+## Decision
 
-The four refit skills (`refit-code`, `refit-agents`, `refit-docs`, `refit-tests`) have the same shape: a `check` mode for a plan or diff, a Holds table, and a `retro` that finds problems after they land. They catch problems late:
+Each domain has one writer skill and one auditor skill, with matching names. The writer's last step runs the auditor's `check` on what it wrote. The writer owns how to write, and the auditor owns how to detect. No hook is added or changed.
 
-| Domain | Writer skill | Where the rules live | While writing | At commit or test |
-|---|---|---|---|---|
-| code | code-change, tdd | refit-code lenses only | Stop hook `skills/refit-code/hook.ts` | none |
-| agents | writing-for-agents | split: theory in the writer, evidence checks in `skills/refit-agents/ADHERENCE.md` | none | agnix in `.githooks/pre-commit`, `load.test.ts` |
-| docs | docs-writing | the writer owns prefixed rules, and refit-docs lenses cite them | none | `refs.test.ts`, `aleph doc-claims` |
-| tests | tdd | refit-tests lenses only | none | `tests/clock-lint.test.ts` |
+| Domain | Writer | Auditor | The writer's last step |
+|---|---|---|---|
+| code | `write-code` (was `code-change`) | `refit-code` | refit-code `check` on the diff, plus refit-tests `check` when the diff changes a test |
+| tests | `write-tests` (was `tdd`) | `refit-tests` | refit-tests `check` on the tests it wrote |
+| docs | `write-docs` (was `docs-writing`) | `refit-docs` | refit-docs `check` on the pages it changed |
+| agents | `write-agents` (was `writing-for-agents`) | `refit-agents` | refit-agents `check` on the files it changed |
 
-- Nothing calls `check`. No file in `jobs/`, `lib/`, `identity/`, code-change or tdd names a refit skill. `check` fires only when the model picks the skill from its description, and factory agents load no skills.
-- Only code has a tool check inside the session.
-- 24 of 45 holds are "unchecked": only a retro finds them. Per skill, tool/model/unchecked: code 4/3/7, agents 3/2/6, docs 2/1/4, tests 1/1/7.
-- Rule ownership differs by domain. In code and tests the writer never sees the rules.
+Each layer:
 
-## Decisions
+- **Audit:** `refit-<domain> retro`, by hand.
+- **Check while writing:** the writer's last step, a link to the auditor's `## Check`. A factory worker reaches it with no change to its role: `skillSection` makes the link absolute, so the worker can Read it.
+- **Hard floor:** agnix in `.githooks/pre-commit`, and `test:all` in `.githooks/pre-push`, which runs `refs.test.ts`, `load.test.ts` and `tests/clock-lint.test.ts`.
+- **Code at Stop:** the existing refit-code hook, unchanged.
 
-1. **Each check runs in the tier where its problem is cheapest to catch.** The tier depends on when the problem gets expensive and on who can detect it. Rules held in the writer's context cost tokens on every turn, and a model follows only part of a long list (IFScale, arXiv 2507.11538: 68-85% at 250 instructions). A tool costs nothing until it fires. A reviewer with fresh context and one question at a time finds more than a writer who holds forty rules and the task.
+## Why
 
-   | Tier | What it catches | Mechanism |
-   |---|---|---|
-   | Before writing | One-way decisions: a new skill or a line, a new module or an edit, where a rule lives, a name, a split | The writer skill runs `refit-<domain> check` on its plan |
-   | While writing | Anything a tool can detect | One Stop hook runs the tool holds of each domain the session changed |
-   | After the draft | Judgment: no-ops, contradictions, completion criteria, trigger overlap, hollow tests | A fresh subagent asks each lens's Check question of the diff |
+- Chris wants audit and enforcement while writing for the least work beyond the skills.
+- The tool holds of the agents, docs and tests domains already run at commit or push, and they fail closed for solo and factory runs.
+- No catch record shows that an earlier tier would have stopped a defect. PRINCIPLES.md rule 4 asks for that record before a new gate.
+- The `write-<domain>` names pair each writer with its `refit-<domain>` auditor. The write-tests description keeps "TDD, test-first" as its first words, so the trigger stays.
 
-2. **The writer owns the generative rules, and the auditor cites them and owns detection.** This is the docs arrangement today. A generative rule shapes a draft: pointers, the information ladder, leading words, a positive target. A detection rule names a signal, its proof and its fix. A writer skill carries no checklist.
+## Limits
 
-3. **Each writer skill calls `check` in one line.** code-change and tdd call refit-code and refit-tests, docs-writing calls refit-docs, and writing-for-agents calls refit-agents. A factory role gets the same line in its prompt text, as it gets its one skill today.
+- The `check` step is a prose rule. A model follows it most of the time, not every time. The commit and push gates catch what the model skips.
+- `check` runs in the writer's own context, so it shares the writer's blind spots.
+- A factory worker sees write-code only in a repo with `sandbox` set (`jobs/lib/transitions/continuation.ts`).
+- Use is measured offline: the transcripts show a Read of a refit skill or a Skill call.
+- Headless check, 2026-11-14 (`claude -p`, Sonnet, `--disable-slash-commands`, a 6-line task, the write-code section as the brief):
+  - With a link to `SKILL.md#check`, 0 of 1 runs read refit-code.
+  - With "read the `## Check` section" and a summary that lists the verdicts, 3 of 3 runs read refit-code and refit-tests.
+  - 2 of those 3 runs listed a verdict for each item. The third run said it "did not run them in full".
 
-4. **One Stop hook serves all four domains.** It generalizes `skills/refit-code/hook.ts`: it sorts the session's changed files by domain, runs that domain's tool holds, and blocks once per finding set with the evidence. It keeps the existing rules: it counts only changes since the session started, and it never blocks a stop that a Stop hook already continued. It runs in any repo. A tool that is not installed is skipped and named in the block text. It records each block and its domain, because PRINCIPLES.md rule 4 keeps a gate only while its record shows catches.
+## Rejected
 
-5. **The judgment pass runs after the draft, in a fresh context.** In solo work it runs at the end of a task that changed files of a domain. In the factory the reviewer runs it, with the Check questions of the domains in the diff.
+The first draft proposed three tiers: a `check` line, one Stop hook shared by four domains, and a judgment pass after each task. The red team returned REVISE for these reasons:
 
-6. **Unchecked holds move to tool holds where the table already names the tool.** This follows the existing rule that a finding that comes back moves up a kind.
+- No catch record supports the premise.
+- Pre-commit and pre-push already run the holds that the shared hook would move.
+- Scoped runs do not work. `refs.ts` reads the whole repo, and the clock lint is a bun test bound to aleph's layout.
+- The judgment pass has no trigger in solo work.
+- Hooks cannot reach a factory worker's skills.
+- The draft also counted 45 holds where the tables hold 41 (24 unchecked).
 
-## Milestone 1
+The red team also found defects in the existing `skills/refit-code/hook.ts`, which are now issues:
 
-- The shared Stop hook, with the tool holds that exist today: refit-code's three checks, agnix on changed agent files, `refs.ts` broken links and orphans on changed docs, and the clock lint on changed test files.
-- The `check` line in code-change, tdd, docs-writing and writing-for-agents.
+- It skips a retry after another Stop hook blocks (a-02850).
+- A crash passes in silence (a-02851).
+- Its blocks have no cap (a-02852).
+- A missing session start blames the agent for old files (a-02853).
 
 ## Open questions
 
-- PRINCIPLES.md rule 4 asks for evidence before a new gate. The hook in milestone 1 runs holds that exist today, and only moves them earlier. The `check` line and the judgment pass have no evidence yet.
-- Is a slim writer plus a later check better than a writer that carries the checklist? Nobody measured it. The refit skills are new, so traces hold little data. An A/B like the grill-me one would answer it: write the same 3 skills both ways, then count refit-agents findings and tokens.
-- Should writing-for-agents fork from upstream and take a new name (proposed: `agent-docs-writing`)? This ends the vendored-upstream decision for that skill. Upstream has no change since our `4ae2317` base.
-- Should the hook block on `content.ts` hits, or only report them? They are candidates, and some are false.
-- What is the time budget? refit-code's hook has a 20 s timeout, and agnix plus `refs.ts` add to it.
-- How much does the factory reviewer prompt grow when it carries the Check questions of up to four domains?
+- Should `check` run in a subagent, for a fresh context, at one extra run per task?
+- Does the refit-code hook earn its place? The transcripts hold 25 of its blocks, possibly with duplicates. A study of what each block caused would answer it.

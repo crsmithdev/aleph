@@ -7,7 +7,7 @@ description: >
   longer earn their place. Use when asked to improve, review, audit, lint or
   clean up docs, a README or a docs site, find stale or broken docs or links,
   or before you add a doc page or section (check). NOT for: CLAUDE.md, AGENTS.md
-  or skills (use refit-agents); writing a new page (use docs-writing).
+  or skills (use refit-agents); writing a new page (use write-docs).
 ---
 
 # Refit docs
@@ -54,7 +54,7 @@ is **rot**. Report a candidate under one lens only.
    Record the commit. Done when the baseline is green and recorded.
 2. **Inventory.** Run `bun <skill dir>/refs.ts <repo>` (broken references, undocumented env vars, orphan docs).
    Run each installed tool of [TOOLS.md](TOOLS.md) and list the ones missing with their install line. Classify
-   each doc by its Diátaxis type (`docs-writing` rule `structure-diataxis`). Done when you have the refs JSON, the
+   each doc by its Diátaxis type (`write-docs` rule `structure-diataxis`). Done when you have the refs JSON, the
    tool output and a type for each doc.
 3. **Hunt.** Spawn one Explore subagent per lens in one message, except **true** and **find**, whose mechanical
    part you read from the inventory yourself. Give each its lens file's Signals section verbatim, the inventory,
@@ -69,7 +69,7 @@ is **rot**. Report a candidate under one lens only.
 
 refit-code's [Act](../refit-code/SKILL.md#act), in this order: true, rot, copies, gaps, find, shape, then clear,
 so that a doc is right before it moves and placed before it is reworded. A new page or a rewrite follows
-[docs-writing](../docs-writing/SKILL.md)'s writing workflow. After each finding, run `refs.ts` and the tools
+[write-docs](../write-docs/SKILL.md)'s writing workflow. After each finding, run `refs.ts` and the tools
 again; a new broken reference is red.
 
 ## Lint

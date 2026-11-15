@@ -1,7 +1,7 @@
 # Find lens
 
 Can a reader reach each doc and find the answer? Fragmentation is a presentation problem (Uddin and Robillard
-2015); a doc nobody reaches costs its upkeep and helps no one. `docs-writing`'s `nav-` and `format-` rules hold
+2015); a doc nobody reaches costs its upkeep and helps no one. `write-docs`'s `nav-` and `format-` rules hold
 the page-level rules.
 
 ## Signals

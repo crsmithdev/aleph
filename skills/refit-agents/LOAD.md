@@ -2,7 +2,7 @@
 
 Does each always-loaded line earn its tokens? Every line of a memory file, every model-invoked description and
 every line a hook injects costs on every turn, whether it fires or not.
-[writing-for-agents](../writing-for-agents/SKILL.md) has the ladder (in-file, disclosed, environment) and the
+[write-agents](../write-agents/SKILL.md) has the ladder (in-file, disclosed, environment) and the
 words this lens uses: context load, cache, sprawl, sediment.
 
 ## Signals

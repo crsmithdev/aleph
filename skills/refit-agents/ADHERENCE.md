@@ -1,6 +1,6 @@
 # Adherence lens
 
-Will the agent follow each line, every time, at the least cost? [writing-for-agents](../writing-for-agents/SKILL.md)
+Will the agent follow each line, every time, at the least cost? [write-agents](../write-agents/SKILL.md)
 is how to write an agent file; this lens audits one against the evidence. Each check carries its evidence:
 **measured** (a study or eval), **vendor** (Anthropic or OpenAI guidance), or **practitioner** (opinion with no
 data). A finding states its tag, and a practitioner check alone rates 3 at most.
@@ -28,7 +28,7 @@ Run `bun <skill dir>/content.ts <repo>` first: it gives the regex candidates (`e
 | 14 | **Examples.** One example, or examples that all look alike, not set off from the instructions | vendor: 3-5 varied examples, or Claude copies unintended patterns (Claude prompting best practices) | judgment |
 | 15 | **A linter's job in prose.** A formatting or style rule a tool can check | vendor: keep lint checks in CI (Codex AGENTS.md guide); practitioner (HumanLayer) | judgment |
 | 16 | **Dated text.** "as of", "currently", a date | vendor (skill best practices) | `content.ts` dated |
-| 17 | **No completion criterion.** A step the agent cannot tell is done | practitioner ([writing-for-agents](../writing-for-agents/SKILL.md)) | judgment |
+| 17 | **No completion criterion.** A step the agent cannot tell is done | practitioner ([write-agents](../write-agents/SKILL.md)) | judgment |
 | 18 | **No-op.** A line the model obeys by default ("be helpful", "write good code") | vendor | agnix `PE-005`, `CC-MEM-005`, then judgment |
 
 **Policy on agnix.** `PE-003` and `CC-MEM-007` turn "should" into "must", so their fix adds the emphasis that

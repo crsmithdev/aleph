@@ -1,17 +1,17 @@
 ---
-name: docs-writing
+name: write-docs
 description: >
   Writes technical docs with Diataxis type gating and runnable examples, and
   holds the doc rules refit-docs audits against. Use when the user asks to
   write or rewrite docs, an API reference, a how-to, or a README. NOT for:
   reviewing or auditing docs (use /aleph:refit-docs); AGENTS.md, CLAUDE.md or
-  skills (use /aleph:writing-for-agents).
+  skills (use /aleph:write-agents).
 ---
 
 # Documentation Writing
 
 - **IS:** writing technical documentation, and the rules for its quality (Diataxis doc types, voice, structure, clarity, runnable code, formatting, navigation, content hygiene, agent-readable docs) for docs sites, API references, documentation-site tutorials, how-to docs, and existing READMEs.
-- **IS NOT:** editorial blog tutorials or articles, AGENTS.md or CLAUDE.md instructions (use `aleph:writing-for-agents`), marketing and landing-page copy, or the product's own error strings and CLI output (this skill covers the docs that describe them).
+- **IS NOT:** editorial blog tutorials or articles, AGENTS.md or CLAUDE.md instructions (use `aleph:write-agents`), marketing and landing-page copy, or the product's own error strings and CLI output (this skill covers the docs that describe them).
 
 ## Mode dispatch
 
@@ -36,9 +36,10 @@ Docs writing progress:
 - [ ] Step 3: Draft: bottom line up front, quick start for getting-started docs, runnable example per concept, next steps for tutorials and how-tos
 - [ ] Step 4: Apply the type-relevant rules to concrete weaknesses in the draft
 - [ ] Step 5: Verify with `review-defaults` and `review-verify-links`; quote the command output
+- [ ] Step 6: Run the `## Check` steps of refit-docs on the pages you changed; list each item with its verdict, and apply each verdict other than keep
 ```
 
-For a README, start from `readme-template.md`.
+For a README, start from `readme-template.md`. For step 6, read [refit-docs](../refit-docs/SKILL.md).
 
 ## Type-gating table
 
@@ -77,4 +78,4 @@ For the full rule list per category, read `rules/_sections.md`. The `*-defaults.
 - Cite the specific failing check in a `*-defaults.md` bundle ("`voice-defaults`: passive voice"), not just the filename, or the author can't locate the issue.
 - Rule files carry their own false-positive guidance (the "should" check, sample credentials, hand-typed dates, series openers). Read the rule before you flag a finding against it.
 
-Adapted from Matthew Blode's `docs-writing` skill (github.com/mblode/agent-skills, MIT, `skills/docs-writing/LICENSE`), with its references to sibling skills and its eval suite removed.
+Adapted from Matthew Blode's `docs-writing` skill (github.com/mblode/agent-skills, MIT, `skills/write-docs/LICENSE`), with its references to sibling skills and its eval suite removed.
