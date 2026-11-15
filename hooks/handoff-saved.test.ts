@@ -61,8 +61,9 @@ describe("the clear and pickup cycle", () => {
   };
   const log = () => (existsSync(join(root, "log")) ? readFileSync(join(root, "log"), "utf8") : "");
 
-  test("this pane's handoff clears and picks up after the hook exits, and outside Herdr no process starts", async () => {
-    const env = fake();
+  test("this pane's handoff clears and picks up after the hook exits even with HC_TERMINAL_ID set, and outside Herdr no process starts", async () => {
+    const env = { ...fake(), HC_TERMINAL_ID: "t12" };
+    writeFileSync(join(root, "bin", "hc"), `#!/bin/sh\necho "hc $@" >> "${root}/log"\n`, { mode: 0o755 });
     const plain = join(root, "projects", "proj.md");
     const stop = JSON.parse(run(plain, { ...env, HERDR_ENV: undefined })).stopReason;
     expect(stop).toContain("Run /clear");
@@ -82,8 +83,8 @@ describe("the clear and pickup cycle", () => {
   test("in the desktop app this terminal's hc file runs the hc cycle, and another terminal's file or the flat file starts nothing", async () => {
     mkdirSync(join(root, "bin"));
     Bun.spawnSync(["mkfifo", join(root, "done")]);
-    writeFileSync(join(root, "bin", "hc"), `#!/bin/sh\necho "$@" >> "${root}/log"\ncase "$3" in /aleph:pickup*) echo > "${root}/done";; esac\nexit 0\n`, { mode: 0o755 });
-    const env = { HC_RUNTIME: "1", HC_TERMINAL_ID: "t12", PATH: `${join(root, "bin")}:${process.env.PATH}` };
+    writeFileSync(join(root, "bin", "hc"), `#!/bin/sh\necho "$@" >> "${root}/log"\n[ "$1" = send ] && echo "\${HC_TERMINAL_ID-unset}" >> "${root}/ids"\ncase "$3" in /aleph:pickup*) echo > "${root}/done";; esac\nexit 0\n`, { mode: 0o755 });
+    const env = { HC_TERMINAL_ID: "t12", PATH: `${join(root, "bin")}:${process.env.PATH}` };
     for (const path of [join(root, "projects", "proj.md"), join(root, "projects", "proj", "hc-t99.md")]) {
       expect(JSON.parse(run(path, env)).stopReason).toContain("Run /clear");
     }
@@ -94,5 +95,6 @@ describe("the clear and pickup cycle", () => {
     expect(out.stopReason).toContain("do not run /clear");
     await Bun.file(join(root, "done")).text();
     expect(log().trim().split("\n")).toEqual(["wait t12", "send t12 /clear", "wait t12", `send t12 /aleph:pickup ${path}`]);
+    expect(readFileSync(join(root, "ids"), "utf8").trim().split("\n")).toEqual(["unset", "unset"]);
   });
 });

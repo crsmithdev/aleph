@@ -16,6 +16,8 @@ const steps = runtime === "hc" ? [
   ["herdr", "agent", "prompt", id, "/clear", "--wait"],
   ["herdr", "agent", "prompt", id, `/aleph:pickup ${path}`, "--wait"],
 ];
+// hc wraps a send in <hc from="tN"> when HC_TERMINAL_ID is set; the session needs plain commands.
+const { HC_TERMINAL_ID, ...plain } = process.env;
 for (const step of steps) {
-  if (Bun.spawnSync(step, { stdout: "ignore", stderr: "ignore" }).exitCode) process.exit(1);
+  if (Bun.spawnSync(step, { stdout: "ignore", stderr: "ignore", env: step[1] === "send" ? plain : process.env }).exitCode) process.exit(1);
 }

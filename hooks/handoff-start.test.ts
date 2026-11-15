@@ -166,7 +166,7 @@ describe("inside the desktop app", () => {
     writeFileSync(join(bin, "hc"), `#!/bin/sh\n[ "$1" = get ] && [ "$2" = t12 ]\n`, { mode: 0o755 });
     mkdirSync(join(root, "handoffs", "projects", "proj"), { recursive: true });
     for (const [id, text] of [["hc-t12", "s12"], ["hc-t9", "s9"], ["p8", "s8"]]) writeFileSync(join(root, "handoffs", "projects", "proj", `${id}.md`), `summary: ${text}\n`);
-    const out = JSON.parse(run(join(root, "proj"), { HC_RUNTIME: "1", HC_TERMINAL_ID: "t12", PATH: `${bin}:${process.env.PATH}` }));
+    const out = JSON.parse(run(join(root, "proj"), { HC_TERMINAL_ID: "t12", PATH: `${bin}:${process.env.PATH}` }));
     const lines = out.systemMessage.split("\n");
     expect(lines.find((l: string) => l.includes("s12"))).toMatch(/^handoff waiting/);
     expect(lines.find((l: string) => l.includes("s9"))).toMatch(/^handoff orphaned/);

@@ -265,7 +265,7 @@ Note frontmatter: `kind`, `scope` (a repo or `global`), `confidence` (`measured`
 
 ## Handoffs: `handoffs/`
 
-`projects/<repo>.md` is the handoff for a repo; its first line is `summary:`. Inside Herdr the handoff is `projects/<repo>/<HERDR_PANE_ID>.md`, one file per pane. Inside the Herdr desktop app (`HC_RUNTIME=1` and `HC_TERMINAL_ID` set, no Herdr pane) it is `projects/<repo>/hc-<HC_TERMINAL_ID>.md`. The `handoff` skill writes it, `handoff-start` offers it at the next session start, and `pickup` moves it to `<YYYY-MM-DD-HHMMSS>-<repo>.md`.
+`projects/<repo>.md` is the handoff for a repo; its first line is `summary:`. Inside Herdr the handoff is `projects/<repo>/<HERDR_PANE_ID>.md`, one file per pane. Inside the Herdr desktop app (`HC_TERMINAL_ID` set, no Herdr pane) it is `projects/<repo>/hc-<HC_TERMINAL_ID>.md`. The `handoff` skill writes it, `handoff-start` offers it at the next session start, and `pickup` moves it to `<YYYY-MM-DD-HHMMSS>-<repo>.md`.
 
 ## Traces: Langfuse
 

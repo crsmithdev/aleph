@@ -12,7 +12,7 @@
  * hook lists each other file of that folder whose pane Herdr no longer has
  * as orphaned: Claude asks before it picks one up. There the flat file is
  * picked up by its path, as pickup with no argument reads the pane's file.
- * Inside the Herdr desktop app (HC_RUNTIME=1, HC_TERMINAL_ID set, and no Herdr
+ * Inside the Herdr desktop app (HC_TERMINAL_ID set, and no Herdr
  * pane) the same holds for <scope>/hc-<HC_TERMINAL_ID>.md: the hook lists each
  * other hc- file of that folder whose terminal `hc get` does not find as orphaned.
  * Each runtime ignores the other's files.
@@ -40,7 +40,7 @@ const pane = process.env.HERDR_ENV === "1" ? process.env.HERDR_PANE_ID : undefin
 const folder = join(dir, "projects", scope);
 const live = pane ? Bun.spawnSync(["herdr", "pane", "list"], { stdout: "pipe", stderr: "ignore" }) : undefined;
 const has = (id: string) => new RegExp(`(^|[^\\w:-])${id.replace(/\W/g, "\\$&")}([^\\w:-]|$)`).test(live!.stdout.toString());
-const term = !pane && process.env.HC_RUNTIME === "1" ? process.env.HC_TERMINAL_ID : undefined;
+const term = !pane ? process.env.HC_TERMINAL_ID : undefined;
 const me = pane ?? (term ? `hc-${term}` : undefined);
 // A pane's file is <pane>.md, a desktop terminal's is hc-<terminal>.md; each runtime sees only its own.
 const ids = me && existsSync(folder) ? readdirSync(folder).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).filter((id) => !!pane !== id.startsWith("hc-")) : [];
