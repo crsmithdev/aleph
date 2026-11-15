@@ -12,7 +12,7 @@
  */
 import { logEvent, logSetting } from "../../../lib/layout.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
-import { BECAUSE, because, FULL, key, word, type Event } from "../../../lib/naming.ts";
+import { BECAUSE, because, key, parseKey, word, type Event } from "../../../lib/naming.ts";
 import { INTAKE_TRIES, RUN_CAP } from "../infra/settings.ts";
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
@@ -169,8 +169,8 @@ export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: 
   const question = clean(raw.question);
   if (!question || !Array.isArray(raw.options) || raw.options.length < 2 || raw.options.length > 4) return null;
   const options = raw.options.map((o: any) => {
-    const after = clean(o?.after);
-    return { label: clean(o?.label).replaceAll(SEP.trim(), ":"), line: clean(o?.line), ...(FULL.test(after) ? { after } : {}) };
+    const ref = parseKey(clean(o?.after));
+    return { label: clean(o?.label).replaceAll(SEP.trim(), ":"), line: clean(o?.line), ...(ref?.kind === "issue" ? { after: key("issue", ref.n) } : {}) };
   });
   if (options.some((o: { label: string }) => !o.label) || new Set(options.map((o: { label: string }) => o.label)).size !== options.length) return null;
   const recommended = clean(raw.recommended);

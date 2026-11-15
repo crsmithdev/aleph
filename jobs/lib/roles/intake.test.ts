@@ -327,6 +327,14 @@ test("the prompt keeps the spec close to the request and how-to-build questions 
   expect(p).toContain("not just because the two issues touch the same file or table");
   expect(p).toContain("a small change in several folders is still one spec");
   expect(p).toContain("do not chain parts in a line by habit");
+  expect(p).toContain("(an issue key like `issue.5`)");
+  expect(p).not.toContain("<repo>-<n>`)");
+});
+
+test("parseRoute keeps an issue key in an ask option's after", () => {
+  const options = [{ label: "A", line: "do a", after: "issue.2" }, { label: "B", line: "do b" }];
+  const r = parseRoute({ verdict: { route: "ask", reason: "r", question: "A or B?", options, recommended: "B", why: ["w"] } }) as any;
+  expect(r.ask.options[0].after).toBe("issue.2");
 });
 
 test("the prompt has intake search past work for the issue's title, quoted for the shell", () => {
