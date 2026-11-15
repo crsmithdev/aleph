@@ -7,10 +7,10 @@ import { conn, getJson, next, putJson, tx } from "./db.ts";
 
 const names = (type: string) => (conn().query("SELECT name FROM sqlite_master WHERE type = ? ORDER BY name").all(type) as { name: string }[]).map((r) => r.name);
 
-test("the schema is created under user_version 4, in WAL", () => {
+test("the schema is created under user_version 5, in WAL", () => {
   expect(names("table")).toEqual(expect.arrayContaining(["counters", "events", "issue_state", "jobs", "settings", "state", "tick", "usage", "openrouter", "jev", "suite_history", "flaky"]));
   expect(names("view")).toEqual(["event_rows"]);
-  expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(4);
+  expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(5);
   expect((conn().query("PRAGMA journal_mode").get() as any).journal_mode).toBe("wal");
 });
 
@@ -28,7 +28,7 @@ test("a file at user_version 1 gains only the new tables and the event tier", ()
   const was = process.env.ALEPH_DB;
   process.env.ALEPH_DB = file;
   try {
-    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(4);
+    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(5);
     expect(names("table")).toEqual(expect.arrayContaining(["state", "usage", "openrouter", "jev", "suite_history", "flaky"]));
     expect(getJson("settings", "keep", 0)).toBe(1);
     expect((conn().query("PRAGMA table_info(events)").all() as { name: string }[]).map((c) => c.name)).toContain("tier");
@@ -41,6 +41,7 @@ test("a file at user_version 3 has the Ask reason review read as review-held", (
   old.run("CREATE TABLE issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)");
   old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT, tier TEXT)");
   old.run("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+  old.run("CREATE TABLE usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, five_hour REAL, seven_day REAL NOT NULL, seven_day_resets_at TEXT)");
   old.run("INSERT INTO issue_state (issue, ask) VALUES ('issue.1', '{\"kind\":\"approval\",\"reason\":\"review\",\"why\":[]}'), ('issue.2', '{\"kind\":\"input\",\"reason\":\"question\"}')");
   old.run("INSERT INTO events (time, subject, action, object, detail) VALUES ('t', 'rule', 'question', 'issue.1', 'review'), ('t', 'rule', 'question', 'issue.2', 'no commit')");
   old.run("INSERT INTO settings VALUES ('always', '{\"review\":{\"action\":\"land\",\"at\":\"t\"},\"question\":{\"action\":\"user\",\"at\":\"t\"}}')");
@@ -49,10 +50,28 @@ test("a file at user_version 3 has the Ask reason review read as review-held", (
   const was = process.env.ALEPH_DB;
   process.env.ALEPH_DB = file;
   try {
-    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(4);
+    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(5);
     expect(conn().query("SELECT issue, json_extract(ask, '$.reason') AS reason FROM issue_state ORDER BY issue").all()).toEqual([{ issue: "issue.1", reason: "review-held" }, { issue: "issue.2", reason: "question" }]);
     expect(conn().query("SELECT detail FROM events ORDER BY seq").all()).toEqual([{ detail: "review-held" }, { detail: "no commit" }]);
     expect(getJson("settings", "always", {})).toEqual({ "review-held": { action: "land", at: "t" }, question: { action: "user", at: "t" } });
+  } finally { process.env.ALEPH_DB = was; }
+});
+
+test("a file at user_version 4 loses the leaked fixture events and usage rows", () => {
+  const file = join(mkdtempSync(join(tmpdir(), "aleph-db-")), "v4.db");
+  const old = new Database(file, { create: true });
+  old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT, tier TEXT)");
+  old.run("CREATE TABLE usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, five_hour REAL, seven_day REAL NOT NULL, seven_day_resets_at TEXT)");
+  old.run("INSERT INTO events (time, subject, action, object) VALUES ('2026-11-12T05:23:00Z', 'gate', 'running', 'a-1'), ('2026-11-12T18:44:00Z', 'gate', 'running', 'b-1'), ('2026-11-14T00:00:00Z', 'job', 'end', 'issue.1')");
+  old.run("INSERT INTO usage (time, seven_day, seven_day_resets_at) VALUES ('2026-11-20T12:00:00Z', 5, '2026-11-07T00:00:00Z'), ('2026-11-20T12:00:00.000Z', 5, '2026-11-07T00:00:00Z'), ('2026-11-14T00:00:00Z', 3, '2026-11-21T00:00:00Z')");
+  old.run("PRAGMA user_version = 4");
+  old.close();
+  const was = process.env.ALEPH_DB;
+  process.env.ALEPH_DB = file;
+  try {
+    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(5);
+    expect(conn().query("SELECT time, subject, action, object FROM events").all()).toEqual([{ time: "2026-11-14T00:00:00Z", subject: "job", action: "end", object: "issue.1" }]);
+    expect(conn().query("SELECT time, seven_day, seven_day_resets_at FROM usage").all()).toEqual([{ time: "2026-11-14T00:00:00Z", seven_day: 3, seven_day_resets_at: "2026-11-21T00:00:00Z" }]);
   } finally { process.env.ALEPH_DB = was; }
 });
 

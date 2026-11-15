@@ -52,6 +52,9 @@ CREATE VIEW event_rows AS SELECT e.seq, e.time, e.subject, e.action, e.object, e
 UPDATE issue_state SET ask = json_set(ask, '$.reason', 'review-held') WHERE json_extract(ask, '$.reason') = 'review';
 UPDATE events SET detail = 'review-held' WHERE action = 'question' AND detail = 'review';
 UPDATE settings SET value = json_insert(json_remove(value, '$.review'), '$."review-held"', json_extract(value, '$.review')) WHERE key = 'always' AND json_type(value, '$.review') IS NOT NULL;
+`, `
+DELETE FROM events WHERE object IN ('a-1', 'b-1');
+DELETE FROM usage WHERE time LIKE '2026-11-20T12:00:00%';
 `];
 const VERSION = SCHEMAS.length;
 
