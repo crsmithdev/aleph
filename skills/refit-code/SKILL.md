@@ -120,9 +120,11 @@ tool.
 ## The hook
 
 `hook.ts` runs at each Stop on the change since the branch left the default branch, plus the working tree. It
-runs every **tool** hold of the table and blocks once per session for one set of findings, also on a stop another hook already continued
-(`stop_hook_active`); a retry after its own block passes. When it blocks, for each finding: change the companion,
-call the owner, or add the pair to `.refit.json` `accepted` with its reason. [ONE-WAY.md](ONE-WAY.md) has the rules of its checks.
+runs every **tool** hold of the table. The same set of findings blocks only once, and a session blocks at most 3
+times in all, across all finding sets; past that it stays silent even when it finds something new. It blocks on a
+stop another hook already continued (`stop_hook_active`) too; a retry after its own block passes. When it blocks,
+for each finding: change the companion, call the owner, or add the pair to `.refit.json` `accepted` with its
+reason. [ONE-WAY.md](ONE-WAY.md) has the rules of its checks.
 
 ## Red flags
 
