@@ -1288,6 +1288,32 @@ describe.skipIf(!chromeUsable)("Flow and Sessions redraw", () => {
   }, 60_000);
 });
 
+describe.skipIf(!chromeUsable)("Memory and Skill redraw", () => {
+  let rig: Rig, page: Page;
+  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/memory"); }, 150_000);
+  afterAll(() => rig?.stop());
+
+  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())'); };
+
+  test("a redraw keeps a marked element connected on Memory and the search box keeps its typed text", async () => {
+    await page.when('document.querySelector("#view #mem-board button[data-tile]") && document.querySelector("#view [data-ui=mem-search]")');
+    await page.ev('window.mark = document.querySelector("#view #mem-board"); window.mark.old = 1; document.querySelector("#view [data-ui=mem-search]").focus(); document.execCommand("insertText", false, "zz")');
+    await redraws();
+    expect(await page.ev('[document.querySelector("#view #mem-board") === window.mark, window.mark.isConnected, document.querySelector("#view [data-ui=mem-search]").value, document.activeElement === document.querySelector("#view [data-ui=mem-search]")]')).toEqual([true, true, "zz", true]);
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
+  test("after two redraws one click on a type tile runs its handler once", async () => {
+    await page.go("#/memory");
+    await page.when('document.querySelector("#view #mem-board button[data-tile]")');
+    await page.ev('window.board = document.querySelector("#view #mem-board")');
+    await redraws();
+    await page.ev('window.n = 0; const r = history.replaceState.bind(history); history.replaceState = (...a) => { window.n++; return r(...a); }; document.querySelector("#view #mem-board button[data-tile]").click()');
+    expect(await page.ev('[window.n, document.querySelector("#view #mem-board") === window.board]')).toEqual([1, true]);
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+});
+
 describe.skipIf(!chromeUsable)("Resetting the page", () => {
   let rig: Rig, page: Page, width: number;
   beforeAll(async () => { rig = await startRig(); page = await rig.open(); width = await page.ev<number>("innerWidth"); }, 150_000);
