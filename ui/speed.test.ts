@@ -348,8 +348,7 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   expect(r.worker).toMatchObject({ live: 1, runs: 7, hours: 6.5, p50: 3600, models: ["sonnet", "haiku"] });
   expect(r.intake).toMatchObject({ live: 0, runs: 1, hours: 0.5, models: ["opus"] });
   expect(r.director).toMatchObject({ live: 0, runs: 1, hours: 1, models: ["fable"] });
-  expect(r.reviewer).toMatchObject({ live: null, runs: 1, hours: null, p50: null });
-  expect(a.roles.map((x) => x.key)).toEqual(["worker", "intake", "director", "monitor", "reviewer"]);
+  expect(a.roles.map((x) => x.key)).toEqual(["worker", "intake", "director", "monitor", "housekeeper", "maintainer", "reviewer"]);
   expect(a.mean).toBe(1); // 8 agent hours over 8
   expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 1, 0, 1]);
   expect(a.points[2].intake).toBe(0.5);
@@ -374,8 +373,53 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
   expect(by("worker", "claude-haiku")).toMatchObject({ runs: 3, succeeded: 1, failed: 1, stuck: 1, rate: 0.3333, p50: 3600, cost: 1.5, firstPass: 1, reviewPass: 0.5, baseline: 0.5 });
   expect(by("worker", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 0, failed: 1, stuck: 0, rate: 0, cost: 0.25, firstPass: 0, reviewPass: null, baseline: null });
   expect(by("intake", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 1, rate: 1 });
-  expect(by("reviewer", "unset")).toMatchObject({ pass: 1, fail: 1, runs: 2, rate: 0.5 });
+  // The verdicts give the pass and fail counts; the runs are those of the review jobs, and there are none here.
+  expect(by("reviewer", "unset")).toMatchObject({ pass: 1, fail: 1, runs: 0, rate: 0.5 });
   expect(a.outcomes.map((x) => x.role)).toEqual(["worker", "worker", "intake", "reviewer"]);
+});
+
+test("agents: the reviewer's runs, model, cost and times come from its review jobs", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  let n = 0;
+  const e = (kind: string, a: number, b: number, extra: object = {}) => ({ folder: `v${n}`, id: `v${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "done", started: iso(a), ended: iso(b), ...extra } }) as any;
+  const runs = [
+    e("review", 10, 10.5, { model: "claude-opus-5-5", cost: 1.25 }), e("review", 11, 12, { model: "claude-opus-5-5", cost: 0.75 }),
+    e("build", 10, 11, { model: "claude-haiku", review: { call: "passed", model: "claude-opus-5-5" } }),
+  ];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "claude-opus-5-5", runs: 2, cost: 2, p50: 1800, p95: 3600, pass: 1, fail: 0, succeeded: 1, ended: 1 });
+  expect(a.roles.find((x) => x.key === "reviewer")).toMatchObject({ live: 0, runs: 2, hours: 1.5, p50: 1800, p95: 3600, models: ["opus"] });
+});
+
+test("agents: housekeeper and maintainer runs are roles with their own outcome rows", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  let n = 0;
+  const e = (kind: string, a: number, extra: object = {}) => ({ folder: `h${n}`, id: `h${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "done", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const runs = [e("housekeeper", 10, { model: "claude-opus-5-5", cost: 0.5 }), e("housekeeper", 12, { model: "claude-opus-5-5", cost: 0.25 }), e("maintainer", 14, { model: "claude-sonnet-5-5", cost: 1 })];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.map((x) => [x.role, x.runs, x.cost])).toEqual([["housekeeper", 2, 0.75], ["maintainer", 1, 1]]);
+  expect(a.roles.map((x) => x.key)).toEqual(expect.arrayContaining(["housekeeper", "maintainer"]));
+});
+
+test("agents: each outcome row has ended, p95 and, for a worker, the cost per built job", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  let n = 0;
+  const e = (kind: string, a: number, len: number, extra: object = {}) => ({ folder: `p${n}`, id: `p${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + len), ...extra } }) as any;
+  const runs = [
+    e("intake", 10, 1, { model: "m" }), e("intake", 12, 3, { model: "m", state: "failed", failed: "x" }), e("intake", 14, 2, { model: "m", state: "failed" }),
+    { folder: "pr", id: "pr", run: { n: 1, role: "intake", job: "jr", state: "running", started: iso(16), model: "m" } } as any,
+    // Workers: one built job at 0.91, and a build that never landed.
+    e("build", 10, 1, { model: "w", cost: 0.91, job: "a" }), e("land", 12, 1, { job: "a", state: "landed" }), e("build", 15, 1, { model: "x", cost: 2 }),
+  ];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => true);
+  const intake = a.outcomes.find((x) => x.role === "intake")!;
+  expect(intake).toMatchObject({ runs: 4, succeeded: 1, failed: 1, stuck: 1, ended: 3, p50: 7200, p95: 10800 });
+  for (const o of a.outcomes) { expect(o.ended).toBe(o.succeeded + o.failed + o.stuck); if (o.p50 !== null) expect(o.p95).toBeGreaterThanOrEqual(o.p50); }
+  expect(a.outcomes.find((x) => x.model === "w")).toMatchObject({ built: 1, perBuilt: 0.91 });
+  expect(a.outcomes.find((x) => x.model === "x")).toMatchObject({ built: 0, perBuilt: null });
+  // 150.27 over 165 built jobs is 0.91 a job.
+  const many = Array.from({ length: 165 }, (_, i) => [e("build", 10, 1, { model: "w", job: `b${i}`, cost: i ? 0 : 150.27 }), e("land", 12, 1, { job: `b${i}`, state: "landed" })]).flat();
+  expect(agentStats(many, 10 * H, 20 * H, H, 2, () => true).outcomes[0]).toMatchObject({ cost: 150.27, built: 165, perBuilt: 0.91 });
 });
 
 test("agents: the all-roles success rate, its baseline, the worker first pass and the local share", () => {

@@ -89,16 +89,16 @@ export interface Speed {
   agents: Agents;
 }
 
-/** One role of the factory's agents. `live` is the runs live now; `runs` started in the window; `hours` is their agent time inside it. A reviewer works inside a held run and records no times, so it has only `runs`: `live`, `hours` and `p50` are null. */
-export interface AgentRole { key: AgentKey | "reviewer"; name: string; live: number | null; runs: number; hours: number | null; p50: number | null; models: string[] }
+/** One role of the factory's agents. `live` is the runs live now; `runs` started in the window; `hours` is their agent time inside it; `p50` and `p95` are their times in seconds. The Reviewer's are those of its own `review` jobs. */
+export interface AgentRole { key: AgentKey; name: string; live: number; runs: number; hours: number; p50: number | null; p95: number | null; models: string[] }
 /**
- * One role and model of the window with how its runs ended. `rate` is succeeded over the runs that ended (null with none); `baseline` is the same rate over the baseline's spans (null with no data). `cost` is the recorded cost of the runs (a reviewer records none, so 0).
- * Worker rows add `built` (succeeded runs of a landed job), `firstPass` (those with no fix round) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`.
+ * One role and model of the window with how its runs ended. `ended` is succeeded + failed + stuck (a running run counts in `runs` only). `rate` is succeeded over `ended` (null with none); `baseline` is the same rate over the baseline's spans (null with no data). `cost` is the recorded cost of the runs; `p50` and `p95` are their times in seconds.
+ * Worker rows add `built` (succeeded runs of a landed job), `perBuilt` (`cost` over `built`, null with none built), `firstPass` (those with no fix round) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`.
  */
 interface OutcomeRow {
-  role: AgentKey | "reviewer"; model: string; runs: number; succeeded: number; failed: number; stuck: number;
-  rate: number | null; p50: number | null; cost: number; baseline: number | null;
-  firstPass?: number; built?: number; reviewPass?: number | null; pass?: number; fail?: number;
+  role: AgentKey; model: string; runs: number; succeeded: number; failed: number; stuck: number; ended: number;
+  rate: number | null; p50: number | null; p95: number | null; cost: number; baseline: number | null;
+  firstPass?: number; built?: number; perBuilt?: number | null; reviewPass?: number | null; pass?: number; fail?: number;
 }
 /** The agents over the window. `workers` and `cap` are the runs the live cap counts, now. `mean` and `peak` count all timed roles, and each point holds each role's mean live in its step. */
 export interface Agents {
@@ -408,7 +408,7 @@ export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "director"], ["monitor", "monitor"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
+const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["reviewer", "review"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
 type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
@@ -419,7 +419,8 @@ const modelName = (m: string) => /^claude-([a-z]+)-/.exec(m)?.[1] ?? m;
  * What "succeeded" means, from what each role's run records:
  * - Worker (build, older "agent"): the run ends `passed`, `waiting` or `landed`: its checks passed and the reviewer did not send it back. A run that a reviewer or a check sent back is `returned`: that is a fail, not stuck.
  * - Intake, Triage, Planner, Director: the run ends `passed` or `done`: the role applied its route or wrote its answer. These roles set no `failed`.
- * - Reviewer: it runs inside the build run and records no run, model or cost. Its verdict is read from the build: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `returned`) is a fail; `review.call` of `passed` is a pass. A reviewer that gave no verdict counts as neither. Its model is not recorded, so its row has the model "unset".
+ * - Housekeeper, Maintainer: like Intake, the run ends `passed` or `done`.
+ * - Reviewer: its runs, model, cost and times are those of its own `review` jobs. Its pass and fail counts (and so `succeeded`, `failed` and `rate`) are read from the verdicts on the builds: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `returned`) is a fail; `review.call` of `passed` is a pass. A build with no verdict counts as neither. A verdict's model is the build's `review.model`, else "unset".
  * Stuck is a run that ended `failed` with no `failed` field, or with the cause `timeout` or `stalled`. Failed is any other end that is not running. A running run counts in `runs` only.
  */
 function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[] {
@@ -427,7 +428,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
   const rows = new Map<string, OutcomeRow & { secs: number[]; verdicts: number; landed: number }>();
   const row = (role: OutcomeRow["role"], model: string) => {
     const k = `${role}\0${model}`;
-    if (!rows.has(k)) rows.set(k, { role, model, runs: 0, succeeded: 0, failed: 0, stuck: 0, rate: null, p50: null, cost: 0, baseline: null, secs: [], verdicts: 0, landed: 0 });
+    if (!rows.has(k)) rows.set(k, { role, model, runs: 0, succeeded: 0, failed: 0, stuck: 0, ended: 0, rate: null, p50: null, p95: null, cost: 0, baseline: null, secs: [], verdicts: 0, landed: 0 });
     return rows.get(k)!;
   };
   const runs = entries.map((e) => e.run);
@@ -446,7 +447,8 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     if (role) {
       const w = row(role, r.model || "unset");
       w.runs++; w.cost += r.cost ?? 0;
-      if (ok) w.succeeded++; else if (stuck) w.stuck++; else if (fail) w.failed++;
+      // The reviewer's ends are the verdicts below.
+      if (role !== "reviewer") { if (ok) w.succeeded++; else if (stuck) w.stuck++; else if (fail) w.failed++; }
       const b = Date.parse(r.ended ?? "");
       if (b >= a && b - a <= MAX_RUN) w.secs.push((b - a) / 1000);
       if (ok && build && landedJobs.has(r.job)) {
@@ -458,7 +460,6 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
       const back = r.failed === "review" || r.review?.call === "returned", land = ok || r.review?.call === "passed";
       if (back || land) {
         const v = row("reviewer", r.review?.model || "unset");
-        v.runs++;
         if (back) { v.fail = (v.fail ?? 0) + 1; v.failed++; } else { v.pass = (v.pass ?? 0) + 1; v.succeeded++; }
         const w = row("worker", r.model || "unset");
         w.verdicts++; w.landed += back ? 0 : 1;
@@ -466,10 +467,10 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     }
   }
   return [...rows.values()].map(({ secs, verdicts, landed, ...x }) => {
-    const ended = x.succeeded + x.failed + x.stuck;
+    const ended = x.succeeded + x.failed + x.stuck, cost = round(x.cost, 2);
     return {
-      ...x, cost: round(x.cost, 2), rate: ended ? round(x.succeeded / ended, 4) : null, p50: secs.length ? round(quantile(secs, 0.5)!) : null,
-      ...(x.role === "worker" ? { firstPass: x.firstPass ?? 0, built: x.built ?? 0, reviewPass: verdicts ? round(landed / verdicts, 4) : null } : {}),
+      ...x, ended, cost, rate: ended ? round(x.succeeded / ended, 4) : null, p50: secs.length ? round(quantile(secs, 0.5)!) : null, p95: secs.length ? round(quantile(secs, 0.95)!) : null,
+      ...(x.role === "worker" ? { firstPass: x.firstPass ?? 0, built: x.built ?? 0, perBuilt: x.built ? round(cost / x.built, 2) : null, reviewPass: verdicts ? round(landed / verdicts, 4) : null } : {}),
       ...(x.role === "reviewer" ? { pass: x.pass ?? 0, fail: x.fail ?? 0 } : {}),
     };
   }).sort((p, q) => order(p.role) - order(q.role) || q.runs - p.runs || p.model.localeCompare(q.model));
@@ -504,15 +505,13 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
         points[i][key] = (points[i][key] ?? 0) + part / step;
       }
     }
-    return { key, name, live, runs, hours: round(ms / HOUR, 1), p50: times.length ? round(quantile(times, 0.5)!) : null, models: [...models].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([m]) => m) };
+    return { key, name, live, runs, hours: round(ms / HOUR, 1), p50: times.length ? round(quantile(times, 0.5)!) : null, p95: times.length ? round(quantile(times, 0.95)!) : null, models: [...models].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([m]) => m) };
   });
   // An end before a start at the same moment: a run that follows another does not add one.
   edges.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
   let up = 0, peak = 0;
   for (const [, d] of edges) { up += d; if (up > peak) peak = up; }
   for (const p of points) for (const [key] of AGENT_ROLES) if (p[key] !== undefined) p[key] = round(p[key]!, 2);
-  const inWindow = entries.map((e) => e.run).filter((r) => isBuild(r.role) && Date.parse(r.started) >= since && Date.parse(r.started) < now);
-  const reviews = inWindow.reduce((n, r) => n + (r.review ? 1 : 0), 0);
   // The baseline rate of a role and model: the mean of its rate over the spans that have data, as averageFigures takes it.
   const prior = before.map(([a, b]) => outcomeRows(entries, a, b));
   const outcomes = outcomeRows(entries, since, now).map((o) => {
@@ -520,7 +519,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
     return { ...o, baseline: v.length ? round(v.reduce((x, y) => x + y, 0) / v.length, 4) : null };
   });
   const success = (rows: OutcomeRow[]) => {
-    const w = rows.filter((o) => o.role !== "reviewer"), ended = w.reduce((n, o) => n + o.succeeded + o.failed + o.stuck, 0);
+    const w = rows.filter((o) => o.role !== "reviewer"), ended = w.reduce((n, o) => n + o.ended, 0);
     return ended ? round(w.reduce((n, o) => n + o.succeeded, 0) / ended, 4) : null;
   };
   const base = prior.map(success).filter((n): n is number => n != null);
@@ -530,12 +529,12 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
     firstPass: built ? round(outcomes.reduce((n, o) => n + (o.firstPass ?? 0), 0) / built, 4) : null,
     local: total ? round(own.filter((o) => o.model === "gpt-oss-20b").reduce((n, o) => n + o.runs, 0) / total, 4) : null,
   };
-  const span = now - since, hours = roles.reduce((n, r) => n + (r.hours ?? 0), 0);
+  const span = now - since, hours = roles.reduce((n, r) => n + r.hours, 0);
   return {
-    live: roles.reduce((n, r) => n + (r.live ?? 0), 0), workers: roles[0].live ?? 0, cap,
+    live: roles.reduce((n, r) => n + r.live, 0), workers: roles[0].live, cap,
     mean: span ? round((hours * HOUR) / span, 1) : 0, peak,
     outcomes, rates,
-    roles: [...roles, { key: "reviewer", name: "Reviewer", live: null, runs: reviews, hours: null, p50: null, models: [] }],
+    roles,
     points,
   };
 }
