@@ -831,7 +831,7 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .herald-running { flex: none; max-height: 30%; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-bottom: var(--sp-6); border-bottom: 1px solid var(--rule); }
 .run-dot { width: var(--dot-s); height: var(--dot-s); border-radius: var(--r-pill); background: var(--run); flex: none; align-self: center; animation: breathe 2s var(--ease) infinite; }
 @keyframes breathe { 50% { opacity: .35; transform: scale(.8); } }
-.run-tier { display: inline-flex; align-items: center; gap: var(--sp-4); color: var(--run); font-size: var(--fs-2xs); font-weight: var(--fw-strong); white-space: nowrap; }
+.run-size { display: inline-flex; align-items: center; gap: var(--sp-4); color: var(--run); font-size: var(--fs-2xs); font-weight: var(--fw-strong); white-space: nowrap; }
 /* The Work and Factory toggles of the feed. */
 .herald-show { display: flex; gap: var(--sp-12); font-size: var(--fs-xs); color: var(--muted); }
 .herald-show label { display: flex; align-items: center; gap: var(--sp-4); cursor: pointer; }

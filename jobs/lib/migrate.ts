@@ -21,6 +21,7 @@ import { renderItem, type Issue } from "../../issues/lib/todo.ts";
 import { renderProject } from "../../issues/lib/projects.ts";
 import { readEnd } from "./infra/process.ts";
 import type { Row } from "./records/record.ts";
+import { SIZE_OF } from "./routing/models.ts";
 
 // --- Paths -----------------------------------------------------------------------------------------------------------
 
@@ -398,7 +399,7 @@ function planJobs(r: Roots, p: Plan, h: Helpers): void {
       const extra: Json = { name: run.name, ...(rv?.reason ? { reason: rv.reason } : {}), ...(rv?.sessions?.[0] ? { session: rv.sessions[0] } : {}), told: true };
       row = {
         id, role: "review", by: "gate", state, project: run.repo ?? null, made: Date.parse(it.started), started: it.started, ended,
-        model: rv?.model ?? null, tier: null, cost: rv?.cost ?? null, commit_sha: null, pid: null, exit_code: null, target: targetOf(run.on),
+        model: rv?.model ?? null, size: null, cost: rv?.cost ?? null, commit_sha: null, pid: null, exit_code: null, target: targetOf(run.on),
         prev: key("job", numberOf.get(x.id)!), retry_of: null, was: `${x.id}~review`, extra: JSON.stringify(extra),
       };
     } else {
@@ -418,7 +419,7 @@ function planJobs(r: Roots, p: Plan, h: Helpers): void {
       const ownRetry = retryOf.get(x.id);
       row = {
         id, role: run.kind === "facts" ? "plain" : run.kind, by: BY[run.kind] ?? "rule", state: run.condition, project: run.repo ?? null,
-        made: run.made ?? Date.parse(run.started), started: run.started, ended, model: run.model ?? null, tier: run.tier ?? null, cost: run.cost ?? null,
+        made: run.made ?? Date.parse(run.started), started: run.started, ended, model: run.model ?? null, size: run.kind === "build" ? SIZE_OF[run.tier ?? run.model ?? ""] ?? null : null, cost: run.cost ?? null,
         commit_sha: commit, pid: end.pid, exit_code: end.exit, target: targetOf(run.on), prev: prevOf.get(x.id) ? key("job", numberOf.get(prevOf.get(x.id)!)!) : null,
         retry_of: ownRetry ? key("job", numberOf.get(ownRetry)!) : null, was: `${idForms(x)[0]} ${x.id}`, extra: Object.keys(extra).length ? JSON.stringify(extra) : null,
       };
@@ -659,8 +660,8 @@ function apply(r: Roots, p: Plan): void {
   const d = conn();
   d.transaction(() => {
     const ins = (sql: string, rows: unknown[][]) => { const q = d.query(sql); for (const row of rows) q.run(...(row as never[])); };
-    ins("INSERT INTO jobs (id, role, by, state, project, made, started, ended, model, tier, cost, commit_sha, pid, exit_code, target, prev, retry_of, was, extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      p.jobs.map(({ row: x }) => [x.id, x.role, x.by, x.state, x.project, x.made, x.started, x.ended, x.model, x.tier, x.cost, x.commit_sha, x.pid, x.exit_code, x.target, x.prev, x.retry_of, x.was, x.extra]));
+    ins("INSERT INTO jobs (id, role, by, state, project, made, started, ended, model, size, cost, commit_sha, pid, exit_code, target, prev, retry_of, was, extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      p.jobs.map(({ row: x }) => [x.id, x.role, x.by, x.state, x.project, x.made, x.started, x.ended, x.model, x.size, x.cost, x.commit_sha, x.pid, x.exit_code, x.target, x.prev, x.retry_of, x.was, x.extra]));
     ins("INSERT INTO events (time, subject, action, object, detail) VALUES (?, ?, ?, ?, ?)", p.events.map((e) => [e.time, e.subject, e.action, e.object, e.detail]));
     ins("INSERT INTO issue_state (issue, ask, ask_job, wait_kind, wait_reason, wait_since, ci) VALUES (?, ?, ?, ?, ?, ?, ?)", p.issueState.map((s) => [s.issue, s.ask, s.ask_job, s.wait_kind, s.wait_reason, s.wait_since, s.ci]));
     ins("INSERT INTO tick (step, last, result) VALUES (?, ?, ?)", p.tick.map(([s, v]) => { const j = JSON.parse(v); return [s, j.last, j.result]; }));

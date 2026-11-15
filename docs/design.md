@@ -865,14 +865,14 @@ A feed row shows one event in a feed on one line. The newest event is first.
 | 5 | Count | `+N`, the lines in the row's fold | yes | `--fs-2xs` `--muted` on `--sunk`, `--r-tag` |
 | 6 | Fold | The older events of the row, one line each | yes | `--rule` guide line on the left; opens from the row |
 
-- One row per attempt of an issue: the first job of a job's `prev` chain. Its older events are in the fold, newest first: the time, a label (the run's kind, or the chip word) and a text (the job's link, its mark `✓` or `✗`, then its tier, model, commit, time and cost).
+- One row per attempt of an issue: the first job of a job's `prev` chain. Its older events are in the fold, newest first: the time, a label (the run's kind, or the chip word) and a text (the job's link, its mark `✓` or `✗`, then its size, model, commit, time and cost).
 - A routine's run is one row, a job like any other: its Id is the run's job (`j-06802`), its title says "3 changes", and each change is a line in the fold with the issue's link. A run that ended and changed nothing has no row; one still running, or one that failed, has.
 - A status row has the time and the new status text only. It is drawn where the text changes after the page loaded, as the old text gives way to the new; the first render has none.
 - A chat is one row: the chip `chat`, the first 8 characters of its id, its first prompt.
-- A routing event is a quiet system row: the tier, the model and the cost in muted text. A routed start's choice is in the fold, not the head.
+- A routing event is a quiet system row: the size, the model and the cost in muted text. A routed start's choice is in the fold, not the head.
 - The Work and Factory toggles above the feed show or hide the rows: an issue's events are Work, any other is Factory.
 
-**Running line:** the jobs and issues in progress sit above the feed, on its grid. Each row has the start time, the chip (`implement`, or the run's kind), the Id, the title, and the tier with a breathing dot. A job that ends leaves the line; its row appears in the feed.
+**Running line:** the jobs and issues in progress sit above the feed, on its grid. Each row has the start time, the chip (`implement`, or the run's kind), the Id, the title, and a build's size with a breathing dot. A job that ends leaves the line; its row appears in the feed.
 
 | Do | Don't |
 |---|---|
@@ -1357,7 +1357,7 @@ A settings list is a group of rows. Each row holds one setting: its label, its c
 
 | Helper | Reference |
 |---|---|
-| `settings(label, rows)`; `setting(label, control, { id, hint, save, attrs })` | `ui/views/gates.js`; `ui/views/factory-agents.js`, which still builds the worker tier checkbox by hand |
+| `settings(label, rows)`; `setting(label, control, { id, hint, save, attrs })` | `ui/views/gates.js`; `ui/views/factory-agents.js`, which still builds the size checkbox by hand |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|

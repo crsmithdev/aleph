@@ -8,6 +8,10 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { alephPath } from "./paths.ts";
 
+// Version 6: the size word of an old tier (a model alias, or the router's worker-low or worker-medium), else of a build's model ID.
+const SIZE = `CASE WHEN size IN ('small', 'medium', 'large') THEN size WHEN size = 'worker-low' OR size LIKE '%haiku%' THEN 'small'
+  WHEN size = 'worker-medium' OR size LIKE '%sonnet%' THEN 'medium' WHEN size LIKE '%opus%' THEN 'large' END`;
+
 // One entry per `user_version`: a file at version N runs the entries from N on, so a new version adds only its tables.
 const SCHEMAS = [`
 CREATE TABLE counters (kind TEXT PRIMARY KEY, last INTEGER NOT NULL);
@@ -55,6 +59,17 @@ UPDATE settings SET value = json_insert(json_remove(value, '$.review'), '$."revi
 `, `
 DELETE FROM events WHERE object IN ('a-1', 'b-1');
 DELETE FROM usage WHERE time LIKE '2026-11-20T12:00:00%';
+`, `
+DROP VIEW event_rows;
+ALTER TABLE jobs RENAME COLUMN tier TO size;
+ALTER TABLE events RENAME COLUMN tier TO size;
+UPDATE jobs SET size = CASE WHEN role = 'build' THEN coalesce(size, model) END;
+UPDATE jobs SET size = ${SIZE} WHERE size IS NOT NULL;
+UPDATE events SET size = ${SIZE} WHERE size IS NOT NULL;
+CREATE VIEW event_rows AS SELECT e.seq, e.time, e.subject, e.action, e.object, e.detail, coalesce(e.size, o.size) AS size,
+  s.role AS subject_role, o.role AS object_role, o.target AS object_target, coalesce(o.project, s.project) AS project,
+  o.model, o.cost, o.commit_sha, o.started, o.ended
+  FROM events e LEFT JOIN jobs s ON s.id = e.subject LEFT JOIN jobs o ON o.id = e.object;
 `];
 const VERSION = SCHEMAS.length;
 

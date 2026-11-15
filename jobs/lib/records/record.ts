@@ -29,7 +29,7 @@ export type RunRecord = Run & { id: string };
 /** The columns of a row, as the table gives them. */
 export interface Row {
   id: string; role: string; by: string; state: string; project: string | null; made: number; started: string; ended: string | null;
-  model: string | null; tier: string | null; cost: number | null; commit_sha: string | null; pid: number | null; exit_code: number | null;
+  model: string | null; size: string | null; cost: number | null; commit_sha: string | null; pid: number | null; exit_code: number | null;
   target: string | null; prev: string | null; retry_of: string | null; was: string | null; extra: string | null;
 }
 
@@ -37,7 +37,7 @@ export interface Row {
 type Change = Partial<Omit<Run, "state" | "job">>;
 
 // The fields of a run that are columns; every other field of a run is in `extra`. The project column holds the run's repo key.
-const COLUMNS = new Set(["id", "role", "state", "started", "ended", "model", "tier", "cost", "commit", "target", "prev", "retryOf", "repo", "made", "by", "job", "ask"]);
+const COLUMNS = new Set(["id", "role", "state", "started", "ended", "model", "size", "cost", "commit", "target", "prev", "retryOf", "repo", "made", "by", "job", "ask"]);
 
 const projectOf = (repo: string | undefined): string | null => repo ?? null;
 const repoOf = (project: string | null): string | undefined => project ?? undefined;
@@ -56,7 +56,7 @@ function rootsOf(rows: Row[]): Map<string, string> {
 
 function fromRow(r: Row, root: string, ask: Ask | undefined): RunRecord {
   const run: Record<string, unknown> = { ...JSON.parse(r.extra ?? "{}"), id: r.id, job: root, role: r.role, by: r.by, state: r.state, made: r.made, started: r.started };
-  const col = { ended: r.ended, model: r.model, tier: r.tier, cost: r.cost, commit: r.commit_sha, target: r.target, prev: r.prev, retryOf: r.retry_of, repo: repoOf(r.project) };
+  const col = { ended: r.ended, model: r.model, size: r.size, cost: r.cost, commit: r.commit_sha, target: r.target, prev: r.prev, retryOf: r.retry_of, repo: repoOf(r.project) };
   for (const [k, v] of Object.entries(col)) if (v !== null && v !== undefined) run[k] = v;
   if (ask) run.ask = ask;
   return run as unknown as RunRecord;
@@ -66,7 +66,7 @@ function toRow(id: string, run: Partial<Run>): Omit<Row, "pid" | "exit_code" | "
   const extra = Object.fromEntries(Object.entries(run).filter(([k, v]) => !COLUMNS.has(k) && v !== undefined));
   return {
     id, role: run.role!, by: run.by ?? "rule", state: run.state!, project: projectOf(run.repo), made: run.made!, started: run.started!, ended: run.ended ?? null,
-    model: run.model ?? null, tier: run.tier ?? null, cost: run.cost ?? null, commit_sha: run.commit ?? null, target: run.target ?? null, prev: run.prev ?? null,
+    model: run.model ?? null, size: run.size ?? null, cost: run.cost ?? null, commit_sha: run.commit ?? null, target: run.target ?? null, prev: run.prev ?? null,
     retry_of: run.retryOf ?? null, extra: Object.keys(extra).length ? JSON.stringify(extra) : null,
   };
 }
@@ -140,7 +140,7 @@ export function makeJob(job: NewJob, fill?: (folder: string, id: string) => void
     const id = `job.${nextNumber("job")}`, folder = jobFolder(id);
     const run = { ...job, state: job.state ?? "running", made: job.made ?? Date.now(), started: job.started ?? new Date().toISOString(), by: job.by ?? "rule", told: job.told ?? false } as Run;
     const r = toRow(id, run);
-    d.query("INSERT INTO jobs (id, role, by, state, project, made, started, ended, model, tier, cost, commit_sha, target, prev, retry_of, extra) VALUES ($id, $role, $by, $state, $project, $made, $started, $ended, $model, $tier, $cost, $commit_sha, $target, $prev, $retry_of, $extra)")
+    d.query("INSERT INTO jobs (id, role, by, state, project, made, started, ended, model, size, cost, commit_sha, target, prev, retry_of, extra) VALUES ($id, $role, $by, $state, $project, $made, $started, $ended, $model, $size, $cost, $commit_sha, $target, $prev, $retry_of, $extra)")
       .run(Object.fromEntries(Object.entries(r).map(([k, v]) => [`$${k}`, v])) as never);
     // A build, land or recheck of the work that holds an Ask decides that Ask.
     const target = run.target ?? id;
@@ -172,7 +172,7 @@ function write(d: Database, id: string, state: State | undefined, change: Change
   const merged = JSON.parse(JSON.stringify({ ...was, ...rest, ...(state ? { state } : {}) })) as RunRecord;
   delete (merged as Partial<RunRecord>).ask;
   const row = toRow(id, merged);
-  d.query("UPDATE jobs SET role=$role, by=$by, state=$state, project=$project, made=$made, started=$started, ended=$ended, model=$model, tier=$tier, cost=$cost, commit_sha=$commit_sha, target=$target, prev=$prev, retry_of=$retry_of, extra=$extra WHERE id=$id")
+  d.query("UPDATE jobs SET role=$role, by=$by, state=$state, project=$project, made=$made, started=$started, ended=$ended, model=$model, size=$size, cost=$cost, commit_sha=$commit_sha, target=$target, prev=$prev, retry_of=$retry_of, extra=$extra WHERE id=$id")
     .run(Object.fromEntries(Object.entries(row).map(([k, v]) => [`$${k}`, v])) as never);
   if ("ask" in change) takeAsk(d, id, merged.target ?? id, ask ?? null);
   const owned = "ask" in change ? ask : was.ask;

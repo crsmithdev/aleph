@@ -366,8 +366,8 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   }
 
   const size = SIZE_OF[run.model ?? ""];
-  // A run routed to a size runs on that size's model, and its job row keeps the size word as its tier.
-  if (size !== undefined) { const pick = readModels()[size].model; jobRecord.patchRun(jobOfFolder(folder), { model: pick, tier: size }); run = { ...run, model: pick }; }
+  // A run routed to a size runs on that size's model, and its job row keeps the size word.
+  if (size !== undefined) { const pick = readModels()[size].model; jobRecord.patchRun(jobOfFolder(folder), { model: pick, size }); run = { ...run, model: pick }; }
   const text = brief(id, run, repo);
   writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");

@@ -36,9 +36,9 @@ test("makeJob numbers a job from the job counter, makes its folder, fills it and
 });
 
 test("a job keeps its columns apart from its extra fields, and getRun reads both", () => {
-  const { id } = record.makeJob({ role: "build", name: "issue.7", repo: "aleph", target: "issue.7", model: "opus", tier: "high", cost: 1.5, branch: "job/x", phase: "setup" });
+  const { id } = record.makeJob({ role: "build", name: "issue.7", repo: "aleph", target: "issue.7", model: "opus", size: "medium", cost: 1.5, branch: "job/x", phase: "setup" });
   const row = conn().query("SELECT * FROM jobs WHERE id = ?").get(id) as Record<string, unknown>;
-  expect(row).toMatchObject({ role: "build", project: "aleph", model: "opus", tier: "high", cost: 1.5, target: "issue.7", prev: null, retry_of: null });
+  expect(row).toMatchObject({ role: "build", project: "aleph", model: "opus", size: "medium", cost: 1.5, target: "issue.7", prev: null, retry_of: null });
   expect(JSON.parse(row.extra as string)).toMatchObject({ name: "issue.7", branch: "job/x", phase: "setup" });
   expect(record.getRun(id)).toMatchObject({ repo: "aleph", branch: "job/x", cost: 1.5 });
   expect(record.getRun("job.99")).toBeNull();

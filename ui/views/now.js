@@ -144,7 +144,7 @@ function feedRow({ tone, at, body, by, cls = "", bodyCls = "", attrs = "" }) {
 const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString(36);
 
 /** An event row as the rows below read it: its time in `at`, its subject in `by`, the issue or routine it is about in `subject`, its job in `on`, its detail in `note`, and the run facts of its job; `row` is the row itself. */
-const shaped = (r) => ({ row: r, at: r.time, by: r.subject, subject: targetOf(r), on: [r.object], note: r.detail, tier: r.tier ?? undefined, model: r.model ?? undefined, cost: r.cost ?? undefined, commit: r.commit_sha ?? undefined, action: r.action, project: r.project ?? undefined });
+const shaped = (r) => ({ row: r, at: r.time, by: r.subject, subject: targetOf(r), on: [r.object], note: r.detail, size: r.size ?? undefined, model: r.model ?? undefined, cost: r.cost ?? undefined, commit: r.commit_sha ?? undefined, action: r.action, project: r.project ?? undefined });
 
 /** An event's identity: the same event from the stream and from the state has the same key. */
 const eventKey = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
@@ -184,19 +184,19 @@ const MARK = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returne
 /** The leading verb of a sentence after its ID, with the words that only join it to the rest. */
 const VERB = /^ ?(?:(?:is|has|asks|proposes|hit) |\S+(?: up| its checks)?(?: by| for| to)?(?::|$| ))\s*/;
 
-/** What a routing event chose, "worker-medium · sonnet · $0.00003", from its job's fields. An event with no such job has a note, "cost … model M tier T p P", read as "T · M · p P"; any other note as it is. */
+/** What a routing event chose, "medium · sonnet · $0.00003", from its job's fields. An event with no such job has a note, "cost … model M tier T p P", read as "T · M · p P"; any other note as it is. */
 const routeText = (ev) => {
-  if (ev.tier) return [ev.tier, ev.model, ev.cost !== undefined && `$${Number(ev.cost.toFixed(5))}`].filter(Boolean).join(" · ");
+  if (ev.size) return [ev.size, ev.model, ev.cost !== undefined && `$${Number(ev.cost.toFixed(5))}`].filter(Boolean).join(" · ");
   const note = ev.note ?? "";
   const m = Object.fromEntries([...note.matchAll(/(\w+) (\S+)/g)].map(([, k, v]) => [k, v]));
   return m.tier ? `${m.tier} · ${shortModel(m.model?.split("/").pop())} · p ${m.p}` : note;
 };
 
-/** Whether an event is a routing choice: it names a tier, or is a start whose note is the model, "model default" when routing picked no tier. */
-const isRouting = (ev) => ev.tier || (ev.action === "started" && /^model /.test(ev.note ?? ""));
+/** Whether an event is a routing choice: it names a size, or is a start whose note is the model, "model default" when routing picked no size. */
+const isRouting = (ev) => ev.size || (ev.action === "started" && /^model /.test(ev.note ?? ""));
 
 /** What an event's own fields add to its row, as HTML: a routing event's choice. */
-const detail = (ev) => (ev.tier ? `→ ${esc(routeText(ev))}` : "");
+const detail = (ev) => (ev.size ? `→ ${esc(routeText(ev))}` : "");
 
 /** An event's sentence in two parts of HTML: its leading ID, and what follows the verb ("the factory is paused", "past its time box"). */
 function parts(ev) {
@@ -224,7 +224,7 @@ const chipTone = (word) => CHIP_TONES[word] ?? tone(word);
 
 /** An event's row on one line: the time, the chip, the ID (the issue, else the run's job), then the title, or `said` for a routine run, or what the sentence adds; `+N` is the count of rows in its fold. The facts of its runs are in the fold. */
 export function eventRow(ev, titles = {}, more = 0, said = "") {
-  const route = ev.action === "routed" && !ev.tier;
+  const route = ev.action === "routed" && !ev.size;
   const { lead, rest } = route ? { lead: "", rest: "" } : parts(ev);
   const word = stateWord(ev), title = route ? "" : titles[ev.subject] ?? "", job = jobOf(ev);
   const id = isIssue(ev.subject) ? idLink(shownId(ev.subject, ev.project), issueHref(ev.subject, ev.project)) : job ? idLink(shownId(job), jobHref(job)) : lead;
@@ -237,14 +237,14 @@ export function eventRow(ev, titles = {}, more = 0, said = "") {
 /** The newest event of `all` (newest first) at or before `at` that `ok` takes. */
 const lastBefore = (all, at, ok) => all.find((e) => e.at <= at && ok(e));
 
-/** A job's facts after its mark: for a build, the tier it was routed to and the model it ran on, both from its start's event, then a land's commit, its time and its cost. */
+/** A job's facts after its mark: for a build, the size it was routed to and the model it ran on, both from its start's event, then a land's commit, its time and its cost. */
 function jobFacts(ev, job, run, all) {
   // The job's first start: the gate logs it again as the run moves on after its result.
   const start = all.findLast((e) => e.action === "running" && jobOf(e) === job && e.at <= ev.at);
   const picked = start && run === "build" ? lastBefore(all, start.at, (e) => e.action === "started" && /^model /.test(e.note ?? "")) : undefined;
   const model = picked?.note.slice(6);
   const took = start && ev !== start ? dur((Date.parse(ev.at) - Date.parse(start.at)) / 1000) : "";
-  return [picked?.tier, model, ev.commit && String(ev.commit).slice(0, 7), took, ev.cost !== undefined && money(ev.cost)].filter(Boolean).map(esc).join(" · ");
+  return [picked?.size, model, ev.commit && String(ev.commit).slice(0, 7), took, ev.cost !== undefined && money(ev.cost)].filter(Boolean).map(esc).join(" · ");
 }
 
 /** An older event as a label and a short text: a run's kind, then its linked job ID, its mark and its facts; or the chip word and what the sentence adds. `all` is the group's events, newest first. */
@@ -323,16 +323,15 @@ function eventRows(events, titles = {}, runs = {}, attempts = {}) {
 /** A status text without the "health: " of each health line, which older history entries carry. */
 const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
-/** The running jobs as rows of the feed's grid under the alerts: the start time, the action word, the ID, the title, the tier with the breathing dot. Each is keyed by `data-job` so a job that ends leaves the section. A job leaves the state when it ends, so the rows are the state's. */
+/** The running jobs as rows of the feed's grid under the alerts: the start time, the action word, the ID, the title, a build's size with the breathing dot. Each is keyed by `data-job` so a job that ends leaves the section. A job leaves the state when it ends, so the rows are the state's. */
 function runNow(s) {
-  const row = (id, who, word, title, t, model, tier = "") => feedRow({ tone: "run", at: t, cls: " run-now", attrs: ` data-job="${esc(id)}"`,
+  const row = (id, who, word, title, t, model, size = "") => feedRow({ tone: "run", at: t, cls: " run-now", attrs: ` data-job="${esc(id)}"`,
     body: `<span class="event-line">${tag(word, "run")}${who}<span class="event-title run-title" title="${esc(title)}">${esc(title)}</span>` +
-      `<span class="run-tier"${model ? ` title="${esc(model)}"` : ""}><span class="run-dot"></span>${esc(tier)}</span></span>` });
+      `<span class="run-size"${model ? ` title="${esc(model)}"` : ""}><span class="run-dot"></span>${esc(size)}</span></span>` });
   const rows = (s.runningIssues ?? []).map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat((s.running ?? []).map((j) => {
     const run = j.run ?? { role: "build", started: j.started };
-    // A job's tier is the Claude model it asked for: its model, or, when another backend served it, its recorded tier.
-    const tier = run.role === "build" ? TIERS[j.tier ?? shortModel(j.model)] : "";
-    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), run.role === "build" ? role("build") : run.role, j.item?.title || j.name, run.started ?? j.started, j.model, tier);
+    const size = run.role === "build" ? j.size : "";
+    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), run.role === "build" ? role("build") : run.role, j.item?.title || j.name, run.started ?? j.started, j.model, size);
   }));
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
 }
@@ -480,8 +479,6 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
 /** What a card's line says for a hold: the action word and the event's content, as `busy a1372 → issues.js` or `after a9`. */
 const holdLine = (ev) => (ev ? [ev.action, contentText(ev)].filter(Boolean).join(" ") : "");
-
-const TIERS = { haiku: "low", sonnet: "medium", opus: "high" };
 
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */

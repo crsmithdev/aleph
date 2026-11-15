@@ -20,8 +20,8 @@ export const prop = { id: "l-1234abcd", kind: "check", title: "No db mocks", tar
 ] };
 
 /** An event row, `event_rows` as the stream and the state send it, from `at`, `by`, the issue or job it is on and the detail. A hold takes its key from `on` as its detail. */
-export const row = (e: { at: string; by: string; subject: string; action: string; on?: string[]; file?: string; note?: string; cost?: number; commit?: string; tier?: string; model?: string }) => {
+export const row = (e: { at: string; by: string; subject: string; action: string; on?: string[]; file?: string; note?: string; cost?: number; commit?: string; size?: string; model?: string }) => {
   const hold = ["busy", "after", "red"].includes(e.action);
   const detail = hold ? [e.on?.[0], e.action === "busy" ? "holds" : "", e.file, e.note].filter(Boolean).join(" ") : e.note;
-  return { time: e.at, subject: e.by, action: e.action, object: !hold && e.on?.[0] ? e.on[0] : e.subject, object_target: !hold && e.on?.[0] ? e.subject : null, ...(detail ? { detail } : {}), tier: e.tier ?? null, model: e.model ?? null, cost: e.cost ?? null, commit_sha: e.commit ?? null };
+  return { time: e.at, subject: e.by, action: e.action, object: !hold && e.on?.[0] ? e.on[0] : e.subject, object_target: !hold && e.on?.[0] ? e.subject : null, ...(detail ? { detail } : {}), size: e.size ?? null, model: e.model ?? null, cost: e.cost ?? null, commit_sha: e.commit ?? null };
 };

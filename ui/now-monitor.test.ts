@@ -77,11 +77,11 @@ test("the Herald shows its alerts under a Not OK badge in the worst alert's tone
 
 test("the Herald lists each running job as a row on the feed grid between the alerts and the feed, and no section with none", () => {
   const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
-  const running = [{ id: "job.0", name: "intake-aleph-7", tier: "haiku", model: "deepseek-v4.1-flash", started: "2026-11-09T11:00:00Z", item: { title: "Fix the thing" } }];
+  const running = [{ id: "job.0", name: "intake-aleph-7", size: "small", model: "deepseek-v4.1-flash", started: "2026-11-09T11:00:00Z", item: { title: "Fix the thing" } }];
   const h = view.renderHerald({ ...calm, asks: [ask], running, runningIssues: [{ id: "aleph-9", stage: "intake", title: "Sort it", at: "2026-11-09T11:30:00Z" }] });
   expect(h.match(/class="event-row run run-now"/g)).toHaveLength(2);
-  // The start time, the action word in the run tone, the job's ID, its title, then the tier after the breathing dot; the model is in the tier's title.
-  expect(h).toContain('<div class="event-row run run-now" data-job="job.0"><span class="event-time">' + clock("2026-11-09T11:00:00Z") + '</span><span class="event-body"><span class="event-line"><span class="badge run">implement</span><a class="idl" href="#/jobs/job.0">j-00000</a><span class="event-title run-title" title="Fix the thing">Fix the thing</span><span class="run-tier" title="deepseek-v4.1-flash"><span class="run-dot"></span>low</span></span></span></div>');
+  // The start time, the action word in the run tone, the job's ID, its title, then the size after the breathing dot; the model is in the size's title.
+  expect(h).toContain('<div class="event-row run run-now" data-job="job.0"><span class="event-time">' + clock("2026-11-09T11:00:00Z") + '</span><span class="event-body"><span class="event-line"><span class="badge run">implement</span><a class="idl" href="#/jobs/job.0">j-00000</a><span class="event-title run-title" title="Fix the thing">Fix the thing</span><span class="run-size" title="deepseek-v4.1-flash"><span class="run-dot"></span>small</span></span></span></div>');
   expect(h).not.toContain("intake-aleph-7");
   expect(h).toContain('data-job="aleph-9"');
   expect(h).toContain('<span class="badge run">intake</span>');
@@ -245,8 +245,8 @@ const a2136 = [
   row({ at: "2026-11-13T19:54:42.483Z", by: "gate", subject: "aleph-2136", action: "passed", on: ["a2136#2"], cost: 0.16095063369608836 }),
   row({ at: "2026-11-13T19:53:20.008Z", by: "claude", subject: "aleph-2136", action: "done" }),
   row({ at: "2026-11-13T19:51:00.787Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#2"] }),
-  row({ at: "2026-11-13T19:50:59.573Z", by: "rule", subject: "aleph-2136", action: "started", note: "model haiku", tier: "worker-low" }),
-  row({ at: "2026-11-13T19:50:59.497Z", by: "rule", subject: "aleph-2136", action: "routed", note: "worker-low by classifier jev-1.13-20260917" }),
+  row({ at: "2026-11-13T19:50:59.573Z", by: "rule", subject: "aleph-2136", action: "started", note: "model haiku", size: "small" }),
+  row({ at: "2026-11-13T19:50:59.497Z", by: "rule", subject: "aleph-2136", action: "routed", note: "small by classifier jev-1.13-20260917" }),
   row({ at: "2026-11-13T19:50:53.298Z", by: "gate", subject: "aleph-2136", action: "done", on: ["a2136#1"], cost: 0.2916336 }),
   row({ at: "2026-11-13T19:50:19.563Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#1"] }),
   row({ at: "2026-11-13T19:50:13.738Z", by: "claude", subject: "aleph-2136", action: "filed" }),
@@ -262,52 +262,52 @@ const olderText = (events: object[]) => {
 test("the Herald's older rows give each job its facts and fold the routing and the start into the implement row", () => {
   expect(olderText(a2136)).toEqual([
     "land | a2136#3 ✓ 08127b8 · 20s",
-    "implement | a2136#2 ✓ worker-low · haiku · 3m 42s · $0.16",
+    "implement | a2136#2 ✓ small · haiku · 3m 42s · $0.16",
     "closed | by Claude Code",
     "intake | a2136#1 ✓ 34s · $0.29",
     "filed | by Claude Code",
   ]);
 });
 
-// An issue's two builds as the writer stores them: each start's own tier, then the job's running and passed events.
-const twoBuilds = (tiers: (string | undefined)[]) => tiers.flatMap((tier, i) => {
+// An issue's two builds as the writer stores them: each start's own size, then the job's running and passed events.
+const twoBuilds = (sizes: (string | undefined)[]) => sizes.flatMap((size, i) => {
   const at = (m: number) => `2026-11-13T${10 + i}:${m < 10 ? "0" : ""}${m}:00Z`;
   return [
     row({ at: at(10), by: "gate", subject: "aleph-7", action: "passed", on: [`a7#${i + 1}`], cost: 0.5 }),
     row({ at: at(5), by: "gate", subject: "aleph-7", action: "running", on: [`a7#${i + 1}`] }),
-    row({ at: at(1), by: "rule", subject: "aleph-7", action: "started", note: `model ${i ? "opus" : "haiku"}`, tier }),
+    row({ at: at(1), by: "rule", subject: "aleph-7", action: "started", note: `model ${i ? "opus" : "haiku"}`, size }),
   ];
 }).reverse();
-const seven = (tiers: (string | undefined)[]) => view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events: twoBuilds(tiers), titles: {}, chats: [], runs: { "a7#1": "build", "a7#2": "build" } } });
+const seven = (sizes: (string | undefined)[]) => view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events: twoBuilds(sizes), titles: {}, chats: [], runs: { "a7#1": "build", "a7#2": "build" } } });
 
-test("the Herald gives each build of an issue the tier of its own start", () => {
-  const h = seven(["worker-low", "opus"]);
-  expect(h).toContain("worker-low · haiku · 5m 00s · $0.50");
-  expect(h).toContain("opus · opus · 5m 00s · $0.50");
-  expect(h).not.toContain("worker-low · opus");
-  expect(h).not.toContain("opus · haiku");
+test("the Herald gives each build of an issue the size of its own start", () => {
+  const h = seven(["small", "large"]);
+  expect(h).toContain("small · haiku · 5m 00s · $0.50");
+  expect(h).toContain("large · opus · 5m 00s · $0.50");
+  expect(h).not.toContain("small · opus");
+  expect(h).not.toContain("large · haiku");
 });
 
-test("the Herald's build facts have no tier when its start routed none, not the tier of the issue's earlier build, and keep the model, commit, time and cost", () => {
-  const events = twoBuilds(["worker-low", undefined]).map((e: any) => e.action === "passed" && e.time.startsWith("2026-11-13T11") ? { ...e, commit_sha: "0123456789abcdef" } : e);
+test("the Herald's build facts have no size when its start routed none, not the size of the issue's earlier build, and keep the model, commit, time and cost", () => {
+  const events = twoBuilds(["small", undefined]).map((e: any) => e.action === "passed" && e.time.startsWith("2026-11-13T11") ? { ...e, commit_sha: "0123456789abcdef" } : e);
   const h = view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: { "a7#1": "build", "a7#2": "build" } } });
-  expect(h).toContain("a7#1 ✓ worker-low · haiku · 5m 00s · $0.50");
+  expect(h).toContain("a7#1 ✓ small · haiku · 5m 00s · $0.50");
   expect(h).toContain("a7#2 ✓ opus · 0123456 · 5m 00s · $0.50");
 });
 
 test("the Herald's job row takes its time from the job's first start, not one the gate logs after its result", () => {
   const again = [row({ at: "2026-11-13T19:54:50.000Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#2"] }), ...a2136];
-  expect(olderText(again)[1]).toBe("implement | a2136#2 ✓ worker-low · haiku · 3m 42s · $0.16");
+  expect(olderText(again)[1]).toBe("implement | a2136#2 ✓ small · haiku · 3m 42s · $0.16");
 });
 
-test("the Herald's row of an attempt holds no tier, model, cost or commit in its head, and its fold holds them", () => {
+test("the Herald's row of an attempt holds no size, model, cost or commit in its head, and its fold holds them", () => {
   const attempts = { "job.1": "job.1", "job.2": "job.1", "job.3": "job.1", "job.4": "job.1" };
   const events = [
     row({ at: "2026-11-13T10:50:00Z", by: "gate", subject: "aleph-7", action: "landed", on: ["job.4"], commit: "0123456789abcdef" }),
     row({ at: "2026-11-13T10:40:00Z", by: "gate", subject: "aleph-7", action: "passed", on: ["job.3"], cost: 0.1 }),
     row({ at: "2026-11-13T10:20:00Z", by: "gate", subject: "aleph-7", action: "passed", on: ["job.2"], cost: 0.5 }),
     row({ at: "2026-11-13T10:10:00Z", by: "gate", subject: "aleph-7", action: "running", on: ["job.2"] }),
-    row({ at: "2026-11-13T10:09:00Z", by: "rule", subject: "aleph-7", action: "started", note: "model haiku", tier: "worker-low" }),
+    row({ at: "2026-11-13T10:09:00Z", by: "rule", subject: "aleph-7", action: "started", note: "model haiku", size: "small" }),
     row({ at: "2026-11-13T10:05:00Z", by: "gate", subject: "aleph-7", action: "done", on: ["job.1"], cost: 0.2 }),
     row({ at: "2026-11-13T10:00:00Z", by: "gate", subject: "aleph-7", action: "running", on: ["job.1"] }),
   ];
@@ -317,12 +317,12 @@ test("the Herald's row of an attempt holds no tier, model, cost or commit in its
   const [head, fold] = h.split('<div class="herald-older">');
   const line = head.slice(head.lastIndexOf('<div class="event-row'));
   expect(line).toContain('<span class="event-line"><span class="badge done">landed</span><a class="idl" href="#/issues/aleph/7">aleph-7</a><span class="event-title" title="Fix it">Fix it</span><span class="event-more">+4</span></span>');
-  for (const fact of ["worker-low", "haiku", "$0.50", "0123456"]) { expect(line).not.toContain(fact); expect(fold).toContain(fact); }
+  for (const fact of ["small", "haiku", "$0.50", "0123456"]) { expect(line).not.toContain(fact); expect(fold).toContain(fact); }
 });
 
-test("an attempt whose newest event is its routed start, with a tier or without, keeps the tier, model and cost out of the head and draws the start in its fold", () => {
+test("an attempt whose newest event is its routed start, with a size or without, keeps the size, model and cost out of the head and draws the start in its fold", () => {
   const routed = [
-    [{ note: "model haiku", tier: "worker-low", cost: 0.001 }, ["worker-low", "haiku", "0.001"], "model haiku → worker-low · $0.001"],
+    [{ note: "model haiku", size: "small", cost: 0.001 }, ["small", "haiku", "0.001"], "model haiku → small · $0.001"],
     [{ note: "model default" }, ["model default"], "model default"],
   ] as const;
   for (const [start, facts, line] of routed) {

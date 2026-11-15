@@ -24,11 +24,11 @@ export function layout(): Layout {
 /** One event in the event table; `event()` checks its words first, so a bad word throws. */
 export function logEvent(e: Parameters<typeof event>[0]): Event {
   const ev = event(e);
-  conn().query("INSERT INTO events (time, subject, action, object, detail, tier) VALUES (?, ?, ?, ?, ?, ?)").run(ev.time, ev.subject, ev.action, ev.object, ev.detail ?? null, ev.tier ?? null);
+  conn().query("INSERT INTO events (time, subject, action, object, detail, size) VALUES (?, ?, ?, ?, ?, ?)").run(ev.time, ev.subject, ev.action, ev.object, ev.detail ?? null, ev.size ?? null);
   return ev;
 }
 
-/** A change of a setting (pause, Always, a model tier, the judge) as an event, so the Herald shows it. */
+/** A change of a setting (pause, Always, a model setting, the judge) as an event, so the Herald shows it. */
 export const logSetting = (detail: string): Event => logEvent({ subject: "human", action: "changed", object: "settings", detail });
 
 /** The events at or after `since` (ms), oldest first, with the job fields of `event_rows`. */

@@ -64,8 +64,8 @@ beforeAll(() => {
     issue: "aleph-3", ask: { kind: "input", reason: "question", question: "Which?", options: [], why: [] }, askRun: ids[2], wait: { kind: "red", reason: "main is red", since: "2026-11-02T03:00:00.000Z" }, rounds: 1, cost: 1, asks: [{ set: "2026-11-02T03:04:30.000Z", reason: "question" }],
     runs: [
       run(ids[0], { kind: "intake", job: ids[0], name: "intake-aleph-3", started: "2026-11-02T03:00:00.000Z", n: 1, route: "build" }),
-      run(ids[1], { job: ids[1], condition: "returned", started: "2026-11-02T03:01:00.000Z", ended: "2026-11-02T03:03:00.000Z", n: 2, cost: 0.5, failed: "review", next: "worker", review: { call: "returned", reason: "no test", model: "opus", cost: 0.2, seconds: 30 } }),
-      run(ids[2], { job: ids[1], condition: "passed", started: "2026-11-02T03:04:00.000Z", ended: "2026-11-02T03:08:00.000Z", n: 3, cost: 0.4, touched: ["aleph-3.1"], review: { call: "passed", model: "opus" } }),
+      run(ids[1], { job: ids[1], condition: "returned", started: "2026-11-02T03:01:00.000Z", ended: "2026-11-02T03:03:00.000Z", n: 2, cost: 0.5, model: "opus", failed: "review", next: "worker", review: { call: "returned", reason: "no test", model: "opus", cost: 0.2, seconds: 30 } }),
+      run(ids[2], { job: ids[1], condition: "passed", started: "2026-11-02T03:04:00.000Z", ended: "2026-11-02T03:08:00.000Z", n: 3, cost: 0.4, model: "qwen3-coder", tier: "sonnet", touched: ["aleph-3.1"], review: { call: "passed", model: "opus" } }),
       run(ids[3], { kind: "land", job: ids[1], condition: "landed", started: "2026-11-02T03:09:00.000Z", ended: "2026-11-02T03:10:00.000Z", n: 4 }),
     ],
     events: [
@@ -121,7 +121,9 @@ test("the plan numbers the jobs by start order and maps the old keys", () => {
     ["job.1", "plain", "done"], ["job.2", "intake", "done"], ["job.3", "build", "returned"], ["job.4", "review", "done"], ["job.5", "build", "passed"], ["job.6", "review", "done"], ["job.7", "land", "landed"],
   ]);
   const [, , returned, review, build2, , land] = rows;
-  expect(review).toMatchObject({ prev: "job.3", target: "issue.3", model: "opus", cost: 0.2 });
+  expect(review).toMatchObject({ prev: "job.3", target: "issue.3", model: "opus", cost: 0.2, size: null });
+  // A build's size is from its old tier, else its model.
+  expect([returned.size, build2.size]).toEqual(["large", "medium"]);
   expect(build2).toMatchObject({ prev: "job.3", target: "issue.3", was: expect.stringContaining("a3#3") });
   expect(land).toMatchObject({ prev: "job.5", commit_sha: landed, project: "aleph" });
   // The commit that the old trailer names goes to the work's first job too.

@@ -11,7 +11,7 @@ This page is the standard for the names, keys and status words that aleph shows 
 | Idea | A note of something to build, with its lens results. |
 | Job | One execution: an intake, build, review, land, recheck, lens, monitor, housekeeper, maintainer or plain run. It has a role, a state, a cost and a folder. |
 | Role | What a job does. A job has one role. |
-| Size | Which model a build job's worker runs on, as the router picks it: `small` (`haiku`), `medium` (`sonnet`) or `large` (`opus`). Each has an entry in the `models` setting. |
+| Size | Which model a build job's worker runs on, as the router picks it: `small` (`haiku`), `medium` (`sonnet`) or `large` (`opus`). Each has an entry in the `models` setting. A build's job row and its start event hold the size word in `size`. |
 | Role model | The model of one role other than the worker: `review`, `intake`, `director`, `monitor`, `maintainer`, `title` or `judge`. Each has an entry in the `models` setting. |
 | Link | A relation between two stored things. A job has `target`, `prev` and `retry_of`. An issue has `from`, `after` and `related`. A hierarchy is a link, never part of a key. |
 | Issue state | The live machine state of one issue: its Ask, its wait and its CI result. It outlives each job on the issue. |
@@ -59,7 +59,7 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
 - **Event**
   - Identity: `seq`, a counter that gives the order. A row in the `events` table of `aleph.db`.
   - Lifecycle: append only.
-  - Owner: one door, `logEvent` in `lib/layout.ts`, which checks the words through `event()` in `lib/naming.ts`. Readers read the view `event_rows`, which adds the role, target, project, model, tier, cost, commit and times of the job on each side.
+  - Owner: one door, `logEvent` in `lib/layout.ts`, which checks the words through `event()` in `lib/naming.ts`. Readers read the view `event_rows`, which adds the role, target, project, model, size, cost, commit and times of the job on each side. An event's own size wins over its job's.
   - Invariants: `subject` is a job key or one of `gate`, `rule`, `human`, `claude`. `action` is in the action set. `object` is a key, or `settings` for a settings event.
   - Relations: one subject. One object. Record events (`hold`, `started`, `streak`, `cap`, `rerun`, `rescued`, `director`) are events with the issue or job as object.
 - **Issue state**
@@ -85,7 +85,7 @@ Every event has 6 fields: a log row, a job's end, a Status card line, a report l
 - The subject is the job key when an agent run acted. The page shows the role of that job and links it. `gate` and `rule` are code, `human` is Chris, and `claude` is an interactive session or the UI chat.
 - A run's state change is one event by `gate` on the job. A returned job that the reviewer sent back has the reviewer's job as subject, and the sentence reads "returned by review".
 - An Ask set logs `question` and an Ask cleared logs `answered`. Each new issue logs `filed`. Each close logs `done` or `dropped`.
-- A change of a setting (pause, resume, an Always rule, a model tier, the judge) logs `changed` on object `settings`.
+- A change of a setting (pause, resume, an Always rule, a model, the judge) logs `changed` on object `settings`.
 - A `vault write` that the contradiction screen refuses logs no event.
 - Keys and paths in the detail are linked by the page: every `(project|issue|idea|job).<n>` and each old issue ID.
 - The detail of a cause is its phrase from `because` in `lib/naming.ts`: `timeout` is "past its time box", `override` is "over review".

@@ -60,5 +60,5 @@ test("a start routed to large logs its size as a field of the started event and 
     expect(await startIssue({ key: "aleph" } as any, "aleph-6", 6, "x", null)).toBeNull();
   } finally { delete process.env.ALEPH_START_CMD; }
   const started = readEvents().filter((e) => e.action === "started");
-  expect(started.map((e) => [e.object, e.tier ?? null, e.detail])).toEqual([["aleph-5", "large", "model claude-opus-5-5"], ["aleph-6", null, "model default"]]);
+  expect(started.map((e) => [e.object, e.size ?? null, e.detail])).toEqual([["aleph-5", "large", "model claude-opus-5-5"], ["aleph-6", null, "model default"]]);
 });
