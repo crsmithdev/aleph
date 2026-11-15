@@ -9,6 +9,7 @@
  * - Kept: a key asked for in the last 10 min is built again on each change and poll. An older one is only marked
  *   dirty, and its next request waits for a build; for a Sessions or Skills key that has an answer, the request gets
  *   that answer with a mark `{ error, since }` while a rebuild runs, and `change` names the key when it ends. A key not asked for in 1 h is dropped.
+ *   A Sessions or Skills key's last good answer is also saved to `<aleph>/ui/answers/`; with none in memory (a restart, the drop) a request gets the saved one the same way.
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
  * - `aleph.db` is polled for `PRAGMA data_version` every 100 ms; a new event row sends the `ev` rows and changes the source `events`.
@@ -22,7 +23,7 @@
  *   what no watcher sees (a systemd timer).
  */
 import { Database } from "bun:sqlite";
-import { readJsonOr } from "../lib/json.ts";
+import { readJsonOr, writeJson } from "../lib/json.ts";
 import { existsSync, mkdirSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { factoryDir } from "../jobs/lib/gates/factory-status.ts";
@@ -105,6 +106,17 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
     saved = text;
   }
 
+  /** Where a Langfuse key's last good answer is kept: beside the key set, one file per key. */
+  const answerFile = (key: string) => { const f = file(); return f ? join(dirname(f), "answers", `${Bun.hash(key).toString(16)}.json`) : null; };
+
+  /** A Langfuse key with no answer in memory takes its saved one, due for a rebuild: the request gets it at once. */
+  function load(key: string, s: Slot): void {
+    const f = answerFile(key);
+    if (s.answer || !f || !readsLangfuse(key)) return;
+    const old = readJsonOr<{ answer: Answer; at: string } | null>(f, null);
+    if (old) { Object.assign(s, old, { hash: Bun.hash(JSON.stringify(old.answer)) }); mark(s); }
+  }
+
   function fail(s: Slot, error: string): void {
     s.error = error;
     s.since ??= iso();
@@ -121,7 +133,11 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
           const { answer, sources } = await build(key, { ...gens });
           s.sources = new Set([...sources, "action"]);
           if (answer.status >= 500) fail(s, errorOf(answer));
-          else Object.assign(s, { answer, hash: Bun.hash(JSON.stringify(answer)), error: undefined, since: undefined, at: iso() });
+          else {
+            Object.assign(s, { answer, hash: Bun.hash(JSON.stringify(answer)), error: undefined, since: undefined, at: iso() });
+            const f = answerFile(key);
+            if (f && readsLangfuse(key)) writeJson(f, { answer, at: s.at });
+          }
         } catch (e) {
           fail(s, e instanceof Error ? e.message : String(e));
         }
@@ -166,11 +182,12 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       let s = slots.get(key);
       if (!s) { slots.set(key, (s = { asked: now(), sources: new Set() })); save(); }
       s.asked = now();
+      load(key, s);
       if (s.answer && dirty(s) && readsLangfuse(key)) {
         if (!s.note) {
           s.note = "a rebuild runs; this is the last answer";
           // The note goes when the rebuild ends, so `change` goes out then even when the answer and mark look the same.
-          void run(key, s).then(() => { if (slots.has(key)) signal([key]); });
+          void (s.building ?? run(key, s)).then(() => { if (slots.has(key)) signal([key]); });
         }
       } else if (!s.answer || dirty(s)) await (s.building ?? run(key, s));
       if (!s.answer) return { answer: { status: 502, body: { error: s.error } } };
@@ -219,6 +236,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
         if (now() - asked >= DROP_MS || slots.has(k)) continue;
         const s: Slot = { asked, sources: new Set() };
         slots.set(k, s);
+        load(k, s);
         void run(k, s);
       }
     },

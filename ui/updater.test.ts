@@ -103,6 +103,64 @@ test("a Sessions key not asked for in 10 min answers at once with its last answe
   expect(f.log).toEqual(["/api/sessions", "/api/sessions"]);
 });
 
+test("a Sessions key with no answer in memory gets its saved answer at once after a restart, and signals when the rebuild ends", async () => {
+  const f = fake(), file = join(dir, "sessions-restart.json");
+  f.world["/api/sessions"] = { body: 1, sources: ["langfuse"] };
+  await createUpdater({ ...f, file: () => file }).get("/api/sessions");
+  const built = new Date(f.now()).toISOString();
+  f.tick(1000);
+  const g = fake();
+  g.world["/api/sessions"] = { body: 2, sources: ["langfuse"] };
+  const v = createUpdater({ ...g, file: () => file });
+  const heard: string[][] = [];
+  v.onChange((keys) => heard.push(keys));
+  const release = g.hold();
+  const got = await v.get("/api/sessions"); // the build is held: this must not wait for it
+  expect(got.answer.body).toBe(1);
+  expect(got.error).toContain("rebuild");
+  expect(got.since).toBe(built);
+  release();
+  await new Promise((r) => setTimeout(r, 0));
+  expect(heard).toEqual([["/api/sessions"]]);
+  const next = await v.get("/api/sessions");
+  expect(next.answer.body).toBe(2);
+  expect(next.error).toBeUndefined();
+});
+
+test("a request for a Sessions key during the restore build gets its saved answer and shares that build", async () => {
+  const f = fake(), file = join(dir, "sessions-restore.json");
+  f.world["/api/sessions"] = { body: 1, sources: ["langfuse"] };
+  await createUpdater({ ...f, file: () => file }).get("/api/sessions");
+  const g = fake();
+  g.world["/api/sessions"] = { body: 2, sources: ["langfuse"] };
+  const v = createUpdater({ ...g, file: () => file });
+  const heard: string[][] = [];
+  v.onChange((keys) => heard.push(keys));
+  const release = g.hold();
+  v.restore();
+  expect((await v.get("/api/sessions")).error).toContain("rebuild");
+  release();
+  await new Promise((r) => setTimeout(r, 0));
+  expect(g.log).toEqual(["/api/sessions"]);
+  expect(heard).toEqual([["/api/sessions"]]);
+});
+
+test("a Sessions key dropped after 1 h gets its saved answer with the rebuild note", async () => {
+  const f = fake(), file = join(dir, "sessions-drop.json"), u = createUpdater({ ...f, file: () => file });
+  f.world["/api/sessions"] = { body: 1, sources: ["langfuse"] };
+  await u.get("/api/sessions");
+  const built = new Date(f.now()).toISOString();
+  f.tick(DROP_MS);
+  u.sweep();
+  f.world["/api/sessions"].body = 2;
+  const release = f.hold();
+  const got = await u.get("/api/sessions");
+  expect(got.answer.body).toBe(1);
+  expect(got.error).toContain("rebuild");
+  expect(got.since).toBe(built);
+  release();
+});
+
 test("a Skills rebuild served over its last answer signals when it ends, even when it fails", async () => {
   const f = fake(), u = createUpdater(f);
   f.world["/api/skills/x"] = { body: 1, sources: ["langfuse"] };
