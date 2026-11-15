@@ -71,7 +71,8 @@ For a handoff, `file` is the handoff file name.
    line that counts the `done` and `superseded` items. Do not list those items.
 2. If no item is open, say so in one line, and go to step 5.
 3. Ask in the question UI, up to 4 items per call, with the recommended option first. An `open-decision` item gets
-   its real options. An `open-work` item gets "Do it", "File it" and "Drop it".
+   its real options. An `open-work` item gets "Do it", "File it" and "Drop it". In a headless run (`claude -p`)
+   there is no question UI: skip steps 3 and 4, leave the open items out of the ledger, and go to step 5.
 4. Act on each answer as the session's work mode says (`/aleph:mode`, factory if none is set). Append it to the
    ledger with the verdict `decided` or `dropped` and the answer in `note`.
 5. Append one line that marks the transcripts as swept up to the time `turns.ts` ran:
