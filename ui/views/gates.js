@@ -1,10 +1,9 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, undecided, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, tag, tone, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
-import { askCard } from "./cards.js";
 
 export const view = {
   path: "/automation",
@@ -15,7 +14,7 @@ export const view = {
   icon: "shield-halved",
   // The caps' use and the live counts come from the factory block of /api/factory.
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/automation?window=${s.window}`), s.url(`/api/factory?window=${s.window}`)]; },
-  combine: ([d, s]) => ({ ...d, asks: s.asks, factory: { ...s.factory, capEnv: d.capEnv, settings: d.settings } }),
+  combine: ([d, s]) => ({ ...d, factory: { ...s.factory, capEnv: d.capEnv, settings: d.settings } }),
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),
@@ -37,12 +36,12 @@ export const BY = Object.fromEntries(["human", "rule", "director", "firefighter"
 
 const PAGE = 50;
 
-const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"], ["gates-waiting", "Waiting for the User"],
+const CONTENTS = [["gates-schedules", "Schedules"], ["monitor", "Monitor"],
   ["rules", "Rules"], ["gates-caps", "Controls"], ["gates-held", "Held Paths"], ["gates-log", "Log"]];
 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { aside: scope(q).bar() })}` + toc(CONTENTS,
-    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRules(d) +
+    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + renderSchedules(d) + renderMonitor(d) + renderRules(d) +
     renderCaps(d) + renderHeld(d) + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
 }
 
@@ -112,12 +111,6 @@ function everyForm(s) {
 export function renderSchedules(d) {
   const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${s.name === "monitor" ? esc(s.every) : everyForm(s)}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
   return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) : empty(), { id: "gates-schedules" });
-}
-
-/** The Asks routed to Chris, as the Status page's cards. */
-function renderWaiting(d) {
-  const asks = undecided(d.asks), rows = asks.map((i) => askCard(i, d.now)).join("");
-  return card("Waiting for the User", rows ? `<div class="list">${rows}</div>` : empty(), { id: "gates-waiting", count: asks.length });
 }
 
 /** The units of an Ask's wait, largest first: a stored number of minutes shows in the largest unit that divides it. */

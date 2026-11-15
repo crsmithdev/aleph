@@ -218,8 +218,10 @@ const data = () => ({
 
 test("the view draws the sections in order, a closed gate, and an Edit row with only Director and the reason's mode", () => {
   const h = gates.renderGates(data());
-  const order = ["Waiting for the User", "Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
+  const order = ["Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
+  expect(h).not.toContain(">Waiting for the User</h2>");
+  expect(h).not.toContain('id="gates-waiting"');
   // The three metric tiles; no Gates now state cards.
   const tiles = [...h.matchAll(/<div class="tile sc"[^>]*><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
   expect(tiles).toEqual(["Automation rate", "Gate catches", "Held time"]);
@@ -358,7 +360,6 @@ test("the Gates page says the user, never you, your or Chris, in its visible tex
   const d = data();
   const text = (h: string) => h.replace(/<[^>]*>/g, " ");
   const h = gates.renderGates({ ...d, asks: [] });
-  expect(h).toContain(">Waiting for the User</h2>");
   expect(h).toContain('<div class="empty"><p>No data</p></div>');
   expect(h).toContain("wait for the user after the reviewer passes the job");
   expect(text(h)).not.toMatch(/\b(you|your|Chris)\b/i);
