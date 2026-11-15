@@ -14,7 +14,7 @@ import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { setPaused } from "../gates/factory-status.ts";
 import { readStore } from "../learning/corrections.ts";
 import { getRun } from "../records/record.ts";
-import { jobOfFolder } from "../records/run-files.ts";
+import { jobOfFolder, logTo } from "../records/run-files.ts";
 import { eventsOf } from "../../../lib/layout.ts";
 import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, repoPath, run, sh, started, useDirectorFixture } from "./director.fixture.ts";
 
@@ -226,8 +226,11 @@ test("a worker's question on a run: the director's answer drops the job with the
 test("a director job on a run's Ask is a job on the run's issue and keeps its decision on its own row", async () => {
   fresh([{ title: "issue", specced: true }]);
   const folder = run({ name: "issue.1", target: "issue.1", ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  logTo(folder, "checks", "(fail) a > b [1.00ms]");
   replyWith({ case: TEXT });
   await direct();
+  // The prompt holds the tail of the run's checks, from the `checks` section of its log.txt.
+  expect(prompt()).toContain("(fail) a > b [1.00ms]");
   const [r] = directorRuns().filter((e) => e.run.target === "issue.1");
   expect(r.id).toMatch(/^job\.\d+$/);
   expect(r.run.decision).toMatchObject({ outcome: "escalated", on: expect.anything() });

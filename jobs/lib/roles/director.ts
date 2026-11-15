@@ -39,6 +39,7 @@ import { DIRECTOR_CAP, needsYouLog } from "../infra/settings.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
+import { readSection } from "../records/run-files.ts";
 import { drop as dropJob, land as landJob, refusal } from "../transitions/transitions.ts";
 import { writeTitle } from "./title.ts";
 
@@ -202,11 +203,9 @@ function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; fil
 /** Whether closing or dropping this issue is Chris's: he filed it. */
 const chrisOwns = (item: issues.Issue): boolean => store.sourceOf(item) === "chris";
 
+const lastLines = (s: string | undefined): string | null => { const t = s?.trimEnd(); return t ? t.split("\n").slice(-TAIL).join("\n") : null; };
 const tail = (folder: string, file: string): string | null => {
-  try {
-    const s = readFileSync(join(folder, file), "utf8").trimEnd();
-    return s ? s.split("\n").slice(-TAIL).join("\n") : null;
-  } catch { return null; }
+  try { return lastLines(readFileSync(join(folder, file), "utf8")); } catch { return null; }
 };
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
 
@@ -253,7 +252,7 @@ ${c.ask.options.length ? `Options:\n${c.ask.options.map((o) => `- ${o.label}: ${
 # Item ${c.at === "item" ? c.on : run!.run.target}: ${item.title} (filed by ${store.sourceOf(item)})
 ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes", item.notes.join("\n"))}` : ""}${run ? `
 # The run ${c.on}
-${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of checks.log", tail(run.folder, "checks.log"))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
+${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of the checks log", lastLines(readSection(run.folder, "checks")))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
 }
 
 const CASE_TEXT = (acts: string[]): string => `The case text is "case": its "headline" is a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade. Its "situation" is plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk. Its "effects" has one entry for each action (${acts.join(", ")}): the "action" and a "text" of 1 or 2 short sentences that says what happens in this case if Chris takes it. Its "recommend" is an action and a one-sentence "why", or null. Its "details", optional, holds risks, gaps and technical facts.`;

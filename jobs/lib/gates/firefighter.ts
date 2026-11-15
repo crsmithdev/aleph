@@ -13,7 +13,6 @@
  * a green run past its failing commit, so a green main brought by another commit settles it.
  * Older ledgers hold runs of kind `firefighter`, from when this was an agent.
  */
-import { readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -23,6 +22,7 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
 import { baselines, factoryDir, sandboxRepos, gates, redLine } from "./factory-status.ts";
 import { git } from "../infra/git.ts";
+import { readSection } from "../records/run-files.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
@@ -53,7 +53,6 @@ const ciLog = (ports: Ports, repo: Repo, url: string): string => {
   return r.ok ? r.out : `(gh run view ${id} --log-failed failed: ${r.out})`;
 };
 
-const read = (path: string): string => { try { return readFileSync(path, "utf8"); } catch { return ""; } };
 
 /** The last LOG_LINES lines of a log, cut to LOG_CHARS from the front. */
 function tail(text: string): string {
@@ -102,7 +101,7 @@ export function reds(ports: Ports = defaultPorts): Red[] {
   const out: Red[] = [];
   for (const b of Object.values(baselines())) {
     if (b.ok || !keys.has(b.repo)) continue;
-    out.push({ repo: b.repo, commit: b.commit, source: "baseline", line: `${b.repo} ${redLine(b)}`, log: () => read(join(factoryDir(), "baseline", b.repo, "checks.log")) });
+    out.push({ repo: b.repo, commit: b.commit, source: "baseline", line: `${b.repo} ${redLine(b)}`, log: () => readSection(join(factoryDir(), "baseline", b.repo), "checks") ?? "" });
   }
   for (const c of redCi()) {
     if (!keys.has(c.repo) || !c.sha) continue;

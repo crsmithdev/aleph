@@ -2,7 +2,7 @@
 // and a rescue Ask on a land live past 30 minutes. No agent run starts.
 import { putJson } from "../../../lib/db.ts";
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
@@ -13,13 +13,15 @@ import { ciFailure, firefight, LOG_CHARS, settleCi, type Ports } from "./firefig
 import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { readEvents } from "../../../lib/layout.ts";
+import { logTo } from "../records/run-files.ts";
 import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.fixture.ts";
 
 useDirectorFixture();
 
 const A = "a1".repeat(20), B = "b2".repeat(20), C = "c3".repeat(20);
 const factory = () => process.env.ALEPH_FACTORY_DIR!;
-const write = (file: string, text: string) => { mkdirSync(join(factory(), file, ".."), { recursive: true }); writeFileSync(join(factory(), file), text); };
+// The baseline's checks write their output as the `checks` section of its log.txt, as checks.ts does; each call starts a new log.
+const checksLog = (text: string) => { const dir = join(factory(), "baseline", key); mkdirSync(dir, { recursive: true }); rmSync(join(dir, "log.txt"), { force: true }); logTo(dir, "checks", text); };
 const baselineRed = (commit: string) => putJson("state", "baseline", { [key]: { repo: key, commit, ok: false, failed: "tests" } });
 const longLog = (what: string) => Array.from({ length: 500 }, (_, i) => `${what} line ${i}`).join("\n");
 const reds = () => readList({ key })!.items.filter((i) => store.areasOf(i).includes("red-main"));
@@ -32,7 +34,7 @@ const agentRuns = () => (existsSync(process.env.ALEPH_JOBS_DIR!) ? readdirSync(p
 test("a red baseline files exactly one critical issue for its commit across two ticks, with the log's tail", async () => {
   fresh([{ title: "other" }]);
   baselineRed(A);
-  write(`baseline/${key}/checks.log`, longLog("checks"));
+  checksLog(longLog("checks"));
   started = [];
   const before = readEvents().length;
   const one = await firefight(ports());
@@ -90,10 +92,10 @@ test("a second failing commit while the first issue is open is one note on it; o
 test("a red whose failing tests differ from the open issue's files a second issue, with no note on the first", async () => {
   fresh([]);
   baselineRed(A);
-  write(`baseline/${key}/checks.log`, "checks line 0\nchecks line 1");
+  checksLog("checks line 0\nchecks line 1");
   await firefight(ports());
   baselineRed(B);
-  write(`baseline/${key}/checks.log`, "(fail) x > y [12.34ms]\n1 tests failed:\n(fail) x > y [12.34ms]");
+  checksLog("(fail) x > y [12.34ms]\n1 tests failed:\n(fail) x > y [12.34ms]");
   const f = await firefight(ports());
   expect(f!.filed).toEqual([{ repo: key, commit: B, source: "baseline", filed: 2 }]);
   expect(reds().map((i) => [i.id, issues.status(i)])).toEqual([[1, "open"], [2, "open"]]);
@@ -103,7 +105,7 @@ test("a red whose failing tests differ from the open issue's files a second issu
 
 test("a red whose failing tests match an older open issue notes it, though a newer issue is open, and files none", async () => {
   fresh([]);
-  const red = (commit: string, log: string) => { baselineRed(commit); write(`baseline/${key}/checks.log`, log); };
+  const red = (commit: string, log: string) => { baselineRed(commit); checksLog(log); };
   red(A, "(fail) x > y [10.00ms]");
   await firefight(ports());
   red(B, "checks line 0");
