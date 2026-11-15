@@ -1,7 +1,7 @@
 /**
  * The jobs: one row in the `jobs` table of aleph.db for each execution (docs/naming.md, docs/data-model.md). This module
- * is the only one that reads or writes a row. `makeJob` is the one creator and `setState` the one writer of a job's
- * state; both log the state as an event in the same transaction. The columns hold what every job has; the rest of a run's
+ * is the only one that reads or writes a row. `makeJob` is the one creator; `setState` and `endRun` are the two writers of a
+ * job's state, and each logs the state as an event in the same transaction as the write (`endRun` writes the state, the end and `next` together). The columns hold what every job has; the rest of a run's
  * fields are the row's `extra`, a JSON object. The folder of a job, `<jobs>/<n>/`, holds its files (run-files.ts).
  *
  * What the issue and its jobs share lives in `issue_state` (one row while an Ask, a wait or a CI result is live): the Ask
@@ -33,7 +33,7 @@ export interface Row {
   target: string | null; prev: string | null; retry_of: string | null; was: string | null; extra: string | null;
 }
 
-/** What a run changes: any field but its state, which only `setState` writes. */
+/** What a run changes: any field but its state, which only `setState` and `endRun` write. */
 type Change = Partial<Omit<Run, "state" | "job">>;
 
 // The fields of a run that are columns; every other field of a run is in `extra`. The project column holds the run's repo key.
@@ -186,7 +186,7 @@ export function copyEnd(id: string): void {
   conn().query("UPDATE jobs SET pid = coalesce(?, pid), exit_code = coalesce(?, exit_code) WHERE id = ?").run(end.pid, end.exit, id);
 }
 
-/** The one writer of a job's state: the state, the fields `fields` that go with it, and the event of the change, in one transaction. */
+/** One of the two writers of a job's state (the other is `endRun`): the state, the fields `fields` that go with it, and the event of the change, in one transaction. */
 export function setState(id: string, state: State, fields: Change = {}): RunRecord {
   return tx((d) => {
     const { was, now } = write(d, id, state, fields);

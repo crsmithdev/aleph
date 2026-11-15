@@ -128,7 +128,7 @@ An issue's children are the issues whose `from` names it (`partsOf` in `issues/l
 
 ## Job rows and issue state: `aleph.db`
 
-`jobs/lib/records/record.ts` is the only module that reads or writes a job row or an issue state row. `makeJob` creates a row and `setState` writes its state; each logs the state as an event in the same transaction. The columns hold what every job has: `id` (`job.<n>`), `role`, `by`, `state`, `project`, `made`, `started`, `ended`, `model`, `tier`, `cost`, `commit_sha`, `pid`, `exit_code`, `target`, `prev`, `retry_of`, `was`. Every other field of a `Run` is the JSON `extra` column. The files of a job are in its folder, see below.
+`jobs/lib/records/record.ts` is the only module that reads or writes a job row or an issue state row. `makeJob` creates a row; `setState` and `endRun` write its state, and `endRun` writes the state, the end and `next` in one transaction; each logs the state as an event in the same transaction. The columns hold what every job has: `id` (`job.<n>`), `role`, `by`, `state`, `project`, `made`, `started`, `ended`, `model`, `tier`, `cost`, `commit_sha`, `pid`, `exit_code`, `target`, `prev`, `retry_of`, `was`. Every other field of a `Run` is the JSON `extra` column. The files of a job are in its folder, see below.
 
 A work is a `prev` chain of jobs. `rounds` and `cost` are queries over the jobs of one target, not stored.
 

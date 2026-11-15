@@ -50,7 +50,7 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
   - Relations: one project. Many links. Many jobs, through the `target` column of each job. At most one issue state.
 - **Job**
   - Identity: `job.<n>`, in start order. A job covers one execution, so a build, its fix round and its land are three jobs. A migrated job keeps its old key in a `was` column, for search only.
-  - Lifecycle: the state is a word from the job states. One writer, `setState`, sets it. A job is open while it is running, passed, waiting, returned or failed.
+  - Lifecycle: the state is a word from the job states. Two writers set it: `setState`, and `endRun`, which writes the state, the end and `next` in one transaction and logs the event like `setState`. A job is open while it is running, passed, waiting, returned or failed.
   - Owner: one creator, `makeJob`. The row is in `aleph.db`. The files are in `jobs/<n>/`.
   - Invariants: the links are columns: `target` (its issue, project or idea), `prev` (the step before it) and `retry_of` (the job it redoes). Each has at most one target. A job has its role, its cost, its model and its commit on its row.
   - Relations: at most one target. At most one `prev`. At most one `retry_of`. Many events name it as subject or object.

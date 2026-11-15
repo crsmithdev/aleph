@@ -7,7 +7,7 @@ This page lists what aleph records about itself, where each record goes, who wri
 | Store | Path | Holds | Writer | Readers |
 |---|---|---|---|---|
 | Event log | `events` table in `~/.aleph/aleph.db` | One row per event | `logEvent` in `lib/layout.ts` | Herald, Gates page, Status page, `/api/events` stream |
-| Job rows | `jobs` table of `aleph.db` | One row for each job: its state, its fields and its `extra` | `makeJob`, `setState` and `patchRun` in `jobs/lib/records/record.ts` | The factory, the director, the monitor |
+| Job rows | `jobs` table of `aleph.db` | One row for each job: its state, its fields and its `extra` | `makeJob`, `setState`, `endRun` and `patchRun` in `jobs/lib/records/record.ts` | The factory, the director, the monitor |
 | Turn traces | Langfuse | One trace per Claude Code turn | `hooks/obs.ts`, `hooks/lib/gate.ts` | Langfuse UI, `ui/api/sessions.ts`, `jobs/lib/learning/corrections.ts`, `ui/usage.ts` |
 | Factory traces | Langfuse | One trace per factory run | `postTrace` in `jobs/lib/learning/trace.ts` | Langfuse UI, `jobs/lib/learning/episode.ts` |
 | `usage` table | `aleph.db` | The account's weekly plan usage, one row per 10 minutes | `ui/usage.ts:89` | `ui/usage.ts`, the monitor table |
