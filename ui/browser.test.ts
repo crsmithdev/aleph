@@ -1120,8 +1120,36 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(ghost).toEqual(["first job", "breathe"]);
   }, 60_000);
 
+  /**
+   * Opens Status and draws the rig once the page's own loads have ended, so that none of them draws over it. A load is
+   * a fetch of /api/factory or /api/flow, and ends when its json is read and the draw that follows it has run. The
+   * first load makes two. The stream's open starts a third, which draws only if its data differs.
+   */
+  const heraldRig = async () => {
+    await page.go("#/issues");
+    await page.ev(`(() => {
+      window.loads = { started: 0, ended: 0 };
+      if (window.rigged) return;
+      window.rigged = true;
+      const rf = window.fetch;
+      window.fetch = (u, o) => {
+        if (!/^\\/api\\/(factory|flow)/.test(String(u))) return rf(u, o);
+        const l = window.loads, end = () => { l.ended++; };
+        l.started++;
+        return rf(u, o).then((r) => {
+          const j = r.json.bind(r);
+          r.json = () => j().then((d) => { setTimeout(end); return d; });
+          return r;
+        });
+      };
+    })()`);
+    await page.go("#/");
+    await page.when("window.loads.started > 2 && window.loads.ended === window.loads.started");
+    await page.ev(drawRig);
+  };
+
   // The Herald drawn from `chats` (one feed row each, keyed `chat <id>`) by morph, as a redraw does; `window.herald(ids)` puts the rows in that order, newest first.
-  const heraldRig = `Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
+  const drawRig = `Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
     const root = document.querySelector("#view");
     window.view = view; window.root = root;
     window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, events: [], chats: ids.map((id, i) => ({ id, last: "2026-11-15T10:0" + (9 - i) + ":00Z", title: "chat " + id })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
@@ -1130,9 +1158,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   })`;
 
   test("a redraw by morph that reorders the Herald's feed rows keeps each row's node", async () => {
-    await page.go("#/");
-    await page.when('document.querySelector("#view #herald")');
-    await page.ev(heraldRig);
+    await heraldRig();
     expect(await page.ev<boolean[]>(`(() => {
       const before = rows(), moved = view.swap(root);
       herald(["c", "a", "b"]); moved();
@@ -1142,9 +1168,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   }, 60_000);
 
   test("a second redraw by swap and morph leaves no animation of the first on any row, and glides each row from where it is", async () => {
-    await page.go("#/");
-    await page.when('document.querySelector("#view #herald")');
-    await page.ev(heraldRig);
+    await heraldRig();
     // The second redraw comes 60 ms into the first: row d grows and row c glides up.
     const [count, left, before, after] = await page.ev<number[][]>(`(() => {
       const first = [], tops = () => Object.values(rows()).map((r) => r.getBoundingClientRect().top);
@@ -1162,9 +1186,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   }, 60_000);
 
   test("a feed row that a redraw removes fades out as an exit element with its text", async () => {
-    await page.go("#/");
-    await page.when('document.querySelector("#view #herald")');
-    await page.ev(heraldRig);
+    await heraldRig();
     const exit = await page.ev<[string, boolean]>(`(() => {
       const moved = view.swap(root);
       herald(["a", "c"]); moved();
@@ -1176,9 +1198,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   }, 60_000);
 
   test("a Herald feed row has the card background, and clips its content while it grows", async () => {
-    await page.go("#/");
-    await page.when('document.querySelector("#view #herald")');
-    await page.ev(heraldRig);
+    await heraldRig();
     const [bg, overflow] = await page.ev<string[]>(`(() => {
       const moved = view.swap(root);
       herald(["d", "a", "b", "c"]); moved();
