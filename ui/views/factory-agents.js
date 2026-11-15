@@ -34,6 +34,10 @@ function scorecard(s, m, win) {
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */
 const WARN_RATE = 0.7;
+/** A row with fewer ended runs shows its counts, not a rate. */
+const MIN_ENDED = 20;
+/** A share (0 to 1) to one decimal. */
+const share1 = (v) => (v == null ? "–" : `${(v * 100).toFixed(1)}%`);
 
 /** The sizes by their label; the models each offers come from /api/models. */
 const SIZES = { small: "Small", medium: "Medium", large: "Large" };
@@ -41,29 +45,29 @@ const SIZES = { small: "Small", medium: "Medium", large: "Large" };
 const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", title: "title", judge: "judge" };
 
 function roles(a, m) {
-  const num = ["Jobs", "Success", "p50", "Cost"];
+  const num = ["Jobs", "Success", "p50", "p95", "Cost", "Built", "First pass", "Review pass"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
   const gone = `<td class="num">${miss("no runs in this window")}</td>`;
   const outs = a.outcomes ?? [];
-  // The outcome row for a config row: the one of its role and current model. A reviewer records no model, so its row is the one of its role.
-  const find = (role, model) => outs.find((x) => x.role === role && (role === "reviewer" || shortModel(x.model) === shortModel(model)));
   const stats = (o) => {
     if (!o) return `${gone.repeat(num.length)}<td>${miss("no runs in this window")}</td>`;
-    const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
-    const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td>${cell(dur(o.p50), { num: true })}${cell(money(o.cost), { num: true })}<td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&state=failed">Failed jobs</a></td>`;
+    const few = o.ended < MIN_ENDED, reviewer = o.role === "reviewer", worker = o.role === "worker";
+    // A reviewer's rate is a share of verdicts, not better or worse.
+    const trend = few ? "" : cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: reviewer ? null : false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
+    const warn = !few && !reviewer && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
+    const rate = few ? `${o.succeeded} / ${o.ended}` : `${esc(share(o.rate))} <span class="m" title="ended">${count(o.ended)}</span> ${trend}`;
+    const per = worker && o.perBuilt != null ? ` <span class="m">${money(o.perBuilt)} / built</span>` : "";
+    const built = worker ? [cell(count(o.built), { num: true }), cell(share1(o.built ? o.firstPass / o.built : null), { num: true }), cell(share1(o.reviewPass), { num: true })] : Array(3).fill(cell("", { num: true }));
+    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${reviewer ? '<span class="m">Pass share</span> ' : ""}${rate}</td>${cell(dur(o.p50), { num: true })}${cell(dur(o.p95), { num: true })}<td class="num">${money(o.cost)}${per}</td>${built.join("")}<td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&state=failed">Failed jobs</a></td>`;
   };
-  /** The worker outcome rows as one, for the one Worker row: the counts add, and the rate is its succeeded over its ended runs. */
-  const allWorkers = () => {
-    const rs = outs.filter((o) => o.role === "worker");
-    const n = (k) => rs.reduce((x, o) => x + (o[k] ?? 0), 0), ended = n("succeeded") + n("failed") + n("stuck");
-    return rs.length ? { role: "worker", runs: n("runs"), succeeded: n("succeeded"), failed: n("failed"), stuck: n("stuck"), rate: ended ? n("succeeded") / ended : null, cost: n("cost") } : null;
+  // The rows of a role: one per model its keys set, with the outcome of that model, then one per other model it has outcomes on.
+  const pick = ([role, keys]) => {
+    const set = [...new Set(keys.map((k) => shortModel(m.models[k]?.model)))], mine = outs.filter((x) => x.role === role);
+    return [...set.map((sm) => [sm, mine.find((x) => shortModel(x.model) === sm)]), ...mine.filter((x) => !set.includes(shortModel(x.model))).map((x) => [shortModel(x.model), x])]
+      .map(([sm, o]) => row([cell(NAMES[role], { wide: true }), cell(sm), stats(o)])).join("");
   };
-  const model = (t) => shortModel(t?.model);
-  const workerRow = () => row([cell("Worker", { wide: true }), cell(Object.keys(SIZES).map((k) => model(m.models[k])).join(", ")), stats(allWorkers())]);
-  const pick = ([key, role]) => row([cell(NAMES[role], { wide: true }), cell(model(m.models[key])), stats(find(role, m.models[key]?.model))]);
   const setRoles = new Set(["worker", "merge", ...Object.values(ROLE_MODELS)]);
-  const config = m ? workerRow() + Object.entries(ROLE_MODELS).map(pick).join("") : "";
+  const config = m ? [["worker", Object.keys(SIZES)], ...Object.entries(ROLE_MODELS).map(([key, role]) => [role, [key]])].map(pick).join("") : "";
   const rows = config + (m ? outs.filter((o) => !setRoles.has(o.role)) : outs).map((o) => row([cell(names[o.role] ?? o.role, { wide: true }), cell(shortModel(o.model)), stats(o)])).join("");
   return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty();
 }
@@ -127,7 +131,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m) {
   const head = scope().bar({ value: win });
   return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${tiles("Scorecard", scorecard(s, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
-    card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + (m === undefined ? card("Models", loadingLine("the models"), { id: "models" }) : m ? card("Models", models(m), { id: "models" }) : "") + `</div>`;
+    card("Roles", a ? roles(a, m) : wait, { id: "roles", aside: a?.rates?.firstPass == null ? "" : `First pass ${share1(a.rates.firstPass)}` }) + (m === undefined ? card("Models", loadingLine("the models"), { id: "models" }) : m ? card("Models", models(m), { id: "models" }) : "") + `</div>`;
 }
 
 /** The old address. */
