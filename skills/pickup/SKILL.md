@@ -9,8 +9,8 @@ argument-hint: "[<name>]"
 
 Find the handoff file, where `<handoffs dir>` is `$ALEPH_HANDOFFS_DIR` if set, else `~/.aleph/handoffs`:
 
-- With an argument `<name>`: `<handoffs dir>/<name>.md`.
-- With no argument: the project's handoff, `<handoffs dir>/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`. `<scope>` is that name: the main repo's directory, or the current directory outside git.
+- If `$ARGUMENTS` holds a name, that name is `<name>`: read `<handoffs dir>/<name>.md`.
+- If `$ARGUMENTS` is empty, read the project's handoff, `<handoffs dir>/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`. `<scope>` is that name: the main repo's directory, or the current directory outside git.
 
 If the session start already holds the handoff text, use it and skip the Read. Otherwise read the file in full. If it does not exist, say so and stop. Do not guess.
 

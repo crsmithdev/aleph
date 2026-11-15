@@ -21,7 +21,7 @@ never from the handoff or transcript text alone.
    `<YYYY-MM-DD-HHMMSS>-<scope>.md` in `<handoffs dir>`, newest first. A handoff item is one bullet of **Open
    questions**, one step of **Active plan** that the handoff does not mark done, or the next action of **Resume
    instructions**.
-3. **Transcripts.** Set `<since>` to the argument's `--since`, else the `at` of the newest ledger line with
+3. **Transcripts.** Set `<since>` to the `--since` value in `$ARGUMENTS`, else the `at` of the newest ledger line with
    `"verdict": "swept"`, else 7 days ago. Run this from the main checkout and write the output to the scratchpad:
 
    ```bash
