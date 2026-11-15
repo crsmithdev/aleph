@@ -33,7 +33,8 @@ Flow page while a bare `/flow` answers 404.
 ## 2. Screenshot the changed screens
 
 Run `playwright-cli` from a scratch directory: it writes its page snapshots and console logs under
-`.playwright-cli/` in the current directory, which would leave the worktree dirty.
+`.playwright-cli/` in the current directory, and the screenshot `--filename` names in the directory itself,
+which no ignore line covers, so a run from the worktree would leave the PNG untracked.
 
 ```sh
 mkdir -p /tmp/verify-ui && cd /tmp/verify-ui
