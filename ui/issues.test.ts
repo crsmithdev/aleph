@@ -53,6 +53,9 @@ const at = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${server.p
 const getJson = async (p: string) => (await at(p)).json() as Promise<any>;
 /** The issue rows of `GET /api/issues`, of one project or of all. */
 const rowsOf = async (project?: string): Promise<any[]> => (await getJson(project ? `/api/issues?project=${project}` : "/api/issues")).issues;
+let seeds = 0;
+/** The rows after a test seeded jobs. `updater.reset()` sets the change counts back, so a kept job read can look fresh; a new env makes the build Worker drop it. */
+const rowsAfterSeed = async (project?: string): Promise<any[]> => { const restore = withEnv({ ALEPH_TEST_SEED: String(++seeds) }); try { return await rowsOf(project); } finally { restore(); } };
 const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1" }, q = "") =>
   at(`/api/issues${q}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
@@ -250,6 +253,22 @@ describe("views", () => {
     expect([...new Set(d.issues.map((i: any) => i.repo))].sort()).toEqual(["fac", "oth"]);
     expect(d.issues.every((i: any) => typeof i.runs === "number" && typeof i.cost === "number")).toBe(true);
     expect((await getJson("/api/issues?project=fac")).projects).toEqual(["fac"]);
+  });
+
+  test("a row's own holds the count and cost of the jobs on it, of its own repo alone", async () => {
+    run("", { name: "on-4", repo: "fac", on: "fac-4", cost: 0.5 });
+    const rows = await rowsAfterSeed("fac"), of = (id: number) => rows.find((r: any) => r.id === id);
+    expect(of(4).own).toEqual({ runs: 1, cost: 0.5 });
+    // The fixture's oth job is on issue.1 too, and counts only in oth.
+    expect(of(1).own.runs).toBe(1);
+  });
+
+  test("a parent's runs hold its sub-issue's jobs; its own holds its alone", async () => {
+    const sub = writeList({ key: "fac" }, "seed", (doc) => todos.refOf(addPart(doc, todos.find(doc, "3")!, { title: "sub", spec: "x" })), true)!.value;
+    run("", { name: "on-sub", repo: "fac", target: `issue.${sub}` });
+    run("", { name: "on-3", repo: "fac", on: "fac-3" });
+    const parent = (await rowsAfterSeed("fac")).find((r: any) => r.id === 3);
+    expect([parent.runs, parent.own.runs]).toEqual([2, 1]);
   });
 
   test("the tests card charts the suite history of the selected project in the window", async () => {

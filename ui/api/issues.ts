@@ -61,7 +61,7 @@ function list(url: URL): Response {
     return doc.items.map((i) => row(repo.key, i, states.get(todos.refOf(i))));
   });
   const by = runsByIssue(allRuns()), key = (r: Row) => `${r.repo}-${r.ref}`;
-  const own = (r: Row) => { const es = by.get(key(r)) ?? []; return { runs: es.length, cost: es.reduce((n, e) => n + (e.run.cost ?? 0), 0) }; };
+  const own = (r: Row) => { const es = (by.get(`issue.${r.ref}`) ?? []).filter((e) => e.run.repo === r.repo); return { runs: es.length, cost: es.reduce((n, e) => n + (e.run.cost ?? 0), 0) }; };
   // A child's jobs also count for its parent: `runs` and `cost` hold both, `own` the row's alone.
   const kids = Map.groupBy(rows.filter((r) => r.parent !== null), (r) => `${r.repo}-${r.parent}`);
   const totals = (r: Row) => [own(r), ...(kids.get(key(r)) ?? []).map(own)].reduce((a, t) => ({ runs: a.runs + t.runs, cost: a.cost + t.cost }));
