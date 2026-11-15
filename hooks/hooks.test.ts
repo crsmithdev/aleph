@@ -197,6 +197,29 @@ describe("obs hook", () => {
     expect(tool.parentSpanId).toBe(agent.spanId);
   });
 
+  test("SubagentStop posts one generation per requestId of the subagent transcript, under the agent span", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aleph-sub-"));
+    try {
+      const transcript = join(dir, "agent.jsonl");
+      const entry = (requestId: string, input: number, output: number, at: string) => ({ type: "assistant", isSidechain: true, requestId, timestamp: at, message: { role: "assistant", model: "claude-fable-5-1", usage: { input_tokens: input, output_tokens: output }, content: [{ type: "text", text: "x" }] } });
+      const lines = [entry("req_1", 11, 22, "2026-09-03T10:00:01.000Z"), entry("req_1", 11, 22, "2026-09-03T10:00:01.500Z"), entry("req_2", 33, 44, "2026-09-03T10:00:03.000Z")];
+      writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+      await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p9", prompt: "delegate" });
+      await fire({ hook_event_name: "SubagentStart", prompt_id: "p9", agent_id: "a9", agent_type: "Explore" });
+      await fire({ hook_event_name: "SubagentStop", prompt_id: "p9", agent_id: "a9", agent_type: "Explore", last_assistant_message: "found it", agent_transcript_path: transcript });
+      const spans = lastSpans();
+      const agent = spans.find((s: any) => s.name === "Explore");
+      const gens = spans.filter((s: any) => attr(s, "langfuse.observation.type")?.stringValue === "generation");
+      expect(spans.length).toBe(3);
+      expect(gens.length).toBe(2);
+      for (const g of gens) {
+        expect(g.traceId).toBe(turnTraceIdFor("p9"));
+        expect(g.parentSpanId).toBe(agent.spanId);
+      }
+      expect(gens.map((g: any) => JSON.parse(attr(g, "langfuse.observation.usage_details").stringValue))).toEqual([{ input: 11, output: 22 }, { input: 33, output: 44 }]);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
   test("other events inside a turn become metadata-only events; outside a turn, or without keys, nothing posts", async () => {
     await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p8", prompt: "compact" });
     await fire({ hook_event_name: "PreCompact", prompt_id: "p8", compact_reason: "auto", trigger: "auto" });

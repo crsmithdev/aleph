@@ -16,7 +16,7 @@ import { agent, prune, session, tool, turn } from "./lib/handshake.ts";
 import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from "../lib/otlp.ts";
 import { parseRating } from "./lib/rating.ts";
 import { traceAttrs } from "./lib/trace.ts";
-import { readEntries } from "./lib/digest.ts";
+import { readEntries, readLines } from "./lib/digest.ts";
 import { decide, judgeChoice, type Question } from "../lib/jev.ts";
 import { costDetails, type Usage } from "../lib/pricing.ts";
 
@@ -158,16 +158,16 @@ function settledEntries(transcriptPath: string, promptId: string, finalMessage: 
 }
 
 /**
- * One generation per API request in this turn. Assistant entries come one per
+ * One generation per API request in these entries. Assistant entries come one per
  * content block and repeat the request's usage, so dedupe on requestId. The
  * span runs from the previous entry's timestamp to this one's: the model was
  * the only thing happening in between.
  */
-function generations(transcriptPath: string, promptId: string, finalMessage: string): Span[] {
+function generations(entries: Record<string, any>[], parent: string | undefined): Span[] {
   const out: Span[] = [];
   const seen = new Set<string>();
   let previous = 0;
-  for (const entry of settledEntries(transcriptPath, promptId, finalMessage)) {
+  for (const entry of entries) {
     const at = Date.parse(entry.timestamp ?? "") || previous || now;
     const usage = entry.message?.usage;
     const requestId: string | undefined = entry.requestId;
@@ -183,7 +183,7 @@ function generations(transcriptPath: string, promptId: string, finalMessage: str
         "langfuse.observation.usage_details": JSON.stringify(usageDetails),
         "langfuse.observation.cost_details": cost ? JSON.stringify(cost) : undefined,
         "langfuse.observation.metadata.request_id": requestId,
-      }, { parent: turnSpanId, end: at }));
+      }, { parent, end: at }));
     }
     previous = at;
   }
@@ -256,11 +256,13 @@ switch (event) {
 
   case "SubagentStop": {
     const hs = agentSlot?.take();
-    spans.push(span(input.agent_type ?? "subagent", "agent", hs?.start ?? now, {
+    const agentSpan = span(input.agent_type ?? "subagent", "agent", hs?.start ?? now, {
       "langfuse.observation.output": truncate(input.last_assistant_message ?? ""),
       "langfuse.observation.metadata.agent_id": input.agent_id,
       "langfuse.observation.metadata.agent_type": input.agent_type,
-    }, { id: hs?.spanId, parent: hs?.parentSpanId ?? turnSpanId }));
+    }, { id: hs?.spanId, parent: hs?.parentSpanId ?? turnSpanId });
+    spans.push(agentSpan);
+    if (input.agent_transcript_path) spans.push(...generations(readLines(input.agent_transcript_path), agentSpan.spanId));
     break;
   }
 
@@ -273,7 +275,7 @@ switch (event) {
     const tag = failed ? {} : await taskType(turnSlot!.get()?.input, message);
     spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || "StopFailure") : undefined, tag));
     // a failed turn's message is the API error, which never reaches the transcript, so do not wait for it
-    if (input.transcript_path) spans.push(...generations(input.transcript_path, input.prompt_id, failed ? "" : message));
+    if (input.transcript_path) spans.push(...generations(settledEntries(input.transcript_path, input.prompt_id, failed ? "" : message), turnSpanId));
     if (input.transcript_path && !failed) spans.push(...textBlocks(input.transcript_path, input.prompt_id, message));
     break;
   }

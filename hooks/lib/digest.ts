@@ -49,12 +49,8 @@ export function resultText(entry: Entry): string {
   return resultContent(block?.content);
 }
 
-/**
- * Only user entries carry promptId; assistant entries do not. A prompt's turn
- * is the user entry with that id and everything after it until a user entry
- * with a different id.
- */
-export function readEntries(transcriptPath: string, promptId: string): Entry[] {
+/** Every entry of a JSONL transcript, or none when the file cannot be read. */
+export function readLines(transcriptPath: string): Entry[] {
   let raw: string;
   try { raw = readFileSync(transcriptPath, "utf8"); } catch { return []; }
   const entries: Entry[] = [];
@@ -62,6 +58,16 @@ export function readEntries(transcriptPath: string, promptId: string): Entry[] {
     if (!line) continue;
     try { entries.push(JSON.parse(line)); } catch { /* partial last line */ }
   }
+  return entries;
+}
+
+/**
+ * Only user entries carry promptId; assistant entries do not. A prompt's turn
+ * is the user entry with that id and everything after it until a user entry
+ * with a different id.
+ */
+export function readEntries(transcriptPath: string, promptId: string): Entry[] {
+  const entries = readLines(transcriptPath);
   const turn: Entry[] = [];
   let inside = false;
   for (const e of entries) {
