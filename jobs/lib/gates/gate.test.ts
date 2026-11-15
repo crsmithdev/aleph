@@ -65,6 +65,10 @@ test("the reviewer prompt names a deleted test; without findings it has no test 
   const f = findings(() => git("rm", "-q", "a.test.ts"));
   expect(reviewPrompt("n", "goal", "diff", f)).toContain("The diff deletes the test a.test.ts");
   expect(reviewPrompt("n", "goal", "diff", [])).not.toContain("Test changes");
+  // The skill's relative links reach the reviewer as absolute paths, so it can Read the test skills.
+  expect(reviewPrompt("n", "goal", "diff", [])).toMatch(/\]\(\/[^)]*\/skills\/write-tests\/SKILL\.md\)/);
+  expect(reviewPrompt("n", "goal", "diff", [])).toMatch(/\]\(\/[^)]*\/skills\/refit-tests\/SKILL\.md\)/);
+  expect(reviewPrompt("n", "goal", "diff", [])).not.toContain("](../");
   const p = reviewPrompt("n", "goal", "diff", []);
   expect(p).toContain("ran the checks that this change reaches");
   expect(p).toContain("they passed");

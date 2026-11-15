@@ -24,7 +24,7 @@ A review is **sceptical**: the worker's summary, commit messages and its own tes
    - **extra**: the branch adds behaviour that no requirement asks for.
 
    Done when every item from step 1 has a verdict with `file:line` or a search record.
-4. **Read the test changes** against the catalog below. Done when each changed test file is accounted for.
+4. **Read the test changes** against the catalog below, with [write-tests](../write-tests/SKILL.md) for what a good test is and [refit-tests](../refit-tests/SKILL.md) with its [HOLLOW.md](../refit-tests/HOLLOW.md) lens for tests that pass when the code is wrong. Done when each changed test file is accounted for.
 5. **Filter the findings** through the bar below. Done when each finding that is left passes all of it.
 
 ## Evidence
@@ -36,7 +36,7 @@ A review is **sceptical**: the worker's summary, commit messages and its own tes
 
 ## Test-cheating catalog
 
-Each item is a finding unless the goal asks for the change:
+Judge these with [write-tests](../write-tests/SKILL.md) and the [HOLLOW.md](../refit-tests/HOLLOW.md) lens of [refit-tests](../refit-tests/SKILL.md). Each item is a finding unless the goal asks for the change:
 
 - A test removed, skipped (`.skip`, `xit`) or focused (`.only`).
 - An assertion removed or loosened: `toBe` to `toBeTruthy`, an exact value to `toBeGreaterThan(0)`, a larger timeout, tolerance or retry count.
