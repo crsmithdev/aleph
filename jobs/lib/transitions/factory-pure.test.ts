@@ -40,9 +40,9 @@ test("the report groups each unshown run under its report lane, in the order of 
   const at = (s: string) => out.indexOf(s);
   expect(at("landed:")).toBeLessThan(at("waiting:"));
   expect(at("waiting:")).toBeLessThan(at("failed:"));
-  expect(out).toContain("landed:\nI-00011 landed");
-  expect(out).toContain("waiting:\nI-00012 waiting");
-  expect(out).toContain("failed:\nI-00013 failed");
+  expect(out).toContain("landed:\ni-00011 landed");
+  expect(out).toContain("waiting:\ni-00012 waiting");
+  expect(out).toContain("failed:\ni-00013 failed");
   expect(out).not.toContain("delivered:");
   expect(out).not.toContain("needs you:");
   expect(out).not.toContain("stuck:");
@@ -51,10 +51,10 @@ test("the report groups each unshown run under its report lane, in the order of 
 test("a peek lists the unshown runs and leaves them unshown", () => {
   mk("fac-14", "build", "landed", { shown: false });
   const now = 1_800_000_000_000;
-  expect(report(now, true)).toContain("I-00014 landed");
-  expect(report(now, true)).toContain("I-00014 landed");
-  expect(report()).toContain("I-00014 landed");
-  expect(report()).not.toContain("I-00014 landed");
+  expect(report(now, true)).toContain("i-00014 landed");
+  expect(report(now, true)).toContain("i-00014 landed");
+  expect(report()).toContain("i-00014 landed");
+  expect(report()).not.toContain("i-00014 landed");
 });
 
 test("a deleted episode page leaves the seen file, and a page still on disk is not listed again", () => {
@@ -286,7 +286,7 @@ test("each suite run appends a history record with the test counts of its checks
 test("the report heads a run with its shown key, a letter and five digits", () => {
   mk("fac-1421", "build", "landed", { shown: false });
   const out = report();
-  expect(out).toContain("I-01421 landed");
+  expect(out).toContain("i-01421 landed");
   expect(out).not.toContain("issue.1421");
 });
 
@@ -295,7 +295,7 @@ test("the report heads a run with its project's code when it has one", () => {
   mk("fac-1421", "build", "landed", { shown: false });
   const out = report();
   expect(out).toContain("f-01421 landed");
-  expect(out).not.toContain("I-01421");
+  expect(out).not.toContain("i-01421");
 });
 
 test("the report gives the unshown runs of one issue as one block under its newest run's lane, the newest marked current", () => {
@@ -303,9 +303,9 @@ test("the report gives the unshown runs of one issue as one block under its newe
   mk("fac-21", "build", "landed", { shown: false, job: first.job });
   mk("fac-22", "build", "failed", { shown: false });
   const out = report();
-  expect(out.split("I-00021").length - 1).toBe(1);
-  expect(out).toContain("landed:\nI-00021\n  failed: red checks\n  landed (current)");
-  expect(out.indexOf("  failed: red checks")).toBeLessThan(out.indexOf("failed:\nI-00022 failed"));
+  expect(out.split("i-00021").length - 1).toBe(1);
+  expect(out).toContain("landed:\ni-00021\n  failed: red checks\n  landed (current)");
+  expect(out.indexOf("  failed: red checks")).toBeLessThan(out.indexOf("failed:\ni-00022 failed"));
   expect(out.split("failed:\n").length - 1).toBe(1);
 });
 
@@ -316,7 +316,7 @@ test("the report lists each open issue that has an Ask under asks:, and leaves o
   setAsk(`issue.${done}`, plainAsk("question", "which?"));
   change(done, (i) => issues.setStatus(i, "done"));
   const out = report();
-  expect(out).toContain(`asks:\n  I-0000${open} ship it`);
-  expect(out).not.toContain(`I-0000${done}`);
+  expect(out).toContain(`asks:\n  i-0000${open} ship it`);
+  expect(out).not.toContain(`i-0000${done}`);
   expect(report()).toContain("asks:");
 });

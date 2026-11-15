@@ -22,7 +22,7 @@ beforeAll(async () => {
   newItems(base, "issues");
   // The project filter matches only registry keys.
   writeRepos({ p: { path: join(base, "p") }, q: { path: join(base, "q") }, "p-x": { path: join(base, "p-x") } }, join(base, "issues"));
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: runs, ALEPH_ITEMS: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: runs, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
   // Issue 1 is p's and issue 2 is q's.
   for (const repo of ["p", "q"]) writeList({ key: repo }, "seed", (doc) => { add(doc, `an issue of ${repo}`); return true; }, true);
   main = git(join(base, "issues"), "rev-parse", "origin/main").out;

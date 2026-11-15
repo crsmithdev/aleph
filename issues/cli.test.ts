@@ -167,14 +167,14 @@ test("list and lint with no repo cover the repos with a run or an item update in
   mkdirSync(jobs);
   const e = { ALEPH_JOBS_DIR: jobs };
   expect(alephWith(e, "issue", "add", "fresh", "A new item").code).toBe(0);
-  expect(alephWith(e, "issue", "list").out).toBe("fresh\n  I-00004  open    medium   A new item\n");
+  expect(alephWith(e, "issue", "list").out).toBe("fresh\n  i-00004  open    medium   A new item\n");
   // proj's only item is from September; a run today makes proj recent, and the latest.
   const saved = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobs;
   seedJob({ role: "build", name: "x", repo: "proj", state: "landed", started: clock().toISOString() });
   // Assigning undefined would set the string "undefined", and a later test's records would land in ./undefined/.
   if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
-  expect(alephWith(e, "issue", "list").out).toBe("proj\n  x-00003  open    medium   An old item\nfresh\n  I-00004  open    medium   A new item\n");
+  expect(alephWith(e, "issue", "list").out).toBe("proj\n  x-00003  open    medium   An old item\nfresh\n  i-00004  open    medium   A new item\n");
   expect(JSON.parse(alephWith(e, "issue", "list", "--status", "done", "--json").out)).toEqual([]);
   const lint = alephWith(e, "issue", "lint");
   expect(lint.code).toBe(1);

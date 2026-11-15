@@ -1,7 +1,15 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { conn } from "./db.ts";
 import { eventsAfter, lastSeq, logEvent, logSetting, readEvents } from "./layout.ts";
 import { sayText } from "./naming.ts";
+
+// Its own aleph.db: the rows below take fixed ids past the job counter, and a later file of the process would draw the same ids.
+const was = process.env.ALEPH_DB, dir = mkdtempSync(join(tmpdir(), "aleph-layout-"));
+beforeAll(() => { process.env.ALEPH_DB = join(dir, "aleph.db"); });
+afterAll(() => { process.env.ALEPH_DB = was; rmSync(dir, { recursive: true, force: true }); });
 
 const job = (id: string, role: string, extra: Record<string, unknown> = {}) =>
   conn().query("INSERT INTO jobs (id, role, by, state, made, started, project, target, model, tier, cost, commit_sha) VALUES (?, ?, 'rule', 'landed', 1, '2026-11-14T10:00:00Z', ?, ?, ?, ?, ?, ?)")
@@ -13,7 +21,7 @@ test("an event round-trips through event_rows with the fields of the jobs it nam
   const e = logEvent({ subject: "job.2", action: "returned", object: "job.1", detail: "a check failed" });
   const [row] = readEvents(0).filter((r) => r.seq === eventsAfter(0).at(-1)!.seq);
   expect(row).toMatchObject({ time: e.time, subject: "job.2", action: "returned", object: "job.1", detail: "a check failed", subject_role: "review", object_role: "build", object_target: "issue.9", project: "project.1", model: "sonnet", tier: "worker-medium", cost: 1.5, commit_sha: "abc1234" });
-  expect(sayText(row)).toBe("J-00001 returned by review: a check failed");
+  expect(sayText(row)).toBe("j-00001 returned by review: a check failed");
 });
 
 test("an event's own tier reads back from event_rows, ahead of the tier of a job it names", () => {

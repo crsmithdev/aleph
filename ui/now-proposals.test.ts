@@ -33,7 +33,7 @@ test("approve and decline handlers", async () => {
   let restore = () => {};
   try {
     restore = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
-      ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "items"), });
+      ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "items"), ALEPH_DB: join(base, "aleph.db"), });
     storeRepos(base);
     writeRepos({ fac: { path: base, sandbox: true } }, join(base, "items"));
     mkdirSync(join(base, "factory"), { recursive: true });

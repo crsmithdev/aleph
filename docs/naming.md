@@ -26,13 +26,13 @@ A stored thing has one key, `<kind>.<n>`, with one counter per kind. A key never
 
 | Kind | Key | Shown as |
 |---|---|---|
-| Project | `project.3` | `P-00003` |
-| Issue | `issue.2072` | `I-02072`, or `a-02072` with the project code `a` |
-| Idea | `idea.7` | `D-00007` |
-| Job | `job.6802` | `J-06802` |
+| Project | `project.3` | `p-00003` |
+| Issue | `issue.2072` | `i-02072`, or `a-02072` with the project code `a` |
+| Idea | `idea.7` | `d-00007` |
+| Job | `job.6802` | `j-06802` |
 
-- The shown form pads the number to 5 digits and is for display only. A stored key is never padded. The parser reads a shown form and a number with leading zeros, so a copied `J-06802` resolves.
-- The kind letters of the shown form are upper case and a project code is lower case, so a project code `i` and the issue letter `I` never clash. The letters are placeholders until the Herald redesign decides them. The parser reads only the upper-case kind letters, and a shown key is never stored.
+- The shown form pads the number to 5 digits and is for display only. A stored key is never padded. The parser reads a shown form and a number with leading zeros, so a copied `j-06802` resolves.
+- The kind letters of the shown form are lower case, `p`, `i`, `d` and `j`. A project code is lower case too, so no project takes the code `p`, `d` or `j`. A shown key is never stored.
 - A commit trailer is `Issue: issue.<n>` or `Job: job.<n>`.
 - A sub-issue is an issue with a `from` link. The parent stays open and closes when its children close.
 

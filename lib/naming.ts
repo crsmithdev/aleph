@@ -56,8 +56,10 @@ export function word(set: string, w: string): string {
 
 let codes: Record<string, string> = {};
 let keys: Record<string, string> = {};
-/** Set the project codes, `{aleph: "a", …}`, from the registry. */
+/** Set the project codes, `{aleph: "a", …}`, from the registry. Throws on a code `p`, `d` or `j`: its issues would show as another kind. */
 export function setCodes(map: Record<string, string>): void {
+  const bad = Object.entries(map).find(([, c]) => c !== LETTER.issue && Object.values(LETTER).includes(c));
+  if (bad) throw new Error(`naming: the code "${bad[1]}" of ${bad[0]} is the letter of another kind`);
   codes = { ...map };
   keys = Object.fromEntries(Object.entries(map).map(([k, c]) => [c, k]));
 }
@@ -65,21 +67,21 @@ export function setCodes(map: Record<string, string>): void {
 /** The kinds of a stored thing: its key is `<kind>.<n>`. */
 export const KEY_KINDS = ["project", "issue", "idea", "job"] as const;
 export type KeyKind = (typeof KEY_KINDS)[number];
-/** The upper-case letter that shows a key's kind; a project code is lower-case, so the two never clash; the letters are placeholders until the Herald redesign decides them. */
-const LETTER: Record<KeyKind, string> = { project: "P", issue: "I", idea: "D", job: "J" };
+/** The lower-case letter that shows a key's kind. A project code is 1–2 letters too, so `setCodes` refuses the codes `p`, `d` and `j`. */
+const LETTER: Record<KeyKind, string> = { project: "p", issue: "i", idea: "d", job: "j" };
 const KEY = /^(project|issue|idea|job)\.(\d+)$/;
-const SHOWN = /^([A-Za-z]{1,2})-(\d+)$/;
+const SHOWN = /^([a-z]{1,2})-(\d+)$/;
 
 /** `issue.2072` from a kind and a number. */
 export const key = (kind: KeyKind, n: number): string => `${kind}.${n}`;
-/** `{kind, n}` for a key, or for its shown form: `I-02072` and `a-02072` (a known project code) read as an issue; or null. */
+/** `{kind, n}` for a key, or for its shown form: `i-02072` and `a-02072` (a known project code) read as an issue; or null. */
 export function parseKey(s: unknown): { kind: KeyKind; n: number } | null {
   const t = String(s ?? "").trim(), k = KEY.exec(t), sh = k ? null : SHOWN.exec(t);
   if (k) return { kind: k[1] as KeyKind, n: Number(k[2]) };
   const kind = sh && (KEY_KINDS.find((x) => LETTER[x] === sh[1]) ?? (keys[sh[1]] ? "issue" : undefined));
   return sh && kind ? { kind, n: Number(sh[2]) } : null;
 }
-/** A key as the page and the terminal show it: `J-06802`, number padded to 5 digits; an issue takes its project's `code` when given (`a-01234`). Anything else unchanged. */
+/** A key as the page and the terminal show it: `j-06802`, number padded to 5 digits; an issue takes its project's `code` when given (`a-01234`). Anything else unchanged. */
 export function shownKey(s: unknown, code?: string): string {
   const k = parseKey(s);
   return k ? `${k.kind === "issue" && code ? code : LETTER[k.kind]}-${String(k.n).padStart(5, "0")}` : String(s ?? "");
@@ -136,7 +138,7 @@ export function event({ time, subject, action, object, detail, tier }: Omit<Even
   return { time: time ?? new Date().toISOString(), subject, action, object, ...(detail ? { detail } : {}), ...(tier ? { tier } : {}) };
 }
 
-/** An ID as the page shows it: a key `J-06802`, an old issue ID `a1421`; anything else unchanged. */
+/** An ID as the page shows it: a key `j-06802`, an old issue ID `a1421`; anything else unchanged. */
 export const shownId = (s: unknown, repo?: string | null): string => (KEY.test(String(s)) ? shownKey(s, repo ? codes[repo] : undefined) : shortId(s));
 /** The detail of an event as text, each issue ID in its short form. */
 export const contentText = (e: Partial<Event>): string => shortText(e.detail ?? "");

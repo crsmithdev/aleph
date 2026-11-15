@@ -138,9 +138,9 @@ test("a hold writes its event, and the log shows it as busy with the job and the
     expect(contentText(e)).toBe("issue.1372 holds ui/views/issues.js");
     const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
     // An issue key names no repo, so the log shows its shown form and links nothing.
-    expect(h).toContain("</td><td>I-01420</td><td>");
+    expect(h).toContain("</td><td>i-01420</td><td>");
     expect(h).toContain('<tr><td class="time lead">');
-    expect(h).toContain('</td><td>busy</td><td class="wide" title="issue.1372 holds ui/views/issues.js">I-01372 holds ui/views/issues.js</td>');
+    expect(h).toContain('</td><td>busy</td><td class="wide" title="issue.1372 holds ui/views/issues.js">i-01372 holds ui/views/issues.js</td>');
   } finally { setHolds(was); }
 });
 

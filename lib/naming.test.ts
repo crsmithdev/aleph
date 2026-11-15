@@ -130,20 +130,20 @@ test("no file outside lib/naming.ts reads an issue ID with its own regex", () =>
 
 test("sayText says an event in the active voice, its object first, the detail after a colon or in place", () => {
   const cases: [Record<string, unknown>, string][] = [
-    [{ subject: "gate", action: "landed", object: "job.6802" }, "J-06802 landed"],
-    [{ subject: "gate", action: "landed", object: "job.6802", detail: "over review" }, "J-06802 landed: over review"],
-    [{ subject: "gate", action: "failed", object: "job.6802", detail: "merge conflict" }, "J-06802 failed: merge conflict"],
-    [{ subject: "job.6803", subject_role: "review", action: "returned", object: "job.6802" }, "J-06802 returned by review"],
-    [{ subject: "gate", action: "returned", object: "job.6802" }, "J-06802 returned"],
-    [{ subject: "gate", action: "waiting", object: "issue.3" }, "I-00003 waits for you"],
-    [{ subject: "gate", action: "after", object: "issue.3", detail: "issue.2" }, "I-00003 waits for I-00002"],
+    [{ subject: "gate", action: "landed", object: "job.6802" }, "j-06802 landed"],
+    [{ subject: "gate", action: "landed", object: "job.6802", detail: "over review" }, "j-06802 landed: over review"],
+    [{ subject: "gate", action: "failed", object: "job.6802", detail: "merge conflict" }, "j-06802 failed: merge conflict"],
+    [{ subject: "job.6803", subject_role: "review", action: "returned", object: "job.6802" }, "j-06802 returned by review"],
+    [{ subject: "gate", action: "returned", object: "job.6802" }, "j-06802 returned"],
+    [{ subject: "gate", action: "waiting", object: "issue.3" }, "i-00003 waits for you"],
+    [{ subject: "gate", action: "after", object: "issue.3", detail: "issue.2" }, "i-00003 waits for i-00002"],
     [{ subject: "gate", action: "waiting", object: "issue.3", project: "aleph" }, "a-00003 waits for you"],
-    [{ subject: "gate", action: "busy", object: "issue.3", detail: "job.6802 holds src/x.ts" }, "I-00003 waits: J-06802 holds src/x.ts"],
-    [{ subject: "gate", action: "red", object: "issue.3", detail: "at abc1234" }, "I-00003 waits: main is red: at abc1234"],
-    [{ subject: "human", action: "filed", object: "issue.3" }, "I-00003 filed by you"],
-    [{ subject: "claude", action: "filed", object: "issue.3" }, "I-00003 filed by Claude Code"],
-    [{ subject: "job.6801", subject_role: "intake", action: "filed", object: "issue.3" }, "I-00003 filed by intake"],
-    [{ subject: "rule", action: "stalled", object: "job.6802" }, "J-06802 stalled"],
+    [{ subject: "gate", action: "busy", object: "issue.3", detail: "job.6802 holds src/x.ts" }, "i-00003 waits: j-06802 holds src/x.ts"],
+    [{ subject: "gate", action: "red", object: "issue.3", detail: "at abc1234" }, "i-00003 waits: main is red: at abc1234"],
+    [{ subject: "human", action: "filed", object: "issue.3" }, "i-00003 filed by you"],
+    [{ subject: "claude", action: "filed", object: "issue.3" }, "i-00003 filed by Claude Code"],
+    [{ subject: "job.6801", subject_role: "intake", action: "filed", object: "issue.3" }, "i-00003 filed by intake"],
+    [{ subject: "rule", action: "stalled", object: "job.6802" }, "j-06802 stalled"],
     [{ subject: "human", action: "changed", object: "settings", detail: "the factory is paused" }, "settings changed: the factory is paused"],
   ];
   for (const [ev, text] of cases) expect(n.sayText(ev)).toBe(text);
@@ -162,10 +162,10 @@ describe("keys", () => {
     expect(n.parseKey("issue.x")).toBeNull();
   });
   test("a shown key pads to 5 digits and parses back, leading zeros included", () => {
-    expect(n.shownKey("job.6802")).toBe("J-06802");
-    expect(n.shownKey("issue.2")).toBe("I-00002");
-    expect(n.shownKey("idea.7")).toBe("D-00007");
-    expect(n.shownKey("project.3")).toBe("P-00003");
+    expect(n.shownKey("job.6802")).toBe("j-06802");
+    expect(n.shownKey("issue.2")).toBe("i-00002");
+    expect(n.shownKey("idea.7")).toBe("d-00007");
+    expect(n.shownKey("project.3")).toBe("p-00003");
     expect(n.shownKey("issue.1234", "a")).toBe("a-01234");
     expect(n.shownKey("settings")).toBe("settings");
     for (const k of ["job.6802", "issue.2", "idea.7", "project.3", "job.123456"]) expect(n.parseKey(n.shownKey(k))).toEqual(n.parseKey(k));
@@ -174,11 +174,10 @@ describe("keys", () => {
     expect(n.parseKey("a-01234")).toEqual({ kind: "issue", n: 1234 });
     expect(n.parseKey("z-01234")).toBeNull();
   });
-  test("a project code i does not clash with the issue letter", () => {
+  test("a project code i is the issue letter, and a code p, d or j is refused", () => {
     n.setCodes({ interview: "i" });
     expect(n.shownKey("issue.5", "i")).toBe("i-00005");
     expect(n.parseKey("i-00005")).toEqual({ kind: "issue", n: 5 });
-    expect(n.parseKey("I-00005")).toEqual({ kind: "issue", n: 5 });
-    expect(n.parseKey("J-00005")).toEqual({ kind: "job", n: 5 });
+    for (const c of ["p", "d", "j"]) expect(() => n.setCodes({ jam: c })).toThrow(/another kind/);
   });
 });

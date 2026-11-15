@@ -186,7 +186,7 @@ test("a Herald group keeps its open or closed state when a newer event arrives a
 test("the Herald's older rows under an issue are labelled by their run's kind with the linked job and a mark, by the chip for an event with no run, and the top row keeps the issue's title", () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-herald-runs-")), restore = withEnv({ ALEPH_JOBS_DIR: base, ALEPH_DB: join(base, "aleph.db") });
   try {
-    const shown = (k: string) => `J-${k.slice(4).padStart(5, "0")}`;
+    const shown = (k: string) => `j-${k.slice(4).padStart(5, "0")}`;
     const [j1, j2] = (["intake", "build"] as const).map((role) => seed({ role, name: "issue.9", target: "issue.9", state: "done", started: "2026-11-09T10:00:00Z" }).id);
     const events = [
       row({ at: "2026-11-09T10:30:00Z", by: "gate", subject: "aleph-9", action: "started" }),

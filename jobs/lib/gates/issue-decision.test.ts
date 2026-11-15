@@ -87,8 +87,10 @@ test("a factory gate gives the dispatch its why and Chris its text", () => {
 });
 
 test("an issue whose run is on the held backend gets the hold decision, not a start", async () => {
-  const was = process.env.ALEPH_FACTORY_DIR, url = process.env.SIDETONE_TELL_URL, dir = mkdtempSync(join(tmpdir(), "hold-"));
+  const was = process.env.ALEPH_FACTORY_DIR, url = process.env.SIDETONE_TELL_URL, db = process.env.ALEPH_DB, dir = mkdtempSync(join(tmpdir(), "hold-"));
   process.env.ALEPH_FACTORY_DIR = dir;
+  // Its own aleph.db: the live jobs an earlier file of the process left running would bind the live cap.
+  process.env.ALEPH_DB = join(dir, "aleph.db");
   process.env.SIDETONE_TELL_URL = "http://127.0.0.1:1/tell";
   try {
     await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
@@ -103,6 +105,7 @@ test("an issue whose run is on the held backend gets the hold decision, not a st
     putJson("state", "backend-hold", null);
     if (was === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = was;
     if (url === undefined) delete process.env.SIDETONE_TELL_URL; else process.env.SIDETONE_TELL_URL = url;
+    process.env.ALEPH_DB = db;
     rmSync(dir, { recursive: true, force: true });
   }
 });

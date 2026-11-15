@@ -47,7 +47,7 @@ describe("milestone 2", () => {
     expect(r.json.find((s: any) => s.id === `fac-${id}`)).toMatchObject({ stage: "new" });
     const text = (await cli(["status"])).stdout;
     expect(text.split("\n")).toContain("fac");
-    expect(text).toContain(`\n  I-${String(id).padStart(5, "0")} new: intake`);
+    expect(text).toContain(`\n  i-${String(id).padStart(5, "0")} new: intake`);
     await issueClose("fac", id, "done");
     expect((await cli(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
   }, 30_000);

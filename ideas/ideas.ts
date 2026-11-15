@@ -29,7 +29,7 @@ export interface Idea { slug: string; fm: Frontmatter; writeup: string; log: str
 
 export const ideasDir = (): string => join(itemsDir(), "ideas");
 
-/** The idea number as text, from `3`, `idea.3` or a shown form such as `D-00003`; a refusal for anything else. */
+/** The idea number as text, from `3`, `idea.3` or a shown form such as `d-00003`; a refusal for anything else. */
 export const slugOf = (arg: string): string => {
   const n = parseKey(arg);
   return n?.kind === "idea" ? String(n.n) : /^\d+$/.test(arg) ? String(Number(arg)) : refuse(`name an idea by its number: ${arg}`);

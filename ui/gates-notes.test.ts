@@ -29,7 +29,7 @@ beforeAll(() => {
   const factory = join(base, "factory");
   mkdirSync(factory);
   writeRepos({ fac: { path: repo, sandbox: true } }, items);
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); note(add(doc, "b task"), "Chris decided: go on", new Date("2026-11-03T10:00:00Z")); add(doc, "c task").notes.push("- 2026-11-03 11:00: Chris decided: stop"); return true; }, true);
 });
 // The test's clock: the notes sit a day before it, inside the 7-day log.
