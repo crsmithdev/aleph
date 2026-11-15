@@ -192,6 +192,12 @@ describe("GET /api/jobs", () => {
     expect(h).not.toContain('value="triage"');
     expect(h).not.toContain('value="planner"');
   });
+  test("the Runs filter shows ?unusable=1 as Failed and its absence as All", () => {
+    const group = (h: string) => h.slice(h.indexOf('data-name="unusable"'), h.indexOf("</div>", h.indexOf('data-name="unusable"')));
+    const pressed = (h: string) => Object.fromEntries([...group(h).matchAll(/data-value="([^"]*)" aria-pressed="(\w+)"/g)].map((m) => [m[1], m[2]]));
+    expect(pressed(v.renderFilters({ unusable: "1" }))).toEqual({ "": "false", "1": "true" });
+    expect(pressed(v.renderFilters({}))).toEqual({ "": "true", "1": "false" });
+  });
   test("?project narrows to one project", async () => {
     expect(await idsOf("project=oth&window=month")).toEqual([K["oth-1#1"]]);
     expect(await (await get("/api/jobs?project=nope")).json()).toEqual({ jobs: [], next: null });
