@@ -216,7 +216,7 @@ describe("the writes", () => {
   test("sort changes an open, unsorted item only", () => {
     const r = repo([{ title: "new" }, { title: "live" }, { title: "closed" }]);
     const [fresh, live, shut] = r.ids;
-    store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, live)!), { kind: "input", reason: "question", question: "Check it.", options: [], why: [] }); return true; });
+    store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, live)!), { reason: "question", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, shut, "x");
     const before = commits();
     expect(store.sort(r, live, "intake", () => { })).toBe(false);

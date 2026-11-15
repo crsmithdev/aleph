@@ -47,7 +47,7 @@ describe("a factory run", () => {
     test("a security path gets the reviewer, then one held-path Ask, and no second review", async () => {
       const n = calls();
       const r = await rjob("rsec", "REVIEW:pass", "commit hooks/r.txt");
-      expect(state(r.json.run)).toMatchObject({ state: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path hooks/r.txt" });
+      expect(state(r.json.run)).toMatchObject({ state: "waiting", ask: expect.objectContaining({ reason: "held-path" }), reason: "held path hooks/r.txt" });
       expect(calls()).toBe(n + 1);
       noSecondReview(r.json.run);
       await drop("rsec");
@@ -57,7 +57,7 @@ describe("a factory run", () => {
       const n = calls();
       const r = await job("fac", "rheld", "Goal: rheld REVIEW:pass\nACTION: commit held/r.txt\n", { land: true });
       const s = state(r.json.run);
-      expect(s).toMatchObject({ state: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/r.txt" });
+      expect(s).toMatchObject({ state: "waiting", ask: expect.objectContaining({ reason: "held-path" }), reason: "held path held/r.txt" });
       expect(s.next).toBeUndefined();
       expect(s.review).toMatchObject({ call: "passed", model: expect.any(String) });
       expect(calls()).toBe(n + 1);

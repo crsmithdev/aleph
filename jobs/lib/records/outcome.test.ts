@@ -43,7 +43,7 @@ test("the news is the job ID and the state word", () => {
 });
 
 test("a waiting run takes its sub from its Ask's needs, in the sub set's words", () => {
-  const wait = (reason: string): Partial<Run> => ({ state: "waiting", ask: { kind: "approval", reason, question: "q", options: [], why: [] } });
+  const wait = (reason: string): Partial<Run> => ({ state: "waiting", ask: { reason, question: "q", options: [], why: [] } });
   expect(newsLine(entry(wait("held-path")))).toBe("job.1 waiting protected");
   expect(newsLine(entry(wait("question")))).toBe("job.1 waiting question");
 });

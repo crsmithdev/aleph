@@ -100,7 +100,7 @@ const TIMELINE = [{ title: "Runs", rows: [
 ] }];
 const NOW = "2026-11-10T17:00:00Z";
 const ASK = {
-  id: "aleph-41", href: "#/kit", repo: "aleph", key: "issue:aleph-41", kind: "input", card: "decide", reason: "question", label: "Decide", tag: "question",
+  id: "aleph-41", href: "#/kit", repo: "aleph", key: "issue:aleph-41", card: "decide", reason: "question", label: "Decide", tag: "question",
   title: "Pick the time format for a day with no time", headline: "Pick the time format for a day with no time", priority: "high", at: "2026-11-10T16:00:00Z",
   situation: "Two tables show a day with no time two ways: Oct 28 and 10/28.",
   actions: [{ label: "Oct 28", act: "kit", path: "/api/kit", primary: true }, { label: "10/28", act: "kit", path: "/api/kit" }, { label: "Deny", act: "kit", path: "/api/kit", input: { name: "reason" } }],

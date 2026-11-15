@@ -19,7 +19,7 @@ describe("the drop of a part", () => {
     const r = await issueClose("fac", part, "drop", "not needed");
     expect(r.code, r.stderr).toBe(0);
     const issue = await show(n);
-    expect(issue.ask).toMatchObject({ kind: "input", reason: "part-dropped" });
+    expect(issue.ask).toMatchObject({ reason: "part-dropped" });
     expect(issue.ask.options.map((o: any) => o.label)).toEqual(["Close with what landed", "Plan the missing part"]);
     expect(await statusLine(`fac-${n}`)).toContain("waiting");
   });

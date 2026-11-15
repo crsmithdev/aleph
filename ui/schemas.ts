@@ -23,7 +23,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }],
     stuck: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],
-    asks: [{ key: "string", kind: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }],
+    asks: [{ key: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }],
     usage: "object?", proposals: "array",
   },
   "/api/status": { tone: "string" },

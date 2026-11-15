@@ -54,9 +54,9 @@ export function fresh(items: { title: string; body?: string; specced?: boolean; 
   }, true);
 }
 /** An Ask that offers options: a product choice. */
-export const choice = (reason = "question"): Ask => ({ kind: "input", reason, question: "Which page?", options: [{ label: "A", line: "page A" }, { label: "B", line: "page B" }], recommended: "A", why: [] });
+export const choice = (reason = "question"): Ask => ({ reason, question: "Which page?", options: [{ label: "A", line: "page A" }, { label: "B", line: "page B" }], recommended: "A", why: [] });
 /** A plain question with no options: a how-to-build one. */
-export const plain = (question = "which module?"): Ask => ({ kind: "input", reason: "question", question, options: [], why: [] });
+export const plain = (question = "which module?"): Ask => ({ reason: "question", question, options: [], why: [] });
 export const asked = (id: number) => askOf(`issue.${id}`);
 export const item = (id: number) => issues.find(readList({ key })!, id)!;
 /** A stream-json result event whose structured output is `o`. */

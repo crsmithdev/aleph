@@ -301,7 +301,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
       const ask = askOf(refIn(repo.key, i));
       ctx.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${store.priorityOf(i)}   updated ${issues.updated(i) ?? "-"}`);
       ctx.log(`after ${store.afterOf(i).map(shownRef).join(", ") || "-"}   refs ${store.refsOf(i).map(shownRef).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
-      ctx.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
+      ctx.log(`ask ${ask ? `${ask.reason}: ${ask.question}` : "-"}`);
       if (i.request.trim()) ctx.log(`\n## Request\n\n${i.request}`);
       if (i.spec.trim()) ctx.log(`\n${i.spec}`);
       if (i.notes.length) ctx.log(`\n### Notes\n${i.notes.join("\n")}`);

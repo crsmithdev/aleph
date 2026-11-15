@@ -43,5 +43,5 @@ export function card(repo: string, item: todos.Issue, stage: string, ask?: Ask):
   const q = ask.question || (last && todos.noteOf(last).text.trim());
   if (q) c.question = q;
   if (ask.options.length) c.decision = ask;
-  return { ...c, ask, reason: ask.reason, askKind: ask.kind };
+  return { ...c, ask, reason: ask.reason };
 }

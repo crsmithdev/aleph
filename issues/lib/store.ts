@@ -180,7 +180,7 @@ function parkWaiter(repo: Place, waiter: Issue, blocker: string): void {
   if (!w) return;
   if (standing) { logAlways("blocker-dropped", ref, "answered", { detail: "the recommended answer" }); return; }
   record.setIssueAsk(ref, {
-    kind: "input", reason: "blocker-dropped", question: `${blocker} was dropped, so this issue is parked. What now?`, recommended: REMOVE_LINK, why: [],
+    reason: "blocker-dropped", question: `${blocker} was dropped, so this issue is parked. What now?`, recommended: REMOVE_LINK, why: [],
     options: [{ label: REMOVE_LINK, line: "Takes the dropped issue out of after and opens this issue." }, { label: DROP_WAITER, line: "Drops this issue too." }],
   });
   logEvent({ subject: "rule", action: "parked", object: ref, detail: `blocker ${blocker} dropped` });

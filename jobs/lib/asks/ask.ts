@@ -22,7 +22,6 @@ import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 
 export interface Ask {
-  kind: "input" | "approval";
   reason: string;
   question: string;
   options: { label: string; line: string; after?: string }[];
@@ -44,7 +43,6 @@ export interface Ask {
 export type Card = "approve" | "decide" | "unstick";
 
 export interface Reason {
-  kind: Ask["kind"];
   actions: string[];
   /** The action the Always button takes. Empty: the factory has no rule that acts on this reason, so the card offers no auto-yes. */
   always: string;
@@ -60,7 +58,7 @@ export interface Reason {
 export interface Granted { action: string; at: string }
 
 const proposal = (name: string, line: string): Reason =>
-  ({ kind: "approval", actions: ["approve", "decline"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change." });
+  ({ actions: ["approve", "decline"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change." });
 
 /**
  * Every reason the factory asks Chris, in the order the page lists the runs that wait. The first group is the spec's Ask
@@ -68,36 +66,36 @@ const proposal = (name: string, line: string): Reason =>
  * `proposal-<kind>:<place>` keys.
  */
 const REASONS = {
-  "held-path": { kind: "approval", actions: ["land", "drop"], always: "", needs: "protected", card: "approve", name: "Lands on held paths",
+  "held-path": { actions: ["land", "drop"], always: "", needs: "protected", card: "approve", name: "Lands on held paths",
     line: "A job that changes a held path, after its checks and review pass.", problem: "The run for {id} changes a path the repo holds for your review, so the factory did not land it." },
-  "review-held": { kind: "approval", actions: ["land", "drop"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
+  "review-held": { actions: ["land", "drop"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
     line: "The reviewer held the job and no fix rounds are left.", problem: "The reviewer could not reach a verdict on {id} in two tries." },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
-  "question": { kind: "input", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question", card: "decide", name: "Questions",
+  "question": { actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question", card: "decide", name: "Questions",
     line: "A job or an intake stopped on a choice that the spec leaves open.", problem: "Your answer is needed." },
-  "no-commit": { kind: "input", actions: ["rerun", "close"], always: "", card: "unstick", name: "Jobs with no commit",
+  "no-commit": { actions: ["rerun", "close"], always: "", card: "unstick", name: "Jobs with no commit",
     get line() { return `The last ${NO_COMMIT_LIMIT} jobs of an issue ended with nothing committed.`; },
     get problem() { return `The last ${NO_COMMIT_LIMIT} runs of {id} ended with no commit, so the factory stopped starting it.`; },
     rerun: { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the issue." } },
   // Its `rerun` answer closes the issue as done (decideAsk); `close` drops it.
-  "part-dropped": { kind: "input", actions: ["rerun", "close"], always: "", card: "decide", name: "Dropped sub-issues",
+  "part-dropped": { actions: ["rerun", "close"], always: "", card: "decide", name: "Dropped sub-issues",
     line: "A sub-issue of an issue was dropped and no other sub-issue is open.", problem: "A sub-issue of {id} was dropped and no other sub-issue of it is open.",
     rerun: { label: "Close as done", hint: "Sets the issue to done; nothing more runs for it." } },
-  "intake-failed": { kind: "input", actions: ["retry", "close"], always: "retry", card: "unstick", name: "Failed intake",
+  "intake-failed": { actions: ["retry", "close"], always: "retry", card: "unstick", name: "Failed intake",
     get line() { return `Intake of an issue failed ${INTAKE_TRIES() === 2 ? "twice" : `${INTAKE_TRIES()} times`}.`; },
     problem: "Intake of {id} failed: it gave no verdict, so no one has decided what to do with this issue." },
-  "rescue": { kind: "input", actions: ["decide", "drop"], always: "recommended", card: "unstick", name: "Rescue of a stuck job",
+  "rescue": { actions: ["decide", "drop"], always: "recommended", card: "unstick", name: "Rescue of a stuck job",
     line: "A stuck job with more than one way out.", problem: "Your answer is needed." },
   // Not Ask reasons of the spec; no new home is named for them.
-  "run-cap": { kind: "input", actions: ["rerun", "close"], always: "", card: "unstick", name: "Job cap",
+  "run-cap": { actions: ["rerun", "close"], always: "", card: "unstick", name: "Job cap",
     get line() { return `An issue started ${RUN_CAP()} times in one hour.`; },
     get problem() { return `The factory started {id} ${RUN_CAP()} times in one hour, so it stopped starting it until you run it again.`; },
     rerun: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
   // Held by the memory re-check on a core note; the director never decides it. Its issue is parked, so no work starts on it.
-  "core-change": { kind: "approval", actions: ["approve", "decline"], always: "", card: "approve", name: "Core note changes",
+  "core-change": { actions: ["approve", "decline"], always: "", card: "approve", name: "Core note changes",
     line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}." },
   // The issue is parked; its decision option `Remove the link` opens it, `Drop the waiter` drops it (decideAsk).
-  "blocker-dropped": { kind: "input", actions: ["decide"], always: "recommended", card: "decide", name: "Dropped blockers",
+  "blocker-dropped": { actions: ["decide"], always: "recommended", card: "decide", name: "Dropped blockers",
     line: "An issue waits after an issue that was dropped.", problem: "{id} waits after an issue that was dropped, so it is parked." },
   "proposal-check": proposal("Proposed checks", "The correction memory proposes a check for a repo."),
   "proposal-claude-md": proposal("Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."),
@@ -139,15 +137,11 @@ export const reasonOf = (given: string | undefined): string => (given && ASK_REA
 export const asking = (item: issues.Issue, ask: Ask | null): ask is Ask =>
   !!ask && (issues.status(item) === "open" || (issues.status(item) === "parked" && (ask.reason === "core-change" || ask.reason === "blocker-dropped")));
 
-/** The kind of an Ask: the ask's own, else from its reason. */
-export const kindOf = (reason: string, given?: string): Ask["kind"] =>
-  given === "input" || given === "approval" ? given : ASK_REASONS[reason]?.kind ?? "input";
-
 /** The kind of wait an ask is, from its reason: question, protected or review; else none. */
 export const needsOf = (ask: Ask | undefined): Reason["needs"] => (ask ? ASK_REASONS[ask.reason]?.needs : undefined);
 
 /** What an awaiting run waits on. A run with no ask of its own asks a question. */
-export const waitOf = (ask: Ask | undefined): Pick<Ask, "kind" | "reason"> => (ask ? { kind: ask.kind, reason: ask.reason } : { kind: "input", reason: "question" });
+export const waitOf = (ask: Ask | undefined): Pick<Ask, "reason"> => ({ reason: ask ? ask.reason : "question" });
 
 /** The actions a card offers. One reason serves a worker's question (a run) and an issue's (a decision): the context picks them. */
 export function actionsOn(reason: string, on: { run: boolean; decision: boolean }): string[] {
@@ -157,7 +151,7 @@ export function actionsOn(reason: string, on: { run: boolean; decision: boolean 
 }
 
 /** An Ask with no options: the factory's own stop, with the sentence Chris reads. */
-export const plainAsk = (reason: AskReason, question: string, why: string[] = []): Ask => ({ kind: kindOf(reason), reason, question, options: [], why });
+export const plainAsk = (reason: AskReason, question: string, why: string[] = []): Ask => ({ reason, question, options: [], why });
 
 const SEP = " :: ";
 const MAX_WHY = 4;
@@ -165,9 +159,9 @@ const clean = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g,
 
 /**
  * An Ask from loose input (a verdict's JSON), or null when it has no usable question, 2–4 options, or a
- * `recommended` that is not an option's label. `kind` and `reason` default to a plain question.
+ * `recommended` that is not an option's label. `reason` defaults to a plain question.
  */
-export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: string } = {}): Ask | null {
+export function normalizeAsk(raw: any, defaults: { reason?: string } = {}): Ask | null {
   if (!raw || typeof raw !== "object") return null;
   const question = clean(raw.question);
   if (!question || !Array.isArray(raw.options) || raw.options.length < 2 || raw.options.length > 4) return null;
@@ -179,8 +173,7 @@ export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: 
   const recommended = clean(raw.recommended);
   if (recommended && !options.some((o: { label: string }) => o.label === recommended)) return null;
   const why = (Array.isArray(raw.why) ? raw.why : []).map(clean).filter(Boolean).slice(0, MAX_WHY);
-  const kind = raw.kind === "approval" || raw.kind === "input" ? raw.kind : defaults.kind ?? "input";
-  return { kind, reason: clean(raw.reason) || defaults.reason || "question", question, options, ...(recommended ? { recommended } : {}), why };
+  return { reason: clean(raw.reason) || defaults.reason || "question", question, options, ...(recommended ? { recommended } : {}), why };
 }
 
 
@@ -307,7 +300,6 @@ export function askIfPartDropped(doc: issues.Doc, part: issues.Issue, reason: st
 /** Put the part-dropped Ask on a parent. */
 export function askPartDropped(key: string, issue: issues.Issue, question: string): void {
   setAsk(refIn(key, issue), {
-    kind: "input",
     reason: "part-dropped",
     question,
     options: [

@@ -123,7 +123,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
           if (r.ask) {
             const [action, why = ""] = (r.recommend ?? "").split(" :: ");
             setIssueAsk(`issue.${item.id}`, {
-              kind: r.ask as "input" | "approval", reason: r.reason ?? "", question: r.question ?? "", options: [], why: [],
+              reason: r.reason ?? "", question: r.question ?? "", options: [], why: [],
               situation: r.situation,
               effects: (r.effects ?? []).map((e) => { const [a, ...t] = e.split(" :: "); return { action: a, text: t.join(" :: ") }; }),
               recommend: { action, why },

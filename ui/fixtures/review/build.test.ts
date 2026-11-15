@@ -24,7 +24,6 @@ afterEach(() => {
 test("the fixture's tools-34 is stored as an Ask and shows on Status as an escalated question", () => {
   Object.assign(process.env, buildReviewFixture(join(dir, "fx")));
   const ask = askOf("issue.34");
-  expect(ask?.kind).toBe("input");
   expect(ask?.reason).toBe("question");
   expect(ask?.situation).toContain("second input file");
   expect(ask?.effects?.some((e) => e.action === "decide")).toBe(true);

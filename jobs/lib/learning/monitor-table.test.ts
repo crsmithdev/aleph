@@ -89,7 +89,7 @@ describe("Asks, reopens and holds", () => {
     { at: at(DAY, 12), item: "p-4", added: ["closed_as: dropped"], removed: ["closed_as: done"] },
     { at: at("2026-10-14", 9), item: "p-5", added: ["reason: question"], removed: [] },
   ];
-  const runs = [run({ role: "build", target: "issue.6", started: at(DAY, 9), ended: at(DAY, 10), state: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } })];
+  const runs = [run({ role: "build", target: "issue.6", started: at(DAY, 9), ended: at(DAY, 10), state: "waiting", ask: { reason: "held-path", question: "q", options: [], why: [] } })];
   const holds = [
     { at: at(DAY, 9), name: "p-1", kind: "spec-check", text: "" },
     { at: at(DAY, 11), name: "p-1", kind: "started", text: "" },

@@ -146,7 +146,7 @@ test("a land killed by a host restart fails and lands again, and the issue does 
 
 // A run held before v6 phase 6, whose second review a host restart killed: call.md says PENDING from before the boot.
 test("an old held run with a PENDING call.md from before the boot is left alone: no review starts and the run keeps its Ask", async () => {
-  const r = mk(`fac-${newIssue()}`, "build", "waiting", { ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } }, { "call.md": "PENDING\n" });
+  const r = mk(`fac-${newIssue()}`, "build", "waiting", { ask: { reason: "held-path", question: "q", options: [], why: [] } }, { "call.md": "PENDING\n" });
   utimesSync(join(r.folder, "call.md"), new Date(BEFORE_BOOT), new Date(BEFORE_BOOT));
   const f = fakes();
   await dispatch(f);

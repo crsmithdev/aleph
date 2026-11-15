@@ -12,7 +12,7 @@ import { dueAt, issueAsks, readTimeouts, setTimeoutOf, timeoutStep } from "./tim
 let dir = "";
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "timeout-")); process.env.ALEPH_FACTORY_DIR = dir; process.env.ALEPH_DB = join(dir, "aleph.db"); });
 
-const ask = (recommend = "land"): Ask => ({ kind: "approval", reason: "review-held", question: "Land it?", options: [], why: [], situation: "It changes hooks/.", recommend: { action: recommend, why: "w" } });
+const ask = (recommend = "land"): Ask => ({ reason: "review-held", question: "Land it?", options: [], why: [], situation: "It changes hooks/.", recommend: { action: recommend, why: "w" } });
 const NOW = Date.parse("2026-11-10T12:00:00Z");
 let n = 0;
 /** A director job whose decision escalated the Ask of `on`, `at` ms. */
@@ -68,7 +68,7 @@ test("timeoutStep does not try a refused land again", async () => {
 });
 
 const question = (recommend?: string): Ask => ({
-  kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "Do A." }, { label: "B", line: "Do B." }], why: [],
+  reason: "question", question: "A or B?", options: [{ label: "A", line: "Do A." }, { label: "B", line: "Do B." }], why: [],
   situation: "The spec leaves A or B open.", ...(recommend ? { recommend: { action: recommend, why: "w" } } : {}),
 });
 /** An issue with `a` on it, escalated `ago` minutes before now. */
@@ -93,13 +93,13 @@ test("a due drop timeout takes the reason's drop, close or deny; an Ask not due,
   setTimeoutOf("no-commit", 30, "drop");
   setTimeoutOf("review-held", 30, "drop");
   const deny = onIssue(31, question("decide:A")), early = onIssue(5, question("decide:A"));
-  const close = onIssue(31, { kind: "input", reason: "no-commit", question: "Rerun?", options: [], why: [], situation: "No commit." });
+  const close = onIssue(31, { reason: "no-commit", question: "Rerun?", options: [], why: [], situation: "No commit." });
   const run = waiting(31);
   const took: string[] = [];
   await timeoutStep(taker(took), NOW, [run], [...deny, ...early, ...close]);
   expect(took).toEqual([`${run.run.name} drop`, `${deny[0].name} deny`, `${close[0].name} close`]);
   setTimeoutOf("rescue", 30, "pick");
-  const none = onIssue(31, { kind: "input", reason: "rescue", question: "What now?", options: [], why: [], situation: "Stuck." });
+  const none = onIssue(31, { reason: "rescue", question: "What now?", options: [], why: [], situation: "Stuck." });
   await timeoutStep(taker(took), NOW, [], none);
   expect(took).toHaveLength(3);
 });

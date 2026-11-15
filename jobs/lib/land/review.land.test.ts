@@ -16,7 +16,7 @@ describe("a factory run", () => {
   test("a change to an existing test goes to the reviewer; its hold needs a review; drop leaves the item open", async () => {
     const id = (await issueAdd("fac", "tests")).json.added;
     const r = await job("fac", "ftest", "Goal: ftest REVIEW:hold\nACTION: commit old.test.ts\n", { on: String(id) }, { ALEPH_FIX_ROUNDS: "0" });
-    expect(state(r.json.run)).toMatchObject({ state: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "review-held" }), reason: expect.stringMatching(/^reviewer: hold|^reviewer: tests do not/) });
+    expect(state(r.json.run)).toMatchObject({ state: "waiting", ask: expect.objectContaining({ reason: "review-held" }), reason: expect.stringMatching(/^reviewer: hold|^reviewer: tests do not/) });
     expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).toContain("The diff changes the test old.test.ts");
     expect((await drop("ftest")).code).toBe(0);
     expect((await issueShow("fac", id)).json.status).toBe("open");
@@ -36,14 +36,14 @@ describe("a factory run", () => {
   test("a held path needs Chris with the rule and the diff stat; his land adds Held-by", async () => {
     const r = await fjob("fheld", "commit held/x.txt");
     const s = state(r.json.run);
-    expect(s).toMatchObject({ state: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/x.txt" });
+    expect(s).toMatchObject({ state: "waiting", ask: expect.objectContaining({ reason: "held-path" }), reason: "held path held/x.txt" });
     expect(s.stat).toContain("held/x.txt");
     const run = r.json.run;
     // No second review: no call.md. The run and the job carry the reviewer's call.
     expect(existsSync(join(jobsDir, run, "call.md"))).toBe(false);
     expect(state(run).review).toMatchObject({ call: "passed" });
     expect((await jobView("fheld")).json.review).toMatchObject({ call: "passed" });
-    expect(state(run)).toMatchObject({ state: "waiting", ask: { kind: "approval", reason: "held-path" } });
+    expect(state(run)).toMatchObject({ state: "waiting", ask: { reason: "held-path" } });
     expect(state(run).needs).toBeUndefined();
     const l = await land("fheld");
     expect(state(l.json.run)).toMatchObject({ state: "landed", held: true });

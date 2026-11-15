@@ -224,19 +224,19 @@ The rescue (`rescue.ts`, `continuation.ts` `rescueCase`) takes one safe action p
 
 Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and options.
 
-| Reason | Kind | Actions | Always action |
-|---|---|---|---|
-| `held-path` | approval | land, drop | none |
-| `review-held` | approval | land, drop | none |
-| `question` | input | answer, drop, decide, deny | `recommended` (intake's own Asks only) |
-| `no-commit` | input | rerun, close | none |
-| `part-dropped` | input | rerun, close | none |
-| `blocker-dropped` | input | decide | `recommended` |
-| `intake-failed` | input | retry, close | `retry` |
-| `rescue` | input | decide, drop | `recommended` |
-| `run-cap` | input | rerun, close | none |
-| `core-change` | approval | approve, decline | none |
-| `proposal-check`, `proposal-claude-md`, `proposal-skill` | approval | approve, decline | `approve` |
+| Reason | Actions | Always action |
+|---|---|---|
+| `held-path` | land, drop | none |
+| `review-held` | land, drop | none |
+| `question` | answer, drop, decide, deny | `recommended` (intake's own Asks only) |
+| `no-commit` | rerun, close | none |
+| `part-dropped` | rerun, close | none |
+| `blocker-dropped` | decide | `recommended` |
+| `intake-failed` | retry, close | `retry` |
+| `rescue` | decide, drop | `recommended` |
+| `run-cap` | rerun, close | none |
+| `core-change` | approve, decline | none |
+| `proposal-check`, `proposal-claude-md`, `proposal-skill` | approve, decline | `approve` |
 
 **The director.** Every new Ask goes to the director first. It is one read-only Fable run per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-goal`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
 

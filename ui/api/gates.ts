@@ -75,7 +75,7 @@ export function rules(entries: LogEntry[] = [], asks = askHistory(), now = Date.
       outcome[record.allRunRecords().some((x) => x.target === a.issue && x.role === "build" && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
     }
     return {
-      reason, ...reasonText(reason), kind: r.kind, mode: r.always, fired: mine.length, decided, outcome,
+      reason, ...reasonText(reason), mode: r.always, fired: mine.length, decided, outcome,
       granted: g ? { action: g.action, at: g.at } : null,
       ...(TIMED.includes(reason) ? { timeout: timeouts[reason]?.minutes ?? 0, noAnswer: timeouts[reason]?.then ?? "pick" } : {}),
       ...(perPlace ? { places: Object.keys(granted).filter((k) => k.startsWith(`${reason}:`)) } : {}),

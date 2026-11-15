@@ -32,7 +32,7 @@ interface Reason {
 export interface Stage extends Reason { id: string; stage: StageName; why: string; of?: { n: number; m: number } }
 
 /** What stage() needs of an Ask. */
-interface AskFact { kind: "input" | "approval"; reason: string }
+interface AskFact { reason: string }
 
 /** What stage() needs of an item. */
 export interface Subject {
@@ -61,7 +61,7 @@ export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Sub
   return {
     id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
     after: store.afterOf(item).map((r) => r.replace(/^issue\./, `${key}-`)), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
-    ...(a ? { ask: { kind: a.kind, reason: a.reason } } : {}),
+    ...(a ? { ask: { reason: a.reason } } : {}),
     spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item),
   };
 }

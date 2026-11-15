@@ -137,7 +137,7 @@ test("a land live past 30 minutes sets one rescue Ask; a land live for 10 minute
     expect(one!.asked).toEqual(["issue.1"]);
     expect((await firefight(ports()))!.asked).toEqual([]);
     const ask = askOf("issue.1");
-    expect(ask).toMatchObject({ kind: "input", reason: "rescue", recommended: "Wait" });
+    expect(ask).toMatchObject({ reason: "rescue", recommended: "Wait" });
     expect(ask!.options.map((o) => o.label)).toEqual(["Wait", "Kill and rerun", "Drop"]);
     expect(askOf("issue.2")).toBeNull();
     expect(calls()).toBe(0);

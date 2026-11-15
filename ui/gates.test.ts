@@ -192,7 +192,7 @@ test("rules() gives each reason row its timeout minutes and no-answer action, an
   } finally { conn().run("DELETE FROM settings WHERE key = 'timeouts'"); }
 });
 
-const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", card: "decide", label: "Decide", headline: `t ${id}`, tag: "", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
+const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, card: "decide", label: "Decide", headline: `t ${id}`, tag: "", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
   actions: [{ act: "checked", label: "Mark it checked", hint: "Records it.", primary: true, path: `/api/issues/${id}/checked`, body: {}, recommended: false }], details: {}, repo: "r" });
 
 const data = () => ({
@@ -203,7 +203,7 @@ const data = () => ({
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
-  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
+  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
   log: { days: 7, max: 200, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to recommended" }] },

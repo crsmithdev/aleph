@@ -67,7 +67,7 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 | `--add`, `--del` | #437018, #C0304C | #A9C77D, #F07178 | diff lines |
 | `--focus` | #7E57C2 | #C792EA | focus ring |
 | `--approve`, `--decide`, `--unstick` | see `--approve` in `ui/app.css` | dark block | Ask cards, each with `-bg` and `-ring` |
-| `--kind` / `--kind-bg` | `--stuck` / `--stuck-bg` | the same | an issue row's kind: `approval` uses `--run`, `input` uses `--need` |
+| `--kind` / `--kind-bg` | `--stuck` / `--stuck-bg` | the same | an issue row's kind: the stuck and error cards |
 | `--k` / `--k-bg` / `--k-ring` | `--approve` / `--approve-bg` / `--approve-ring` | the same | an Ask card: `decide` and `unstick` set their own |
 
 #### Data colours

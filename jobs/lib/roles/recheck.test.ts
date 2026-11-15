@@ -152,7 +152,7 @@ test("correct and archive on core notes are held for Chris, change no file, and 
   // Each held verdict is a parked issue with a core-change Ask that names the note.
   const a = readList({ key: "aleph" })!.items.find((i) => i.id === Number(held.CoreA.issue.split("-")[1]))!;
   expect(status(a)).toBe("parked");
-  expect(askOf(`issue.${held.CoreA.issue.split("-")[1]}`)).toMatchObject({ kind: "approval", reason: "core-change", question: expect.stringContaining("CoreA"), why: ["moved", "New claim: A now holds."] });
+  expect(askOf(`issue.${held.CoreA.issue.split("-")[1]}`)).toMatchObject({ reason: "core-change", question: expect.stringContaining("CoreA"), why: ["moved", "New claim: A now holds."] });
   await seed("Other", 0);
   reply([]);
   await recheck(root, false);

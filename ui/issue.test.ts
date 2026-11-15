@@ -19,13 +19,14 @@ test("a row carries its link, its stage and why; a parked row has no why", () =>
 });
 
 test("a card that waits on an Ask carries the Ask, its reason and the question", () => {
-  const ask = { kind: "input", reason: "question", question: "", options: [] } as unknown as Ask;
+  const ask = { reason: "question", question: "", options: [] } as unknown as Ask;
   expect(card("alpha", item(), "waiting")).toMatchObject({ id: "alpha-7", href: "#/issues/alpha/7", priority: "high", stage: "waiting" });
-  expect(card("alpha", item(), "waiting", ask)).toMatchObject({ ask, reason: "question", askKind: "input", question: "what now?" });
+  expect(card("alpha", item(), "waiting", ask)).toMatchObject({ ask, reason: "question", question: "what now?" });
+  expect(card("alpha", item(), "waiting", ask)).not.toHaveProperty("askKind");
 });
 
 test("a card's question from the last note leaves out the note's stamp", () => {
-  const ask = { kind: "input", reason: "intake-failed", question: "", options: [] } as unknown as Ask;
+  const ask = { reason: "intake-failed", question: "", options: [] } as unknown as Ask;
   const it = { ...item(), notes: ["- 2026-10-27T12:34:00.000Z: Intake failed: no verdict in 2 runs"] } as Issue;
   expect(card("alpha", it, "waiting", ask).question).toBe("Intake failed: no verdict in 2 runs");
 });

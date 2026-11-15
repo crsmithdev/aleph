@@ -83,7 +83,7 @@ export interface Job {
   agent?: boolean;
   /** Running, stuck: the part this job works on, "n/m" of its parent. */
   part?: Part;
-  /** Awaiting: what the run asks of Chris, an input or an approval, and why. */
+  /** Awaiting: what the run asks of Chris, and why. */
   ask?: Ask;
   /** Awaiting: when the Ask timeout lands the run, with no answer from Chris (jobs/lib/asks/timeout.ts). */
   due?: string;
@@ -114,8 +114,6 @@ export interface NewIssue { id: string; title: string; priority?: string; status
   ask?: Ask;
   /** The Ask's reason. */
   reason?: string;
-  /** The Ask's kind: `input` or `approval`. */
-  askKind?: "input" | "approval";
   /** The stage from stage(). */
   stage?: string }
 
@@ -165,7 +163,7 @@ export interface State {
     monitor: ReturnType<typeof monitorPanel>;
   };
   stuck: Job[]; running: Job[];
-  /** Everything that waits for Chris: one entry per awaiting run, issue and proposal, with its kind (input or approval) and reason. */
+  /** Everything that waits for Chris: one entry per awaiting run, issue and proposal, with its card and reason. */
   asks: AskItem[];
   /** Queued and blocked issues (and old items): the Queued lane. */
   queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; kind: IssueDecision["kind"];

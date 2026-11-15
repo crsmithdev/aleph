@@ -236,7 +236,7 @@ describe("an issue that acceptance failed twice", () => {
       partId = it.id;
       return true;
     });
-    setAsk(`issue.${partId}`, { kind: "input", reason: "run-cap", question: "", options: [], why: [] });
+    setAsk(`issue.${partId}`, { reason: "run-cap", question: "", options: [], why: [] });
     try {
       // The trailer commit on main names the issue; origin/main points at it, as a land would leave it.
       sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nIssue: fac-${partId}`);
@@ -258,8 +258,8 @@ describe("a parked issue with a core-change Ask", () => {
       for (const t of ["held core note", "shelved question"]) { const it = add(doc, t); setStatus(it, "parked"); id.push(it.id); }
       return true;
     });
-    setAsk(`issue.${id[0]}`, { kind: "approval", reason: "core-change", question: "Apply it?", options: [], why: [] });
-    setAsk(`issue.${id[1]}`, { kind: "input", reason: "question", question: "Which?", options: [], why: [] });
+    setAsk(`issue.${id[0]}`, { reason: "core-change", question: "Apply it?", options: [], why: [] });
+    setAsk(`issue.${id[1]}`, { reason: "question", question: "Which?", options: [], why: [] });
     expect(state(now).asks.filter((a) => id.some((n) => a.id === `fac-${n}`)).map((a) => [a.id, a.reason])).toEqual([[`fac-${id[0]}`, "core-change"]]);
   });
 });

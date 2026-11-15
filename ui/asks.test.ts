@@ -10,14 +10,14 @@ import type { Job, NewIssue } from "./state.ts";
 let STORE: Partial<Ask> | undefined;
 const run = (reason: string, extra: Partial<Job> = {}): Job => ({
   name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, state: "waiting", started: "2026-10-28T00:00:00Z",
-  ask: { kind: reason === "held-path" || reason === "review-held" ? "approval" : "input", reason, ...STORE },
+  ask: { reason, ...STORE },
   run: { role: "build", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
 } as Job);
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra,
-  ...(STORE ? { ask: { kind: "input", reason: extra.reason ?? "question", question: "q", options: [], why: [], ...STORE } as Ask } : {}) });
+  ...(STORE ? { ask: { reason: extra.reason ?? "question", question: "q", options: [], why: [], ...STORE } as Ask } : {}) });
 const TARGET = { check: "aleph checks", "claude-md": "identity/CLAUDE.md", skill: "skills/write-tests/SKILL.md" } as const;
 const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }], ...(STORE && { situation: STORE.situation, effects: STORE.effects, recommend: STORE.recommend }) });
-const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "input" as const, reason: "question", why: ["w"] };
+const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", reason: "question", why: ["w"] };
 const RUN_CAP = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it.";
 
 const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, []);
@@ -49,6 +49,9 @@ describe("asks", () => {
     test(`${reason}: with no case text the Ask is with the director and offers no action; the director's case text brings the actions`, () => {
       const [plain] = CASES[reason]();
       expect(plain.escalated).toBe(false);
+      expect(plain).not.toHaveProperty("kind");
+      expect(["approve", "decide", "unstick"]).toContain(plain.card);
+      expect(escalated({ situation: "Stored situation.", kind: "input" } as Partial<Ask>)).not.toHaveProperty("kind");
       expect(plain.situation).toBe(plain.problem);
       expect(plain.actions).toEqual([]);
       expect(plain.always).toBeUndefined();
@@ -100,7 +103,7 @@ describe("asks", () => {
   });
 
   test("an Ask the director still holds is tagged as its call; once escalated it has the reason's tag", () => {
-    const held = ofIssues(issue({ reason: "question", question: "what now?", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] } as Ask }))[0];
+    const held = ofIssues(issue({ reason: "question", question: "what now?", ask: { reason: "question", question: "q", options: [], why: [] } as Ask }))[0];
     expect(held.tag).toBe("director");
     STORE = { situation: "The port is taken, so pick one." };
     try { expect(ofIssues(issue({ reason: "question", question: "what now?" }))[0].tag).toBe("question"); } finally { STORE = undefined; }

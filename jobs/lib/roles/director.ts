@@ -253,7 +253,7 @@ ${l.signals.map((s) => `- source: ${s.source}; at: ${s.at}; quote: ${s.quote}; l
   const where = c.at === "item" ? `the item ${c.on}` : `the run ${c.on}${run!.run.target ? ` on ${run!.run.target}` : ""}`;
   return `# The Ask on ${where}
 
-Reason: ${reason} (${r.kind}${r.needs ? `, a ${r.needs} wait` : ""})
+Reason: ${reason}${r.needs ? ` (a ${r.needs} wait)` : ""}
 On: ${c.at === "run" ? `a run of the job ${run!.run.name}` : "an issue"}${c.ask.options.length ? ", a decision with options" : ""}
 Actions on Chris's card: ${actionsOf(c).join(", ")}
 Question: ${c.ask.question || "(none)"}

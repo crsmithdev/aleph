@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
 import { readList } from "../../../issues/lib/store.ts";
@@ -12,7 +12,7 @@ import { seed } from "../../job.testkit.ts";
 import { newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
-const ask: Ask = { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
+const ask: Ask = { reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
 
 test("askChris with a null text sets the Ask and adds no note; an unknown issue gets none", () => {
   setup();
@@ -62,11 +62,12 @@ test("a run's Ask is the run's: the issue has none, and clearing the issue's Ask
 
 test("normalizeAsk takes after, 2 to 4 options and a recommended label that is one of them", () => {
   const raw = { question: "Q?", options: [{ label: "A", line: "a", after: "issue.4" }, { label: "B", line: "b", after: "i-00005" }], recommended: "A", why: ["w"] };
-  expect(normalizeAsk(raw)).toEqual({ kind: "input", reason: "question", question: "Q?", options: [{ label: "A", line: "a", after: "issue.4" }, { label: "B", line: "b", after: "issue.5" }], recommended: "A", why: ["w"] });
+  expect(normalizeAsk(raw)).toEqual({ reason: "question", question: "Q?", options: [{ label: "A", line: "a", after: "issue.4" }, { label: "B", line: "b", after: "issue.5" }], recommended: "A", why: ["w"] });
   expect(normalizeAsk({ ...raw, recommended: "C" })).toBeNull();
   expect(normalizeAsk({ ...raw, options: raw.options.slice(0, 1) })).toBeNull();
   expect(normalizeAsk({ ...raw, question: " " })).toBeNull();
-  expect(normalizeAsk(raw, { kind: "approval", reason: "review-held" })).toMatchObject({ kind: "approval", reason: "review-held" });
+  expect(normalizeAsk(raw, { reason: "review-held" })).toMatchObject({ reason: "review-held" });
+  expect(normalizeAsk({ ...raw, kind: "approval" })).not.toHaveProperty("kind");
 });
 
 test("normalizeAsk drops an after that is not an issue ID", () => {
@@ -80,19 +81,17 @@ test("reasonOf keeps a known reason and reads any other as a question", () => {
   expect(reasonOf(undefined)).toBe("question");
 });
 
-test("the table gives the kind, the wait and the plain Ask of a reason", () => {
-  expect(kindOf("held-path")).toBe("approval");
-  expect(kindOf("question", "approval")).toBe("approval");
-  expect(kindOf("nope")).toBe("input");
+test("the table gives the wait and the plain Ask of a reason, and no row or Ask has a kind", () => {
+  for (const r of Object.values(ASK_REASONS)) expect(r).not.toHaveProperty("kind");
   expect(needsOf(plainAsk("held-path", "q"))).toBe("protected");
   expect(needsOf(plainAsk("no-commit", "q"))).toBeUndefined();
   expect(needsOf(undefined)).toBeUndefined();
-  expect(plainAsk("review-held", "q", ["w"])).toEqual({ kind: "approval", reason: "review-held", question: "q", options: [], why: ["w"] });
+  expect(plainAsk("review-held", "q", ["w"])).toEqual({ reason: "review-held", question: "q", options: [], why: ["w"] });
 });
 
 test("waitOf reads a run with no ask as a question", () => {
-  expect(waitOf(undefined)).toEqual({ kind: "input", reason: "question" });
-  expect(waitOf(ask)).toEqual({ kind: "approval", reason: "held-path" });
+  expect(waitOf(undefined)).toEqual({ reason: "question" });
+  expect(waitOf(ask)).toEqual({ reason: "held-path" });
 });
 
 test("actionsOn picks by context for a question and a dropped part", () => {
@@ -166,7 +165,7 @@ test("readAlways ignores a grant that grant() would refuse, and the next write d
   expect(Object.keys(getJson("settings", "always", {}))).toEqual(["rescue"]);
 });
 
-const choice: Ask = { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], why: [] };
+const choice: Ask = { reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], why: [] };
 const plain = plainAsk("question", "Which module?");
 
 test("may: the director answers a plain question and a product choice alike", () => {
@@ -255,7 +254,7 @@ test("every reason has a card, a name, a line and a problem text, and one that o
 });
 
 test("a parked issue with a blocker-dropped Ask is asking, and its Always rule can be recommended", () => {
-  const blocker: Ask = { kind: "input", reason: "blocker-dropped", question: "q?", options: [{ label: "Remove the link", line: "l" }, { label: "Drop the waiter", line: "d" }], why: [] };
+  const blocker: Ask = { reason: "blocker-dropped", question: "q?", options: [{ label: "Remove the link", line: "l" }, { label: "Drop the waiter", line: "d" }], why: [] };
   expect(asking(item({ parked: "true" }), blocker)).toBe(true);
   expect(asking(item({ parked: "true" }), { ...blocker, reason: "question" })).toBe(false);
   expect(grant("blocker-dropped", "recommended")).toBeNull();

@@ -131,7 +131,7 @@ test("an issue that names a busy file an open job also names waits; a job waitin
   const out = await dispatchIssues(start);
   expect(calls).toEqual([]);
   expect(out.skipped).toContain(`issue.${second}: waits for issue.${first}: both change the busy file jobs/busy.ts`);
-  reseed(job, { state: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  reseed(job, { state: "waiting", ask: { reason: "held-path", question: "q", options: [], why: [] } });
   await dispatchIssues(start);
   expect(calls).toEqual([`issue.${second}`]);
 });
@@ -147,7 +147,7 @@ test("an issue that uses the gpt-oss server waits for an open job that uses it; 
   const out = await dispatchIssues(start);
   expect(calls).toEqual([`issue.${third}`]);
   expect(out.skipped).toContain(`issue.${second}: waits for issue.${first}: both use the gpt-oss server`);
-  reseed(job, { state: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  reseed(job, { state: "waiting", ask: { reason: "held-path", question: "q", options: [], why: [] } });
   await dispatchIssues(start);
   expect(calls).toContain(`issue.${second}`);
 });

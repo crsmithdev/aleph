@@ -3,7 +3,7 @@
  * the page only renders. One entry per run, issue that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
-import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
+import { actionsOn, ASK_REASONS, LIMITS, limitText, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
 import { jobHref, parseId, refs, word } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
@@ -18,7 +18,7 @@ interface Action {
   path: string; body: Record<string, unknown>; confirm?: true; input?: { name: string; lead?: string };
 }
 export interface AskItem {
-  key: string; reason: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
+  key: string; reason: string; id: string; href: string; title: string; problem: string;
   /** The card's kind (it sets the color), its label that opens the title, the title after the label, and the tag that names the stop. */
   card: Card; label: string; headline: string; tag: string;
   /** The stored situation when the Ask holds one, else the fixed problem text. */ situation: string;
@@ -209,7 +209,7 @@ function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
  * One row. An Ask with no case text is still with the director (jobs/lib/roles/director.ts): the row shows the fixed problem
  * text and offers no action and no auto-yes until the director escalates it with its case text.
  */
-function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, kind?: string, priority?: string): AskItem {
+function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, priority?: string): AskItem {
   const more: string[] = [];
   const stored0 = askIn(c)?.situation;
   const said = stored0 ? limitText(stored0, LIMITS.situation) : null;
@@ -223,7 +223,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   const stored = said?.kept;
   const headline = (escalated && askIn(c)?.headline?.trim()) || title;
   return {
-    key, reason, kind: kindOf(reason, kind), card: r.card, label: r.card[0].toUpperCase() + r.card.slice(1), headline, tag: escalated ? word("ask", reason) : word("actor", "Director"), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
+    key, reason, card: r.card, label: r.card[0].toUpperCase() + r.card.slice(1), headline, tag: escalated ? word("ask", reason) : word("actor", "Director"), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
     ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };
@@ -238,8 +238,8 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, lessons: Lesson[]
   const add = (it: AskItem) => out.push(it);
   const rank = Object.keys(ASK_REASONS);
   const runs = s.runs.filter((j) => j.ask && ASK_REASONS[j.ask.reason]).sort((a, b) => rank.indexOf(a.ask!.reason) - rank.indexOf(b.ask!.reason));
-  for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, jobHref(j.id), j.item?.title ?? "", j.repo, j.ask!.kind, j.item?.priority));
-  for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, parseId(i.id)?.repo ?? "", i.askKind, i.priority));
+  for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, jobHref(j.id), j.item?.title ?? "", j.repo, j.item?.priority));
+  for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, parseId(i.id)?.repo ?? "", i.priority));
   for (const l of lessons) {
     const reason = `proposal-${l.kind ?? "skill"}`;
     if (ASK_REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));

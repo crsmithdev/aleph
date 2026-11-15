@@ -77,14 +77,12 @@ test("the sentence says at most three parts, the most serious first", () => {
 });
 
 test("what asks for you leads the status sentence, in the warning colour", () => {
-  const ask = (kind: string) => ({ kind });
-  const asks = (...k: string[]) => ({ asks: k.map(ask) });
+  const asks = (n: number) => ({ asks: Array.from({ length: n }, () => ({})) });
   const raw = (top: object, o: object = {}) => view.renderLede({ ...calmState, ...top, factory: { ...calmState.factory, ...o } });
-  expect(raw(asks("approval"))).toBe('<span class="say warning"><a href="#awaiting">Your attention is needed</a>.</span>');
-  expect(raw(asks("input", "input"))).toBe(raw(asks("approval")));
-  expect(raw(asks("input", "approval"))).toBe(raw(asks("approval")));
+  expect(raw(asks(1))).toBe('<span class="say warning"><a href="#awaiting">Your attention is needed</a>.</span>');
+  expect(raw(asks(2))).toBe(raw(asks(1)));
   expect(raw({}, { runsToday: 12 })).toBe('<span class="say fine">Everything is fine.</span>');
-  expect(raw(asks("approval"), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">The build is failing on main</a>; <a href="#awaiting">your attention is needed</a>.');
+  expect(raw(asks(1), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">The build is failing on main</a>; <a href="#awaiting">your attention is needed</a>.');
 });
 
 test("a paused factory does not say everything is fine", () => {
@@ -137,7 +135,7 @@ test("the page has one head, built by pageHead: the time, the status sentence, t
 
 test("the status line says your attention is needed when the Issues section has an item", () => {
   const calm = { ...state, asks: [], stuck: [], issues: [], factory: { ...state.factory, health: [], paused: false } };
-  for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q", ask: { kind: "input", reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }]) {
+  for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }]) {
     const h = view.renderLede({ ...calm, ...o });
     expect(h).toMatch(/your attention is needed/i);
     expect(h).not.toContain("Awaiting");
@@ -167,8 +165,8 @@ const OOD = "Alert: This status is out of date.";
 const strip = (h: string) => h.replace(/<[^>]*>/g, "");
 
 test("the out-of-date part comes first and survives MAX_SAID", () => {
-  const s = { ...calmState, health: { ...(calmState as any).health }, asks: [{ kind: "approval" }, { kind: "input" }], stuck: [{}] };
-  const base = said({}, { stuck: [{}], asks: [{ kind: "approval" }, { kind: "input" }] });
+  const s = { ...calmState, health: { ...(calmState as any).health }, asks: [{}, {}], stuck: [{}] };
+  const base = said({}, { stuck: [{}], asks: [{}, {}] });
   const h = strip(view.renderLede(s, true));
   expect(h.startsWith(OOD.slice(0, -1) + "; ")).toBe(true);
   expect(h.split("; ").length).toBe(base.split("; ").length + 1);
@@ -187,8 +185,8 @@ test("a dead factory tick says the alert, in red", () => {
 
 test("the status-line links point at anchors in the rendered Alerts section", () => {
   const stuck = [job({ name: "aleph-1", state: "failed" })];
-  const lede = view.renderLede({ ...calmState, stuck, asks: [{ kind: "approval" }] });
-  const needs = view.renderNeeds({ ...calmState, stuck, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
+  const lede = view.renderLede({ ...calmState, stuck, asks: [{}] });
+  const needs = view.renderNeeds({ ...calmState, stuck, asks: [{ id: "a1", at: "2026-11-01T00:00:00Z", text: "x" }] });
   const alerts = needs.split('<h2 id="h-needs">Alerts</h2>')[1] ?? "";
   const ids = [...lede.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
   expect(ids).toContain("jobs-stuck");

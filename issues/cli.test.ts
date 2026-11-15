@@ -230,7 +230,7 @@ test("attach puts a file on an issue in one store commit; a type it does not tak
 });
 
 test("decide notes the answer and clears the Ask; an issue with no Ask exits 1", () => {
-  setAsk("issue.3", { kind: "input", reason: "question", question: "A or B?", options: [], why: [] });
+  setAsk("issue.3", { reason: "question", question: "A or B?", options: [], why: [] });
   try {
     const d = aleph("issue", "decide", "proj", "3", "Take B.");
     expect(d.code).toBe(0);

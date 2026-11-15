@@ -106,7 +106,7 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
       const repo = loadRegistry()[r.repo!];
       const minutes = Math.floor((now - Date.parse(r.started)) / 60_000);
       const question = `${name}: its land run ${last.id} is live for ${minutes} minutes, and 99% of lands end within 20. Wait, kill and rerun, or drop?`;
-      const ask = normalizeAsk({ question, options: SLOW_LAND_OPTIONS, recommended: "Wait", why: [`Run: ${name}, land, running since ${r.started}`] }, { kind: "input", reason: "rescue" })!;
+      const ask = normalizeAsk({ question, options: SLOW_LAND_OPTIONS, recommended: "Wait", why: [`Run: ${name}, land, running since ${r.started}`] }, { reason: "rescue" })!;
       const why = askFromRun(last, repo, issueOf(runs), ask, question);
       if (why) { logEvent({ subject: "gate", action: "failed", object: name, detail: `${name}: no rescue Ask for its slow land: ${why}` }); continue; }
       logEvent({ subject: "gate", action: "waiting", object: name, detail: `${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director` });
@@ -248,7 +248,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     const why = issue === undefined ? "no issue" : opts.done ? close(repo, issue, text, "done", "gate") : null;
     if (why) logEvent({ subject: "gate", action: "failed", object: name, detail: `no issue note: ${why}` });
   };
-  const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
+  const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] }, { reason: "rescue" })!;
   // A run that ended with a QUESTION about the spec: a rerun reads the same spec and asks again, so it waits for a spec edit.
   const asked = askedQuestion(r);
   const specQuestion = asked !== null;

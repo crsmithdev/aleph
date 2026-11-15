@@ -196,7 +196,6 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 
 | Field | Holds |
 |---|---|
-| `kind` | `input` or `approval` |
 | `reason` | One of the reasons in [Workflow](workflow.md#8-asks-the-director-and-always-rules) |
 | `question`, `options[]`, `recommended`, `why[]` | What intake or code asks; 2 to 4 options |
 | `headline`, `situation`, `effects[]`, `recommend` | The director's case text when it escalates |

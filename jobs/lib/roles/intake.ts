@@ -135,8 +135,8 @@ export function parseRoute(reply: any): Route | string {
     case "ask": {
       const question = text(raw.question);
       if (!question) return "ask without a question";
-      const ask = normalizeAsk(raw, { kind: "input", reason: "question" });
-      return { route: "ask", reason, ask: ask ? { ...ask, kind: "input", reason: "question" } : plainAsk("question", question) };
+      const ask = normalizeAsk(raw, { reason: "question" });
+      return { route: "ask", reason, ask: ask ? { ...ask, reason: "question" } : plainAsk("question", question) };
     }
     case "done": {
       const commit = text(raw.commit);

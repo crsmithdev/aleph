@@ -95,7 +95,7 @@ function hold(n: Note, v: Verdict, day: string): void {
   const request = [`The memory re-check of the core note ${n.title} gives the verdict ${v.verdict}.`, `Why: ${v.why}`, claim].filter(Boolean).join("\n\n");
   const issue = fileIssue(repo, { title: cutTitle(`Apply the ${v.verdict} of core note ${n.title}`), kind: "task", source: "memory", parked: true, request }, "rule", { after: () => {} });
   const ref = `${repo.key}-${issue.id}`;
-  setAsk(`issue.${issue.id}`, { kind: "approval", reason: "core-change", question: `Apply the ${v.verdict} verdict to the core note ${n.title}?`, options: [], why: [v.why, claim].filter(Boolean) });
+  setAsk(`issue.${issue.id}`, { reason: "core-change", question: `Apply the ${v.verdict} verdict to the core note ${n.title}?`, options: [], why: [v.why, claim].filter(Boolean) });
   putJson("state", "recheck-held", { ...getJson<Record<string, Held>>("state", "recheck-held", {}), [n.title]: { ...v, day, issue: ref } });
 }
 

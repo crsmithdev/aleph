@@ -65,13 +65,13 @@ test("facts carry what stage() needs: status, spec, after, parts, ask kind and e
     { ...item(22, "open"), fm: {} },
     { id: 23, title: "p", fm: { from: "issue.22" }, request: "", spec: "s", notes: [] },
   ] };
-  const built = seed({ role: "build", name: "issue.21", repo: "demo", target: "issue.21", state: "waiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, shown: true, started: STARTED });
+  const built = seed({ role: "build", name: "issue.21", repo: "demo", target: "issue.21", state: "waiting", ask: { reason: "question", question: "?", options: [], why: [] }, shown: true, started: STARTED });
   const f = facts(repo, doc);
   // The run owns the issue's one Ask, so the issue has none of its own.
   expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [] });
   expect(f.items[21].ask).toBeUndefined();
   expect(f.items[22]).toMatchObject({ parts: ["demo-23"], after: [] });
-  expect(f.runs[21]).toEqual([{ id: built.id, kind: "build", state: "waiting", open: true, ask: { kind: "input", reason: "question" } }]);
+  expect(f.runs[21]).toEqual([{ id: built.id, kind: "build", state: "waiting", open: true, ask: { reason: "question" } }]);
 });
 
 test("a child's from and after resolve to the issues, their runs and their status", () => {

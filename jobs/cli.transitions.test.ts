@@ -92,7 +92,7 @@ describe("every transition dispatches at once", () => {
     await when(() => started().includes(`issue.${x}`));
     // The held run waits on an Ask, as a job that needs Chris does.
     const [run] = runs(x);
-    setState(`job.${run}`, "waiting", { ask: { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a" }], recommended: "A", why: ["w"] } });
+    setState(`job.${run}`, "waiting", { ask: { reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a" }], recommended: "A", why: ["w"] } });
     expect(hookLines().join("\n")).toContain(`issue.${x}`);
     expect((await issueClose("fac", x, "drop", "not needed")).code).toBe(0);
     expect(state(run).state).toBe("dropped");

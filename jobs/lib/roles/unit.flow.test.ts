@@ -68,7 +68,7 @@ describe("the state rule", () => {
 
   test("a question needs Chris", async () => {
     const r = await actionJob("asks", "question");
-    expect(state(r.json.run)).toMatchObject({ state: "waiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
+    expect(state(r.json.run)).toMatchObject({ state: "waiting", ask: expect.objectContaining({ reason: "question" }), question: "which colour?" });
     expect(told).toContain(`${r.json.run} waiting question`);
   });
 

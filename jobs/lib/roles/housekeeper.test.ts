@@ -36,7 +36,7 @@ function seed(items: { title: string; body?: string; open?: boolean; ask?: Ask }
 
 test("the daily run reviews every parked issue in batches of BATCH, and no open one nor one with a core-change Ask", async () => {
   seed([...Array.from({ length: BATCH + 2 }, (_, k) => ({ title: `Parked issue ${k + 1}` })), { title: "Open issue", open: true },
-    { title: "Core note X", ask: { kind: "approval", reason: "core-change", question: "Apply the archive verdict to the core note X?", options: [], why: [] } }]);
+    { title: "Core note X", ask: { reason: "core-change", question: "Apply the archive verdict to the core note X?", options: [], why: [] } }]);
   act([]);
   expect(housekeepDue(NOW)).toBe(true);
   const out = await housekeep(NOW);

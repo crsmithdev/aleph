@@ -108,7 +108,7 @@ test("the schema requires the case text with actions, and parseReply returns it 
 test("the escalation list: a land on a security path gets case text and no action; a stored host-check Ask is not on it", async () => {
   fresh([{ title: "held", specced: true }, { title: "check", ask: { ...plainAsk("question", "look at the dashboard"), reason: "host-check" } }]);
   branch(`b${n}`, "hooks/x.ts");
-  const folder = run({ name: "issue.1", target: "issue.1", ask: { kind: "approval", reason: "held-path", question: "Land it?", options: [], why: [] }, branch: `b${n}` });
+  const folder = run({ name: "issue.1", target: "issue.1", ask: { reason: "held-path", question: "Land it?", options: [], why: [] }, branch: `b${n}` });
   reply([{ do: "land" }, { do: "answer", note: "checked" }]);
   const out = await direct();
   expect(out.map((d) => [d.ref, d.outcome, d.why])).toEqual([
@@ -127,7 +127,7 @@ test("the escalation list: a land on a security path gets case text and no actio
 test("a review Ask on a run that changes bun.lock or a security path is Chris's; one that changes neither the director lands", async () => {
   fresh([{ title: "lock", specced: true }]);
   branch(`lock${n}`, "bun.lock");
-  run({ name: "issue.1", target: "issue.1", ask: { kind: "approval", reason: "review-held", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
+  run({ name: "issue.1", target: "issue.1", ask: { reason: "review-held", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
   reply([{ do: "land" }]);
   const [d] = await direct();
   expect(d).toMatchObject({ outcome: "escalated", why: "the run changes bun.lock, a security path or bun.lock, so its land is Chris's" });
@@ -135,7 +135,7 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
 
   fresh([{ title: "plain", specced: true }]);
   branch(`ok${n}`, "src/a.ts");
-  const folder = run({ name: "issue.1", target: "issue.1", ask: { kind: "approval", reason: "review-held", question: "Land?", options: [], why: [] }, branch: `ok${n}` });
+  const folder = run({ name: "issue.1", target: "issue.1", ask: { reason: "review-held", question: "Land?", options: [], why: [] }, branch: `ok${n}` });
   const [e] = await direct();
   expect(e).toMatchObject({ outcome: "decided", applied: ["land"] });
   expect(landed).toEqual([`issue.1`]);
@@ -163,7 +163,7 @@ test("a memory proposal is on the escalation list: the director's case text goes
 });
 
 test("a core-change Ask on a parked issue is escalated to Chris with case text, whatever actions the director replies, and decides nothing", async () => {
-  fresh([{ title: "Core note X", ask: { kind: "approval", reason: "core-change", question: "Apply the archive verdict to the core note X?", options: [], why: ["gone"] } }]);
+  fresh([{ title: "Core note X", ask: { reason: "core-change", question: "Apply the archive verdict to the core note X?", options: [], why: ["gone"] } }]);
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
   replyWith({ case: { situation: "The re-check says X is gone.", effects: [{ action: "approve", text: "Archives X." }, { action: "decline", text: "Keeps X." }], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
   const [d] = await direct();
@@ -175,7 +175,7 @@ test("a core-change Ask on a parked issue is escalated to Chris with case text, 
 });
 
 test("a blocker-dropped Ask on a parked waiter is escalated to Chris, whatever actions the director replies, and decides nothing", async () => {
-  fresh([{ title: "Waiter", ask: { kind: "input", reason: "blocker-dropped", question: "issue.9 was dropped.", options: [{ label: "Remove the link", line: "Opens it." }, { label: "Drop the waiter", line: "Drops it." }], recommended: "Remove the link", why: [] } }]);
+  fresh([{ title: "Waiter", ask: { reason: "blocker-dropped", question: "issue.9 was dropped.", options: [{ label: "Remove the link", line: "Opens it." }, { label: "Drop the waiter", line: "Drops it." }], recommended: "Remove the link", why: [] } }]);
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
   replyWith({ case: { situation: "The blocker was dropped.", effects: [], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
   const [d] = await direct();
@@ -226,7 +226,7 @@ test("a run-cap Ask: the director reruns the issue once; the second run-cap Ask 
 
 test("a worker's question on a run: the director's answer drops the job with the answer as the next run's note", async () => {
   fresh([{ title: "goal", specced: true }]);
-  run({ name: "issue.1", target: "issue.1", ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  run({ name: "issue.1", target: "issue.1", ask: { reason: "question", question: "which module?", options: [], why: [] } });
   reply([{ do: "answer", note: "use ask.ts" }]);
   const [d] = await direct();
   expect(d).toMatchObject({ outcome: "decided" });
@@ -236,7 +236,7 @@ test("a worker's question on a run: the director's answer drops the job with the
 
 test("a director job on a run's Ask is a job on the run's issue and keeps its decision on its own row", async () => {
   fresh([{ title: "issue", specced: true }]);
-  const folder = run({ name: "issue.1", target: "issue.1", ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  const folder = run({ name: "issue.1", target: "issue.1", ask: { reason: "question", question: "which module?", options: [], why: [] } });
   logTo(folder, "checks", "(fail) a > b [1.00ms]");
   replyWith({ case: TEXT });
   await direct();
@@ -277,13 +277,13 @@ test("a drop reason that names another issue of this repo on main gets the fate 
   sh(repoPath(), "git", "add", "-A");
   sh(repoPath(), "git", "commit", "-q", "-m", `z\n\nIssue: issue.2`);
   sh(repoPath(), "git", "update-ref", "refs/remotes/origin/main", "HEAD");
-  run({ name: "issue.1", target: "issue.1", ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  run({ name: "issue.1", target: "issue.1", ask: { reason: "question", question: "which module?", options: [], why: [] } });
   reply([{ do: "drop", reason: `the work is already in ${key}-2` }]);
   await direct();
   expect(dropped.map((d) => d.fate)).toEqual(["duplicate"]);
 
   fresh([{ title: "goal", specced: true }]);
-  run({ name: "issue.1", target: "issue.1", ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  run({ name: "issue.1", target: "issue.1", ask: { reason: "question", question: "which module?", options: [], why: [] } });
   reply([{ do: "drop", reason: "the work is already in gpu-faults-2" }]);
   await direct();
   expect(dropped.map((d) => d.fate)).toEqual(["duplicate", undefined]);

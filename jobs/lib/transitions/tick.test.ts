@@ -92,7 +92,7 @@ test("an intake that sets an Ask starts the director at once, with no tick", asy
   seed([{ body: "VERDICT:ask" }]);
   const s = recorder();
   await intakeNow(repo(), 1, s);
-  expect(askOf(`issue.1`)?.kind).toBe("input");
+  expect(askOf(`issue.1`)).not.toHaveProperty("kind");
   expect(s.directors).toBe(1);
   expect(s.taken).toEqual([]);
 });

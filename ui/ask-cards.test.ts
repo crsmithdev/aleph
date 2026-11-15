@@ -25,10 +25,10 @@ const issueAsk = (n: number, reason: string, o: object = {}) => ({ id: `aleph-${
 
 /** One escalated Ask of each kind: a held run, an issue's question, and a no-commit stop. */
 const four = () => asksOf(
-  [job({ name: "aleph-27", state: "waiting", reason: "held path hooks/x.ts", item: { id: 27, title: "Digest" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })],
+  [job({ name: "aleph-27", state: "waiting", reason: "held path hooks/x.ts", item: { id: 27, title: "Digest" }, ask: { reason: "held-path", ...CASE(["land", "drop"], "land") } })],
   [
-    issueAsk(41, "question", { ask: { kind: "input", reason: "question", question: "A or B?", options: [], why: [], ...CASE(["decide", "deny"], "decide") } }),
-    issueAsk(42, "no-commit", { ask: { kind: "input", reason: "no-commit", question: "q", options: [], why: [], ...CASE(["rerun", "close"], "rerun") } }),
+    issueAsk(41, "question", { ask: { reason: "question", question: "A or B?", options: [], why: [], ...CASE(["decide", "deny"], "decide") } }),
+    issueAsk(42, "no-commit", { ask: { reason: "no-commit", question: "q", options: [], why: [], ...CASE(["rerun", "close"], "rerun") } }),
   ], []);
 const card = (row: string) => row.match(/^<article[^]*<\/article>$/)![0];
 
@@ -40,6 +40,7 @@ test("one card per kind: the title opens with the kind label, and the tag names 
   for (const [i, label] of items.map((x, k) => [x, ["Approve", "Decide", "Unstick"][k]] as const)) {
     const row = card(askCard(i, "2026-10-27T17:00:00Z"));
     expect(row).toContain(`data-card="${i.card}"`);
+    expect(row).not.toContain("data-kind");
     expect(row).toContain(`data-annotate="${shortId(i.id)}"`);
     expect(row).toContain(`<span class="t"><b class="ask-kind">${label}:</b> <span class="ask-title">the doc-claim check in the verify gate</span></span>`);
     expect(row).toContain(`<span class="ask-tag">${i.tag}</span>`);
@@ -79,12 +80,12 @@ test("Technical details are closed by default and hold the director's details an
 });
 
 test("each held path names its change: a package file is a package change", () => {
-  const [i] = asksOf([job({ name: "aleph-28", state: "waiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })]);
+  const [i] = asksOf([job({ name: "aleph-28", state: "waiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { reason: "held-path", ...CASE(["land", "drop"], "land") } })]);
   expect(i.tag).toBe("protected");
 });
 
 test("an old Ask with none of the new fields still renders: the item's title, the fixed text, no mark", () => {
-  const [i] = asksOf([], [issueAsk(50, "run-cap", { title: "Loops a lot", ask: { kind: "input", reason: "run-cap", question: "q", options: [], why: [], situation: "It started three times." } })]);
+  const [i] = asksOf([], [issueAsk(50, "run-cap", { title: "Loops a lot", ask: { reason: "run-cap", question: "q", options: [], why: [], situation: "It started three times." } })]);
   expect(i.headline).toBe("Loops a lot");
   const row = askCard(i, "2026-10-27T17:00:00Z");
   expect(row).toContain('<b class="ask-kind">Unstick:</b> <span class="ask-title">Loops a lot</span>');
@@ -104,20 +105,21 @@ test("one Ask per reason: the card, its label and its tag come from the server i
   };
   expect(Object.keys(want).sort()).toEqual(Object.keys(ASK_REASONS).sort());
   const plain = Object.keys(want).filter((r) => !r.startsWith("proposal-"));
-  const items = asksOf([], plain.map((r, n) => issueAsk(60 + n, r, { title: `Stop ${r}`, ask: { kind: "input", reason: r, question: "q", options: [], why: [], ...CASE([], "") } })),
+  const items = asksOf([], plain.map((r, n) => issueAsk(60 + n, r, { title: `Stop ${r}`, ask: { reason: r, question: "q", options: [], why: [], ...CASE([], "") } })),
     ["check", "claude-md", "skill"].map((k, n) => ({ ...prop, id: `l-${n}`, kind: k, situation: "S." })));
   expect(items.map((i) => i.reason).sort()).toEqual(Object.keys(want).sort());
   for (const i of items) {
     const [kind, label, tag] = want[i.reason];
     const row = card(askCard(i, "2026-10-27T17:00:00Z"));
     expect(row).toContain(`data-card="${kind}" data-reason="${i.reason}"`);
+    expect(row).not.toContain("data-kind");
     expect(row).toContain(`<b class="ask-kind">${label}:</b>`);
     expect(row).toContain(`<span class="ask-tag">${tag}</span>`);
   }
 });
 
 test("an Ask still with the director shows its title and fixed text, and no button", () => {
-  const [i] = asksOf([], [issueAsk(51, "no-commit", { title: "Empty runs", ask: { kind: "input", reason: "no-commit", question: "q", options: [], why: [] } })]);
+  const [i] = asksOf([], [issueAsk(51, "no-commit", { title: "Empty runs", ask: { reason: "no-commit", question: "q", options: [], why: [] } })]);
   const row = askCard(i, "2026-10-27T17:00:00Z");
   expect(row).toContain('<b class="ask-kind">Unstick:</b> <span class="ask-title">Empty runs</span>');
   expect(row).toContain("With the director");

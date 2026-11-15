@@ -285,8 +285,6 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .issue-row .actions { max-width: 100%; }
 .issue-row input.reason { max-width: 100%; }
 .issue-row[data-kind] { --kind: var(--stuck); --kind-bg: var(--stuck-bg); border-color: var(--kind); }
-.issue-row[data-kind="approval"] { --kind: var(--run); --kind-bg: var(--run-bg); }
-.issue-row[data-kind="input"] { --kind: var(--need); --kind-bg: var(--need-bg); }
 .issue-row[data-kind="error"] { background: var(--stuck-bg); }
 .kind-tag { display: inline-block; padding: 1px var(--sp-8); border-radius: var(--r-tag); background: var(--kind-bg); color: var(--kind); font: var(--fw-strong) var(--fs-xs) var(--sans); }
 .issue-row[data-kind="error"] .kind-tag { background: var(--stuck); color: var(--surface); }

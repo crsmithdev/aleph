@@ -8,7 +8,7 @@ import { setCodes } from "../lib/naming.ts";
 import { add, noteOf, setStatus, type Doc } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
 import * as todos from "../issues/lib/todo.ts";
-import { askOf, setAsk, refIn } from "../jobs/lib/asks/ask.ts";
+import { askOf, setAsk, refIn, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { updater } from "./updater.ts";
 
@@ -716,8 +716,8 @@ describe("POST /api/issues/:id/decide and deny", () => {
   const item = (n: number) => readList({ key: "fac" })!.items.find((i) => i.id === n)!;
   const ask = (decision: boolean, wait?: string) => writeList({ key: "fac" }, "seed", (doc) => {
     const i = add(doc, "which way", { request: "x" });
-    if (decision) setAsk(refIn(doc.repo!, i), { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { after: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
-    else { setAsk(refIn(doc.repo!, i), { kind: "input", reason: "question", question: "Should it be A or B?", options: [], why: [] }); todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller."); }
+    if (decision) setAsk(refIn(doc.repo!, i), { reason: "question", question: "A or B?", options: [{ label: "A", line: "do a", ...(wait ? { after: wait } : {}) }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] });
+    else { setAsk(refIn(doc.repo!, i), { reason: "question", question: "Should it be A or B?", options: [], why: [] }); todos.note(i, "triage: for Chris: Should it be A or B? My recommendation is B, it is smaller."); }
     return i.id;
   })!.value;
 
@@ -765,7 +765,7 @@ describe("POST /api/issues/:id/decide and deny", () => {
       Object.assign(i.fm, { kind: "issue" });
       return i.id;
     })!.value;
-    setAsk(`issue.${n}`, { kind, reason, question: "a migrated ask", options: [], why: [] });
+    setAsk(`issue.${n}`, { kind, reason, question: "a migrated ask", options: [], why: [] } as Ask);
     return n;
   };
 
@@ -786,7 +786,7 @@ describe("POST /api/issues/:id/decide and deny", () => {
       Object.assign(i.fm, { kind: "goal" });
       return String(i.id);
     })!.value;
-    const capped = () => { const r = dotted(); setAsk(`issue.${r}`, { kind: "input", reason: "run-cap", question: "stopped", options: [], why: [] }); return r; };
+    const capped = () => { const r = dotted(); setAsk(`issue.${r}`, { reason: "run-cap", question: "stopped", options: [], why: [] }); return r; };
     const find = (ref: string) => readList({ key: "fac" })!.items.find((i) => String(i.id) === ref)!;
     await withRealCli(async () => {
       const a = capped();
@@ -816,7 +816,7 @@ describe("POST /api/issues/:id/decide and deny", () => {
 
 describe("POST /api/issues/:id/retriage and rerun", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
-  const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "stuck triage", { request: "x" }); setAsk(refIn(doc.repo!, i), { kind: "input", reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
+  const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "stuck triage", { request: "x" }); setAsk(refIn(doc.repo!, i), { reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
 
   for (const [verb, argv] of [["retriage", ["issue", "note", "--", "fac", "N", "Chris: run intake again"]], ["rerun", ["issue", "decide", "--", "fac", "N", "Chris: run it again"]]] as const) {
     test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on an item with an ask`, async () => {
@@ -909,7 +909,7 @@ describe("what an issue waits on", () => {
 describe("the Issue page shows the ask row", () => {
   const seed = (stored: boolean) => writeList({ key: "fac" }, "seed", (doc) => {
     const i = add(doc, stored ? "ask with text" : "plain", { request: "x" });
-    setAsk(refIn(doc.repo!, i), { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"],
+    setAsk(refIn(doc.repo!, i), { reason: "question", question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"],
       ...(stored ? { situation: "Two ways to go.", effects: [{ action: "decide:A", text: "Goes with A." }, { action: "decide:B", text: "Goes with B." }], recommend: { action: "decide:B", why: "smaller" } } : {}) });
     return i.id;
   }, true)!.value;

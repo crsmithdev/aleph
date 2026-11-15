@@ -21,7 +21,7 @@ test("the report hook prints one line for each thing to act on, and nothing when
   sh(other, "git", "push", "-q", "origin", "main");
   await cli(["pause"]);
   const id = seedItem("fac", "Needs Chris");
-  setAsk(`issue.${id}`, { kind: "input", reason: "question", question: "Which?", options: [], why: [] });
+  setAsk(`issue.${id}`, { reason: "question", question: "Which?", options: [], why: [] });
   const text = (await cli(["report", "--hook"])).json.hookSpecificOutput.additionalContext;
   const lines = text.split("\n").filter(Boolean);
   expect(lines).toHaveLength(3);

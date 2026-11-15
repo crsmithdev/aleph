@@ -243,7 +243,7 @@ async function blockerDropped() {
 test("a dropped blocker parks the waiter, logs rule parked, and asks Chris what to do", async () => {
   const { a, b, ref } = await blockerDropped();
   expect(show(b).status).toBe("parked");
-  expect(askOf(ref)).toMatchObject({ kind: "input", reason: "blocker-dropped", recommended: "Remove the link" });
+  expect(askOf(ref)).toMatchObject({ reason: "blocker-dropped", recommended: "Remove the link" });
   expect(askOf(ref)!.options.map((o) => o.label)).toEqual(["Remove the link", "Drop the waiter"]);
   expect(readEvents().filter((e) => e.object === ref && e.action === "parked")).toMatchObject([{ subject: "rule", detail: `blocker issue.${a} dropped` }]);
 });
