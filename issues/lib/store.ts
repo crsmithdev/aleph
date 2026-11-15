@@ -156,6 +156,9 @@ function logClosed(item: Issue, by: string): void {
   logEvent({ subject: by, action: status(item), object: keyOf("issue", item.id), ...(why ? { detail: why } : {}) });
 }
 
+/** The `created` time of each issue at `rev` that has a parsable one, in ms by issue number, with no fetch. */
+export const createdAt = (dir: string, rev: string): Map<number, number> => new Map(loadAll(dir, rev).flatMap((i) => { const at = Date.parse(String(i.fm.created)); return Number.isNaN(at) ? [] : [[i.id, at] as [number, number]]; }));
+
 /**
  * Apply `change` to the project's list on the store's origin/main and push it as one commit. When the push is refused
  * because main moved, fetch and apply `change` again. `change` returns null to write nothing. A project the items repo

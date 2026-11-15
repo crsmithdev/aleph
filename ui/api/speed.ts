@@ -15,7 +15,7 @@ import { activeEnd, isRunning } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import { stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
-import { itemsDir, projectsAt, reader } from "../../issues/lib/store.ts";
+import { createdAt, itemsDir, projectsAt, reader } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP, RUN_CAP } from "../../jobs/lib/infra/settings.ts";
@@ -272,7 +272,7 @@ const originMain = (dir: string): string => {
   return rev?.ok ? rev.out : "";
 };
 
-/** When each issue came into the store, in ms. Null for one that a bulk commit added. Each read adds only the commits since the last. */
+/** When each issue was filed, in ms: its created field, else when a commit added it. Null for one with no created field that a bulk commit added. Each read adds only the commits since the last. */
 export function filed(dir = itemsDir(), head = originMain(dir)): Filed {
   if (!head) return { issue: new Map() };
   if (head === filedAt.head) return filedAt;
@@ -291,12 +291,13 @@ export function filed(dir = itemsDir(), head = originMain(dir)): Filed {
     if (m) added.push([Number(m[1]), at]);
   }
   const projects = added.length ? projectsAt(dir, head) : new Map<number, string>();
+  const created = added.length ? createdAt(dir, head) : new Map<number, number>();
   for (const [n, when] of added) {
     const name = projects.get(n);
     if (!name) continue;
     const key = `${name}-${n}`;
     // A file added again keeps the first time.
-    if (!next.issue.has(key)) next.issue.set(key, when);
+    if (!next.issue.has(key)) next.issue.set(key, created.get(n) ?? when);
   }
   filedAt = { ...next, head };
   return filedAt;

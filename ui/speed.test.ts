@@ -135,14 +135,18 @@ test("phases: implement spans a job's fix rounds, land starts at the last finish
   expect(p.land).toMatchObject({ count: 3, p50: 1800, p90: 3600 }); // 600 (a), 1800 (b), 3600 (e)
 });
 
-test("filed: an issue's file is its filing; a bulk commit's time does not count", () => {
+test("filed: an issue's created field is its filing, else its file's add time; a bulk commit's time does not count", () => {
   const store = join(base, "store");
   mkdirSync(store, { recursive: true });
   writeRepos({ fx: {} }, store);
   const restore = withEnv({ ALEPH_ITEMS: store });
   const git = (...a: string[]) => Bun.spawnSync(["git", "-C", store, ...a], { stderr: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
   const add = (when: number, msg: string, ...ids: string[]) => {
-    for (const id of ids) { mkdirSync(join(store, `issues/${id}`), { recursive: true }); writeFileSync(join(store, `issues/${id}/issue.md`), "---\nproject: project.1\n---\n"); }
+    for (const spec of ids) {
+      const [id, created] = spec.split("@");
+      mkdirSync(join(store, `issues/${id}`), { recursive: true });
+      writeFileSync(join(store, `issues/${id}/issue.md`), `---\nproject: project.1\n${created ? `created: ${created}\n` : ""}---\n`);
+    }
     git("add", ".");
     const stamp = `@${when} +0000`;
     Bun.spawnSync(["git", "-C", store, "commit", "-qm", msg], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: stamp, GIT_COMMITTER_DATE: stamp } });
@@ -157,6 +161,14 @@ test("filed: an issue's file is its filing; a bulk commit's time does not count"
   // A new commit reads only what it adds.
   add(3000, "fx: add", "5");
   expect(filed(store).issue.get("fx-5")).toBe(3000_000);
+  // The created field wins over the commit time, and an unparsable one falls back to it.
+  add(4000, "fx: add", "6@2026-11-08T04:13:00.000Z", "7@soon");
+  const g = filed(store);
+  expect([g.issue.get("fx-6"), g.issue.get("fx-7")]).toEqual([Date.parse("2026-11-08T04:13:00.000Z"), 4000_000]);
+  // Lead runs from the created time, not the add time.
+  add(5000, "fx: add", "8@1970-01-01T00:00:10.000Z");
+  const lead = phases([{ role: "land", job: "fx-8", name: "x", repo: "fx", target: "issue.8", state: "landed", started: new Date(6000_000).toISOString(), ended: new Date(7000_000).toISOString() } as any], filed(store), 0, 9_999_000);
+  expect(lead.lead).toMatchObject({ count: 1, p50: 6990 });
   } finally { restore(); }
 });
 
