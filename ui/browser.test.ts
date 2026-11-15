@@ -194,11 +194,13 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
         const d = document.querySelector("#monitor details"), f = document.querySelector("form[data-cap=live]");
         d.open = true;
         d.old = true;
-        f.elements.live.value = "4";
+        window.want = Number(f.elements.live.value) + 1;
+        f.elements.live.value = String(window.want);
         f.requestSubmit();
       })()`);
-      await pg.when('!document.querySelector("#monitor details").old');
-      expect(await pg.ev("document.querySelector(\"#monitor details\").open")).toBe(true);
+      // The hint shows the saved cap only once the page is drawn again, which a failed save never does.
+      await pg.when('document.querySelector("form[data-cap=live] .hint").textContent.includes(" of " + window.want + " now")');
+      expect(await pg.ev("[document.querySelector(\"#monitor details\").open, document.querySelector(\"#monitor details\").old]")).toEqual([true, true]);
     } finally { own.stop(); }
   }, 60_000);
 
@@ -1164,6 +1166,33 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
   }, 60_000);
 
   const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
+});
+
+describe.skipIf(!chromeUsable)("Automation redraw", () => {
+  let rig: Rig, page: Page;
+  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/automation"); }, 150_000);
+  afterAll(() => rig?.stop());
+
+  const ready = () => page.when('document.querySelector("#view .ph select")');
+  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())'); };
+
+  test("a redraw keeps a marked element connected", async () => {
+    await ready();
+    await page.ev('window.mark = document.querySelector("#view #gates-caps"); window.mark.old = 1');
+    await redraws();
+    expect(await page.ev('[document.querySelector("#view #gates-caps") === window.mark, window.mark.isConnected]')).toEqual([true, true]);
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
+  test("after two redraws one click on a rule's Edit button, marked before them, opens its row once", async () => {
+    await ready();
+    await page.ev('window.edit = document.querySelector("#view button[data-edit-rule]")');
+    await redraws();
+    await page.ev("window.edit.click()");
+    expect(await page.ev(`[window.edit.isConnected, window.edit.getAttribute("aria-expanded"),
+      document.querySelector('#view tr.rule-edit[data-reason="' + CSS.escape(window.edit.dataset.editRule) + '"]').hidden]`)).toEqual([true, "true", false]);
+    expect(page.errors).toEqual([]);
+  }, 60_000);
 });
 
 describe.skipIf(!chromeUsable)("Resetting the page", () => {
