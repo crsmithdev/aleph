@@ -655,7 +655,7 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
     const rec = readRecord();
     const base = { at: new Date().toISOString(), ref: refOf(c), on: c.on, reason: reasonName(c), question: questionOf(c), applied: [] as string[], refused: [] as string[] };
     // An Always rule granted `user` for the reason sends the Ask to Chris with no run.
-    if (always(base.reason)?.action === "user") return escalate(c, base, undefined, "a rule sends this Ask to the user");
+    if (always(base.reason, c.repo?.key)?.action === "user") return escalate(c, base, undefined, "a rule sends this Ask to the user");
     // One run per Ask: an Ask the director escalated before, whose case text was not written, goes to Chris with no second run.
     if (escalatedBefore(c, rec)) return escalate(c, base, undefined, "the director escalated this Ask before");
     const listed = escalation(c, rec);

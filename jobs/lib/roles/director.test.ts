@@ -303,6 +303,23 @@ test("an Ask whose reason a rule grants user is escalated at once with no direct
   expect(directorRuns().map((e) => e.run.target)).toEqual([`issue.2`]);
 });
 
+test("a user grant scoped to another project leaves the Ask to the director", async () => {
+  fresh([{ title: "product", ask: choice() }]);
+  expect(grant("question:elsewhere", "user")).toBeNull();
+  replyWith({ case: TEXT });
+  await direct();
+  expect(directorRuns().map((e) => e.run.target)).toEqual([`issue.1`]);
+});
+
+test("a user grant scoped to the Ask's project escalates it with no director run", async () => {
+  fresh([{ title: "product", ask: choice() }]);
+  expect(grant(`question:${key}`, "user")).toBeNull();
+  replyWith({ case: TEXT });
+  await direct();
+  expect(directorRuns()).toHaveLength(0);
+  expect(asked(1)!.situation).toContain("a rule sends this Ask to the user");
+});
+
 test("an edit-goal with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
   fresh([{ title: "goal", specced: true, body: "Old spec.", ask: plain("which wins?") }]);
   const folder = run({ name: "issue.1", target: "issue.1", state: "failed" });

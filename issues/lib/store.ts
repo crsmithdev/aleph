@@ -169,7 +169,7 @@ export const REMOVE_LINK = "Remove the link", DROP_WAITER = "Drop the waiter";
  */
 function parkWaiter(repo: Place, waiter: Issue, blocker: string): void {
   const ref = keyOf("issue", waiter.id);
-  const standing = always("blocker-dropped")?.action === "resolve";
+  const standing = always("blocker-dropped", repo.key)?.action === "resolve";
   const w = writeList(repo, `todo: item ${waiter.id}: blocker ${blocker} dropped`, (doc) => {
     const item = issues.find(doc, waiter.id);
     if (!item || status(item) !== "open" || !afterOf(item).includes(blocker)) return null;

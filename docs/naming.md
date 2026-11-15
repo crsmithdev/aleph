@@ -68,6 +68,12 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
   - Owner: `issue_state`, in the `ask` column.
   - Invariants: at most one Ask per issue. The first verb of a pair goes ahead and the second drops the issue.
   - Relations: one issue. At most one job, the one that asked.
+- **Always**
+  - Identity: a reason plus a scope. The key is the reason alone (all projects) or the reason, a colon and a project key (such as `held-path:aleph`). Proposal rules keep their key of a proposal reason, a colon and a place (such as `proposal-skill:aleph`).
+  - Lifecycle: granted, revoked. Each logs `changed` on `settings`.
+  - Owner: the `always` setting, in the `settings` table.
+  - Invariants: a grant takes a verb of the reason's pair, or `user` (not for a proposal reason). The Always action of a card is the first verb of its pair. The lookup for a reason in a project returns the project grant, else the all grant.
+  - Relations: one reason. At most one project.
 - **Issue state**
   - Identity: the issue key. A row exists only while something is live.
   - Lifecycle: set when an Ask, a wait or a CI result starts. Deleted when none is live.

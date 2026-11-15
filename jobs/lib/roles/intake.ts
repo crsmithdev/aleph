@@ -376,7 +376,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
       issues.setStatus(item, "done", undefined, v.reason);
     } else if (v.route === "close") {
       issues.setStatus(item, "done", undefined, v.reason);
-    } else if (v.ask.recommended && always("question")?.action === "resolve") {
+    } else if (v.ask.recommended && always("question", repo.key)?.action === "resolve") {
       // The issue stays unsorted: the next intake reads this note and routes it.
       const o = v.ask.options.find((x) => x.label === v.ask.recommended) ?? v.ask.options[0]!;
       issues.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
@@ -411,7 +411,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
     && causeOf(e.run) === "unanswered");
   const n = runs.length;
   if (n < INTAKE_TRIES()) return null;
-  const grant = always("intake-failed")?.action;
+  const grant = always("intake-failed", repo.key)?.action;
   const ref = `${repo.key}-${id}`;
   if (grant === "continue") {
     writeJson(mark, [...before, ...runs.map((e) => e.id)]);

@@ -378,6 +378,19 @@ describe("a run with no reply", () => {
     expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "rule", object: `${repo.key}-1`, action: "reran", detail: "intake" }));
   });
 
+  test("continue scoped to another project asks Chris; scoped to the repo's project it continues", async () => {
+    reset([{ title: "a", body: "nothing" }]);
+    grant("intake-failed:elsewhere", "continue");
+    await run();
+    await run();
+    expect(askOf("issue.1")).toMatchObject({ reason: "intake-failed" });
+    reset([{ title: "a", body: "nothing" }]);
+    grant(`intake-failed:${repo.key}`, "continue");
+    await run();
+    await run();
+    expect(askOf("issue.1")).toBeNull();
+  });
+
   test("discontinue: the item is dropped with the note", async () => {
     reset([{ title: "a", body: "nothing" }]);
     grant("intake-failed", "discontinue");

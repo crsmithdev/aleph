@@ -456,7 +456,7 @@ test("rules() has one row per Ask reason; renderRules is one table with a row pe
   expect(h.match(/<tr class="rule" data-reason="/g)!.length).toBe(r.length);
 });
 
-test("a stored firefighter grant for held-path is dead: rules() shows no grant and Decides offers only Director and User", () => {
+test("a stored firefighter grant for held-path is dead: rules() shows no grant and Decides offers Director, Approve and User", () => {
   const saved = getJson("settings", "always", {});
   try {
     putJson("settings", "always", { "held-path": { action: "firefighter", at: ago(5) } });
@@ -465,7 +465,7 @@ test("a stored firefighter grant for held-path is dead: rules() shows no grant a
     const h = gates.renderRules({ rules: [row] });
     expect(h).not.toContain("always.json grants");
     expect(h).not.toContain("firefighter");
-    expect(h).toMatch(/data-value="" aria-pressed="true">Director<\/button><button type="button" data-value="user" aria-pressed="false">User</);
+    expect(h).toMatch(/data-value="" aria-pressed="true">Director<\/button><button type="button" data-value="approve" aria-pressed="false">Approve<\/button><button type="button" data-value="user" aria-pressed="false">User</);
   } finally { putJson("settings", "always", saved); }
 });
 

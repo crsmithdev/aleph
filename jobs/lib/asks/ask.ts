@@ -8,7 +8,7 @@
  * The issue store keeps no Ask. A run that set an Ask on its issue has `asked` set, with the
  * spec's version when it asked about the spec.
  *
- * The `always` setting maps a reason to `{ action, at }`.
+ * The `always` setting maps a key to `{ action, at }`. A key is a reason (all projects) or a reason, a colon and a project key (one project).
  */
 import { logEvent, logSetting } from "../../../lib/layout.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
@@ -44,8 +44,8 @@ export type Card = "approve" | "decide" | "unstick";
 
 export interface Reason {
   actions: AskAction[];
-  /** The action the Always button takes. Empty: the factory has no rule that acts on this reason, so the card offers no auto-yes. */
-  always: AskAction | "";
+  /** The action the Always button takes: the first verb of the pair. */
+  always: AskAction;
   /** The word a run's news and prompts use for this wait: a word of the sub set (lib/naming.ts). */
   needs?: "question" | "protected" | "review";
   /** The card's kind, and the name and one line the Automation page names the reason by. */
@@ -66,18 +66,18 @@ const proposal = (name: string, line: string): Reason =>
  * `proposal-<kind>:<place>` keys.
  */
 const REASONS = {
-  "held-path": { actions: ["approve", "disapprove"], always: "", needs: "protected", card: "approve", name: "Lands on held paths",
+  "held-path": { actions: ["approve", "disapprove"], always: "approve", needs: "protected", card: "approve", name: "Lands on held paths",
     line: "A job that changes a held path, after its checks and review pass.", problem: "The run for {id} changes a path the repo holds for review, so the factory did not land it." },
-  "review-held": { actions: ["approve", "disapprove"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
+  "review-held": { actions: ["approve", "disapprove"], always: "approve", needs: "review", card: "approve", name: "Reviewer holds",
     line: "The reviewer held the job and no fix rounds are left.", problem: "The reviewer could not reach a verdict on {id} in two tries." },
   "question": { actions: ["resolve", "dismiss"], always: "resolve", needs: "question", card: "decide", name: "Questions",
     line: "A job or an intake stopped on a choice that the spec leaves open.", problem: "An answer is needed." },
-  "no-commit": { actions: ["continue", "discontinue"], always: "", card: "unstick", name: "Jobs with no commit",
+  "no-commit": { actions: ["continue", "discontinue"], always: "continue", card: "unstick", name: "Jobs with no commit",
     get line() { return `The last ${NO_COMMIT_LIMIT} jobs of an issue ended with nothing committed.`; },
     get problem() { return `The last ${NO_COMMIT_LIMIT} runs of {id} ended with no commit, so the factory stopped starting it.`; },
     continue: { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the issue." } },
   // Its options are Close as done and Keep open (decideAsk); `dismiss` drops the issue.
-  "part-dropped": { actions: ["resolve", "dismiss"], always: "", card: "decide", name: "Dropped sub-issues",
+  "part-dropped": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Dropped sub-issues",
     line: "A sub-issue of an issue was dropped and no other sub-issue is open.", problem: "A sub-issue of {id} was dropped and no other sub-issue of it is open." },
   "intake-failed": { actions: ["continue", "discontinue"], always: "continue", card: "unstick", name: "Failed intake",
     get line() { return `Intake of an issue failed ${INTAKE_TRIES() === 2 ? "twice" : `${INTAKE_TRIES()} times`}.`; },
@@ -86,12 +86,12 @@ const REASONS = {
   "rescue": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Rescue of a stuck job",
     line: "A stuck job with more than one way out.", problem: "An answer is needed." },
   // Not Ask reasons of the spec; no new home is named for them.
-  "run-cap": { actions: ["continue", "discontinue"], always: "", card: "unstick", name: "Job cap",
+  "run-cap": { actions: ["continue", "discontinue"], always: "continue", card: "unstick", name: "Job cap",
     get line() { return `An issue started ${RUN_CAP()} times in one hour.`; },
     get problem() { return `The factory started {id} ${RUN_CAP()} times in one hour, so it stopped starting it until it is run again.`; },
     continue: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
   // Held by the memory re-check on a core note; the director never decides it. Its issue is parked, so no work starts on it.
-  "core-change": { actions: ["approve", "disapprove"], always: "", card: "approve", name: "Core note changes",
+  "core-change": { actions: ["approve", "disapprove"], always: "approve", card: "approve", name: "Core note changes",
     line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}." },
   // The issue is parked; its option `Remove the link` opens it, `Drop the waiter` drops it (decideAsk).
   "blocker-dropped": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Dropped blockers",
@@ -194,10 +194,10 @@ export const askNote = (a: Ask): string =>
   (a.recommended ? ` My recommendation is ${a.recommended}.` : "") +
   (a.why.length ? ` Why: ${a.why.join("; ")}.` : "");
 
-const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
+const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.replace(/:[^:]*$/, "")];
 /** `user` sends the Ask to Chris with no director run; every reason takes it but the memory proposals. */
 const USER = "user";
-const allows = (reason: string, r: Reason, action: string): boolean => r.actions.some((x) => x === action) || action === r.always || (action === USER && !reason.startsWith("proposal-"));
+const allows = (reason: string, r: Reason, action: string): boolean => r.actions.some((x) => x === action) || (action === USER && !reason.startsWith("proposal-"));
 
 /** The old words of a stored grant and the verbs they read as. */
 const RENAMED: Record<string, string> = { recommended: "resolve", retry: "continue" };
@@ -210,14 +210,14 @@ export const readAlways = (): Record<string, Granted> =>
 
 const write = (s: Record<string, Granted>): void => putJson("settings", "always", s);
 
-/** The Always rule for `reason`, or null. */
-export const always = (reason: string): Granted | null => readAlways()[reason] ?? null;
+/** The Always rule for `reason`, or null: with a `project`, that project's rule, else the rule for all projects. */
+export const always = (reason: string, project?: string): Granted | null => { const s = readAlways(); return (project && s[`${reason}:${project}`]) || s[reason] || null; };
 
 /** Let the factory take `action` for `reason` without asking. Returns why it could not, or null. */
 export function grant(reason: string, action: string): string | null {
   const r = reasonFor(reason);
   if (!r) return `unknown reason ${reason}; known: ${Object.keys(ASK_REASONS).join(", ")}`;
-  if (!allows(reason, r, action)) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
+  if (!allows(reason, r, action)) return `${reason} has no action ${action}; actions: ${r.actions.join(", ")}`;
   write({ ...readAlways(), [reason]: { action, at: new Date().toISOString() } });
   logSetting(`Always: ${reason} is ${action}`);
   return null;

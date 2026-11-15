@@ -8,6 +8,7 @@ import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, a
 import { ASK_ACTIONS } from "../../../lib/naming.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
+import { readEvents } from "../../../lib/layout.ts";
 import { readList } from "../../../issues/lib/store.ts";
 import { seed } from "../../job.testkit.ts";
 import { newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
@@ -102,7 +103,8 @@ test("actionsOn gives each reason the one pair of verbs of its card, on a run an
   pair(["no-commit", "intake-failed", "run-cap"], ["continue", "discontinue"]);
   expect(actionsOn("question", { run: true, decision: false })).toEqual(actionsOn("question", { run: false, decision: true }));
   expect(ASK_REASONS.rescue.card).toBe("decide");
-  for (const r of Object.values(ASK_REASONS)) for (const a of [...r.actions, r.always]) expect(a === "" || ASK_ACTIONS.includes(a)).toBe(true);
+  for (const r of Object.values(ASK_REASONS)) for (const a of [...r.actions, r.always]) expect(ASK_ACTIONS.includes(a)).toBe(true);
+  for (const [reason, r] of Object.entries(ASK_REASONS)) expect([reason, r.always]).toEqual([reason, r.actions[0]]);
 });
 
 
@@ -118,6 +120,30 @@ test("grant then always round-trips; revoke removes it", () => {
   revoke("held-path");
   expect(always("held-path")).toBeNull();
   expect(readAlways()).toEqual({});
+});
+
+test("a grant of reason:project holds for that project only, and a bare grant holds for every project", () => {
+  expect(grant("held-path:aleph", "approve")).toBeNull();
+  expect(always("held-path", "aleph")?.action).toBe("approve");
+  expect(always("held-path", "other")).toBeNull();
+  expect(always("held-path")).toBeNull();
+  expect(grant("held-path", "disapprove")).toBeNull();
+  expect(always("held-path", "aleph")?.action).toBe("approve");
+  expect(always("held-path", "other")?.action).toBe("disapprove");
+  expect(grant("held-path", "land")).toContain("has no action land");
+  expect(grant("held-path:aleph", "land")).toContain("has no action land");
+  expect(grant("proposal-skill:aleph", "approve")).toBeNull();
+  expect(always("proposal-skill:aleph")?.action).toBe("approve");
+  expect(grant("proposal-skill:aleph", "user")).not.toBeNull();
+  expect(grant("nope:aleph", "approve")).toContain("unknown reason nope:aleph");
+});
+
+test("a revoke of reason:project removes only that grant and logs changed on settings", () => {
+  grant("held-path:aleph", "approve");
+  grant("held-path", "approve");
+  revoke("held-path:aleph");
+  expect(Object.keys(readAlways())).toEqual(["held-path"]);
+  expect(readEvents().filter((e) => e.object === "settings").at(-1)).toMatchObject({ action: "changed", detail: "Always: held-path:aleph is Ask me" });
 });
 
 test("grant refuses the old words, and readAlways reads a stored recommended as resolve and retry as continue", () => {

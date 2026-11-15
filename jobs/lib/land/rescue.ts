@@ -255,7 +255,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   // `spec`: the run asked about this issue's spec, so it waits for a spec edit.
   const chris = async (question: string, ask: Ask, spec?: issues.Issue) => {
     // An Always rule to take the recommendation: Rerun drops the run, and the issue reruns. Not for a run that asked a question.
-    if (!specQuestion && ask.recommended === "Rerun" && always("rescue")?.action === "resolve") {
+    if (!specQuestion && ask.recommended === "Rerun" && always("rescue", repo.key)?.action === "resolve") {
       const why = await act.drop(name, question);
       if (!why) {
         logAlways("rescue", name, "reran", { detail: `dropped ${runs[0].id}` });

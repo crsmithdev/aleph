@@ -257,6 +257,16 @@ test("deciding Remove the link opens the waiter without the link and clears the 
   expect(show(two.b)).toMatchObject({ status: "dropped", ask: null });
 });
 
+test("an Always blocker-dropped grant scoped to the issue's project resolves the Ask; one for another project does not", async () => {
+  expect(grant("blocker-dropped:elsewhere", "resolve")).toBeNull();
+  try {
+    expect(askOf((await blockerDropped()).ref)).toMatchObject({ reason: "blocker-dropped" });
+    expect(grant("blocker-dropped:proj", "resolve")).toBeNull();
+    const { b } = await blockerDropped();
+    expect(show(b)).toMatchObject({ status: "open", after: [], ask: null });
+  } finally { revoke("blocker-dropped:elsewhere"); revoke("blocker-dropped:proj"); }
+});
+
 test("with Always blocker-dropped resolve, a dropped blocker opens the waiter without the link and asks nothing", async () => {
   expect(grant("blocker-dropped", "resolve")).toBeNull();
   try {
