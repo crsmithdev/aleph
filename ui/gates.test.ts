@@ -619,12 +619,21 @@ test("the body has the tick, the suite and the monitor with their last run from 
   expect(h).toContain(">Schedules</h2>");
   expect(h).toContain(`<th>Schedule</th><th>Every</th><th>Result</th><th class="num">Last Run</th>`);
   expect(h).toContain('<td class="wide" title="tick">tick</td>');
-  expect(h).not.toContain("<td><input");
-  // The interval sits in its row: a locked number and unit with an Edit button; the monitor's is a locked hour.
-  expect(h).toMatch(/<form class="every" data-schedule="tick"><input name="n" type="number" id="every-tick" value="1"[^>]* disabled[^>]*><select name="unit"[^>]* disabled><option value="s">seconds<\/option><option value="min" selected>minutes/);
-  expect(h).toContain('<button type="button" class="act" data-edit>Edit</button></form>');
-  expect(h).toMatch(/data-schedule="suite"><input[^>]*value="1"[^>]*>.*<option value="h" selected>hours/);
-  expect(h).toMatch(/<form class="every" data-schedule="monitor"><input name="n" type="number" id="every-monitor" value="0"[^>]* disabled[^>]*><button type="button" class="act" data-edit>Edit<\/button><\/form>/);
+  // The table is text: no control, no disabled and no Edit step. The intervals and the monitor's hour are one settings list below it.
+  const cells = h.match(/<td[^>]*>.*?<\/td>/g)!;
+  expect(cells).toHaveLength(12);
+  expect(cells.filter((c: string) => /<(input|select|button)/.test(c))).toEqual([]);
+  expect(h).not.toContain("disabled");
+  expect(h).not.toContain("data-edit");
+  expect(h.match(/<div class="settings"/g)).toHaveLength(1);
+  expect(h).toMatch(/<form class="srow" data-schedule="tick"><label class="sl" for="every-tick">Tick every<\/label><span class="sctl"><input name="n" type="number" id="every-tick" value="1"[^>]*><select name="unit"[^>]*><option value="s">seconds<\/option><option value="min" selected>minutes.*?<button[^>]*type="submit"[^>]*>Save<\/button>/);
+  expect(h).toMatch(/<form class="srow" data-schedule="suite"><label class="sl" for="every-suite">Suite every<\/label>.*<input name="n"[^>]*id="every-suite" value="1".*<option value="h" selected>hours/);
+  // The monitor runs once a day from its hour: its Every cell stays text and its hour is a setting beside the intervals.
+  expect(h).toMatch(/<form class="srow" data-schedule="monitor"><label class="sl" for="hour-monitor">Monitor hour<\/label><span class="sctl"><input name="n" type="number" id="hour-monitor" value="0"[^>]*><button[^>]*type="submit"[^>]*>Save<\/button>/);
+  expect(h.match(/<form class="srow"/g)).toHaveLength(3);
+  expect(h).toContain("<td>1d</td>");
+  // A tick with no timer installed has no interval: its Every cell is miss(), not an empty cell.
+  expect(gates.renderSchedules({ schedules: [{ name: "tick", last: null, result: null, every: null }] })).toContain(`<td><span title="no timer">–</span></td>`);
   expect(h).not.toContain("has not run");
   expect(h.indexOf("Last Run")).toBeLessThan(h.indexOf("<tbody>"));
   const tbody = h.split("<tbody>")[1].split("</tbody>")[0];

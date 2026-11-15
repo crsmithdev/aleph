@@ -99,24 +99,24 @@ export function renderMonitor(d) {
 const UNITS = [["s", "seconds"], ["min", "minutes"], ["h", "hours"]];
 const splitEvery = (every) => { const m = /^([1-9]\d*)(s|min|h)$/.exec(every ?? ""); return m ? { n: m[1], unit: m[2] } : null; };
 
-/** The Every cell of a schedule with a timer: a number and a unit, locked until Edit opens them, then Save posts them. */
-function everyForm(s) {
+/** The interval of a schedule with a timer as a setting: a number and a unit, with a Save button that posts them. */
+function everySetting(s) {
   const v = splitEvery(s.every) ?? { n: "", unit: "min" }, id = `every-${s.name}`;
-  return `<form class="every" data-schedule="${esc(s.name)}">${inputBox("n", v.n, { id, type: "number", attrs: ` min="1" step="1" inputmode="numeric" required disabled aria-label="${esc(s.name)} every"` })}` +
-    selectBox(`${s.name} unit`, "unit", UNITS.map(([value, label]) => ({ value, label })), v.unit, { attrs: " disabled" }) +
-    `<button type="button" class="act" data-edit>Edit</button></form>`;
+  return setting(`${s.name[0].toUpperCase()}${s.name.slice(1)} every`, inputBox("n", v.n, { id, type: "number", attrs: ` min="1" step="1" inputmode="numeric" required` }) +
+    selectBox(`${s.name} unit`, "unit", UNITS.map(([value, label]) => ({ value, label })), v.unit), { id, save: "Save", attrs: ` data-schedule="${esc(s.name)}"` });
 }
 
-/** The Every cell of the monitor: the local hour from which its daily step runs, locked until Edit opens it, then Save posts it. */
-function hourForm(s) {
-  return `<form class="every" data-schedule="monitor">${inputBox("n", s.hour, { id: "every-monitor", type: "number", attrs: ` min="0" max="23" step="1" inputmode="numeric" required disabled aria-label="monitor hour"` })}` +
-    `<button type="button" class="act" data-edit>Edit</button></form>`;
+/** The monitor's hour as a setting: the local hour 0 to 23 from which the tick runs its monitor step. */
+function hourSetting(s) {
+  return setting("Monitor hour", inputBox("n", s.hour ?? 0, { id: "hour-monitor", type: "number", attrs: ` min="0" max="23" step="1" inputmode="numeric" required aria-label="monitor hour"` }),
+    { id: "hour-monitor", save: "Save", attrs: ` data-schedule="monitor"` });
 }
 
-/** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran. The monitor runs in the tick, once a day from its hour, so its cell holds that hour. */
+/** The tick, the suite and the monitor: how often each runs, what came of its last run and when it ran, as text; then their intervals, and the monitor's hour, as settings. The monitor runs in the tick, once a day from its hour. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${s.name === "monitor" ? hourForm(s) : everyForm(s)}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
-  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) : empty(), { id: "gates-schedules" });
+  const rows = d.schedules.map((s) => `<tr>${cell(s.name, { wide: true })}<td>${s.every ? esc(s.every) : miss("no timer")}</td><td>${s.result ? esc(s.result) : miss("no result")}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
+  const edit = d.schedules.map((s) => (s.name === "monitor" ? hourSetting(s) : everySetting(s)));
+  return card("Schedules", rows ? dataTable(heads(["Schedule", "Every", "Result", "Last Run"], ["Last Run"]), rows) + settings("Schedule intervals", edit) : empty(), { id: "gates-schedules" });
 }
 
 /** The units of an Ask's wait, largest first: a stored number of minutes shows in the largest unit that divides it. */
@@ -255,17 +255,6 @@ export function mount(root) {
     await redraw(true);
   };
   root.onclick = async (e) => {
-    // The first click unlocks the row's interval and turns Edit into Save; the next submits it.
-    const edit = e.target.closest?.("form.every button");
-    if (edit) {
-      const f = edit.form;
-      if (f.elements.n.disabled) {
-        for (const el of f.elements) el.disabled = false;
-        edit.textContent = "Save";
-        return f.elements.n.focus();
-      }
-      return f.requestSubmit();
-    }
     const seg = e.target.closest?.("#gates-log .seg button");
     if (seg) return goQuery({ by: seg.dataset.value, page: "" });
     const turn = e.target.closest?.("#gates-log button[data-page]");
