@@ -97,6 +97,7 @@ test("a director add files the fix job through writeFiling: one filed event, on 
   expect(item(2)).toMatchObject({ title: "Fix the other module" });
   expect(events().filter((e) => e.action === "filed").map((e) => [e.subject, e.object])).toEqual([["director", "issue.2"]]);
   expect(started).toEqual([`${key}-2`]);
+  expect(prompt()).toContain("Check each Oracle clause of a spec you write against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec");
 });
 
 test("the schema requires the case text with actions, and parseReply returns it with the actions", () => {
@@ -120,6 +121,7 @@ test("the escalation list: a land on a security path gets case text and no actio
   expect(awaitsChris(`issue.2`)).toBe(false);
   expect(getRun(jobOfFolder(folder))!.ask!.situation).toStartWith("The director did not decide this Ask");
   expect(prompt()).toContain("This Ask is on the escalation list");
+  expect(prompt()).not.toContain("Check each Oracle clause");
 });
 
 test("a review Ask on a run that changes bun.lock or a security path is Chris's; one that changes neither the director lands", async () => {

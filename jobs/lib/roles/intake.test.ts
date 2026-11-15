@@ -329,6 +329,8 @@ test("the prompt keeps the spec close to the request and how-to-build questions 
   expect(p).toContain("do not chain parts in a line by habit");
   expect(p).toContain("(an issue key like `issue.5`)");
   expect(p).not.toContain("<repo>-<n>`)");
+  expect(p).toContain("Check each Oracle clause against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec");
+  expect(p).toContain("no two clauses that cannot both be true");
 });
 
 test("parseRoute keeps an issue key in an ask option's after", () => {
