@@ -44,9 +44,11 @@ Chris's taste.
    `<kind>.<n>` and the path is the key. Consolidate: fewer stores, fewer file formats, fewer files. Then run
    `aleph:red-team` on the proposal and fix what it finds.
 8. **Decide.** Settle each open question with a reason. Write a vault note for each decision and each learned
-   behavior with `aleph:vault`.
+   behavior with `aleph:vault`. In a headless run (`claude -p`) write no note: name each note you would write in
+   Decisions.
 9. **Propose.** Write the proposal and act on it by the work mode (`skills/mode/SKILL.md`). In factory mode,
-   file the work as issues. In solo mode, build it with worktree agents.
+   file the work as issues. In solo mode, build it with worktree agents. In a headless run (`claude -p`) file no
+   issue and start no build: list the issues you would file in Sins.
 
 ## Output
 
@@ -58,7 +60,8 @@ Report these parts, each in full:
    data flow).
 4. **Measurements.** The counts and the benchmark numbers that back the choices.
 5. **Sins.** Each wrong thing found on the way, in two groups: must be fixed with the change, and can follow
-   later. File the second group as issues.
+   later. File the second group as issues; in a headless run (`claude -p`) file none and list the second group as
+   the issues you would file.
 6. **Decisions.** Each open question you decided, with its reason and the vault note.
 
 Not verified: state any claim you did not check against data or a run.
