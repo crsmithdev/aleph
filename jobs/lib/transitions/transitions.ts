@@ -22,7 +22,7 @@ import { Refusal, refuse } from "../../../lib/refusal.ts";
 import { factoryGates, liveEntries, onLocal } from "../gates/factory-status.ts";
 import { readModels } from "../routing/models.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { raise, route, TIER_MODEL, type Tier } from "../routing/route.ts";
+import { raise, route, type Size } from "../routing/route.ts";
 import type { Gate, Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import { key, parseId } from "../../../lib/naming.ts";
@@ -85,7 +85,7 @@ async function dispatch(run: NewJob, cwd: string, command: string[], output: Out
   let gpu: (() => void) | null = null; // a local run holds the GPU slot from its cap check until its job row is written
   try {
     if (isBuild(run.role)) {
-      // The run's model, or its tier's, names its backend: a backend the factory holds starts no run, whatever the caller.
+      // The run's model, or its size's, names its backend: a backend the factory holds starts no run, whatever the caller.
       const f = factoryGates(undefined, run);
       if (f.backend) hold("backend", f.backend.ev!, f.backend.why);
       if (f["live-cap"]) hold("live-cap", { action: "full" }, `${f["live-cap"].why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
@@ -357,12 +357,12 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
  * A foreground unit is waited for, its output dropped. Returns the refusal, or null. A refusal from
  * `ALEPH_START_CMD` is text from another process, so it names no gate.
  */
-export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<Refused | null> {
-  const picked = tier !== undefined ? tier : await route(spec, name);
+export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, size?: Size | null): Promise<Refused | null> {
+  const picked = size !== undefined ? size : await route(spec, name);
   // A rerun of an issue whose build run failed takes the next level up; a run that did no work (credit) or hit the host (infra) does not count.
   const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.role) && e.run.state === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
   const routed = picked && failed ? raise(picked) : picked;
-  const model = routed ? TIER_MODEL[routed] : null;
+  const model = routed ? readModels()[routed].model : null;
   logEvent({ subject: "rule", action: "started", object: name, detail: `model ${model ?? "default"}`, tier: routed });
   const start = startCmd();
   if (start) {
@@ -371,7 +371,7 @@ export async function startIssue(repo: Repo, name: string, id: number | string, 
     return code === 0 ? null : refusedBy((await new Response(p.stderr).text()).trim() || `exit ${code}`);
   }
   try {
-    await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(model ? { model } : {}) }, { output: "ignore", by: "rule" })).child?.exited;
+    await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(routed ? { model: routed } : {}) }, { output: "ignore", by: "rule" })).child?.exited;
     return null;
   } catch (e) {
     return refusedBy(e);

@@ -29,17 +29,22 @@ test("a Jev 500 gives no model and logs no event", async () => {
   expect(readEvents()).toEqual([]);
 });
 
-test("a small pick at p >= 0.6 gives small, medium when small is disabled, and large when both are disabled", async () => {
-  reply = { status: 200, body: { answers: { tier: { type: "choice", choice: "small", probabilities: { small: 0.7 } } }, cost: 0, model: "m" } };
-  expect(await route("x", "aleph-5")).toBe("small");
-  expect(readEvents().find((e) => e.action === "routed")).toMatchObject({ object: "aleph-5", detail: "small by classifier m" });
+test("a medium pick at p >= 0.6 gives medium and logs a routed event on the issue key", async () => {
+  reply = { status: 200, body: { answers: { size: { type: "choice", choice: "medium", probabilities: { medium: 0.7 } } }, cost: 0, model: "m" } };
+  expect(await route("x", "issue.2958")).toBe("medium");
+  expect(readEvents().find((e) => e.action === "routed")).toMatchObject({ subject: "rule", object: "issue.2958", detail: "medium by classifier m" });
+});
+
+test("a small pick gives medium when small is disabled, and large when both are disabled", async () => {
+  reply = { status: 200, body: { answers: { size: { type: "choice", choice: "small", probabilities: { small: 0.7 } } }, cost: 0, model: "m" } };
+  expect(await route("x")).toBe("small");
   expect(setModel("small", { enabled: false })).toBeNull();
   expect(await route("x")).toBe("medium");
   expect(setModel("medium", { enabled: false })).toBeNull();
   expect(await route("x")).toBe("large");
 });
 
-test("raise gives the next enabled tier up, skips a disabled one, and stays at the top", () => {
+test("raise gives the next enabled size up, skips a disabled one, and stays at the top", () => {
   const on = { enabled: true, model: "m" }, off = { enabled: false, model: "m" };
   const models: any = { small: on, medium: on, large: on };
   expect(raise("small", models)).toBe("medium");
@@ -48,12 +53,12 @@ test("raise gives the next enabled tier up, skips a disabled one, and stays at t
   expect(raise("small", { ...models, medium: off })).toBe("large");
 });
 
-test("a start routed to small logs its tier as a field of the started event, not in its detail; a start with no tier logs none", async () => {
+test("a start routed to large logs its size as a field of the started event and the size's model in its detail; a start with no size logs none", async () => {
   process.env.ALEPH_START_CMD = "true";
   try {
-    expect(await startIssue({ key: "aleph" } as any, "aleph-5", 5, "x", "small")).toBeNull();
+    expect(await startIssue({ key: "aleph" } as any, "aleph-5", 5, "x", "large")).toBeNull();
     expect(await startIssue({ key: "aleph" } as any, "aleph-6", 6, "x", null)).toBeNull();
   } finally { delete process.env.ALEPH_START_CMD; }
   const started = readEvents().filter((e) => e.action === "started");
-  expect(started.map((e) => [e.object, e.tier ?? null, e.detail])).toEqual([["aleph-5", "small", "model haiku"], ["aleph-6", null, "model default"]]);
+  expect(started.map((e) => [e.object, e.tier ?? null, e.detail])).toEqual([["aleph-5", "large", "model claude-opus-5-5"], ["aleph-6", null, "model default"]]);
 });

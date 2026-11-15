@@ -22,7 +22,7 @@ The vault also logs its own writes in `daily/<date>.md` (`appendDaily` in `vault
 
 ## Event log
 
-An event has the 6 fields of `Event` in `lib/naming.ts:127`: `seq`, `time`, `subject`, `action`, `object` and `detail`; a start's event also has a `tier`, the one the factory routed it to. [Naming](naming.md#events) defines the words. `event()` in `lib/naming.ts:135` checks `subject` and `action` against their sets, so a bad word throws. `logEvent` inserts one row into the `events` table of `aleph.db`. A row never changes. `readEvents` in `lib/layout.ts:35` reads the view `event_rows` from `since` on, in `seq` order. No code writes the event log by any other means.
+An event has the 6 fields of `Event` in `lib/naming.ts:127`: `seq`, `time`, `subject`, `action`, `object` and `detail`; a start's event also has a `tier`, the Size the factory routed it to. [Naming](naming.md#events) defines the words. `event()` in `lib/naming.ts:135` checks `subject` and `action` against their sets, so a bad word throws. `logEvent` inserts one row into the `events` table of `aleph.db`. A row never changes. `readEvents` in `lib/layout.ts:35` reads the view `event_rows` from `since` on, in `seq` order. No code writes the event log by any other means.
 
 ### Who writes events
 
@@ -33,7 +33,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `gate` | A run's state: `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` | `jobs/lib/records/record.ts:182` |
 | `gate` | `question` when an Ask is set, `answered` when it is cleared | `jobs/lib/records/record.ts:168` |
 | `gate` | A hold when a new one is written: `paused`, `red`, `after`, `full`, `busy`, `looping`, `credit`, `waiting`, `running` and others | `jobs/lib/gates/factory-status.ts:71`, from `jobs/lib/transitions/factory.ts:91` and `:136` |
-| `rule` | `routed`, with `tier`, `model`, `p` and `cost` | `jobs/lib/routing/route.ts:30` |
+| `rule` | `routed`, its `detail` the Size and the classifier model (`medium by classifier <model>`), on the issue key | `jobs/lib/routing/route.ts:28` |
 | `rule` | `paused`, `started`, `busy`, `done`, `failed` (`error`) for the dispatch steps | `jobs/lib/transitions/factory.ts:70`, `:74`, `:112`, `:142`, `:146`, `:182`, `:190`, `:275`, `:484`, `:538` |
 | `rule` | `started` for a run, with the model | `jobs/lib/transitions/transitions.ts:363` |
 | `rule` | `missed` for a stalled key, `started` (`check`) for a suite on a moved main, `failed` (`error`) for a tick step | `jobs/lib/transitions/tick.ts:156`, `:165`, `:219` |

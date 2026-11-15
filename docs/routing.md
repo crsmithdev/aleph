@@ -46,13 +46,13 @@ Every role runs with `--disable-slash-commands`, so it loads no skill. The worke
 
 ## Worker sizes
 
-`route(spec)` in `jobs/lib/routing/route.ts` asks Jev one `choice` question about the goal's spec:
+`route(spec)` in `jobs/lib/routing/route.ts` asks Jev one `choice` question about the goal's spec. A build routed to a size runs on that size's model from `aleph models`, the default below unless Chris set another:
 
-| Size | Model | Fits |
+| Size | Default model | Fits |
 |---|---|---|
 | `small` | `haiku` | A small, mechanical change in one or two files whose done state is exact |
 | `medium` | `sonnet` | A typical change across several files, with a clear Oracle |
-| `large` | `opus` | A design-heavy or cross-cutting change, or one whose approach is open |
+| `large` | `claude-opus-5-5` | A design-heavy or cross-cutting change, or one whose approach is open |
 
 Jev's answer counts when its probability is at least 0.6. Otherwise, or when Jev fails or the judge choice is `haiku`, the run gets no `--model` and uses the CLI default. A disabled size steps up to the next enabled one; `large` is always on.
 
@@ -92,7 +92,7 @@ aleph models set small deepseek-v4.1-flash
 aleph models disable medium           # only small and medium can be off
 ```
 
-A run on a size set to another model records that model as `model` and its Claude model as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
+A build routed to a size records the model that ran as `model` and the size word as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
 
 **OpenRouter.** A call gets `ANTHROPIC_BASE_URL=https://openrouter.ai/api`, `OPENROUTER_API_KEY` as `ANTHROPIC_AUTH_TOKEN` (from the environment or `~/.aleph/.env`), an empty `ANTHROPIC_API_KEY`, and the model's id in the default-model variables. OpenRouter runs count against the live cap and take no GPU slot. Without a key, the Agents page disables the OpenRouter models.
 

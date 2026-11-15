@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { readList } from "../../../issues/lib/store.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { setModel } from "../routing/models.ts";
-import type { Tier } from "../routing/route.ts";
+import type { Size } from "../routing/route.ts";
 import { holdBackend, issueFacts } from "./factory-status.ts";
 import { decideStart } from "./start-decision.ts";
 import { dispatchIssues, stalled } from "../transitions/factory.ts";
@@ -19,56 +19,56 @@ afterEach(() => {
   teardown();
 });
 
-/** The decision for issue `id` with a fake route that answers `tier` and counts its calls in `asked`. */
+/** The decision for issue `id` with a fake route that answers `size` and counts its calls in `asked`. */
 let asked = 0;
-async function decide(id: number, tier: Tier | null, extra: object = {}) {
+async function decide(id: number, size: Size | null, extra: object = {}) {
   asked = 0;
   const repo = loadRegistry().fac, jobs = allJobs();
   const item = readList({ key: "fac" })!.items.find((i) => i.id === id)!;
-  return decideStart(repo, { ...issueFacts(repo, item, jobs, NOW), done: () => false, ...extra }, jobs, async () => { asked++; return tier as any; });
+  return decideStart(repo, { ...issueFacts(repo, item, jobs, NOW), done: () => false, ...extra }, jobs, async () => { asked++; return size as any; });
 }
 
-/** A router on a local port that answers `tier` for every spec. */
-function router(tier: Tier): { stop: () => void } {
-  const server = Bun.serve({ port: 0, fetch: () => Response.json({ answers: { tier: { type: "choice", choice: tier, probabilities: { [tier]: 1 } } } }) });
+/** A router on a local port that answers `size` for every spec. */
+function router(size: Size): { stop: () => void } {
+  const server = Bun.serve({ port: 0, fetch: () => Response.json({ answers: { size: { type: "choice", choice: size, probabilities: { [size]: 1 } } } }) });
   Object.assign(process.env, { ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
   return { stop: () => server.stop(true) };
 }
 
 test("a ready issue starts with no route asked, so the start rates the spec itself", async () => {
   const id = newIssue();
-  expect(await decide(id, "large")).toMatchObject({ kind: "ready", tier: undefined });
+  expect(await decide(id, "large")).toMatchObject({ kind: "ready", size: undefined });
   expect(asked).toBe(0);
 });
 
-test("with the live cap full of Claude runs, a tier on the local backend starts; a tier on Claude stays held", async () => {
+test("with the live cap full of Claude runs, a size on the local backend starts with that size word; a size on Claude stays held", async () => {
   process.env.ALEPH_LIVE_CAP = "1";
   expect(setModel("small", { model: "gpt-oss-20b" })).toBeNull();
   mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
   const id = newIssue();
-  expect(await decide(id, "small")).toMatchObject({ kind: "ready", tier: "small" });
-  expect(await decide(id, "large")).toMatchObject({ kind: "live-cap", tier: "large", why: "1 agent runs are live" });
-  expect(await decide(id, null)).toMatchObject({ kind: "live-cap", tier: null });
+  expect(await decide(id, "small")).toMatchObject({ kind: "ready", size: "small" });
+  expect(await decide(id, "large")).toMatchObject({ kind: "live-cap", size: "large", why: "1 agent runs are live" });
+  expect(await decide(id, null)).toMatchObject({ kind: "live-cap", size: null });
   expect(asked).toBe(1);
 });
 
-test("the live cap with every tier on Claude asks no route", async () => {
+test("the live cap with every size on Claude asks no route", async () => {
   process.env.ALEPH_LIVE_CAP = "1";
   mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
   const id = newIssue();
-  expect(await decide(id, "small")).toMatchObject({ kind: "live-cap", tier: undefined });
+  expect(await decide(id, "small")).toMatchObject({ kind: "live-cap", size: undefined });
   expect(asked).toBe(0);
 });
 
-test("a held backend holds an issue whose tier runs on it; another tier starts; an issue with a run is held with no route", async () => {
+test("a held backend holds an issue whose size runs on it; another size starts; an issue with a run is held with no route", async () => {
   expect(setModel("small", { model: "deepseek-v4.1-flash" })).toBeNull();
   await holdBackend("openrouter", CREDIT);
   const id = newIssue();
-  expect(await decide(id, "small")).toMatchObject({ kind: "backend", tier: "small", why: `waits for OpenRouter: ${CREDIT}` });
-  expect(await decide(id, "large")).toMatchObject({ kind: "ready", tier: "large" });
+  expect(await decide(id, "small")).toMatchObject({ kind: "backend", size: "small", why: `waits for OpenRouter: ${CREDIT}` });
+  expect(await decide(id, "large")).toMatchObject({ kind: "ready", size: "large" });
   const ran = newIssue();
   mk(`fac-${ran}`, "build", "failed", { model: "deepseek-v4.1-flash" });
-  expect(await decide(ran, "large")).toMatchObject({ kind: "backend", tier: undefined });
+  expect(await decide(ran, "large")).toMatchObject({ kind: "backend", size: undefined });
   expect(asked).toBe(0);
 });
 

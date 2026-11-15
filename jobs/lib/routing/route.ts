@@ -1,17 +1,15 @@
-/** Jev picks the model tier for a factory run, from the item's spec. */
+/** Jev picks the size (small, medium or large) of a factory run, from the item's spec. */
 import { logEvent } from "../../../lib/layout.ts";
 import { decide, judgeChoice } from "../../../lib/jev.ts";
 import { readModels } from "./models.ts";
 
-export const TIERS = ["small", "medium", "large"] as const;
-export type Tier = (typeof TIERS)[number];
-/** The Claude model a tier's run asks for; unit.ts runs a size set to a model Claude does not serve on that model. */
-export const TIER_MODEL = { small: "haiku", medium: "sonnet", large: "opus" } as const;
+export const SIZES = ["small", "medium", "large"] as const;
+export type Size = (typeof SIZES)[number];
 const CUT = 0.6;
 
-const TIER_QUESTION = {
+const SIZE_QUESTION = {
   type: "choice" as const,
-  instructions: "Which model tier fits the change that `goal` asks for?",
+  instructions: "Which size fits the change that `goal` asks for?",
   criteria: {
     small: "A small, mechanical change in one or two files whose done state is stated exactly.",
     medium: "A typical change across several files, with a clear oracle.",
@@ -19,25 +17,25 @@ const TIER_QUESTION = {
   },
 };
 
-/** The tier for a spec, or null (no --model) when Jev is off, errs, or is not sure enough. A disabled tier gives the next enabled tier up. */
-export async function route(spec: string, subject = "route"): Promise<Tier | null> {
+/** The size for a spec, or null (no --model) when Jev is off, errs, or is not sure enough. A disabled size gives the next enabled size up. */
+export async function route(spec: string, subject = "route"): Promise<Size | null> {
   if (judgeChoice() === "haiku") return null;
   try {
-    const d = await decide({ goal: spec }, { tier: TIER_QUESTION });
-    const a = d.answers.tier;
+    const d = await decide({ goal: spec }, { size: SIZE_QUESTION });
+    const a = d.answers.size;
     if (a.type !== "choice") return null;
     const p = a.probabilities?.[a.choice] ?? a.confidence ?? 0;
-    try { logEvent({ subject: "rule", action: "routed", object: subject, detail: `${a.choice} by classifier ${d.model.split("/").pop()}` }); } catch { /* the cost event is a note; it never changes the tier */ }
-    if (!(TIERS as readonly string[]).includes(a.choice) || p < CUT) return null;
+    try { logEvent({ subject: "rule", action: "routed", object: subject, detail: `${a.choice} by classifier ${d.model.split("/").pop()}` }); } catch { /* the cost event is a note; it never changes the size */ }
+    if (!(SIZES as readonly string[]).includes(a.choice) || p < CUT) return null;
     const models = readModels();
-    return TIERS.slice(TIERS.indexOf(a.choice as Tier)).find((t) => models[t].enabled)!;
+    return SIZES.slice(SIZES.indexOf(a.choice as Size)).find((s) => models[s].enabled)!;
   } catch {
     return null;
   }
 }
 
 
-/** The next enabled tier above `tier`, or `tier` at the top: the tier of a rerun after a failed run. */
-export function raise(tier: Tier, models = readModels()): Tier {
-  return TIERS.slice(TIERS.indexOf(tier) + 1).find((t) => models[t].enabled) ?? tier;
+/** The next enabled size above `size`, or `size` at the top: the size of a rerun after a failed run. */
+export function raise(size: Size, models = readModels()): Size {
+  return SIZES.slice(SIZES.indexOf(size) + 1).find((s) => models[s].enabled) ?? size;
 }

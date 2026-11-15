@@ -129,7 +129,7 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_JOBS_DIR: jobsDir, ALEPH_ITEMS: items, ALEPH_JOB_FOREGROUND: "1",
     ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_DB: join(base, "aleph.db"),
-    // No test reaches the live router: its tier for a seed varies, so a start does not rate it.
+    // No test reaches the live router: its size for a seed varies, so a start does not rate it.
     ALEPH_JUDGE: "haiku",
     // The live cap's test starts six runs against a cap of five.
     ALEPH_LIVE_CAP: "5",

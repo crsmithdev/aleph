@@ -148,7 +148,7 @@ export const RELANDS = 3;
  */
 export const TODO_PATH = "docs/todo.md";
 
-/** The model of a merge run: the cheapest tier the factory routes a worker to. */
+/** The model of a merge run: the cheapest size the factory routes a worker to. */
 export const MERGE_MODEL = "haiku";
 /** The time limit of a merge run, in seconds. */
 export const MERGE_SECONDS = 600;

@@ -25,7 +25,7 @@ export const onGpu = (model: string | undefined): boolean => viaOf(model) === "l
 /** The name of a backend in a line Chris reads. */
 export const BACKENDS: Record<Via, string> = { claude: "Claude", local: "the local server", openrouter: "OpenRouter" };
 
-/** Who serves a run's calls: its own model's backend or, when its model is a size's Claude model, its size's model's backend. */
+/** Who serves a run's calls: its own model's backend or, when its model is a size word or a size's Claude model, its size's model's backend. */
 export function viaOfRun(run: { model?: string; merge?: true }, models: Record<Name, Setting>): Via {
   const own = viaOf(run.model);
   const size = SIZE_OF[run.model ?? ""];
@@ -138,8 +138,8 @@ export type Name = keyof typeof OFFERS;
 export type Setting = { enabled: boolean; model: string };
 /** The sizes that can be disabled. */
 const DISABLES = ["small", "medium"] as const;
-/** The size of a run's Claude model. */
-export const SIZE_OF: Record<string, Name | undefined> = { haiku: "small", sonnet: "medium", opus: "large" };
+/** The size of a run's model: a size word, which unit.ts replaces with the size's model, or the Claude model of a merge run. */
+export const SIZE_OF: Record<string, Name | undefined> = { small: "small", medium: "medium", large: "large", haiku: "small", sonnet: "medium", opus: "large" };
 /** The name each entry had in a models setting stored before the sizes. */
 const OLD_NAMES: Partial<Record<Name, string>> = { small: "worker-low", medium: "worker-medium", review: "reviewer" };
 

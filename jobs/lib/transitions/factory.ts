@@ -32,7 +32,7 @@ import { baselineChecks, type CheckTask, type ChecksStop } from "../gates/checks
 import { drop, land, recheck, refusal, startIssue, type Refused } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
-import { route, type Tier } from "../routing/route.ts";
+import { route, type Size } from "../routing/route.ts";
 import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, issueFacts, issueJob, setPaused, baselines, changedLinesOf, factoryDir, sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
@@ -47,8 +47,8 @@ const openIssues = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => bui
 
 /** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick's sweep still does. */
 
-/** `tier` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
-type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null) => Promise<Refused | null>;
+/** `size` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
+type Start = (repo: Repo, name: string, id: number | string, spec: string, size?: Size | null) => Promise<Refused | null>;
 export type Checks = (repo: Repo, commit: string, logs: string, record?: CheckTask["record"]) => Promise<ChecksStop | null>;
 type Land = (name: string) => Promise<string | null>;
 /**
@@ -143,7 +143,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
         continue;
       }
       const { spec } = issueBrief(item, name, jobs);
-      const no = await start(repo, name, ref, spec, d.tier);
+      const no = await start(repo, name, ref, spec, d.size);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
       if (no) skip(name, no.gate, no.why, no.ev);
       else { recordHold(name, "started", "started"); started.push(name); }
@@ -376,7 +376,7 @@ export async function stalled(jobs = allJobs(), lists = reader(), done = doneChe
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
   if (!liveRuns(runs)) {
     for (const { repo, item } of openIssues(lists)) {
-      // No model call: the stall check agrees with the dispatch on all but the router's tier.
+      // No model call: the stall check agrees with the dispatch on all but the router's size.
       const facts = issueFacts(repo, item, jobs);
       if ((await decideStart(repo, { ...facts, done, red: redOf(repo) }, jobs, unrouted)).kind === "ready") out.push(`goal:${facts.name}`);
     }

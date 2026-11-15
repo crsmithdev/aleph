@@ -27,7 +27,7 @@ import { keepDiff } from "../records/jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
 import { OPUS_MODEL } from "../../../lib/models.ts";
-import { readModels, SIZE_OF, viaOf } from "../routing/models.ts";
+import { readModels, SIZE_OF } from "../routing/models.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "../transitions/continuation.ts";
 import { oracleCommands, outsideSurface } from "./issue-spec.ts";
 import { docClaimProblems } from "../../../hooks/lib/docclaims.ts";
@@ -366,9 +366,8 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   }
 
   const size = SIZE_OF[run.model ?? ""];
-  // A size set to a model Claude does not serve runs on it; the run keeps its Claude model as its tier.
-  const pick = size !== undefined ? readModels()[size].model : undefined;
-  if (pick !== undefined && viaOf(pick) !== "claude") { jobRecord.patchRun(jobOfFolder(folder), { model: pick, tier: run.model }); run = { ...run, model: pick }; }
+  // A run routed to a size runs on that size's model, and its job row keeps the size word as its tier.
+  if (size !== undefined) { const pick = readModels()[size].model; jobRecord.patchRun(jobOfFolder(folder), { model: pick, tier: size }); run = { ...run, model: pick }; }
   const text = brief(id, run, repo);
   writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");
