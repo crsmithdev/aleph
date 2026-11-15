@@ -263,6 +263,12 @@ describe("views", () => {
     expect(of(1).own.runs).toBe(1);
   });
 
+  test("a row's own counts a director job, which has no repo, on its issue", async () => {
+    run("", { name: "dir-4", role: "director", target: "issue.4", cost: 0.25 } as any);
+    const rows = await rowsAfterSeed("fac");
+    expect(rows.find((r: any) => r.id === 4).own).toEqual({ runs: 1, cost: 0.25 });
+  });
+
   test("a parent's runs hold its sub-issue's jobs; its own holds its alone", async () => {
     const sub = writeList({ key: "fac" }, "seed", (doc) => todos.refOf(addPart(doc, todos.find(doc, "3")!, { title: "sub", spec: "x" })), true)!.value;
     run("", { name: "on-sub", repo: "fac", target: `issue.${sub}` });
