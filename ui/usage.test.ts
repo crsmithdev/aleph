@@ -35,7 +35,7 @@ async function errors(fn: () => Promise<unknown>): Promise<string[]> {
   return lines;
 }
 
-const snap = (h: number, seven: number, reset = "2026-11-02T00:00:00Z"): Snapshot => ({ at: new Date(T0 + h * H).toISOString(), five_hour: 0, seven_day: seven, seven_day_resets_at: reset });
+const snap = (h: number, seven: number, reset = "2026-11-02T00:00:00Z"): Snapshot => ({ at: new Date(T0 + h * H).toISOString(), seven_day: seven, seven_day_resets_at: reset });
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "usage-"));
@@ -49,8 +49,8 @@ beforeEach(() => {
 afterEach(() => { server.stop(true); rmSync(dir, { recursive: true }); delete process.env.ALEPH_USAGE_URL; delete process.env.ALEPH_DB; });
 
 /** Rows of the `usage` table, as a poll writes them. */
-const insert = (rows: { at: string; five_hour?: number | null; seven_day: number; seven_day_resets_at?: string | null }[]) => {
-  for (const r of rows) conn().query("INSERT INTO usage (time, five_hour, seven_day, seven_day_resets_at) VALUES (?, ?, ?, ?)").run(r.at, r.five_hour ?? null, r.seven_day, r.seven_day_resets_at ?? null);
+const insert = (rows: { at: string; seven_day: number; seven_day_resets_at?: string | null }[]) => {
+  for (const r of rows) conn().query("INSERT INTO usage (time, seven_day, seven_day_resets_at) VALUES (?, ?, ?)").run(r.at, r.seven_day, r.seven_day_resets_at ?? null);
 };
 
 test("the window starts at the last reset", () => {
@@ -115,7 +115,7 @@ test("a run's share puts its reviewer's dollars on the review's model", () => {
 test("off: the 7-day percent less the fitted share of this machine's Claude dollars since the reset", () => {
   // The week starts at 00:00, its reset time a hair under the hour; the polls fall 3 minutes past each hour.
   const start = Date.parse("2026-11-04T00:00:00Z"), reset = new Date(start + 7 * 24 * H - 59).toISOString();
-  const rows = (r: string | null) => Array.from({ length: 11 }, (_, h): Snapshot => ({ at: new Date(start + h * H + 3 * 60_000).toISOString(), five_hour: 0, seven_day: 3 * h, seven_day_resets_at: r }));
+  const rows = (r: string | null) => Array.from({ length: 11 }, (_, h): Snapshot => ({ at: new Date(start + h * H + 3 * 60_000).toISOString(), seven_day: 3 * h, seven_day_resets_at: r }));
   const write = (r: string | null) => { conn().run("DELETE FROM usage"); insert(rows(r)); };
   write(reset);
   const f = { fable: 1.5, rest: 0.125, pooled: false, hours: 24 };
@@ -134,7 +134,7 @@ test("off: the 7-day percent less the fitted share of this machine's Claude doll
 
 test("gainSince: the latest weekly percent minus the snapshot nearest to 5 hours before, in the reset window", () => {
   const t = (h: number) => new Date(Date.UTC(2026, 9, 29, 12) - h * 3600_000).toISOString();
-  const snap = (h: number, seven_day: number): Snapshot => ({ at: t(h), five_hour: 1, seven_day, seven_day_resets_at: "2026-11-02T09:00:00Z" });
+  const snap = (h: number, seven_day: number): Snapshot => ({ at: t(h), seven_day, seven_day_resets_at: "2026-11-02T09:00:00Z" });
   expect(gainSince([snap(6, 20), snap(5.1, 22), snap(2, 25), snap(0, 30)], 5 * 3600_000)).toBe(8);
   expect(gainSince([snap(1, 20), snap(0, 30)], 5 * 3600_000)).toBeNull();
   expect(gainSince([snap(0, 30)], 5 * 3600_000)).toBeNull();
@@ -171,24 +171,15 @@ test("a JSON body with no usage numbers logs one line", async () => {
   expect(lines[0]).toContain("no usage numbers");
 });
 
-const noFive = (extra: object) => Response.json({ ...extra, seven_day: { utilization: 25, resets_at: nextWeek() } });
-for (const [name, body] of [["null", { five_hour: null }], ["missing", {}], ["non-numeric", { five_hour: { utilization: "x" } }]] as const) {
-  test(`a reply with ${name} five_hour gives a null five_hour snapshot`, async () => {
-    reply = () => noFive(body);
-    let snap: Snapshot | null = null;
-    const lines = await errors(async () => { snap = await pollOnce(); });
-    expect(lines).toEqual([]);
-    expect(snap!.seven_day).toBe(25);
-    expect(snap!.five_hour).toBeNull();
-    expect(readSnapshots().at(-1)!.five_hour).toBeNull();
-    expect(summary().now).not.toBeNull();
-  });
-}
-
-test("readSnapshots keeps a null or missing five_hour as null and a number as is", () => {
-  const row = (m: number, extra: object) => ({ at: new Date(NOW - 900 * H + m * 60_000).toISOString(), seven_day: 3, ...extra });
-  insert([row(1, { five_hour: null }), row(2, {}), row(3, { five_hour: 12 })]);
-  expect(readSnapshots().slice(-3).map((s) => s.five_hour)).toEqual([null, null, 12]);
+test("a reply's five_hour is not stored: the snapshot and the stored row have only the seven-day fields", async () => {
+  reply = () => Response.json({ five_hour: { utilization: 5 }, seven_day: { utilization: 25, resets_at: nextWeek() } });
+  let snap = null as Snapshot | null;
+  const lines = await errors(async () => { snap = await pollOnce(); });
+  expect(lines).toEqual([]);
+  const want = { at: new Date(NOW).toISOString(), seven_day: 25, seven_day_resets_at: nextWeek() };
+  expect(snap).toEqual(want);
+  expect(readSnapshots().at(-1)).toEqual(want);
+  expect(readSnapshots().at(-1)!.seven_day).toBe(25);
 });
 
 test("a network failure logs one line", async () => {
@@ -203,8 +194,8 @@ test("a network failure logs one line", async () => {
 
 test("summary ignores a row dated after the clock, so a future-dated snapshot does not stick as the latest", () => {
   const now = Date.parse("2026-11-01T23:30:00Z");
-  const past = { at: "2026-11-01T23:20:00Z", five_hour: null, seven_day: 25, seven_day_resets_at: "2026-11-05T00:00:00Z" };
-  const future = { at: "2026-11-20T12:00:00Z", five_hour: null, seven_day: 18, seven_day_resets_at: "2026-11-05T00:00:00Z" };
+  const past = { at: "2026-11-01T23:20:00Z", seven_day: 25, seven_day_resets_at: "2026-11-05T00:00:00Z" };
+  const future = { at: "2026-11-20T12:00:00Z", seven_day: 18, seven_day_resets_at: "2026-11-05T00:00:00Z" };
   insert([past, future]);
   const s = summary(now);
   expect(s.now?.seven_day).toBe(25);
@@ -214,7 +205,7 @@ test("summary ignores a row dated after the clock, so a future-dated snapshot do
 test("currentFit reads Langfuse's hourly spend, and a snapshot dated after the clock does not skew it", async () => {
   const t0 = Math.floor((NOW - 10 * H) / H) * H;
   const reset = new Date(NOW + 5 * 24 * H).toISOString();
-  const good = Array.from({ length: 9 }, (_, h) => ({ at: new Date(t0 + h * H + 60_000).toISOString(), five_hour: 0, seven_day: 10 + h, seven_day_resets_at: reset }));
+  const good = Array.from({ length: 9 }, (_, h) => ({ at: new Date(t0 + h * H + 60_000).toISOString(), seven_day: 10 + h, seven_day_resets_at: reset }));
   const observations = Array.from({ length: 8 }, (_, h) => ({ id: `o${h}`, startTime: new Date(t0 + h * H + 5 * 60_000).toISOString(), providedModelName: "claude-opus-5-5", calculatedTotalCost: 4 }));
   const write = (rows: Parameters<typeof insert>[0]) => { conn().run("DELETE FROM usage"); insert(rows); };
   use(memory({ traces: [], observations }));
@@ -222,7 +213,7 @@ test("currentFit reads Langfuse's hourly spend, and a snapshot dated after the c
     write(good);
     const base = await currentFit();
     expect(base).toEqual({ fable: 0.25, rest: 0.25, pooled: true, hours: 8 });
-    const future = { at: new Date(NOW + 30 * H).toISOString(), five_hour: 0, seven_day: 1, seven_day_resets_at: new Date(NOW + 12 * 24 * H).toISOString() };
+    const future = { at: new Date(NOW + 30 * H).toISOString(), seven_day: 1, seven_day_resets_at: new Date(NOW + 12 * 24 * H).toISOString() };
     write([...good, future]);
     expect(await currentFit()).toEqual(base);
   } finally {

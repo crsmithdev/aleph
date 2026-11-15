@@ -13,7 +13,7 @@ import { openRouterSpend, viaOf } from "../jobs/lib/routing/models.ts";
 import { once, touch } from "../lib/sources.ts";
 import { credentialsFile, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
 
-export interface Snapshot { at: string; five_hour: number | null; seven_day: number; seven_day_resets_at: string | null }
+export interface Snapshot { at: string; seven_day: number; seven_day_resets_at: string | null }
 /** A job's or session's estimated share of the week: percent of the weekly limit, and whether the pooled rate priced it. */
 export interface Wk { pct: number; pooled: boolean }
 /** Percent of the week per Claude dollar, on Fable and on the other models; `pooled`: one rate for both. `hours`: the rows of the fit. */
@@ -74,10 +74,10 @@ async function fetchUsage(now = new Date()): Promise<Snapshot | null> {
   } catch (e) {
     return failed(e instanceof SyntaxError ? "response body is not valid JSON" : `network failure or timeout (${errName(e)})`);
   }
-  const five = b?.five_hour?.utilization, seven = b?.seven_day?.utilization;
+  const seven = b?.seven_day?.utilization;
   if (typeof seven !== "number") return failed("response body has no usage numbers");
   const resets = b.seven_day.resets_at;
-  return { at: now.toISOString(), five_hour: typeof five === "number" ? five : null, seven_day: seven, seven_day_resets_at: typeof resets === "string" ? resets : null };
+  return { at: now.toISOString(), seven_day: seven, seven_day_resets_at: typeof resets === "string" ? resets : null };
 }
 
 /** Polls once: adds the snapshot to the `usage` table; on any error records nothing. */
@@ -86,7 +86,7 @@ export async function pollOnce(): Promise<Snapshot | null> {
   lastFailed = snap === null;
   if (!snap) return null;
   try {
-    conn().query("INSERT INTO usage (time, five_hour, seven_day, seven_day_resets_at) VALUES (?, ?, ?, ?)").run(snap.at, snap.five_hour, snap.seven_day, snap.seven_day_resets_at);
+    conn().query("INSERT INTO usage (time, seven_day, seven_day_resets_at) VALUES (?, ?, ?)").run(snap.at, snap.seven_day, snap.seven_day_resets_at);
   } catch (e) {
     console.error(`ui/usage: cannot write the usage row: ${e instanceof Error ? e.message : "error"}`);
   }
@@ -105,7 +105,7 @@ export function startPoller(ms = POLL_MS, polled = () => {}): () => void {
 /** The snapshots dated at or before `clock`; a row dated after it cannot be a poll that has happened. */
 export function readSnapshots(clock = Date.now()): Snapshot[] {
   touch("usage");
-  const out = conn().query("SELECT time AS at, five_hour, seven_day, seven_day_resets_at FROM usage").all() as Snapshot[];
+  const out = conn().query("SELECT time AS at, seven_day, seven_day_resets_at FROM usage").all() as Snapshot[];
   return out.filter((s) => Date.parse(s.at) <= clock).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
