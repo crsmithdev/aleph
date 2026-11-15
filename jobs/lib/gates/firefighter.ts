@@ -138,7 +138,7 @@ function fileRed(r: Red, effects: store.Effects = defaultPorts): Filed | null {
   const log = r.source === "ci" ? ciFailure(r.log()) : tail(r.log());
   const what = r.source === "ci" ? `The failure, from \`gh run view --log-failed\` of ${r.url}` : `The last ${LOG_LINES} lines of the log, at most ${LOG_CHARS} characters`;
   const request = `${mark(r.commit)}\nFailed: ${SOURCE_NAME[r.source]}\n${r.line}\n\n${what}:\n\n\`\`\`\n${log || "(no log)"}\n\`\`\`\n`;
-  const w = store.writeFiling(repo, `firefighter: ${SOURCE_NAME[r.source]} red at ${r.commit.slice(0, 7)}`, "firefighter", effects, (doc, file): Filed | null => {
+  const w = store.writeFiling(repo, `firefighter: ${SOURCE_NAME[r.source]} red at ${r.commit.slice(0, 7)}`, "gate", effects, (doc, file): Filed | null => {
     if (doc.items.some((i) => holds(i, r.commit))) return null;
     const open = doc.items.filter((i) => issues.status(i) === "open" && isRedMain(i) && sameFails(i.request, log)).at(-1);
     const at = { repo: r.repo, commit: r.commit, source: r.source };
@@ -211,7 +211,7 @@ function rerun(r: Red, ports: Ports): boolean {
   if (r.source !== "ci" || !id || !repo || rerunIds().includes(id) || (store.reader().list(r.repo)?.items ?? []).some((i) => holds(i, r.commit)) || !early(r.log())) return false;
   if (!ports.gh(repo, ["run", "rerun", id, "--failed"]).ok) return false;
   putJson("state", "reran", [...rerunIds(), id]);
-  logEvent({ subject: "firefighter", action: "reran", object: r.repo, detail: `reran CI run ${id} of ${r.repo}: it failed before any test` });
+  logEvent({ subject: "gate", action: "reran", object: r.repo, detail: `reran CI run ${id} of ${r.repo}: it failed before any test` });
   return true;
 }
 
@@ -224,20 +224,20 @@ export interface Fired { filed: Filed[]; asked: string[] }
 export async function firefight(ports: Ports = defaultPorts, now = Date.now()): Promise<Fired | null> {
   if (gates({ only: ["pause"] })) return null;
   const filed: Filed[] = [];
-  for (const r of (() => { try { return reds(ports); } catch (e: any) { logEvent({ subject: "firefighter", action: "failed", object: "reds", detail: `failed: ${e?.message ?? e}` }); return []; } })()) {
+  for (const r of (() => { try { return reds(ports); } catch (e: any) { logEvent({ subject: "gate", action: "failed", object: "reds", detail: `failed: ${e?.message ?? e}` }); return []; } })()) {
     try {
       if (rerun(r, ports)) continue;
       const f = fileRed(r, ports);
       if (!f) continue;
       filed.push(f);
       // A new issue's `filed` event is the filing's own.
-      if ("noted" in f) logEvent({ subject: "firefighter", action: "red", object: `${f.repo}-${f.noted}`, detail: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
+      if ("noted" in f) logEvent({ subject: "gate", action: "red", object: `${f.repo}-${f.noted}`, detail: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
     } catch (e: any) {
-      logEvent({ subject: "firefighter", action: "failed", object: r.repo, detail: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}` });
+      logEvent({ subject: "gate", action: "failed", object: r.repo, detail: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}` });
     }
   }
-  try { for (const l of settleCi(ports)) logEvent({ subject: "firefighter", action: "changed", object: "ci", detail: l }); } catch (e: any) { logEvent({ subject: "firefighter", action: "failed", object: "ci", detail: `CI watch: failed: ${e?.message ?? e}` }); }
+  try { for (const l of settleCi(ports)) logEvent({ subject: "gate", action: "changed", object: "ci", detail: l }); } catch (e: any) { logEvent({ subject: "gate", action: "failed", object: "ci", detail: `CI watch: failed: ${e?.message ?? e}` }); }
   let asked: string[] = [];
-  try { asked = await askSlowLands(now); } catch (e: any) { logEvent({ subject: "firefighter", action: "failed", object: "lands", detail: `slow lands: failed: ${e?.message ?? e}` }); }
+  try { asked = await askSlowLands(now); } catch (e: any) { logEvent({ subject: "gate", action: "failed", object: "lands", detail: `slow lands: failed: ${e?.message ?? e}` }); }
   return { filed, asked };
 }

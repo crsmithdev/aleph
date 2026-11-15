@@ -108,8 +108,8 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
       const question = `${name}: its land run ${last.id} is live for ${minutes} minutes, and 99% of lands end within 20. Wait, kill and rerun, or drop?`;
       const ask = normalizeAsk({ question, options: SLOW_LAND_OPTIONS, recommended: "Wait", why: [`Run: ${name}, land, running since ${r.started}`] }, { kind: "input", reason: "rescue" })!;
       const why = askFromRun(last, repo, issueOf(runs), ask, question);
-      if (why) { logEvent({ subject: "firefighter", action: "failed", object: name, detail: `${name}: no rescue Ask for its slow land: ${why}` }); continue; }
-      logEvent({ subject: "firefighter", action: "waiting", object: name, detail: `${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director` });
+      if (why) { logEvent({ subject: "gate", action: "failed", object: name, detail: `${name}: no rescue Ask for its slow land: ${why}` }); continue; }
+      logEvent({ subject: "gate", action: "waiting", object: name, detail: `${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director` });
       out.push(name);
     } finally {
       release();
@@ -129,13 +129,13 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
     const release = await lock(`rescue-${first[0].run.repo}-${name}`, rescueWaitMs());
-    if (!release) { logEvent({ subject: "firefighter", action: "busy", object: name, detail: "the rescue lock stayed busy; the rescue is skipped" }); continue; }
+    if (!release) { logEvent({ subject: "gate", action: "busy", object: name, detail: "the rescue lock stayed busy; the rescue is skipped" }); continue; }
     try {
       // Read again under the lock: another dispatch may have acted on it.
       const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
       if (runs) await rescueJob(runs, act, land, checkMain);
     } catch (e: any) {
-      logEvent({ subject: "firefighter", action: "failed", object: name, detail: String(e?.message ?? e) });
+      logEvent({ subject: "gate", action: "failed", object: name, detail: String(e?.message ?? e) });
     } finally {
       release();
     }
@@ -166,11 +166,11 @@ async function releaseEdited(act: Rescue): Promise<void> {
     if (!release) continue;
     try {
       const why = await act.drop(r.name, "the goal's spec was edited after the run asked about it; the goal starts again on the new spec");
-      if (why) { logEvent({ subject: "firefighter", action: "failed", object: r.name, detail: `release after a spec edit failed (${why})` }); continue; }
+      if (why) { logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed (${why})` }); continue; }
       if (askOf(`issue.${issue}`)?.question === question) clearAsk(`issue.${issue}`);
       await tell(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
     } catch (e: any) {
-      logEvent({ subject: "firefighter", action: "failed", object: r.name, detail: `release after a spec edit failed: ${e?.message ?? e}` });
+      logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed: ${e?.message ?? e}` });
     } finally {
       release();
     }
@@ -244,9 +244,9 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   const say = (line: string) => tell(`${shortId(name)}: ${line}`);
   // Code writes no issue note: a rescue that closes the issue logs `done`, any other step logs `changed`.
   const record = (text: string, opts: { done?: boolean } = {}) => {
-    if (issue !== undefined && !opts.done) logEvent({ subject: "firefighter", action: "changed", object: keyOf("issue", Number(issue)), detail: text });
-    const why = issue === undefined ? "no issue" : opts.done ? close(repo, issue, text, "done", "firefighter") : null;
-    if (why) logEvent({ subject: "firefighter", action: "failed", object: name, detail: `no issue note: ${why}` });
+    if (issue !== undefined && !opts.done) logEvent({ subject: "gate", action: "changed", object: keyOf("issue", Number(issue)), detail: text });
+    const why = issue === undefined ? "no issue" : opts.done ? close(repo, issue, text, "done", "gate") : null;
+    if (why) logEvent({ subject: "gate", action: "failed", object: name, detail: `no issue note: ${why}` });
   };
   const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.state}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
   // A run that ended with a QUESTION about the spec: a rerun reads the same spec and asks again, so it waits for a spec edit.
@@ -263,10 +263,10 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
         await tell(`${repo.key}/${name}: always: Rerun; dropped, and the goal reruns`);
         return;
       }
-      logEvent({ subject: "firefighter", action: "failed", object: name, detail: `always Rerun failed (${why})` });
+      logEvent({ subject: "gate", action: "failed", object: name, detail: `always Rerun failed (${why})` });
     }
     const why = askFromRun(last, repo, issue, ask, question, spec);
-    if (why) logEvent({ subject: "firefighter", action: "failed", object: name, detail: `no issue note: ${why}` });
+    if (why) logEvent({ subject: "gate", action: "failed", object: name, detail: `no issue note: ${why}` });
     await say(`asks Chris: ${question}`);
   };
   const take = async (step: Step) => {
@@ -319,7 +319,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     // The worker says the issue is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
     // the issue with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
     const main: MainState = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
-    if (main.state === "unchecked" || main.state === "running") { logEvent({ subject: "firefighter", action: "waiting", object: name, detail: `the claim waits: ${main.line}` }); return; }
+    if (main.state === "unchecked" || main.state === "running") { logEvent({ subject: "gate", action: "waiting", object: name, detail: `the claim waits: ${main.line}` }); return; }
     // An issue a red CI started is met only when GitHub CI on main is green too: the checks here may pass where CI fails.
     const ci = issue === undefined ? undefined : readRecord(keyOf("issue", Number(issue)))?.ci;
     const ciRed = ci ? redCi().find((c) => c.repo === repo.key) : undefined;

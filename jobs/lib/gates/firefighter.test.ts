@@ -41,7 +41,7 @@ test("a red baseline files exactly one critical issue for its commit across two 
   expect(one!.filed).toEqual([{ repo: key, commit: A, source: "baseline", filed: 2 }]);
   expect((await firefight(ports()))!.filed).toEqual([]);
   // It files through writeFiling: one filed event, and the ports' `after` once.
-  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.subject, e.object])).toEqual([["firefighter", "issue.2"]]);
+  expect(readEvents().slice(before).filter((e) => e.action === "filed").map((e) => [e.subject, e.object])).toEqual([["gate", "issue.2"]]);
   expect(started).toEqual([`${key}-2`]);
   const [it] = reds();
   expect(reds().length).toBe(1);
@@ -233,9 +233,10 @@ test("a CI run that failed in setup is rerun once; failing again, it files an is
   const p: Ports = { gh: (_, args) => { asked.push(args); return { ok: true, out: args[1] === "rerun" ? "" : SETUP_LOG }; }, after: () => {} };
   await firefight(p);
   expect(asked.filter((a) => a[1] === "rerun")).toEqual([["run", "rerun", "777", "--failed"]]);
-  expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "firefighter", object: key, action: "reran" }));
+  expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "gate", object: key, action: "reran" }));
   expect(reds()).toEqual([]);
-  expect(readEvents().filter((e) => e.subject === "firefighter").map((e) => e.action)).toEqual(["reran"]);
+  expect(readEvents().filter((e) => e.subject === "gate").map((e) => e.action)).toEqual(["reran"]);
+  expect(readEvents().filter((e) => e.subject === "firefighter")).toEqual([]);
   await firefight(p);
   expect(asked.filter((a) => a[1] === "rerun").length).toBe(1);
   expect(reds().length).toBe(1);
@@ -281,11 +282,12 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
   expect(reds()[0].fm.closed_why).toContain(`past the failing commit ${failed.slice(0, 7)}`);
 });
 
-test("a step that fails is an event of the firefighter with the failure in its note", async () => {
+test("a step that fails is an event of the gate with the failure in its note", async () => {
   fresh([]);
   ciStep([loadRegistry()[key]], listing([{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }]));
   await firefight({ gh: () => { throw new Error("gh broke"); }, after: () => {} });
-  const events = readEvents().filter((e) => e.subject === "firefighter" && e.action === "failed");
+  const events = readEvents().filter((e) => e.subject === "gate" && e.action === "failed");
   expect(events.length).toBeGreaterThan(0);
   expect(events.some((e) => e.detail?.includes("gh broke"))).toBe(true);
+  expect(readEvents().filter((e) => e.subject === "firefighter")).toEqual([]);
 });

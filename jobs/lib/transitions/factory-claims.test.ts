@@ -153,6 +153,8 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
   expect(ask(id)).toBeNull();
   expect(notes(id)).toContain("always: Rerun");
   expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "rule", object: `issue.${id}`, action: "reran", detail: "dropped job.1" }));
+  expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "gate", object: `issue.${id}`, action: "changed", detail: "always: Rerun" }));
+  expect(readEvents().some((e) => e.subject === "firefighter")).toBe(false);
 });
 
 test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {

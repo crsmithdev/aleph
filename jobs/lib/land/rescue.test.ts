@@ -40,8 +40,9 @@ test("a rescue that throws gives a failed event whose note holds the failure", a
   writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
   await dispatchIssues(f.start, undefined, { ...f.rescue, drop: async () => { throw new Error("drop broke"); } });
   const e = readEvents().find((x) => x.action === "failed" && x.detail?.includes("drop broke"));
-  expect(e?.subject).toBe("firefighter");
+  expect(e?.subject).toBe("gate");
   expect(e?.detail).toContain("drop broke");
+  expect(readEvents().some((x) => x.subject === "firefighter")).toBe(false);
 });
 
 test("a run the API refused for credit waits: the rescue starts no rerun, recheck or drop, and writes no Ask", async () => {
