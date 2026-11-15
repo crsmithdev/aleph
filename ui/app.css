@@ -278,7 +278,6 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .cards.one { grid-template-columns: minmax(0, 1fr); }
 .cards > * { min-width: 0; margin: 0; }
 .ff-lines { list-style: none; margin: var(--sp-8) 0 0; padding: 0; display: grid; gap: var(--sp-4); font-size: var(--fs-sm); }
-.ff-lines li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ff-row details .ff-lines li { white-space: normal; }
 .list { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-12); }
 .list > * { min-width: 0; margin: 0; }
@@ -454,7 +453,6 @@ summary .peek { color: var(--muted); margin-left: var(--sp-6); }
 .list .facts { margin: 0; gap: var(--sp-2) var(--sp-14); font-size: var(--fs-sm); }
 ul.issues { list-style: none; margin: 0 0 var(--sp-18); padding: 0; border-top: 1px solid var(--rule-2); }
 ul.issues li { display: flex; align-items: baseline; gap: var(--sp-8); padding: var(--sp-2) 0; line-height: 1.45; border-bottom: 1px solid var(--rule-2); white-space: nowrap; font-size: var(--fs-sm); }
-ul.issues li .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 720px) { ul.issues li { overflow: hidden; } ul.issues li small.quiet { display: none; } }
 /* ---------- the shared table: lib.js cells (idLink, badge, chips, when) and sortHead go in it ----------
    Columns: id or name, title, state badge, project, labels, numbers, time last. The widest text column is td.wide. */
@@ -646,7 +644,6 @@ pre.stat b { color: var(--need); }
   #nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--ink); }
 }
 .grow { padding: var(--sp-4) 0; }
-.grow .reason { font-size: var(--fs-xs); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
 .results, .writes { list-style: none; margin: 0; padding: 0; }
 .results li, .writes li { padding: var(--sp-8) 0; border-bottom: 1px solid var(--rule-2); }
 .writes .tm { color: var(--muted); font-family: var(--mono); font-size: var(--fs-xs); }
@@ -856,7 +853,6 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .event-id { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .event-say { display: block; }
 .event-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
-.event-run { display: inline-block; max-width: 100%; vertical-align: bottom; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .event-body.alert, .event-body.error, .event-row.alert .event-body, .event-row.error .event-body, .event-row.stuck .event-body { color: var(--stuck); }
 .event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body, .event-row.need .event-body { color: var(--need); }
 .event-body.fine, .event-row.fine .event-body { color: var(--ink); }
@@ -1097,7 +1093,6 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .job-card.small .ih { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-6); min-width: 0; overflow: hidden; }
 .job-card.small .ih > .idl, .job-card.small .ih > .id { flex: none; white-space: nowrap; }
 .job-card.small .ih > .badge { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.job-card.small .ih > .kind-tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-card.small .ih > .part { flex: none; font: var(--fw-strong) var(--fs-xs) var(--mono); white-space: nowrap; }
 .job-card.small .ih > .num { flex: none; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 .issue-row > .t {
@@ -1117,7 +1112,6 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .issue-row details.cfold > .body { margin-top: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-8); }
 .issue-row details.cfold:not([open]) > .body { display: none; }
 /* A folded card is 3 lines: head row, title, one sentence; each is cut to one line. */
-.issue-row:has(> details.cfold) > .t, .issue-row:has(> details.cfold) > .problem, .issue-row:has(> details.cfold) > .situation { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 
 /* ---------- Gates page (views/gates.js) ---------- */
 .gates .ph .aside { margin-left: 0; font-size: var(--fs-sm); }
