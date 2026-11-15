@@ -2,7 +2,7 @@
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { actButton, fold, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, money, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, undecided, when, scope } from "../lib.js";
-import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, parseId, say as sayParts, targetOf, whoOf } from "../../lib/naming.ts";
+import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, parseId, parseKey, say as sayParts, targetOf, whoOf } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { share, flowOf, statusCards, usable } from "./speed.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./cards.js";
@@ -134,7 +134,7 @@ function feedRow({ tone, at, body, by, cls = "", bodyCls = "" }) {
 const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString(36);
 
 /** An event row as the rows below read it: its time in `at`, its subject in `by`, the issue or routine it is about in `subject`, its job in `on`, its detail in `note`, and the run facts of its job; `row` is the row itself. */
-const shaped = (r) => ({ row: r, at: r.time, by: r.subject, subject: targetOf(r), on: [r.object], note: r.detail, tier: r.tier ?? undefined, model: r.model ?? undefined, cost: r.cost ?? undefined, commit: r.commit_sha ?? undefined, action: r.action });
+const shaped = (r) => ({ row: r, at: r.time, by: r.subject, subject: targetOf(r), on: [r.object], note: r.detail, tier: r.tier ?? undefined, model: r.model ?? undefined, cost: r.cost ?? undefined, commit: r.commit_sha ?? undefined, action: r.action, project: r.project ?? undefined });
 
 /** An event's identity: the same event from the stream and from the state has the same key. */
 const eventKey = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
@@ -159,8 +159,8 @@ const saidHtml = (p, row) => {
 
 /** The holds: an issue's state while it waits, not an event, so the feed leaves them out. The ones that need Chris are alerts. */
 const WAITS = new Set(["waiting", "paused", "red", "after", "full", "gpu", "busy", "parent", "credit"]);
-/** An issue's subject (`aleph-2118`), not a routine's (`housekeeper`). */
-const isIssue = (subject) => Boolean(parseId(subject));
+/** An issue's subject (`aleph-2118`, `issue.2118`), not a routine's (`housekeeper`). */
+const isIssue = (subject) => Boolean(parseId(subject) || parseKey(subject)?.kind === "issue");
 /** The word for a run kind in a row's line: a build run implements the issue. */
 const role = (kind) => (kind === "build" ? "implement" : kind);
 /** The mark of a run's result in an older row. */
@@ -175,6 +175,9 @@ const routeText = (ev) => {
   const m = Object.fromEntries([...note.matchAll(/(\w+) (\S+)/g)].map(([, k, v]) => [k, v]));
   return m.tier ? `${m.tier} · ${shortModel(m.model?.split("/").pop())} · p ${m.p}` : note;
 };
+
+/** Whether an event is a routing choice: it names a tier, or is a start whose note is the model, "model default" when routing picked no tier. */
+const isRouting = (ev) => ev.tier || (ev.action === "started" && /^model /.test(ev.note ?? ""));
 
 /** What an event's own fields add to its row, as HTML: a routing event's choice. */
 const detail = (ev) => (ev.tier ? `→ ${esc(routeText(ev))}` : "");
@@ -203,17 +206,16 @@ function stateWord(ev) {
 const CHIP_TONES = { filed: "quiet", ended: "quiet", closed: "done", started: "run" };
 const chipTone = (word) => CHIP_TONES[word] ?? tone(word);
 
-/** An event's row: the time, then the issue's title, and under it the state, the ID and what the sentence adds. A routing event's is its tier and model. `more` is the count of older rows folded behind it; `run` is the kind of the event's run. */
-export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "", all = [ev]) {
+/** An event's row on one line: the time, the chip, the ID (the issue, else the run's job), then the title, or `said` for a routine run, or what the sentence adds; `+N` is the count of rows in its fold. The facts of its runs are in the fold. */
+export function eventRow(ev, titles = {}, more = 0, said = "") {
   const route = ev.action === "routed" && !ev.tier;
-  const title = route ? "" : titles[ev.subject] ?? "";
   const { lead, rest } = route ? { lead: "", rest: "" } : parts(ev);
-  const word = stateWord(ev), who = run && isIssue(ev.subject) ? `${esc(role(run))} ` : "";
-  const line = route ? esc(routeText(ev))
-    : `${tag(word, chipTone(word))} ${[lead && who + lead, rest !== ev.action && rest, detail(ev), run && isIssue(ev.subject) && jobFacts(ev, jobOf(ev), run, all)].filter(Boolean).join(" · ")}`;
-  return feedRow({ tone: chipTone(word), at: ev.at, by: ev.by, cls: route ? " sys" : "",
-    body: `${title ? `<span class="event-title" title="${esc(title)}">${esc(title)}</span>` : ""}` +
-      `<span class="event-say">${line}${more ? `<span class="event-more">+${more}</span>` : ""}</span>` });
+  const word = stateWord(ev), title = route ? "" : titles[ev.subject] ?? "", job = jobOf(ev);
+  const id = isIssue(ev.subject) ? idLink(shownId(ev.subject, ev.project), issueHref(ev.subject, ev.project)) : job ? idLink(shownId(job), jobHref(job)) : lead;
+  const text = said || title || (!isRouting(ev) && rest !== ev.action && rest);
+  const line = route ? `<span class="event-say">${esc(routeText(ev))}</span>`
+    : `<span class="event-line">${tag(word, chipTone(word))}${id}${text ? `<span class="event-title" title="${esc(title || text.replace(/<[^>]*>/g, ""))}">${title ? esc(title) : text}</span>` : "<span></span>"}${more ? `<span class="event-more">+${more}</span>` : ""}</span>`;
+  return feedRow({ tone: chipTone(word), at: ev.at, by: ev.by, cls: route ? " sys" : "", body: line });
 }
 
 /** The newest event of `all` (newest first) at or before `at` that `ok` takes. */
@@ -230,10 +232,11 @@ function jobFacts(ev, job, run, all) {
 }
 
 /** An older event as a label and a short text: a run's kind, then its linked job ID, its mark and its facts; or the chip word and what the sentence adds. `all` is the group's events, newest first. */
-function brief(ev, runs = {}, chats = {}, all = [ev]) {
+function brief(ev, runs = {}, all = [ev]) {
   const job = jobOf(ev), run = runs[job];
   const cut = (s) => esc(s ?? "");
   if (ev.action === "routed") return { ev, label: "routed", text: cut(routeText(ev)) };
+  if (ev.action === "stalled") return { ev, label: "", text: `stalled ${esc(shownId(ev.subject, ev.project))}${run ? ` · ${esc(role(run))}` : ""}` };
   const { lead, rest } = parts(ev), more = detail(ev) && ` ${detail(ev)}`;
   if (run) {
     const fx = jobFacts(ev, job, run, all);
@@ -245,19 +248,19 @@ function brief(ev, runs = {}, chats = {}, all = [ev]) {
   return { ev, label: stateWord(ev), text: said + more };
 }
 
-/** The older rows of a group, newest first: no start of a job with another event, nor of a run kind with a newer one, and no routing or start of an issue that a later job start draws as that job's facts. */
-function briefs([latest, ...earlier], runs = {}, chats = {}) {
-  const all = [latest, ...earlier];
+/** The rows of a group's fold, newest first: its events but a head with no run, which its row says; no start of a job with another event, nor of a run kind with a newer one, and no routing or start of an issue that a later job start draws as that job's facts. */
+function briefs(all, runs = {}) {
   const drawn = (ev) => (ev.action === "routed" || ev.action === "started") && all.some((e) => e.action === "running" && jobOf(e) && e.at >= ev.at);
   // The gate can log a job's start after its result, so any other event of the job hides the start.
-  const ended = new Set([latest, ...earlier].filter((ev) => ev.action !== "running").map(jobOf));
-  const seen = new Set([runs[jobOf(latest)]]), out = [];
-  for (const ev of earlier) {
+  const ended = new Set(all.filter((ev) => ev.action !== "running").map(jobOf));
+  const seen = new Set(), out = [];
+  for (const ev of all) {
     const job = jobOf(ev), run = runs[job];
+    if (ev === all[0] && !isRouting(ev) && !run) continue;
     if (ev.action === "running" && (ended.has(job) || (run && seen.has(run)))) continue;
     if (drawn(ev)) continue;
     seen.add(run);
-    out.push(brief(ev, runs, chats, all));
+    out.push(brief(ev, runs, all));
   }
   return out;
 }
@@ -266,19 +269,39 @@ function briefs([latest, ...earlier], runs = {}, chats = {}) {
 const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.action)}"><span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
   `<span class="brief-label" title="${esc(label)}">${esc(label)}</span><span class="brief-text" title="${text.replace(/<[^>]*>/g, "")}">${text}</span></div>`;
 
-/** Rows of `groups`, each `[id, events]` newest first: the newest event's row, with the older ones briefly behind it; `row(ev, more, events)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
-const grouped = (groups, row, runs, chats) => groups.map(([id, events]) => {
-  const inner = briefs(events, runs, chats).map(briefRow);
-  return { at: events[0].at, key: `event ${hash(eventKey(events[0]))}`, html: inner.length ? fold(row(events[0], inner.length, events), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(events[0], 0, events) };
+/** Rows of `groups`, each `[id, events]` newest first: the newest event's row, but a stall, with the events briefly behind it, the head's run among them; `row(head, more)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
+const grouped = (groups, row, runs) => groups.map(([id, events]) => {
+  const head = events.find((e) => e.action !== "stalled") ?? events[0];
+  const inner = briefs([head, ...events.filter((e) => e !== head)], runs).map(briefRow);
+  return { at: head.at, key: `event ${hash(eventKey(head))}`, html: inner.length ? fold(row(head, inner.length), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(head, 0) };
 });
 
-/** The rows of the issue events: one per subject, its newest event, with its older events behind an expand control. */
-function issueRows(events, titles = {}, runs = {}) {
-  const by = new Map();
-  // An issue's runs share its row; any other subject (the housekeeper) is one row per run, so a row's older events belong to one run.
-  const groupOf = (ev) => (isIssue(ev.subject) || !jobOf(ev) ? ev.subject : `${ev.subject}:${jobOf(ev)}`);
-  for (const ev of events) if (!WAITS.has(ev.action)) by.set(groupOf(ev), [...(by.get(groupOf(ev)) ?? []), ev]);
-  return grouped([...by].map(([k, v]) => [`issue:${k}`, v]), (ev, more, all) => eventRow(ev, titles, {}, more, runs[jobOf(ev)], all), runs);
+/** A routine run that ended and changed nothing has no row; one still running, or one that failed, has. */
+const FAILED = ["failed", "returned", "dropped"];
+
+/**
+ * The rows of the issue and routine events. An issue's row is one per attempt (`attempts`: the first job of a job's `prev` chain), its older events in the fold;
+ * an event with no job takes the attempt of the one before it, else of the first. A routine's run is one row that says "N changes", each change a line in its fold.
+ */
+function eventRows(events, titles = {}, runs = {}, attempts = {}) {
+  const issues = new Map(), routine = new Map(), first = new Map(), add = (m, k, ev) => m.set(k, [ev, ...(m.get(k) ?? [])]);
+  const live = [...events].reverse().filter((ev) => !WAITS.has(ev.action)), attemptOf = (ev) => attempts[jobOf(ev)] ?? "";
+  for (const ev of live) if (isIssue(ev.subject) && attemptOf(ev) && !first.has(ev.subject)) first.set(ev.subject, attemptOf(ev));
+  const runIds = new Set(live.filter((ev) => !isIssue(ev.subject) && jobOf(ev)).map(jobOf)), now = new Map(first);
+  for (const ev of live) {
+    if (ev.action === "changed" && runIds.has(ev.by)) add(routine, ev.by, ev);
+    else if (isIssue(ev.subject)) { now.set(ev.subject, attemptOf(ev) || now.get(ev.subject) || ""); add(issues, `${ev.subject}${now.get(ev.subject) && `:${now.get(ev.subject)}`}`, ev); }
+    else if (jobOf(ev)) add(routine, jobOf(ev), ev);
+    else add(issues, ev.subject, ev);
+  }
+  const runRows = [...routine].flatMap(([job, evs]) => {
+    const head = evs.find((e) => e.action !== "changed") ?? evs[0], changes = evs.filter((e) => e.action === "changed");
+    if (!changes.length && !FAILED.includes(head.action) && !evs.every((e) => e.action === "running")) return [];
+    const lines = [...changes].reverse().map((c) => briefRow({ ev: c, label: stateWord(c), text: `${idLink(shownId(c.subject, c.project), issueHref(c.subject, c.project))}${c.note ? ` ${esc(c.note)}` : ""}` }));
+    const row = eventRow(head, titles, changes.length, changes.length ? plural(changes.length, "change") : "");
+    return [{ at: head.at, key: `event ${hash(eventKey(head))}`, html: lines.length ? fold(row, `<div class="herald-older">${lines.join("")}</div>`, { cls: "herald-group", id: `issue:${head.subject}:${job}` }) : row }];
+  });
+  return [...grouped([...issues].map(([k, v]) => [`issue:${k}`, v]), (ev, more) => eventRow(ev, titles, more), runs), ...runRows];
 }
 
 /** A status text without the "health: " of each health line, which older history entries carry. */
@@ -328,7 +351,10 @@ export function renderHerald(s) {
   for (const r of [...status].reverse()) { const n = (seen.get(r.key) ?? 0) + 1; seen.set(r.key, n); r.key += ` ${n}`; }
   const live = errors ? status.shift() : null;
   const events = heraldEvents(s);
-  const rows = [...status, ...issueRows(events, s.herald?.titles, s.herald?.runs)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  // A chat conversation is one row, read from its session: its last turn's time, its first prompt.
+  const chats = (s.herald?.chats ?? []).map((c) => ({ at: c.last, key: `chat ${c.id}`, html: feedRow({ tone: "quiet", at: c.last, by: "claude",
+    body: `<span class="event-line">${tag("chat", "quiet")}${idLink(c.id.slice(0, 8))}<span class="event-title" title="${esc(c.title)}">${esc(c.title)}</span><span></span></span>` }) }));
+  const rows = [...status, ...chats, ...eventRows(events, s.herald?.titles, s.herald?.runs, s.herald?.attempts)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = (live ? [live, ...rows] : rows).map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}"`)).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.

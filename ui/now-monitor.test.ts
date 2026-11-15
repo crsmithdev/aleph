@@ -9,6 +9,7 @@ import { heraldRuns } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
 import { seed } from "../jobs/job.testkit.ts";
+import { setCodes } from "../lib/naming.ts";
 
 const calm = { ...withFactory({}), asks: [], stuck: [] };
 test("the Pipeline card shows the 6 stages in order, each a ring of runs per issue in its health tone with its p90 time, and no other role", () => {
@@ -137,15 +138,11 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   // The fixture's status now (12:00) is newest, then the event at 11:30, then the status at 11:00.
   expect(order).toEqual(["alert", "run", "fine"]);
   const line = view.eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
-  // Two columns: the time, then the title, the sentence with its job linked and its detail.
+  // Two columns: the time, then one line: the chip, the issue linked, the title.
   expect(line).toContain('<div class="event-row stuck" data-by="gate"><span class="event-time">');
-  expect(line).toContain('<span class="event-say"><span class="badge stuck">failed</span> <a class="idl" href="#/jobs/aleph-5%231">aleph-5#1</a> · past its time box</span>');
-  expect(line).toContain('<span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span><span class="event-say">');
-  expect(line.indexOf("event-title")).toBeLessThan(line.indexOf("event-say"));
-  // A row with no title keeps the sentence as its only line.
-  const bare = view.eventRow(merged[0], {});
-  expect(bare).not.toContain("event-title");
-  expect(bare).toContain('<span class="event-say">');
+  expect(line).toContain('<span class="event-line"><span class="badge stuck">failed</span><a class="idl" href="#/issues/aleph/5">aleph-5</a><span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span></span>');
+  // A row with no title takes what its sentence adds in the title's place.
+  expect(view.eventRow(merged[0], {})).toContain('<span class="event-title" title="past its time box">past its time box</span>');
   expect(line).not.toContain("event-tone");
 });
 
@@ -160,7 +157,7 @@ test("an event from the stream goes into the Herald at once", async () => {
   let html = "";
   const herald = { querySelectorAll: () => [], set outerHTML(v: string) { html = v; } };
   view.view.event({ querySelector: (q: string) => (q === "#herald" ? herald : null) }, row({ at: "2026-11-09T11:59:00Z", by: "gate", subject: "aleph-6", action: "landed", on: ["aleph-6#2"] }));
-  expect(html).toContain('<span class="event-say"><span class="badge done">landed</span> <a class="idl" href="#/jobs/aleph-6%232">aleph-6#2</a></span>');
+  expect(html).toContain('<span class="badge done">landed</span><a class="idl" href="#/issues/aleph/6">aleph-6</a>');
 });
 
 test("a Herald group keeps its open or closed state when a newer event arrives and the rows move, through the stream path", async () => {
@@ -196,7 +193,7 @@ test("the Herald's older rows under an issue are labelled by their run's kind wi
     ];
     const runs = heraldRuns(events, allRuns());
     expect(runs).toEqual({ [j1]: "intake", [j2]: "build" });
-    const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the footer" }, chats: {}, runs } });
+    const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the footer" }, chats: [], runs } });
     const [top, older] = h.split('<div class="herald-older">');
     expect(top).toContain('<span class="event-title" title="Fix the footer">Fix the footer</span>');
     expect(top).toContain('<span class="badge done">closed</span>');
@@ -212,25 +209,24 @@ test("the Herald's older rows under an issue are labelled by their run's kind wi
 
 test("the Herald draws a routing event as a system row: its choice, with no title", () => {
   const events = [row({ at: "2026-11-09T10:00:00Z", by: "rule", subject: "aleph-9", action: "routed", note: "worker-medium by classifier jev-1.13" })];
-  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the thing" }, chats: {}, runs: {} } });
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: { "aleph-9": "Fix the thing" }, chats: [], runs: {} } });
   expect(h).toContain("worker-medium by classifier jev-1.13");
   expect(h).not.toContain("Fix the thing");
   expect(h).toMatch(/class="event-row quiet sys" data-by="rule"/);
 });
 
-test("the Herald folds a job subject per run and an issue across its runs", () => {
+test("the Herald folds an issue across its runs, and draws no row for a routine run that ended with no change", () => {
   const e = (at: string, subject: string, action: string, job: string) => (row({ at, by: "gate", subject, action, on: [job] }));
   const events = [
     e("2026-11-09T09:00:00Z", "housekeeper", "running", "housekeeper#1"), e("2026-11-09T09:10:00Z", "housekeeper", "done", "housekeeper#1"),
     e("2026-11-09T10:00:00Z", "housekeeper", "running", "housekeeper#2"), e("2026-11-09T10:10:00Z", "housekeeper", "done", "housekeeper#2"),
     e("2026-11-09T11:00:00Z", "aleph-9", "done", "aleph-9#1"), e("2026-11-09T12:00:00Z", "aleph-9", "done", "aleph-9#2"),
   ];
-  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: {} } });
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: {} } });
   expect(h).toContain('data-fold="issue:aleph-9"');
   expect(h).not.toContain('data-fold="issue:housekeeper"');
-  // Each run is its own row: the two finished runs stay apart, and neither hides the other's events. A routine's run ends, quiet.
-  expect(h.match(/<span class="badge quiet">ended<\/span>/g)).toHaveLength(2);
-  expect(h.match(/<div [^>]*class="event-row quiet"[^>]*>(?:(?!<\/div>).)*>housekeeper#\d/g)).toHaveLength(2);
+  // A routine's run that ended with no change draws no row.
+  expect(h).not.toContain("housekeeper#");
 });
 
 test("the Herald hides an older start of a run with a newer event, leaves out the holds, and draws a routing event as tier, model and p", () => {
@@ -241,9 +237,10 @@ test("the Herald hides an older start of a run with a newer event, leaves out th
     row({ at: "2026-11-09T11:00:00Z", by: "gate", subject: "aleph-9", action: "after", on: ["aleph-7"] }),
     row({ at: "2026-11-09T10:00:00Z", by: "rule", subject: "route", action: "routed", note: "cost 0.00004 model typesafe/jev-1.13-20260917 tier worker-medium p 0.83" }),
   ];
-  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: { "aleph-9#2": "build" } } });
-  expect(h).toMatch(/<span class="badge done">passed<\/span> implement <a[^>]*>aleph-9#2<\/a>/);
-  expect(h).not.toContain("herald-older");
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: { "aleph-9#2": "build" } } });
+  expect(h).toMatch(/<span class="badge done">passed<\/span><a[^>]*>aleph-9<\/a>/);
+  // The fold has the build's line only: its start is hidden by its result, and the routing is drawn as the build's facts.
+  expect(h.match(/<div class="event-brief/g)).toHaveLength(1);
   expect(h).not.toContain("aleph-8");
   expect(h).toMatch(/<div data-key="[^"]*" class="event-row quiet sys" data-by="rule">/);
   expect(h).toContain("worker-medium · jev-1.13 · p 0.83");
@@ -264,7 +261,7 @@ const a2136 = [
 ];
 const a2136Runs = { "a2136#1": "intake", "a2136#2": "build", "a2136#3": "land" };
 const olderText = (events: object[]) => {
-  const h = view.renderHerald({ ...calm, now: "2026-11-13T20:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: a2136Runs } });
+  const h = view.renderHerald({ ...calm, now: "2026-11-13T20:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: a2136Runs } });
   return h.split('<div class="herald-older">')[1].split("</details>")[0].split('<div class="event-brief').slice(1)
     .map((r: string) => r.match(/title="([^"]*)">[^<]*<\/span><span class="brief-text" title="([^"]*)"/)!.slice(1).join(" | "));
 };
@@ -272,6 +269,7 @@ const olderText = (events: object[]) => {
 
 test("the Herald's older rows give each job its facts and fold the routing and the start into the implement row", () => {
   expect(olderText(a2136)).toEqual([
+    "land | a2136#3 ✓ 08127b8 · 20s",
     "implement | a2136#2 ✓ worker-low · haiku · 3m 42s · $0.16",
     "closed | by Claude Code",
     "intake | a2136#1 ✓ 34s · $0.29",
@@ -288,7 +286,7 @@ const twoBuilds = (tiers: (string | undefined)[]) => tiers.flatMap((tier, i) => 
     row({ at: at(1), by: "rule", subject: "aleph-7", action: "started", note: `model ${i ? "opus" : "haiku"}`, tier }),
   ];
 }).reverse();
-const seven = (tiers: (string | undefined)[]) => view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events: twoBuilds(tiers), titles: {}, chats: {}, runs: { "a7#1": "build", "a7#2": "build" } } });
+const seven = (tiers: (string | undefined)[]) => view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events: twoBuilds(tiers), titles: {}, chats: [], runs: { "a7#1": "build", "a7#2": "build" } } });
 
 test("the Herald gives each build of an issue the tier of its own start", () => {
   const h = seven(["worker-low", "opus"]);
@@ -300,17 +298,114 @@ test("the Herald gives each build of an issue the tier of its own start", () => 
 
 test("the Herald's build facts have no tier when its start routed none, not the tier of the issue's earlier build, and keep the model, commit, time and cost", () => {
   const events = twoBuilds(["worker-low", undefined]).map((e: any) => e.action === "passed" && e.time.startsWith("2026-11-13T11") ? { ...e, commit_sha: "0123456789abcdef" } : e);
-  const h = view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: { "a7#1": "build", "a7#2": "build" } } });
+  const h = view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: { "a7#1": "build", "a7#2": "build" } } });
   expect(h).toContain("a7#1 ✓ worker-low · haiku · 5m 00s · $0.50");
-  expect(h.match(/[^<>]*0123456[^<>]*/g)).toEqual([" · opus · 0123456 · 5m 00s · $0.50"]);
+  expect(h).toContain("a7#2 ✓ opus · 0123456 · 5m 00s · $0.50");
 });
 
 test("the Herald's job row takes its time from the job's first start, not one the gate logs after its result", () => {
   const again = [row({ at: "2026-11-13T19:54:50.000Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#2"] }), ...a2136];
-  expect(olderText(again)[0]).toBe("implement | a2136#2 ✓ worker-low · haiku · 3m 42s · $0.16");
+  expect(olderText(again)[1]).toBe("implement | a2136#2 ✓ worker-low · haiku · 3m 42s · $0.16");
 });
 
-test("the Herald's head row of a land gives its commit and its time", () => {
-  const h = view.renderHerald({ ...calm, now: "2026-11-13T20:00:00Z", herald: { history: [], events: a2136, titles: {}, chats: {}, runs: a2136Runs } });
-  expect(h).toMatch(/<span class="badge done">landed<\/span> land <a[^>]*>a2136#3<\/a> · 08127b8 · 20s/);
+test("the Herald's row of an attempt holds no tier, model, cost or commit in its head, and its fold holds them", () => {
+  const attempts = { "job.1": "job.1", "job.2": "job.1", "job.3": "job.1", "job.4": "job.1" };
+  const events = [
+    row({ at: "2026-11-13T10:50:00Z", by: "gate", subject: "aleph-7", action: "landed", on: ["job.4"], commit: "0123456789abcdef" }),
+    row({ at: "2026-11-13T10:40:00Z", by: "gate", subject: "aleph-7", action: "passed", on: ["job.3"], cost: 0.1 }),
+    row({ at: "2026-11-13T10:20:00Z", by: "gate", subject: "aleph-7", action: "passed", on: ["job.2"], cost: 0.5 }),
+    row({ at: "2026-11-13T10:10:00Z", by: "gate", subject: "aleph-7", action: "running", on: ["job.2"] }),
+    row({ at: "2026-11-13T10:09:00Z", by: "rule", subject: "aleph-7", action: "started", note: "model haiku", tier: "worker-low" }),
+    row({ at: "2026-11-13T10:05:00Z", by: "gate", subject: "aleph-7", action: "done", on: ["job.1"], cost: 0.2 }),
+    row({ at: "2026-11-13T10:00:00Z", by: "gate", subject: "aleph-7", action: "running", on: ["job.1"] }),
+  ];
+  const h = view.renderHerald({ ...calm, now: "2026-11-13T11:00:00Z", herald: { history: [], events, titles: { "aleph-7": "Fix it" }, chats: [], runs: { "job.1": "intake", "job.2": "build", "job.3": "review", "job.4": "land" }, attempts } });
+  // One row for the attempt: its four runs are one group.
+  expect(h.match(/<details/g)).toHaveLength(1);
+  const [head, fold] = h.split('<div class="herald-older">');
+  const line = head.slice(head.lastIndexOf('<div class="event-row'));
+  expect(line).toContain('<span class="event-line"><span class="badge done">landed</span><a class="idl" href="#/issues/aleph/7">aleph-7</a><span class="event-title" title="Fix it">Fix it</span><span class="event-more">+4</span></span>');
+  for (const fact of ["worker-low", "haiku", "$0.50", "0123456"]) { expect(line).not.toContain(fact); expect(fold).toContain(fact); }
+});
+
+test("an attempt whose newest event is its routed start, with a tier or without, keeps the tier, model and cost out of the head and draws the start in its fold", () => {
+  const routed = [
+    [{ note: "model haiku", tier: "worker-low", cost: 0.001 }, ["worker-low", "haiku", "0.001"], "model haiku → worker-low · $0.001"],
+    [{ note: "model default" }, ["model default"], "model default"],
+  ] as const;
+  for (const [start, facts, line] of routed) {
+    const events = [
+      row({ at: "2026-11-15T12:02:00Z", by: "rule", subject: "aleph-72", action: "started", ...start }),
+      row({ at: "2026-11-15T12:01:00Z", by: "gate", subject: "aleph-72", action: "done", on: ["job.1"] }),
+      row({ at: "2026-11-15T12:00:00Z", by: "gate", subject: "aleph-72", action: "running", on: ["job.1"] }),
+    ];
+    const h = view.renderHerald({ ...calm, now: "2026-11-15T13:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: { "job.1": "intake" }, attempts: { "job.1": "job.1" } } });
+    const [head, fold] = h.split('<div class="herald-older">');
+    expect(head).toContain('<span class="badge run">started</span>');
+    for (const fact of facts) expect(head).not.toContain(fact);
+    expect(fold).toContain(line);
+  }
+});
+
+test("a second attempt of an issue, a job whose chain starts elsewhere, is a row of its own", () => {
+  const events = [
+    row({ at: "2026-11-13T12:00:00Z", by: "gate", subject: "aleph-7", action: "done", on: ["job.9"] }),
+    row({ at: "2026-11-13T10:00:00Z", by: "gate", subject: "aleph-7", action: "done", on: ["job.1"] }),
+    row({ at: "2026-11-13T09:00:00Z", by: "claude", subject: "aleph-7", action: "filed" }),
+  ];
+  const h = view.renderHerald({ ...calm, now: "2026-11-13T13:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: { "job.1": "intake", "job.9": "intake" }, attempts: { "job.1": "job.1", "job.9": "job.9" } } });
+  expect(h.match(/<details/g)).toHaveLength(2);
+  // An event with no job, the filing, goes with the first attempt.
+  const [newer, older] = h.split("</details>");
+  expect(newer).not.toContain(">filed<");
+  expect(older).toContain(">filed<");
+});
+
+const hk = (at: string, action: string, on?: string[]) => row({ at, by: "gate", subject: "housekeeper", action, on: on ?? ["job.57"] });
+const changed = (at: string, issue: string, why: string) => row({ at, by: "job.57", subject: issue, action: "changed", note: why });
+const feed = (events: object[], extra: object = {}) => view.renderHerald({ ...calm, now: "2026-11-15T14:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: {}, ...extra } });
+
+test("a housekeeper run with 2 changes is one row reading 2 changes, with a line for each in its fold, in the order they ran; an ended run with none has no row", () => {
+  const h = feed([
+    hk("2026-11-15T13:10:00Z", "done"), changed("2026-11-15T13:06:00Z", "aleph-8", "later"), changed("2026-11-15T13:05:00Z", "aleph-5", "the land did it"), hk("2026-11-15T13:00:00Z", "running"),
+    hk("2026-11-15T12:10:00Z", "done", ["job.56"]), hk("2026-11-15T12:00:00Z", "running", ["job.56"]),
+  ]);
+  expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
+  expect(h).toContain('<span class="badge quiet">ended</span><a class="idl" href="#/jobs/job.57">j-00057</a><span class="event-title" title="2 changes">2 changes</span><span class="event-more">+2</span>');
+  const lines = h.split('<div class="herald-older">')[1].split('<div class="event-brief').slice(1);
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toContain("aleph-5");
+  expect(lines[0]).toContain("the land did it");
+  expect(lines[1]).toContain("aleph-8");
+  expect(h).not.toContain("j-00056");
+});
+
+test("a housekeeper job whose only event is running draws one row that links its job", () => {
+  const h = feed([hk("2026-11-15T13:00:00Z", "running")]);
+  expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
+  expect(h).toContain('<span class="badge run">started</span><a class="idl" href="#/jobs/job.57">j-00057</a>');
+  expect(h).not.toContain("<details");
+});
+
+test("a stalled event on an intake job of an issue folds into the issue's row as stalled and the issue and the run, not a row of its own", () => {
+  setCodes({ aleph: "a" });
+  try {
+    const at = (m: number) => `2026-11-15T13:${m}:00Z`;
+    const events = [
+      { ...row({ at: at(30), by: "rule", subject: "issue.2072", action: "stalled", on: ["job.9"] }), project: "aleph" },
+      { ...row({ at: at(10), by: "gate", subject: "issue.2072", action: "running", on: ["job.9"] }), project: "aleph" },
+    ];
+    const h = feed(events, { runs: { "job.9": "intake" }, titles: { "issue.2072": "Fix ingest" } });
+    expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
+    // The head is the start; the stall is in the fold.
+    expect(h).toContain('<span class="badge run">started</span><a class="idl" href="#/issues/aleph/2072">a-02072</a>');
+    expect(h.split('<div class="herald-older">')[1]).toContain('>stalled a-02072 · intake</span>');
+  } finally { setCodes({}); }
+});
+
+test("two chat turns of one session are one feed row, titled by its first prompt", () => {
+  const chat = { id: "5a5a4e9b-88d1-476f-aeb2-e20af1a9fae6", start: "2026-11-15T12:00:00Z", last: "2026-11-15T12:30:00Z", title: "why is the build red" };
+  const h = feed([], { chats: [chat] });
+  expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
+  expect(h).toContain('<span class="badge quiet">chat</span><span class="idp">5a5a4e9b</span><span class="event-title" title="why is the build red">why is the build red</span>');
 });

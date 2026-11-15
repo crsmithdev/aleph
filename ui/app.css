@@ -845,7 +845,10 @@ details.herald-group > summary { display: flex; align-items: baseline; padding: 
 details.herald-group > summary::before { content: none; }
 details.herald-group[open] .event-more { color: var(--ink); background: var(--rule); }
 .herald-group > summary .event-row { flex: 1; min-width: 0; }
-.herald-older { margin: 0 0 var(--sp-4) var(--sp-12); padding: var(--sp-2) var(--sp-8); background: var(--sunk); border-radius: var(--r-card); }
+/* A fold hangs on a 2px guide line under the time column, its sub-rows in the head row's columns. */
+.herald-older { margin: 0 0 var(--sp-4) var(--sp-12); padding: var(--sp-2) 0 var(--sp-2) var(--sp-8); border-left: 2px solid var(--rule); }
+/* A head row is one line: the chip, the ID, the title, +N. */
+.event-line { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: var(--sp-8); align-items: baseline; }
 .event-more { margin-left: var(--sp-8); font-size: var(--fs-2xs); font-weight: var(--fw-strong); color: var(--muted); padding: 0 var(--sp-6); border-radius: var(--r-tag); background: var(--sunk); }
 /* The event of an alert that still holds: tinted and ringed like an Ask card, as the Herald pins no copy of it. */
 .event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-6) var(--sp-8); margin-bottom: var(--sp-4); }
