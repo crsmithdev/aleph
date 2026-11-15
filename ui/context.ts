@@ -71,6 +71,41 @@ function weigh(v: any): number {
   return images(v).reduce((n, b) => n + imageTokens(b.source.data) * 4 - b.source.data.length, JSON.stringify(v ?? "").length);
 }
 
+/** The chars of the strings in `v` and in its arrays, at any depth. */
+const chars = (v: any): number => typeof v === "string" ? v.length : Array.isArray(v) ? v.reduce((n, x) => n + chars(x), 0) : 0;
+/**
+ * Per attachment type, the chars of the record fields Claude Code (2.1.325) renders into the model's context, its
+ * own wording aside: a skill_listing's names and digests and a hook's stdout and stderr never reach it, and a
+ * hook_success reaches it only from these three events. A type absent here, whose text is mostly Claude Code's
+ * own wording (instructions, environment, date, auto_mode), weighs its whole record.
+ */
+const SHOWN: Record<string, (a: any) => number> = {
+  skill_listing: (a) => chars(a.content),
+  hook_success: (a) => ["SessionStart", "UserPromptSubmit", "UserPromptExpansion"].includes(a.hookEvent) ? chars(a.content) : 0,
+  hook_additional_context: (a) => chars(a.content),
+  hook_blocking_error: (a) => chars([a.blockingError?.command, a.blockingError?.blockingError]),
+  async_hook_response: (a) => chars([a.response?.systemMessage, a.response?.hookSpecificOutput?.additionalContext]),
+  task_reminder: (a) => chars((a.content ?? []).map((t: any) => [String(t.id), t.status, t.subject])),
+  todo_reminder: (a) => chars((a.content ?? []).map((t: any) => [t.status, t.content])),
+  file: (a) => typeof a.content?.file?.content === "string" ? a.content.file.content.length : weigh(a),
+  edited_text_file: (a) => chars(a.snippet),
+  read_truncation_notice: (a) => chars(a.banner),
+  total_tokens_reminder: (a) => chars(a.text),
+  silent_turn_reminder: (a) => chars(a.text),
+  session_context: (a) => chars(Object.values(a.context ?? {})),
+  deferred_tools_delta: (a) => chars([a.addedLines, a.removedNames]),
+  agent_listing_delta: (a) => chars([a.addedLines, a.removedTypes]),
+  mcp_instructions_delta: (a) => chars([a.addedBlocks, a.removedNames]),
+  ...Object.fromEntries([
+    "credential_org", "deferred_tools_record", "command_permissions", "hook_non_blocking_error", "hook_system_message",
+    "hook_cancelled", "hook_error_during_execution", "hook_permission_decision", "structured_output", "max_turns_reached",
+    "context_efficiency", "attention_budget", "already_read_file", "withheld_memory", "goals", "goal_status",
+  ].map((t) => [t, () => 0])),
+};
+
+/** An attachment's chars as the model sees them: the fields Claude Code renders for its type, else the whole record. */
+const rendered = (a: any): number => (SHOWN[a.type] ?? weigh)(a);
+
 const KEYS = ["file_path", "command", "pattern", "url", "query", "description", "skill", "prompt"];
 /** The one input field that names a call (a path, a command, a URL), else the input as JSON, cut to 120 chars. */
 function brief(input: any): string {
@@ -131,8 +166,8 @@ function scan(jsonl: string): Scan {
       if (out.length) note("hook UserPromptSubmit", text.length, 1, offer(text));
       else { memory += text; add(hooks, a.hookName ?? "?", text.length); }
     } else if (a) {
-      if (out.length) note("attachment", weigh(a), 1, a.type ?? "?");
-      else add(before, a.type ?? "?", weigh(a));
+      if (out.length) note("attachment", rendered(a), 1, a.type ?? "?");
+      else add(before, a.type ?? "?", rendered(a));
     } else if (o.type === "user" && !o.isSidechain) {
       const c = o.message?.content;
       const results = Array.isArray(c) ? c.filter((b: any) => b.type === "tool_result") : [];

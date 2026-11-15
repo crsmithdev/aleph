@@ -73,6 +73,32 @@ test("a later attachment is its own part, weighed by its chars beside the other 
   expect(r[3].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[3].fill);
 });
 
+test("a later skill_listing weighs the text the model gets, without its names and digests", () => {
+  // Claude Code renders the listing's content alone; the 40 names and 40 digests beside it never reach the model
+  const names = Array.from({ length: 40 }, (_, i) => `skill-${i}`);
+  const listing = { attachment: { type: "skill_listing", content: "c".repeat(100), names, digests: names.map(() => "d".repeat(16)) } };
+  const r = parse([...lines, { type: "user", message: { content: "u".repeat(200) } }, listing, req("r4", 5, 1800, 500)].map((o) => JSON.stringify(o)).join("\n")).requests;
+  // 100 chars of content beside the 202 of the message, not the 1,400 of the whole record
+  expect(r[3].parts.slice(-1)).toEqual([{ name: "Attachments · 1", rec: "attachment", tokens: 164, how: "est" }]);
+  expect(r[3].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[3].fill);
+});
+
+test("a later hook_success of an event Claude Code does not render weighs nothing beside a message", () => {
+  // Claude Code shows the model a hook_success only from SessionStart, UserPromptSubmit and UserPromptExpansion
+  const hook = { attachment: { type: "hook_success", hookName: "PostToolUse:Bash", hookEvent: "PostToolUse", content: "c".repeat(100), stdout: "o".repeat(300), stderr: "" } };
+  const r = parse([...lines, { type: "user", message: { content: "u".repeat(200) } }, hook, req("r4", 5, 1800, 500)].map((o) => JSON.stringify(o)).join("\n")).requests;
+  expect(r[3].parts.slice(-1)).toEqual([{ name: "Attachments · 1", rec: "attachment", tokens: 0, how: "est" }]);
+  expect(r[3].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[3].fill);
+});
+
+test("a later file attachment weighs the file's text, not its record", () => {
+  const file = { attachment: { type: "file", filename: "/a/".padEnd(300, "f"), displayPath: "d".repeat(300), content: { type: "text", file: { filePath: "/a/".padEnd(300, "f"), content: "c".repeat(202) } } } };
+  const r = parse([...lines, { type: "user", message: { content: "u".repeat(200) } }, file, req("r4", 5, 1800, 500)].map((o) => JSON.stringify(o)).join("\n")).requests;
+  // 202 chars of text beside the 202 of the message: half the 493 the gap holds past the turn
+  expect(r[3].parts.slice(-1)).toEqual([{ name: "Attachments · 1", rec: "attachment", tokens: 247, how: "est" }]);
+  expect(r[3].parts.reduce((s, p) => s + p.tokens, 0)).toBe(r[3].fill);
+});
+
 test("a gap of one later attachment gives the assistant turn the output and the rest to the attachment, exact", () => {
   const hook = { attachment: { type: "hook_additional_context", hookName: "SessionStart", content: ["c".repeat(40)] } };
   const r = parse([...lines, hook, req("r4", 5, 1800, 100)].map((o) => JSON.stringify(o)).join("\n")).requests;
@@ -291,6 +317,17 @@ describe("parseExact", () => {
     const items = s.items.filter((i) => i.rec === "rest of request 1");
     expect(items.map((i) => i.name)).toEqual(["skill_listing", "Prompts"]);
     expect(items.reduce((n, i) => n + i.tokens, 0)).toBe(other.tokens);
+  });
+
+  test("a hook_success before request 1 weighs its content, not the stdout and stderr the model never gets", async () => {
+    const restore = withEnv({ ALEPH_ENV_FILE: envFile("ANTHROPIC_API_KEY=sk-test\n") });
+    const hook = JSON.stringify({ attachment: { type: "hook_success", hookName: "SessionStart", hookEvent: "SessionStart", content: "h".repeat(20), stdout: "o".repeat(600), stderr: "e".repeat(400) } });
+    const s = await parseExact(hook + "\n" + withModel, fake);
+    restore();
+    // Other is 892: the hook's 20 chars of content and the 4 of "hi" split it, not its 1,130 chars of JSON
+    const items = s.items.filter((i) => i.rec === "rest of request 1");
+    expect(items.map((i) => [i.name, i.tokens])).toEqual([["hook_success", 743], ["Prompts", 149]]);
+    expect(items.reduce((n, i) => n + i.tokens, 0)).toBe(s.requests[0].parts.find((p) => p.rec === "rest of request 1")!.tokens);
   });
 
   test("with no key it keeps chars ÷ 4 estimates and makes no call", async () => {
