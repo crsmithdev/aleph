@@ -647,7 +647,8 @@ export const goQuery = (changes) => { location.hash = withQuery(changes); };
 /** The `.fbar` in `.ph` holds what scopes the whole page; each change goes to the hash and loads the route again. */
 export function wireScope(root) {
   const ph = root.querySelector?.(".ph");
-  if (!ph) return;
+  if (!ph || ph._scope) return;
+  ph._scope = true;
   ph.addEventListener("click", (e) => {
     const b = e.target.closest?.(".seg button");
     if (b) { remember(b.parentElement.dataset.name, b.dataset.value); goQuery({ [b.parentElement.dataset.name]: b.dataset.value }); }

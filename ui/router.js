@@ -15,8 +15,8 @@ import { arm, cmd, notice, pageHead, postJson, say, actMessages, decided, denyRe
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
-/** The paths of the views drawn by morphing, not by innerHTML. Empty: no view is on. */
-export const morph = new Set();
+/** The paths of the views drawn by morphing, not by innerHTML: the Ideas list and the Idea page. */
+export const morph = new Set(["/ideas", "/ideas/:slug"]);
 
 /** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
 export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);
@@ -236,7 +236,7 @@ export async function start() {
       startDraw();
       const out = view.render(data, params, query);
       endDraw(at);
-      // Spike: a refresh of a view whose path is in `morph` is merged into the page by idiomorph, which keeps the elements that match.
+      // A refresh of a view whose path is in `morph` is merged into the page by idiomorph, which keeps the elements that match.
       if (morph.has(view.path) && !first) (await import("./vendor/idiomorph.js")).Idiomorph.morph($("view"), out, { morphStyle: "innerHTML" });
       else $("view").innerHTML = out;
     } catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`, "Reload the page. If it stays, this is a bug in the view.")}</div>`; return; }

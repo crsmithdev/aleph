@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } from "bun:test";
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
@@ -1081,10 +1081,10 @@ describe.skipIf(!chromeUsable)("Status page", () => {
 });
 
 describe.skipIf(!chromeUsable)("Ideas", () => {
-  let rig: Rig, page: Page;
+  let rig: Rig, page: Page, idea = "";
   beforeAll(async () => {
     rig = await startRig((e) => {
-      const idea = join(e.ALEPH_ITEMS, "ideas", "1");
+      idea = join(e.ALEPH_ITEMS, "ideas", "1");
       mkdirSync(idea, { recursive: true });
       writeFileSync(join(idea, "idea.md"), "---\ntitle: Issue history\nstatus: exploring\nbuilt: []\n---\nA sketch.\n\n## Log\n");
       for (const f of ["prior-art-2026-11-01-0900.html", "prior-art-2026-11-02-1000.html"]) writeFileSync(join(idea, f), `<p>${f}</p>`);
@@ -1121,11 +1121,45 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     return page.ev<[boolean, boolean]>('[document.querySelector("#view tbody tr") === window.row, window.row.isConnected]');
   };
 
-  test("a redraw replaces the row by default, and keeps the same element when the view is in the morph set", async () => {
-    expect(await redrawn()).toEqual([false, false]);
-    await page.ev('import("/router.js").then((m) => m.morph.add("/ideas"))');
+  test("a redraw keeps the same row on the list and the same element on the idea page, as the default morph set says", async () => {
     expect(await redrawn()).toEqual([true, true]);
-    await page.ev('import("/router.js").then((m) => m.morph.delete("/ideas"))');
+    await page.go("#/ideas/1");
+    await page.when('document.querySelector("#view [data-tab]")');
+    await page.ev('document.querySelector("#view [data-tab]").mark = 1');
+    await page.ev('import("/router.js").then((m) => m.redraw())');
+    await page.when('document.querySelector("#view [data-tab]")');
+    expect(await page.ev('document.querySelector("#view [data-tab]").mark')).toBe(1);
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
+  test("a reload with changed data puts the new text in the kept row", async () => {
+    await page.go("#/ideas");
+    await page.when('document.querySelector("#view tbody tr")');
+    await page.ev('window.row = document.querySelector("#view tbody tr")');
+    const file = join(idea, "idea.md"), before = readFileSync(file, "utf8");
+    writeFileSync(file, before.replace("title: Issue history", "title: Renamed idea"));
+    try {
+      await page.ev('import("/router.js").then((m) => m.redraw(true))');
+      await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Renamed idea")');
+      expect(await page.ev('document.querySelector("#view tbody tr") === window.row')).toBe(true);
+    } finally { writeFileSync(file, before); }
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
+  test("after two redraws the page head is kept, and one change of its Project select runs its handler once", async () => {
+    await page.go("#/ideas");
+    await page.when('document.querySelector("#view .ph select")');
+    await page.ev('window.ph = document.querySelector("#view .ph")');
+    for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())');
+    expect(await page.ev('document.querySelector("#view .ph") === window.ph')).toBe(true);
+    await page.ev(`(() => {
+      window.saved = 0;
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k, v) { if (k === "aleph.project") window.saved++; return set.call(this, k, v); };
+      document.querySelector("#view .ph select").dispatchEvent(new Event("change", { bubbles: true }));
+      Storage.prototype.setItem = set;
+    })()`);
+    expect(await page.ev("window.saved")).toBe(1);
     expect(page.errors).toEqual([]);
   }, 60_000);
 
