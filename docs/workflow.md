@@ -48,7 +48,7 @@ No transition waits for the tick. Each step starts the next one directly. The ti
 | failed | Its job or a sub-issue's job is returned or failed |
 | working | It has sub-issues in progress |
 | landing, working | It has an open job |
-| held | It waits on an issue in its `after` list |
+| held | Its latest `held` event stands: no `started` event came after it. The reason is that event's sentence |
 | working | `plan` is set: intake will split it |
 | queued | It has a spec and waits for a dispatch |
 | new | Intake has not taken it in |

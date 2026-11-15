@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CLI, base, fakeLog, other, remote, section, sh, state, setup, teardown } from "./cli.helpers";
 import { actionJob as job, cli, drop, issueAdd, issueClose, job as startJob, land, status as statusOf } from "./flow.testkit.ts";
+import { logEvent } from "../lib/layout.ts";
 import { readRepos, writeRepos } from "../tests/projects.ts";
 
 beforeAll(setup);
@@ -55,13 +56,14 @@ describe("milestone 2", () => {
   test("aleph status shows each issue ID as its project's code and five digits", async () => {
     const id = (await issueAdd("fac", "shown with its code")).json.added;
     const held = (await issueAdd("fac", "held by the one shown", { after: [`issue.${id}`] })).json.added;
+    logEvent({ subject: "gate", action: "held", object: `issue.${held}`, detail: `after: issue.${id}` });
     const repos = readRepos(join(base, "items"));
     writeRepos({ ...repos, fac: { ...repos.fac, code: "f" } }, join(base, "items"));
     try {
       const shown = (n: number) => `f-${String(n).padStart(5, "0")}`;
       const recent = (await cli(["status"])).stdout, one = (await cli(["status", `fac-${id}`])).stdout;
       expect(recent).toContain(`\n  ${shown(id)} new: intake`);
-      expect(recent).toContain(`\n  ${shown(held)} held: ${shown(held)} waits for ${shown(id)}`);
+      expect(recent).toContain(`\n  ${shown(held)} held: issue.${held} held: after issue.${id}`);
       expect(one.startsWith(`${shown(id)} new`)).toBe(true);
       for (const t of [recent, one]) for (const n of [id, held]) { expect(t).not.toContain(`fac-${n}`); expect(t).not.toMatch(new RegExp(`\\bf${n}\\b`)); }
       expect((await cli(["status", `fac-${id}`, "--json"])).json.id).toBe(`fac-${id}`);

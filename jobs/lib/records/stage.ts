@@ -11,9 +11,10 @@ import { isWaiting, type Run, type State } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { isOpen } from "./job.ts";
 import { counting } from "./record.ts";
+import { eventsOf } from "../../../lib/layout.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { parseKey, sayText, type StageName } from "../../../lib/naming.ts";
+import { parseKey, say, sayText, type StageName } from "../../../lib/naming.ts";
 
 
 /** Why an item stands where it does: the event fields of docs/naming.md. A field the naming sets have no word for is left out. */
@@ -36,7 +37,9 @@ interface AskFact { reason: string }
 
 /** What stage() needs of an item. */
 export interface Subject {
-  id: string; status: string; after: string[]; parts: string[]; ask?: AskFact;
+  id: string; status: string; parts: string[]; ask?: AskFact;
+  /** The Herald sentence of the issue's latest `held` event, its IDs as keys, when no `started` event came after it. */
+  held?: string;
   /** It has a spec. */
   spec: boolean;
   /** `plan` is set. */
@@ -58,9 +61,11 @@ export interface Ctx {
 
 export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Subject {
   const a = askOf(refIn(key, item));
+  const hold = issues.status(item) === "open" ? eventsOf(`issue.${issues.refOf(item)}`, "held", "started").at(-1) : undefined;
   return {
     id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
-    after: store.afterOf(item).map((r) => r.replace(/^issue\./, `${key}-`)), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
+    ...(hold?.action === "held" ? { held: say(hold).map((p) => (typeof p === "string" ? p : p.id)).join("") } : {}),
+    parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
     ...(a ? { ask: { reason: a.reason } } : {}),
     spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item),
   };
@@ -82,7 +87,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const id = item.id;
   /** The stage with its reason: `why` is the reason's sentence, as the Herald says it; a reason with no action is its fields as text. */
   const out = (s: StageName, r: Reason = {}, of?: Stage["of"]): Stage =>
-    ({ id, stage: s, ...r, why: r.action ? sayText(r.action === "after" ? { subject: "rule", action: r.action, object: id, detail: r.on?.join(" ") } : { subject: "rule", action: r.action, object: r.on?.find((x) => parseKey(x)?.kind === "job") ?? id }) : [r.sub, r.count].filter(Boolean).join(" "), ...(of ? { of } : {}) });
+    ({ id, stage: s, ...r, why: r.action ? r.action === "held" ? item.held! : sayText({ subject: "rule", action: r.action, object: r.on?.find((x) => parseKey(x)?.kind === "job") ?? id }) : [r.sub, r.count].filter(Boolean).join(" "), ...(of ? { of } : {}) });
   if (item.status === "dropped") return out("dropped", { action: "dropped" });
   // An open item that asks is waiting, even when a trailer commit on main names it (a reopened issue can have one).
   if (item.status === "open" && item.ask) return out("waiting", { action: "waiting", to: "human" });
@@ -109,11 +114,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const last = work.at(-1);
   if (last?.kind === "land") return out("landing", { action: last.state, on: [last.id] });
   if (last) return out("working", { action: last.state, on: [last.id] });
-  const blockers = item.after.filter((ref) => {
-    const s = ctx.item(ref);
-    return s !== undefined && (s.status === "dropped" || (s.status === "open" && !doneWhy(s)));
-  });
-  if (blockers.length) return out("held", { action: "after", on: blockers });
+  if (item.held) return out("held", { action: "held" });
   if (item.plan) return out("working", { action: "starting", sub: "intake" });
   if (item.tracker) return out("new");
   if (item.spec) return out("queued", { action: "starting" });

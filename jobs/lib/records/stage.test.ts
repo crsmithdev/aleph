@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { aleph, env, repo, seedPart, seedItem, seedRun, setup, sh, teardown } from "../../cli.helpers";
 import * as issues from "../../../issues/lib/todo.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { loadRegistry } from "./ledger.ts";
 import { subjectOf } from "./stage.ts";
 import { repoStages } from "./status.ts";
@@ -26,6 +27,9 @@ const newRun = <T extends number | string>(id: T, run: Parameters<typeof seedRun
 const newIssue = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${++jobs}`, { kind: "goal", ...fm });
 const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", ...fm });
 
+/** A `held` event on issue `n` that waits for another new issue, then the number. */
+const held = (n: number, detail = `after: issue.${newIssue()}`) => { logEvent({ subject: "gate", action: "held", object: `issue.${n}`, detail }); return n; };
+
 const ISSUES_NEW: Row[] = [
   { name: "new issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, count: "1 / 2", why: /^1 \/ 2$/, build: async () => {
     const n = issue();
@@ -50,7 +54,13 @@ const ISSUES_NEW: Row[] = [
 const PARTS_NEW: Row[] = [
   { name: "new issue: working", stage: "working", action: "running", on: /^job\.\d+$/, why: /^j-\d+ started$/, build: async () => newRun(newIssue(), { role: "build", state: "running" }) },
   // PARTS_NEW[1] is the held issue that the `aleph status` test below reads.
-  { name: "new issue: held", stage: "held", action: "after", why: /^fac-\d+ waits for fac-\d/, build: async () => newIssue({ after: [ref(newIssue())] }) },
+  { name: "new issue: held", stage: "held", action: "held", why: /^issue\.\d+ held: after issue\.\d+$/, build: async () => held(newIssue()) },
+  { name: "new issue: a started event after the held event ends the hold", stage: "queued", action: "starting", build: async () => {
+    const n = held(newIssue({ after: [`issue.${newIssue()}`] }));
+    logEvent({ subject: "rule", action: "started", object: `issue.${n}`, detail: "model default" });
+    return n;
+  } },
+  { name: "new issue: done with a held event", stage: "done", build: async () => held(newIssue({ status: "done" })) },
   { name: "new issue: working while intake splits it", stage: "working", build: async () => newIssue({ plan: "true" }) },
   { name: "new issue: an intake run sorts it, not works it", stage: "queued", action: "starting", build: async () => newRun(newIssue(), { role: "intake", state: "running" }) },
 ];
@@ -82,7 +92,7 @@ test("aleph status prints the same stage as JSON and as one line, with the short
   const r = await aleph(["status", ref(id), "--json"]);
   expect(r.code, r.stderr).toBe(0);
   expect(r.json).toEqual(JSON.parse(JSON.stringify(await statusOf(PARTS_NEW[1]))));
-  expect(r.json.why).toMatch(/waits for fac-\d/);
+  expect(r.json.why).toMatch(/^issue\.\d+ held: after issue\.\d+$/);
   const text = await aleph(["status", ref(id)]);
   const shown = (t: string) => t.replace(/fac-(\d+)/g, (_m, n) => `i-${n.padStart(5, "0")}`);
   expect(text.stdout.trim()).toBe(`${shown(r.json.id)} ${r.json.stage}: ${shown(r.json.why)}`);
@@ -90,10 +100,9 @@ test("aleph status prints the same stage as JSON and as one line, with the short
 }, 90_000);
 
 describe("subjectOf", () => {
-  const item = (id: number, after?: string[]): issues.Issue => ({ id, title: "t", fm: after ? { after } : {}, request: "", spec: "", notes: [] });
+  const item = (id: number): issues.Issue => ({ id, title: "t", fm: {}, request: "", spec: "", notes: [] });
   const doc: issues.Doc = { items: [] };
-  test("an issue is keyed by its number, and an issue.<n> in after by the repo's key", () => {
+  test("an issue is keyed by its number", () => {
     expect(subjectOf(item(5), "proj", doc).id).toBe("proj-5");
-    expect(subjectOf(item(5, ["issue.3"]), "proj", doc).after).toEqual(["proj-3"]);
   });
 });

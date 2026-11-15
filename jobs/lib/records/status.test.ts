@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { facts, onMain, repoStages } from "./status.ts";
 import type { Repo } from "./ledger.ts";
 import { seed } from "../../job.testkit.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import type { Doc, Issue } from "../../../issues/lib/todo.ts";
 
 // The test's clock: the recent-runs window reads it.
@@ -59,7 +60,7 @@ test("a touched item the store closed is done without a fresh trailer commit, an
   expect(states([13])).toEqual([["demo-13", "done"]]);
 });
 
-test("facts carry what stage() needs: status, spec, after, parts, ask kind and each job's last run", () => {
+test("facts carry what stage() needs: status, spec, parts, ask kind and each job's last run", () => {
   const doc: Doc = { items: [
     { ...item(21, "open"), spec: "s", fm: { after: ["issue.22"] } },
     { ...item(22, "open"), fm: {} },
@@ -68,9 +69,9 @@ test("facts carry what stage() needs: status, spec, after, parts, ask kind and e
   const built = seed({ role: "build", name: "issue.21", repo: "demo", target: "issue.21", state: "waiting", ask: { reason: "question", question: "?", options: [], why: [] }, shown: true, started: STARTED });
   const f = facts(repo, doc);
   // The run owns the issue's one Ask, so the issue has none of its own.
-  expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [] });
+  expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, parts: [] });
   expect(f.items[21].ask).toBeUndefined();
-  expect(f.items[22]).toMatchObject({ parts: ["demo-23"], after: [] });
+  expect(f.items[22]).toMatchObject({ parts: ["demo-23"] });
   expect(f.runs[21]).toEqual([{ id: built.id, kind: "build", state: "waiting", open: true, ask: { reason: "question" } }]);
 });
 
@@ -85,6 +86,7 @@ test("a child's from and after resolve to the issues, their runs and their statu
   });
   const built = seed({ role: "build", name: "issue.6", repo: "demo", target: "issue.6", state: "running", shown: true, started: STARTED });
 
+  logEvent({ subject: "gate", action: "held", object: "issue.7", detail: "after: issue.6" });
   const open = mk("open");
   const f = facts(repo, open);
   expect(f.items[6]).toMatchObject({ id: "demo-6", status: "open" });
@@ -93,13 +95,16 @@ test("a child's from and after resolve to the issues, their runs and their statu
   expect(st([6]).map((s) => ({ id: s.id, stage: s.stage }))).toEqual([{ id: "demo-6", stage: "working" }]);
   const blocked = st([7])[0];
   expect(blocked.stage).toBe("held");
-  expect(blocked.why).toContain("demo-6");
+  expect(blocked.why).toBe("issue.7 held: after issue.6");
   const issue = st([5])[0];
   expect(issue.stage).toBe("working");
   expect(issue.of).toEqual({ n: 0, m: 2 });
   expect(repoStages(repo, { fetch: false, doc: open }).map((s) => s.id)).toEqual(["demo-5", "demo-6", "demo-7"]);
 
   const done = mk("done");
+  // The hold lasts until a start: a done blocker does not end it.
+  expect(st([7], done)[0].stage).toBe("held");
+  logEvent({ subject: "rule", action: "started", object: "issue.7", detail: "model default" });
   expect(st([7], done)[0].stage).toBe("queued");
   expect(st([5], done)[0].of).toEqual({ n: 1, m: 2 });
 });

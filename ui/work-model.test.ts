@@ -6,6 +6,7 @@ import { writeList } from "../issues/lib/store.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
 import { setAsk, refIn } from "../jobs/lib/asks/ask.ts";
+import { logEvent } from "../lib/layout.ts";
 import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
@@ -68,6 +69,7 @@ beforeAll(async () => {
     add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);
+  logEvent({ subject: "gate", action: "held", object: "issue.4", detail: "after: issue.3" });
   run("", { kind: "build", job: "fac-3", name: "fac-3", state: "running", on: "fac-3" });
   run("", { kind: "triage", job: "triage-fac-99", name: "triage-fac-99", state: "waiting", on: "fac-99", ask: { kind: "input", reason: "no-commit", question: "Triage gave no verdict.", options: [], why: [] } });
   run("", { kind: "build", job: "fac-6-r", name: "fac-6-r", state: "waiting", on: "fac-6", ask: { kind: "approval", reason: "review-held", question: "Land it?", options: [], why: [] }, review: { call: "waiting", reason: "judgement" } });

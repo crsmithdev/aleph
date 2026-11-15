@@ -28,6 +28,7 @@ import { when } from "./lib.js";
 import * as tl from "./timeline.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
+import { logEvent } from "../lib/layout.ts";
 import { writeRepos } from "../tests/projects.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
@@ -103,6 +104,7 @@ beforeAll(async () => {
     return true;
   }, true);
   writeList({ key: "oth" }, "seed", (doc) => { add(doc, "other thing"); return true; }, true);
+  logEvent({ subject: "gate", action: "held", object: "issue.3", detail: "after: issue.4" });
   run("", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", on: "fac-1" });
   run("", { job: "oth-1", name: "oth-1", repo: "oth", state: "running", on: "oth-1" });
   seeded = sh(items, "git", "rev-parse", "origin/main");
