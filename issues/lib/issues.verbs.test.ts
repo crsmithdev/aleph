@@ -257,8 +257,8 @@ test("deciding Remove the link opens the waiter without the link and clears the 
   expect(show(two.b)).toMatchObject({ status: "dropped", ask: null });
 });
 
-test("with Always blocker-dropped recommended, a dropped blocker opens the waiter without the link and asks nothing", async () => {
-  expect(grant("blocker-dropped", "recommended")).toBeNull();
+test("with Always blocker-dropped resolve, a dropped blocker opens the waiter without the link and asks nothing", async () => {
+  expect(grant("blocker-dropped", "resolve")).toBeNull();
   try {
     const { a, b, ref } = await blockerDropped();
     expect(show(b)).toMatchObject({ status: "open", after: [], ask: null });

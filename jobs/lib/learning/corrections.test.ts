@@ -163,6 +163,13 @@ test("decline drops the proposal's issue", async () => {
   expect(status(readList(repo)!.items[0])).toBe("dropped");
 });
 
+test("decline with a reason drops the proposal's issue with that reason", async () => {
+  pickFirst = true;
+  await mine(NOW, quiet);
+  expect(decline(proposals()[0].id, "too vague")).toBe("");
+  expect(readList(repo)!.items[0].fm.closed_why).toBe("too vague");
+});
+
 test("an approved claude-md proposal reopens its issue with a spec with Goal, Edit surface and Oracle", async () => {
   pickFirst = true; checkP = 0.4; ruleP = 0.5; scope = "repo";
   await mine(NOW, quiet);
@@ -199,8 +206,8 @@ describe("standing proposals", () => {
     expect(readEvents().filter((e) => e.object === "issue.1" && e.action === "filed").length).toBe(1);
   });
 
-  test("decline marks it declined", async () => {
-    grant("decline");
+  test("disapprove marks it declined", async () => {
+    grant("disapprove");
     pickFirst = true;
     await mine(NOW, quiet);
     expect(stored().lessons[0].state).toBe("declined");

@@ -1,5 +1,5 @@
 /**
- * `POST /api/proposals/:id/approve` and `POST /api/proposals/:id/decline`: Chris's Yes or No on a correction-memory proposal, run in
+ * `POST /api/proposals/:id/approve` and `POST /api/proposals/:id/decline` (`{ reason }`, optional): Chris's Yes or No on a correction-memory proposal, run in
  * process (no `aleph` command does this) through `post` in ui/action.ts.
  */
 import { approve, decline } from "../../jobs/lib/learning/corrections.ts";
@@ -17,8 +17,8 @@ export const routes: Routes = {
     if (parseId(ref)?.repo !== repo.key) fail(422, ref);
     return { issue: ref };
   }),
-  "POST /api/proposals/:id/decline": post((_body, { id }) => {
-    const refusal = decline(id);
+  "POST /api/proposals/:id/decline": post((body, { id }) => {
+    const refusal = decline(id, typeof body.reason === "string" ? body.reason.trim() : "");
     if (refusal) fail(422, refusal);
     return { declined: id };
   }),

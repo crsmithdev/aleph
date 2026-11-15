@@ -29,7 +29,7 @@ export const redirect = (hash) => {
 };
 
 /** The label of an automatic mode: what it does. */
-export const MODES = { recommended: "Take the pick", retry: "Retry", start: "Start", land: "Land", approve: "Approve" };
+export const MODES = { resolve: "Take the pick" };
 const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 
 /** The log's actors, in filter order, with the badge tone of each from `tone()`. */

@@ -736,6 +736,17 @@ describe("POST /api/issues/:id/decide and deny", () => {
     });
   });
 
+  test("a part-dropped Ask stored with the old labels takes the card's Keep open: the issue stays open with plan", async () => {
+    const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "a parent", { request: "x" }).id)!.value;
+    setAsk(`issue.${n}`, { reason: "part-dropped", question: "What now?", why: [], options: [
+      { label: "Close with what landed", line: "Close the issue: the sub-issues that landed are enough." },
+      { label: "Plan the missing part", line: "Plan a new sub-issue for what the dropped sub-issue was to do." }] });
+    await withRealCli(async () => {
+      expect((await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "Keep open" }) })).status).toBe(200);
+      expect([todos.status(item(n)), item(n).fm.plan]).toEqual(["open", "true"]);
+    });
+  });
+
   test("an option that waits sets after in the same write as the Ask clears", async () => {
     const target = writeList({ key: "fac" }, "seed", (doc) => add(doc, "blocker", { request: "x" }).id, true)!.value;
     const n = ask(true, `issue.${target}`);
@@ -910,7 +921,7 @@ describe("the Issue page shows the ask row", () => {
   const seed = (stored: boolean) => writeList({ key: "fac" }, "seed", (doc) => {
     const i = add(doc, stored ? "ask with text" : "plain", { request: "x" });
     setAsk(refIn(doc.repo!, i), { reason: "question", question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"],
-      ...(stored ? { situation: "Two ways to go.", effects: [{ action: "decide:A", text: "Goes with A." }, { action: "decide:B", text: "Goes with B." }], recommend: { action: "decide:B", why: "smaller" } } : {}) });
+      ...(stored ? { situation: "Two ways to go.", effects: [{ action: "resolve:A", text: "Goes with A." }, { action: "resolve:B", text: "Goes with B." }], recommend: { action: "resolve:B", why: "smaller" } } : {}) });
     return i.id;
   }, true)!.value;
 

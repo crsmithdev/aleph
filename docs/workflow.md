@@ -83,7 +83,7 @@ Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 **Send-backs at intake:**
 
 - A failed spec check goes back to the same session once, with the problems. A second failure sets an `intake-failed` Ask.
-- A run with no reply retries at once. After `ALEPH_INTAKE_TRIES` (2), it sets an `intake-failed` Ask, or applies the Always rule (`retry` or `close`).
+- A run with no reply retries at once. After `ALEPH_INTAKE_TRIES` (2), it sets an `intake-failed` Ask, or applies the Always rule (`continue` or `discontinue`).
 - A `close` or `done` route on a `red-main` issue while main is still red becomes a `question` Ask.
 - A worker follow-up whose Edit surface is only test files closes as a test-only follow-up.
 
@@ -226,17 +226,19 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 
 | Reason | Actions | Always action |
 |---|---|---|
-| `held-path` | land, drop | none |
-| `review-held` | land, drop | none |
-| `question` | answer, drop, decide, deny | `recommended` (intake's own Asks only) |
-| `no-commit` | rerun, close | none |
-| `part-dropped` | rerun, close | none |
-| `blocker-dropped` | decide | `recommended` |
-| `intake-failed` | retry, close | `retry` |
-| `rescue` | decide, drop | `recommended` |
-| `run-cap` | rerun, close | none |
-| `core-change` | approve, decline | none |
-| `proposal-check`, `proposal-claude-md`, `proposal-skill` | approve, decline | `approve` |
+| `held-path` | approve, disapprove | none |
+| `review-held` | approve, disapprove | none |
+| `question` | resolve, dismiss | `resolve` (intake's own Asks only) |
+| `no-commit` | continue, discontinue | none |
+| `part-dropped` | resolve, dismiss | none |
+| `blocker-dropped` | resolve, dismiss | `resolve` |
+| `intake-failed` | continue, discontinue | `continue` |
+| `rescue` | resolve, dismiss | `resolve` |
+| `run-cap` | continue, discontinue | none |
+| `core-change` | approve, disapprove | none |
+| `proposal-check`, `proposal-claude-md`, `proposal-skill` | approve, disapprove | `approve` |
+
+The first verb of a pair goes ahead and the second drops the issue; the second takes an optional typed reason. `approve` lands the job, applies the core-note change or reopens the proposal issue. `resolve` takes an option, the recommendation or a typed answer; a `part-dropped` Ask offers the options "Close as done" and "Keep open". `continue` starts the job or intake again. `disapprove` on a proposal also stops the memory proposing it again, and on `core-change` it keeps the note. The six words are `ASK_ACTIONS` in `lib/naming.ts`.
 
 **The director.** Every new Ask goes to the director first. It is one read-only Fable run per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-goal`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
 
@@ -249,16 +251,16 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 
 - a rule grants `user` for its reason: no director run starts, and the Ask goes to Chris at once with the fallback case text;
 - the Ask is a memory proposal;
-- it is a `core-change` Ask: the memory re-check holds a correct or archive verdict on a core note, on a parked issue. Approve applies the verdict through the vault op and closes the issue as done, or notes the op's refusal on the issue. Decline keeps the claim, sets the note's `updated` to today and drops the issue;
+- it is a `core-change` Ask: the memory re-check holds a correct or archive verdict on a core note, on a parked issue. Approve applies the verdict through the vault op and closes the issue as done, or notes the op's refusal on the issue. Disapprove keeps the claim, sets the note's `updated` to today and drops the issue;
 - it is a second `run-cap` or `rescue` Ask on an issue the director decided once;
 - the land changes a security path or `bun.lock`;
 - a held run's branch cannot be read.
 
 An Ask that the actions leave open, a failed director run or a malformed reply also escalates. The Status page shows an Ask's buttons only after the director escalates it.
 
-**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. `grant` takes a reason's own actions, its Always action in the table above, or `user`. Code reads only these rules: the Always actions in the table above, `close` for `intake-failed`, `decline` for the memory proposals, and `user`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason but the memory proposals (`proposal-*`) takes `user`, through `aleph always grant <reason> user` or the Gates page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
+**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. `grant` takes a reason's own actions, its Always action in the table above, or `user`. Code reads only these rules: the Always actions in the table above, `discontinue` for `intake-failed`, `disapprove` for the memory proposals, and `user`. A stored `recommended` reads as `resolve` and `retry` as `continue`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason but the memory proposals (`proposal-*`) takes `user`, through `aleph always grant <reason> user` or the Gates page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
 
-**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Gates page set, for any reason in the table above but the memory proposals, `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none; `drop` takes the reason's drop, close or deny. A land takes `Held-by: timeout` and includes the escalation list. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card shows the time of the land.
+**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Gates page set, for any reason in the table above but the memory proposals, `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none or a word that is not one of the reason's verbs (a stored old word, such as `land` or `deny`, reads as the verb that replaced it); `drop` takes the reason's second verb (`dismiss`, `discontinue` or `disapprove`). An `approve` lands the run with `Held-by: timeout`, and the escalation list applies to it. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card names the action the timeout takes, and the time.
 
 ## 9. Human controls
 

@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, needsOf, may, normalizeAsk, CLOSE_DONE, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { ASK_ACTIONS } from "../../../lib/naming.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
 import { readList } from "../../../issues/lib/store.ts";
@@ -94,12 +95,14 @@ test("waitOf reads a run with no ask as a question", () => {
   expect(waitOf(ask)).toEqual({ reason: "held-path" });
 });
 
-test("actionsOn picks by context for a question and a dropped part", () => {
-  expect(actionsOn("question", { run: true, decision: false })).toEqual(["answer", "drop"]);
-  expect(actionsOn("question", { run: false, decision: true })).toEqual(["decide", "deny"]);
-  expect(actionsOn("part-dropped", { run: false, decision: true })).toEqual(["decide", "close"]);
-  expect(actionsOn("part-dropped", { run: false, decision: false })).toEqual(["rerun", "close"]);
-  expect(actionsOn("review-held", { run: true, decision: false })).toEqual(["land", "drop"]);
+test("actionsOn gives each reason the one pair of verbs of its card, on a run and on an issue", () => {
+  const pair = (reasons: string[], verbs: string[]) => { for (const r of reasons) expect([r, actionsOn(r)]).toEqual([r, verbs]); };
+  pair(["held-path", "review-held", "core-change", "proposal-check", "proposal-claude-md", "proposal-skill"], ["approve", "disapprove"]);
+  pair(["question", "rescue", "part-dropped", "blocker-dropped"], ["resolve", "dismiss"]);
+  pair(["no-commit", "intake-failed", "run-cap"], ["continue", "discontinue"]);
+  expect(actionsOn("question", { run: true, decision: false })).toEqual(actionsOn("question", { run: false, decision: true }));
+  expect(ASK_REASONS.rescue.card).toBe("decide");
+  for (const r of Object.values(ASK_REASONS)) for (const a of [...r.actions, r.always]) expect(a === "" || ASK_ACTIONS.includes(a)).toBe(true);
 });
 
 
@@ -109,11 +112,21 @@ afterEach(() => { delete process.env.ALEPH_FACTORY_DIR; delete process.env.ALEPH
 
 test("grant then always round-trips; revoke removes it", () => {
   expect(always("held-path")).toBeNull();
-  expect(grant("held-path", "land")).toBeNull();
-  expect(always("held-path")?.action).toBe("land");
+  expect(grant("held-path", "land")).toContain("has no action land");
+  expect(grant("held-path", "approve")).toBeNull();
+  expect(always("held-path")?.action).toBe("approve");
   revoke("held-path");
   expect(always("held-path")).toBeNull();
   expect(readAlways()).toEqual({});
+});
+
+test("grant refuses the old words, and readAlways reads a stored recommended as resolve and retry as continue", () => {
+  for (const [reason, old] of [["question", "deny"], ["question", "recommended"], ["intake-failed", "retry"], ["no-commit", "rerun"], ["part-dropped", "close"], ["proposal-check", "decline"]]) expect([reason, grant(reason, old)]).toEqual([reason, expect.stringContaining(`has no action ${old}`)]);
+  const at = "2026-11-04T12:00:00Z";
+  putJson("settings", "always", { question: { action: "recommended", at }, "intake-failed": { action: "retry", at }, "proposal-check:aleph": { action: "approve", at }, rescue: { action: "user", at } });
+  expect(readAlways()).toEqual({ question: { action: "resolve", at }, "intake-failed": { action: "continue", at }, "proposal-check:aleph": { action: "approve", at }, rescue: { action: "user", at } });
+  expect(grant("blocker-dropped", "resolve")).toBeNull();
+  expect(getJson("settings", "always", {})).toMatchObject({ question: { action: "resolve" }, "intake-failed": { action: "continue" } });
 });
 
 test("user is granted on any reason but a memory proposal, and a stored grant stays", () => {
@@ -136,13 +149,13 @@ const cli = (...args: string[]) => {
 };
 
 test("aleph always grant, list and revoke work on the always setting", () => {
-  const g = cli("always", "grant", "rescue", "recommended");
+  const g = cli("always", "grant", "rescue", "resolve");
   expect(g.code).toBe(0);
   const saved = getJson("settings", "always", {});
-  expect(saved).toEqual({ rescue: { action: "recommended", at: expect.any(String) } });
+  expect(saved).toEqual({ rescue: { action: "resolve", at: expect.any(String) } });
   const l = cli("always", "list");
   expect(l.code).toBe(0);
-  expect(JSON.parse(l.out).rescue.action).toBe("recommended");
+  expect(JSON.parse(l.out).rescue.action).toBe("resolve");
   expect(cli("always", "revoke", "rescue").code).toBe(0);
   expect(getJson("settings", "always", {})).toEqual({});
   expect(cli("always", "list").out).not.toContain("rescue");
@@ -158,10 +171,10 @@ test("no reason can be handed to the firefighter: an Ask is the director's, then
 test("readAlways ignores a grant that grant() would refuse, and the next write drops it", () => {
   const at = "2026-11-04T12:00:00Z";
   const dead = Object.fromEntries(["held-path", "review-held", "no-commit", "run-cap"].map((k) => [k, { action: "firefighter", at }]));
-  putJson("settings", "always", { ...dead, rescue: { action: "recommended", at } });
+  putJson("settings", "always", { ...dead, rescue: { action: "resolve", at } });
   expect(Object.keys(readAlways())).toEqual(["rescue"]);
   expect(always("held-path")).toBeNull();
-  expect(grant("rescue", "recommended")).toBeNull();
+  expect(grant("rescue", "resolve")).toBeNull();
   expect(Object.keys(getJson("settings", "always", {}))).toEqual(["rescue"]);
 });
 
@@ -181,28 +194,40 @@ test("may: the director does not answer an Ask whose run waits for a spec edit",
 });
 
 test("may: Chris takes the actions the card offers, on a run and on an issue", () => {
-  expect(may("chris", "answer", plain, { run: true })).toBeNull();
+  expect(may("chris", "resolve", plain, { run: true })).toBeNull();
+  expect(may("chris", "resolve", plain)).toBeNull();
   expect(may("chris", "answer", plain)).toBe("its question Ask offers no answer");
-  expect(may("chris", "decide", plain)).toBeNull();
-  expect(may("chris", "answer", plainAsk("held-path", "x"), { run: true })).toBe("its held-path Ask offers no answer");
-  expect(may("chris", "land", plainAsk("held-path", "x"), { run: true })).toBeNull();
-  expect(may("chris", "rerun", plainAsk("no-commit", "x"))).toBeNull();
-  expect(may("chris", "answer", { ...plain, reason: "nope" }, { run: true })).toBe("its nope Ask offers no answer");
-  expect(may("chris", "answer", undefined, { run: true })).toBe("it has no Ask");
+  expect(may("chris", "resolve", plainAsk("held-path", "x"), { run: true })).toBe("its held-path Ask offers no resolve");
+  expect(may("chris", "approve", plainAsk("held-path", "x"), { run: true })).toBeNull();
+  expect(may("chris", "continue", plainAsk("no-commit", "x"))).toBeNull();
+  expect(may("chris", "resolve", { ...plain, reason: "nope" }, { run: true })).toBe("its nope Ask offers no resolve");
+  expect(may("chris", "resolve", undefined, { run: true })).toBe("it has no Ask");
 });
 
 test("decideAsk leaves a plain Ask's issue open; on part-dropped the plan option sets plan and any other answer closes the issue", () => {
   const i = item({ status: "To Do" });
   decideAsk(plain, i, "Chris: use b.ts");
   expect(issues.status(i)).toBe("open");
-  for (const [said, plan, status] of [[`Chris chose ${PLAN_REST}`, "true", "open"], ["Chris chose Close with what landed", undefined, "done"]] as const) {
+  for (const [said, plan, status] of [[`Chris chose ${PLAN_REST}`, "true", "open"], [`Chris chose ${CLOSE_DONE}`, undefined, "done"]] as const) {
     const p = { ...item({ status: "To Do" }), id: status === "done" ? 21 : 22 };
     askPartDropped("fac", p, "A part was dropped. What now?");
     const a = askOf(refIn("fac", p));
     expect(a?.reason).toBe("part-dropped");
+    expect(a?.options.map((o) => o.label)).toEqual(["Close as done", "Keep open"]);
     decideAsk(a, p, said);
     expect(p.fm.plan as string | undefined).toBe(plan);
     expect(issues.status(p)).toBe(status);
+  }
+});
+
+test("decideAsk reads a part-dropped Ask stored with the old labels by its lines: the old plan option keeps the issue open", () => {
+  const old: Ask = { reason: "part-dropped", question: "q", why: [], options: [
+    { label: "Close with what landed", line: "Close the issue: the sub-issues that landed are enough." },
+    { label: "Plan the missing part", line: "Plan a new sub-issue for what the dropped sub-issue was to do." }] };
+  for (const [o, plan, status] of [[old.options[1], "true", "open"], [old.options[0], undefined, "done"]] as const) {
+    const p = item({ status: "To Do" });
+    decideAsk(old, p, `director decided: ${o.label}: ${o.line}. why`);
+    expect([p.fm.plan as string | undefined, issues.status(p)]).toEqual([plan, status]);
   }
 });
 
@@ -244,19 +269,18 @@ test("ASK_REASONS names no reason that no code raises, and a stored one reads as
   expect(reasonOf("triage-failed")).toBe("question");
 });
 
-test("every reason has a card, a name, a line and a problem text, and one that offers rerun says what rerun does", () => {
+test("every reason has a card, a name, a line and a problem text, and one that offers continue says what continue does", () => {
   for (const [reason, r] of Object.entries(ASK_REASONS)) {
     expect([reason, ["approve", "decide", "unstick"].includes(r.card)]).toEqual([reason, true]);
     expect([reason, !!r.name && !!r.line && !!r.problem]).toEqual([reason, true]);
     expect(r.problem).not.toMatch(/\byour?\b/i);
-    const offers = [...actionsOn(reason, { run: false, decision: false }), ...actionsOn(reason, { run: true, decision: false })];
-    expect([reason, offers.includes("rerun") ? !!r.rerun : true]).toEqual([reason, true]);
+    expect([reason, r.actions.includes("continue") ? !!r.continue : true]).toEqual([reason, true]);
   }
 });
 
-test("a parked issue with a blocker-dropped Ask is asking, and its Always rule can be recommended", () => {
+test("a parked issue with a blocker-dropped Ask is asking, and its Always rule can be resolve", () => {
   const blocker: Ask = { reason: "blocker-dropped", question: "q?", options: [{ label: "Remove the link", line: "l" }, { label: "Drop the waiter", line: "d" }], why: [] };
   expect(asking(item({ parked: "true" }), blocker)).toBe(true);
   expect(asking(item({ parked: "true" }), { ...blocker, reason: "question" })).toBe(false);
-  expect(grant("blocker-dropped", "recommended")).toBeNull();
+  expect(grant("blocker-dropped", "resolve")).toBeNull();
 });

@@ -6,13 +6,18 @@ import { join } from "node:path";
 import * as record from "../records/record.ts";
 import type { Entry } from "../records/ledger.ts";
 import { seed } from "../../job.testkit.ts";
-import type { Ask } from "./ask.ts";
+import * as issues from "../../../issues/lib/todo.ts";
+import { readList } from "../../../issues/lib/store.ts";
+import { takeOnTimeout } from "../transitions/tick.ts";
+import { mk, newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
+import { allRuns } from "../records/ledger.ts";
+import { setAsk, type Ask } from "./ask.ts";
 import { dueAt, issueAsks, readTimeouts, setTimeoutOf, timeoutStep } from "./timeout.ts";
 
 let dir = "";
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "timeout-")); process.env.ALEPH_FACTORY_DIR = dir; process.env.ALEPH_DB = join(dir, "aleph.db"); });
 
-const ask = (recommend = "land"): Ask => ({ reason: "review-held", question: "Land it?", options: [], why: [], situation: "It changes hooks/.", recommend: { action: recommend, why: "w" } });
+const ask = (recommend = "approve"): Ask => ({ reason: "review-held", question: "Land it?", options: [], why: [], situation: "It changes hooks/.", recommend: { action: recommend, why: "w" } });
 const NOW = Date.parse("2026-11-10T12:00:00Z");
 let n = 0;
 /** A director job whose decision escalated the Ask of `on`, `at` ms. */
@@ -42,8 +47,8 @@ test("dueAt is the escalation time plus the minutes, only when the case text rec
   const now = NOW;
   const e = waiting(10, ask(), now);
   expect(dueAt(e, {})).toBeNull();
-  expect(dueAt(e, { "review-held": { minutes: 30, then: "pick" } })).toEqual({ at: now - 10 * 60_000 + 30 * 60_000, action: "land" });
-  expect(dueAt(waiting(10, { ...ask(), reason: "question" }), { question: { minutes: 30, then: "drop" } })?.action).toBe("drop");
+  expect(dueAt(e, { "review-held": { minutes: 30, then: "pick" } })).toEqual({ at: now - 10 * 60_000 + 30 * 60_000, action: "approve" });
+  expect(dueAt(waiting(10, { ...ask(), reason: "question" }), { question: { minutes: 30, then: "drop" } })?.action).toBe("dismiss");
   expect(dueAt(waiting(10, { ...ask(), recommend: undefined }), { "review-held": { minutes: 30, then: "pick" } })).toBeNull();
   expect(dueAt(waiting(10, { ...ask(), situation: undefined }), { "review-held": { minutes: 30, then: "pick" } })).toBeNull();
 });
@@ -81,24 +86,24 @@ function onIssue(ago: number, a: Ask) {
 }
 const taker = (took: string[]) => async (name: string, action: string) => { took.push(`${name} ${action}`); return null; };
 
-test("timeoutStep takes the recommended decide:A on an issue's question Ask once", async () => {
+test("timeoutStep takes the recommended resolve:A on an issue's question Ask once", async () => {
   setTimeoutOf("question", 30);
-  const asks = onIssue(31, question("decide:A")), took: string[] = [];
+  const asks = onIssue(31, question("resolve:A")), took: string[] = [];
   expect(await timeoutStep(taker(took), NOW, [], asks)).toEqual([asks[0].name]);
   expect(await timeoutStep(taker(took), NOW, [], asks)).toEqual([]);
-  expect(took).toEqual([`${asks[0].name} decide:A`]);
+  expect(took).toEqual([`${asks[0].name} resolve:A`]);
 });
 
-test("a due drop timeout takes the reason's drop, close or deny; an Ask not due, or with no recommendation under pick, gets nothing", async () => {
+test("a due drop timeout takes its second verb: disapprove on a run, dismiss on a question Ask, discontinue on a no-commit Ask; an Ask not due, or with no recommendation under pick, gets nothing", async () => {
   setTimeoutOf("question", 30, "drop");
   setTimeoutOf("no-commit", 30, "drop");
   setTimeoutOf("review-held", 30, "drop");
-  const deny = onIssue(31, question("decide:A")), early = onIssue(5, question("decide:A"));
+  const dismiss = onIssue(31, question("resolve:A")), early = onIssue(5, question("resolve:A"));
   const close = onIssue(31, { reason: "no-commit", question: "Rerun?", options: [], why: [], situation: "No commit." });
   const run = waiting(31);
   const took: string[] = [];
-  await timeoutStep(taker(took), NOW, [run], [...deny, ...early, ...close]);
-  expect(took).toEqual([`${run.run.name} drop`, `${deny[0].name} deny`, `${close[0].name} close`]);
+  await timeoutStep(taker(took), NOW, [run], [...dismiss, ...early, ...close]);
+  expect(took).toEqual([`${run.run.name} disapprove`, `${dismiss[0].name} dismiss`, `${close[0].name} discontinue`]);
   setTimeoutOf("rescue", 30, "pick");
   const none = onIssue(31, { reason: "rescue", question: "What now?", options: [], why: [], situation: "Stuck." });
   await timeoutStep(taker(took), NOW, [], none);
@@ -121,4 +126,41 @@ test("core-change has no timeout: setTimeoutOf refuses it, readTimeouts ignores 
   const core = onIssue(31, { ...ask("approve"), reason: "core-change" }), took: string[] = [];
   expect(await timeoutStep(taker(took), NOW, [], core)).toEqual([]);
   expect(took).toEqual([]);
+});
+
+test("takeOnTimeout takes dismiss and discontinue on an issue by dropping it", async () => {
+  setup();
+  try {
+    for (const [reason, action] of [["question", "dismiss"], ["no-commit", "discontinue"]] as const) {
+      const id = newIssue(), a: Ask = { reason, question: "q?", options: [], why: [], situation: "s" };
+      setAsk(`issue.${id}`, a);
+      expect(await takeOnTimeout(`issue.${id}`, action, { key: `issue.${id}`, on: `issue.${id}`, name: `issue.${id}`, ask: a, run: false })).toBeNull();
+      expect(issues.status(issues.find(readList({ key: "fac" })!, id)!)).toBe("dropped");
+    }
+  } finally { teardown(); }
+});
+
+test("a pick timeout takes a recommend of an old word as its verb, and waits on a word that is no verb of the reason", async () => {
+  setTimeoutOf("review-held", 30);
+  setTimeoutOf("question", 30);
+  const run = waiting(31, ask("land")), off = waiting(31, ask("resolve"));
+  const asks = [...onIssue(31, question("decide:B")), ...onIssue(31, question("deny")), ...onIssue(31, question("decide:Z")), ...onIssue(31, question("approve"))];
+  const took: string[] = [];
+  await timeoutStep(taker(took), NOW, [run, off], asks);
+  expect(took).toEqual([`${run.run.name} approve`, `${asks[0].name} resolve:B`, `${asks[1].name} dismiss`]);
+});
+
+test("takeOnTimeout's second verb on a waiting run drops the issue and the run; a word that is not one of the six is refused", async () => {
+  setup();
+  try {
+    const id = newIssue(), a: Ask = { ...ask(), reason: "review-held" };
+    mk(`fac-${id}`, "build", "waiting", { ask: a });
+    const w = { key: `issue.${id}`, on: `issue.${id}`, name: `issue.${id}`, ask: a, run: true };
+    const status = () => issues.status(issues.find(readList({ key: "fac" })!, id)!);
+    expect(await takeOnTimeout(w.name, "land", w)).toBe("the timeout takes no land on the review-held Ask");
+    expect([status(), allRuns().at(-1)!.run.state]).toEqual(["open", "waiting"]);
+    expect(await takeOnTimeout(w.name, "disapprove", w)).toBeNull();
+    expect(status()).toBe("dropped");
+    expect(allRuns().at(-1)!.run.state).not.toBe("waiting");
+  } finally { teardown(); }
 });

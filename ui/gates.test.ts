@@ -47,7 +47,7 @@ beforeAll(async () => {
   }, join(base, "items"));
   const factory = join(base, "factory");
   mkdirSync(factory);
-  putJson("settings", "always", { rescue: { action: "recommended", at: ago(30) }, "run-cap": { action: "rerun", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } });
+  putJson("settings", "always", { rescue: { action: "resolve", at: ago(30) }, "run-cap": { action: "continue", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } });
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\necho '{}'\nexit 0\n`);
@@ -84,7 +84,7 @@ test("the body of /api/automation has every section, one rule per Ask reason wit
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
   const by = (k: string) => d.rules.find((r: any) => r.reason === k);
-  expect(by("rescue").granted.action).toBe("recommended");
+  expect(by("rescue").granted.action).toBe("resolve");
   expect(by("proposal-claude-md").places).toEqual(["proposal-claude-md:global"]);
   expect(d.held).toEqual(SECURITY_PATHS);
   expect(d.repoHeld).toEqual([{ repo: "held", held: ["src/auth/**"] }]);
@@ -120,8 +120,8 @@ test("the log reads the hold, the rules Chris set, and the old rule, director an
     "director | issue.8 | reran | the cause is fixed",
     "rule | issue.5 | reran | rescue",
     "gate | issue.3 | full | local",
-    "human | rescue | changed | set to recommended",
-    "human | run-cap | changed | set to rerun",
+    "human | rescue | changed | set to resolve",
+    "human | run-cap | changed | set to continue",
     "human | proposal-claude-md:global | changed | set to approve",
   ]);
 });
@@ -203,10 +203,10 @@ const data = () => ({
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
-  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
+  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
-  log: { days: 7, max: 200, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to recommended" }] },
+  log: { days: 7, max: 200, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to resolve" }] },
 });
 
 test("the view draws the sections in order, a closed gate, and an Edit row with only Director and the reason's mode", () => {
@@ -235,7 +235,7 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   }
   expect(h).not.toContain("The director decides first");
   const rescue = h.slice(h.indexOf('data-rule="rescue"'));
-  expect(rescue).toMatch(/data-value="recommended" aria-pressed="true">Take the pick</);
+  expect(rescue).toMatch(/data-value="resolve" aria-pressed="true">Take the pick</);
   expect(h.match(/<tr class="rule" data-reason=/g)).toHaveLength(Object.keys(ASK_REASONS).length);
   for (const p of SECURITY_PATHS) expect(h).toContain(`<code class="chip">${p}</code>`);
   const card = gates.renderHeld(data());
@@ -290,8 +290,8 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).toContain(`</td><td>changed</td><td class="wide"`);
   expect(h).not.toContain("r-5");
   expect(h).toContain('<tr><th>Logged</th><th>Object</th><th>Subject</th><th>Action</th><th>Detail</th><th class="num">Times</th></tr>');
-  expect(h).toContain(`<td class="wide" title="set to recommended">set to recommended</td>`);
-  expect(gates.renderLog(data(), "rule")).not.toContain("set to recommended");
+  expect(h).toContain(`<td class="wide" title="set to resolve">set to resolve</td>`);
+  expect(gates.renderLog(data(), "rule")).not.toContain("set to resolve");
 });
 
 test("renderLog shows a missing action, and each By badge takes its tone from tone()", () => {
@@ -485,9 +485,9 @@ test("a reason granted user shows User in Decides, and the proposal-skill row of
 test("a grant that is neither the reason's mode nor user still shows pressed in Decides", () => {
   const saved = getJson("settings", "always", {});
   try {
-    putJson("settings", "always", { "intake-failed": { action: "close", at: ago(5) } });
+    putJson("settings", "always", { "intake-failed": { action: "discontinue", at: ago(5) } });
     const h = gates.renderRules({ rules: rules().filter((x) => x.reason === "intake-failed") });
-    expect(h).toMatch(/data-value="" aria-pressed="false">Director<\/button><button type="button" data-value="retry" aria-pressed="false">[^<]+<\/button><button type="button" data-value="close" aria-pressed="true">[^<]+<\/button><button type="button" data-value="user" aria-pressed="false">User</);
+    expect(h).toMatch(/data-value="" aria-pressed="false">Director<\/button><button type="button" data-value="continue" aria-pressed="false">[^<]+<\/button><button type="button" data-value="discontinue" aria-pressed="true">[^<]+<\/button><button type="button" data-value="user" aria-pressed="false">User</);
   } finally { putJson("settings", "always", saved); }
 });
 

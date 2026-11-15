@@ -19,7 +19,7 @@ import { afterFiling } from "../transitions/filing.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
-import { always, ASK_REASONS, askSub, asking, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
+import { always, ASK_REASONS, askSub, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
 import { allRuns, isAgentRun, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
@@ -110,12 +110,10 @@ const reasonName = (c: Case): string => (c.at === "lesson" ? `proposal-${c.lesso
 /** The issue or thing the case is about, as the log names it: the item's ref, a run's item or job, a lesson's id. */
 const refOf = (c: Case): string => (c.at === "run" ? c.entry.run.target ?? c.entry.run.name : c.on);
 
-/** The actions Chris's card offers, each owed an effect: the reason's actions, with `decide` as one `decide:<label>` per option. */
+/** The actions Chris's card offers, each owed an effect: the reason's actions, with `resolve` on an issue as one `resolve:<label>` per option. */
 function actionsOf(c: Case): string[] {
-  if (c.at === "lesson") return ["approve", "decline"];
-  const reason = reasonOf(c.ask.reason);
-  const acts = actionsOn(reason, { run: c.at === "run", decision: c.ask.options.length > 0 });
-  return acts.flatMap((a) => (a === "decide" && c.ask.options.length ? c.ask.options.map((o) => `decide:${o.label}`) : [a]));
+  if (c.at === "lesson") return ["approve", "disapprove"];
+  return actionsOn(reasonOf(c.ask.reason)).flatMap((a) => (a === "resolve" && c.at !== "run" && c.ask.options.length ? c.ask.options.map((o) => `resolve:${o.label}`) : [a]));
 }
 
 /** One director decision, kept with its outcome. */
@@ -193,7 +191,7 @@ function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; fil
   if (c.ask.reason === "blocker-dropped") return { why: "an after link to a dropped issue is Chris's" };
   if (ONCE_PER_ISSUE.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
     return { why: `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris` };
-  const b = actionsOf(c).includes("land") ? branchOf(c) : null;
+  const b = actionsOf(c).includes("approve") ? branchOf(c) : null;
   if (b) {
     const held = heldChange(b.repo, b.branch);
     if (held === "unknown" && c.ask.reason === "held-path") return { why: "the held run's branch cannot be read for security paths, so its land is Chris's" };
@@ -241,7 +239,7 @@ Kind: ${l.kind}
 Target: ${l.target || "(none)"}
 Title: ${l.title || "(none)"}
 Sentence: ${l.sentence}
-Approve only reopens the proposal's parked issue with a spec for the factory; it writes no CLAUDE.md line, skill or check itself. Decline marks the lesson declined for good.
+Approve only reopens the proposal's parked issue with a spec for the factory; it writes no CLAUDE.md line, skill or check itself. Disapprove marks the lesson declined for good.
 Signals:
 ${l.signals.map((s) => `- source: ${s.source}; at: ${s.at}; quote: ${s.quote}; link: ${s.link}`).join("\n") || "(none)"}
 `;
@@ -605,7 +603,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     if (a.do === "answer" && a.option && !option) return no(a, `the Ask has no option ${a.option}`);
     const said = a.do === "rerun" ? `director: run it again${a.note ? `: ${a.note}` : ""}` : `director decided: ${option ? `${option.label}: ${option.line}. ` : ""}${a.note}`;
     // On the part-dropped Ask, any answer but the plan option closes the issue.
-    if (ask?.reason === "part-dropped" && !said.includes(PLAN_REST) && chrisOwns(item)) return no(a, `${id} was filed by Chris, and this answer closes it`);
+    if (ask?.reason === "part-dropped" && !keepsOpen(said) && chrisOwns(item)) return no(a, `${id} was filed by Chris, and this answer closes it`);
     const after = a.do === "answer" ? a.after ?? (option?.after ? [option.after] : undefined) : undefined;
     const why = await refusal(async () => verbs.decide(repo, n!, said, after ? { after } : {}));
     return why ? no(a, why) : done(a, { action: a.do === "rerun" ? "reran" : "answered", sub, note: a.do === "rerun" ? a.note : option ? `${option.label}: ${a.note}` : a.note });

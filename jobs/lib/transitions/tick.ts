@@ -37,9 +37,10 @@ import { housekeeperDetached, intakeDetached, suiteDetached } from "./launch.ts"
 import { housekeepDue } from "../roles/housekeeper.ts";
 import { monitorStep } from "../roles/monitor.ts";
 import { timeoutStep, type Waiting } from "../asks/timeout.ts";
+import { actionsOn } from "../asks/ask.ts";
 import { drop, land, refusal } from "./transitions.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
-import { parseIssueRef } from "../../../issues/lib/todo.ts";
+import { parseKey } from "../../../lib/naming.ts";
 import { editedWaits, toRescue } from "../land/rescue.ts";
 import { smokeStep } from "../gates/smoke.ts";
 
@@ -178,23 +179,25 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
 }
 
 /**
- * The timeout's action on an Ask, as Chris's card takes it: a land or a drop of the run (its answer is the drop's
- * reason), else on the issue a drop, a decision with its intake, or intake again. The refusal, or null.
+ * The timeout's action on an Ask, as Chris's card takes it: approve lands the run; resolve on a run drops it with the
+ * question as the reason, so it runs again; the reason's second verb drops the issue and its run; resolve or continue
+ * on an issue is a decision with its intake. Any other action is refused. The refusal, or null.
  */
-async function takeOnTimeout(name: string, action: string, w: Waiting): Promise<string | null> {
+export async function takeOnTimeout(name: string, action: string, w: Waiting): Promise<string | null> {
   const said = `timeout: no answer to the ${w.ask.reason} Ask; ${w.ask.effects?.find((e) => e.action === action)?.text ?? action}`;
-  if (action === "land") return refusal(() => land(name, { lander: "timeout" }, { output: "ignore" }));
-  if (w.run && (action === "drop" || action === "answer")) return refusal(() => drop(name, { reason: action === "answer" ? `${said} (the question: "${w.ask.question}")` : said, quiet: true }));
-  const p = parseIssueRef(w.key), repo = p && loadRegistry()[p.repo];
+  const verb = action.split(":")[0];
+  if (verb === "approve") return refusal(() => land(name, { lander: "timeout" }, { output: "ignore" }));
+  if (w.run && verb === "resolve") return refusal(() => drop(name, { reason: `${said} (the question: "${w.ask.question}")`, quiet: true }));
+  // An issue's number is global: its repo is the one whose list holds it.
+  const k = parseKey(w.key), id = k?.kind === "issue" ? k.n : undefined, lists = reader(), repo = id === undefined ? undefined : Object.values(loadRegistry()).find((r) => lists.item(r.key, id));
   if (!repo) return `no repo for ${w.key}`;
+  // As `aleph issue drop`: the issue first, then its run, whose drop starts the dispatch.
+  if (verb === actionsOn(w.ask.reason)[1]) return refusal(async () => { verbs.close(repo, id!, "drop", said); if (w.run) await drop(name, { reason: said, quiet: true }); });
+  if (w.run || (verb !== "resolve" && verb !== "continue")) return `the timeout takes no ${action} on the ${w.ask.reason} Ask`;
   return refusal(async () => {
-    if (action === "drop" || action === "close" || action === "deny") verbs.close(repo, p.id, "drop", said);
-    else if (action === "retry") { const n = verbs.note(repo, p.id, said, true); if (n.answered) intakeDetached(repo, n.result.id); }
-    else {
-      const o = w.ask.options.find((x) => action === `decide:${x.label}`);
-      const d = verbs.decide(repo, p.id, o ? `timeout decided: ${o.label}: ${o.line}` : said, o?.after ? { after: [o.after] } : {});
-      intakeDetached(repo, d.item.id);
-    }
+    const o = w.ask.options.find((x) => action === `resolve:${x.label}`);
+    const d = verbs.decide(repo, id!, o ? `timeout decided: ${o.label}: ${o.line}` : said, o?.after ? { after: [o.after] } : {});
+    intakeDetached(repo, d.item.id);
   });
 }
 

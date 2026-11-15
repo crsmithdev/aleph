@@ -3,7 +3,7 @@
  * the page only renders. One entry per run, issue that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
-import { actionsOn, ASK_REASONS, LIMITS, limitText, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
+import { actionsOn, ASK_REASONS, CLOSE_DONE, LIMITS, limitText, PLAN_REST, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
 import { jobHref, parseId, refs, word } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
@@ -106,42 +106,48 @@ for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) 
 function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
   const job = (verb: string) => `/api/jobs/${encodeURIComponent(c.run?.id ?? "")}/${verb}`;
   const issue = (verb: string) => `/api/issues/${encodeURIComponent(c.id)}/${verb}`;
+  /** The drop of the issue: on a run, of the run's issue, which drops the run with it (`aleph issue drop`). */
+  const dropIt = c.run?.item ? `/api/issues/${encodeURIComponent(`${c.run.repo}-${c.run.item.id}`)}/drop` : c.run ? job("drop") : issue("drop");
   const proposal = (verb: string) => `/api/proposals/${encodeURIComponent(c.id)}/${verb}`;
   const a = (act: string, label: string, hint: string, path: string, body: Record<string, unknown> = {}, more: Partial<Action> = {}): Action =>
     ({ act, label, hint, primary: false, recommended: false, path, body, ...more });
+  const held = reason === "held-path" || reason === "review-held";
+  /** The second verb of a pair: it drops the issue, and its box takes an optional reason. */
+  const drops = (act: string, label: string, hint: string, path: string): Action[] =>
+    [a(act, label, hint, path, { reason: "" }, { input: { name: "reason" } })];
   const one = (act: string): Action[] => {
     switch (act) {
-      case "land": return [a("land", "Land it", c.run ? "Merges the run's branch into main." : "Lands the held run's branch on main.", job("land"))];
-      case "drop":
-        return c.run ? [a("drop", "Drop the job", "Discards the run's branch; the issue stays open.", job("drop"), {}, { confirm: true })]
-          : [a("drop", "Drop the issue", "Marks the issue dropped; nothing more runs for it.", issue("drop"), {}, { confirm: true })];
-      case "rerun": { const r = ASK_REASONS[reason].rerun!; return [a("rerun", r.label, r.hint, issue("rerun"))]; }
-      case "retry": return [a("retriage", "Run intake again", "Removes the Ask; intake runs again at once.", issue("retriage"))];
-      case "close": return [a("close", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue("drop"), { reason: "Chris closed it" })];
-      case "deny":
-        return [a("deny", "Deny", "Records the user's refusal on the issue and closes the question.", issue("drop"), { reason: "Chris denied it" }, { input: { name: "reason", lead: "Chris denied: " } })];
       case "approve":
+        if (held) return [a("approve", "Land it", c.run ? "Merges the run's branch into main." : "Lands the held run's branch on main.", job("land"))];
         if (reason === "core-change") return [a("approve", "Apply the change", "Applies the verdict to the note in the vault, then closes the issue as done.", issue("approve"))];
         if (c.lesson) { const w = words(c.lesson); return [a("approve", `Reopen the issue: ${w.approve}`, `Reopens the issue that ${w.hint}.`, proposal("approve"))]; }
         return [a("approve", "Reopen the issue", "Reopens the proposal's issue with a spec for the factory.", proposal("approve"))];
-      case "decline":
-        if (reason === "core-change") return [a("decline", "Keep the claim", "Keeps the note as it is with its date set to today, and drops the issue.", issue("decline"))];
-        if (c.lesson) return [a("decline", words(c.lesson).decline, "Drops the proposal; the memory does not propose this lesson again.", proposal("decline"))];
-        return [a("decline", "Never propose this", "Drops the proposal and stops the memory proposing it again.", proposal("decline"))];
-      case "decide": {
+      case "disapprove":
+        if (held) return drops("disapprove", "Drop the issue", "Discards the run's branch and marks the issue dropped.", dropIt);
+        if (reason === "core-change") return drops("disapprove", "Keep the claim", "Keeps the note as it is with its date set to today, and drops the issue.", issue("decline"));
+        if (c.lesson) return drops("disapprove", words(c.lesson).decline, "Drops the proposal; the memory does not propose this lesson again.", proposal("decline"));
+        return drops("disapprove", "Never propose this", "Drops the proposal and stops the memory proposing it again.", proposal("decline"));
+      case "resolve": {
+        if (c.run) return [a("resolve", "Answer and rerun", "Takes the user's answer and starts the job again with it.", job("answer"), {}, { input: { name: "answer" } })];
+        const decide = (label: string, hint: string, body: Record<string, unknown> = { label }) => a("resolve", label, hint, issue("decide"), body);
+        if (reason === "part-dropped") return [decide(CLOSE_DONE, "Sets the issue to done; nothing more runs for it."), decide(PLAN_REST, "Keeps the issue open and plans a new sub-issue for what the dropped one was to do.")];
         const d = c.issue?.decision;
         if (d) return [...d.options].sort((x, y) => +(y.label === d.recommended) - +(x.label === d.recommended))
-          .map((o) => a("decide", o.label, o.line || "Records this choice on the issue and lets the factory act on it.", issue("decide"), { label: o.label }));
-        if (proseDecision(c.issue?.question).recommendation) return [a("decide", "Approve recommendation", "Records the recommended choice on the issue, and the factory acts on it.", issue("decide"), { recommendation: true })];
-        return [a("decide", "Approve it", "Records the user's approval on the issue, and the factory starts it.", issue("decide"), { approve: true })];
+          .map((o) => decide(o.label, o.line || "Records this choice on the issue and lets the factory act on it."));
+        if (proseDecision(c.issue?.question).recommendation) return [decide("Approve recommendation", "Records the recommended choice on the issue, and the factory acts on it.", { recommendation: true })];
+        return [decide("Approve it", "Records the user's approval on the issue, and the factory starts it.", { approve: true })];
       }
+      case "dismiss":
+        return drops("dismiss", "Drop the issue", "Marks the issue dropped; nothing more runs for it.", dropIt);
+      case "continue": { const r = ASK_REASONS[reason].continue!; return [a("continue", r.label, r.hint, issue(reason === "intake-failed" ? "retriage" : "rerun"))]; }
+      case "discontinue": return drops("discontinue", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue("drop"));
       default: return [];
     }
   };
   const names = new Map<Action, string>();
-  const acts = actionsOn(reason, { run: !!c.run, decision: !!c.issue?.decision }).flatMap((n) => {
-    const got = n === "answer" ? [a("answer", "Answer and rerun", "Takes the user's answer and starts the job again with it.", job("answer"), {}, { input: { name: "answer" } })] : one(n);
-    for (const x of got) names.set(x, x.act === "decide" && x.body.label ? `decide:${x.body.label}` : n);
+  const acts = actionsOn(reason).flatMap((n) => {
+    const got = one(n);
+    for (const x of got) names.set(x, x.act === "resolve" && x.body.label ? `resolve:${x.body.label}` : n);
     return got;
   });
   if (acts[0]) acts[0].primary = true;
@@ -193,7 +199,7 @@ function alwaysFor(reason: string, action: string, first: string | undefined): A
   if (!action) return undefined;
   const label = `${first ?? action} [auto-yes]`;
   const revoke = `Revoke with \`aleph always revoke ${reason}\`.`;
-  if (action === "recommended") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking. ${revoke}` };
+  if (action === "resolve") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking. ${revoke}` };
   return { label, action, hint: `Does this one now. From now on, the factory does this without asking. ${revoke}` };
 }
 

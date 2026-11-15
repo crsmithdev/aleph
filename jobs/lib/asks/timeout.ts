@@ -1,7 +1,7 @@
 /**
  * The Ask timeout: when Chris does not answer an escalated Ask in the minutes the `timeouts` setting gives for its reason, the
  * tick takes the reason's no-answer action once, on a waiting run's Ask or an issue's: `pick` takes the action the
- * director's case text recommends (it keeps waiting when there is none), `drop` takes the reason's drop, close or deny.
+ * director's case text recommends (it keeps waiting when there is none), `drop` takes the reason's second verb, the one that drops it.
  * A land acts on the escalation list too: Chris sets the minutes, so the land is his. A held-path Ask has no timeout,
  * so a timeout never lands a held change, and a core-change Ask has none, so a timeout never applies or declines a
  * core note change.
@@ -19,9 +19,6 @@ import { actionsOn, ASK_REASONS, logAlways, type Ask } from "./ask.ts";
 export type NoAnswer = "pick" | "drop";
 export interface Timeout { minutes: number; then: NoAnswer }
 const THEN: NoAnswer[] = ["pick", "drop"];
-/** The actions that end an Ask with no work done, one per reason. */
-const DROPS = ["drop", "close", "deny"];
-
 /** The reasons a timeout may act on: every Ask reason but the memory proposals, which are Chris's, and held-path and core-change, which never time out. */
 export const TIMED = Object.keys(ASK_REASONS).filter((r) => !r.startsWith("proposal-") && r !== "held-path" && r !== "core-change");
 
@@ -57,10 +54,21 @@ export const issueAsks = (states = record.allIssueStates()): Waiting[] =>
 /** The detail of the event a timeout logs after it acts: the minutes it waited, or why it could not act. */
 const ACTED = /^(no answer in \d+ min|the timeout could not take)/;
 
-/** The action `then` takes on the Ask, or null to keep waiting. */
+/** The old words a stored recommend may name, each read as the reason's first verb (0) or its second (1). */
+const OLD: Record<string, 0 | 1> = { land: 0, answer: 0, decide: 0, rerun: 0, retry: 0, drop: 1, close: 1, deny: 1, decline: 1 };
+
+/**
+ * The action `then` takes on the Ask, or null to keep waiting: one of the reason's two verbs, or `resolve:<label>` of
+ * one of its options. A recommend of an old word reads as its verb; any other recommend is not taken.
+ */
 function actionOf(w: Waiting, then: NoAnswer): string | null {
-  if (then === "pick") return w.ask.recommend?.action ?? null;
-  return actionsOn(w.ask.reason, { run: w.run, decision: w.ask.options.length > 0 }).find((a) => DROPS.includes(a)) ?? null;
+  const acts: string[] = actionsOn(w.ask.reason);
+  if (then === "drop") return acts[1];
+  const rec = w.ask.recommend?.action ?? "", at = rec.indexOf(":");
+  const said = at < 0 ? rec : rec.slice(0, at), label = at < 0 ? "" : rec.slice(at + 1);
+  const verb = acts.includes(said) ? said : Object.hasOwn(OLD, said) ? acts[OLD[said]] : null;
+  if (!verb || !label) return verb;
+  return verb === "resolve" && w.ask.options.some((o) => o.label === label) ? `resolve:${label}` : null;
 }
 
 /**
@@ -83,7 +91,7 @@ export const dueAt = (e: Entry, timeouts = readTimeouts()): { at: number; action
 };
 
 /** The log word of what an action did. */
-const DID: Record<string, string> = { land: "landed", drop: "dropped", close: "dropped", deny: "dropped", rerun: "reran", retry: "reran" };
+const DID: Record<string, string> = { approve: "landed", disapprove: "dropped", dismiss: "dropped", discontinue: "dropped", continue: "reran" };
 
 /**
  * The tick's step: `take` the action of each waiting run's and issue's Ask whose timeout is due; it returns the

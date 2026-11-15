@@ -265,7 +265,7 @@ export function place(kind: Kind, target = ""): string {
 /** The standing key for a lesson: `proposal-<kind>:<place>`. */
 export const standingKey = (l: Lesson): string => `proposal-${l.kind ?? "skill"}:${place(l.kind ?? "skill", l.target)}`;
 
-/** A proposal with a standing approve or decline is answered at once, as the route would. */
+/** A proposal with a standing approve or disapprove is answered at once, as the route would. */
 function standingProposals(made: Lesson[], effects: Effects): void {
   for (const l of made) {
     const reason = standingKey(l);
@@ -278,9 +278,9 @@ function standingProposals(made: Lesson[], effects: Effects): void {
       // The issue's filing logged `filed`; the standing approve answers its proposal.
       if (ref.startsWith(`${repo.key}-`)) logAlways(reason, ref, "answered", { detail: `${reason}: approved ${l.id}` });
       else fail(l.id, `${reason}: approve failed: ${ref}`);
-    } else if (action === "decline") {
+    } else if (action === "disapprove") {
       const refusal = decline(l.id);
-      if (refusal) fail(l.id, `${reason}: decline failed: ${refusal}`);
+      if (refusal) fail(l.id, `${reason}: disapprove failed: ${refusal}`);
       else logAlways(reason, l.id, "dropped", { detail: `${reason}: declined` });
     }
   }
@@ -356,8 +356,8 @@ export function approve(id: string, repo: Place, effects: Effects): string {
   return l.issue;
 }
 
-/** Marks a proposal declined for good and drops its issue; "" when done, else a refusal string. */
-export function decline(id: string, now = Date.now()): string {
+/** Marks a proposal declined for good and drops its issue, with `reason` when given; "" when done, else a refusal string. */
+export function decline(id: string, reason = "", now = Date.now()): string {
   const store = readStore();
   const l = pending(store, id, "declined");
   if (typeof l === "string") return l;
@@ -367,7 +367,7 @@ export function decline(id: string, now = Date.now()): string {
       const w = writeList({ key: ref.repo }, `memory: declined ${l.issue}`, (doc) => {
         const item = find(doc, ref.id);
         if (!item) return null;
-        setStatus(item, "dropped", undefined, "the memory proposal was declined");
+        setStatus(item, "dropped", undefined, reason || "the memory proposal was declined");
         return true;
       });
       if (!w) return `no issue ${l.issue} to drop`;

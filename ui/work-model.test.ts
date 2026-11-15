@@ -64,7 +64,7 @@ beforeAll(async () => {
     const g = addPart(doc, two, { title: "gated", spec: "Do it." });
     setAsk(refIn(doc.repo!, g), { reason: "question", question: "Update left-pad?", options: [], why: [] });
     const three = add(doc, "A part was dropped", { request: "Plan it.\n" });
-    setAsk(refIn(doc.repo!, three), { reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [] });
+    setAsk(refIn(doc.repo!, three), { reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close as done", line: "close" }, { label: "Keep open", line: "plan" }], recommended: "Close as done", why: [] });
     add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);

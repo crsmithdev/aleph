@@ -365,9 +365,9 @@ describe("a run with no reply", () => {
     expect(askOf("issue.1")).toBeNull();
   });
 
-  test("retry: no Ask, and a third intake runs the command", async () => {
+  test("continue: no Ask, and a third intake runs the command", async () => {
     reset([{ title: "a", body: "nothing" }]);
-    grant("intake-failed", "retry");
+    grant("intake-failed", "continue");
     await run();
     const t = await run();
     expect(askOf("issue.1")).toBeNull();
@@ -378,13 +378,13 @@ describe("a run with no reply", () => {
     expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "rule", object: `${repo.key}-1`, action: "reran", detail: "intake" }));
   });
 
-  test("close: the item is done with the note", async () => {
+  test("discontinue: the item is dropped with the note", async () => {
     reset([{ title: "a", body: "nothing" }]);
-    grant("intake-failed", "close");
+    grant("intake-failed", "discontinue");
     await run();
     await run();
-    expect(issues.status(item(1))).toBe("done");
-    expect(item(1).fm.closed_why).toBe("no verdict in 2 runs; standing: closed");
+    expect(issues.status(item(1))).toBe("dropped");
+    expect(item(1).fm.closed_why).toBe("no verdict in 2 runs; standing: dropped");
   });
 
   test("recommended: an ask with options leaves no Ask and a note naming the recommendation", async () => {

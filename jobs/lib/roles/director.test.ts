@@ -24,7 +24,7 @@ const repo = () => loadRegistry()[key];
 const direct = () => directAll([repo()], ports());
 const directorRuns = () => allRuns().filter((e) => e.run.role === "director");
 const prompt = () => readFileSync(join(base, "prompt.md"), "utf8");
-const TEXT = { situation: "The goal asks for page A or B.", effects: [{ action: "decide:A", text: "Builds page A." }, { action: "decide:B", text: "Builds page B." }, { action: "deny", text: "Closes the question." }], recommend: { action: "decide:A", why: "Chris chose A before." } };
+const TEXT = { situation: "The goal asks for page A or B.", effects: [{ action: "resolve:A", text: "Builds page A." }, { action: "resolve:B", text: "Builds page B." }, { action: "dismiss", text: "Closes the question." }], recommend: { action: "resolve:A", why: "Chris chose A before." } };
 
 test("a decided Ask: code applies the answer, clears the Ask, and logs a Director decision and its record", async () => {
   fresh([{ title: "product", ask: choice() }]);
@@ -102,7 +102,7 @@ test("a director add files the fix job through writeFiling: one filed event, on 
 
 test("the schema requires the case text with actions, and parseReply returns it with the actions", () => {
   expect(DIRECTOR_SCHEMA.required).toEqual(["case"]);
-  expect(parseReply({ actions: [{ do: "rerun" }], case: TEXT }, ["decide:A", "decide:B", "deny"])).toEqual({ actions: [{ do: "rerun" }], text: TEXT });
+  expect(parseReply({ actions: [{ do: "rerun" }], case: TEXT }, ["resolve:A", "resolve:B", "dismiss"])).toEqual({ actions: [{ do: "rerun" }], text: TEXT });
 });
 
 test("the escalation list: a land on a security path gets case text and no action; a stored host-check Ask is not on it", async () => {
@@ -149,13 +149,13 @@ test("a memory proposal is on the escalation list: the director's case text goes
   const issue = `issue.1`;
   const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", title: "Check x.ts", issue, signals: [{ id: "s1", source: "chris", at: "2026-10-01T00:00:00Z", quote: "you forgot x.ts", link: "" }] };
   putJson("state", "corrections", { minedAt: "", lessons: [lesson] });
-  replyWith({ case: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files a goal." }, { action: "decline", text: "Drops it." }], recommend: { action: "decline", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
+  replyWith({ case: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files a goal." }, { action: "disapprove", text: "Drops it." }], recommend: { action: "disapprove", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
   const [d] = await direct();
   expect(d).toMatchObject({ ref: issue, on: issue, reason: "proposal-claude-md", outcome: "escalated", why: "a memory proposal is Chris's", applied: [] });
   expect(directorRuns()[0].run.target).toBe(issue);
   const l = readStore().lessons[0];
   expect(l.situation).toBe("The lesson says to check x.ts.");
-  expect(l.recommend).toEqual({ action: "decline", why: "Too vague." });
+  expect(l.recommend).toEqual({ action: "disapprove", why: "Too vague." });
   expect(l.state).toBe("proposed");
   // The case text says approve reopens the parked issue; it does not say approve files a goal.
   expect(prompt()).toContain("reopens");
@@ -165,12 +165,12 @@ test("a memory proposal is on the escalation list: the director's case text goes
 test("a core-change Ask on a parked issue is escalated to Chris with case text, whatever actions the director replies, and decides nothing", async () => {
   fresh([{ title: "Core note X", ask: { reason: "core-change", question: "Apply the archive verdict to the core note X?", options: [], why: ["gone"] } }]);
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
-  replyWith({ case: { situation: "The re-check says X is gone.", effects: [{ action: "approve", text: "Archives X." }, { action: "decline", text: "Keeps X." }], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
+  replyWith({ case: { situation: "The re-check says X is gone.", effects: [{ action: "approve", text: "Archives X." }, { action: "disapprove", text: "Keeps X." }], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
   const [d] = await direct();
   expect(d).toMatchObject({ ref: `issue.1`, reason: "core-change", outcome: "escalated", why: "a change to a core note is Chris's", applied: [] });
   expect(issues.status(item(1))).toBe("parked");
   expect(asked(1)!.situation).toBe("The re-check says X is gone.");
-  expect(prompt()).toContain("Actions on Chris's card: approve, decline");
+  expect(prompt()).toContain("Actions on Chris's card: approve, disapprove");
   expect(readRecord().map((r) => r.outcome)).toEqual(["escalated"]);
 });
 

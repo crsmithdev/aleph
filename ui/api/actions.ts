@@ -31,7 +31,7 @@ const action = (verb: "land" | "recheck" | "drop") => post(async (body, { id }) 
 
 const answerAndRerun = post(async (body, { id }) => {
   const { run } = find(id);
-  if (!isWaiting(run.state) || may("chris", "answer", run.ask, { run: true })) fail(409, `${id} is ${run.state}, not waiting for an answer`);
+  if (!isWaiting(run.state) || may("chris", "resolve", run.ask, { run: true })) fail(409, `${id} is ${run.state}, not waiting for an answer`);
   const said = typeof body.answer === "string" ? body.answer.trim() : "";
   if (!said) fail(400, "answer is required");
   return aleph(["drop", "--", run.name, `Chris answered the worker's question "${run.ask?.question ?? run.question ?? ""}": ${said}`]);

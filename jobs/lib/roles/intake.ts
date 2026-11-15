@@ -376,7 +376,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
       issues.setStatus(item, "done", undefined, v.reason);
     } else if (v.route === "close") {
       issues.setStatus(item, "done", undefined, v.reason);
-    } else if (v.ask.recommended && always("question")?.action === "recommended") {
+    } else if (v.ask.recommended && always("question")?.action === "resolve") {
       // The issue stays unsorted: the next intake reads this note and routes it.
       const o = v.ask.options.find((x) => x.label === v.ask.recommended) ?? v.ask.options[0]!;
       issues.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
@@ -413,17 +413,17 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   if (n < INTAKE_TRIES()) return null;
   const grant = always("intake-failed")?.action;
   const ref = `${repo.key}-${id}`;
-  if (grant === "retry") {
+  if (grant === "continue") {
     writeJson(mark, [...before, ...runs.map((e) => e.id)]);
     logAlways("intake-failed", ref, "reran");
     return `${ref}: no verdict in ${n} intake runs; standing: intake again next tick`;
   }
-  if (grant === "close") {
-    const closed = sort(repo, id, `intake ${ref}: no verdict`, (item) => {
-      issues.setStatus(item, "done", undefined, `no verdict in ${n} runs; standing: closed`);
+  if (grant === "discontinue") {
+    const dropped = sort(repo, id, `intake ${ref}: no verdict`, (item) => {
+      issues.setStatus(item, "dropped", undefined, `no verdict in ${n} runs; standing: dropped`);
     });
-    if (closed) logAlways("intake-failed", ref, "done");
-    return closed ? `${ref}: no verdict in ${n} intake runs; standing: closed` : null;
+    if (dropped) logAlways("intake-failed", ref, "dropped");
+    return dropped ? `${ref}: no verdict in ${n} intake runs; standing: dropped` : null;
   }
   return askFailed(repo, id, `no verdict in ${n} runs: ${reason}`);
 }

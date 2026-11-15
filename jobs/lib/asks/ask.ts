@@ -12,7 +12,7 @@
  */
 import { logEvent, logSetting } from "../../../lib/layout.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
-import { BECAUSE, because, key, parseKey, word, type Event } from "../../../lib/naming.ts";
+import { BECAUSE, because, key, parseKey, word, type AskAction, type Event } from "../../../lib/naming.ts";
 import { INTAKE_TRIES, RUN_CAP } from "../infra/settings.ts";
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
@@ -43,22 +43,22 @@ export interface Ask {
 export type Card = "approve" | "decide" | "unstick";
 
 export interface Reason {
-  actions: string[];
+  actions: AskAction[];
   /** The action the Always button takes. Empty: the factory has no rule that acts on this reason, so the card offers no auto-yes. */
-  always: string;
+  always: AskAction | "";
   /** The word a run's news and prompts use for this wait: a word of the sub set (lib/naming.ts). */
   needs?: "question" | "protected" | "review";
   /** The card's kind, and the name and one line the Automation page names the reason by. */
   card: Card; name: string; line: string;
   /** The card's fixed problem text; `{id}` is the issue or run it is about. */
   problem: string;
-  /** What the `rerun` action is called and does for this reason. */
-  rerun?: { label: string; hint: string };
+  /** What the `continue` action is called and does for this reason. */
+  continue?: { label: string; hint: string };
 }
 export interface Granted { action: string; at: string }
 
 const proposal = (name: string, line: string): Reason =>
-  ({ actions: ["approve", "decline"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change." });
+  ({ actions: ["approve", "disapprove"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change." });
 
 /**
  * Every reason the factory asks Chris, in the order the page lists the runs that wait. The first group is the spec's Ask
@@ -66,36 +66,35 @@ const proposal = (name: string, line: string): Reason =>
  * `proposal-<kind>:<place>` keys.
  */
 const REASONS = {
-  "held-path": { actions: ["land", "drop"], always: "", needs: "protected", card: "approve", name: "Lands on held paths",
+  "held-path": { actions: ["approve", "disapprove"], always: "", needs: "protected", card: "approve", name: "Lands on held paths",
     line: "A job that changes a held path, after its checks and review pass.", problem: "The run for {id} changes a path the repo holds for review, so the factory did not land it." },
-  "review-held": { actions: ["land", "drop"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
+  "review-held": { actions: ["approve", "disapprove"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
     line: "The reviewer held the job and no fix rounds are left.", problem: "The reviewer could not reach a verdict on {id} in two tries." },
-  // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
-  "question": { actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question", card: "decide", name: "Questions",
+  "question": { actions: ["resolve", "dismiss"], always: "resolve", needs: "question", card: "decide", name: "Questions",
     line: "A job or an intake stopped on a choice that the spec leaves open.", problem: "An answer is needed." },
-  "no-commit": { actions: ["rerun", "close"], always: "", card: "unstick", name: "Jobs with no commit",
+  "no-commit": { actions: ["continue", "discontinue"], always: "", card: "unstick", name: "Jobs with no commit",
     get line() { return `The last ${NO_COMMIT_LIMIT} jobs of an issue ended with nothing committed.`; },
     get problem() { return `The last ${NO_COMMIT_LIMIT} runs of {id} ended with no commit, so the factory stopped starting it.`; },
-    rerun: { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the issue." } },
-  // Its `rerun` answer closes the issue as done (decideAsk); `close` drops it.
-  "part-dropped": { actions: ["rerun", "close"], always: "", card: "decide", name: "Dropped sub-issues",
-    line: "A sub-issue of an issue was dropped and no other sub-issue is open.", problem: "A sub-issue of {id} was dropped and no other sub-issue of it is open.",
-    rerun: { label: "Close as done", hint: "Sets the issue to done; nothing more runs for it." } },
-  "intake-failed": { actions: ["retry", "close"], always: "retry", card: "unstick", name: "Failed intake",
+    continue: { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the issue." } },
+  // Its options are Close as done and Keep open (decideAsk); `dismiss` drops the issue.
+  "part-dropped": { actions: ["resolve", "dismiss"], always: "", card: "decide", name: "Dropped sub-issues",
+    line: "A sub-issue of an issue was dropped and no other sub-issue is open.", problem: "A sub-issue of {id} was dropped and no other sub-issue of it is open." },
+  "intake-failed": { actions: ["continue", "discontinue"], always: "continue", card: "unstick", name: "Failed intake",
     get line() { return `Intake of an issue failed ${INTAKE_TRIES() === 2 ? "twice" : `${INTAKE_TRIES()} times`}.`; },
-    problem: "Intake of {id} failed: it gave no verdict, so no one has decided what to do with this issue." },
-  "rescue": { actions: ["decide", "drop"], always: "recommended", card: "unstick", name: "Rescue of a stuck job",
+    problem: "Intake of {id} failed: it gave no verdict, so no one has decided what to do with this issue.",
+    continue: { label: "Run intake again", hint: "Removes the Ask; intake runs again at once." } },
+  "rescue": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Rescue of a stuck job",
     line: "A stuck job with more than one way out.", problem: "An answer is needed." },
   // Not Ask reasons of the spec; no new home is named for them.
-  "run-cap": { actions: ["rerun", "close"], always: "", card: "unstick", name: "Job cap",
+  "run-cap": { actions: ["continue", "discontinue"], always: "", card: "unstick", name: "Job cap",
     get line() { return `An issue started ${RUN_CAP()} times in one hour.`; },
     get problem() { return `The factory started {id} ${RUN_CAP()} times in one hour, so it stopped starting it until it is run again.`; },
-    rerun: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
+    continue: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
   // Held by the memory re-check on a core note; the director never decides it. Its issue is parked, so no work starts on it.
-  "core-change": { actions: ["approve", "decline"], always: "", card: "approve", name: "Core note changes",
+  "core-change": { actions: ["approve", "disapprove"], always: "", card: "approve", name: "Core note changes",
     line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}." },
-  // The issue is parked; its decision option `Remove the link` opens it, `Drop the waiter` drops it (decideAsk).
-  "blocker-dropped": { actions: ["decide"], always: "recommended", card: "decide", name: "Dropped blockers",
+  // The issue is parked; its option `Remove the link` opens it, `Drop the waiter` drops it (decideAsk).
+  "blocker-dropped": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Dropped blockers",
     line: "An issue waits after an issue that was dropped.", problem: "{id} waits after an issue that was dropped, so it is parked." },
   "proposal-check": proposal("Proposed checks", "The correction memory proposes a check for a repo."),
   "proposal-claude-md": proposal("Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."),
@@ -143,12 +142,8 @@ export const needsOf = (ask: Ask | undefined): Reason["needs"] => (ask ? ASK_REA
 /** What an awaiting run waits on. A run with no ask of its own asks a question. */
 export const waitOf = (ask: Ask | undefined): Pick<Ask, "reason"> => ({ reason: ask ? ask.reason : "question" });
 
-/** The actions a card offers. One reason serves a worker's question (a run) and an issue's (a decision): the context picks them. */
-export function actionsOn(reason: string, on: { run: boolean; decision: boolean }): string[] {
-  if (reason === "question") return on.run ? ["answer", "drop"] : ["decide", "deny"];
-  if (reason === "part-dropped") return on.decision ? ["decide", "close"] : ["rerun", "close"];
-  return ASK_REASONS[reason].actions;
-}
+/** The actions a card offers: its reason's pair of verbs, the same on a run and on an issue. */
+export const actionsOn = (reason: string, _on?: { run: boolean; decision: boolean }): string[] => ASK_REASONS[reason].actions;
 
 /** An Ask with no options: the factory's own stop, with the sentence Chris reads. */
 export const plainAsk = (reason: AskReason, question: string, why: string[] = []): Ask => ({ reason, question, options: [], why });
@@ -202,11 +197,16 @@ export const askNote = (a: Ask): string =>
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
 /** `user` sends the Ask to Chris with no director run; every reason takes it but the memory proposals. */
 const USER = "user";
-const allows = (reason: string, r: Reason, action: string): boolean => r.actions.includes(action) || action === r.always || (action === USER && !reason.startsWith("proposal-"));
+const allows = (reason: string, r: Reason, action: string): boolean => r.actions.some((x) => x === action) || action === r.always || (action === USER && !reason.startsWith("proposal-"));
 
-/** The `always` setting. A missing row is empty; An entry that grant() would refuse is ignored. */
+/** The old words of a stored grant and the verbs they read as. */
+const RENAMED: Record<string, string> = { recommended: "resolve", retry: "continue" };
+
+/** The `always` setting. A missing row is empty; a grant of an old word reads as its verb; an entry that grant() would refuse is ignored. */
 export const readAlways = (): Record<string, Granted> =>
-  Object.fromEntries(Object.entries(getJson<Record<string, Granted>>("settings", "always", {})).filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(reason, r, g?.action); }));
+  Object.fromEntries(Object.entries(getJson<Record<string, Granted>>("settings", "always", {}))
+    .map(([reason, g]) => [reason, { ...g, action: RENAMED[g?.action] ?? g?.action }] as [string, Granted])
+    .filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(reason, r, g.action); }));
 
 const write = (s: Record<string, Granted>): void => putJson("settings", "always", s);
 
@@ -283,7 +283,18 @@ export function waitsForSpecEdit(e: Entry): { version: string; question: string 
   return a?.spec !== undefined ? { version: a.spec, question: a.question } : null;
 }
 
-export const PLAN_REST = "Plan the missing part";
+export const PLAN_REST = "Keep open";
+export const CLOSE_DONE = "Close as done";
+/**
+ * The part-dropped Ask's options. An Ask stored before they had these labels names them "Close with what landed" and
+ * "Plan the missing part", with the same lines, so its answers are read by the lines.
+ */
+export const PART_DROPPED: Ask["options"] = [
+  { label: CLOSE_DONE, line: "Close the issue: the sub-issues that landed are enough." },
+  { label: PLAN_REST, line: "Plan a new sub-issue for what the dropped sub-issue was to do." },
+];
+/** An answer to the part-dropped Ask keeps the issue open: it names Keep open or its line. */
+export const keepsOpen = (said: string): boolean => said.includes(PLAN_REST) || said.includes(PART_DROPPED[1].line);
 
 /**
  * Called in the write that sets part `part` to dropped: when its parent is open, has no Ask and no other open part,
@@ -302,10 +313,7 @@ export function askPartDropped(key: string, issue: issues.Issue, question: strin
   setAsk(refIn(key, issue), {
     reason: "part-dropped",
     question,
-    options: [
-      { label: "Close with what landed", line: "Close the issue: the sub-issues that landed are enough." },
-      { label: PLAN_REST, line: "Plan a new sub-issue for what the dropped sub-issue was to do." },
-    ],
+    options: PART_DROPPED,
     why: [],
   });
 }
@@ -333,7 +341,7 @@ export function may(actor: Actor, action: string, ask: Ask | null | undefined, o
 
 /**
  * What a decision on `ask` does to the item, in the write that notes the decision `said`: on the part-dropped Ask, the
- * plan option sets `plan`, and any other answer closes the issue. On the blocker-dropped Ask, the drop option drops the
+ * Keep open option sets `plan`, and any other answer closes the issue. On the blocker-dropped Ask, the drop option drops the
  * issue, and any other answer opens it without its links to dropped issues. The caller clears the Ask after that write.
  */
 export function decideAsk(ask: Ask | null, item: issues.Issue, said: string): void {
@@ -344,7 +352,6 @@ export function decideAsk(ask: Ask | null, item: issues.Issue, said: string): vo
     return;
   }
   if (ask?.reason !== "part-dropped") return;
-  const planRest = ask.options.find((o) => o.label === PLAN_REST);
-  if (planRest && (said.includes(planRest.label) || said.includes(planRest.line))) item.fm.plan = "true";
+  if (keepsOpen(said)) item.fm.plan = "true";
   else issues.setStatus(item, "done");
 }

@@ -164,12 +164,12 @@ export const REMOVE_LINK = "Remove the link", DROP_WAITER = "Drop the waiter";
 
 /**
  * Called after the write that dropped issue `blocker`, for each open issue whose `after` names it: with the Always rule
- * `recommended` for blocker-dropped the link is removed and the issue stays open; else the issue is parked with the
+ * `resolve` for blocker-dropped the link is removed and the issue stays open; else the issue is parked with the
  * blocker-dropped Ask (ask.ts decides it).
  */
 function parkWaiter(repo: Place, waiter: Issue, blocker: string): void {
   const ref = keyOf("issue", waiter.id);
-  const standing = always("blocker-dropped")?.action === "recommended";
+  const standing = always("blocker-dropped")?.action === "resolve";
   const w = writeList(repo, `todo: item ${waiter.id}: blocker ${blocker} dropped`, (doc) => {
     const item = issues.find(doc, waiter.id);
     if (!item || status(item) !== "open" || !afterOf(item).includes(blocker)) return null;

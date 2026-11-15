@@ -15,14 +15,14 @@ test("issues that wait for triage are not rows and not in the status line: triag
   expect(view.renderLede(s)).not.toContain("triage");
 });
 
-test("an old prose note gets a Problem with no tag or lead, Approve recommendation and Deny", () => {
+test("an old prose note gets a Problem with no tag or lead, Approve recommendation and Drop the issue", () => {
   const note = "triage: for Chris: Should `ui/x.ts` use A or B?\nA is simpler. My recommendation is A, because it is simpler. Then more words.";
   const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: note, ask: { reason: "question", question: note, options: [], why: [], situation: "Should ui/x.ts use A or B?" } }]), stuck: [], issues: [], factory: { ...state.factory, health: [] } };
   const [row] = rows(withAttn(s));
   expect(problem(row)).not.toContain("triage: for Chris");
   expect(row).toContain('data-label="Approve recommendation"');
   expect(row).toContain('data-path="/api/issues/aleph-152/decide" data-body="{&quot;recommendation&quot;:true}"');
-  expect(row).toContain('data-label="Deny"');
+  expect(row).toContain('data-label="Drop the issue"');
   expect(row).toContain('class="reason"');
   expect(row.match(/<details class="more"/g)?.length).toBe(1);
 });

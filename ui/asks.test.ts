@@ -30,7 +30,7 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "no-commit": () => ofIssues(issue({ reason: "no-commit", question: "the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal." })),
   "run-cap": () => ofIssues(issue({ reason: "run-cap", question: RUN_CAP })),
   "intake-failed": () => ofIssues(issue({ reason: "intake-failed", question: "Intake failed: no verdict in 2 runs: failed: its process ended before a verdict" })),
-  "part-dropped": () => ofIssues(issue({ reason: "part-dropped", decision: { ...decision, options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed" }, question: "A goal was dropped." })),
+  "part-dropped": () => ofIssues(issue({ reason: "part-dropped", decision: { ...decision, options: [{ label: "Close as done", line: "close" }, { label: "Keep open", line: "plan" }], recommended: "Close as done" }, question: "A goal was dropped." })),
   rescue: () => ofIssues(issue({ reason: "rescue", decision, question: "Should it be A or B?" })),
   "blocker-dropped": () => ofIssues(issue({ status: "parked", reason: "blocker-dropped", decision: { ...decision, options: [{ label: "Remove the link", line: "open" }, { label: "Drop the waiter", line: "drop" }], recommended: "Remove the link" }, question: "issue.9 was dropped, so this issue is parked. What now?" })),
   "core-change": () => ofIssues(issue({ reason: "core-change", question: "Apply the archive verdict to the core note X?" })),
@@ -42,7 +42,7 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
 describe("asks", () => {
 
 
-  const key = (a: { act: string; body: Record<string, unknown> }) => (a.act === "decide" && a.body.label ? `decide:${a.body.label}` : a.act);
+  const key = (a: { act: string; body: Record<string, unknown> }) => (a.act === "resolve" && a.body.label ? `resolve:${a.body.label}` : a.act);
   for (const reason of Object.keys(ASK_REASONS)) {
     /** The case's first entry once the director escalated it with this case text. */
     const escalated = (text: Partial<Ask>) => { STORE = text; try { return CASES[reason]()[0]; } finally { STORE = undefined; } };
@@ -77,22 +77,45 @@ describe("asks", () => {
     try {
       const req = (reason: string) => CASES[reason]()[0].actions.map(({ act, path, body, confirm, input }) => ({ act, path, body, confirm, input }));
       expect(ofRuns(run("question", { question: "Which port?", id: "a#27" }))[0].actions.map(({ act, path, body, confirm, input }) => ({ act, path, body, confirm, input }))).toEqual([
-        { act: "answer", path: "/api/jobs/a%2327/answer", body: {}, confirm: undefined, input: { name: "answer" } },
-        { act: "drop", path: "/api/jobs/a%2327/drop", body: {}, confirm: true, input: undefined },
+        { act: "resolve", path: "/api/jobs/a%2327/answer", body: {}, confirm: undefined, input: { name: "answer" } },
+        { act: "dismiss", path: "/api/issues/aleph-27/drop", body: { reason: "" }, confirm: undefined, input: { name: "reason" } },
       ]);
       expect(req("rescue")).toEqual([
-        { act: "decide", path: "/api/issues/aleph-387/decide", body: { label: "B" }, confirm: undefined, input: undefined },
-        { act: "decide", path: "/api/issues/aleph-387/decide", body: { label: "A" }, confirm: undefined, input: undefined },
-        { act: "drop", path: "/api/issues/aleph-387/drop", body: {}, confirm: true, input: undefined },
+        { act: "resolve", path: "/api/issues/aleph-387/decide", body: { label: "B" }, confirm: undefined, input: undefined },
+        { act: "resolve", path: "/api/issues/aleph-387/decide", body: { label: "A" }, confirm: undefined, input: undefined },
+        { act: "dismiss", path: "/api/issues/aleph-387/drop", body: { reason: "" }, confirm: undefined, input: { name: "reason" } },
       ]);
-      expect(req("intake-failed").map((a) => [a.path, a.body])).toEqual([["/api/issues/aleph-387/retriage", {}], ["/api/issues/aleph-387/drop", { reason: "Chris closed it" }]]);
+      expect(req("intake-failed").map((a) => [a.act, a.path, a.body])).toEqual([["continue", "/api/issues/aleph-387/retriage", {}], ["discontinue", "/api/issues/aleph-387/drop", { reason: "" }]]);
+      expect(req("no-commit").map((a) => [a.act, a.path])).toEqual([["continue", "/api/issues/aleph-387/rerun"], ["discontinue", "/api/issues/aleph-387/drop"]]);
       expect(req("core-change").map(({ act, path, body }) => ({ act, path, body }))).toEqual([
         { act: "approve", path: "/api/issues/aleph-387/approve", body: {} },
-        { act: "decline", path: "/api/issues/aleph-387/decline", body: {} },
+        { act: "disapprove", path: "/api/issues/aleph-387/decline", body: { reason: "" } },
       ]);
       expect(req("proposal-check").map((a) => a.path)).toEqual(["/api/proposals/L1/approve", "/api/proposals/L1/decline"]);
-      const deny = ofIssues(issue({ reason: "question", decision, question: "Should it be A or B?" }))[0].actions.find((a) => a.act === "deny");
-      expect(deny).toMatchObject({ path: "/api/issues/aleph-387/drop", body: { reason: "Chris denied it" }, input: { name: "reason", lead: "Chris denied: " } });
+      expect(req("proposal-check").map((a) => a.act)).toEqual(["approve", "disapprove"]);
+    } finally { STORE = undefined; }
+  });
+
+  test("each card offers only the verbs of its pair, and the second verb has a reason box", () => {
+    const pairs: Record<string, string[]> = { approve: ["approve", "disapprove"], decide: ["resolve", "dismiss"], unstick: ["continue", "discontinue"] };
+    STORE = { situation: "Stored situation." };
+    try {
+      for (const reason of Object.keys(ASK_REASONS)) {
+        const [it] = CASES[reason](), verbs: string[] = ASK_REASONS[reason].actions;
+        expect([reason, [...new Set(it.actions.map((a) => a.act))]]).toEqual([reason, verbs]);
+        expect(verbs).toEqual(pairs[it.card]);
+        for (const a of it.actions.filter((x) => x.act === verbs[1])) expect([reason, a.input?.name]).toEqual([reason, "reason"]);
+        for (const a of it.actions.filter((x) => x.act !== verbs[1])) expect([reason, a.input?.name === "reason"]).toEqual([reason, false]);
+        if (verbs[0] !== "resolve") expect(it.actions.filter((a) => a.act === verbs[0]).length).toBe(1);
+      }
+    } finally { STORE = undefined; }
+  });
+
+  test("a part-dropped card offers resolve choices labelled Close as done and Keep open", () => {
+    STORE = { situation: "Stored situation." };
+    try {
+      const [it] = CASES["part-dropped"]();
+      expect(it.actions.filter((a) => a.act === "resolve").map((a) => [a.label, a.body])).toEqual([["Close as done", { label: "Close as done" }], ["Keep open", { label: "Keep open" }]]);
     } finally { STORE = undefined; }
   });
 
@@ -125,12 +148,12 @@ describe("asks", () => {
       expect(always.hint).toMatch(/[Rr]eopen/);
       expect(always.hint).not.toMatch(/File|files|goal/);
       expect(always.hint).toContain("aleph always revoke");
-      const reruns = [
-        ...CASES["no-commit"]()[0].actions.filter((a) => a.act === "rerun"),
-        ...CASES["run-cap"]()[0].actions.filter((a) => a.act === "rerun"),
+      const continues = [
+        ...CASES["no-commit"]()[0].actions.filter((a) => a.act === "continue"),
+        ...CASES["run-cap"]()[0].actions.filter((a) => a.act === "continue"),
       ];
-      expect(reruns.length).toBe(2);
-      for (const a of reruns) expect(`${a.label} ${a.hint}`).not.toContain("goal");
+      expect(continues.length).toBe(2);
+      for (const a of continues) expect(`${a.label} ${a.hint}`).not.toContain("goal");
     } finally { STORE = undefined; }
   });
 
@@ -142,7 +165,6 @@ describe("asks", () => {
       expect(hints.length).toBeGreaterThan(5);
       for (const h of hints) expect(h).not.toMatch(/\b(you|your)\b/i);
       expect(hints).toContain("Takes the user's answer and starts the job again with it.");
-      expect(hints).toContain("Records the user's refusal on the issue and closes the question.");
       expect(hints).toContain("Records the user's approval on the issue, and the factory starts it.");
     } finally { STORE = undefined; }
   });

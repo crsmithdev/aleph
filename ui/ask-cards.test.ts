@@ -25,10 +25,10 @@ const issueAsk = (n: number, reason: string, o: object = {}) => ({ id: `aleph-${
 
 /** One escalated Ask of each kind: a held run, an issue's question, and a no-commit stop. */
 const four = () => asksOf(
-  [job({ name: "aleph-27", state: "waiting", reason: "held path hooks/x.ts", item: { id: 27, title: "Digest" }, ask: { reason: "held-path", ...CASE(["land", "drop"], "land") } })],
+  [job({ name: "aleph-27", state: "waiting", reason: "held path hooks/x.ts", item: { id: 27, title: "Digest" }, ask: { reason: "held-path", ...CASE(["approve", "disapprove"], "approve") } })],
   [
-    issueAsk(41, "question", { ask: { reason: "question", question: "A or B?", options: [], why: [], ...CASE(["decide", "deny"], "decide") } }),
-    issueAsk(42, "no-commit", { ask: { reason: "no-commit", question: "q", options: [], why: [], ...CASE(["rerun", "close"], "rerun") } }),
+    issueAsk(41, "question", { ask: { reason: "question", question: "A or B?", options: [], why: [], ...CASE(["resolve", "dismiss"], "resolve") } }),
+    issueAsk(42, "no-commit", { ask: { reason: "no-commit", question: "q", options: [], why: [], ...CASE(["continue", "discontinue"], "continue") } }),
   ], []);
 const card = (row: string) => row.match(/^<article[^]*<\/article>$/)![0];
 
@@ -49,10 +49,10 @@ test("one card per kind: the title opens with the kind label, and the tag names 
 
 test("a card with a due time names the action the timeout takes", () => {
   const at = "2026-10-27T17:00:00Z", i = four()[0];
-  const drop = card(askCard({ ...i, due: at, dueAction: "drop" }, at)), land = card(askCard({ ...i, due: at, dueAction: "land" }, at));
+  const drop = card(askCard({ ...i, due: at, dueAction: "disapprove" }, at)), land = card(askCard({ ...i, due: at, dueAction: "approve" }, at));
   expect(drop).toContain("Drops at");
-  expect(drop).not.toContain("Lands at");
-  expect(land).toContain("Lands at");
+  expect(drop).not.toContain("Approves at");
+  expect(land).toContain("Approves at");
 });
 
 test("the compact face is the title and the buttons; the open face adds the description and what each button does", () => {
@@ -64,7 +64,7 @@ test("the compact face is the title and the buttons; the open face adds the desc
   expect(fold).not.toContain("<button");
   expect(row.slice(row.indexOf(fold) + fold.length)).toContain('data-label="Land it"');
   // Each button carries what it does; the page shows it only while the fold is open.
-  expect(row).toMatch(/data-label="Land it">Land it<\/button><div class="choice-text"><span class="effect">What land does\.<\/span>/);
+  expect(row).toMatch(/data-label="Land it">Land it<\/button><div class="choice-text"><span class="effect">What approve does\.<\/span>/);
   const css = readFileSync(join(import.meta.dir, "app.css"), "utf8");
   expect(css).toContain(".issue-row[data-card] .choice-text { display: none; }");
   expect(css).toContain(".issue-row[data-card]:has(.ask-fold[open]) .choice-text { display: flex;");
@@ -73,9 +73,9 @@ test("the compact face is the title and the buttons; the open face adds the desc
 
 test("the recommended button is marked and filled; the others are not", () => {
   const row = askCard(four()[0], "2026-10-27T17:00:00Z");
-  expect(row).toContain('<div class="choice rec"><button class="act primary" type="button" data-act="land"');
+  expect(row).toContain('<div class="choice rec"><button class="act primary" type="button" data-act="approve"');
   expect(row.match(/<span class="rec-note">Recommended<\/span>/g)).toHaveLength(1);
-  expect(row).toContain('<div class="choice"><button class="act" type="button" data-act="drop"');
+  expect(row).toContain('<div class="choice"><button class="act" type="button" data-act="disapprove"');
 });
 
 test("Technical details are closed by default and hold the director's details and why it recommends", () => {
@@ -88,7 +88,7 @@ test("Technical details are closed by default and hold the director's details an
 });
 
 test("each held path names its change: a package file is a package change", () => {
-  const [i] = asksOf([job({ name: "aleph-28", state: "waiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { reason: "held-path", ...CASE(["land", "drop"], "land") } })]);
+  const [i] = asksOf([job({ name: "aleph-28", state: "waiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { reason: "held-path", ...CASE(["approve", "disapprove"], "approve") } })]);
   expect(i.tag).toBe("protected");
 });
 
@@ -107,7 +107,7 @@ test("one Ask per reason: the card, its label and its tag come from the server i
   const want: Record<string, [string, string, string]> = {
     "held-path": ["approve", "Approve", "protected"], "review-held": ["approve", "Approve", "returned"], question: ["decide", "Decide", "question"],
     "no-commit": ["unstick", "Unstick", "failed"], "part-dropped": ["decide", "Decide", "incomplete"], "intake-failed": ["unstick", "Unstick", "failed"],
-    rescue: ["unstick", "Unstick", "waiting"], "run-cap": ["unstick", "Unstick", "capped"],
+    rescue: ["decide", "Decide", "waiting"], "run-cap": ["unstick", "Unstick", "capped"],
     "core-change": ["approve", "Approve", "core-change"], "blocker-dropped": ["decide", "Decide", "blocker-dropped"],
     "proposal-check": ["approve", "Approve", "proposal"], "proposal-claude-md": ["approve", "Approve", "proposal"], "proposal-skill": ["approve", "Approve", "proposal"],
   };
@@ -166,11 +166,11 @@ test("a decide card marks the recommendation once, on the action when one carrie
 
 test("the reason box is an inputBox() with its attributes and the reason kept in denyReasons", () => {
   denyReasons.set("tools-4", "not now");
-  const row = askCard(plain({ actions: [{ act: "deny", label: "Deny", hint: "Closes it.", path: "/api/issues/tools-4/drop", body: {}, input: { name: "reason", lead: "Chris denied: " } }] }), "2026-10-27T17:00:00Z");
+  const row = askCard(plain({ actions: [{ act: "dismiss", label: "Drop the issue", hint: "Closes it.", path: "/api/issues/tools-4/drop", body: {}, input: { name: "reason", lead: "Chris denied: " } }] }), "2026-10-27T17:00:00Z");
   denyReasons.delete("tools-4");
   const input = row.match(/<input [^>]*>/)![0];
   expect(input.startsWith('<input name="reason" type="text" value="not now"')).toBe(true);
-  for (const a of ['aria-label="Reason to deny tools-4"', 'data-repo="tools"', 'data-id="4"', 'data-lead="Chris denied: "', "hidden", 'maxlength="200"']) expect(input).toContain(a);
+  for (const a of ['aria-label="Reason to dismiss tools-4"', 'data-repo="tools"', 'data-id="4"', 'data-lead="Chris denied: "', "hidden", 'maxlength="200"']) expect(input).toContain(a);
 });
 
 test("a decided ask has no card in the Herald while a state still lists it, and shows again once a state loaded after the decision drops it and a later one lists it", () => {

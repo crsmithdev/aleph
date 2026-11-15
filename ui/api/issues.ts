@@ -12,7 +12,7 @@ import { allRuns, issueKeyOf, loadRegistry, onOf, runsByIssue, type Repo } from 
 import { counting } from "../../jobs/lib/records/record.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
-import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
+import { askOf, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
 import { afterOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
@@ -229,7 +229,8 @@ const decide = post((b, params) => {
   const { repo, n, item } = target(params);
   const d = askOf(refIn(repo.key, item));
   if (!d || (todos.status(item) !== "open" && d.reason !== "blocker-dropped")) return fail(409, "this issue is not waiting for a decision");
-  const o = d.options.find((x) => x.label === b.label);
+  // A part-dropped Ask stored with the old labels takes the card's labels.
+  const o = (d.reason === "part-dropped" ? PART_DROPPED : d.options).find((x) => x.label === b.label);
   if (d.options.length && !o) fail(400, `no option named ${JSON.stringify(b.label ?? null)}`);
   const rec = b.recommendation === true ? proseDecision(todos.noteOf(item.notes.at(-1) ?? "").text).recommendation : null;
   const note = o ? `Chris decided: ${o.label}: ${o.line}` : b.approve === true ? "Chris approved it" : rec ? `Chris decided: ${rec}` : fail(400, "this issue has no recommendation to approve");
@@ -273,11 +274,13 @@ const answer = (verb: "note" | "decide" | "done", text: string) => post((_b, par
   return aleph(["issue", verb, "--", repo.key, String(n), text]);
 });
 
-/** Chris's answer to a held change of a core note, run in process (no `aleph` command does this): the refusal of the vault op is a 422. */
-const core = (approved: boolean) => post(async (_b, params) => {
+/** Chris's answer to a held change of a core note, run in process (no `aleph` command does this): the refusal of the vault op is a 422. A `reason` is a note on the issue. */
+const core = (approved: boolean) => post(async (b, params) => {
   const { repo, item } = target(params);
   const why = await answerHeld(`${repo.key}-${item.id}`, approved);
   if (why) fail(422, why);
+  const said = typeof b.reason === "string" ? b.reason.trim() : "";
+  if (said) await aleph(["issue", "note", "--", repo.key, String(item.id), `Chris: ${said}`]);
   return { status: approved ? "done" : "dropped" };
 });
 

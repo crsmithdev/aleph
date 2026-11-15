@@ -7,6 +7,9 @@ export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"] as const;
 const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"] as const;
 const ASKS = ["protected", "question", "incomplete", "capped", "proposal"] as const;
+/** The verbs of an Ask card, each pair the verb that goes ahead and then the verb that drops the issue: the only actions an Ask offers, a rule grants or a timeout takes. */
+export const ASK_ACTIONS = ["approve", "disapprove", "resolve", "dismiss", "continue", "discontinue"] as const;
+export type AskAction = (typeof ASK_ACTIONS)[number];
 export const ACTIONS: readonly string[] = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed", "stalled", "reopened"];
 /** Why a run stopped: the closed set of causes (outcome.ts `Cause`). */
 export const CAUSES = ["no-commit", "timeout", "stalled", "infra", "locked", "credit", "check", "conflict", "moved", "review", "unanswered", "other"] as const;
