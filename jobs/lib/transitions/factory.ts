@@ -406,13 +406,13 @@ const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`
 /** The heading a run's report entry goes under: the report lane of its state. */
 const laneOf = (e: Entry): string => lane(e.run.state);
 
-/** One run as the report gives it. */
-function entry(e: Entry): string {
+/** One run as the report gives it; in an issue's block (`current` says which run is the newest) it leaves out the key the block head shows. */
+function entry(e: Entry, current?: boolean): string {
   const r = e.run;
   const needs = isWaiting(r.state) ? needsOf(r.ask) : undefined;
   const lane = laneOf(e);
   const hit = (lane === "landed" || lane === "waiting") && r.repo && onOf(r) !== undefined ? reader().item(r.repo, onOf(r)!) : undefined, prio = hit && priorityOf(hit);
-  const head = `${shownId(r.name, r.repo)} ${r.state}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.state !== "returned" && r.state !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
+  const head = `${current === undefined ? `${shownId(r.name, r.repo)} ` : ""}${r.state}${current ? " (current)" : ""}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.state !== "returned" && r.state !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.state === "landed" && r.commit) {
     lines.push(`  commit ${r.commit.slice(0, 7)}`);
@@ -443,9 +443,18 @@ export function report(now = Date.now(), peek = false): string {
   if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));
   const eps = newEpisodes();
   if (eps.length) lines.push(["episodes:", ...eps.map((t) => `  ${t}`)].join("\n"));
+  const asks = askLines();
+  if (asks.length) lines.push(["asks:", ...asks.map((a) => `  ${a}`)].join("\n"));
   const lessons = proposals();
   if (lessons.length) lines.push(["proposed lessons (Yes or No on Status):", ...lessons.map((l) => `  ${l.id} ${l.kind}: ${l.sentence} (${l.count} signals)`)].join("\n"));
   return lines.join("\n");
+}
+
+/** Each open issue that has an Ask, by its shown key and title. */
+function askLines(): string[] {
+  return Object.values(loadRegistry()).flatMap((repo) => (reader({ fetch: false }).list(repo.key)?.items ?? [])
+    .filter((item) => issues.status(item) === "open" && askOf(refIn(repo.key, item)))
+    .map((item) => `${shownId(refIn(repo.key, item), repo.key)} ${item.title}`));
 }
 
 const episodesSeenFile = () => join(factoryDir(), "episodes-seen");
@@ -502,9 +511,16 @@ function cameDue(): string[] {
 function runLines(now: number, peek: boolean): string[] {
   const fresh = allRuns().filter((e) => e.run.shown === false && e.run.role !== "plain" && e.run.state !== "running" && !isRunning(e));
   const lines: string[] = [];
+  // The runs of one issue are one block, listed oldest first under the lane of the newest; a run with no issue target is its own.
+  const blocks = new Map<string, Entry[]>();
+  for (const e of fresh) {
+    const k = onOf(e.run) === undefined ? e.id : `${e.run.repo}/${e.run.target}`;
+    blocks.set(k, [...blocks.get(k) ?? [], e]);
+  }
+  const block = (runs: Entry[]) => runs.length === 1 ? entry(runs[0]) : [shownId(runs[0].run.target, runs[0].run.repo), ...runs.map((e, i) => entry(e, i === runs.length - 1).replace(/^/gm, "  "))].join("\n");
   for (const l of LANES) {
-    const here = fresh.filter((e) => laneOf(e) === l);
-    if (here.length) lines.push(`${l}:`, ...here.map(entry));
+    const here = [...blocks.values()].filter((b) => laneOf(b.at(-1)!) === l);
+    if (here.length) lines.push(`${l}:`, ...here.map(block));
   }
   if (!peek) for (const e of fresh) patchRun(e.id, { shown: true });
   const today = runsToday(now);

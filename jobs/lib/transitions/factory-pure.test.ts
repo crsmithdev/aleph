@@ -6,6 +6,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
 import { spentToday, runsToday, health, writeBaseline, baselines, suiteHistory, factorySnapshot, issueFacts } from "../gates/factory-status.ts";
+import { plainAsk, setAsk } from "../asks/ask.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { reseed, seed } from "../../job.testkit.ts";
 import { ctx, sh, newIssue, change, mk, setup, teardown } from "./factory.helpers.ts";
@@ -295,4 +296,27 @@ test("the report heads a run with its project's code when it has one", () => {
   const out = report();
   expect(out).toContain("f-01421 landed");
   expect(out).not.toContain("I-01421");
+});
+
+test("the report gives the unshown runs of one issue as one block under its newest run's lane, the newest marked current", () => {
+  const first = mk("fac-21", "build", "failed", { shown: false, reason: "red checks" });
+  mk("fac-21", "build", "landed", { shown: false, job: first.job });
+  mk("fac-22", "build", "failed", { shown: false });
+  const out = report();
+  expect(out.split("I-00021").length - 1).toBe(1);
+  expect(out).toContain("landed:\nI-00021\n  failed: red checks\n  landed (current)");
+  expect(out.indexOf("  failed: red checks")).toBeLessThan(out.indexOf("failed:\nI-00022 failed"));
+  expect(out.split("failed:\n").length - 1).toBe(1);
+});
+
+test("the report lists each open issue that has an Ask under asks:, and leaves out a done issue's Ask", () => {
+  const open = newIssue();
+  const done = newIssue();
+  setAsk(`issue.${open}`, plainAsk("question", "which?"));
+  setAsk(`issue.${done}`, plainAsk("question", "which?"));
+  change(done, (i) => issues.setStatus(i, "done"));
+  const out = report();
+  expect(out).toContain(`asks:\n  I-0000${open} ship it`);
+  expect(out).not.toContain(`I-0000${done}`);
+  expect(report()).toContain("asks:");
 });

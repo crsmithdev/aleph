@@ -25,7 +25,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 | `aleph intake <repo>-<n>` | Takes in one issue now |
 | `aleph status [<repo>-<n>[.<k>]] [--json]` | The state of one issue, or of each open issue in the recent repos |
 | `aleph jobs` | Open jobs, then the jobs that ended in the last 24 hours |
-| `aleph report` | Runs not yet shown, how far each checkout is behind `origin/main`, and health lines |
+| `aleph report` | Runs not yet shown (one block per issue, under the lane of its newest run), each open issue with an Ask, how far each checkout is behind `origin/main`, and health lines |
 | `aleph land <name>` | Lands a held or reviewed run, with `Held-by: Chris` |
 | `aleph drop <name>` | Drops a run and deletes its branch |
 | `aleph recheck <name>` | Merges main into a returned or failed run's branch and checks it again, without a worker |
