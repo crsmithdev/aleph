@@ -2,20 +2,19 @@
 name: design-language
 description: >
   Design language: extract a UI's design language from its code into one
-  reference doc, or audit the UI against that doc. Use when asked to find
-  hard-coded colours, sizes or fonts, standardize tables, charts or value
-  formats, or check a UI change against the design reference.
+  reference doc. Use when asked to find hard-coded colours, sizes or fonts,
+  or standardize tables, charts or value formats.
 ---
 
 # Design language
 
 The design language is what the code **already mostly does**, written down: tokens, formats, layout rules and components, each with its use count. The doc records the language; it does not invent a new one. A value that bypasses the language is a **deviation**, and each deviation becomes a fix.
 
-The reference doc is `docs/design.md`. If it does not exist, run **Extract**. If it exists, run **Audit**. Change no UI code in either mode: the output is the doc and the issues.
+The reference doc is `docs/design.md`. If it does not exist, run **Extract**. To audit a UI against the doc, use refit-design. Change no UI code: the output is the doc and the issues.
 
 ## Inventory
 
-Both modes start here. Find the UI's files: stylesheets, the page shell, the views or components, and the shared helpers. Then run:
+Extract starts here. Find the UI's files: stylesheets, the page shell, the views or components, and the shared helpers. Then run:
 
 ```
 bun <this skill>/scripts/inventory.ts <ui files or dirs> --summary
@@ -53,12 +52,7 @@ Done when every group above has a list, and you can name the file you have not r
 
 ## Audit
 
-1. Read `docs/design.md`.
-2. Run the inventory on the whole UI, or on the files a change touched.
-3. Mark each `literal`, `helper-bypass`, column and component against the doc: **follows**, **deviates** (name the rule), or **new** (a value or pattern the doc does not cover).
-4. Report the deviations with `file:line`, the value, and the rule. A **new** pattern used 3 or more times is a proposal to amend the doc; list it apart from the deviations.
-
-Done when every row of the inventory is marked, and the report gives the counts per mark.
+See [refit-design](../refit-design/SKILL.md).
 
 ## Done when
 
