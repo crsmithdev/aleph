@@ -199,7 +199,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
         f.requestSubmit();
       })()`);
       // The hint shows the saved cap only once the page is drawn again, which a failed save never does.
-      await pg.when('document.querySelector("form[data-cap=live] .hint").textContent.includes(" of " + window.want + " now")');
+      await pg.when('document.querySelector("form[data-cap=live] .hint").textContent.endsWith(" of " + window.want)');
       expect(await pg.ev("[document.querySelector(\"#monitor details\").open, document.querySelector(\"#monitor details\").old]")).toEqual([true, true]);
     } finally { own.stop(); }
   }, 60_000);

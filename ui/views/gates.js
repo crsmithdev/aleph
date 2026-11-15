@@ -47,11 +47,11 @@ export function renderGates(d, q = new URLSearchParams()) {
 
 /** The environment variable that overrides each key of the `caps` setting, as jobs/lib/infra/settings.ts names it. */
 const CAP_ENV = { live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP", intakeTries: "ALEPH_INTAKE_TRIES", jobSeconds: "ALEPH_JOB_TIMEOUT", fixRounds: "ALEPH_FIX_ROUNDS", landBatch: "ALEPH_LAND_BATCH", loadLimit: "ALEPH_LOAD_LIMIT" };
-/** One cap as a setting: a number input with a Save button, `now` in the hint, and a warning when its environment variable overrides the `caps` setting. */
-function capSetting(f, key, label, value, note) {
+/** One cap as a setting: a number input with a Save button, `hint` of at most four words, `tip` as the row's title, and a mark in the hint and a warning in the title when its environment variable overrides the `caps` setting. */
+function capSetting(f, key, label, value, hint, tip) {
   const id = `cap-${key}`, env = f.capEnv?.[key] ? ` ${CAP_ENV[key]} is set: an edit has no effect while that variable is set.` : "";
   return setting(label, inputBox(key, value, { id, type: "number", attrs: ` min="${key === "fixRounds" ? 0 : 1}" step="1" inputmode="numeric" required` }),
-    { id, save: "Save", hint: `${note}.${env}`, attrs: ` data-cap="${key}"` });
+    { id, save: "Save", hint: env ? `${hint}, env` : hint, attrs: ` data-cap="${key}" title="${esc(`${tip}.${env}`)}"` });
 }
 
 /** The metric tiles: the automation rate, the gate catches and the held time, each over the log's window. */
@@ -67,20 +67,20 @@ export function renderNow(d) {
 
 /** The settings under the caps: each one's value and a form to edit it. */
 const SETTINGS = [
-  ["intakeTries", "Intake tries", "intake runs with no reply before an Ask"],
-  ["jobSeconds", "Job time limit", "seconds in a worker's time box"],
-  ["fixRounds", "Fix rounds", "times a failed job goes back to its worker before an Ask"],
-  ["landBatch", "Land batch", "passed runs one land pushes together"],
-  ["loadLimit", "Load limit", "the 1-minute load average under which a check, a worker or a land starts"],
+  ["intakeTries", "Intake tries", "runs", "intake runs with no reply before an Ask"],
+  ["jobSeconds", "Job time limit", "seconds", "seconds in a worker's time box"],
+  ["fixRounds", "Fix rounds", "rounds", "times a failed job goes back to its worker before an Ask"],
+  ["landBatch", "Land batch", "jobs", "passed runs one land pushes together"],
+  ["loadLimit", "Load limit", "1min load", "the 1-minute load average under which a check, a worker or a land starts"],
 ];
 
 /** The controls panel: the live cap and the run cap, each with its use against its limit, then the settings, each with a form to edit it. */
 export function renderCaps(d) {
   const f = d.factory;
   return card("Controls", settings("Controls", [
-    capSetting(f, "live", "Live cap", f.liveCap, `Live jobs against the cap: ${f.liveRuns} of ${f.liveCap} now`),
-    capSetting(f, "run", "Job cap", f.runCap, `The most starts any one issue made in the last hour: ${f.runStarts ?? 0} of ${f.runCap}`),
-    ...SETTINGS.map(([k, label, note]) => capSetting(f, k, label, f.settings?.[k] ?? "", note[0].toUpperCase() + note.slice(1))),
+    capSetting(f, "live", "Live cap", f.liveCap, `${count(f.liveRuns)} of ${count(f.liveCap)}`, "Live jobs now, of the cap"),
+    capSetting(f, "run", "Job cap", f.runCap, `${count(f.runStarts ?? 0)} of ${count(f.runCap)}`, "The most starts any one issue made in the last hour"),
+    ...SETTINGS.map(([k, label, hint, tip]) => capSetting(f, k, label, f.settings?.[k] ?? "", hint, tip[0].toUpperCase() + tip.slice(1))),
   ]), { id: "gates-caps" });
 }
 
@@ -91,7 +91,7 @@ export function renderMonitor(d) {
   const n = m.findings.length, first = n ? ` First: ${findingHtml(m.findings[0])}` : "";
   const summary = `${esc(day(localMs(m.day)))}: ${plural(n, "finding")}.${first}`;
   const body = (n ? findingsList(m.findings) : "") +
-    (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? error(`No reading: ${m.error}`, "The monitor reads again at its next run.") : "");
+    (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? error("Could not load the monitor.", "Reads again next run", { detail: m.error }) : "");
   return card("Monitor", fold(summary, body), { id: "monitor" });
 }
 
@@ -122,7 +122,7 @@ export function renderSchedules(d) {
 /** The units of an Ask's wait, largest first: a stored number of minutes shows in the largest unit that divides it. */
 const WAITS = [["d", 1440, "days"], ["h", 60, "hours"], ["min", 1, "minutes"]];
 const splitWait = (m) => { const [unit, k] = WAITS.find(([, k]) => m % k === 0); return { n: m / k, unit }; };
-const waitText = (m) => { const { n, unit } = splitWait(m); return `${n} ${unit}`; };
+const waitText = (m) => { const { n, unit } = splitWait(m); return `${count(n)} ${unit}`; };
 
 /** Who decides a reason first: a rule's action when the always setting grants one, else the director. */
 const decidesText = (r) => (r.places ? (r.places.length ? `Approve for ${r.places.map((k) => k.slice(k.indexOf(":") + 1)).join(", ")}` : "Director") : r.granted ? modeLabel(r.granted.action) : "Director");
@@ -134,7 +134,7 @@ const noAnswerText = (r) => (r.timeout ? `After ${waitText(r.timeout)}: ${r.noAn
 function decidedCell(d) {
   const all = d.rule + d.director + d.chris;
   if (!all) return miss("none decided");
-  const line = `${d.rule} rule · ${d.director} director · ${d.chris} user`;
+  const line = `${count(d.rule)} rule · ${count(d.director)} director · ${count(d.chris)} user`;
   return meter([["rule", d.rule], ["dir", d.director], ["user", d.chris]].map(([k, n]) => ({ pct: (100 * n) / all, cls: `c-${k}` })), line) + `<small class="split">${esc(line)}</small>`;
 }
 
@@ -146,13 +146,13 @@ function ruleForm(r) {
   const opt = (value, label, on) => ({ label, on, attrs: ` data-value="${esc(value)}"` });
   const g = r.granted?.action ?? "";
   const decide = setting("Decides", seg(`Who decides ${r.name}`, [opt("", "Director", !g), ...(r.mode ? [opt(r.mode, modeLabel(r.mode), g === r.mode)] : []), ...(g && g !== r.mode && g !== "user" ? [opt(g, modeLabel(g), true)] : []), opt("user", "User", g === "user")], ' data-field="decide"'),
-    { hint: "Director: the director decides and sends the rest to the user. User: the Ask goes to the user with no director run." });
+    { hint: "Who decides first", attrs: ` title="Director: the director decides and sends the rest to the user. User: the Ask goes to the user with no director run."` });
   const v = r.timeout ? splitWait(r.timeout) : { n: 30, unit: "min" }, off = r.timeout ? "" : " disabled", then = r.timeout ? r.noAnswer ?? "pick" : "wait";
   const wait = setting("If no answer", seg(`If ${r.name} gets no answer`, [opt("wait", "Keep waiting", then === "wait"), opt("pick", "Take the pick", then === "pick"), opt("drop", "Drop", then === "drop")], ' data-field="wait"') +
     ` after ${inputBox("n", v.n, { type: "number", attrs: ` min="1" step="1" inputmode="numeric" required aria-label="${esc(r.name)} wait"${off}` })}` +
     selectBox(`${r.name} wait unit`, "unit", WAITS.map(([value, , label]) => ({ value, label })), v.unit, { attrs: off }),
-    { hint: "Take the pick: the action the director recommends, if it recommends one. Drop: the reason's drop, close or deny." });
-  const buttons = `<span class="rule-acts"><button type="button" class="act" data-cancel>Cancel</button><button type="submit" class="act primary">Save</button></span>`;
+    { hint: "After the timeout", attrs: ` title="Take the pick: the action the director recommends, if it recommends one. Drop: the reason's drop, close or deny."` });
+  const buttons = `<span class="rule-acts">${actButton("Cancel", { cancel: "" })}${actButton("Save", {}, { primary: true, type: "submit" })}</span>`;
   return `<form class="rule-form" data-rule="${esc(r.reason)}" data-was-decide="${esc(g)}" data-was-wait="${r.timeout ?? ""}" data-was-then="${then}" hidden>` +
     settings(`Edit ${r.name}`, r.timeout === undefined ? [decide] : [decide, wait]) + buttons + `</form>`;
 }
@@ -170,9 +170,8 @@ export function renderRules(d) {
 export function renderHeld(d) {
   const repos = d.repoHeld ?? [];
   const scopeRow = (k, list) => `<dt>${esc(k)}</dt><dd>${list.map((p) => `<div><code>${esc(p)}</code></div>`).join("")}</dd>`;
-  return card("Held Paths", note("The security paths and a repo's held paths wait for the user after the reviewer passes the job. A test is never held.") +
-    `<dl class="held-paths">${scopeRow("Every repo", d.held)}${repos.map((r) => scopeRow(r.repo, r.held)).join("")}</dl>` +
-    (repos.length ? "" : empty()), { id: "gates-held", label: "Held paths" });
+  return card("Held Paths", `<div title="The reviewer passes the job, then these paths wait for the user. A test is never held.">${note("Awaits user")}</div>` +
+    (d.held.length || repos.length ? `<dl class="held-paths">${scopeRow("Every repo", d.held)}${repos.map((r) => scopeRow(r.repo, r.held)).join("")}</dl>` : empty()), { id: "gates-held", label: "Held paths" });
 }
 
 /** An ID of the log in its short form, as a link to its issue page: a job ID links to its `target`'s. `repo` is the project of an issue key. Other text stays text. */

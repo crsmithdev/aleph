@@ -255,7 +255,46 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   expect(card).not.toMatch(/<code>[^<]*<\/code>\s*<code>/);
   expect(card).toContain("<dt>Every repo</dt>");
   expect(card).toContain("<dt>r</dt>");
-  expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No data</p></div>');
+  const bare = gates.renderHeld({ ...data(), repoHeld: [] });
+  expect(bare).toContain("<dt>Every repo</dt>");
+  expect(bare).not.toContain('<div class="empty">');
+  expect(gates.renderHeld({ ...data(), held: [], repoHeld: [] })).toContain('<div class="empty"><p>No data</p></div>');
+});
+
+test("each hint and note of the page is at most four words, and the longer text is a title", () => {
+  const h = gates.renderGates(data());
+  const words = (cls: string) => [...h.matchAll(new RegExp(`<(\\w+) class="${cls}"[^>]*>([^<]*)</\\1>`, "g"))].map((m) => m[2]);
+  const shown = [...words("hint"), ...words("note")];
+  expect(shown.length).toBeGreaterThan(8);
+  for (const t of shown) expect(t.trim().split(/\s+/).length).toBeLessThanOrEqual(4);
+  expect(h).not.toContain("The security paths and a repo's held paths wait for the user");
+  expect(h).not.toContain("Live jobs against the cap:");
+  expect(h).toContain('title="Director: the director decides');
+});
+
+test("a cap set by its environment variable keeps its use in the hint, marks env, and keeps the long warning as a title", () => {
+  const h = gates.renderCaps({ ...data(), factory: { ...data().factory, capEnv: { live: true } } });
+  expect(h).toContain('<small class="hint">5 of 5, env</small>');
+  expect(h).toContain("ALEPH_LIVE_CAP is set: an edit has no effect while that variable is set.");
+});
+
+test("a rule form's Cancel and Save are act buttons, Save the one primary submit, and Decided By counts show with thousands", () => {
+  const row = { ...rules().find((x) => x.reason === "held-path")!, decided: { rule: 1200, director: 1, chris: 0 } };
+  const h = gates.renderRules({ rules: [row] });
+  const form = h.slice(h.indexOf('<form class="rule-form"'));
+  expect(form).toContain('<button class="act" type="button" data-cancel="">Cancel</button>');
+  expect(form.match(/<button class="act primary" type="submit"/g)).toHaveLength(1);
+  expect(form).toContain('<button class="act primary" type="submit">Save</button>');
+  expect(h).toContain('<small class="split">1,200 rule · 1 director · 0 user</small>');
+});
+
+test("a Monitor report with an error shows Could not load, and the message only in the Technical details fold", () => {
+  const h = gates.renderMonitor({ monitor: { day: "2026-11-03", findings: [], text: "", error: "boom" } });
+  expect(h).toContain("Could not load");
+  expect(h).not.toContain("No reading");
+  const [before, fold] = h.split("Technical details");
+  expect(before).not.toContain("boom");
+  expect(fold).toContain("boom");
 });
 
 const entry = (subject: string, action = "answered", object = "r-1") => ({ time: ago(1), subject, object, action }) as any;
@@ -394,7 +433,7 @@ test("the Gates page says the user, never you, your or Chris, in its visible tex
   const text = (h: string) => h.replace(/<[^>]*>/g, " ");
   const h = gates.renderGates({ ...d, asks: [] });
   expect(h).toContain('<div class="empty"><p>No data</p></div>');
-  expect(h).toContain("wait for the user after the reviewer passes the job");
+  expect(h).toContain("then these paths wait for the user");
   expect(text(h)).not.toMatch(/\b(you|your|Chris)\b/i);
 });
 
@@ -433,8 +472,8 @@ test("the Caps section holds a form each for the two caps, with use against limi
   expect(h).toContain('for="cap-jobSeconds">Job time limit</label>');
   expect(h).toContain('name="jobSeconds" type="number" id="cap-jobSeconds" value="1800"');
   expect(h).toMatch(/name="fixRounds"[^>]* min="0"/);
-  expect(h).toContain("Live jobs against the cap: 5 of 5 now.");
-  expect(h).toContain("in the last hour: 2 of 3.");
+  expect(h).toContain('<small class="hint">5 of 5</small>');
+  expect(h).toContain('<small class="hint">2 of 3</small>');
   expect(h).not.toContain("day");
   expect(gates.renderGates(data())).toContain(">Controls</h2>");
 });
@@ -443,7 +482,7 @@ test("the cap row and the rule hints say job and issue, with no goal and no Run 
   const h = gates.renderGates(data());
   const caps = h.slice(h.indexOf('<section class="card" id="gates-caps"'), h.indexOf('aria-label="Held paths"'));
   expect(caps).toContain(">Job cap</label>");
-  expect(caps).toContain("Live jobs against the cap");
+  expect(caps).toContain("Live jobs now, of the cap");
   expect(caps).toContain("The most starts any one issue made in the last hour");
   const rules = h.slice(h.indexOf('<section class="card" id="rules"'));
   expect(rules).toContain("Jobs with no commit");
