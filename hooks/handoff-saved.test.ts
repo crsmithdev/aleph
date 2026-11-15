@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,10 +12,10 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function run(file_path: string) {
+function run(file_path: string, env: Record<string, string | undefined> = {}) {
   const r = Bun.spawnSync(["bun", HOOK], {
     stdin: Buffer.from(JSON.stringify({ hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path } })),
-    env: { ...process.env, ALEPH_HANDOFFS_DIR: root },
+    env: { ...process.env, ALEPH_HANDOFFS_DIR: root, HERDR_ENV: undefined, HERDR_PANE_ID: undefined, ...env },
     stdout: "pipe", stderr: "pipe",
   });
   expect(r.exitCode).toBe(0);
@@ -48,4 +48,34 @@ test("a pane's handoff in the repo's folder ends the turn, a deeper file prints 
   expect(out.continue).toBe(false);
   expect(out.stopReason).toContain(path);
   expect(run(join(root, "projects", "proj", "sub", "x.md"))).toBe("");
+});
+
+describe("the clear and pickup cycle", () => {
+  // The fake herdr logs each call, holds `agent wait` until the test opens the gate fifo, and
+  // signals the done fifo after the last prompt, so the test waits on events and not on timers.
+  const fake = () => {
+    mkdirSync(join(root, "bin"));
+    for (const f of ["gate", "done"]) Bun.spawnSync(["mkfifo", join(root, f)]);
+    writeFileSync(join(root, "bin", "herdr"), `#!/bin/sh\necho "$@" >> "${root}/log"\n[ "$2" = wait ] && cat "${root}/gate" > /dev/null\ncase "$4" in /aleph:pickup*) echo > "${root}/done";; esac\nexit 0\n`, { mode: 0o755 });
+    return { HERDR_ENV: "1", HERDR_PANE_ID: "p7", PATH: `${join(root, "bin")}:${process.env.PATH}` };
+  };
+  const log = () => (existsSync(join(root, "log")) ? readFileSync(join(root, "log"), "utf8") : "");
+
+  test("this pane's handoff clears and picks up after the hook exits, and outside Herdr no process starts", async () => {
+    const env = fake();
+    const plain = join(root, "projects", "proj.md");
+    const stop = JSON.parse(run(plain, { ...env, HERDR_ENV: undefined })).stopReason;
+    expect(stop).toContain("Run /clear");
+    expect(stop).toContain(plain);
+    expect(log()).toBe("");
+    const path = join(root, "projects", "proj", "p7.md");
+    const out = JSON.parse(run(path, env));
+    expect(out.continue).toBe(false);
+    expect(out.stopReason).toContain("on its own");
+    expect(out.stopReason).toContain("do not run /clear");
+    expect(log()).not.toContain("/clear");
+    await Bun.spawn(["sh", "-c", `echo go > ${join(root, "gate")}`]).exited;
+    await Bun.file(join(root, "done")).text();
+    expect(log().trim().split("\n")).toEqual(["agent wait p7 --until idle --until done", "agent prompt p7 /clear --wait", `agent prompt p7 /aleph:pickup ${path} --wait`]);
+  });
 });

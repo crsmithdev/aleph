@@ -19,7 +19,7 @@ After you change a hook, run `/reload-plugins`.
 | `PreToolUse` | `Bash` | `secret-scan.ts` | 10 | Denies a commit that adds a secret or a debug leftover |
 | `PreToolUse` | `Bash` | `gh-guard.ts` | 15 | Asks before a `gh` write to a repo of another owner |
 | `PreToolUse` | `Bash` | `bash-allow.ts` | 10 | Denies a Bash command outside the run's own `Bash(...)` list |
-| `PostToolUse` | `Write` | `handoff-saved.ts` | 10 | Ends the turn after a handoff file is written |
+| `PostToolUse` | `Write` | `handoff-saved.ts` | 10 | Ends the turn after a handoff file is written; in Herdr, also clears and picks up |
 | `Stop` | | `verify-gate.ts` | 45 | Blocks a claim of completion that no run supports |
 | `Stop` | | `context-gate.ts` | 10 | Warns on context fill; asks for a handoff after a compaction |
 | `Stop` | | `skills/refit-code/hook.ts` | 20 | Blocks once per set of findings, at most 3 times per session, when a change leaves out a file that history changes with it, copies code a `.jscpd.json` boundary protects, or adds a copy of code the base did not have |
@@ -119,6 +119,9 @@ The design is in [the context gate decision](context-gate.md).
 ### handoff-saved
 
 `hooks/handoff-saved.ts` watches `Write`. When the path is `<handoffs>/projects/*.md` or `<handoffs>/projects/<repo>/*.md`, it returns `{continue: false}` with a stop reason that says to run `/clear`.
+
+- Outside Herdr, the stop reason tells Chris to run `/clear`, and no process starts.
+- Inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set), when the file is this pane's `<handoffs>/projects/<repo>/<HERDR_PANE_ID>.md`, the stop reason says the session clears and picks up on its own. The hook also starts `hooks/handoff-cycle.ts` detached, so it outlives the hook. That process waits until Herdr reports the pane `idle` or `done` (idle after unseen work, as in an unfocused tab), then runs `herdr agent prompt <pane> /clear --wait` and `herdr agent prompt <pane> "/aleph:pickup <path>" --wait`. A failed step stops the cycle.
 
 ## Tracing
 
