@@ -380,6 +380,17 @@ describe("render", () => {
     expect(h).not.toContain(next.text);
     expect(v.renderJob({ ...job, next: { step: "wait", action: "passed", to: "human", text: "passed → human" } })).toContain('<span class="quiet">Next</span> passed → human');
   });
+  test("the weekly % under the Cost tile carries the WK_TIP tooltip, and the pooled sentence when pooled", () => {
+    const kpis = (o: object) => { const h = v.renderJob({ ...job, ...o }); return h.slice(h.indexOf("dp-kpis"), h.indexOf("</section>", h.indexOf("dp-kpis"))); };
+    const wk = (h: string) => h.match(/<span class="wk" title="([^"]*)">([^<]*)<\/span>/);
+    const one = wk(kpis({ wk: { pct: 1.4, pooled: false } }))!;
+    expect(one[1]).toStartWith("An estimate of the share of the weekly plan limit");
+    expect(one[1]).not.toContain("One rate prices all models");
+    expect(one[2]).toBe("\u22481% wk");
+    expect(kpis({ wk: { pct: 1.4, pooled: false } })).toContain("$0.75");
+    expect(wk(kpis({ wk: { pct: 1.4, pooled: true } }))![1]).toContain("One rate prices all models");
+    expect(kpis({ wk: undefined })).not.toContain('class="wk"');
+  });
   test("the dp-detail block holds the detail panels, with no Detail head of its own", () => {
     const h = v.renderJob(job);
     expect(h.slice(h.indexOf('<div class="dp-detail">'))).toStartWith('<div class="dp-detail"><details class="dp-panel dp-fold" open>');

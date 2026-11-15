@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { actButton, fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, pageOf, pageRows, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
+import { actButton, fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, pageOf, pageRows, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkHtml, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
@@ -146,7 +146,7 @@ function jobKpis(j, now = Date.now()) {
   return renderKpis([
     { k: "Implements", v: esc(count(builds.length)), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
     { k: "Elapsed", v: esc(dur(runs.length ? (end - runs[0].start) / 1000 : undefined)), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
-    { k: "Cost", v: esc(money(j.cost)), sub: j.wk ? esc(wkText(j.wk)) : "" },
+    { k: "Cost", v: esc(money(j.cost)), sub: j.wk ? wkHtml(j.wk) : "" },
     { k: "Change", v: c ? esc(c.lines) : miss("no change recorded"), sub: [c ? esc(c.files) : "", j.commit ? shaLink(j.commit, j.commitUrl) : ""].filter(Boolean).join(", ") },
     { k: "Checked by", v: j.checkedBy?.length ? esc(j.checkedBy.join(", ")) : miss("no check recorded"), text: !!j.checkedBy?.length, sub: j.look ? esc(`look: ${dur(j.look * 60)}`) : "" },
   ]);
