@@ -68,8 +68,8 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 2. **Inventory.** Run `bun <skill dir>/load.ts <repo>` for the context load (always, lazy, skills, hooks),
    `bun <skill dir>/content.ts <repo>` for the adherence candidates and the tools the files name,
    `bun <skill dir>/install.ts <repo>` from the main checkout for the user and project installs, and
-   `agnix -t claude-code --format json .` from the repo root (the target is `generic`, `cursor`, `codex` or `kiro`
-   when the repo serves those tools). List the repo's CLIs: `bin/`, the manifest's `bin` and `scripts`, the
+   `agnix --format json .` from the repo root (the `tools` array in `.agnix.toml` names the target, `claude-code`
+   here; set it to `cursor`, `codex` or `kiro` when the repo serves those tools). List the repo's CLIs: `bin/`, the manifest's `bin` and `scripts`, the
    Makefile or justfile targets. Done when you have the load, install and agnix JSON and the CLI list.
 3. **Hunt.** Spawn one Explore subagent per lens in one message, except **valid**, which you read from the agnix
    JSON yourself. Give each its lens file's Signals section verbatim, the inventory, and the agent files or CLIs
@@ -117,7 +117,7 @@ asks it) or **unchecked** (only a retro finds it). A finding that comes back mov
 
 | Lens | Hold | Kind | Tool |
 |---|---|---|---|
-| valid | An agent file that breaks its spec | tool | `agnix -t claude-code` in `.githooks/pre-commit` |
+| valid | An agent file that breaks its spec | tool | `agnix` with `tools = ["claude-code"]` in `.githooks/pre-commit` |
 | load | Always-loaded tokens grow past the last total | tool | `load.test.ts`: "the always-loaded tokens inside the repo stay at or under the recorded total" |
 | structure | A body over 500 lines, a reference more than one link deep | tool | agnix `AS-012`, `AS-013` in `.githooks/pre-commit` |
 | structure | A body over 5,000 tokens, an orphan, a chain from a reference | unchecked | none |

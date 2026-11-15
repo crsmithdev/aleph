@@ -43,12 +43,11 @@ test("an agnix that exits 1 refuses the commit of a CLAUDE.md", () => {
   expect(s.head()).toBe(before);
 });
 
-test("a commit of a skill file runs agnix with -t claude-code and the file", () => {
+test("a commit of a skill file runs agnix on the file with no -t", () => {
   const s = setup(0);
   expect(s.commit("skills/x/SKILL.md").exitCode).toBe(0);
   const args = readFileSync(s.record, "utf8").trim().split(" ");
-  expect(args).toContain("claude-code");
-  expect(args.slice(0, 2)).toEqual(["-t", "claude-code"]);
+  expect(args).not.toContain("-t");
   expect(args).toContain("skills/x/SKILL.md");
 });
 

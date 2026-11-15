@@ -5,10 +5,10 @@ this file holds how to read them and the limits agnix may not know yet.
 
 ## Signals
 
-- **agnix.** `agnix -t claude-code --format json .` from the repo root. Rule prefixes: `AS-` (Agent Skills),
+- **agnix.** `agnix --format json .` from the repo root (`.agnix.toml` sets `tools = ["claude-code"]`). Rule prefixes: `AS-` (Agent Skills),
   `CC-SK-`, `CC-AG-`, `CC-HK-`, `CC-MEM-`, `CC-PL-` (Claude Code skills, subagents, hooks, memory, plugins),
   `MCP-`, `REF-` (imports and links), `XML-`, `PE-` (prompt engineering), `XP-` (cross-tool). `agnix explain <ID>`
-  gives a rule's source and level (MUST or SHOULD). Add `-t cursor`, `codex` or `kiro` when the repo serves them.
+  gives a rule's source and level (MUST or SHOULD). Add `cursor`, `codex` or `kiro` to that `tools` array when the repo serves them.
 - **Plugin manifest.** `claude plugin validate <dir>` when the repo is a plugin or a marketplace.
 - **Limits** (the Agent Skills spec at agentskills.io/specification, Anthropic skill best practices, and the Claude
   Code memory and skills docs):
@@ -43,7 +43,7 @@ Fix by hand. agnix's `--fix` only on one file, after `--dry-run --show-fixes` on
 
 ## Hold
 
-`agnix -t claude-code` (with `--strict` once the repo is clean) in `.githooks/pre-commit`, which runs it on the
+`agnix` (with `--strict` once the repo is clean) in `.githooks/pre-commit`, which runs it on the
 staged agent files and refuses the commit when agnix fails or is missing. A `.agnix.toml`
 records the rules the repo turns off, each with its reason.
 

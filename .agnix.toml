@@ -1,3 +1,6 @@
+# The target is claude-code. The CLI flag -t is deprecated for this entry.
+tools = ["claude-code"]
+
 # Each rule the repo turns off has its reason here.
 
 # XP-003 reads a path to the user's own data (~/.claude/, ~/.aleph/) as a portability problem. It is not one in a
