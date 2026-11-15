@@ -103,11 +103,12 @@ export async function maintainAll(root: string, dry: boolean, now: number, parts
   return report;
 }
 
-/** The one-line result of a pass for the tick: the mechanical counts, then each other part's count or its error. */
+/** The one-line result of a pass for the tick: the mechanical counts, then each other part's count or its error, and each retried day whose compile failed with its error. */
 const summary = (r: Json): string => {
   const c = Object.entries(r.counts as Record<string, number>).filter(([k]) => k !== "lessons" && k !== "notes" && k !== "rechecked" && k !== "resolved" && k !== "aliased").map(([k, v]) => `${v} ${k}`).join(", ");
   const tail = (k: string, what: string) => (r[k]?.error ? [`${k} failed: ${r[k].error}`] : r.counts[what] !== undefined ? [`${r.counts[what]} ${what}`] : []);
-  return [...(c ? [`${r.dry ? "dry: " : ""}${c}`] : []), ...tail("corrections", "lessons"), ...tail("compile", "notes"), ...tail("recheck", "rechecked"), ...tail("dedupe", "resolved"), ...tail("alias", "aliased")].join(" · ");
+  const retried = ((r.retried ?? []) as Json[]).flatMap((x) => (x.error ? [`${x.day} ${x.error}`] : []));
+  return [...(c ? [`${r.dry ? "dry: " : ""}${c}`] : []), ...tail("corrections", "lessons"), ...(retried.length ? [`retried failed: ${retried.join(", ")}`] : []), ...tail("compile", "notes"), ...tail("recheck", "rechecked"), ...tail("dedupe", "resolved"), ...tail("alias", "aliased")].join(" · ");
 };
 
 /**

@@ -371,6 +371,16 @@ test("the maintain step compiles a day whose compile failed again on the next da
   } finally { endRetry(); }
 });
 
+test("the tick's maintain result shows a failed retried compile with its day and its error", async () => {
+  retrySetup();
+  try {
+    writeFileSync(join(base, "fail"), "");
+    await runTick(NOW, quiet());
+    await runTick(NOW + 864e5, quiet());
+    expect(tickRows().maintain.result).toMatch(/retried failed: 2026-11-03 .*exited 3/);
+  } finally { endRetry(); }
+});
+
 test("the maintain step makes no second compile of a failed day once a compile of it succeeded, or past 3 days before yesterday", async () => {
   const dir = retrySetup();
   const days = (r: any) => r.retried?.map((x: any) => x.day);
