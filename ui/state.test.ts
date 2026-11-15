@@ -289,6 +289,14 @@ describe("the Herald's attempts and chats", () => {
     expect(h.attempts[other]).toBe(other);
   });
 
+  test("a Herald event on an issue key titles it from its project's list; an old full ID still does", () => {
+    logEvent({ subject: "gate", action: "done", object: "issue.1" });
+    logEvent({ subject: "gate", action: "done", object: "fac-2" });
+    const h = state(now).herald!;
+    expect(h.events.find((e) => e.object === "issue.1")?.project).toBe("fac");
+    expect(h.titles).toMatchObject({ "issue.1": "needs item", "fac-2": "waiting goal" });
+  });
+
   test("two turns on one chat session are one conversation: its session, start, last turn and first prompt", () => {
     const projects = join(base, "projects"), sessions = process.env.ALEPH_SESSIONS_DIR!;
     const turn = (type: string, timestamp: string, content: unknown) => JSON.stringify({ type, timestamp, message: { content } });

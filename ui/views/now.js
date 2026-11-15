@@ -264,7 +264,7 @@ function brief(ev, runs = {}, all = [ev]) {
   return { ev, label: stateWord(ev), text: said + more };
 }
 
-/** The rows of a group's fold, newest first: its events but a head with no run, which its row says; no start of a job with another event, nor of a run kind with a newer one, and no routing or start of an issue that a later job start draws as that job's facts. */
+/** The rows of a group's fold, newest first: its events but a head with no run and no detail, which its row says; no start of a job with another event, nor of a run kind with a newer one, and no routing or start of an issue that a later job start draws as that job's facts. */
 function briefs(all, runs = {}) {
   const drawn = (ev) => (ev.action === "routed" || ev.action === "started") && all.some((e) => e.action === "running" && jobOf(e) && e.at >= ev.at);
   // The gate can log a job's start after its result, so any other event of the job hides the start.
@@ -272,7 +272,7 @@ function briefs(all, runs = {}) {
   const seen = new Set(), out = [];
   for (const ev of all) {
     const job = jobOf(ev), run = runs[job];
-    if (ev === all[0] && !isRouting(ev) && !run) continue;
+    if (ev === all[0] && !isRouting(ev) && !run && (!ev.note || ev.action === "routed")) continue;
     if (ev.action === "running" && (ended.has(job) || (run && seen.has(run)))) continue;
     if (drawn(ev)) continue;
     seen.add(run);

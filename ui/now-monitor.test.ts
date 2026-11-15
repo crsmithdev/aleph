@@ -421,6 +421,17 @@ test("a stalled event on an intake job of an issue folds into the issue's row as
   } finally { setCodes({}); }
 });
 
+test("a head with a note keeps its line in the fold under its titled row; a head with none has no brief row", () => {
+  setCodes({ aleph: "a" });
+  try {
+    const done = (note?: string) => [{ ...row({ at: "2026-11-15T13:00:00Z", by: "gate", subject: "issue.2072", action: "done", note }), project: "aleph" }];
+    const h = feed(done("the land did it"), { titles: { "issue.2072": "Fix ingest" } });
+    expect(h).toContain('<span class="event-title" title="Fix ingest">Fix ingest</span>');
+    expect(h.split('<div class="herald-older">')[1]).toContain(">the land did it</span>");
+    expect(feed(done(), { titles: { "issue.2072": "Fix ingest" } })).not.toContain("herald-older");
+  } finally { setCodes({}); }
+});
+
 test("two chat turns of one session are one feed row, titled by its first prompt", () => {
   const chat = { id: "5a5a4e9b-88d1-476f-aeb2-e20af1a9fae6", start: "2026-11-15T12:00:00Z", last: "2026-11-15T12:30:00Z", title: "why is the build red" };
   const h = feed([], { chats: [chat] });

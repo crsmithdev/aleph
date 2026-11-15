@@ -177,7 +177,7 @@ export interface State {
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
   /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
-  herald?: { history: HeraldHistoryItem[]; events: EventRow[]; /** The title of each issue the events name, by its full ID. */ titles: Record<string, string>;
+  herald?: { history: HeraldHistoryItem[]; events: EventRow[]; /** The title of each issue the events name, by the event's target. */ titles: Record<string, string>;
     /** The title of each run an issue event names, by its job ID. */ runs: Record<string, string>;
     /** The attempt of each job an issue event names, by its job ID: its first job of the `prev` chain. */ attempts: Record<string, string>;
     /** The UI chat conversations with a turn in the last day, oldest first. */ chats: Chat[] };
@@ -477,7 +477,7 @@ export function state(now = new Date()): State {
   const redOf = mainRed();
   const events = withProjects(readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS)), titles: Record<string, string> = {};
   for (const e of events) {
-    const issue = targetOf(e), p = parseId(issue);
+    const issue = targetOf(e), k = parseKey(issue), p = parseId(issue) ?? (k?.kind === "issue" && e.project ? { repo: e.project, n: k.n, sub: undefined } : null);
     const item = p && !(issue in titles) ? lists.item(p.repo, p.sub === undefined ? p.n : `${p.n}.${p.sub}`) : undefined;
     if (item) titles[issue] = item.title;
   }
