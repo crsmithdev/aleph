@@ -412,7 +412,7 @@ function entry(e: Entry): string {
   const needs = isWaiting(r.state) ? needsOf(r.ask) : undefined;
   const lane = laneOf(e);
   const hit = (lane === "landed" || lane === "waiting") && r.repo && onOf(r) !== undefined ? reader().item(r.repo, onOf(r)!) : undefined, prio = hit && priorityOf(hit);
-  const head = `${shownId(r.name)} ${r.state}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.state !== "returned" && r.state !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
+  const head = `${shownId(r.name, r.repo)} ${r.state}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.state !== "returned" && r.state !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.state === "landed" && r.commit) {
     lines.push(`  commit ${r.commit.slice(0, 7)}`);

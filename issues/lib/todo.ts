@@ -8,7 +8,7 @@
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { today } from "../../lib/day.ts";
 import { next } from "../../lib/db.ts";
-import { ISSUE_KINDS, parseId, parseKey, shortText, STATUSES } from "../../lib/naming.ts";
+import { ISSUE_KINDS, parseId, parseKey, shownKey, STATUSES } from "../../lib/naming.ts";
 
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["project", "created"] as const;
@@ -132,8 +132,9 @@ export const blank = (repo?: string, project?: string): Doc => ({ items: [], ...
 
 /** The number of the issue as text: `"5"`. */
 export const refOf = (item: Issue): string => String(item.id);
-/** The text with each id as its short id (docs/naming.md); an id of a project with no code stays whole. `key` is the repo the text is about. */
-export const localRefs = (_key: string, text: string): string => shortText(text);
+/** The text with each full or short id of the repo `key` as its shown key, `a-01234` with the project's code, `I-01234` with none. `code` is that code. */
+export const localRefs = (key: string, text: string, code?: string): string =>
+  text.replace(/(?<![\w.-])[a-z][a-z0-9-]*\d+(?:\.\d+)?(?![\w-])/g, (r) => { const p = parseId(r); return p?.repo === key && p.sub === undefined ? shownKey(`issue.${p.n}`, code) : r; });
 /** The number of the parent, as text, from `from: issue.<n>`. Undefined for an issue with no parent. */
 export const parentRef = (item: Issue): string | undefined => { const p = item.fm.from ? parseKey(item.fm.from) : null; return p?.kind === "issue" ? String(p.n) : undefined; };
 /** The id that finds the item: its number. */

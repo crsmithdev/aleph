@@ -452,12 +452,12 @@ function statusCmd(ctx: Ctx): void {
   try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (ctx.rest.includes("--json")) return ctx.out(s);
-  ctx.log(issues.localRefs(key, stageLine(s)));
+  ctx.log(issues.localRefs(key, stageLine(s), repo.code));
 }
 
 /** `aleph status` with no issue: the stage of each open issue in each recent repo. */
 function statusRecent(ctx: Ctx): void {
-  const states: Stage[] = [], ofRepo: { key: string; rows: Stage[] }[] = [];
+  const states: Stage[] = [], ofRepo: { key: string; code?: string; rows: Stage[] }[] = [];
   for (const { repo, doc } of listRecent()) {
     const open = (doc?.items ?? []).filter((i) => issues.status(i) === "open");
     if (!open.length) continue;
@@ -467,13 +467,13 @@ function statusRecent(ctx: Ctx): void {
       const main = `refs/remotes/origin/${f.main}`;
       const rows = stages(repo.path, main, f, open.map((i) => issues.refOf(i)));
       states.push(...rows);
-      if (rows.length) ofRepo.push({ key: repo.key, rows });
+      if (rows.length) ofRepo.push({ key: repo.key, code: repo.code, rows });
     }
     catch (e: any) { ctx.err(`warn: ${repo.key}: ${e?.message ?? e}`); }
   }
   if (ctx.rest.includes("--json")) return ctx.out(states);
   if (!states.length) { ctx.log("no open items"); return; }
-  for (const { key, rows } of ofRepo) { ctx.log(key); for (const s of rows) ctx.log(issues.localRefs(key, `  ${stageLine(s)}`)); }
+  for (const { key, code, rows } of ofRepo) { ctx.log(key); for (const s of rows) ctx.log(issues.localRefs(key, `  ${stageLine(s)}`, code)); }
 }
 
 /** An issue key as the terminal shows it, with the code of the project that holds that issue. */

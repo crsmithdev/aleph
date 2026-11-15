@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import * as issues from "./todo.ts";
 import { addPart } from "./parts.fixture.ts";
-import { setCodes } from "../../lib/naming.ts";
 
 test("titleProblem passes a part title with its group and refuses length, a final period and a prefix", () => {
   expect(issues.titleProblem("[Status layout] Put the metrics on the left", { part: true })).toBeNull();
@@ -88,10 +87,9 @@ test("edit leaves labels unset and lint reports no retired labels finding", () =
   expect(issues.lint(doc).filter((f) => f.problem.includes("labels is retired"))).toEqual([]);
 });
 
-test("localRefs shows each id as its short id and keeps the id of a project with no code", () => {
-  setCodes({ aleph: "a" });
-  expect(issues.localRefs("aleph", "after aleph-12, koans-3")).toBe("after a12, koans-3");
-  setCodes({});
+test("localRefs shows each id of the repo as its shown key, with the code or I, and leaves other text", () => {
+  expect(issues.localRefs("aleph", "after aleph-12, koans-3", "a")).toBe("after a-00012, koans-3");
+  expect(issues.localRefs("koans", "koans-3 waits for koans-12")).toBe("I-00003 waits for I-00012");
 });
 
 test("edit takes the title it already has, even a bad one, and still refuses another bad title", () => {

@@ -9,7 +9,7 @@ import { spentToday, runsToday, health, writeBaseline, baselines, suiteHistory, 
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { reseed, seed } from "../../job.testkit.ts";
 import { ctx, sh, newIssue, change, mk, setup, teardown } from "./factory.helpers.ts";
-import { writeRepos } from "../../../tests/projects.ts";
+import { readRepos, writeRepos } from "../../../tests/projects.ts";
 
 beforeEach(setup);
 afterEach(() => { setSystemTime(); teardown(); });
@@ -287,4 +287,12 @@ test("the report heads a run with its shown key, a letter and five digits", () =
   const out = report();
   expect(out).toContain("I-01421 landed");
   expect(out).not.toContain("issue.1421");
+});
+
+test("the report heads a run with its project's code when it has one", () => {
+  writeRepos({ ...readRepos(), fac: { ...readRepos().fac, code: "f" } });
+  mk("fac-1421", "build", "landed", { shown: false });
+  const out = report();
+  expect(out).toContain("f-01421 landed");
+  expect(out).not.toContain("I-01421");
 });
