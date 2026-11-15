@@ -5,7 +5,7 @@ import { row, withFactory } from "./test-now.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { heraldRuns } from "./state.ts";
+import { heraldReviewed, heraldRuns } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
 import { seed } from "../jobs/job.testkit.ts";
@@ -380,6 +380,26 @@ test("a housekeeper run with 2 changes is one row reading 2 changes, with a line
   expect(lines[0]).toContain("the land did it");
   expect(lines[1]).toContain("aleph-8");
   expect(h).not.toContain("j-00056");
+  // A reviewed count alone does not draw a row for a run that changed nothing.
+  expect(feed([hk("2026-11-15T12:10:00Z", "done", ["job.56"]), hk("2026-11-15T12:00:00Z", "running", ["job.56"])], { reviewed: { "job.56": 4 } })).not.toContain("j-00056");
+});
+
+test("the Herald state's reviewed count of a housekeeper job is its tally's reviewed", () => {
+  const base = mkdtempSync(join(tmpdir(), "aleph-herald-reviewed-")), restore = withEnv({ ALEPH_JOBS_DIR: base, ALEPH_DB: join(base, "aleph.db") });
+  try {
+    const { id } = seed({ role: "housekeeper", name: "housekeeper", state: "done", tally: { reviewed: 3, retitled: 1, noted: 2 } });
+    expect(heraldReviewed([row({ at: "2026-11-15T13:10:00Z", by: "gate", subject: "housekeeper", action: "done", on: [id] })], allRuns())).toEqual({ [id]: 3 });
+  } finally { restore(); rmSync(base, { recursive: true, force: true }); }
+});
+
+test("a housekeeper run with a reviewed count says it before its verb counts, and its fold has a line for each change", () => {
+  const h = feed([
+    hk("2026-11-15T13:10:00Z", "done"), changed("2026-11-15T13:07:00Z", "aleph-9", "note: second look"), changed("2026-11-15T13:06:00Z", "aleph-8", "note: first look"),
+    changed("2026-11-15T13:05:00Z", "aleph-5", "retitle: New title"), hk("2026-11-15T13:00:00Z", "running"),
+  ], { reviewed: { "job.57": 3 } });
+  expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
+  expect(h).toContain('<span class="event-title" title="reviewed 3 · retitled 1 · commented 2">reviewed 3 · retitled 1 · commented 2</span>');
+  expect(h.split('<div class="herald-older">')[1].split('<div class="event-brief').slice(1)).toHaveLength(3);
 });
 
 test("a housekeeper run whose changes all have a verb counts each verb, and each line is labelled with the verb's past word", () => {

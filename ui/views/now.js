@@ -302,7 +302,7 @@ const FAILED = ["failed", "returned", "dropped"];
  * The rows of the issue and routine events. An issue's row is one per attempt (`attempts`: the first job of a job's `prev` chain), its older events in the fold;
  * an event with no job takes the attempt of the one before it, else of the first. A routine's run is one row that says "N changes", each change a line in its fold.
  */
-function eventRows(events, titles = {}, runs = {}, attempts = {}) {
+function eventRows(events, titles = {}, runs = {}, attempts = {}, reviewed = {}) {
   const issues = new Map(), routine = new Map(), first = new Map(), add = (m, k, ev) => m.set(k, [ev, ...(m.get(k) ?? [])]);
   const live = [...events].reverse().filter((ev) => !WAITS.has(ev.action)), attemptOf = (ev) => attempts[jobOf(ev)] ?? "";
   for (const ev of live) if (isIssue(ev.subject) && attemptOf(ev) && !first.has(ev.subject)) first.set(ev.subject, attemptOf(ev));
@@ -320,7 +320,7 @@ function eventRows(events, titles = {}, runs = {}, attempts = {}) {
     const lines = [...changes].reverse().map((c) => { const m = verb(c), note = m ? m[2] : c.note;
       return briefRow({ ev: c, label: m ? VERBS[m[1]] : stateWord(c), text: `${idLink(shownId(c.subject, c.project), issueHref(c.subject, c.project))}${note ? ` ${esc(note)}` : ""}` }); });
     const count = (v) => changes.filter((c) => verb(c)?.[1] === v).length;
-    const said = !changes.length ? "" : changes.every(verb) ? Object.keys(VERBS).filter(count).map((v) => `${VERBS[v]} ${count(v)}`).join(" · ") : plural(changes.length, "change");
+    const said = !changes.length ? "" : [reviewed[job] !== undefined && `reviewed ${reviewed[job]}`, ...changes.every(verb) ? Object.keys(VERBS).filter(count).map((v) => `${VERBS[v]} ${count(v)}`) : [plural(changes.length, "change")]].filter(Boolean).join(" · ");
     const row = eventRow(head, titles, changes.length, said);
     return [{ at: head.at, key: `event ${hash(eventKey(head))}`, html: lines.length ? fold(row, `<div class="herald-older">${lines.join("")}</div>`, { cls: "herald-group", id: `issue:${head.subject}:${job}` }) : row }];
   });
@@ -378,7 +378,7 @@ export function renderHerald(s) {
   // A chat conversation is one row, read from its session: its last turn's time, its first prompt.
   const chats = (s.herald?.chats ?? []).map((c) => ({ at: c.last, key: `chat ${c.id}`, html: feedRow({ tone: "quiet", at: c.last, by: "claude",
     body: `<span class="event-line">${tag("chat", "quiet")}${idLink(c.id.slice(0, 8))}<span class="event-title" title="${esc(c.title)}">${esc(c.title)}</span><span></span></span>` }) }));
-  const rows = [...status, ...chats, ...eventRows(events, s.herald?.titles, s.herald?.runs, s.herald?.attempts)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const rows = [...status, ...chats, ...eventRows(events, s.herald?.titles, s.herald?.runs, s.herald?.attempts, s.herald?.reviewed)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}"`)).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.

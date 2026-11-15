@@ -65,6 +65,16 @@ export function heraldRuns(events: EventRow[], runs: Entry[]): Record<string, st
   return titles;
 }
 
+/** The count of issues each housekeeper run reviewed, by its job ID: its job record's tally, for each run a done event names. */
+export function heraldReviewed(events: EventRow[], runs: Entry[]): Record<string, number> {
+  const reviewed: Record<string, number> = {};
+  for (const e of events) {
+    const n = e.action === "done" && parseKey(e.object)?.kind === "job" ? runOfJob(e.object, runs)?.run.tally?.reviewed : undefined;
+    if (n !== undefined) reviewed[e.object] = n;
+  }
+  return reviewed;
+}
+
 export interface Job {
   /** The job ID of the run that counts, `a1430#2`: the Job page's address and the one an action acts on. */
   id: string;
@@ -180,6 +190,7 @@ export interface State {
   herald?: { history: HeraldHistoryItem[]; events: EventRow[]; /** The title of each issue the events name, by the event's target. */ titles: Record<string, string>;
     /** The title of each run an issue event names, by its job ID. */ runs: Record<string, string>;
     /** The attempt of each job an issue event names, by its job ID: its first job of the `prev` chain. */ attempts: Record<string, string>;
+    /** The issues each housekeeper run reviewed, by its job ID; a run with no stored count has none. */ reviewed: Record<string, number>;
     /** The UI chat conversations with a turn in the last day, oldest first. */ chats: Chat[] };
 }
 
@@ -484,7 +495,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), events, titles, runs: heraldRuns(events, jobs.flat()), attempts: heraldAttempts(events, jobs.flat()), chats: chats(now.getTime() - 86_400_000) },
+    herald: { history: currentStatusHistory(), events, titles, runs: heraldRuns(events, jobs.flat()), attempts: heraldAttempts(events, jobs.flat()), reviewed: heraldReviewed(events, jobs.flat()), chats: chats(now.getTime() - 86_400_000) },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
