@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, mock, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { dispatchIssues, setPaused } from "./factory.ts";
-import { gates, gpuSlot, liveEntries, liveRuns } from "../gates/factory-status.ts";
+import { dispatchIssues, runNow, setPaused } from "./factory.ts";
+import { gates, gpuSlot, liveEntries, liveRuns, writeBaseline } from "../gates/factory-status.ts";
 import { setModel } from "../routing/models.ts";
 import { waitingToLand } from "../land/landing.ts";
 import { allJobs, allRuns, type Run } from "../records/ledger.ts";
@@ -16,6 +16,7 @@ import { startJob } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { change, ctx, dispatch, fakes, newIssue, mk, setup, teardown } from "./factory.helpers.ts";
+import { writeList } from "../../../issues/lib/store.ts";
 
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */
 let afterHeld: ((name: string) => void) | undefined;
@@ -273,4 +274,37 @@ test("when a local run starts while gpuSlot takes the free gpu lock, gpuSlot ret
   } finally {
     setSystemTime();
   }
+});
+
+test("Run now starts the one issue it names while the factory is paused and the live cap is 0, and no other ready issue", async () => {
+  process.env.ALEPH_LIVE_CAP = "0";
+  setPaused(true);
+  const [a, b] = [newIssue(), newIssue()];
+  const f = fakes();
+  const out = await runNow(`issue.${b}`, f.start);
+  expect(f.calls).toEqual([`start issue.${b}`]);
+  expect(out).toMatchObject({ started: [`issue.${b}`] });
+  expect(out.refused).toBeUndefined();
+  expect(record.read(`issue.${a}`)).toBeNull();
+});
+
+test("Run now starts nothing and returns the text of the gate that binds: an unfinished after, a busy file, a red baseline", async () => {
+  process.env.ALEPH_LIVE_CAP = "0";
+  setPaused(true);
+  const f = fakes();
+  // An unfinished `after` ref.
+  const blocker = newIssue(), waiting = newIssue();
+  await change(waiting, (item) => { item.fm.after = [`issue.${blocker}`]; });
+  expect((await runNow(`issue.${waiting}`, f.start)).refused).toBe(`Waits on issue.${blocker}`);
+  // A file that an open job also names.
+  const surface = "## Edit surface\n- jobs/busy.ts (the change)\n";
+  const withSurface = () => writeList({ key: "fac" }, "add", (doc) => issues.add(doc, "ship it", { spec: surface }).id, true)!.value;
+  const [first, second] = [withSurface(), withSurface()];
+  for (const n of [901, 902, 903]) mk(`fac-${n}`, "land", "dropped", { conflicts: ["jobs/busy.ts"] });
+  mk(`fac-${first}`, "build", "passed");
+  expect((await runNow(`issue.${second}`, f.start)).refused).toBe(`Waits for issue.${first}: both change the busy file jobs/busy.ts`);
+  // A red baseline binds before the busy file does.
+  writeBaseline("fac", () => ({ repo: "fac", commit: "abc1234def", ok: false, failed: "tests" }));
+  expect((await runNow(`issue.${second}`, f.start)).refused).toBe("main is red at abc1234: tests");
+  expect(f.calls).toEqual([]);
 });

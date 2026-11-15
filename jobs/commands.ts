@@ -25,7 +25,7 @@ import * as notes from "../lib/annotations.ts";
 import * as ideas from "../ideas/ideas.ts";
 import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
 import { readTimeouts, setTimeoutOf } from "./lib/asks/timeout.ts";
-import { behind, directorStep, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
+import { behind, directorStep, hookLines, report, runDispatch, runNow, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { dispatchAfterIssue, filing } from "./lib/transitions/filing.ts";
 import { maintainAll, runTick } from "./lib/transitions/tick.ts";
 import { vaultDir } from "../lib/paths.ts";
@@ -73,7 +73,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   housekeep: { usage: "aleph housekeep", purpose: "review the parked issues a land touched, or every parked issue once a day" },
   suite: { usage: "aleph suite", purpose: "run one suite step" },
   monitor: { usage: "aleph monitor [--dry] [--day YYYY-MM-DD]", purpose: "write the monitor's table and reading of a day" },
-  dispatch: { usage: "aleph dispatch", purpose: "start every ready issue up to the live cap" },
+  dispatch: { usage: "aleph dispatch [issue.N]", purpose: "start every ready issue up to the live cap, or one issue now" },
   intake: { usage: "aleph intake <repo>-<n>", purpose: "run intake on an issue" },
   status: { usage: "aleph status [<repo>-<n>[.<k>]] [--json]", purpose: "show the stage of an issue, or the recent ones" },
   report: { usage: "aleph report [--hook|--peek]", purpose: "show the runs not yet seen and the factory's health; --peek leaves the runs unseen" },
@@ -403,9 +403,12 @@ async function intakeCmd(ctx: Ctx): Promise<void> {
   ctx.out(await intakeNow(repo, ref.id));
 }
 
-/** `aleph dispatch`: start every ready issue up to the live cap. A run's end and `aleph issue` call it. */
+/** `aleph dispatch`: start every ready issue up to the live cap. A run's end and `aleph issue` call it. With an issue key it starts that one issue now (Run now), or refuses with the text of the gate. */
 async function dispatchCmd(ctx: Ctx): Promise<void> {
-  ctx.out(await runDispatch());
+  if (!ctx.rest[0]) return ctx.out(await runDispatch());
+  const d = await runNow(ctx.rest[0]);
+  if (d.refused) refuse(d.refused);
+  ctx.out(d);
 }
 
 /** `aleph tick`, from the timer every minute: the periodic steps that are due and the sweep (tick.ts). */

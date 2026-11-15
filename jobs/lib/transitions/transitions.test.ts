@@ -21,7 +21,7 @@ beforeEach(() => {
   writeRepos({ fac: { path: repo, sandbox: true }, plain: { path: repo } }, join(base, "items"));
   for (const [k, v] of Object.entries({
     ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"),
-    XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DISPATCH: "off", ALEPH_JOB_FOREGROUND: "1",
+    XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DISPATCH: "off", ALEPH_JOB_FOREGROUND: "1", ALEPH_LIVE_CAP: "5",
   })) {
     saved[k] = process.env[k];
     process.env[k] = v;
@@ -63,6 +63,17 @@ describe("startJob", () => {
   test("does not refuse for the starting rule once the last run's made is older than STARTING_MS", async () => {
     seed({ role: "build", name: "x", repo: "fac", branch: "factory/x", state: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: NOW - STARTING_MS - 1000 });
     expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).not.toContain("is running as");
+  });
+});
+
+describe("Run now", () => {
+  test("a build start with the live cap at 0 makes the job when it is Run now, and is refused with the full gate when it is not", async () => {
+    process.env.ALEPH_LIVE_CAP = "0";
+    const why = await startJob({ repo: "fac", name: "x", spec: "s" }).catch((e) => e);
+    expect(why).toMatchObject({ gate: "full" });
+    expect(runs()).toEqual([]);
+    expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }, { now: true }))).toBe("");
+    expect(runs()).toHaveLength(1);
   });
 });
 

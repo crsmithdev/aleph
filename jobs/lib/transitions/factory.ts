@@ -37,7 +37,7 @@ import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, 
 export { setPaused };
 
 import { heldEvent, issueDecision, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
-import { decideStart, unrouted } from "../gates/start-decision.ts";
+import { decideStart, unrouted, type StartDecision } from "../gates/start-decision.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
 import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
 
@@ -51,7 +51,7 @@ const openIssues = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => bui
 /** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick's sweep still does. */
 
 /** `size` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
-type Start = (repo: Repo, name: string, id: number | string, spec: string, size?: Size | null) => Promise<Refused | null>;
+type Start = (repo: Repo, name: string, id: number | string, spec: string, size?: Size | null, now?: boolean) => Promise<Refused | null>;
 export type Checks = (repo: Repo, commit: string, logs: string, record?: CheckTask["record"]) => Promise<ChecksStop | null>;
 type Land = (name: string) => Promise<string | null>;
 /**
@@ -67,10 +67,12 @@ type Land = (name: string) => Promise<string | null>;
  * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts issues
  * only: an issue is closed as done once its parts are all done (`closeIssues`). Intake (intake.ts) took each issue in
  * before: an issue to plan (`plan` set) goes to an intake run too, but `intakeQueued` starts it, once for each pass.
+ * `now` is the key of one issue to Run now (`runNow`): the pause, the live cap, the order and the steps above do not apply, only that issue is read,
+ * and `refused` is the text of what held it.
  */
-export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[] }> {
-  if (gates({ only: ["paused"] })) return { started: [], skipped: [], paused: true };
-  const kept = await startKept();
+export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, now?: string): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; refused?: string }> {
+  if (!now && gates({ only: ["paused"] })) return { started: [], skipped: [], paused: true };
+  const kept = now ? [] : await startKept();
   for (const name of kept) logEvent({ subject: "rule", action: "started", object: name, detail: "the pause kept this step" });
   if (rescue) await rescueStuck(rescue, land, async (repo) => mainState(repo));
   const landed: string[] = [];
@@ -86,8 +88,10 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
   const done = doneChecker(true, (key, id) => reader({ fetch: false }).item(key, id));
   // A parent whose parts all landed closes without a green main, after the sweep closes the parts.
   const lists = reader();
-  for (const repo of sandboxRepos()) { sweepMain(repo, lists); for (const l of await closeIssues(repo, done)) skipped.push(l); }
-  const ready = openIssues();
+  for (const repo of now ? [] : sandboxRepos()) { sweepMain(repo, lists); for (const l of await closeIssues(repo, done)) skipped.push(l); }
+  const ready = openIssues().filter(({ repo, item }) => !now || issueJob(repo, issues.idOf(item)) === now);
+  /** The text that stopped a Run now. */
+  let refused: string | undefined;
   /** The full bound's `N / M jobs`, when a decision skipped an issue for the cap. */
   let capText: string | undefined;
   /** Records the hold and the skip line of an issue no start reached. The pause, the backend and the live cap each log their own change, so a skip for one records no hold. */
@@ -95,6 +99,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
     if (kind === "waiting") holdGoal(name);
     if (kind !== "paused" && kind !== "waiting" && kind !== "full" && kind !== "done") recordHold(name, kind, ev);
     skipped.push(`${name}: ${why}`);
+    refused = why;
   };
   /** Skips an issue the store no longer has open, with its status; true when it did, so the caller stops. */
   const closed = (name: string, repo: Repo, ref: number | string): boolean => {
@@ -108,7 +113,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
   const held = (name: string, repo: Repo, d: IssueDecision) => {
     const b = d.kind === "red" ? baselines()[repo.key] : undefined;
     if (d.kind === "full") capText = facts(d.ev);
-    skip(name, d.kind as Gate, d.why, b ? heldEvent("red", `at ${b.commit.slice(0, 7)}: ${b.failed}`) : d.ev!);
+    skip(name, d.kind as Gate, now ? d.text : d.why, b ? heldEvent("red", `at ${b.commit.slice(0, 7)}: ${b.failed}`) : d.ev!);
   };
   for (const { repo, item: listed } of ready) {
     const ref = issues.idOf(listed);
@@ -130,13 +135,15 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
       // An item closed, dropped or parked since the pass listed it is skipped with that status; one still open is a plain issue.
       if (!item) { if (closed(name, repo, ref)) continue; skip(name, "parent", "not a goal", { action: "parent" }); continue; }
       // A pass that began before a pause must not start a run after it.
-      const d = await decideStart(repo, { ...issueFacts(repo, item, jobs), done, red }, jobs, () => route(issueBrief(item, name, jobs).spec, name));
+      // Run now asks the issue's gates only; the start holds the backend and the GPU slot of a local model.
+      const d: StartDecision = now ? issueDecision({ ...issueFacts(repo, item, jobs), done, red }) : await decideStart(repo, { ...issueFacts(repo, item, jobs), done, red }, jobs, () => route(issueBrief(item, name, jobs).spec, name));
       if (d.kind !== "ready" && d.kind !== "ask") { held(name, repo, d); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       if (closed(name, repo, ref)) continue;
       if (d.kind === "ask") {
         // The Ask goes to the director, as every Ask does; its `question` event is the only event of the guard.
         skipped.push(`${name}: ${d.why}`);
+        if (now) refused = d.text;
         if (d.ask === "no-commit") {
           const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
           const bad = askChris(repo, ref, { ...plainAsk("no-commit", text), facts: d.facts }, text);
@@ -149,7 +156,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
         continue;
       }
       const { spec } = issueBrief(item, name, jobs);
-      const no = await start(repo, name, ref, spec, d.size);
+      const no = await start(repo, name, ref, spec, d.size, now !== undefined);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
       if (no) skip(name, no.gate, no.why, no.ev);
       else { recordHold(name, "started"); started.push(name); }
@@ -157,6 +164,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
       release();
     }
   }
+  if (now) return { started, skipped, ...(started.length ? {} : { refused: refused ?? `${now} is not a queued issue` }) };
   logCap(capText ?? facts(gates({ only: ["full"] })?.ev) ?? null);
   return { started, skipped, ...(landed.length ? { landed } : {}) };
 }
@@ -584,6 +592,9 @@ const landPart = (name: string) => refusal(async () => { await (await land(name,
 /** A safe default drop: quiet, as the factory writes the issue note and the news. */
 const dropIssue = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
 const recheckIssue = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
+
+/** `aleph dispatch <key>`: start that one issue now, whatever the pause, the live cap and the order; the other gates of issueDecision still bind. */
+export const runNow = (key: string, start: Start = startIssue) => dispatchIssues(start, undefined, undefined, key);
 
 /**
  * `aleph dispatch`: one dispatch of the ready issues, then the intake queue and the director for an Ask that the

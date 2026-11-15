@@ -70,14 +70,14 @@ interface Started { run: string; job: string; folder: string }
 /** A started run, and in the foreground its unit's process, for the caller to wait on after the locks are gone. */
 export interface Start { started: Started; child?: ReturnType<typeof Bun.spawn> }
 
-/** How a start is made: the `aleph` argv it is written down as in the `command` section of `log.txt`, who starts it, and where a foreground unit writes. */
-export interface StartOpts { command?: string[]; output?: Output; by?: string }
+/** How a start is made: the `aleph` argv it is written down as in the `command` section of `log.txt`, who starts it, where a foreground unit writes, and `now` (Run now) to skip the live cap. */
+export interface StartOpts { command?: string[]; output?: Output; by?: string; now?: boolean }
 
 /**
  * Make the job and start its unit, under the dispatch lock. The lock
  * is held until the unit writes `pid`, so a second dispatch counts this job.
  */
-async function dispatch(run: NewJob, cwd: string, command: string[], output: Output | undefined, prep: (folder: string) => void): Promise<Start> {
+async function dispatch(run: NewJob, cwd: string, command: string[], output: Output | undefined, prep: (folder: string) => void, now?: boolean): Promise<Start> {
   const release = await lock("dispatch", 120_000); // a queue of starts, each holding it until its unit writes pid
   if (!release) refuse("another dispatch holds the lock");
   let child: ReturnType<typeof Bun.spawn> | undefined;
@@ -88,7 +88,8 @@ async function dispatch(run: NewJob, cwd: string, command: string[], output: Out
       // The run's model, or its size's, names its backend: a backend the factory holds starts no run, whatever the caller.
       const f = factoryGates(undefined, run);
       if (f.waiting) hold("waiting", f.waiting.ev!, f.waiting.why);
-      if (f.full) hold("full", heldEvent("full"), `${f.full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
+      // Run now skips the live cap, but not a local model's: that bound is the GPU slot.
+      if (f.full && !(now && !onLocal(run, readModels()))) hold("full", heldEvent("full"), `${f.full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
       if (onLocal(run, readModels())) {
         gpu = await lock("gpu", 0);
         if (!gpu) hold("full", heldEvent("gpu"), "a local call holds the GPU");
@@ -188,7 +189,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     }, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
       if (!first) return writeFileSync(runFile(folder, "spec.md"), a.spec);
       addNote(open!, a.spec);
-    });
+    }, o.now);
   } finally {
     release();
   }
@@ -357,7 +358,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
  * A foreground unit is waited for, its output dropped. Returns the refusal, or null. A refusal from
  * `ALEPH_START_CMD` is text from another process, so it names no gate.
  */
-export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, size?: Size | null): Promise<Refused | null> {
+export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, size?: Size | null, now?: boolean): Promise<Refused | null> {
   const picked = size !== undefined ? size : await route(spec, name);
   // A rerun of an issue whose build run failed takes the next level up; a run that did no work (credit) or hit the host (infra) does not count.
   const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.role) && e.run.state === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
@@ -371,7 +372,7 @@ export async function startIssue(repo: Repo, name: string, id: number | string, 
     return code === 0 ? null : refusedBy((await new Response(p.stderr).text()).trim() || `exit ${code}`);
   }
   try {
-    await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(routed ? { model: routed } : {}) }, { output: "ignore", by: "rule" })).child?.exited;
+    await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(routed ? { model: routed } : {}) }, { output: "ignore", by: "rule", now })).child?.exited;
     return null;
   } catch (e) {
     return refusedBy(e);
