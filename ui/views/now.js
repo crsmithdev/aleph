@@ -340,7 +340,7 @@ function runNow(s) {
 /** The Herald panel: sticky alerts on top, rolling event history stream below. */
 export function renderHerald(s) {
   const cur = verdict(s, outOfDateNow);
-  // An error is not pinned: the newest event already says it, and is marked live instead.
+  // An error is not pinned: the newest event already says it.
   const asks = undecided(s.asks ?? []).map((i) => askCard(i, s.now));
   const stuck = (s.stuck ?? []).map(stuckRow(s));
   const errors = cur.errors.length;

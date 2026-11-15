@@ -1106,6 +1106,12 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     })`);
     expect(ghost).toBe("first job");
   }, 60_000);
+
+  test("guard: a Herald row keeps its 3px tone stripe", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#herald .event-row")');
+    expect(await page.ev('getComputedStyle(document.querySelector("#herald .event-row")).borderLeftWidth')).toBe("3px");
+  }, 30_000);
 });
 
 describe.skipIf(!chromeUsable)("Ideas", () => {
