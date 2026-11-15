@@ -90,6 +90,16 @@ test("the Herald lists each running job as a row on the feed grid between the al
   expect(view.renderHerald({ ...calm, running: [], runningIssues: [] })).not.toContain("herald-running");
 });
 
+test("a running job's row names its run's kind, and shows the size of a build only", () => {
+  const job = { id: "job.1", name: "aleph-7", size: "small", started: "2026-11-09T11:00:00Z", item: { title: "Fix it" } };
+  const h = view.renderHerald({ ...calm, running: [{ ...job, run: { kind: "build" } }], runningIssues: [] });
+  expect(h).toContain('<span class="badge run">implement</span>');
+  expect(h).toContain('<span class="run-dot"></span>small</span>');
+  const r = view.renderHerald({ ...calm, running: [{ ...job, run: { kind: "review" } }], runningIssues: [] });
+  expect(r).toContain('<span class="badge run">review</span>');
+  expect(r).toContain('<span class="run-size"><span class="run-dot"></span></span>');
+});
+
 test("the Herald panel shows an OK badge with no alerts and no alert row", () => {
   const h = view.renderHerald(calm);
   expect(h).not.toContain("No active alerts");

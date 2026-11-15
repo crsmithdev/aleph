@@ -336,9 +336,9 @@ function runNow(s) {
     body: `<span class="event-line">${tag(word, "run")}${who}<span class="event-title run-title" title="${esc(title)}">${esc(title)}</span>` +
       `<span class="run-size"${model ? ` title="${esc(model)}"` : ""}><span class="run-dot"></span>${esc(size)}</span></span>` });
   const rows = (s.runningIssues ?? []).map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat((s.running ?? []).map((j) => {
-    const run = j.run ?? { role: "build", started: j.started };
-    const size = run.role === "build" ? j.size : "";
-    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), run.role === "build" ? role("build") : run.role, j.item?.title || j.name, run.started ?? j.started, j.model, size);
+    const run = j.run ?? { kind: "build", started: j.started };
+    const size = run.kind === "build" ? j.size : "";
+    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), role(run.kind), j.item?.title || j.name, run.started ?? j.started, j.model, size);
   }));
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
 }
