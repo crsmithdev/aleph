@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, day, localMs, plural, miss, note, notice, facts, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, day, localMs, plural, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 
@@ -173,9 +173,9 @@ export function renderRules(d) {
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
 export function renderHeld(d) {
   const repos = d.repoHeld ?? [];
-  const paths = (list) => `<div class="held">${list.map((p) => chip(p, { el: "code" })).join("")}</div>`;
+  const scopeRow = (k, list) => `<dt>${esc(k)}</dt><dd>${list.map((p) => `<div><code>${esc(p)}</code></div>`).join("")}</dd>`;
   return card("Held Paths", note("The security paths and a repo's held paths wait for the user after the reviewer passes the job. A test is never held.") +
-    facts([["Every repo", paths(d.held)], ...repos.map((r) => [r.repo, paths(r.held)])]) +
+    `<dl class="held-paths">${scopeRow("Every repo", d.held)}${repos.map((r) => scopeRow(r.repo, r.held)).join("")}</dl>` +
     (repos.length ? "" : empty()), { id: "gates-held", label: "Held paths" });
 }
 

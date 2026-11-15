@@ -246,11 +246,15 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   const rescue = h.slice(h.indexOf('data-rule="rescue"'));
   expect(rescue).toMatch(/data-value="resolve" aria-pressed="true">Take the pick</);
   expect(h.match(/<tr class="rule" data-reason=/g)).toHaveLength(Object.keys(ASK_REASONS).length);
-  for (const p of SECURITY_PATHS) expect(h).toContain(`<code class="chip">${p}</code>`);
+  expect(h).not.toContain('<code class="chip">');
   const card = gates.renderHeld(data());
+  expect(card).not.toContain('class="held"');
+  expect(card).not.toContain('class="chip"');
+  // Each path is its own line, a bare code element; no line holds two, and both scope labels sit in one list.
+  for (const p of [...SECURITY_PATHS, "src/auth/**"]) expect(card).toContain(`<div><code>${p}</code></div>`);
+  expect(card).not.toMatch(/<code>[^<]*<\/code>\s*<code>/);
+  expect(card).toContain("<dt>Every repo</dt>");
   expect(card).toContain("<dt>r</dt>");
-  expect(card).toContain('<code class="chip">src/auth/**</code>');
-  for (const p of SECURITY_PATHS) expect(card).toContain(`<code class="chip">${p}</code>`);
   expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No data</p></div>');
 });
 
