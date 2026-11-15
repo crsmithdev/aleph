@@ -245,7 +245,7 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   expect(h).not.toContain("The director decides first");
   const rescue = h.slice(h.indexOf('data-rule="rescue"'));
   expect(rescue).toMatch(/data-value="resolve" aria-pressed="true">Take the pick</);
-  expect(h.match(/<tr class="rule" data-reason=/g)).toHaveLength(Object.keys(ASK_REASONS).length);
+  expect(h.match(/<td class="acts">/g)).toHaveLength(Object.keys(ASK_REASONS).length);
   expect(h).not.toContain('<code class="chip">');
   const card = gates.renderHeld(data());
   expect(card).not.toContain('class="held"');
@@ -492,7 +492,7 @@ test("the Deviations row of docs/design.md drops the held-path chips and names t
   const row = (await Bun.file(new URL("../docs/design.md", import.meta.url)).text()).split("\n").find((l) => l.startsWith("| Parts of the Automation page written by hand"))!;
   expect(row).not.toContain("div.held");
   expect(row).not.toContain("held-path chips");
-  expect(row).toContain("tr.rule");
+  expect(row).not.toContain("tr.rule");
   expect(row).toContain("renderLog()");
   expect(row).toContain("held-paths");
 });
@@ -503,7 +503,14 @@ test("rules() has one row per Ask reason; renderRules is one table with a row pe
   for (const k of ["proposal-check", "proposal-claude-md", "proposal-skill", "question", "held-path"]) expect(r).toContain(k);
   const h = gates.renderRules({ rules: rules() });
   expect(h.match(/<table/g)!.length).toBe(1);
-  expect(h.match(/<tr class="rule" data-reason="/g)!.length).toBe(r.length);
+  expect(h.match(/<td class="acts">/g)!.length).toBe(r.length);
+});
+
+test("a rule row names the reason in its title cell, ends in a small Edit button, and its form follows the table", () => {
+  const h = gates.renderRules({ rules: rules().filter((x) => x.reason === "held-path") });
+  expect(h).toMatch(/<td class="wide" title="held-path[^"]*">[^<]+<\/td>/);
+  expect(h).toMatch(/<td class="acts"><button class="act small" type="button" data-edit-rule="held-path">Edit<\/button><\/td><\/tr>/);
+  expect(h.indexOf('<form class="rule-form"')).toBeGreaterThan(h.indexOf("</table>"));
 });
 
 test("a stored firefighter grant for held-path is dead: rules() shows no grant and Decides offers Director, Approve and User", () => {
@@ -569,7 +576,8 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
   const h = gates.renderRules({ rules: [row] });
-  expect(h).toContain('<th>Ask</th><th class="num">Fired</th><th>Decided By</th><th>Decides</th><th>If Auto Cannot</th><th>If No Answer</th><th></th>');
+  expect(h).toContain('<th>Ask</th><th class="num">Fired</th><th>Decided By</th><th>Decides</th><th>If No Answer</th><th></th>');
+  for (const t of ["If Auto Cannot", "Ask me", "colspan", 'class="note"']) expect(h).not.toContain(t);
   expect(h).not.toMatch(/Manual|<th>[^<]*[()/]/);
   expect(h).toContain('<td class="num">5</td>');
   expect(h).toContain('<small class="split">2 rule · 1 director · 1 user</small>');

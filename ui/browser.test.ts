@@ -1222,7 +1222,8 @@ describe.skipIf(!chromeUsable)("Automation redraw", () => {
     await redraws();
     await page.ev("window.edit.click()");
     expect(await page.ev(`[window.edit.isConnected, window.edit.getAttribute("aria-expanded"),
-      document.querySelector('#view tr.rule-edit[data-reason="' + CSS.escape(window.edit.dataset.editRule) + '"]').hidden]`)).toEqual([true, "true", false]);
+      document.querySelector('#view form.rule-form[data-rule="' + CSS.escape(window.edit.dataset.editRule) + '"]').hidden,
+      document.querySelector('#view form.rule-form[data-rule="' + CSS.escape(window.edit.dataset.editRule) + '"]').closest("td")]`)).toEqual([true, "true", false, null]);
     expect(page.errors).toEqual([]);
   }, 60_000);
 });

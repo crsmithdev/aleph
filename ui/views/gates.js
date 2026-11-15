@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, day, localMs, plural, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, row, day, localMs, plural, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
 
@@ -141,7 +141,7 @@ function decidedCell(d) {
 /** A reason has an Edit row unless it is a memory proposal, which is granted per place. */
 const editable = (r) => !r.places;
 
-/** The Edit row of a reason, hidden until its Edit button opens it. Save posts only what changed. */
+/** The settings form of a reason, under the table and hidden until its Edit button opens it. Save posts only what changed. */
 function ruleForm(r) {
   const opt = (value, label, on) => ({ label, on, attrs: ` data-value="${esc(value)}"` });
   const g = r.granted?.action ?? "";
@@ -153,21 +153,17 @@ function ruleForm(r) {
     selectBox(`${r.name} wait unit`, "unit", WAITS.map(([value, , label]) => ({ value, label })), v.unit, { attrs: off }),
     { hint: "Take the pick: the action the director recommends, if it recommends one. Drop: the reason's drop, close or deny." });
   const buttons = `<span class="rule-acts"><button type="button" class="act" data-cancel>Cancel</button><button type="submit" class="act primary">Save</button></span>`;
-  return `<tr class="rule-edit" data-reason="${esc(r.reason)}" hidden><td colspan="7"><form class="rule-form" data-rule="${esc(r.reason)}" data-was-decide="${esc(g)}" data-was-wait="${r.timeout ?? ""}" data-was-then="${then}">` +
-    settings(`Edit ${r.name}`, r.timeout === undefined ? [decide] : [decide, wait]) + buttons + `</form></td></tr>`;
+  return `<form class="rule-form" data-rule="${esc(r.reason)}" data-was-decide="${esc(g)}" data-was-wait="${r.timeout ?? ""}" data-was-then="${then}" hidden>` +
+    settings(`Edit ${r.name}`, r.timeout === undefined ? [decide] : [decide, wait]) + buttons + `</form>`;
 }
 
-/** One row per Ask reason: how often it fired, who decided it, who decides it first, and what happens when that fails. Edit opens the reason's settings under its row. */
+/** One row per Ask reason: how often it fired, who decided it, who decides it first, and what happens when no one answers. Edit opens the reason's settings under the table. */
 export function renderRules(d) {
-  const rows = d.rules.map((r) => {
-    const edit = editable(r) ? `<button type="button" class="act" data-edit-rule="${esc(r.reason)}" aria-expanded="false">Edit</button>` : "";
-    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="wide" title="${esc([r.name, r.reason, r.line].filter(Boolean).join(" "))}"><b>${esc(r.name)}</b> <code>${esc(r.reason)}</code>${r.line ? note(r.line) : ""}</td>` +
-      cell(count(r.fired), { num: true }) + `<td class="decided">${decidedCell(r.decided)}</td>` +
-      `<td>${esc(decidesText(r))}</td><td>Ask me</td><td>${esc(noAnswerText(r))}</td><td class="act-cell">${edit}</td></tr>` + (edit ? ruleForm(r) : "");
-  }).join("");
-  const legend = note("Decides: who acts first, Auto by a rule or by the director. If Auto cannot: where an Ask goes when that fails. If no answer: what happens when an Ask waits for the user.");
+  const rows = d.rules.map((r) => row([
+    cell(r.name, { wide: true, title: [r.reason, r.line].filter(Boolean).join(" ") }), cell(count(r.fired), { num: true }), `<td class="decided">${decidedCell(r.decided)}</td>`,
+    cell(decidesText(r)), cell(noAnswerText(r)), `<td class="acts">${editable(r) ? actButton("Edit", { "edit-rule": r.reason }, { kind: "small" }) : ""}</td>`])).join("");
   return card("Rules", !rows ? empty() :
-    legend + dataTable(heads(["Ask", "Fired", "Decided By", "Decides", "If Auto Cannot", "If No Answer", ""], ["Fired"]), rows, { id: "rules-table" }), { id: "rules" });
+    dataTable(heads(["Ask", "Fired", "Decided By", "Decides", "If No Answer", ""], ["Fired"]), rows, { id: "rules-table" }) + d.rules.filter(editable).map(ruleForm).join(""), { id: "rules" });
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
@@ -211,7 +207,7 @@ const SAVES = {
   cap: (f) => ["/api/automation/caps", { [f.dataset.cap]: Number(f.elements[f.dataset.cap].value) }, "cap"],
 };
 
-/** The posts an Edit row's Save needs: a grant or a revoke when Decides changed, a timeout when the wait or its action changed. */
+/** The posts a rule form's Save needs: a grant or a revoke when Decides changed, a timeout when the wait or its action changed. */
 export function rulePosts(f) {
   const url = (what) => `/api/automation/rules/${encodeURIComponent(f.dataset.rule)}/${what}`;
   const picked = (field) => f.querySelector(`.seg[data-field="${field}"] [aria-pressed="true"]`)?.dataset.value;
@@ -264,9 +260,9 @@ export function mount(root) {
     }
     const open = e.target.closest?.("button[data-edit-rule]");
     if (open) {
-      const row = root.querySelector(`tr.rule-edit[data-reason="${CSS.escape(open.dataset.editRule)}"]`);
-      row.hidden = !row.hidden;
-      open.setAttribute("aria-expanded", String(!row.hidden));
+      const form = root.querySelector(`form.rule-form[data-rule="${CSS.escape(open.dataset.editRule)}"]`);
+      form.hidden = !form.hidden;
+      open.setAttribute("aria-expanded", String(!form.hidden));
       return;
     }
     const pick = e.target.closest?.("form.rule-form .seg button");
