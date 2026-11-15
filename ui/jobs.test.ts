@@ -345,7 +345,7 @@ describe("render", () => {
     expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9#3"><p class="quiet" role="status"><i class="spin" aria-hidden="true"></i>Loading the diff…</p></div>');
   });
   test("the head is pageHead with the title and the nav links as aside", () => {
-    const aside = '<a class="act" href="#/issues/fac/9">Issue</a><a class="act" href="http://lf/sessions/s">Trace</a>';
+    const aside = '<a class="act" href="http://lf/sessions/s">Trace</a>';
     const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
     mock.module("./lib.js", () => ({ ...real, pageHead: tagged }));
     try {
@@ -388,9 +388,25 @@ describe("render", () => {
     expect(css).not.toContain(".dp-detail > h2");
     expect(css).not.toContain(".dp-detail > .sh");
   });
-  test("a job on an issue links to it above the Timeline, and its crumb goes through the issue", () => {
+  test("an open job on an issue shows the lifecycle buttons of its state, and a closed job shows none", () => {
+    const head = (o: object) => { const h = v.renderJob({ ...job, ...o }); return h.slice(0, h.indexOf("</header>")); };
+    const labels = (h: string) => [...h.matchAll(/<button class="act[^"]*" type="button"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
+    expect(labels(head({ open: true, state: "waiting" }))).toEqual(["Land", "Recheck", "Park", "Cancel", "Cancel job"]);
+    expect(labels(head({ open: true, state: "running" }))).toEqual(["Park", "Cancel", "Cancel job"]);
+    expect(labels(head({ open: true, state: "waiting", parked: true }))).toEqual(["Recheck", "Unpark", "Cancel", "Cancel job"]);
+    expect(head({ open: true, state: "running" })).toContain('data-path="/api/jobs/fac-9%233/park"');
+    expect(head({ open: false })).not.toContain("<button");
+    expect(head({ open: true, item: undefined })).not.toContain("<button");
+  });
+  test("the Cancel dialog offers park, restart and drop, with park chosen", () => {
+    const h = v.renderJob({ ...job, open: true, state: "running" });
+    expect([...h.matchAll(/name="then" value="(\w+)"/g)].map((m) => m[1])).toEqual(["park", "restart", "drop"]);
+    expect(h).toContain('value="park" checked');
+    expect(h).toContain(`data-body="${'{&quot;then&quot;:&quot;park&quot;}'}"`);
+  });
+  test("a job on an issue has no Issue button: its crumb goes through the issue", () => {
     const h = v.renderJob(job), href = "#/issues/fac/9";
-    expect(h.slice(0, h.indexOf('class="dp-tl'))).toContain(`<a class="act" href="${href}">Issue</a>`);
+    expect(h).not.toContain(">Issue</a>");
     expect(h.match(/<nav[^>]*>.*?<\/nav>/s)?.[0] ?? "").toContain(href);
     const bare = v.renderJob({ ...job, item: undefined });
     expect(bare).not.toContain("#/issues/");

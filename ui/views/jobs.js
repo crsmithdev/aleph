@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, pageOf, pageRows, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
+import { actButton, fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, pageOf, pageRows, plural, linkButton, loadDiff, loadingLine, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS, shortText, issueHref, jobHref, STATES } from "../../lib/naming.ts";
 
@@ -152,13 +152,28 @@ function jobKpis(j, now = Date.now()) {
   ]);
 }
 
+/** The actions of an open job on an issue: Land and Recheck while it waits, Park or Unpark, and Cancel, which opens its dialog. */
+function lifecycle(j) {
+  if (!j.open || !j.item) return "";
+  const act = (label, verb, o = {}) => actButton(label, { act: verb, path: `/api/jobs/${encodeURIComponent(j.id)}/${verb}`, label }, o);
+  const waiting = j.state === "waiting";
+  const outcome = (then, label, effect) => `<label><input type="radio" name="then" value="${then}"${then === "park" ? " checked" : ""}><span>${label}<small>${effect}</small></span></label>`;
+  return (waiting && !j.parked ? act("Land", "land", { primary: true }) : "") + (waiting ? act("Recheck", "recheck") : "") +
+    (j.parked ? act("Unpark", "unpark", { primary: true }) : act("Park", "park")) +
+    `<button class="act danger" type="button" data-dialog="cancel-job">Cancel</button>` +
+    `<dialog id="cancel-job" class="cancel-job"><form method="dialog"><h3>Cancel job ${esc(shortText(j.name))}</h3>` +
+    outcome("park", "Park the issue", "Waits for Unpark") + outcome("restart", "Restart", "Back to the queue") + outcome("drop", "Drop the issue", "Closes it") +
+    `<div class="actions"><button class="act" type="submit">Keep</button>` +
+    actButton("Cancel job", { act: "cancel", path: `/api/jobs/${encodeURIComponent(j.id)}/cancel`, body: JSON.stringify({ then: "park" }), label: "Cancel job" }, { kind: "danger" }) + `</div></form></dialog>`;
+}
+
 /** The Job page: the header and its pills, the KPI strip, the Timeline, the Spec and the Result, then the Detail panels. */
 export function renderJob(j) {
   const id = shortText(j.name), p = j.parent;
   // The issue the job works on: a part's parent, else the job's own item.
   const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: issueHref(`${j.repo}-${j.item.id}`) });
   const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${shortText(iss.id)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
-  const nav = [iss ? linkButton("Issue", iss.href) : "", p?.next ? linkButton(`Next sub-issue: ${shortText(p.next.id)}`, p.next.href) : "", j.trace ? linkButton("Trace", j.trace) : ""].join("");
+  const nav = [p?.next ? linkButton(`Next sub-issue: ${shortText(p.next.id)}`, p.next.href) : "", j.trace ? linkButton("Trace", j.trace) : ""].join("");
   const pills = statusRow(badge(j.state), j.item ? priorityBadge(j.item.priority) : "", `${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(shortText(p.id), p.href)}` }) : ""}${idLink(shortText(j.name))}`);
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
@@ -176,7 +191,7 @@ export function renderJob(j) {
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
-    pageHead(j.item?.title || j.title || id, { aside: nav + (j.state === "waiting" ? cmd(`aleph land ${j.name}`, { primary: true }) + cmd(`aleph drop ${j.name}`) : "") }) + `${pills}${next}${blocked}` +
+    pageHead(j.item?.title || j.title || id, { aside: nav + lifecycle(j) }) + `${pills}${next}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? note(j.reason) : "") +
     jobKpis(j) + renderTimeline(jobSegments(j)) +
     (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +
@@ -198,6 +213,12 @@ async function mountJob(root) {
 
 // Loads a log file when its button is clicked: the page itself carries only names and sizes.
 if (typeof document !== "undefined") {
+  // Cancel opens its dialog; the chosen outcome becomes the body of the Cancel job button.
+  document.addEventListener("click", (e) => { const b = e.target.closest?.("[data-dialog]"); if (b) document.getElementById(b.dataset.dialog)?.showModal(); });
+  document.addEventListener("change", (e) => {
+    const r = e.target.closest?.("#cancel-job input[name=then]");
+    if (r) r.closest("dialog").querySelector("button[data-act=cancel]").dataset.body = JSON.stringify({ then: r.value });
+  });
   document.addEventListener("click", async (e) => {
     const b = e.target.closest?.("[data-log]");
     if (!b) return;

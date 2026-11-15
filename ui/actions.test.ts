@@ -104,6 +104,28 @@ test("POST /api/jobs/:id/drop passes the reason", async () => {
   expect(recorded().at(-1)).toBe("drop -- x");
 });
 
+test("park and unpark set the status of the job's issue", async () => {
+  for (const [verb, status] of [["park", "parked"], ["unpark", "open"]]) {
+    expect((await post(jp("won", verb), { "X-Aleph-UI": "1" })).status).toBe(200);
+    expect(recorded().at(-1)).toBe(`issue edit --status ${status} -- r 5`);
+  }
+});
+
+test("cancel changes the issue before it drops the job, and restart leaves the issue alone", async () => {
+  for (const [then, first] of [["park", "issue edit --status parked -- r 5"], ["drop", "issue drop -- r 5 Chris cancelled its job"], ["restart", null]] as const) {
+    const before = recorded().length;
+    expect((await post(jp("won", "cancel"), { "X-Aleph-UI": "1" }, { then })).status).toBe(200);
+    expect(recorded().slice(before)).toEqual([...(first ? [first] : []), "drop -- won Chris cancelled it"]);
+  }
+});
+
+test("cancel refuses an outcome it does not know, and a job with no issue, and runs nothing", async () => {
+  const before = recorded().length;
+  expect((await post(jp("won", "cancel"), { "X-Aleph-UI": "1" }, { then: "later" })).status).toBe(400);
+  expect((await post(jp("x", "cancel"), { "X-Aleph-UI": "1" }, { then: "park" })).status).toBe(400);
+  expect(recorded().length).toBe(before);
+});
+
 test("a name not in the ledger is 404 and runs nothing", async () => {
   const before = recorded().length;
   expect((await post(jp("nope", "land"))).status).toBe(404);

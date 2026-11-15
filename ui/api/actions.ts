@@ -1,5 +1,5 @@
 /**
- * `POST /api/jobs/:id/land|recheck|drop` and `POST /api/jobs/:id/answer` (`{ answer }`, "Answer and rerun" on a
+ * `POST /api/jobs/:id/land|recheck|drop|park|unpark|cancel` and `POST /api/jobs/:id/answer` (`{ answer }`, "Answer and rerun" on a
  * question run: the answer becomes the reason of `aleph drop`, so the next dispatch carries it in the spec). `:id` is a
  * job ID, `a1430#2`. Each action is the `aleph` command of that name on the job's name, run through ui/action.ts. The
  * command acts on the newest job of that name, so an action acts only while the named job is that one: a 409 otherwise.
@@ -37,6 +37,28 @@ const answerAndRerun = post(async (body, { id }) => {
   return aleph(["drop", "--", run.name, `Chris answered the worker's question "${run.ask?.question ?? run.question ?? ""}": ${said}`]);
 });
 
+/** Job `id`'s name and its issue as `<repo> <n>`; a 400 for a job with no issue. */
+function issueOfJob(id: string): { name: string; issue: [string, string] } {
+  const { run } = find(id), n = onOf(run);
+  if (!run.repo || n === undefined) fail(400, `${id} works on no issue`);
+  return { name: run.name, issue: [run.repo!, String(n)] };
+}
+
+/** Park or unpark the job's issue: a parked issue starts no run, and its live run does not land. */
+const park = (status: "parked" | "open") => post((_body, { id }) => aleph(["issue", "edit", "--status", status, "--", ...issueOfJob(id).issue]));
+
+/**
+ * Cancel: drop the job, and `then` decides the issue. `park` parks it, `drop` drops it, `restart` leaves it open, so the
+ * dispatch starts it again. The issue changes first, because the drop starts the dispatch.
+ */
+const cancel = post(async (body, { id }) => {
+  const then = body.then, { name, issue } = issueOfJob(id);
+  if (!["park", "restart", "drop"].includes(then)) fail(400, "then must be park, restart or drop");
+  if (then === "park") await aleph(["issue", "edit", "--status", "parked", "--", ...issue]);
+  if (then === "drop") await aleph(["issue", "drop", "--", ...issue, "Chris cancelled its job"]);
+  return aleph(["drop", "--", name, "Chris cancelled it"]);
+});
+
 /**
  * "Wait for <repo>-<n>": set the stuck job's issue (a part run's dotted `on` names the issue holding the part) to wait
  * on that open issue, then drop the job. All or none: a failed drop puts the old `after` back, and the error says so.
@@ -64,4 +86,7 @@ export const routes: Routes = {
   "POST /api/jobs/:id/drop": action("drop"),
   "POST /api/jobs/:id/wait": wait,
   "POST /api/jobs/:id/answer": answerAndRerun,
+  "POST /api/jobs/:id/park": park("parked"),
+  "POST /api/jobs/:id/unpark": park("open"),
+  "POST /api/jobs/:id/cancel": cancel,
 };

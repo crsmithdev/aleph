@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { allRuns, isBuild, issueKeyOf, loadRegistry, onOf, runOfJob, runsByIssue, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, isBuild, isOpen, issueKeyOf, loadRegistry, onOf, runOfJob, runsByIssue, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
@@ -87,17 +87,22 @@ interface JobDetail extends Job {
   next?: NextStep & { text: string }; rounds?: number;
   /** For a part: its issue, its place among the issue's parts, and the part after it. */
   parent?: { id: string; href: string; n: number; of: number; next?: { id: string; href: string } };
+  /** The job is open: it can be landed, parked or cancelled. */
+  open: boolean;
+  /** The job's issue is parked. */
+  parked?: boolean;
 }
 
 /** The item's spec and, for a part, its issue and its place among the parts. Nothing when the store cannot be read. */
-function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | "parent"> {
+function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | "parent" | "parked"> {
   const place = loadRegistry()[repo];
   let doc: todos.Doc | null = null;
   try { doc = place ? readList(place) : null; } catch { return {}; }
   const item = doc && todos.find(doc, id);
   if (!doc || !item) return {};
-  const out: Pick<JobDetail, "spec" | "parent"> = {};
+  const out: Pick<JobDetail, "spec" | "parent" | "parked"> = {};
   if (item.spec) out.spec = item.spec;
+  if (todos.status(item) === "parked") out.parked = true;
   const up = parentOf(doc, item);
   if (!up) return out;
   const parts = partsOf(doc, up).map(todos.refOf);
@@ -176,7 +181,7 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
   const fit = await currentFit().catch(() => null);
   const projector = jobProjector();
   const job = projector.toJob(runs, v);
-  const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit), holds: readHolds([job.name]) };
+  const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit), holds: readHolds([job.name]), open: isOpen(runs) };
   const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
   if (blockers.length) detail.blockers = blockers;
   const step = stepOf(runs);

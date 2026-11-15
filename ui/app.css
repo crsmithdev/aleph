@@ -355,6 +355,14 @@ p.note { margin: var(--sp-4) 0; font-size: var(--fs-sm); color: var(--ink-2); }
 .meta > span + span::before { content: "\00b7"; margin: 0 var(--sp-6); }
 .lede { margin: var(--sp-2) 0 var(--sp-12); font-size: var(--fs-sm); color: var(--muted); }
 .act-msg { font-size: var(--fs-sm); color: var(--stuck); align-self: center; }
+/* The Job page's Cancel dialog: one outcome for the issue, then Cancel job. */
+.cancel-job { border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); color: var(--ink); padding: var(--sp-16) var(--sp-20); width: min(420px, 90vw); }
+.cancel-job::backdrop { background: rgb(0 0 0 / .35); }
+.cancel-job h3 { margin: 0 0 var(--sp-10); font: var(--fw-strong) var(--fs-md) var(--sans); }
+.cancel-job label { display: flex; gap: var(--sp-10); padding: var(--sp-8) var(--sp-10); border-radius: var(--r-ctl); cursor: pointer; }
+.cancel-job label:hover { background: var(--sunk); }
+.cancel-job small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.cancel-job .actions { justify-content: flex-end; }
 .blocker-dead .act { margin-top: var(--sp-4); }
 .shead .fbar .act { min-height: var(--ctl-h); box-sizing: border-box; padding: 0 var(--sp-12); font: var(--fs-sm) var(--sans); border-radius: var(--r-ctl); border: 1px solid var(--rule); background: none; color: var(--muted); }
 .shead .fbar .act:hover { color: var(--ink); border-color: var(--rule); }
