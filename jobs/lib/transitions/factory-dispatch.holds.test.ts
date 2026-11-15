@@ -6,7 +6,8 @@ import * as store from "../../../issues/lib/store.ts";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, suiteStep } from "./factory.ts";
-import { readHolds } from "../gates/factory-status.ts";
+import { holdBackend, readHolds } from "../gates/factory-status.ts";
+import * as record from "../records/record.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { change, ctx, newIssue, notes, setup, sh, teardown } from "./factory.helpers.ts";
 
@@ -158,4 +159,25 @@ test("a sub-issue waits on its parent's after, and starts once those refs are do
   change(x, (i) => { i.fm.closed_as = "done"; });
   const out = await dispatchIssues(async () => null, undefined, undefined);
   expect(out.started).toContain(`issue.${child}`);
+});
+
+test("a held backend skips an issue with no run with no hold event and no issue state, and the second dispatch routes it no more", async () => {
+  await holdBackend("claude", "API Error: 402 This request would exceed your available credits");
+  const id = newIssue();
+  const name = `issue.${id}`;
+  let routed = 0;
+  const server = Bun.serve({ port: 0, fetch: () => { routed++; return Response.json({ answers: { size: { type: "choice", choice: "large", probabilities: { large: 1 } } } }); } });
+  const saved = { url: process.env.ALEPH_JEV_URL, key: process.env.OPENROUTER_API_KEY };
+  Object.assign(process.env, { ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
+  try {
+    const before = readEvents().length;
+    for (let i = 0; i < 2; i++) expect((await dispatchIssues(async () => null)).skipped).toEqual([`${name}: waits for Claude: API Error: 402 This request would exceed your available credits`]);
+    expect(routed).toBe(1);
+    expect(readEvents().slice(before).filter((e) => e.object === name && e.subject === "gate")).toEqual([]);
+    expect(record.read(name)).toBeNull();
+  } finally {
+    server.stop(true);
+    if (saved.url === undefined) delete process.env.ALEPH_JEV_URL; else process.env.ALEPH_JEV_URL = saved.url;
+    if (saved.key === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = saved.key;
+  }
 });

@@ -32,12 +32,12 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 |---|---|---|
 | `gate` | A run's state: `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` | `jobs/lib/records/record.ts:182` |
 | `gate` | `question` when an Ask is set, `answered` when it is cleared | `jobs/lib/records/record.ts:168` |
-| `gate` | A hold when a new one is written: `paused`, `red`, `after`, `full`, `busy`, `looping`, `credit`, `waiting`, `running` and others | `jobs/lib/gates/factory-status.ts:71`, from `jobs/lib/transitions/factory.ts:91` and `:136` |
+| `gate` | A hold when a new one is written: `red`, `after`, `busy`, `looping`, `credit`, `running` and others. The pause, the backend and the live cap write none: each logs its own `changed` event on `settings` | `jobs/lib/gates/factory-status.ts:73`, from `jobs/lib/transitions/factory.ts:93` and `:136` |
+| `gate` | `changed` on the object `settings`, when the live cap (`cap: on: 5 / 5 jobs`, `cap: on: 1 / 1 local jobs`, `cap: off`) or the held backend (`credit: on: claude: <the call's line>`, `credit: off`) starts or ends; a gate that stays on logs nothing more | `jobs/lib/gates/factory-status.ts:95`, `:133`, `:143` |
 | `rule` | `routed`, its `detail` the Size and the classifier model (`medium by classifier <model>`), on the issue key | `jobs/lib/routing/route.ts:28` |
-| `rule` | `paused`, `started`, `busy`, `done`, `failed` (`error`) for the dispatch steps | `jobs/lib/transitions/factory.ts:70`, `:74`, `:112`, `:142`, `:146`, `:182`, `:190`, `:275`, `:484`, `:538` |
+| `rule` | `started`, `busy`, `done`, `failed` (`error`) for the dispatch steps | `jobs/lib/transitions/factory.ts:74`, `:112`, `:142`, `:146`, `:182`, `:190`, `:275`, `:484`, `:538` |
 | `rule` | `started` for a run, with the model | `jobs/lib/transitions/transitions.ts:363` |
 | `rule` | `missed` for a stalled key, `started` (`check`) for a suite on a moved main, `failed` (`error`) for a tick step | `jobs/lib/transitions/tick.ts:156`, `:165`, `:219` |
-| `rule` | `paused` (`credit`) when a backend is held, `reran` when it answers again | `jobs/lib/gates/factory-status.ts:119`, `:129` |
 | `rule` | `gpu`, when the GPU slot stays taken and the call falls back | `jobs/lib/roles/agent-call.ts:120` |
 | `rule` | `failed` for a filing, a detached start, a land start, a job diff, a correction, a UI read | `jobs/lib/transitions/filing.ts:29`, `jobs/lib/transitions/launch.ts:89`, `jobs/lib/roles/unit.ts:101`, `jobs/lib/records/jobdiff.ts:47`, `jobs/lib/learning/corrections.ts:17`, `ui/state.ts:36` |
 | `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:238`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:259`, `jobs/lib/asks/timeout.ts:105`, `jobs/lib/learning/corrections.ts`, `issues/lib/store.ts` |
@@ -49,6 +49,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | the filer: `intake`, `firefighter`, `human`, `claude`, `worker` | `filed`, one event per new issue | `issues/lib/store.ts:411` |
 | the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `issues/lib/store.ts:155` |
 | `human` | `changed`, when an Always rule is set back to Ask me | `jobs/lib/asks/ask.ts:237` |
+| `human` | `changed` on the object `settings`: `pause: on` and `pause: off`, from the pause and resume commands | `jobs/lib/gates/factory-status.ts:88`, through `logSetting` in `lib/layout.ts:32` |
 
 The set `ACTORS` in `lib/naming.ts:17` also holds `worker`, `reviewer`, `check` and `monitor`. No `logEvent` call uses `reviewer`, `check` or `monitor`. `worker` and `claude` appear only as the filer or closer of an issue. An issue's events have the object `issue.<n>`.
 

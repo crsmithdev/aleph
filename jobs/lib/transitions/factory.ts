@@ -33,7 +33,7 @@ import { drop, land, recheck, refusal, startIssue, type Refused } from "./transi
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, type Size } from "../routing/route.ts";
-import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, issueFacts, issueJob, setPaused, baselines, changedLinesOf, factoryDir, sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
+import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, issueFacts, issueJob, setPaused, baselines, changedLinesOf, factoryDir, sandboxRepos, gates, holdGoal, liveRuns, logCap, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
 import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
@@ -66,10 +66,7 @@ type Land = (name: string) => Promise<string | null>;
  * before: an issue to plan (`plan` set) goes to an intake run too, but `intakeQueued` starts it, once for each pass.
  */
 export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[] }> {
-  if (gates({ only: ["pause"] })) {
-    logEvent({ subject: "rule", action: "paused", object: "factory" });
-    return { started: [], skipped: [], paused: true };
-  }
+  if (gates({ only: ["pause"] })) return { started: [], skipped: [], paused: true };
   const kept = await startKept();
   for (const name of kept) logEvent({ subject: "rule", action: "started", object: name, detail: "the pause kept this step" });
   if (rescue) await rescueStuck(rescue, land, async (repo) => mainState(repo));
@@ -88,8 +85,14 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
   const lists = reader();
   for (const repo of sandboxRepos()) { sweepMain(repo, lists); for (const l of await closeIssues(repo, done)) skipped.push(l); }
   const ready = openIssues();
-  /** Records the hold and the skip line of an issue no start reached. */
-  const skip = (name: string, kind: Gate, why: string, ev: Hold) => { recordHold(name, kind, why, ev); skipped.push(`${name}: ${why}`); };
+  /** The live-cap bound's `N / M jobs`, when a decision skipped an issue for the cap. */
+  let capText: string | undefined;
+  /** Records the hold and the skip line of an issue no start reached. The pause, the backend and the live cap each log their own change, so a skip for one records no hold. */
+  const skip = (name: string, kind: Gate, why: string, ev: Hold) => {
+    if (kind === "backend") holdGoal(name);
+    if (kind !== "pause" && kind !== "backend" && kind !== "live-cap") recordHold(name, kind, why, ev);
+    skipped.push(`${name}: ${why}`);
+  };
   /** Skips an issue the store no longer has open, with its status; true when it did, so the caller stops. */
   const closed = (name: string, repo: Repo, ref: number | string): boolean => {
     const latest = reader().item(repo.key, ref);
@@ -101,6 +104,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
   /** Skips an issue that a gate holds; a red main's event names its commit, and the note its failed checks. */
   const held = (name: string, repo: Repo, d: IssueDecision) => {
     const b = d.kind === "baseline" ? baselines()[repo.key] : undefined;
+    if (d.kind === "live-cap") capText = d.ev!.detail ?? undefined;
     skip(name, d.kind as Gate, d.why, b ? { action: "red", detail: `at ${b.commit.slice(0, 7)}: ${b.failed}` } : d.ev!);
   };
   for (const { repo, item: listed } of ready) {
@@ -151,6 +155,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue)
       release();
     }
   }
+  logCap(capText ?? gates({ only: ["live-cap"] })?.ev?.detail ?? null);
   return { started, skipped, ...(landed.length ? { landed } : {}) };
 }
 

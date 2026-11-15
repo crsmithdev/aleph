@@ -5,8 +5,10 @@ import { dispatchIssues, setPaused } from "./factory.ts";
 import { gates, gpuSlot, liveEntries, liveRuns } from "../gates/factory-status.ts";
 import { setModel } from "../routing/models.ts";
 import { waitingToLand } from "../land/landing.ts";
-import { allJobs, type Run } from "../records/ledger.ts";
-import { layout } from "../../../lib/layout.ts";
+import { allJobs, allRuns, type Run } from "../records/ledger.ts";
+import * as record from "../records/record.ts";
+import { setState } from "../records/record.ts";
+import { layout, readEvents } from "../../../lib/layout.ts";
 import { reseed, seed } from "../../job.testkit.ts";
 import * as locks from "../infra/locks.ts";
 import { held } from "../infra/locks.ts";
@@ -39,6 +41,47 @@ test("gates returns the first factory gate, in the order pause, live cap", () =>
   process.env.ALEPH_LIVE_CAP = "0";
   expect(gates({ jobs: [], only: ["pause"] })).toBeNull();
   expect(gates({ jobs: [], only: ["live-cap"] })?.gate).toBe("live-cap");
+});
+
+/** The `settings` events logged after `from`, as subject and detail. */
+const settingsSince = (from: number) => readEvents().slice(from).filter((e) => e.object === "settings").map((e) => [e.subject, e.detail]);
+
+test("pause logs one human settings event, and a dispatch while paused logs no event on the factory or an issue", async () => {
+  const id = newIssue();
+  const before = readEvents().length;
+  setPaused(true);
+  setPaused(true);
+  await dispatchIssues(async () => null);
+  expect(readEvents().slice(before).map((e) => [e.subject, e.action, e.object, e.detail])).toEqual([["human", "changed", "settings", "pause: on"]]);
+  setPaused(false);
+  expect(settingsSince(before)).toEqual([["human", "pause: on"], ["human", "pause: off"]]);
+  expect(readEvents().filter((e) => e.object === "factory" || e.object === `issue.${id}`)).toEqual([]);
+});
+
+test("a full live cap logs one cap-on event over two dispatches and none on the skipped issues; it logs cap-off only once the cap frees", async () => {
+  process.env.ALEPH_LIVE_CAP = "1";
+  const NOW = Date.parse("2026-11-04T00:00:00Z");
+  setSystemTime(NOW);
+  try {
+    mk("fac-99", "build", "running", { model: "sonnet", made: NOW });
+    const a = newIssue(), b = newIssue();
+    const before = readEvents().length;
+    for (let i = 0; i < 2; i++) expect((await dispatchIssues(async () => null)).started).toEqual([]);
+    expect(settingsSince(before)).toEqual([["gate", "cap: on: 1 / 1 jobs"]]);
+    expect(readEvents().slice(before).filter((e) => e.object === `issue.${a}` || e.object === `issue.${b}`)).toEqual([]);
+    expect(record.read(`issue.${a}`)).toBeNull();
+    // The cap is still full and no issue is open: the cap stays on.
+    for (const id of [a, b]) change(id, (i) => issues.setStatus(i, "parked"));
+    await dispatchIssues(async () => null);
+    expect(settingsSince(before)).toHaveLength(1);
+    // The run ends: the next dispatch logs the cap off, once.
+    setState(allRuns().find((e) => e.run.name === "issue.99")!.id, "failed");
+    await dispatchIssues(async () => null);
+    await dispatchIssues(async () => null);
+    expect(settingsSince(before)).toEqual([["gate", "cap: on: 1 / 1 jobs"], ["gate", "cap: off"]]);
+  } finally {
+    setSystemTime();
+  }
 });
 
 test("a stuck or failed run stops no gate: its open job keeps only its own issue not ready", () => {

@@ -81,14 +81,22 @@ const DAY = 24 * 3600_000;
 
 export const paused = () => getJson("settings", "paused", null) !== null;
 
-/** Pauses the factory (the `paused` setting holds the time) or, with `on` false, resumes it. */
+/** Pauses the factory (the `paused` setting holds the time) or, with `on` false, resumes it; a pause that stays logs nothing. */
 export function setPaused(on: boolean): void {
+  const was = paused();
   putJson("settings", "paused", on ? new Date().toISOString() : null);
-  logSetting(on ? "the factory is paused" : "the factory is resumed");
+  if (was !== on) logSetting(`pause: ${on ? "on" : "off"}`);
 }
 
-/** The backend the factory holds after a call on it ended with the API credit error: `via` is the backend, `why` the call's line. */
-export interface BackendHold { via: Via; why: string; since: string }
+/** Logs the live cap turning on (`full`: its `N / M jobs`) or off (null); a cap that stays as it is logs nothing. */
+export function logCap(full: string | null): void {
+  if ((full !== null) === getJson("state", "cap-on", false)) return;
+  putJson("state", "cap-on", full !== null);
+  logEvent({ subject: "gate", action: "changed", object: "settings", detail: full === null ? "cap: off" : `cap: on: ${full}` });
+}
+
+/** The backend the factory holds after a call on it ended with the API credit error: `via` is the backend, `why` the call's line, `goals` the issues with no run that it held. */
+export interface BackendHold { via: Via; why: string; since: string; goals?: string[] }
 
 /** The backend the factory holds now, or null. */
 export function backendHold(): BackendHold | null {
@@ -102,11 +110,17 @@ const holdBound = (h: BackendHold): Bound =>
 
 /**
  * The backend hold of an issue with no run yet, whose backend only routing names: it binds when this hold already held
- * the issue, so the dispatch does not route the issue again while the hold lasts.
+ * the issue (`holdGoal`), so the dispatch does not route the issue again while the hold lasts.
  */
 export function heldGoal(name: string): Bound | null {
-  const h = backendHold(), w = record.read(name)?.wait;
-  return h && w?.kind === "backend" && w.since >= h.since ? holdBound(h) : null;
+  const h = backendHold();
+  return h?.goals?.includes(name) ? holdBound(h) : null;
+}
+
+/** Remembers in the backend hold that it held the issue. The hold lifts with its issues. */
+export function holdGoal(name: string): void {
+  const h = backendHold();
+  if (h && !h.goals?.includes(name)) putJson("state", "backend-hold", { ...h, goals: [...(h.goals ?? []), name] });
 }
 
 /**
@@ -116,7 +130,7 @@ export function heldGoal(name: string): Bound | null {
 export async function holdBackend(via: Via, why: string): Promise<void> {
   if (backendHold()?.via === via) return;
   putJson("state", "backend-hold", { via, why, since: new Date().toISOString() });
-  logEvent({ subject: "rule", action: "paused", object: via, detail: `held ${BACKENDS[via]}: ${why}` });
+  logEvent({ subject: "gate", action: "changed", object: "settings", detail: `credit: on: ${via}: ${why}` });
   await tell(`the factory holds ${BACKENDS[via]}: ${why}`);
 }
 
@@ -126,7 +140,7 @@ export async function probeHold(up: (via: Via) => Promise<boolean> = probeBacken
   if (!h || !(await up(h.via))) return null;
   putJson("state", "backend-hold", null);
   const line = `${BACKENDS[h.via]} answers again: the hold is off`;
-  logEvent({ subject: "rule", action: "reran", object: h.via, detail: line });
+  logEvent({ subject: "gate", action: "changed", object: "settings", detail: "credit: off" });
   return line;
 }
 
@@ -196,8 +210,8 @@ export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): 
   const call = local && held("gpu");
   const live = local ? liveLocal(jobs?.flat(), models) + (call ? 1 : 0) : liveRuns(jobs?.flat());
   const bound: Bound = local
-    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)`, ev: call ? { action: "gpu" } : { action: "full", detail: `${live} / ${LOCAL_CAP} local runs` } }
-    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)`, ev: { action: "full", detail: `${live} / ${LIVE_CAP()} runs` } };
+    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)`, ev: { action: call ? "gpu" : "full", detail: `${live} / ${LOCAL_CAP} local jobs` } }
+    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)`, ev: { action: "full", detail: `${live} / ${LIVE_CAP()} jobs` } };
   return {
     pause: paused() ? PAUSED : null,
     backend: hold && run !== undefined && viaOfRun(run, models) === hold.via ? holdBound(hold) : null,
