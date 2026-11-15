@@ -1195,6 +1195,39 @@ describe.skipIf(!chromeUsable)("Automation redraw", () => {
   }, 60_000);
 });
 
+describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
+  let rig: Rig, page: Page;
+  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/factory/jobs"); }, 150_000);
+  afterAll(() => rig?.stop());
+
+  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())'); };
+
+  test("a redraw keeps a marked element connected on Jobs and on Agents", async () => {
+    for (const [hash, sel] of [["#/factory/jobs", "#perf"], ["#/factory/agents", "#capacity"]]) {
+      await page.go(hash);
+      await page.when(`document.querySelector("#view ${sel} aleph-chart")`);
+      await page.ev(`window.mark = document.querySelector("#view ${sel}"); window.mark.old = 1`);
+      await redraws();
+      expect(await page.ev(`[document.querySelector("#view ${sel}") === window.mark, window.mark.isConnected]`)).toEqual([true, true]);
+    }
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
+  test("after two redraws one click on a stage tile, marked before them, runs its handler once and shows the stage in the address", async () => {
+    await page.go("#/factory/jobs");
+    await page.when('document.querySelector("#view button[data-tile=queue]")');
+    await page.ev('window.tile = document.querySelector("#view button[data-tile=queue]")');
+    await redraws();
+    await page.ev('window.n = 0; const r = history.replaceState.bind(history); history.replaceState = (...a) => { window.n++; return r(...a); }; window.tile.click()');
+    await page.when('location.hash.includes("stage=queue")');
+    expect(await page.ev("[window.tile.isConnected, window.n]")).toEqual([true, 1]);
+    await page.when('document.querySelector("#view button[data-tile=queue]").getAttribute("aria-pressed") === "true"');
+    // Each chart shows the frame of the picked stage, not the one drawn first.
+    await page.when('document.querySelector("#view aleph-chart[key=\\"factory/jobs/trend\\"]").frame.measure.name === document.querySelector("#view button[data-tile=queue] .k").textContent');
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+});
+
 describe.skipIf(!chromeUsable)("Resetting the page", () => {
   let rig: Rig, page: Page, width: number;
   beforeAll(async () => { rig = await startRig(); page = await rig.open(); width = await page.ev<number>("innerWidth"); }, 150_000);

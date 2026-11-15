@@ -15,8 +15,8 @@ import { arm, cmd, notice, pageHead, postJson, say, actMessages, decided, denyRe
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
-/** The paths of the views drawn by morphing, not by innerHTML: the Ideas list, the Idea page and Automation. */
-export const morph = new Set(["/ideas", "/ideas/:slug", "/automation"]);
+/** The paths of the views drawn by morphing, not by innerHTML: the Ideas list, the Idea page, Automation, Jobs and Agents. */
+export const morph = new Set(["/ideas", "/ideas/:slug", "/automation", "/factory/jobs", "/factory/agents"]);
 
 /** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
 export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);

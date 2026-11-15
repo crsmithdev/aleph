@@ -763,7 +763,9 @@ export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key,
 export const tiles = (label, html, id) => `<section class="tiles"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${html}</section>`;
 /** Call `fn(key)` when a tile or another selector with `data-tile` under `el` is clicked. */
 export function onTile(el, fn) {
-  el?.addEventListener("click", (e) => {
+  if (!el || el._tile) return;
+  el._tile = true;
+  el.addEventListener("click", (e) => {
     const b = e.target.closest?.("button[data-tile]");
     if (b) fn(b.dataset.tile);
   });
