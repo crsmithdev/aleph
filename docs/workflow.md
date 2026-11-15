@@ -282,7 +282,7 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 
 | Task | Trigger | Does | Stops duplicate work |
 |---|---|---|---|
-| Firefighter | Tick, each 5 minutes | Files one `critical` `red-main` bug per failing commit of the baseline or GitHub CI; sets a `rescue` Ask on a land live for 30 minutes | The `Failing commit:` line; an `asked` event on the land's record |
+| Firefighter | Tick, each 5 minutes, or each minute while a CI run on main is in progress or a land ended in the last 15 minutes | Files one `critical` `red-main` bug per failing commit of the baseline or GitHub CI; sets a `rescue` Ask on a land live for 30 minutes | The `Failing commit:` line; an `asked` event on the land's record |
 | Suite | `aleph-suite` timer, hourly; the sweep after a red main moves | Runs the full checks on `origin/main` and records the baseline | Runs only when main moved |
 | Maintainer | Tick, daily from 03:00; `aleph memory maintain [--dry]` | Runs the mechanical vault pass, groups signals into lessons and proposes a check, a rule or a skill as a `proposal-*` Ask, and compiles yesterday into vault notes | Signals already in a lesson are skipped; the vault run record and `compiledDays` |
 | Episodes | Tick, each 30 minutes | Writes a page for each finished issue | `episodes-seen` |

@@ -1,7 +1,7 @@
 /**
  * `aleph tick`, from its timer every minute. It starts only periodic work, each step on its own due rule: the
- * maintainer (dry vault maintenance, corrections, compile) and the monitor once a day, the housekeeper once a day and after a land (at most once an hour), the episodes, the CI read and
- * the firefighter on a fixed period, the probe of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
+ * maintainer (dry vault maintenance, corrections, compile) and the monitor once a day, the housekeeper once a day and after a land (at most once an hour), the episodes every 30 minutes, the CI read and
+ * the firefighter every 5 minutes (every minute while a CI run on a factory main is in progress or a land on it is under 15 minutes old), the probe of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
  * and an Ask each start their next step at once. The sweep is the safety net: work that should have started and did
  * not is logged as `missed: <key>`, so the cause gets fixed, and is started. A tick that finds nothing due reads
  * only local files: no agent run and no fetch.
@@ -22,7 +22,7 @@ import { holdsWork } from "../infra/process.ts";
 import { reader, type Reader } from "../../../issues/lib/store.ts";
 import { refOf, status } from "../../../issues/lib/todo.ts";
 import { allIssueStates, clearIssueState, getRun } from "../records/record.ts";
-import { ciStep } from "../gates/ci.ts";
+import { ciRunning, ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
 import { doneChecker } from "./filing.ts";
@@ -31,7 +31,7 @@ import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { retain } from "../infra/retention.ts";
-import { allJobs, loadRegistry, type Repo } from "../records/ledger.ts";
+import { allJobs, allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { housekeeperDetached, intakeDetached, suiteDetached } from "./launch.ts";
 import { housekeepDue } from "../roles/housekeeper.ts";
@@ -46,6 +46,8 @@ import { smokeStep } from "../gates/smoke.ts";
 
 /** How often each step with a fixed period runs. */
 const EVERY_MS = { ci: 5 * 60_000, firefight: 5 * 60_000, episodes: 30 * 60_000 } as const;
+/** The period of the ci and firefight steps while a CI run on a factory main is in progress or a land on it ended within FRESH_MS. */
+const FRESH_EVERY_MS = 60_000, FRESH_MS = 15 * 60_000;
 type Periodic = keyof typeof EVERY_MS;
 
 /**
@@ -61,10 +63,17 @@ export function readTick(): TickState {
   return { last, missed: getJson("state", "tick.missed", []), suite: getJson("state", "tick.suite", {}) };
 }
 
-/** Whether `step` is due at `now`: it never ran, or it ran EVERY_MS[step] or more ago. */
+/** Whether a CI run on a factory main is in progress by the last CI read, or a land on one ended in the last FRESH_MS. */
+function fresh(now: number): boolean {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  return [...keys].some(ciRunning) || allRuns().some(({ run }) => run.role === "land" && run.state === "landed" && run.repo && keys.has(run.repo) && now - Date.parse(run.ended ?? run.started) < FRESH_MS);
+}
+
+/** Whether `step` is due at `now`: it never ran, or it ran EVERY_MS[step] or more ago (a minute for ci and firefight while `fresh`). */
 export function due(s: TickState, step: Periodic, now: number): boolean {
   const t = Date.parse(s.last[step] ?? "");
-  return Number.isNaN(t) || now - t >= EVERY_MS[step];
+  const every = (step === "ci" || step === "firefight") && fresh(now) ? FRESH_EVERY_MS : EVERY_MS[step];
+  return Number.isNaN(t) || now - t >= every;
 }
 
 type Json = Record<string, any>;

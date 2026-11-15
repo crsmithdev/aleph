@@ -40,21 +40,27 @@ export function ciState(repo: string, runs: GhRun[]): Ci | null {
 }
 
 const saved = (): Record<string, Ci> => getJson("state", "ci", {});
+const savedRunning = (): Record<string, boolean> => getJson("state", "ci.running", {});
 
-/** Reads each repo's CI and saves it; a repo `gh` cannot read keeps what it had. Returns the red ones. */
+/** Reads each repo's CI and saves it, and whether a run on its main is not completed (the `ci.running` row); a repo `gh` cannot read keeps what it had. Returns the red ones. */
 export function ciStep(repos: Repo[], call: Gh = gh): Ci[] {
-  const all = saved();
+  const all = saved(), running = savedRunning();
   for (const repo of repos) {
     const list = ghRuns(repo, call);
     const c = list && ciState(repo.key, list);
     if (c) all[repo.key] = c;
+    if (list) running[repo.key] = list.some((r) => r.status !== "completed");
   }
   putJson("state", "ci", all);
+  putJson("state", "ci.running", running);
   return redCi();
 }
 
 /** The repo's CI on main as the last read saved it, or undefined. */
 export const ciOf = (repo: string): Ci | undefined => saved()[repo];
+
+/** Whether the repo's latest CI read saw a run on main that is not completed. */
+export const ciRunning = (repo: string): boolean => savedRunning()[repo] === true;
 
 /** The repos whose CI on main is red now. */
 export const redCi = (): Ci[] => Object.values(saved()).filter((c) => !c.ok);

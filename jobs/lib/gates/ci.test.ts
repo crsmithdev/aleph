@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ciState, ciStep, redCi, type Gh, type GhRun } from "./ci.ts";
+import { ciRunning, ciState, ciStep, redCi, type Gh, type GhRun } from "./ci.ts";
 import { health } from "./factory-status.ts";
 import { reds } from "./firefighter.ts";
 import type { Repo } from "../records/ledger.ts";
@@ -65,4 +65,14 @@ test("a red CI is a health line and one firefighter red at its latest failed hea
   ciStep([repo], listing([run("success", "c6", "2026-10-29T06:00:00Z")]));
   expect(redCi()).toEqual([]);
   expect(health().some((l) => l.text.includes("CI on main"))).toBe(false);
+});
+
+test("the CI read keeps whether a run on main is not completed, and a later read of finished runs clears it", () => {
+  ciStep([repo], listing([run("", "c2", "2026-10-29T02:00:00Z", "in_progress"), run("success", "c1", "2026-10-29T01:00:00Z")]));
+  expect(ciRunning("fac")).toBe(true);
+  // A read that fails keeps the mark.
+  ciStep([repo], listing(null));
+  expect(ciRunning("fac")).toBe(true);
+  ciStep([repo], listing([run("success", "c2", "2026-10-29T02:00:00Z"), run("success", "c1", "2026-10-29T01:00:00Z")]));
+  expect(ciRunning("fac")).toBe(false);
 });

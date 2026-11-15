@@ -21,6 +21,7 @@ import * as record from "../records/record.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
+import { ciStep } from "../gates/ci.ts";
 import { newItems, writeRepos } from "../../../tests/projects.ts";
 
 // The test's clock: the run that holds the live slot is `starting` against it.
@@ -224,6 +225,24 @@ test("a periodic step is due when it never ran or its period has passed", () => 
   expect(due(s, "ci", NOW + 4 * MIN)).toBe(false);
   expect(due(s, "ci", NOW + 5 * MIN)).toBe(true);
   expect(due(s, "episodes", NOW)).toBe(true);
+  expect(due(s, "ci", NOW + MIN)).toBe(false);
+});
+
+test("ci and firefight are due every minute while a CI run on main is in progress", () => {
+  const s = { last: { ci: new Date(NOW).toISOString(), firefight: new Date(NOW).toISOString() }, missed: [], suite: {} };
+  const runs = (status: string) => [{ conclusion: "", status, headSha: "c1", url: "https://ci/c1", createdAt: "2026-11-04T11:59:00Z" }];
+  ciStep([repo()], () => ({ ok: true, out: JSON.stringify(runs("in_progress")) }));
+  expect([due(s, "ci", NOW + MIN), due(s, "firefight", NOW + MIN)]).toEqual([true, true]);
+  ciStep([repo()], () => ({ ok: true, out: JSON.stringify(runs("completed")) }));
+  expect([due(s, "ci", NOW + MIN), due(s, "firefight", NOW + MIN)]).toEqual([false, false]);
+});
+
+test("ci is due every minute for 15 minutes after a land on main, and every 5 minutes after that", () => {
+  const s = { last: { ci: new Date(NOW).toISOString() }, missed: [], suite: {} };
+  seedJob({ role: "land", state: "landed", repo: key, started: new Date(NOW - 12 * MIN).toISOString(), ended: new Date(NOW - 10 * MIN).toISOString() });
+  expect(due(s, "ci", NOW + MIN)).toBe(true);
+  // 17 minutes after the land.
+  expect(due({ ...s, last: { ci: new Date(NOW + 6 * MIN).toISOString() } }, "ci", NOW + 7 * MIN)).toBe(false);
 });
 
 test("a tick that finds the tick lock held runs no step, writes nothing and says so", async () => {
