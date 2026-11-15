@@ -62,6 +62,12 @@ test("a call the API refused for credit states the credit cause and holds its mo
   expect(agentCause({ code: 1, timedOut: false, stalled: false }, { found: true, ok: false, line, result: "" })).toEqual({ kind: "credit", reason: line });
 });
 
+test("resultOf takes the model the CLI ran on from its init event", () => {
+  const res = '{"type":"result","is_error":false,"result":"done"}';
+  expect(resultOf(`{"type":"system","subtype":"init","model":"claude-opus-5-5"}\n{"type":"assistant"}\n${res}\n`).model).toBe("claude-opus-5-5");
+  expect(resultOf(`${res}\n`).model).toBeUndefined();
+});
+
 test("resultOf reads the last result event; only is_error false is ok", () => {
   const ok = '{"type":"result","is_error":false,"total_cost_usd":0.5,"result":"done"}';
   expect(resultOf(`{"type":"assistant"}\n${ok}\n`)).toMatchObject({ found: true, ok: true, cost: 0.5, result: "done", line: "" });

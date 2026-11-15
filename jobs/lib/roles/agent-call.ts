@@ -47,7 +47,7 @@ export interface Ask {
 }
 
 /** A call's reply: its text, its structured output, its session, its cost in USD, how it ended, and why it gave no usable reply, or null. */
-export interface Reply { text: string; data: unknown; session?: string; cost?: number; step: Step; cause: AgentCause | null }
+export interface Reply { text: string; data: unknown; session?: string; cost?: number; model?: string; step: Step; cause: AgentCause | null }
 
 /** How long a call that the time box or the stall watch stopped gets after SIGTERM before SIGKILL. */
 const KILL_AFTER_MS = 30_000;
@@ -73,7 +73,7 @@ export function agentCause(r: Step, o: Outcome): AgentCause | null {
  * What a stream-json stdout says. `found`: it has a `result` event. `usage` is that event's tokens, in the shape
  * `costDetails` takes; `data` its `structured_output`; `line` why it is not ok, else empty.
  */
-export interface Outcome { found: boolean; ok: boolean; line: string; result: string; cost?: number; usage?: Usage; session?: string; data?: unknown }
+export interface Outcome { found: boolean; ok: boolean; line: string; result: string; cost?: number; usage?: Usage; session?: string; data?: unknown; model?: string }
 
 /**
  * The only read of a stream-json stdout's answer: its last `result` event. Lines that are not JSON and other events
@@ -82,6 +82,20 @@ export interface Outcome { found: boolean; ok: boolean; line: string; result: st
  * not a `command_lifecycle` event, which the command adds after the agent's output.
  */
 export function resultOf(stdout: string): Outcome {
+  const out = answerOf(stdout), model = initModel(stdout);
+  return model ? { ...out, model } : out;
+}
+
+/** The model of the CLI's init event: the one a call with no --model ran on. */
+function initModel(stdout: string): string | undefined {
+  for (const line of stdout.split("\n")) {
+    if (!line.includes('"init"')) continue;
+    try { const ev = JSON.parse(line); if (ev?.type === "system" && ev.subtype === "init" && typeof ev.model === "string") return ev.model; } catch { /* not JSON */ }
+  }
+  return undefined;
+}
+
+function answerOf(stdout: string): Outcome {
   let last: string | undefined;
   for (const line of stdout.trimEnd().split("\n").reverse()) {
     let ev: any;
@@ -134,7 +148,7 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   const res = resultOf(out);
   const cause = agentCause(step, res);
   if (cause && policyOf(cause.kind).holdsBackend) await holdBackend(viaOf(model), cause.reason);
-  return { text: step.code === 0 && !res.found ? out : res.result, data: res.data, session: res.session, cost: costOf(model, res), step, cause };
+  return { text: step.code === 0 && !res.found ? out : res.result, data: res.data, session: res.session, cost: costOf(model, res), ...(res.model ? { model: res.model } : {}), step, cause };
 }
 
 /**

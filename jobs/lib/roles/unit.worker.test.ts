@@ -51,6 +51,12 @@ describe("a factory run", () => {
     await drop("frouted");
   }, 30_000);
 
+  test("a run started with no --model records the model the CLI ran on, from its init event", async () => {
+    const r = await aleph(["job", "fac", "fnomodel", "--spec", "-"], { ALEPH_FIX_ROUNDS: "0" }, "Goal: fnomodel\nACTION: commit fnomodel.txt\n");
+    expect(state(r.json.run).model).toBe("claude-opus-5-5");
+    await drop("fnomodel");
+  }, 30_000);
+
   test("a worker-low tier set to gpt-oss-20b leaves a run record with model gpt-oss-20b and tier haiku", async () => {
     putJson("settings", "models", { "worker-low": { enabled: true, model: "gpt-oss-20b" } });
     const r = await aleph(["job", "fac", "flowtier", "--spec", "-", "--model", "haiku"], { ALEPH_FIX_ROUNDS: "0" }, "Goal: flowtier\nACTION: commit flowtier.txt\n");

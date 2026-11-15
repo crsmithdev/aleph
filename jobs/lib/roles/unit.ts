@@ -378,6 +378,8 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     limit: workSeconds(run), slot: false, onSpawn: (p) => { child = p; },
   });
   child = null;
+  // A run with no --model ran on the CLI's default: record the one its init event names.
+  if (!run.model && w.model) { jobRecord.patchRun(jobOfFolder(folder), { model: w.model }); run = { ...run, model: w.model }; }
   if (repo.sandbox) return factoryVerdict(id, folder, run, repo, w, env);
   const result = resultText(readFileSync(runFile(folder, "transcript.jsonl"), "utf8"));
   writeFileSync(runFile(folder, "result.md"), result);
