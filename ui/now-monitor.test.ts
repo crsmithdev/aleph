@@ -256,8 +256,8 @@ const a2136 = [
   row({ at: "2026-11-13T19:54:42.483Z", by: "gate", subject: "aleph-2136", action: "passed", on: ["a2136#2"], cost: 0.16095063369608836 }),
   row({ at: "2026-11-13T19:53:20.008Z", by: "claude", subject: "aleph-2136", action: "done" }),
   row({ at: "2026-11-13T19:51:00.787Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#2"] }),
-  row({ at: "2026-11-13T19:50:59.573Z", by: "rule", subject: "aleph-2136", action: "started", note: "model haiku" }),
-  row({ at: "2026-11-13T19:50:59.497Z", by: "rule", subject: "aleph-2136", action: "routed", note: "classifier jev-1.13-20260917", cost: 0.000036414, tier: "worker-low", model: "haiku" }),
+  row({ at: "2026-11-13T19:50:59.573Z", by: "rule", subject: "aleph-2136", action: "started", note: "model haiku", tier: "worker-low" }),
+  row({ at: "2026-11-13T19:50:59.497Z", by: "rule", subject: "aleph-2136", action: "routed", note: "worker-low by classifier jev-1.13-20260917" }),
   row({ at: "2026-11-13T19:50:53.298Z", by: "gate", subject: "aleph-2136", action: "done", on: ["a2136#1"], cost: 0.2916336 }),
   row({ at: "2026-11-13T19:50:19.563Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#1"] }),
   row({ at: "2026-11-13T19:50:13.738Z", by: "claude", subject: "aleph-2136", action: "filed" }),
@@ -277,6 +277,32 @@ test("the Herald's older rows give each job its facts and fold the routing and t
     "intake | a2136#1 ✓ 34s · $0.29",
     "filed | by Claude Code",
   ]);
+});
+
+// An issue's two builds as the writer stores them: each start's own tier, then the job's running and passed events.
+const twoBuilds = (tiers: (string | undefined)[]) => tiers.flatMap((tier, i) => {
+  const at = (m: number) => `2026-11-13T${10 + i}:${m < 10 ? "0" : ""}${m}:00Z`;
+  return [
+    row({ at: at(10), by: "gate", subject: "aleph-7", action: "passed", on: [`a7#${i + 1}`], cost: 0.5 }),
+    row({ at: at(5), by: "gate", subject: "aleph-7", action: "running", on: [`a7#${i + 1}`] }),
+    row({ at: at(1), by: "rule", subject: "aleph-7", action: "started", note: `model ${i ? "opus" : "haiku"}`, tier }),
+  ];
+}).reverse();
+const seven = (tiers: (string | undefined)[]) => view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events: twoBuilds(tiers), titles: {}, chats: {}, runs: { "a7#1": "build", "a7#2": "build" } } });
+
+test("the Herald gives each build of an issue the tier of its own start", () => {
+  const h = seven(["worker-low", "opus"]);
+  expect(h).toContain("worker-low · haiku · 5m 00s · $0.50");
+  expect(h).toContain("opus · opus · 5m 00s · $0.50");
+  expect(h).not.toContain("worker-low · opus");
+  expect(h).not.toContain("opus · haiku");
+});
+
+test("the Herald's build facts have no tier when its start routed none, not the tier of the issue's earlier build, and keep the model, commit, time and cost", () => {
+  const events = twoBuilds(["worker-low", undefined]).map((e: any) => e.action === "passed" && e.time.startsWith("2026-11-13T11") ? { ...e, commit_sha: "0123456789abcdef" } : e);
+  const h = view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: { history: [], events, titles: {}, chats: {}, runs: { "a7#1": "build", "a7#2": "build" } } });
+  expect(h).toContain("a7#1 ✓ worker-low · haiku · 5m 00s · $0.50");
+  expect(h.match(/[^<>]*0123456[^<>]*/g)).toEqual([" · opus · 0123456 · 5m 00s · $0.50"]);
 });
 
 test("the Herald's job row takes its time from the job's first start, not one the gate logs after its result", () => {

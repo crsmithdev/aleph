@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEvents } from "../../../lib/layout.ts";
+import { startIssue } from "../transitions/transitions.ts";
 import { raise, route } from "./route.ts";
 import { setModel } from "./models.ts";
 
@@ -45,4 +46,14 @@ test("raise gives the next enabled tier up, skips a disabled one, and stays at t
   expect(raise("worker-medium", models)).toBe("opus");
   expect(raise("opus", models)).toBe("opus");
   expect(raise("worker-low", { ...models, "worker-medium": off })).toBe("opus");
+});
+
+test("a start routed to worker-low logs its tier as a field of the started event, not in its detail; a start with no tier logs none", async () => {
+  process.env.ALEPH_START_CMD = "true";
+  try {
+    expect(await startIssue({ key: "aleph" } as any, "aleph-5", 5, "x", "worker-low")).toBeNull();
+    expect(await startIssue({ key: "aleph" } as any, "aleph-6", 6, "x", null)).toBeNull();
+  } finally { delete process.env.ALEPH_START_CMD; }
+  const started = readEvents().filter((e) => e.action === "started");
+  expect(started.map((e) => [e.object, e.tier ?? null, e.detail])).toEqual([["aleph-5", "worker-low", "model haiku"], ["aleph-6", null, "model default"]]);
 });

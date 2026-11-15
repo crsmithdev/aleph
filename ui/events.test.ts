@@ -9,6 +9,7 @@ import { newItems, writeRepos } from "../tests/projects.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 import { git } from "../lib/git.ts";
+import { logEvent } from "../lib/layout.ts";
 
 let base: string, runs: string, factory: string, ref: string, main: string;
 let server: TestServer, stop: () => void, restoreEnv: () => void;
@@ -104,8 +105,8 @@ test("a stream with a project sends only the ev events of that project, and a ch
 test("a stream with a project sends an ev for an event on an issue of that project, with the project, and none for another's", async () => {
   // The test above leaves a bad ref in the items repo.
   writeFileSync(join(ref, "main"), `${main}\n`);
-  const code = `import { logEvent } from "./lib/layout.ts"; for (const n of [1, 2]) logEvent({ subject: "human", action: "changed", object: "issue." + n });`;
-  const text = (await changeAfter(() => { Bun.spawn(["bun", "-e", code], { cwd: join(import.meta.dir, ".."), env: process.env }); }, "?project=p"))!;
+  // Logged here, not by a process the test starts: the ref's change above comes 500 ms on, and under load a new bun can start later.
+  const text = (await changeAfter(() => { for (const n of [1, 2]) logEvent({ subject: "human", action: "changed", object: `issue.${n}` }); }, "?project=p"))!;
   const rows = [...text.matchAll(/event: ev\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]));
   expect(rows.map((r) => r.object)).toEqual(["issue.1"]);
   expect(rows[0].project).toBe("p");

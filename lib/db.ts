@@ -41,6 +41,13 @@ CREATE TABLE jev (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, cost REAL NOT NUL
 CREATE TABLE suite_history (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, repo TEXT NOT NULL, commit_sha TEXT NOT NULL,
   ran INTEGER NOT NULL, passed INTEGER NOT NULL, failed INTEGER NOT NULL, skipped INTEGER NOT NULL, rerun_passed INTEGER NOT NULL);
 CREATE TABLE flaky (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, repo TEXT NOT NULL, check_name TEXT NOT NULL, run TEXT NOT NULL, tests TEXT);
+`, `
+ALTER TABLE events ADD COLUMN tier TEXT;
+DROP VIEW event_rows;
+CREATE VIEW event_rows AS SELECT e.seq, e.time, e.subject, e.action, e.object, e.detail, coalesce(e.tier, o.tier) AS tier,
+  s.role AS subject_role, o.role AS object_role, o.target AS object_target, coalesce(o.project, s.project) AS project,
+  o.model, o.cost, o.commit_sha, o.started, o.ended
+  FROM events e LEFT JOIN jobs s ON s.id = e.subject LEFT JOIN jobs o ON o.id = e.object;
 `];
 const VERSION = SCHEMAS.length;
 

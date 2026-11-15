@@ -7,27 +7,30 @@ import { conn, getJson, next, putJson, tx } from "./db.ts";
 
 const names = (type: string) => (conn().query("SELECT name FROM sqlite_master WHERE type = ? ORDER BY name").all(type) as { name: string }[]).map((r) => r.name);
 
-test("the schema is created under user_version 2, in WAL", () => {
+test("the schema is created under user_version 3, in WAL", () => {
   expect(names("table")).toEqual(expect.arrayContaining(["counters", "events", "issue_state", "jobs", "settings", "state", "tick", "usage", "openrouter", "jev", "suite_history", "flaky"]));
   expect(names("view")).toEqual(["event_rows"]);
-  expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(2);
+  expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(3);
   expect((conn().query("PRAGMA journal_mode").get() as any).journal_mode).toBe("wal");
 });
 
-test("a file at user_version 1 gains only the new tables", () => {
+test("a file at user_version 1 gains only the new tables and the event tier", () => {
   const file = join(mkdtempSync(join(tmpdir(), "aleph-db-")), "v1.db");
   const old = new Database(file, { create: true });
   old.run("CREATE TABLE counters (kind TEXT PRIMARY KEY, last INTEGER NOT NULL)");
   old.run("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+  old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT)");
+  old.run("CREATE VIEW event_rows AS SELECT * FROM events");
   old.run("INSERT INTO settings VALUES ('keep', '1')");
   old.run("PRAGMA user_version = 1");
   old.close();
   const was = process.env.ALEPH_DB;
   process.env.ALEPH_DB = file;
   try {
-    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(2);
+    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(3);
     expect(names("table")).toEqual(expect.arrayContaining(["state", "usage", "openrouter", "jev", "suite_history", "flaky"]));
     expect(getJson("settings", "keep", 0)).toBe(1);
+    expect((conn().query("PRAGMA table_info(events)").all() as { name: string }[]).map((c) => c.name)).toContain("tier");
   } finally { process.env.ALEPH_DB = was; }
 });
 

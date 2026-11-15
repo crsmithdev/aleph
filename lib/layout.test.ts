@@ -16,6 +16,16 @@ test("an event round-trips through event_rows with the fields of the jobs it nam
   expect(sayText(row)).toBe("J-00001 returned by review: a check failed");
 });
 
+test("an event's own tier reads back from event_rows, ahead of the tier of a job it names", () => {
+  job("job.3", "build", { tier: "sonnet" });
+  logEvent({ subject: "rule", action: "started", object: "x-tier", detail: "model haiku", tier: "worker-low" });
+  logEvent({ subject: "rule", action: "started", object: "job.3", tier: "opus" });
+  logEvent({ subject: "rule", action: "started", object: "job.3" });
+  const rows = readEvents(0).filter((r) => r.object === "x-tier" || r.object === "job.3");
+  expect(rows.map((r) => r.tier)).toEqual(["worker-low", "opus", "sonnet"]);
+  expect(rows[0]!.detail).toBe("model haiku");
+});
+
 test("readEvents keeps the order of seq and the window of its time", () => {
   const a = logEvent({ time: "2026-11-14T09:00:00.000Z", subject: "rule", action: "started", object: "w-old" });
   logEvent({ subject: "rule", action: "started", object: "w-new" });

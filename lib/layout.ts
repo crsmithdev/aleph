@@ -24,7 +24,7 @@ export function layout(): Layout {
 /** One event in the event table; `event()` checks its words first, so a bad word throws. */
 export function logEvent(e: Parameters<typeof event>[0]): Event {
   const ev = event(e);
-  conn().query("INSERT INTO events (time, subject, action, object, detail) VALUES (?, ?, ?, ?, ?)").run(ev.time, ev.subject, ev.action, ev.object, ev.detail ?? null);
+  conn().query("INSERT INTO events (time, subject, action, object, detail, tier) VALUES (?, ?, ?, ?, ?, ?)").run(ev.time, ev.subject, ev.action, ev.object, ev.detail ?? null, ev.tier ?? null);
   return ev;
 }
 

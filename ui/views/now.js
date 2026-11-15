@@ -219,15 +219,14 @@ export function eventRow(ev, titles = {}, chats = {}, more = 0, run = "", all = 
 /** The newest event of `all` (newest first) at or before `at` that `ok` takes. */
 const lastBefore = (all, at, ok) => all.find((e) => e.at <= at && ok(e));
 
-/** A job's facts after its mark: for a build, the tier it was routed to and the model it ran on (routed one ↑ raised one), then a land's commit, its time and its cost. */
+/** A job's facts after its mark: for a build, the tier it was routed to and the model it ran on, both from its start's event, then a land's commit, its time and its cost. */
 function jobFacts(ev, job, run, all) {
   // The job's first start: the gate logs it again as the run moves on after its result.
   const start = all.findLast((e) => e.action === "running" && jobOf(e) === job && e.at <= ev.at);
-  const route = start && run === "build" ? lastBefore(all, start.at, (e) => e.action === "routed" && e.tier) : undefined;
-  const ran = start && run === "build" ? lastBefore(all, start.at, (e) => e.action === "started" && /^model /.test(e.note ?? ""))?.note.slice(6) : undefined;
-  const model = route?.model && ran && ran !== route.model ? `${route.model}↑${ran}` : ran ?? route?.model;
+  const picked = start && run === "build" ? lastBefore(all, start.at, (e) => e.action === "started" && /^model /.test(e.note ?? "")) : undefined;
+  const model = picked?.note.slice(6);
   const took = start && ev !== start ? dur((Date.parse(ev.at) - Date.parse(start.at)) / 1000) : "";
-  return [route?.tier, model, ev.commit && String(ev.commit).slice(0, 7), took, ev.cost !== undefined && money(ev.cost)].filter(Boolean).map(esc).join(" · ");
+  return [picked?.tier, model, ev.commit && String(ev.commit).slice(0, 7), took, ev.cost !== undefined && money(ev.cost)].filter(Boolean).map(esc).join(" · ");
 }
 
 /** An older event as a label and a short text: a run's kind, then its linked job ID, its mark and its facts; or the chip word and what the sentence adds. `all` is the group's events, newest first. */

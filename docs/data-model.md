@@ -203,7 +203,7 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 
 ## Machine state tables: `aleph.db`
 
-`PRAGMA user_version` is 2. Version 2 added `state`, `usage`, `openrouter`, `jev`, `suite_history` and `flaky` to the tables of version 1 (`SCHEMAS` in `lib/db.ts`). A file at version 1 runs only the version 2 entry when a process opens it.
+`PRAGMA user_version` is 3. Version 2 added `state`, `usage`, `openrouter`, `jev`, `suite_history` and `flaky` to the tables of version 1, and version 3 added `events.tier` (`SCHEMAS` in `lib/db.ts`). A file at version 1 runs only the entries after it when a process opens it.
 
 | Table | Holds | Writer |
 |---|---|---|

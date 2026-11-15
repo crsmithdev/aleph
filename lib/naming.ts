@@ -121,19 +121,19 @@ export const refs = (text: unknown): string[] => [...String(text ?? "").matchAll
 /** Free text with each full issue ID of a project with a code in its short form. */
 export const shortText = (text: unknown): string => String(text ?? "").replace(FREE, shortId);
 
-/** An event: a sentence of 6 fields. `object` is a key (an old issue ID until issues have keys), or `settings`. */
-export interface Event { seq?: number; time: string; subject: string; action: string; object: string; detail?: string | null }
+/** An event: a sentence of 6 fields, and the tier of a start. `object` is a key (an old issue ID until issues have keys), or `settings`. */
+export interface Event { seq?: number; time: string; subject: string; action: string; object: string; detail?: string | null; tier?: string | null }
 /** An event as `event_rows` gives it: the roles, project and run fields of the jobs it names. */
 export interface EventRow extends Event {
   subject_role?: string | null; object_role?: string | null; object_target?: string | null; project?: string | null;
-  model?: string | null; tier?: string | null; cost?: number | null; commit_sha?: string | null; started?: string | null; ended?: string | null;
+  model?: string | null; cost?: number | null; commit_sha?: string | null; started?: string | null; ended?: string | null;
 }
 const JOB = /^job\.\d+$/;
 /** An event with its words checked; throws on a word outside its set. */
-export function event({ time, subject, action, object, detail }: Omit<Event, "time"> & { time?: string }): Event {
+export function event({ time, subject, action, object, detail, tier }: Omit<Event, "time"> & { time?: string }): Event {
   if (!JOB.test(subject) && !ACTORS.includes(subject)) throw new Error(`naming: subject "${subject}" is not a job key or in its set`);
   if (!ACTIONS.includes(action)) throw new Error(`naming: action "${action}" is not in its set`);
-  return { time: time ?? new Date().toISOString(), subject, action, object, ...(detail ? { detail } : {}) };
+  return { time: time ?? new Date().toISOString(), subject, action, object, ...(detail ? { detail } : {}), ...(tier ? { tier } : {}) };
 }
 
 /** An ID as the page shows it: a key `J-06802`, an old issue ID `a1421`; anything else unchanged. */

@@ -363,7 +363,7 @@ export async function startIssue(repo: Repo, name: string, id: number | string, 
   const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.role) && e.run.state === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
   const routed = picked && failed ? raise(picked) : picked;
   const model = routed ? TIER_MODEL[routed] : null;
-  logEvent({ subject: "rule", action: "started", object: name, detail: `model ${model ?? "default"}` });
+  logEvent({ subject: "rule", action: "started", object: name, detail: `model ${model ?? "default"}`, tier: routed });
   const start = startCmd();
   if (start) {
     const p = Bun.spawn([start, repo.key, name, String(id)], { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
