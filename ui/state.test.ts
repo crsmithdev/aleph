@@ -69,7 +69,8 @@ beforeAll(() => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeRepos({ fac: { path: repo, sandbox: true, checks: [] } }, items);
-  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
+  // The fixture has one live run; the default cap (cores / 6) is 1 on a 4-core runner, which would read a queued issue as live-capped.
+  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ALEPH_LIVE_CAP: "5", ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting goal" ? { spec: "Do it." } : {});
     add(doc, "urgent goal", { spec: "Do it first.", priority: "critical" });
