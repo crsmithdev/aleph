@@ -238,6 +238,20 @@ test("a director job on a run's Ask is a job on the run's issue and keeps its de
   expect(getRun(jobOfFolder(folder))!.decision).toBeUndefined();
 });
 
+test("the prompt of a run's Ask holds the review of the run: the newest review job's result.md, and no section with no review job", async () => {
+  fresh([{ title: "goal", specced: true }]);
+  run({ name: "issue.1", target: "issue.1", ask: plain() });
+  replyWith({ case: TEXT });
+  await direct();
+  expect(prompt()).not.toContain("The review of the run");
+  fresh([{ title: "goal", specced: true }]);
+  const folder = run({ name: "issue.1", target: "issue.1", ask: plain() });
+  run({ role: "review", name: "issue.1", target: "issue.1", prev: jobOfFolder(folder), state: "done" }, { "result.md": "no test\n" });
+  await direct();
+  expect(prompt()).toContain("The review of the run");
+  expect(prompt()).toContain("no test");
+});
+
 test("a paused factory starts no director run", async () => {
   fresh([{ title: "q", ask: plain() }]);
   setPaused(true);

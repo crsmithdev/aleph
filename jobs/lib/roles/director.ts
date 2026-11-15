@@ -209,6 +209,13 @@ const tail = (folder: string, file: string): string | null => {
 };
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
 
+/** The review of a run: the result.md of the newest review job whose `prev` is the run, as the Jobs route shows it. */
+function reviewOf(e: Entry): string | null {
+  const r = allRuns().findLast((x) => x.run.role === "review" && x.run.prev === e.id);
+  const text = r && readFile(r, "result.md");
+  return text ? clip(text) : null;
+}
+
 /** `git diff --stat` of the run's branch against its repo's main, or why there is none. */
 function diffStat(repo: Repo | undefined, run: Run): string {
   if (!repo || !run.branch) return "(no branch)";
@@ -252,7 +259,7 @@ ${c.ask.options.length ? `Options:\n${c.ask.options.map((o) => `- ${o.label}: ${
 # Item ${c.at === "item" ? c.on : run!.run.target}: ${item.title} (filed by ${store.sourceOf(item)})
 ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes", item.notes.join("\n"))}` : ""}${run ? `
 # The run ${c.on}
-${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of the checks log", lastLines(readSection(run.folder, "checks")))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
+${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("The review of the run", reviewOf(run))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of the checks log", lastLines(readSection(run.folder, "checks")))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
 }
 
 const CASE_TEXT = (acts: string[]): string => `The case text is "case": its "headline" is a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade. Its "situation" is plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk. Its "effects" has one entry for each action (${acts.join(", ")}): the "action" and a "text" of 1 or 2 short sentences that says what happens in this case if Chris takes it. Its "recommend" is an action and a one-sentence "why", or null. Its "details", optional, holds risks, gaps and technical facts.`;
