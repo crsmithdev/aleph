@@ -14,6 +14,8 @@ import { recent } from "./langfuse.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
+/** The types the counts read; the model calls (GENERATION) are most of the rows and none of them is counted. */
+const TYPES = ["TOOL", "GUARDRAIL", "SPAN"];
 
 /** The local dates of the last `days` days, oldest first, ending today. */
 function dayKeys(days: number, now: Date): string[] {
@@ -69,7 +71,7 @@ export async function activity(days: number, project: string | null, now = new D
   try {
     const got = await once(`${lf.base}|${keys[0]}|${days}|${project ?? ""}`, ["langfuse"], async () => {
       const [all, mine] = await Promise.all([
-        recent(lf, from.getTime(), to.getTime(), slim),
+        recent(lf, from.getTime(), to.getTime(), TYPES, slim),
         project ? projectTraces(lf, project, new Date(from.getTime() - DAY), to) : null,
       ]);
       const rows = mine ? all.rows.filter((o) => o.traceId && mine.ids.has(o.traceId)) : all.rows;

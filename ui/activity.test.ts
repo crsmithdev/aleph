@@ -30,6 +30,9 @@ describe("activity", () => {
     expect(a.tools.map((t) => [t.name, t.calls, t.errors])).toEqual([["Bash", 2, 1], ["Edit", 1, 0], ["Read", 1, 0]]);
     expect(a.hooks.map((h) => [h.name, h.calls, h.errors])).toEqual([["verify-gate", 2, 0], ["vault-recall", 1, 1]]);
     expect(a.denials).toEqual({ total: 1, recent: [{ at: at(0), reason: "nothing was run" }] });
+    // Langfuse filters on one type per read; the model calls are not read.
+    expect(reads().length).toBeGreaterThan(0);
+    for (const r of reads()) expect(["TOOL", "GUARDRAIL", "SPAN"]).toContain((r.q as any).type);
   });
 
   test("in a build pass a second read does not reach Langfuse; after a Langfuse change it does", async () => {
@@ -37,11 +40,11 @@ describe("activity", () => {
       openPass({ langfuse: 1 }, "activity.test");
       const a = await activity(7, null, now);
       const b = await activity(7, null, now);
-      expect(reads().length).toBe(1);
+      expect(reads().length).toBe(3);
       expect(b).toEqual(a);
       openPass({ langfuse: 2 }, "activity.test");
       await activity(7, null, now);
-      expect(reads().length).toBe(2);
+      expect(reads().length).toBe(6);
     } finally { closePass(); }
   });
 

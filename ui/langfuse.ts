@@ -21,11 +21,16 @@ const LAG = 10 * 60_000, FULL = 3600_000;
 let kept: { env: string; rows: Map<string, Observation>; from: number; to: number; since: number; cut: number } | null = null;
 let reads: Promise<unknown> = Promise.resolve();
 
-/** The observations of [from, to) as `slim` keeps them; inside a build pass, through the kept rows. */
-export async function recent(lf: Langfuse, from: number, to: number, slim: (o: any) => Observation): Promise<{ rows: Observation[]; partial: boolean }> {
+/** The observations of [from, to) of the `types`, as `slim` keeps them; inside a build pass, through the kept rows. Langfuse filters on one type per read. */
+export async function recent(lf: Langfuse, from: number, to: number, types: string[], slim: (o: any) => Observation): Promise<{ rows: Observation[]; partial: boolean }> {
+  const oldest = (rows: Observation[]) => rows.reduce((m, o) => Math.min(m, Date.parse(o.startTime ?? "") || Infinity), Infinity);
+  // `cut` is the newest of the oldest rows of the types that stopped at the page limit.
   const read = async (a: number) => {
-    const got = await lf.observations({ from: new Date(a), to: new Date(to) });
-    return { rows: got.rows.map(slim), partial: got.partial };
+    const gots = await Promise.all(types.map(async (type) => {
+      const got = await lf.observations({ from: new Date(a), to: new Date(to), type });
+      return { rows: got.rows.map(slim), partial: got.partial };
+    }));
+    return { rows: gots.flatMap((g) => g.rows), partial: gots.some((g) => g.partial), cut: Math.max(-Infinity, ...gots.filter((g) => g.partial).map((g) => oldest(g.rows))) };
   };
   const env = passEnv();
   if (env === null) return read(from);
@@ -34,7 +39,7 @@ export async function recent(lf: Langfuse, from: number, to: number, slim: (o: a
     if (!kept || kept.env !== env || to - kept.since > FULL || from < kept.from) kept = { env, rows: new Map(), from, to: from + LAG, since: to, cut: -Infinity };
     const k = kept, got = await read(Math.max(k.from, k.to - LAG));
     for (const o of got.rows) k.rows.set(o.id!, o);
-    if (got.partial) k.cut = Math.max(k.cut, got.rows.reduce((m, o) => Math.min(m, Date.parse(o.startTime ?? "") || Infinity), Infinity));
+    k.cut = Math.max(k.cut, got.cut);
     k.to = to;
     return { rows: [...k.rows.values()].filter((o) => Date.parse(o.startTime ?? "") >= from), partial: from < k.cut };
   });
