@@ -350,7 +350,8 @@ function heraldMotion(root) {
   const h = root.querySelector("#herald");
   // A page with no matchMedia (the tests' DOM) has no layout to animate either.
   if (!h || !globalThis.matchMedia || matchMedia("(prefers-reduced-motion: reduce)").matches) return () => {};
-  const was = new Map([...heraldRows(h)].map((r) => [rowKey(r), { r, box: r.getBoundingClientRect() }]));
+  // A copy of each row, for a redraw by morph reuses a row's node for another row.
+  const was = new Map([...heraldRows(h)].map((r) => [rowKey(r), { r: r.cloneNode(true), box: r.getBoundingClientRect() }]));
   return () => {
     const now = root.querySelector("#herald");
     if (!now) return;
@@ -386,8 +387,12 @@ function heraldMotion(root) {
 }
 
 function wireHeraldJump(root) {
-  root.querySelector?.(".shead .say")?.addEventListener?.("click", (e) => {
-    if (e.target.closest?.("a")) return;
+  // On the head, which a redraw keeps and which `outOfDate` leaves in place; the sentence inside it is drawn again.
+  const head = root.querySelector?.(".shead");
+  if (!head || head._jump) return;
+  head._jump = true;
+  head.addEventListener?.("click", (e) => {
+    if (!e.target.closest?.(".say") || e.target.closest?.("a")) return;
     const herald = root.querySelector?.("#herald");
     if (herald) {
       herald.scrollIntoView?.({ behavior: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth", block: "center" });

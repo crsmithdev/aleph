@@ -1080,6 +1080,32 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     const [input, h1] = await page.ev<number[]>(`[document.querySelector(".issue-page .title-edit").offsetWidth, document.querySelector(".issue-page .ph h1").clientWidth]`);
     expect(input).toBe(h1);
   });
+
+  test("a redraw keeps a marked element connected, and one click on the status sentence, in the head marked before them, after two redraws jumps to the Herald once", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald") && document.querySelector("#view #scorecard")');
+    await page.ev('window.mark = [document.querySelector("#view #scorecard"), document.querySelector("#view .shead")]; window.n = 0; Element.prototype.scrollIntoView = function () { window.n++; }');
+    for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())');
+    expect(await page.ev('[document.querySelector("#view #scorecard") === mark[0], mark[0].isConnected, document.querySelector("#view .shead") === mark[1]]')).toEqual([true, true, true]);
+    await page.ev('mark[1].querySelector(".say").click()');
+    expect(await page.ev("window.n")).toBe(1);
+    expect(page.errors).toEqual([]);
+  }, 60_000);
+
+  test("when the first of two running jobs ends, a redraw by morph fades a ghost of that job where its row was", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald")');
+    const ghost = await page.ev<string>(`Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
+      const root = document.querySelector("#view"), job = (name) => ({ name, started: "2026-11-15T10:00:00Z", item: { title: name } });
+      const draw = (running) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
+      draw([job("first job"), job("second job")]);
+      const moved = view.swap(root);
+      draw([job("second job")]);
+      moved();
+      return root.querySelector("#herald .run-now:not([data-job]) .run-title").textContent;
+    })`);
+    expect(ghost).toBe("first job");
+  }, 60_000);
 });
 
 describe.skipIf(!chromeUsable)("Ideas", () => {

@@ -10,13 +10,14 @@
 // them, in GROUPS order under the HEADERS, and routes by hash (#/jobs/aleph-52).
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
+import { Idiomorph } from "./vendor/idiomorph.js";
 import { setCodes } from "../lib/naming.ts";
 import { arm, cmd, notice, pageHead, postJson, say, actMessages, decided, denyReasons, endDraw, loadDiff, error, linkButton, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope, startDraw } from "./lib.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
-/** The paths of the views drawn by morphing, not by innerHTML: the Ideas list, the Idea page, Automation, Jobs and Agents. */
-export const morph = new Set(["/ideas", "/ideas/:slug", "/automation", "/factory/jobs", "/factory/agents"]);
+/** The paths of the views drawn by morphing, not by innerHTML: the Ideas list, the Idea page, Automation, Jobs, Agents and Status. */
+export const morph = new Set(["/", "/ideas", "/ideas/:slug", "/automation", "/factory/jobs", "/factory/agents"]);
 
 /** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
 export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);
@@ -237,7 +238,7 @@ export async function start() {
       const out = view.render(data, params, query);
       endDraw(at);
       // A refresh of a view whose path is in `morph` is merged into the page by idiomorph, which keeps the elements that match.
-      if (morph.has(view.path) && !first) (await import("./vendor/idiomorph.js")).Idiomorph.morph($("view"), out, { morphStyle: "innerHTML" });
+      if (morph.has(view.path) && !first) Idiomorph.morph($("view"), out, { morphStyle: "innerHTML" });
       else $("view").innerHTML = out;
     } catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`, "Reload the page. If it stays, this is a bug in the view.")}</div>`; return; }
     if (saved) restoreState($("view"), saved);
