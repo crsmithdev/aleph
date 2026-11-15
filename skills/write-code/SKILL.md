@@ -21,7 +21,7 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
    2. <step> → verify: <command> shows <result>
    ```
 
-   "Fix the bug" becomes "a test that fails on the bug, then passes". "Add validation" becomes "tests for the invalid inputs, then make them pass". "Refactor X" becomes "the same tests pass before and after". Done when every step has a `verify:` that a command can show; step 3 runs each one.
+   "Fix the bug" becomes "a test that fails on the bug, then passes". "Add validation" becomes "tests for the invalid inputs, then make them pass". "Refactor X" becomes "the same tests pass before and after". When the goal is a bug or a flaky test, call the Read tool on [diagnosing-bugs](../diagnosing-bugs/SKILL.md) before you plan, and make its feedback loop your first step. Done when every step has a `verify:` that a command can show; step 3 runs each one, and for a bug, when you have read diagnosing-bugs.
 
 2. **Settle each reading.** Where the goal reads two ways and the readings lead to different code, take the reading you would recommend and record it: in the `defaults` field when your brief defines one, else in your summary. Where a simpler approach than the one the goal names meets the goal, take it and say why. Done when each ambiguity you found has a recorded choice.
 
