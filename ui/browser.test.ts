@@ -926,6 +926,9 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(cli(["add", "--selector", ".mark", "--", "from the agent"]).exitCode).toBe(0);
     await page.when('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").textContent === "2"');
     expect(await page.ev('document.getElementById("kit-annotate-layer").shadowRoot.querySelectorAll(".pin.agent").length')).toBe(1);
+    // The notes list of an open note offers both ways out: Terminal, from the `send` index.html gives annotate(), and Chat, from the tool.
+    await page.ev('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").click()');
+    expect(await page.ev('(() => { const u = document.getElementById("kit-annotate").shadowRoot; return [u.querySelector(".term").hidden, u.querySelector(".term").textContent, u.querySelector(".send").hidden, u.querySelector(".send").textContent]; })()')).toEqual([false, "Terminal", false, "Chat"]);
     for (const n of await server()) expect(cli(["drop", n.id]).exitCode).toBe(0);
   }, 30_000);
 
