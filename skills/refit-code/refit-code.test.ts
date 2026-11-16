@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { session } from "../../hooks/lib/handshake.ts";
 import { jscpd, scan } from "./clones.ts";
-import { accepted, changed, history, holes, rules, wilson } from "./cochange.ts";
+import { accepted, changed, history, holes, rules, seed, wilson } from "./cochange.ts";
 
 const HOOK = join(import.meta.dir, "hook.ts");
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -53,6 +53,28 @@ test("a pair that always changes together is a rule; a file that changes alone a
   expect(all.get("a.ts")!.map((r) => r.b)).toEqual(["b.ts"]);
   expect(all.has("c.ts")).toBe(false);
   expect(all.has("a.test.ts")).toBe(false);
+});
+
+test("the seed counts a file renamed mid-history under the new path, and never names the old one", () => {
+  for (let i = 0; i < 12; i++) {
+    write("old.ts", `export const o = ${i};\n`);
+    write("comp.ts", `export const c = ${i};\n`);
+    sh("git", "add", "-A");
+    sh("git", "commit", "-qm", `fix old ${i}`);
+  }
+  sh("git", "mv", "old.ts", "new.ts");
+  sh("git", "commit", "-qm", "rename old.ts to new.ts");
+  for (let i = 0; i < 12; i++) {
+    write("new.ts", `export const o = ${100 + i};\n`);
+    write("comp.ts", `export const c = ${100 + i};\n`);
+    sh("git", "add", "-A");
+    sh("git", "commit", "-qm", `fix new ${i}`);
+  }
+  const s = seed(root);
+  expect(Object.fromEntries(s.fixes.map((f) => [f.file, f.count]))).toEqual({ "new.ts": 24, "comp.ts": 24 });
+  expect(s.pairs.some((p) => p.a === "old.ts" || p.b === "old.ts")).toBe(false);
+  const pair = s.pairs.find((p) => p.a === "new.ts" && p.b === "comp.ts");
+  expect([pair?.co, pair?.n]).toEqual([24, 25]);
 });
 
 test("a change to a.ts alone leaves b.ts as a hole; a change to both leaves none", () => {

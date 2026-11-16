@@ -30,13 +30,22 @@ function git(cwd: string, ...args: string[]): string {
   return p.exitCode === 0 ? p.stdout.toString() : "";
 }
 
-/** The last `limit` commits that are not merges, newest first. */
+/** The last `limit` commits that are not merges, newest first. Each file is named by the path it has today, so a
+ * rename does not split a file's history in two: walking newest first, a rename teaches the old path its new name. */
 export function history(cwd: string, limit = 2000, since?: string): Commit[] {
-  const out = git(cwd, "log", "--no-merges", "--name-only", "--format=\x1e%h\x1f%s", `-n${limit}`, ...(since ? [`--since=${since}`] : []));
+  const out = git(cwd, "log", "--no-merges", "-M", "--name-status", "--format=\x1e%h\x1f%s", `-n${limit}`, ...(since ? [`--since=${since}`] : []));
+  const today = new Map<string, string>();
   return out.split("\x1e").slice(1).map((c) => {
-    const [head, ...files] = c.split("\n");
+    const [head, ...lines] = c.split("\n");
     const [sha, subject] = head.split("\x1f");
-    return { sha, subject, files: files.filter(Boolean) };
+    const files = lines.filter(Boolean).map((l) => {
+      const [status, a, b] = l.split("\t");
+      const path = status[0] === "R" ? b : a;
+      const name = today.get(path) ?? path;
+      if (status[0] === "R") today.set(a, name);
+      return name;
+    });
+    return { sha, subject, files };
   });
 }
 
@@ -118,7 +127,7 @@ export function holes(root: string, change: Set<string>, all: Map<string, Rule[]
 }
 
 /** The files whose commits most often read as a fix, the strongest pairs and the largest copies of code: the retro's first candidates. */
-function seed(root: string, since = "90.days") {
+export function seed(root: string, since = "90.days") {
   const commits = history(root, 5000, since);
   const fixes = new Map<string, string[]>();
   for (const c of commits) if (FIX.test(c.subject)) for (const f of c.files) fixes.set(f, [...(fixes.get(f) ?? []), `${c.sha} ${c.subject}`]);
