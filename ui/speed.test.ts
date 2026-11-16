@@ -424,6 +424,27 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
   expect(a.outcomes.map((x) => x.role)).toEqual(["worker", "worker", "intake", "reviewer"]);
 });
 
+test("agents: a build the reviewer returned is no first pass, with no failed field", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  const e = (id: string, a: number, extra: object) => ({ folder: id, id, run: { n: 1, role: "build", job: "a", state: "passed", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
+  const runs = [
+    e("f1", 10, { state: "returned", review: { call: "returned" } }), e("f2", 12, {}), e("f3", 14, { role: "land", state: "landed" }),
+  ];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.find((x) => x.role === "worker")).toMatchObject({ built: 1, firstPass: 0, reviewPass: 0.5 });
+});
+
+test("agents: a landed build whose job retries one sent back is no first pass", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  const e = (id: string, job: string, a: number, extra: object) => ({ folder: id, id, run: { n: 1, role: "build", job, target: "issue.1", state: "passed", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
+  const runs = [
+    e("b1", "a", 10, { state: "returned", failed: "review" }), e("b2", "b", 12, { retryOf: "b1" }), e("b3", "b", 14, { role: "land", state: "landed" }),
+  ];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.find((x) => x.role === "worker")).toMatchObject({ built: 1, firstPass: 0 });
+  expect(a.rates.firstPass).toBe(0);
+});
+
 test("agents: the reviewer's runs, model, cost and times come from its review jobs", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;

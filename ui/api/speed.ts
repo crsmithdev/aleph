@@ -104,7 +104,7 @@ export interface Speed {
 export interface AgentRole { key: AgentKey; name: string; live: number; runs: number; hours: number; p50: number | null; p95: number | null; models: string[] }
 /**
  * One role and model of the window with how its runs ended. `ended` is succeeded + failed + stuck (a running run counts in `runs` only). `rate` is succeeded over `ended` (null with none); `baseline` is the same rate over the baseline's spans (null with no data). `cost` is the recorded cost of the runs; `p50` and `p95` are their times in seconds.
- * Worker rows add `built` (succeeded runs of a landed job), `perBuilt` (`cost` over `built`, null with none built), `firstPass` (those with no fix round) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`.
+ * Worker rows add `built` (succeeded runs of a landed job), `perBuilt` (`cost` over `built`, null with none built), `firstPass` (those whose job, and the jobs it retries, had no run sent back) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`.
  */
 interface OutcomeRow {
   role: AgentKey; model: string; runs: number; succeeded: number; failed: number; stuck: number; ended: number;
@@ -116,7 +116,7 @@ export interface Agents {
   live: number; workers: number; cap: number; mean: number; peak: number;
   roles: AgentRole[];
   outcomes: OutcomeRow[];
-  /** Over the window, 0 to 1, null with no data: `success` is succeeded over ended runs of all roles but the reviewer, `baseline` the same over the baseline's spans, `firstPass` the share of landed worker builds with no fix round, `local` the share of runs on gpt-oss-20b. */
+  /** Over the window, 0 to 1, null with no data: `success` is succeeded over ended runs of all roles but the reviewer, `baseline` the same over the baseline's spans, `firstPass` the share of landed worker builds whose job, and the jobs it retries, had no run sent back, `local` the share of runs on gpt-oss-20b. */
   rates: { success: number | null; baseline: number | null; firstPass: number | null; local: number | null };
   points: ({ at: string } & Partial<Record<AgentKey, number>>)[];
 }
@@ -453,9 +453,14 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
   // The review run of a build: the one whose `prev` is the build's job. Its model serves a verdict that has none.
   const reviews = new Map<string, string>();
   for (const e of entries) if (e.run.role === "review" && e.run.prev && e.run.model) reviews.set(e.run.prev, e.run.model);
-  // A job landed when a land run of it landed; a job had a fix round when one of its runs was sent back.
+  // A job landed when a land run of it landed; a job had a fix round when a run of it was sent back by a check or by the reviewer, or when it retries a job that had one.
   const landedJobs = new Set(runs.filter((r) => r.role === "land" && r.state === "landed").map((r) => r.job));
-  const roundJobs = new Set(runs.filter((r) => r.failed).map((r) => r.job));
+  const roundJobs = new Set(runs.filter((r) => r.failed || r.review?.call === "returned").map((r) => r.job));
+  const jobOf = new Map(entries.map((e) => [e.id, e.run.job]));
+  const retriedBy = new Map<string, string[]>();
+  for (const e of entries) { const from = e.run.retryOf ? jobOf.get(e.run.retryOf) : undefined; if (from !== undefined && from !== e.run.job) retriedBy.set(from, [...(retriedBy.get(from) ?? []), e.run.job]); }
+  const queue = [...roundJobs];
+  while (queue.length) for (const j of retriedBy.get(queue.pop()!) ?? []) if (!roundJobs.has(j)) { roundJobs.add(j); queue.push(j); }
   for (const e of entries) {
     const r = e.run;
     const a = Date.parse(r.started);
