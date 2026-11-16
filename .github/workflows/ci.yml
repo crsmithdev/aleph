@@ -10,6 +10,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       # The tests make commits in temp repos, so git needs an identity.
       - run: git config --global user.name ci && git config --global user.email ci@localhost
+      # aleph-tools is private: its read-only deploy key lets bun clone it.
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.ALEPH_TOOLS_DEPLOY_KEY }}
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       # The firefighter quotes this line in a CI issue: a failure that depends on the core count can then be reproduced.
