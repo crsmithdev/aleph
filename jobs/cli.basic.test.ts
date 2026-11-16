@@ -16,7 +16,7 @@ const setups = () => (existsSync(setupLog) ? readFileSync(setupLog, "utf8").spli
 describe("job", () => {
   test("a worker that commits ends passed, with setup, checks, result and news", async () => {
     const before = setups();
-    const r = await aleph(["job", "De mo", "alpha", "--spec", "-"], { ALEPH_UI_PASSWORD: "hunter2" }, "Goal: alpha\nACTION: commit a.txt\n");
+    const r = await aleph(["job", "De mo", "alpha", "--spec", "-"], {}, "Goal: alpha\nACTION: commit a.txt\n");
     expect(r.code).toBe(0);
     const s = state(r.json.run);
     expect(s).toMatchObject({ role: "build", name: "alpha", repo: "demo", state: "passed", told: true, branch: "job/alpha", worktree: worktree("alpha") });
@@ -36,7 +36,7 @@ describe("job", () => {
     expect(args).toContain("--output-format stream-json --verbose");
     const workerEnv = readFileSync(join(fakeLog, "env"), "utf8");
     expect(workerEnv).toContain(`ALEPH_JOB_ID=${r.json.run}`);
-    expect(workerEnv).not.toMatch(/^(CLAUDECODE|ANTHROPIC_API_KEY|ALEPH_UI_PASSWORD)=/m);
+    expect(workerEnv).not.toMatch(/^(CLAUDECODE|ANTHROPIC_API_KEY)=/m);
   });
 
   test("a follow-up runs in the same worktree with the spec, notes and previous result", async () => {

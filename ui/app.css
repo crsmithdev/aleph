@@ -581,10 +581,7 @@ pre.stat b { color: var(--need); }
 }
 #nav li.head { margin: var(--sp-14) 0 var(--sp-4); padding: 0 var(--sp-8); font-size: var(--fs-xs); font-weight: var(--fw-strong); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); }
 #nav a:hover { background: var(--sunk); color: var(--ink); }
-#nav wa-icon, #logout wa-icon { flex: none; width: 1.25em; font-size: var(--fs-sm); }
-#logout { display: flex; align-items: center; gap: var(--sp-8); margin-top: var(--sp-14); padding: var(--sp-6) var(--sp-8); border-radius: var(--r-ctl); font-size: var(--fs-sm); color: var(--muted); text-decoration: none; }
-#logout[hidden] { display: none; }
-#logout:hover { background: var(--sunk); color: var(--ink); }
+#nav wa-icon { flex: none; width: 1.25em; font-size: var(--fs-sm); }
 #nav a[aria-current="page"] { background: var(--sunk); color: var(--ink); font-weight: var(--fw-strong); box-shadow: inset 2px 0 0 var(--ink); }
 /* The Status entry takes the tone of the factory's status, so it shows from every page. */
 #nav a[data-tone="fine"] { color: var(--ink); }
@@ -598,8 +595,8 @@ pre.stat b { color: var(--need); }
   .shell.collapsed .side { padding-left: var(--sp-6); padding-right: var(--sp-6); align-items: center; overflow: hidden; }
   .shell.collapsed .mark { padding: var(--sp-2) 0 0; margin: 0; font-size: 0; gap: 0; }
   .shell.collapsed #nav li.head { margin: var(--sp-8) var(--sp-4); padding: 0; height: 1px; overflow: hidden; font-size: 0; background: var(--rule); }
-  .shell.collapsed #nav a, .shell.collapsed #logout { justify-content: center; padding: var(--sp-8) 0; width: 36px; }
-  .shell.collapsed #nav .lbl, .shell.collapsed #logout .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .shell.collapsed #nav a { justify-content: center; padding: var(--sp-8) 0; width: 36px; }
+  .shell.collapsed #nav .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .shell.collapsed #collapse { align-self: center; }
 }
 /* .card p sets --ink-2 at the same specificity, so the card form is named too. */
@@ -623,7 +620,6 @@ pre.stat b { color: var(--need); }
   /* One row: the links scroll sideways, and the router scrolls the current one into view. */
   #nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   #collapse { display: none; }
-  #logout { margin: 0; padding: var(--sp-4) var(--sp-8); }
   #nav li.head { display: none; }
   #nav ul { display: flex; flex-wrap: nowrap; gap: var(--sp-2); }
   #nav a { white-space: nowrap; padding: var(--sp-4) var(--sp-8); }

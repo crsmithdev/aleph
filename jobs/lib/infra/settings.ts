@@ -149,7 +149,6 @@ export const runEnvFile = (): string | undefined => process.env.ALEPH_RUN_ENV;
 export const skillsDir = () => process.env.ALEPH_SKILLS_DIR ?? join(import.meta.dir, "..", "..", "..", "skills");
 /** The skills store. */
 export const skillsStore = () => alephPath("ALEPH_SKILLS_STORE", "skills-store.json");
-export const uiPassword = () => process.env.ALEPH_UI_PASSWORD ?? "";
 export const cliOverride = (): string | undefined => process.env.ALEPH_CLI;
 export const stateSlowMs = () => num("ALEPH_STATE_SLOW_MS", 0);
 /** The credentials file. */

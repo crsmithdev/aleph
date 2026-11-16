@@ -85,19 +85,6 @@ test("resultOf reads the last result event; only is_error false is ok", () => {
   expect(resultOf("")).toMatchObject({ found: false, ok: false, line: "no output" });
 });
 
-test("a call's env has no ALEPH_UI_PASSWORD, from the default env or from the env a caller passes", async () => {
-  process.env.ALEPH_UI_PASSWORD = "secret";
-  const file = join(base, "env");
-  const cmd = fake(`env > ${file}; echo ok`);
-  await callAgent("monitor", "x", ask(cmd));
-  expect(readFileSync(file, "utf8")).not.toContain("ALEPH_UI_PASSWORD");
-  await callAgent("title", "x", { ...ask(cmd), env: { ...process.env, MAX_THINKING_TOKENS: "0" } });
-  const passed = readFileSync(file, "utf8");
-  expect(passed).not.toContain("ALEPH_UI_PASSWORD");
-  expect(passed).toContain("MAX_THINKING_TOKENS=0");
-  delete process.env.ALEPH_UI_PASSWORD;
-});
-
 /** A shell prefix that opens fd 3 on a pipe with no writer: `read -t N -u 3` then waits N seconds. */
 const WAIT = `f=$(mktemp -u); mkfifo $f; exec 3<>$f; rm $f`;
 

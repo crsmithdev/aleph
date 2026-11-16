@@ -757,16 +757,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(page.errors).toEqual([]);
   }, 30_000);
 
-  test("Log out shows only behind the password gate", async () => {
-    expect(await page.ev('document.querySelector("#logout").hidden')).toBe(true);
-  }, 30_000);
-
-  test("a 401 reloads the page", async () => {
-    await page.go("#/");
-    await page.ev(`(() => { window.__before = 1; const f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/") ? Promise.resolve(new Response("", { status: 401 })) : f(u, o); location.hash = "#/issues"; })()`);
-    await page.when("window.__before === undefined");
-    await page.when('document.querySelector("#nav li")');
-  }, 30_000);
 });
 
 describe.skipIf(!chromeUsable)("Status page", () => {

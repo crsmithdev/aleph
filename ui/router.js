@@ -218,8 +218,6 @@ export async function start() {
   let version = null;
   async function api(url) {
     const res = await fetch(url, { cache: "no-store" });
-    if (res.status === 401) { location.reload(); return res; }
-    if (res.headers.get("x-aleph-login") === "1") $("logout").hidden = false;
     const stale = res.headers.get("x-aleph-stale") === "1";
     if (stale === $("stale").hidden) {
       $("stale").hidden = !stale;
@@ -291,12 +289,6 @@ export async function start() {
     // The keys of each `change`, for code outside the views: the kit's note tool reloads on /api/annotations.
     changed: (keys) => { if (keys.includes("/api/status")) readTone(); dispatchEvent(new CustomEvent("aleph:change", { detail: keys })); },
     opened: () => readTone(),
-  });
-
-  $("logout").addEventListener("click", async (e) => {
-    e.preventDefault();
-    await postJson("/api/logout").catch(() => {});
-    location.reload();
   });
 
   // The tone of the status sentence, from /api/status, kept for the Status entry of each nav draw.

@@ -138,7 +138,7 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   // A run whose --allowedTools names Bash prefixes may run only those: hooks/bash-allow.ts reads them, since a user setting that allows plain Bash would let the rest through.
   const at = o.flags.indexOf("--allowedTools");
   const list = at < 0 ? [] : o.flags[at + 1]?.split(",").flatMap((t) => t.match(/^Bash\((.+):\*\)$/)?.[1] ?? []);
-  const env = { ...(o.env ?? { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }), ...modelEnv(model), ALEPH_UI_PASSWORD: undefined, ALEPH_BASH_ALLOW: list.length ? JSON.stringify(list) : undefined };
+  const env = { ...(o.env ?? { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }), ...modelEnv(model), ALEPH_BASH_ALLOW: list.length ? JSON.stringify(list) : undefined };
   const seen = statSync(o.stdout, { throwIfNoEntry: false })?.size ?? 0;
   let step: Step;
   try {
@@ -164,7 +164,7 @@ export function startChat(session: string, fresh: boolean, system: string, cwd: 
     "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     "--append-system-prompt", system, fresh ? "--session-id" : "--resume", session,
   ], true);
-  const env = { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(OPUS_MODEL), ALEPH_UI_PASSWORD: undefined };
+  const env = { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(OPUS_MODEL) };
   return Bun.spawn(argv, { cwd, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
 }
 

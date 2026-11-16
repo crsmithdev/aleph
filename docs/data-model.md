@@ -11,7 +11,7 @@ Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdo
 ├── handoffs/           session handoffs                       ALEPH_HANDOFFS_DIR
 ├── spool/              hand-offs between hooks, 1 day         ALEPH_SPOOL
 ├── aleph.db            SQLite: counters, jobs, events, issue state, settings, logs  ALEPH_DB
-└── .env                keys: Langfuse, OpenRouter, UI password
+└── .env                keys: Langfuse, OpenRouter
 ```
 
 Retention: each tick (`jobs/lib/infra/retention.ts`) deletes data over 90 days old: the folder of a job that ended that long ago (its row stays), a job folder that no row holds and that did not change for 90 days, `usage` rows by `time`, and `dispatch.<day>.log` and `housekeeper.<day>.log` files (each log moves aside each UTC day under the day it began, which `dispatch.day` or `housekeeper.day` holds). The event log and the job rows stay forever.
@@ -223,7 +223,6 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 | `episodes/` | One page per finished issue; kept 90 days | Episodes |
 | `episode-use.jsonl` | `{date, title, event}` per line; `event` is `shown` or `opened`; kept 90 days | `aleph memory recall --episodes`, the `episode-open.ts` hook |
 | `standing-retry/` | Runs an Always `continue` started | Intake |
-| `ui-sessions.json` | UI login tokens | `aleph-ui` |
 | `dispatch.log` | Output of detached dispatch, intake, director and suite | `launch.ts` |
 
 ### Corrections

@@ -46,9 +46,6 @@ afterEach(() => { for (const [k, v] of Object.entries(vars)) process.env[k] ??= 
 // A factory worker's shell carries its job's variables. A test reads them as a worker, so they are cleared here;
 // a test that sets one of them itself still gets the value it sets.
 delete process.env.ALEPH_JOB_ID;
-// A shell with ALEPH_UI_PASSWORD turns on the UI's login gate, and every UI test would get a 401. A test of the
-// gate sets the password itself.
-delete process.env.ALEPH_UI_PASSWORD;
 // git sets these for a hook run from a linked worktree; a fixture's git would then write the enclosing repo and push to its origin (aleph-1733).
 for (const k of [
   "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT", "GIT_OBJECT_DIRECTORY", "GIT_DIR",

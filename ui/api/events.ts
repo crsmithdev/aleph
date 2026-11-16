@@ -9,7 +9,6 @@
 import { eventsAfter, lastSeq } from "../../lib/layout.ts";
 import type { EventRow } from "../../lib/naming.ts";
 import { eventIn, projectOf, withProjects } from "./scope.ts";
-import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
 import { eventTails, updater } from "../updater.ts";
 
@@ -21,8 +20,6 @@ const event = (name: string, data: string) => encoder.encode(`event: ${name}\nda
 
 /** The open streams, each with the project it follows ("" for all). */
 const clients = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
-/** The session token of each client that opened its stream with the gate on. */
-const tokens = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
 let ping: Timer | undefined;
 
 function send(bytes: Uint8Array, row?: EventRow): void {
@@ -55,17 +52,6 @@ function start(): void {
   ping = setInterval(() => { send(event("ping", JSON.stringify({ at: Date.now() }))); void updater.get("/api/status"); }, PING_MS);
 }
 
-/** A session that logs out loses its streams. */
-onLogout.push((token) => {
-  for (const [c, t] of tokens) {
-    if (t !== token) continue;
-    tokens.delete(c);
-    clients.delete(c);
-    c.close();
-  }
-  if (!clients.size) stop();
-});
-
 function stop(): void {
   clearInterval(ping);
 }
@@ -79,13 +65,10 @@ export const routes: Routes = {
         mine = c;
         if (!clients.size) start();
         clients.set(c, project);
-        const t = gateOn() ? cookieToken(req) : null;
-        if (t) tokens.set(c, t);
         c.enqueue(event("ping", JSON.stringify({ at: Date.now() })));
       },
       cancel() {
         clients.delete(mine);
-        tokens.delete(mine);
         if (!clients.size) stop();
       },
     });

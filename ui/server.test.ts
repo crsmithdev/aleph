@@ -34,7 +34,7 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-// Security: the server must listen on loopback only; home-proxy puts the login in front of it on the LAN.
+// Security: the server must listen on loopback only; home-proxy is what exposes it on the LAN.
 test("binds 127.0.0.1", () => {
   expect(server.hostname).toBe("127.0.0.1");
 });
@@ -129,26 +129,9 @@ test("lib/status-words.ts reaches the page as JS", async () => {
   expect(js).toContain("export const labelOf = (tone, text) =>");
 });
 
-test("x-aleph-login is on every API answer behind the gate, and absent without a password", async () => {
-  expect((await at("/api/_test/x")).headers.get("x-aleph-login")).toBeNull();
-  expect((await at("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "x" }) })).status).toBe(404);
-  const restorePassword = withEnv({ ALEPH_UI_PASSWORD: "hunter2" });
-  const { at: g, stop: stopGated } = await withServer({ warm: false });
-  try {
-    const ok = await g("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "hunter2" }) });
-    const cookie = ok.headers.get("set-cookie")!.split(";")[0];
-    expect((await g("/api/factory", { headers: { cookie } })).headers.get("x-aleph-login")).toBe("1");
-  } finally {
-    stopGated();
-    restorePassword();
-  }
-});
-
-test("without a password, a Host that is not this machine gets a 403 that names ALEPH_UI_PASSWORD", async () => {
+test("a request is served whatever its Host, with no login", async () => {
   for (const path of ["/", "/api/factory"]) {
-    const r = await at(path, { headers: { host: "aleph.home" } });
-    expect(r.status).toBe(403);
-    expect(await r.text()).toContain("ALEPH_UI_PASSWORD");
+    expect((await at(path, { headers: { host: "aleph.home" } })).status).toBe(200);
     expect((await at(path)).status).toBe(200);
   }
 });

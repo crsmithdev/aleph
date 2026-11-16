@@ -19,17 +19,9 @@ systemctl --user enable --now aleph-ui.service
 
 If the host already has a plain file at `~/.config/systemd/user/aleph-ui.service`, `systemctl --user link` refuses to replace it, so remove that file first.
 
-## Log in
+## Access
 
-Set `ALEPH_UI_PASSWORD` in `~/.aleph/.env` to turn on the password gate. With it unset, the UI has no login and answers only requests whose Host header names this machine (`127.0.0.1`, `localhost` or `[::1]`); any other Host, such as `aleph.home`, gets a 403 page.
-
-With the gate on, `/` shows a login form. The right password sets the `aleph_session` cookie, which keeps the device logged in for a year. The sessions are in `~/.aleph/factory/ui-sessions.json`, so a restart keeps every device logged in. The factory keeps one token of its own in that file, which its smoke test and `aleph doctor` send as the cookie. The token comes back into the file when it is missing.
-
-| To | Do |
-|---|---|
-| Log out one device | Use the `Log out` link on it |
-| Log out every device | Delete `~/.aleph/factory/ui-sessions.json` |
-| Change the password | Edit `~/.aleph/.env`, then `systemctl --user restart aleph-ui` |
+The UI has no login. The server binds `127.0.0.1` and answers every request, whatever its Host header. home-proxy serves it on the LAN as `aleph.home`, so any device on the LAN can read and drive it.
 
 ## Usage and skills
 

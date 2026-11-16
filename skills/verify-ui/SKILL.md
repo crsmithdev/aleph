@@ -21,11 +21,10 @@ nothing. Take a free port at or above 3002 and start a one-off server on it, in 
 
 ```sh
 port=$(bun -e 'const n=require("node:net");(async()=>{for(let p=3002;p<3200;p++){if(await new Promise(k=>{const s=n.createServer();s.once("error",()=>k(false));s.listen(p,"127.0.0.1",()=>s.close(()=>k(true)))})){console.log(p);return}}})()')
-ALEPH_UI_PASSWORD= bun ui/server.ts --port "$port" >/tmp/verify-ui.log 2>&1 & echo $! > /tmp/verify-ui.pid
+bun ui/server.ts --port "$port" >/tmp/verify-ui.log 2>&1 & echo $! > /tmp/verify-ui.pid
 ```
 
-`ALEPH_UI_PASSWORD=` drops the password gate, which a one-off server on loopback does not need. The server
-prints its URL. Done when `curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/"` prints 200.
+The server prints its URL. Done when `curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/"` prints 200.
 
 The UI is a hash router: a screen's address is `http://127.0.0.1:<port>/#/<route>`, so `#/flow` reaches the
 Flow page while a bare `/flow` answers 404.

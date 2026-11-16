@@ -4,7 +4,6 @@
  */
 import { getJson, putJson } from "../../../lib/db.ts";
 import { uiPort } from "../infra/settings.ts";
-import { factoryCookie } from "../infra/ui-token.ts";
 import { errText } from "../../../lib/errtext.ts";
 
 const PATHS = ["/", "/api/factory"];
@@ -18,7 +17,7 @@ interface Smoke { fails: number; reason?: string; at?: string }
 export async function smokeProblem(base = `http://127.0.0.1:${port()}`): Promise<string | null> {
   for (const path of PATHS) {
     try {
-      const r = await fetch(base + path, { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { cookie: factoryCookie() } });
+      const r = await fetch(base + path, { signal: AbortSignal.timeout(TIMEOUT_MS) });
       if (!r.ok) return `${path} answered ${r.status}`;
     } catch (e) {
       return `${path}: ${errText(e)}`;

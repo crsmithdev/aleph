@@ -1,5 +1,5 @@
 /**
- * The factory UI's server. It binds 127.0.0.1 and home-proxy serves it on the LAN behind the gate in `ui/auth.ts`: a login, or with no password only this machine. It serves the page, `ui/lib.js`,
+ * The factory UI's server. It binds 127.0.0.1 and home-proxy serves it on the LAN, so it has no login. It serves the page, `ui/lib.js`,
  * each `ui/views/*.js`, and the routes of every `ui/api/*.ts`, loaded at start.
  * A route file exports `routes`: `"GET /api/x/:id"` → `(req, params, url) => Response`. The answers of the routes in
  * `KEYED` come from the updater (ui/updater.ts), which builds them in its Worker; every other route runs here.
@@ -10,7 +10,6 @@ import { fileURLToPath } from "node:url";
 import { announce, shelf } from "aleph-tools/shelf.ts";
 import { skipFetches } from "../issues/lib/store.ts";
 import { loadDotenv } from "../lib/env.ts";
-import { gateOn, gate, routes as authRoutes } from "./auth.ts";
 import { startPoller } from "./usage.ts";
 import { KEYED, respond, startUpdater, stopUpdater, updater } from "./updater.ts";
 import { uiPort } from "../jobs/lib/infra/settings.ts";
@@ -106,18 +105,12 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
   skipFetches();
   const routes = (await loadRoutes(join(import.meta.dir, "api"))).map((r) => (r.method === "GET" && KEYED.has(r.path) ? { ...r, handler: (_req: Request, _p: Record<string, string>, url: URL) => respond(url) } : r));
   if (apiDir) routes.push(...await loadRoutes(apiDir));
-  for (const [key, handler] of Object.entries(authRoutes)) {
-    const [method, path] = key.split(" ");
-    routes.push({ method, path, ...compile(path), handler });
-  }
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
     // Bun closes a request after 10 s by default; /api/memory and /api/sessions take longer.
     idleTimeout: 120,
     async fetch(req) {
-      const refused = gate(req);
-      if (refused) return refused;
       const shelved = await shelf(req);
       if (shelved) return shelved;
       const url = new URL(req.url);
@@ -138,7 +131,6 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
         }
         res.headers.set("x-aleph-version", version(dir));
         if (codePrint(root, loaded) !== loadedPrint) res.headers.set("x-aleph-stale", "1");
-        if (gateOn()) res.headers.set("x-aleph-login", "1");
         return res;
       }
       if (allowed) return new Response("method not allowed", { status: 405 });
@@ -171,7 +163,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
 }
 
 if (import.meta.main) {
-  loadDotenv(undefined, ["ALEPH_UI_PASSWORD"]);
+  loadDotenv();
   const i = process.argv.indexOf("--port");
   const port = Number(i >= 0 ? process.argv[i + 1] : uiPort());
   if (!Number.isInteger(port) || port < 0 || port > 65535) {

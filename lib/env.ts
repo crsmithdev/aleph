@@ -37,7 +37,7 @@ export const anthropicKey = (): string | null => dotenvKey("ANTHROPIC_API_KEY");
  * Only LANGFUSE_* keys, plus any `extra` names the caller asks for (the UI server asks for its password): the file also holds model API keys, and a nested `claude -p`
  * that inherits ANTHROPIC_API_KEY bills the API instead of the subscription.
  */
-export function loadDotenv(path = envFile(), extra: string[] = []): void {
+export function loadDotenv(path = envFile()): void {
   let text: string;
   try { text = readFileSync(path, "utf8"); } catch { return; }
   for (const raw of text.split("\n")) {
@@ -46,7 +46,7 @@ export function loadDotenv(path = envFile(), extra: string[] = []): void {
     const eq = line.indexOf("=");
     if (eq < 1) continue;
     const key = line.slice(0, eq).trim();
-    if (!key.startsWith("LANGFUSE_") && !extra.includes(key)) continue;
+    if (!key.startsWith("LANGFUSE_")) continue;
     let value = line.slice(eq + 1).trim();
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
     if (process.env[key] === undefined) process.env[key] = value;
