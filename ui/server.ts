@@ -171,6 +171,7 @@ if (import.meta.main) {
     process.exit(2);
   }
   const server = await serve(port);
-  announce(`http://127.0.0.1:${server.port}`);
+  // Only the UI's own port names the shelf, so a one-off check server does not take the shelf from it.
+  if (String(server.port) === uiPort()) announce(`http://127.0.0.1:${server.port}`);
   console.log(`http://127.0.0.1:${server.port}/`);
 }

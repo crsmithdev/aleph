@@ -88,17 +88,26 @@ Verify each status claim against the tool output that produced it, and name each
 A mock is a design draft Chris looks at: HTML pages, images, a canvas. Keep
 it in the repo at `docs/mocks/<name>/`, never in `/tmp` or the scratchpad,
 and commit it with a `README.md` that names the request and each decision.
-When the mock is ready, serve that directory in the background with
-`python3 -m http.server <port> -d docs/mocks/<name>` on a free port at or
-above 3002. Then open the page in Chris's browser:
+A mock uses the repo's design rules: in aleph, the tokens and classes of
+`ui/app.css` and the components of `docs/design.md`. The README cites the
+rule each decision follows.
+
+When the mock is ready, put it on the shelf and open the URL it prints in
+Chris's browser:
 
 ```bash
-cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "http://localhost:<port>/<page>"
+bun ~/aleph-tools/shelf.ts put docs/mocks/<name> --title "<title>" --kind mock
+cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "<url>"
 ```
 
+Then run `bun ~/aleph-tools/shelf.ts wait <id>` with `run_in_background`.
+When it exits 0, its output is Chris's notes on the mock. Put a changed mock
+on the shelf again. If `put` fails, serve the directory with
+`python3 -m http.server <port> -d docs/mocks/<name>` on a free port at or
+above 3002 instead.
+
 Do not use `wslview`. It looks for `WSLInterop`, but this WSL registers
-`WSLInterop-late`, so it fails. Keep the server up until Chris is done with
-the mock.
+`WSLInterop-late`, so it fails.
 
 ## Memory
 

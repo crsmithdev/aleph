@@ -5,7 +5,7 @@
     "": {
       "name": "aleph",
       "dependencies": {
-        "aleph-tools": "git+ssh://git@github.com/crsmithdev/aleph-tools.git#7b403e6a5bf6da281c381a4c5e7abd44eb23bd79",
+        "aleph-tools": "git+ssh://git@github.com/crsmithdev/aleph-tools.git#aa21ce9cb2f01851ab314cd509c8c718dd57be2b",
       },
       "devDependencies": {
         "@types/bun": "^1.4.4",
@@ -59,7 +59,7 @@
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
-    "aleph-tools": ["aleph-tools@git+ssh://git@github.com/crsmithdev/aleph-tools.git#7b403e6a5bf6da281c381a4c5e7abd44eb23bd79", {}, "7b403e6a5bf6da281c381a4c5e7abd44eb23bd79"],
+    "aleph-tools": ["aleph-tools@git+ssh://git@github.com/crsmithdev/aleph-tools.git#aa21ce9cb2f01851ab314cd509c8c718dd57be2b", {}, "aa21ce9cb2f01851ab314cd509c8c718dd57be2b"],
 
     "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
