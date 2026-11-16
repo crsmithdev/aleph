@@ -409,7 +409,7 @@ export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["reviewer", "review"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
+const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["title", "title"], ["judge", "judge"], ["reviewer", "review"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
 type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */

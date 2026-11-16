@@ -212,6 +212,12 @@ describe("GET /api/jobs", () => {
     expect(pressed(v.renderFilters({ unusable: "1" }))).toEqual({ "": "false", "1": "true" });
     expect(pressed(v.renderFilters({}))).toEqual({ "": "true", "1": "false" });
   });
+  test("title and judge runs are not jobs", async () => {
+    const ids = [run("", { role: "title", name: "title", started: ago(1) }), run("", { role: "judge", name: "judge", started: ago(1) })];
+    expect(await idsOf()).not.toContain(ids[0]);
+    expect(await idsOf()).not.toContain(ids[1]);
+    expect(await idsOf()).toContain(K["oth-1#1"]);
+  });
   test("?project narrows to one project", async () => {
     expect(await idsOf("project=oth&window=month")).toEqual([K["oth-1#1"]]);
     expect(await (await get("/api/jobs?project=nope")).json()).toEqual({ jobs: [], next: null });

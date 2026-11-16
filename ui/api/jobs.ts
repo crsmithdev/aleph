@@ -217,7 +217,7 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
 const none = () => Response.json({ error: "no such job" }, { status: 404 });
 
 export const routes: Routes = {
-  // One row per job, newest first: `?project=`, `?window=` (default week), `?state=`, `?unusable=1` (the runs the monitor counts as failed), and the page `?limit=`, `?before=` (an ISO start).
+  // One row per job, newest first, without the title and judge calls: `?project=`, `?window=` (default week), `?state=`, `?unusable=1` (the runs the monitor counts as failed), and the page `?limit=`, `?before=` (an ISO start).
   "GET /api/jobs": (_req, _p, url) => {
     const q = url.searchParams, sc = scopeOf(url);
     if (sc instanceof Response) return sc;
@@ -227,7 +227,7 @@ export const routes: Routes = {
     if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
     loadRegistry();
     const since = Date.now() - sc.ms, all = allRuns();
-    const hit = all.filter((e) => { const r = e.run; return repoIn(r.repo, sc.project) && (!state || r.state === state) && (q.get("unusable") !== "1" || unusable(e)) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)); })
+    const hit = all.filter((e) => { const r = e.run; return !["title", "judge"].includes(r.role) && repoIn(r.repo, sc.project) && (!state || r.state === state) && (q.get("unusable") !== "1" || unusable(e)) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)); })
       .sort((a, b) => Date.parse(b.run.started) - Date.parse(a.run.started));
     const page = hit.slice(0, limit);
     return Response.json({ jobs: rowsOf(page), next: hit.length > limit ? page.at(-1)!.run.started : null });

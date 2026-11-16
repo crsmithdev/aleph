@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,8 @@ import { judge } from "../../../hooks/lib/judge.ts";
 import { writeLine } from "../roles/title.ts";
 import { MODELS } from "../../../lib/models.ts";
 import { putJson } from "../../../lib/db.ts";
+import { allRuns } from "../records/ledger.ts";
+import { gpuSlot } from "../gates/factory-status.ts";
 import { AGENT_SETTINGS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf, viaOfRun } from "./models.ts";
 
 let dir: string;
@@ -147,3 +149,41 @@ for (const { slot, cmd, result, call } of SLOTS) {
     }
   });
 }
+
+test("a judge call keeps one run of the judge with its model and its end, out of the report", async () => {
+  const cmd = join(dir, "fake");
+  writeFileSync(cmd, `#!/bin/sh\nprintf '%s' ${JSON.stringify(JSON.stringify({ type: "result", is_error: false, result: JSON.stringify({ verdict: "pass", reason: "ok" }), total_cost_usd: 0.01 }))}\n`, { mode: 0o755 });
+  const saved = process.env.ALEPH_JUDGE_CMD, before = new Set(allRuns().map((e) => e.id));
+  process.env.ALEPH_JUDGE_CMD = cmd;
+  try {
+    expect(setModel("judge", { model: "deepseek-v4.1-flash" })).toBeNull();
+    await judge("TURN: x", "x");
+  } finally {
+    if (saved === undefined) delete process.env.ALEPH_JUDGE_CMD; else process.env.ALEPH_JUDGE_CMD = saved;
+  }
+  const runs = allRuns().filter((e) => !before.has(e.id)).map((e) => e.run);
+  expect(runs).toHaveLength(1);
+  expect(runs[0]).toMatchObject({ role: "judge", model: "deepseek-v4.1-flash", state: "done", shown: true });
+  expect(runs[0].ended).toBeTruthy();
+});
+
+test("a title call on the local model whose GPU slot stays taken keeps its run on haiku, the model it ran on", async () => {
+  const env = { ALEPH_RULE_CMD: join(dir, "fake"), ALEPH_JOBS_DIR: join(dir, "jobs"), XDG_RUNTIME_DIR: join(dir, "run") };
+  const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, env);
+  writeFileSync(env.ALEPH_RULE_CMD, `#!/bin/sh\nprintf '%s' '{"type":"result","is_error":false,"result":"A title"}'\n`, { mode: 0o755 });
+  const T0 = Date.parse("2026-11-04T00:00:00Z"), before = new Set(allRuns().map((e) => e.id));
+  setSystemTime(T0);
+  const release = (await gpuSlot(0))!;
+  try {
+    expect(setModel("title", { model: "gpt-oss-20b" })).toBeNull();
+    const line = writeLine("Write a rule.", "a quote", 200);
+    setSystemTime(T0 + 31_000); // the 30 s box ends while the slot stays taken
+    expect(await line).toBe("A title");
+  } finally {
+    release();
+    setSystemTime();
+    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+  expect(allRuns().filter((e) => !before.has(e.id)).map((e) => e.run.model)).toEqual(["haiku"]);
+});
