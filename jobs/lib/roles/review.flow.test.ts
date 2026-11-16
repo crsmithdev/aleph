@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, fakeLog, jobRuns, state, setup, teardown } from "../../cli.helpers";
+import { base, fakeLog, jobRuns, other, state, setup, teardown } from "../../cli.helpers";
 import { allRuns } from "../records/ledger.ts";
 import { jobFolder } from "../records/run-files.ts";
 import { drop, job } from "../../flow.testkit.ts";
+import { readModels } from "../routing/models.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 beforeAll(setup);
@@ -67,6 +68,42 @@ describe("a factory run", () => {
       expect(runsOf("rheld").map((x) => [x.role, x.state])).toEqual([["build", "waiting"]]);
       await drop("rheld");
     });
+
+    test("a returned build keeps its size, and a build with no size stays on the default", async () => {
+      rmSync(join(fakeLog, "holdonce"), { force: true });
+      await job("fac", "rsize", "Goal: rsize REVIEW:holdonce\nACTION: commit rsize.txt\n", { model: "medium" });
+      const rs = runsOf("rsize");
+      expect(rs[0]).toMatchObject({ state: "returned", failed: "review", size: "medium" });
+      expect(rs[1]).toMatchObject({ size: "medium", model: readModels().medium.model });
+      await drop("rsize");
+      rmSync(join(fakeLog, "holdonce"), { force: true });
+      await job("fac", "rnosize", "Goal: rnosize REVIEW:holdonce\nACTION: commit rnosize.txt\n");
+      const ns = runsOf("rnosize");
+      expect(ns[0]).toMatchObject({ state: "returned", failed: "review" });
+      expect(ns[1].size).toBeUndefined();
+      expect(ns[1].model).not.toBe(readModels().medium.model);
+      await drop("rnosize");
+    }, 60_000);
+
+    test("a returned merge round starts a round on the size of the build before it", async () => {
+      // Call 1 passes the build and pushes a clash on rmerge.txt, so the land conflicts; call 2 holds the merge round.
+      // The worker is the fake one, which gives no result on a merge prompt: this one adds it.
+      const rv = join(base, "merge-reviewer"), n = join(base, "merge-reviews"), wk = join(base, "merge-worker");
+      const pass = `'{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}'`;
+      const hold = `'{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"hold","summary":"Looked.","failures":[{"clause":"merge","observed":"seen"}]}}'`;
+      writeFileSync(rv, `#!/bin/bash\ncat > /dev/null\necho x >> ${n}\nc=$(wc -l < ${n})\n` +
+        `if [ $c = 1 ]; then (cd ${other} && git pull -q --rebase origin main && echo theirs > rmerge.txt && git add rmerge.txt && git -c user.name=t -c user.email=t@t commit -qm clash && git push -q origin main); echo ${pass}\n` +
+        `elif [ $c = 2 ]; then echo ${hold}\nelse echo ${pass}; fi\n`, { mode: 0o755 });
+      writeFileSync(wk, `#!/bin/bash\np=$(cat)\nprintf '%s' "$p" | ${join(base, "fake-worker")} "$@"\n` +
+        `if printf '%s' "$p" | grep -q '^# Merge '; then echo '{"type":"result","is_error":false,"result":"","structured_output":{"summary":"merged","defaults":[],"followups":[],"flakes":[],"already_met":null,"question":null}}'; fi\n`, { mode: 0o755 });
+      await job("fac", "rmerge", "Goal: rmerge\nACTION: commit rmerge.txt\n", { land: true, model: "medium" }, { ALEPH_REVIEWER_CMD: rv, ALEPH_WORKER_CMD: wk });
+      const rs = runsOf("rmerge");
+      expect(rs[1]).toMatchObject({ role: "land", reason: "merge conflict" });
+      expect(rs[2]).toMatchObject({ merge: true, state: "returned", failed: "review" });
+      expect(rs[3].merge).toBeUndefined();
+      expect(rs[3]).toMatchObject({ size: "medium", model: readModels().medium.model });
+      await drop("rmerge");
+    }, 60_000);
 
     test("a held path the reviewer holds is a fix round, not an Ask", async () => {
       rmSync(join(fakeLog, "holdonce"), { force: true });

@@ -286,13 +286,15 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   }
   const back = nextBrief(folder, run);
   const merge = next === "worker" && back.merge;
+  // A merge round runs on MERGE_MODEL, so the round after it takes the size of the build before it.
+  const size = jobById(jobOfFolder(folder))?.findLast((e) => e.run.role === "build" && !e.run.merge)?.run.size;
   const log = logStream(folder, "dispatch");
   try {
     const s = next === "land"
       ? await startLand(run.name, {}, { output: { file: log } })
       : next === "recheck"
       ? await startRecheck(run.name, { output: { file: log } })
-      : await startJob({ repo: run.repo!, name: run.name, spec: back.note, land: true, ...(merge ? { merge: true, model: MERGE_MODEL } : {}) }, { output: { file: log } });
+      : await startJob({ repo: run.repo!, name: run.name, spec: back.note, land: true, ...(merge ? { merge: true, model: MERGE_MODEL } : size ? { model: size } : {}) }, { output: { file: log } });
     appendFileSync(log, JSON.stringify(s.started, null, 2) + "\n");
     await s.child?.exited;
   } catch (e: any) {

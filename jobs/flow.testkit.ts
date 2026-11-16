@@ -71,8 +71,8 @@ const flags = (fields: verbs.Fields): string[] => Object.entries(fields).flatMap
   v === undefined ? [] : k === "media" ? (v as string[]).flatMap((m) => ["--media", m]) : [`--${k}`, Array.isArray(v) ? v.join(",") : v]);
 
 /** `aleph job <repo> <name> --spec -` with the spec's text. */
-export const job = (repo: string, name: string, spec: string, o: { on?: string; land?: boolean } = {}, extra: Record<string, string> = {}) =>
-  cli(["job", repo, name, "--spec", "-", ...(o.on ? ["--on", o.on] : []), ...(o.land ? ["--land"] : [])], extra, spec);
+export const job = (repo: string, name: string, spec: string, o: { on?: string; land?: boolean; model?: string } = {}, extra: Record<string, string> = {}) =>
+  cli(["job", repo, name, "--spec", "-", ...(o.on ? ["--on", o.on] : []), ...(o.land ? ["--land"] : []), ...(o.model ? ["--model", o.model] : [])], extra, spec);
 /** `aleph job demo <name>` with the one-action spec of cli.helpers `job`. */
 export const actionJob = (name: string, action: string, extra: Record<string, string> = {}, repo = "demo") =>
   job(repo, name, `Goal: ${name}\nACTION: ${action}\n`, {}, extra);
