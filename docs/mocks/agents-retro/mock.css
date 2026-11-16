@@ -1,0 +1,37 @@
+  /* Mock chrome only: the bar, the finding heads and the Now / Fixed frames. The parts use app.css as the UI does. */
+  body { margin: 0; }
+  .mockbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 24px; background: var(--sunk); border-bottom: 1px solid var(--rule); font: 500 13px var(--sans); }
+  .mockbar a { color: var(--ink-2); text-decoration: none; } .mockbar a:hover { color: var(--ink); }
+  .mockbar button { font: inherit; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; margin-left: auto; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 8px 24px 60px; }
+  .mk-finding { margin: 36px 0; }
+  .mk-ft { font: 700 21px var(--display); color: var(--ink); margin: 0 0 6px; }
+  .mk-fl { margin: 0 0 14px; padding-left: 26px; font: 14px/1.6 var(--sans); color: var(--ink-2); }
+  .mk-fl code { font: 13px var(--mono); }
+  .mk-st { font: 600 11px var(--sans); padding: 1px 7px; border-radius: 9px; background: var(--sunk); color: var(--muted); }
+  .mk-st.mk-p { background: var(--need-bg); color: var(--stuck); }
+  .mk-cmp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .mk-cmp.mk-stack { grid-template-columns: minmax(0, 1fr); }
+  .mk-cmp.mk-narrow .mk-side { max-width: 390px; }
+  .mk-side { display: grid; gap: var(--gap-in); padding: 14px; border: 1px dashed var(--rule); border-radius: 12px; }
+  .mk-tag { margin: 0; font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
+  .mk-tag.mk-now { color: var(--muted); } .mk-tag.mk-fixed { color: var(--done); }
+  .mk-shot { max-width: 100%; border-radius: 10px; }
+  .mk-mlegend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-xs); color: var(--ink-2); }
+  .mk-mlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  .mk-lrow { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: var(--fs-sm); }
+  .mk-lrow b { font-weight: var(--fw-strong); color: var(--muted); font-size: var(--fs-xs); }
+
+  /* The proposed CSS fixes, scoped to the Fixed side. */
+  /* 1: the error line keeps --stuck inside a card. */
+  .fix .card .error p:first-child { color: var(--stuck); }
+  /* 7: the fold button is a bare muted mark in a fixed gutter, so every Model cell starts at one x. */
+  .fix #roles td:nth-child(2) { position: relative; padding-left: 22px; }
+  .fix #roles button.fold { all: unset; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 18px; text-align: center; color: var(--muted); cursor: pointer; }
+  .fix #roles button.fold:hover { color: var(--ink); }
+  /* 2: the spinner and the failed ring sit at the upper right of a metric card. */
+  .fix .tile .r1 .spin { margin: 2px 0 0; }
+  .fix .spin.bad { animation: none; display: inline-grid; place-items: center; border-color: var(--stuck); color: var(--stuck); font: var(--fw-strong) 9px/1 var(--sans); }
+  /* 17: the key keeps its word; the trend wraps under it when the row is full. */
+  .fix .tile .r1 { flex-wrap: wrap; row-gap: var(--sp-4); }
+  .fix #roles button.fold:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
