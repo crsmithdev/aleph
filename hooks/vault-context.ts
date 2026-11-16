@@ -13,12 +13,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadVault, repoScope, startContext, vaultDir } from "../vault/lib/vault.ts";
+import { isAgent } from "../lib/env.ts";
 
 const input = JSON.parse((await Bun.stdin.text()) || "{}");
 const root = vaultDir();
 if (!existsSync(join(root, "Home.md"))) process.exit(0);
 const identity = (f: string) => readFileSync(join(import.meta.dir, "..", "identity", f), "utf8");
-const agent = Boolean(process.env.ALEPH_AGENT);
+const agent = isAgent();
 const { text } = startContext(root, await loadVault(root), repoScope(input.cwd ?? process.cwd()), agent ? identity("AGENT.md") : undefined);
 const context = agent ? `${text}\n\n${identity("VOICE.md")}` : text;
 console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context } }));

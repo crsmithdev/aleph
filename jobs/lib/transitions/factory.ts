@@ -11,7 +11,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { afterOf, buildableIssue, buildableIssues, close, partsOf, planSet, priorityOf, readLists, reader, reopenReverted, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
-import { logEvent } from "../../../lib/layout.ts";
+import { factoryDir, logEvent } from "../../../lib/layout.ts";
 import { itemOnMain, landedIndex, revertedIn } from "../records/status.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
 import { allRuns, isWaiting, loadRegistry, onOf, type Entry, type Repo } from "../records/ledger.ts";
@@ -32,7 +32,7 @@ import { drop, land, recheck, refusal, startIssue, type Refused } from "./transi
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, type Size } from "../routing/route.ts";
-import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, issueFacts, issueJob, setPaused, baselines, changedLinesOf, factoryDir, sandboxRepos, gates, holdGoal, liveRuns, logCap, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
+import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, issueFacts, issueJob, setPaused, baselines, changedLinesOf, sandboxRepos, gates, holdGoal, liveRuns, logCap, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
 import { heldEvent, issueDecision, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";

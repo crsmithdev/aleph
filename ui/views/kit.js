@@ -6,9 +6,9 @@ import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow
 import { PRIORITIES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
-import { askCard } from "./cards.js";
-import { eventRow, findingsList } from "./now.js";
-import { bar } from "./speed.js";
+import { askCard } from "../ask-cards.js";
+import { eventRow, findingsList } from "../feed.js";
+import { bar } from "../flow-parts.js";
 
 const THEMES = ["system", "light", "dark"];
 const DAY = 864e5, T0 = new Date(2026, 10, 3).getTime();

@@ -6,8 +6,9 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isAgent } from "../lib/env.ts";
 
-if (!process.env.ALEPH_AGENT) {
+if (!isAgent()) {
   const additionalContext = readFileSync(join(import.meta.dir, "..", "identity", "voice-reminder.md"), "utf8").trim();
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } }));
 }

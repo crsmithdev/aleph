@@ -24,9 +24,10 @@ import { join, resolve } from "node:path";
 import { handoffsDir } from "../lib/paths.ts";
 import { repoScope } from "../vault/lib/vault.ts";
 import { probe } from "../lib/git.ts";
+import { jobId } from "../lib/env.ts";
 
 const input = JSON.parse((await Bun.stdin.text()) || "{}");
-if (process.env.ALEPH_JOB_ID || process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith("sdk")) process.exit(0);
+if (jobId() || process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith("sdk")) process.exit(0);
 
 const cwd = resolve(input.cwd ?? process.cwd());
 const scope = repoScope(cwd);

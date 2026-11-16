@@ -1,11 +1,11 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, undecided, remember, keep, kept } from "../lib.js";
+import { actButton, editable, fold, issueApi, runNowButton, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, undecided, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
-import { askCard } from "./cards.js";
+import { askCard } from "../ask-cards.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
 export const view = {
@@ -466,11 +466,6 @@ const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]
 const choose = (name, all, cur) => selectBox(name, name, !cur || all.includes(cur) ? all : [cur, ...all], cur, { attrs: ` ${FORM}` });
 
 const FORM = 'form="issue-edit"';
-
-/** The Run now button of an issue (`runNow` from the API: null when it starts the issue, else the gate's text), or nothing when `runNow` is absent. A gate that binds shows it disabled, its text in a short note and as the title. */
-export const runNowButton = (repo, ref, runNow) => (runNow === undefined ? "" : `<span class="run-now">${runNow === null
-  ? `${actButton("Run now", { act: "run", path: `${issueApi(repo, ref)}/run`, label: "Run now" })}<span class="act-msg" role="status"></span>`
-  : `<button class="act" type="button" disabled title="${esc(runNow)}">Run now</button> <span class="quiet">${esc(runNow.split(":")[0])}</span>`}</span>`);
 
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
 const issueHead = (d, ref) => pageHead("", {

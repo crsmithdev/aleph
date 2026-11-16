@@ -10,7 +10,7 @@ import { clip, NAMES, parseId, parseKey, sayText, shortText, shownId, targetOf }
 // @ts-ignore plain JS, shared with the page
 import { cardTrend, clock, count, dur, hours, mean, pct, when } from "../ui/lib.js";
 // @ts-ignore plain JS, shared with the page
-import { cardHours, cardPct, pace } from "../ui/views/speed.js";
+import { cardHours, cardPct, pace } from "../ui/flow-parts.js";
 import { errText } from "../lib/errtext.ts";
 
 const REFRESH_MS = 10_000;

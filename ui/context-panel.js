@@ -3,8 +3,8 @@
 // when the endpoint says so (from API usage) and est. otherwise (chars ÷ 4). The Tools and Tool results rows unfold
 // into each tool and each call; a call's input loads its result text. Every other part unfolds into its items, and
 // the compact summary into its text.
-import { get } from "../router.js";
-import { card, count, dataTable, empty, error, esc, fold, goQuery, hashQuery, heads, keep, kept, loadingLine, pct, setQuery, tag, tone } from "../lib.js";
+import { get } from "./router.js";
+import { card, count, dataTable, empty, error, esc, fold, goQuery, hashQuery, heads, keep, kept, loadingLine, pct, setQuery, tag, tone } from "./lib.js";
 
 const SERIES = ["--series-1", "--series-2", "--series-3", "--chart-6", "--chart-7", "--run", "--need", "--done"];
 const colour = (i) => `var(${SERIES[i % SERIES.length]})`;

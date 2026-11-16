@@ -10,9 +10,9 @@ import { activeIssues, agentStats, CLASSES, classify, filed, phaseTimes, phases,
 import { buckets } from "../lib/windows.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { bar, statusCards, usageCard, xLabel } from "./views/speed.js";
+import { bar, statusCards, usageCard } from "./flow-parts.js";
 // @ts-ignore plain JS shared with the page
-import { pct } from "./lib.js";
+import { pct, xLabel } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";

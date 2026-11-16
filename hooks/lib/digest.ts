@@ -4,6 +4,7 @@
  */
 import { readFileSync, statSync } from "node:fs";
 import { resultContent, resultEntries } from "../../lib/toolresult.ts";
+import { jobId } from "../../lib/env.ts";
 
 type Entry = Record<string, any>;
 
@@ -147,6 +148,6 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "")
 
 /** Never inside an aleph job: a worker's prompt is not Chris speaking. */
 export function userGrantedSkip(prompt: string): boolean {
-  if (process.env.ALEPH_JOB_ID) return false;
+  if (jobId()) return false;
   return /\bskip\s+verif(y|ication)\b/i.test(prompt);
 }

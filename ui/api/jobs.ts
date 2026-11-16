@@ -1,6 +1,6 @@
 /** `GET /api/jobs`, `/api/jobs/:id`, and its diff and logs: the Jobs and Job views' data. `:id` is a job key, `job.6802`. */
 import { roundsOf, stepOf, type Step as NextStep } from "../../jobs/lib/records/record.ts";
-import { readFileSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
@@ -13,7 +13,7 @@ import { currentFit, runShare, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
 import { resultContent } from "../../lib/toolresult.ts";
 import { issueHref, shownId } from "../../lib/naming.ts";
-import { isSection, readSection, readSections } from "../../jobs/lib/records/run-files.ts";
+import { isSection, readSections } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { runNowOf } from "./issues.ts";
@@ -30,11 +30,11 @@ export interface LogFile { name: string; size: number }
  */
 const LOG_SOURCE = { "output.log": { file: "transcript.jsonl" }, "stderr.log": { section: "stderr" }, "setup.log": { section: "setup" }, "checks.log": { section: "checks" }, "land.log": { section: "land" } } as const;
 export const LOGS = Object.keys(LOG_SOURCE) as (keyof typeof LOG_SOURCE)[];
-/** The text of the log `name` of the job folder `folder`, or undefined when it has none. */
-function logText(folder: string, name: keyof typeof LOG_SOURCE): string | undefined {
-  const src: { file: string } | { section: string } = LOG_SOURCE[name];
-  if ("section" in src) return isSection(src.section) ? readSection(folder, src.section) : undefined;
-  try { return readFileSync(join(folder, src.file), "utf8"); } catch { return undefined; }
+/** The text of the log `name` of the run `e`, or undefined when it has none. */
+function logText(e: Entry, name: keyof typeof LOG_SOURCE): string | undefined {
+  const src: { file: "transcript.jsonl" } | { section: string } = LOG_SOURCE[name];
+  if ("section" in src) return isSection(src.section) ? readFile(e, src.section) : undefined;
+  return readFile(e, src.file);
 }
 /** The known logs a job folder has. */
 function logsOf(folder: string): LogFile[] {
@@ -253,7 +253,7 @@ export const routes: Routes = {
   "GET /api/jobs/:id/logs/:file": (_req, params, url) => {
     const at = located(params.id, projectOf(url));
     if (!at || !(LOGS as readonly string[]).includes(params.file)) return Response.json({ error: "no such log" }, { status: 404 });
-    const text = logText(at.e.folder, params.file as keyof typeof LOG_SOURCE);
+    const text = logText(at.e, params.file as keyof typeof LOG_SOURCE);
     if (text === undefined) return Response.json({ error: "no such log" }, { status: 404 });
     if (url.searchParams.get("as") === "transcript") {
       if (params.file !== "output.log") return Response.json({ error: "not a transcript" }, { status: 404 });

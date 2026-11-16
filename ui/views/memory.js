@@ -3,8 +3,8 @@
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
-import { held, mountContext, renderContext } from "./context.js";
-import { renderProcesses } from "./processes.js";
+import { held, mountContext, renderContext } from "../context-panel.js";
+import { renderProcesses } from "../processes.js";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel } from "../timeline.js";
 import { actButton, badge, bytes, count, fold, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, goQuery, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, miss, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tag, tiles, when, scope } from "../lib.js";

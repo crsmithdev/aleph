@@ -46,6 +46,7 @@ import { readModels, setModel } from "./lib/routing/models.ts";
 import { issueKey, key, parseId, parseKey, shortText, shownKey } from "../lib/naming.ts";
 import { projectName } from "../issues/lib/projects.ts";
 import { errText } from "../lib/errtext.ts";
+import { isAgent } from "../lib/env.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -424,7 +425,7 @@ async function tickCmd(ctx: Ctx): Promise<void> {
  */
 function reportCmd(ctx: Ctx): void {
   if (ctx.rest.includes("--hook")) {
-    if (process.env.ALEPH_AGENT) return;
+    if (isAgent()) return;
     const lines = hookLines();
     if (lines.length) ctx.out({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") } });
     return;

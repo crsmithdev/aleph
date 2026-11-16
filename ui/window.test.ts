@@ -8,7 +8,7 @@ import * as agents from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import * as fjobs from "./views/factory-jobs.js";
 // @ts-ignore plain JS shared with the page
-import { listUrl } from "./views/jobs.js";
+import { listUrl } from "./jobs-table.js";
 // @ts-ignore plain JS shared with the page
 // @ts-ignore plain JS shared with the page
 import * as gates from "./views/gates.js";

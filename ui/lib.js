@@ -970,3 +970,15 @@ import { FACTORY } from "../lib/windows.ts";
 
 /** The API path of issue `<repo>-<ref>`: `/api/issues/a1430`. */
 export const issueApi = (repo, ref) => `/api/issues/${encodeURIComponent(shortId(`${repo}-${ref}`))}`;
+
+/** The Run now button of an issue (`runNow` from the API: null when it starts the issue, else the gate's text), or nothing when `runNow` is absent. A gate that binds shows it disabled, its text in a short note and as the title. */
+export const runNowButton = (repo, ref, runNow) => (runNow === undefined ? "" : `<span class="run-now">${runNow === null
+  ? `${actButton("Run now", { act: "run", path: `${issueApi(repo, ref)}/run`, label: "Run now" })}<span class="act-msg" role="status"></span>`
+  : `<button class="act" type="button" disabled title="${esc(runNow)}">Run now</button> <span class="quiet">${esc(runNow.split(":")[0])}</span>`}</span>`);
+
+/** A bucket's x-axis label: "4a" or "1:36p" in the hour and day windows, "Oct 25" in week and month. */
+export function xLabel(at, window) {
+  const d = new Date(at);
+  if (window === "week" || window === "month") return day(d);
+  return hourLabel(d);
+}

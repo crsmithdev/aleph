@@ -13,6 +13,7 @@ import { postTurnSpan } from "./lib/trace.ts";
 import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
 import { appendRecallLog, coreNotes, loadWiki, recordRun, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
 import { errText } from "../lib/errtext.ts";
+import { isAgent } from "../lib/env.ts";
 
 const MIN_PROMPT = 20;
 // Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout,
@@ -59,7 +60,7 @@ async function postSpan(input: any, start: number, meta: { candidates: number; a
 }
 
 async function main() {
-  if (process.env.ALEPH_AGENT) return;
+  if (isAgent()) return;
   const input = JSON.parse((await Bun.stdin.text()) || "{}");
   const prompt: string = typeof input.prompt === "string" ? input.prompt.trim() : "";
   if (prompt.length < MIN_PROMPT || judgeChoice() === "haiku") return;

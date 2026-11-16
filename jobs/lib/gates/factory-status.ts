@@ -11,7 +11,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { isOpen, openJob, type Job } from "../records/job.ts";
 import { heldEvent, type Bound, type Gate, type Hold } from "./issue-decision.ts";
 import { event, type Event, issueKey, OLD_HOLDS, parseKey } from "../../../lib/naming.ts";
-import { eventsOf, layout, logEvent, logSetting, readEvents } from "../../../lib/layout.ts";
+import { eventsOf, logEvent, logSetting, readEvents } from "../../../lib/layout.ts";
 import { conn, getJson, putJson, tx } from "../../../lib/db.ts";
 import * as record from "../records/record.ts";
 import { allRuns, isWaiting, isBuild, loadRegistry, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
@@ -22,8 +22,6 @@ import { smokeLine } from "./smoke.ts";
 import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "../infra/settings.ts";
 import type { Via } from "../../../lib/models.ts";
 import { BACKENDS, probeBackend, readModels, viaOfRun, type Name, type Setting } from "../routing/models.ts";
-
-export const factoryDir = () => layout().factory;
 
 /** One record of why an issue waits: `kind` is the hold word, or `started`; `event` its log event, which a `started` record lacks. */
 export interface HoldRecord { at: string; name: string; kind: string; text: string; event?: Event }
@@ -521,6 +519,9 @@ export interface TickRow { last: string | null; result: string | null }
 
 export const tickRows = (): Record<string, TickRow> =>
   Object.fromEntries((conn().query("SELECT * FROM tick").all() as (TickRow & { step: string })[]).map(({ step, ...row }) => [step, row]));
+
+/** The tick keys the sweep has acted on and that are still missed (tick.ts writes them). */
+export const tickMissed = (): string[] => getJson("state", "tick.missed", []);
 
 /** Sets the columns that `row` gives for `step`; the other column keeps its value. */
 export const setTick = (step: string, row: Partial<TickRow>): void => {

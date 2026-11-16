@@ -16,7 +16,7 @@ import { badge, dataTable, empty, heads, md, pageHead, priorityBadge, scope } fr
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
-import { mountContext } from "./views/context.js";
+import { mountContext } from "./context-panel.js";
 // @ts-ignore
 import { panel } from "./timeline.js";
 // @ts-ignore

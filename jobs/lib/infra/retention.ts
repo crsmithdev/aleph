@@ -6,7 +6,7 @@
  */
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { factoryDir } from "../gates/factory-status.ts";
+import { factoryDir } from "../../../lib/layout.ts";
 import { today } from "../../../lib/day.ts";
 import { jobsDir } from "../records/ledger.ts";
 import { allRunRecords } from "../records/record.ts";

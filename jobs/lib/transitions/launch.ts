@@ -4,11 +4,10 @@
  * systemd unit (or, with `ALEPH_JOB_FOREGROUND=1`, a plain child); a dispatch
  * or intake after a transition is a unit of its own too. The transitions themselves run in-process: see transitions.ts.
  */
-import { logEvent } from "../../../lib/layout.ts";
+import { dispatchLog, factoryDir, logEvent } from "../../../lib/layout.ts";
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { home } from "../../../lib/paths.ts";
 import { dirname, join } from "node:path";
-import { factoryDir } from "../gates/factory-status.ts";
 import { LOW, type Repo } from "../records/ledger.ts";
 import { dispatchOn, jobForeground } from "../infra/settings.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -111,25 +110,25 @@ export async function runLogged(args: string[], log: string): Promise<number | n
  */
 export function dispatchDetached(): void {
   if (!dispatchOn()) return;
-  detached(["dispatch"], join(factoryDir(), "dispatch.log"));
+  detached(["dispatch"], dispatchLog());
 }
 
 /** Start `aleph intake <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
 export function intakeDetached(repo: Repo, id: number): void {
   if (!dispatchOn() || !repo.sandbox) return;
-  detached(["intake", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
+  detached(["intake", `${repo.key}-${id}`], dispatchLog());
 }
 
 /** Start `aleph director` detached, for a new Ask: the director decides it now, not at a tick. It never fails the caller. */
 export function directorDetached(): void {
   if (!dispatchOn()) return;
-  detached(["director"], join(factoryDir(), "dispatch.log"));
+  detached(["director"], dispatchLog());
 }
 
 /** Start `aleph suite` detached, for a main that moved while its record is red. It never fails the caller. */
 export function suiteDetached(): void {
   if (!dispatchOn()) return;
-  detached(["suite"], join(factoryDir(), "dispatch.log"));
+  detached(["suite"], dispatchLog());
 }
 
 /** Start `aleph housekeep` detached, for a land or the daily review of parked issues. It never fails the caller. */

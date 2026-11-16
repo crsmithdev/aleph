@@ -4,7 +4,7 @@ import { chartKey, FRAMES, redirect, renderFactoryJobs, slowestFrame, stripFrame
 // @ts-ignore plain JS shared with the page
 import { option, title } from "./chart.js";
 // @ts-ignore plain JS shared with the page
-import { wireJobs } from "./views/jobs.js";
+import { wireJobs } from "./jobs-table.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
 const F1 = new Date(2026, 9, 27, 9).getTime(), F2 = new Date(2026, 9, 28, 14).getTime();

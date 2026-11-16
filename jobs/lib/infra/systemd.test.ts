@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { timer } from "./systemd.ts";
+import { setTimerInterval, timer } from "./systemd.ts";
 
 let dir: string;
 beforeAll(() => { dir = mkdtempSync(join(tmpdir(), "aleph-systemd-")); });
@@ -34,4 +34,24 @@ test("no next run and the service failed or inactive is a dead timer", () => {
 
 test("systemctl failing gives its first line as err", () => {
   expect(withSystemctl("echo 'Failed to connect to bus'; exit 1")).toEqual({ next: null, running: false, err: "Failed to connect to bus" });
+});
+
+test("setTimerInterval writes the drop-in with the unit file's boot triggers, then reloads and restarts the timer", () => {
+  const bin = join(dir, "systemctl-set"), units = join(dir, "units"), calls = join(dir, "calls");
+  writeFileSync(bin, `#!/bin/sh\necho "$@" >> ${calls}\n`, { mode: 0o755 });
+  const before = { bin: process.env.ALEPH_SYSTEMCTL, units: process.env.ALEPH_UNIT_DIR };
+  process.env.ALEPH_SYSTEMCTL = bin; process.env.ALEPH_UNIT_DIR = units;
+  try {
+    expect(setTimerInterval("tick", "5min")).toBeNull();
+    expect(setTimerInterval("tick", "5 min")).toContain("whole number");
+    expect(setTimerInterval("nope", "5min")).toContain("only tick and suite");
+  } finally {
+    if (before.bin === undefined) delete process.env.ALEPH_SYSTEMCTL; else process.env.ALEPH_SYSTEMCTL = before.bin;
+    if (before.units === undefined) delete process.env.ALEPH_UNIT_DIR; else process.env.ALEPH_UNIT_DIR = before.units;
+  }
+  const conf = readFileSync(join(units, "aleph-tick.timer.d", "interval.conf"), "utf8");
+  expect(conf).toContain("[Timer]\nOnUnitActiveSec=\n");
+  expect(conf).toMatch(/OnBootSec=/);
+  expect(conf).toContain("OnUnitActiveSec=5min\n");
+  expect(readFileSync(calls, "utf8")).toBe("--user daemon-reload\n--user restart aleph-tick.timer\n");
 });

@@ -13,7 +13,8 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { file as fileIssues, note, noteFlake, reader } from "../../../issues/lib/store.ts";
 import { filing } from "../transitions/filing.ts";
 import { callAgent, resultOf, type Reply } from "./agent-call.ts";
-import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
+import { addWorktree, fetchOrigin, git } from "../infra/git.ts";
+import { jobGrep, trailerLine } from "../records/status.ts";
 import { heldRule, parseReview, type Followup, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, issueKeyOf, loadRegistry, newsLine, readEnvFile, tell, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
@@ -126,8 +127,8 @@ const taskOf = (folder: string, repo: Repo, changed: string[], phase: (p: string
 function stampJob(wt: string, base: string, run: Run, id: string): void {
   const bare = git(wt, "log", "--format=%H", "--invert-grep", "-E", jobGrep([id]), `${base}..HEAD`).out;
   if (!bare || git(wt, "rev-list", "--merges", `${base}..HEAD`).out) return;
-  const issue = run.target ? ` --trailer 'Issue: ${run.target}'` : "";
-  const amend = `git -c core.hooksPath=/dev/null commit -q --amend --no-edit --no-verify --trailer 'Job: ${id}'${issue}`;
+  const issue = run.target ? ` --trailer '${trailerLine("Issue", run.target)}'` : "";
+  const amend = `git -c core.hooksPath=/dev/null commit -q --amend --no-edit --no-verify --trailer '${trailerLine("Job", id)}'${issue}`;
   if (!git(wt, "-c", "core.hooksPath=/dev/null", "rebase", "-q", "--exec", amend, base).ok) git(wt, "rebase", "--abort");
 }
 

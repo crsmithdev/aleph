@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
+// @ts-ignore feed.js is plain JS, shared with the page
+import { eventRow } from "./feed.js";
 import { row, withFactory } from "./test-now.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -139,12 +141,12 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   const order = [...h.slice(h.indexOf("herald-feed")).matchAll(/class="event-row (\w+)/g)].map((m) => m[1]);
   // The fixture's status now (12:00) is newest, then the event at 11:30, then the status at 11:00.
   expect(order).toEqual(["alert", "run", "warning"]);
-  const line = view.eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
+  const line = eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
   // Two columns: the time, then one line: the chip, the issue linked, the title.
   expect(line).toContain('<div class="event-row stuck" data-by="gate"><span class="event-time">');
   expect(line).toContain('<span class="event-line"><span class="badge stuck">failed</span><a class="idl" href="#/issues/aleph/5">aleph-5</a><span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span></span>');
   // A row with no title takes what its sentence adds in the title's place.
-  expect(view.eventRow(merged[0], {})).toContain('<span class="event-title" title="past its time box">past its time box</span>');
+  expect(eventRow(merged[0], {})).toContain('<span class="event-title" title="past its time box">past its time box</span>');
   expect(line).not.toContain("event-tone");
 });
 

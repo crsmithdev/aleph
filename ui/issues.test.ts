@@ -22,7 +22,7 @@ import * as lib from "./lib.js";
 // @ts-ignore plain JS, shared with the page
 import { label, option } from "./chart.js";
 // @ts-ignore plain JS, shared with the page
-import { xLabel } from "./views/speed.js";
+import { xLabel } from "./lib.js";
 // @ts-ignore plain JS, shared with the page
 import { when } from "./lib.js";
 // @ts-ignore plain JS, shared with the page

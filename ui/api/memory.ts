@@ -6,7 +6,7 @@
  * The POST routes are its writes: a note goes through `vault write`, `archive` or `delete`, so each is validated,
  * committed and pushed; a handoff or an episode is a file. A write clears nothing: the updater's watchers see it.
  */
-import { getJson } from "../../lib/db.ts";
+import { readStore } from "../../jobs/lib/learning/corrections.ts";
 import { daysAgo } from "../../lib/day.ts";
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -171,12 +171,11 @@ function maintain(root: string, ran: TickRow | undefined) {
   return { name: "maintain", runs: "daily after 03:00", last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday, re-checks stale notes, resolves overlaps" };
 }
 
-/** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. The corrections
- * store is read as a row: corrections.ts loads the factory's actions, which the server must not. */
+/** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. */
 async function processes(): Promise<Response> {
   const root = vaultDir(), now = Date.now();
   const tick = tickRows();
-  const store = getJson<{ minedAt: string; lessons: { sentence: string; state: string }[] }>("state", "corrections", { minedAt: "", lessons: [] });
+  const store = readStore();
   const step = (name: string, runs: string, last: string | undefined, next: string | null, does: string) =>
     ({ name, runs, last: last ?? null, next, result: tick[name]?.result ?? null, detail: null, does });
   const steps = [

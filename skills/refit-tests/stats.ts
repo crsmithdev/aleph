@@ -13,7 +13,7 @@ import { join, resolve } from "node:path";
 import { isTestFile } from "../../jobs/lib/gates/test-files.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { git as run } from "../../lib/git.ts";
-import { conn } from "../../lib/db.ts";
+import { flakes as allFlakes, suiteHistory as suiteRecords } from "../../jobs/lib/gates/factory-status.ts";
 
 export type Case = { name: string; file: string; line: number; s: number; asserts?: number };
 
@@ -116,7 +116,7 @@ function repoKey(cwd: string): string {
 
 /** aleph's full-suite records for this repo, one per month (the last of each): ran, failed, skipped. Empty outside aleph. */
 function suiteHistory(cwd: string) {
-  const rows = conn().query("SELECT time AS at, ran, failed, skipped, rerun_passed AS rerunPassed FROM suite_history WHERE repo = ? ORDER BY seq").all(repoKey(cwd)) as { at: string; ran: number; failed: number; skipped: number; rerunPassed: number }[];
+  const rows = suiteRecords(repoKey(cwd));
   const last = new Map(rows.map((r) => [r.at.slice(0, 7), r]));
   return [...last].map(([month, r]) => ({ month, ran: r.ran, failed: r.failed, skipped: r.skipped, rerunPassed: r.rerunPassed }));
 }
@@ -151,8 +151,8 @@ export function smells(cwd: string, paths: string[] = []) {
 
 /** aleph's flake rows for `repo`, per test, most often first. Empty outside aleph. */
 export function flakes(repo: string) {
-  const rows = conn().query("SELECT time AS at, run, tests FROM flaky WHERE repo = ? ORDER BY seq").all(repo) as { at: string; run: string; tests: string | null }[];
-  const seen = rows.flatMap((r) => (r.tests ? JSON.parse(r.tests) as string[] : ["(no test named)"]).map((t) => ({ t, at: r.at, run: r.run })));
+  const rows = allFlakes().filter((r) => r.repo === repo);
+  const seen = rows.flatMap((r) => (r.tests ?? ["(no test named)"]).map((t) => ({ t, at: r.at, run: r.run })));
   const tests = Object.entries(Object.groupBy(seen, (s) => s.t)).map(([test, ss]) => ({
     test, count: ss!.length, first: ss![0].at.slice(0, 10), last: ss!.at(-1)!.at.slice(0, 10), runs: ss!.slice(-3).map((s) => s.run),
   }));

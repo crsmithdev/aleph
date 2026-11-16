@@ -15,7 +15,7 @@ import { traceIdFor } from "../../../lib/otlp.ts";
 import { partsOf, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { section } from "../../../issues/lib/todo.ts";
-import { factoryDir } from "../gates/factory-status.ts";
+import { factoryDir } from "../../../lib/layout.ts";
 import { touch } from "../../../lib/sources.ts";
 import { trimUse } from "../../../lib/episode-use.ts";
 import { fetchOrigin, git } from "../infra/git.ts";

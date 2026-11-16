@@ -6,7 +6,7 @@ import { readFetched, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { parseId, parseKey, tail } from "../../../lib/naming.ts";
-import { fetchOrigin, git, jobCommit } from "../infra/git.ts";
+import { fetchOrigin, git } from "../infra/git.ts";
 import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
@@ -67,6 +67,17 @@ export function landedCommits(cwd: string, main: string, key: string, n: number 
 /** For a `landedIndex` result, the items with a trailer commit on main that a later commit reverts and none that is not reverted. */
 const revertedOnly = new WeakMap<Map<string, string[]>, Set<string>>();
 export const revertedIn = (index: Map<string, string[]>): Set<string> => revertedOnly.get(index) ?? new Set();
+
+/** One trailer line of a commit message: the one trailer writer. `name` is `Issue`, `Job` or `Held-by`. */
+export const trailerLine = (name: "Issue" | "Job" | "Held-by", value: string): string => `${name}: ${value}`;
+
+/** The `git log -E --grep` of a `Job:` trailer line with one of `values`: a job key such as `job.12`. */
+export const jobGrep = (values: string[]): string => `--grep=^Job: (${[...new Set(values)].map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`;
+
+/** The commit of a job on `origin/<main>` (the newest whose message has a `Job:` trailer with one of `values`), or an empty string. */
+export function jobCommit(cwd: string, main: string, values: string[]): string {
+  return git(cwd, "log", `origin/${main}`, "-1", "--format=%H", "-E", jobGrep(values)).out;
+}
 
 /** The log format that gives each commit's hash and its `Issue` trailer values, tab-separated: the one trailer reader. */
 const TRAILERS = "--format=%H%x09%(trailers:key=Issue,valueonly,separator=%x2C)";

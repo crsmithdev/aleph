@@ -6,7 +6,7 @@ import { join } from "node:path";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 // @ts-ignore cards.js is plain JS, shared with the page
-import { askCard } from "./views/cards.js";
+import { askCard } from "./ask-cards.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { decided, denyReasons, endDraw, startDraw, when } from "./lib.js";
 import { shortId } from "../lib/naming.ts";

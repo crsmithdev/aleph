@@ -19,6 +19,7 @@ import * as store from "./store.ts";
 import { askIfPartDropped, askOf, awaitsChris, clearAsk, decideAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { triage } from "./triage.ts";
 import { errText } from "../../lib/errtext.ts";
+import { isAgent } from "../../lib/env.ts";
 
 /** The fields `add` and `edit` take. `labels` are the issue's areas. `spec` makes an issue buildable, and `after` is what it waits for. */
 export interface Fields {
@@ -127,7 +128,7 @@ function checkKeys(field: "after" | "refs", refs: string[]): string[] {
 }
 
 /** Who runs this command: a factory agent (`ALEPH_AGENT`), a Claude Code session (`CLAUDECODE`), else Chris at a shell. */
-const actor = (): string => (process.env.ALEPH_AGENT ? "worker" : process.env.CLAUDECODE ? "claude" : "human");
+const actor = (): string => (isAgent() ? "worker" : process.env.CLAUDECODE ? "claude" : "human");
 
 /**
  * Add an issue, with its areas from the triage unless `fields.labels` is given. With `fields.spec` it is buildable as filed;

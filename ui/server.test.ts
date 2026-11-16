@@ -21,7 +21,7 @@ beforeAll(async () => {
   for (const [repo, name] of [["aleph", "issue.1"], ["other", "issue.2"]]) seed({ role: "build", state: "running", started: new Date(NOW).toISOString(), name, target: name, repo });
   // A view added the way a view issue adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");
-  for (const f of ["index.html", "app.css", "lib.js", "router.js", "chart.js", "system-parts.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
+  for (const f of ["index.html", "app.css", "lib.js", "router.js", "chart.js", "system-parts.js", "decision.js", "timeline.js", "feed.js", "jobs-table.js", "flow-parts.js", "ask-cards.js", "processes.js", "context-panel.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
   cpSync(join(import.meta.dir, "..", "lib"), join(base, "lib"), { recursive: true });
   mkdirSync(apiDir);
   writeFileSync(join(pageDir, "views", "_test.js"), `export const view = { path: "/_test/:id", title: "Test", group: "factory", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);

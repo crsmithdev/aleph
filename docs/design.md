@@ -570,7 +570,7 @@ A metric card shows one headline number of a list page, with its key.
 
 | Helper | Reference |
 |---|---|
-| `statCard({ k, v, v2, q, note, trend, extra, href, key, on, loading, failed })` in `tiles(label, html)`; `cardTrend()`; `onTile()` | `statusCards()` in `ui/views/speed.js` |
+| `statCard({ k, v, v2, q, note, trend, extra, href, key, on, loading, failed })` in `tiles(label, html)`; `cardTrend()`; `onTile()` | `statusCards()` in `ui/flow-parts.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -707,7 +707,7 @@ A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 | a legend on a stacked chart | a stacked chart with no legend |
 | `panelOf("agents/cost", frame)` | an ECharts instance made by the view |
 
-Two charts are allowed outside the chart panel: the Agent Time bar (`ui/views/speed.js`) and the session waterfall (`ui/views/session.js`).
+Two charts are allowed outside the chart panel: the Agent Time bar (`ui/flow-parts.js`) and the session waterfall (`ui/views/session.js`).
 
 #### Legend
 
@@ -768,7 +768,7 @@ The outcome bar shows how the agent time of a window ended, by class.
 
 | Helper | Reference |
 |---|---|
-| `bar(d, key)` in `ui/views/speed.js`, from `/api/flow` | `ui/views/speed.js` |
+| `bar(d, key)` in `ui/flow-parts.js`, from `/api/flow` | `ui/flow-parts.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -826,7 +826,7 @@ An ask card asks Chris a question. It shows the question, the choices and the bu
 
 | Helper | Reference |
 |---|---|
-| `askCard(i)` in `ui/views/cards.js` | `ui/views/now.js` |
+| `askCard(i)` in `ui/ask-cards.js` | `ui/views/now.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -888,7 +888,7 @@ The findings list shows the numbered findings of a Monitor report.
 
 | Helper | Reference |
 |---|---|
-| `findingsList(findings)` in `ui/views/now.js`, one `findingHtml()` `<li>` each in `<ol class="findings">` | `ui/views/gates.js` |
+| `findingsList(findings)` in `ui/feed.js`, one `findingHtml()` `<li>` each in `<ol class="findings">` | `ui/views/gates.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1531,16 +1531,16 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Health in `ui/views/memory.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
-| The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/now.js` | follow-up |
+| The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/feed.js` | follow-up |
 | Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`) and the feed's rows (`div.event-row`, `div.event-brief`) | `renderPipeline()`, `feedRow()`, `briefRow()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
-| Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/speed.js`, `ui/views/session.js` | allowed |
+| Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/flow-parts.js`, `ui/views/session.js` | allowed |
 | A lens result is a hand `iframe.lens-frame`, sandboxed: no helper for a result page; the Log pane's lines are a hand `ul` | `renderIdea()` in `ui/views/ideas.js` | follow-up |
-| Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/cards.js` | follow-up |
+| Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/ask-cards.js` | follow-up |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |
-| The outcome bar shows `empty()` with no card | `bar()` in `ui/views/speed.js` | follow-up |
+| The outcome bar shows `empty()` with no card | `bar()` in `ui/flow-parts.js` | follow-up |
 | The `@container` queries at 560px (`pipeline`) and 420px (a card) have no breakpoint token: a container query cannot read a custom property | `ui/app.css` | allowed |
 | The `@media (min-width: 721px)` query for the collapsed sidebar has no breakpoint token: a media query cannot read a custom property | `ui/app.css` | allowed |
 | The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |

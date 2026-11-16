@@ -26,7 +26,7 @@ const START = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
 const TS = new Bun.Transpiler({ loader: "ts" });
 /** The modules that views import, by URL, and each one's file under ui/. `lib/naming.ts` sits at the same path from the page and from the repo, so `ui/lib.js` imports it as `../lib/naming.ts`; the page gets it as JS. */
-const SHARED = new Map([["/lib.js", "lib.js"], ["/router.js", "router.js"], ["/chart.js", "chart.js"], ["/system-parts.js", "system-parts.js"], ["/decision.js", "decision.js"], ["/timeline.js", "timeline.js"], ["/lib/naming.ts", "../lib/naming.ts"], ["/lib/models.ts", "../lib/models.ts"], ["/lib/status-words.ts", "../lib/status-words.ts"], ["/lib/windows.ts", "../lib/windows.ts"]]);
+const SHARED = new Map([["/lib.js", "lib.js"], ["/router.js", "router.js"], ["/chart.js", "chart.js"], ["/system-parts.js", "system-parts.js"], ["/decision.js", "decision.js"], ["/timeline.js", "timeline.js"], ["/feed.js", "feed.js"], ["/jobs-table.js", "jobs-table.js"], ["/flow-parts.js", "flow-parts.js"], ["/ask-cards.js", "ask-cards.js"], ["/processes.js", "processes.js"], ["/context-panel.js", "context-panel.js"], ["/lib/naming.ts", "../lib/naming.ts"], ["/lib/models.ts", "../lib/models.ts"], ["/lib/status-words.ts", "../lib/status-words.ts"], ["/lib/windows.ts", "../lib/windows.ts"]]);
 
 /** `/api/jobs/:name` as a regex and its parameter names. */
 export function compile(path: string): { pattern: RegExp; names: string[] } {

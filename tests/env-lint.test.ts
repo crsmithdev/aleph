@@ -22,3 +22,11 @@ test("no teardown deletes an env variable it should restore, except the files in
     .filter((f) => !/^(node_modules|vendor|\.worktrees|acceptance)\//.test(f) && deletes(readFileSync(join(ROOT, f), "utf8")));
   expect([...found.filter((f) => !EXCEPT.includes(f)), ...EXCEPT.filter((f) => !found.includes(f)).map((f) => `${f} no longer deletes: remove it from EXCEPT`)].sort()).toEqual([]);
 });
+
+const SKIPPED = /\.(test|helpers|fixture|testkit)\.ts$/;
+
+test("only lib/env.ts reads ALEPH_AGENT or ALEPH_JOB_ID: callers use isAgent() and jobId()", () => {
+  const found = [...new Bun.Glob("**/*.ts").scanSync({ cwd: ROOT })]
+    .filter((f) => !/^(node_modules|vendor|\.worktrees|acceptance)\//.test(f) && f !== "lib/env.ts" && f !== "tests/preload.ts" && !SKIPPED.test(f) && /process\.env\.ALEPH_(AGENT|JOB_ID)\b/.test(readFileSync(join(ROOT, f), "utf8")));
+  expect(found).toEqual([]);
+});

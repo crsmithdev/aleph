@@ -7,6 +7,12 @@ export interface LangfuseConfig {
   secretKey: string;
 }
 
+/** True in a factory agent: the agent settings in jobs/lib/routing/models.ts set ALEPH_AGENT for the claude process of each role. */
+export const isAgent = (): boolean => Boolean(process.env.ALEPH_AGENT);
+
+/** The id of the job this process runs for, if any: the unit sets ALEPH_JOB_ID (jobs/lib/roles/unit.ts), and its children inherit it. */
+export const jobId = (): string | undefined => process.env.ALEPH_JOB_ID;
+
 /** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
 const envFile = (): string => alephPath("ALEPH_ENV_FILE", ".env");
 

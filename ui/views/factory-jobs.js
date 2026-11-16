@@ -3,8 +3,8 @@ import { get, moved, redraw } from "../router.js";
 import { card, cell, pagedTable, row, dur, count, empty, error, failMessage, heads, loadingLine, onTile, pageHead, searchBox, setQuery, shortModel, statCard, cardTrend, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
-import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./jobs.js";
-import { bucketOf, flowOf, lastPeriod, trendOn, usable } from "./speed.js";
+import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "../jobs-table.js";
+import { bucketOf, flowOf, lastPeriod, trendOn, usable } from "../flow-parts.js";
 
 export const STAGES = [
   ["lead", NAMES.lead],

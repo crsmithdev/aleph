@@ -3,6 +3,7 @@
  * reader (docs/data-model.md): the layout
  * (items, jobs, factory) under ~/.aleph. The environment wins, variable by variable.
  */
+import { join } from "node:path";
 import { conn } from "./db.ts";
 import { event, type Event, type EventRow } from "./naming.ts";
 import { alephPath } from "./paths.ts";
@@ -20,6 +21,11 @@ export function layout(): Layout {
     get factory() { touch("factory"); return factory(); },
   };
 }
+
+/** The factory folder. */
+export const factoryDir = (): string => layout().factory;
+/** Where detached dispatch, intake, director and suite runs write their output. */
+export const dispatchLog = (): string => join(factoryDir(), "dispatch.log");
 
 /** One event in the event table; `event()` checks its words first, so a bad word throws. */
 export function logEvent(e: Parameters<typeof event>[0]): Event {

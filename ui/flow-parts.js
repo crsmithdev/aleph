@@ -1,7 +1,7 @@
 // What the Status pages share: formats, the /api/flow load, the merged causes, tiles and the usage pace.
-import { get } from "../router.js";
-import { count, cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, plural, statCard, when, scope } from "../lib.js";
-import { BUCKETS } from "../../lib/windows.ts";
+import { get } from "./router.js";
+import { count, cardTrend, xLabel, empty, meter, day, dur, hourLabel, esc, hours, pct, plural, statCard, when, scope } from "./lib.js";
+import { BUCKETS } from "../lib/windows.ts";
 
 /** The period an answer covers, in words. */
 export const period = (d) => (d?.window === "hour" ? "hour" : plural(BUCKETS[d?.window]?.n ?? 7, bucketOf(d)));
@@ -11,13 +11,6 @@ export const bucketOf = (d) => BUCKETS[d?.window]?.name ?? "day";
 export const trendOn = (d) => d?.window === "week" || d?.window === "month" || !d?.window;
 /** "last 7 days": the span as the page says it. */
 export const lastPeriod = (d) => `last ${period(d)}`;
-
-/** A bucket's x-axis label: "4a" or "1:36p" in the hour and day windows, "Oct 25" in week and month. */
-export function xLabel(at, window) {
-  const d = new Date(at);
-  if (window === "week" || window === "month") return day(d);
-  return hourLabel(d);
-}
 
 /** /api/flow for `window` in the project of the query `q`, with the window's trend baseline (`d.baseline`) when
  * `baseline`; `{ error }` when the load fails. */

@@ -22,7 +22,7 @@ The vault also logs its own writes in `daily/<date>.md` (`appendDaily` in `vault
 
 ## Event log
 
-An event has the 6 fields of `Event` in `lib/naming.ts:135`: `seq`, `time`, `subject`, `action`, `object` and `detail`; a start's event also has a `tier`, the Size the factory routed it to. [Naming](naming.md#events) defines the words. `event()` in `lib/naming.ts:143` checks `subject` and `action` against their sets, so a bad word throws. `logEvent` inserts one row into the `events` table of `aleph.db`. A row never changes. `readEvents` in `lib/layout.ts:35` reads the view `event_rows` from `since` on, in `seq` order. No code writes the event log by any other means.
+An event has the 6 fields of `Event` in `lib/naming.ts:135`: `seq`, `time`, `subject`, `action`, `object` and `detail`; a start's event also has a `tier`, the Size the factory routed it to. [Naming](naming.md#events) defines the words. `event()` in `lib/naming.ts:143` checks `subject` and `action` against their sets, so a bad word throws. `logEvent` inserts one row into the `events` table of `aleph.db`. A row never changes. `readEvents` in `lib/layout.ts:41` reads the view `event_rows` from `since` on, in `seq` order. No code writes the event log by any other means.
 
 ### Who writes events
 
@@ -49,7 +49,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | the filer: `intake`, `firefighter`, `human`, `claude`, `worker` | `filed`, one event per new issue | `issues/lib/store.ts:411` |
 | the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `issues/lib/store.ts:169` |
 | `human` | `changed`, when an Always rule is set back to Ask me | `jobs/lib/asks/ask.ts:237` |
-| `human` | `changed` on the object `settings`: `pause: on` and `pause: off`, from the pause and resume commands | `jobs/lib/gates/factory-status.ts:88`, through `logSetting` in `lib/layout.ts:32` |
+| `human` | `changed` on the object `settings`: `pause: on` and `pause: off`, from the pause and resume commands | `jobs/lib/gates/factory-status.ts:88`, through `logSetting` in `lib/layout.ts:38` |
 
 The set `ACTORS` in `lib/naming.ts:22` also holds `worker`, `reviewer`, `check` and `monitor`. No `logEvent` call uses `reviewer`, `check` or `monitor`. `worker` and `claude` appear only as the filer or closer of an issue. An issue's events have the object `issue.<n>`.
 

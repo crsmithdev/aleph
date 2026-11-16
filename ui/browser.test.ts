@@ -475,7 +475,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     await page.width(390);
     const project = "-home-user-a-very-long-directory-name-another-long-directory-name-and-more";
-    const r = await page.ev<any>(`import("/views/context.js").then(({ renderContext }) => {
+    const r = await page.ev<any>(`import("/context-panel.js").then(({ renderContext }) => {
       const p = document.createElement("div");
       p.className = "page";
       const usage = { input: 1, cacheRead: 0, cacheWrite: 0, output: 1 };
@@ -666,7 +666,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     await page.when('document.querySelector("#view article.issue-row")');
     // A real Ask card with a Deny, from the view's own renderer. After the POST every other fetch hangs, and the mark on #view shows that no render replaced it.
-    await page.ev(`import("/views/cards.js").then(({ askCard }) => {
+    await page.ev(`import("/ask-cards.js").then(({ askCard }) => {
       const f = window.fetch;
       window.posts = [];
       window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push([u, o.body]), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
@@ -779,7 +779,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     test(`at ${w} px the outcome bar shows the whole label of a 2% segment and the page does not scroll sideways`, async () => {
       await page.width(w);
       await page.go("#/");
-      const m = await page.ev<{ clip: boolean[]; widths: number[]; page: number }>(`import("/views/speed.js").then((v) => {
+      const m = await page.ev<{ clip: boolean[]; widths: number[]; page: number }>(`import("/flow-parts.js").then((v) => {
         const classes = [["landed", 40], ["returned", 20], ["failed", 1.6], ["reran", 10], ["dropped", 8]].map(([key, hours], i) => ({ key, lost: i > 1, hours, text: key }));
         const host = document.createElement("div");
         host.id = "obar-probe";
@@ -802,7 +802,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   test("the outcome bar mark is as tall as the segments", async () => {
     await page.width(1100);
     await page.go("#/");
-    const m = await page.ev<{ sep: number[]; segs: number[][] }[]>(`import("/views/speed.js").then((v) => {
+    const m = await page.ev<{ sep: number[]; segs: number[][] }[]>(`import("/flow-parts.js").then((v) => {
       const host = document.createElement("div");
       host.id = "obar-probe";
       document.querySelector("#view").prepend(host);

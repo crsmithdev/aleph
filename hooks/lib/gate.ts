@@ -11,7 +11,7 @@
  */
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { langfuseConfig, sessionEnvironment } from "../../lib/env.ts";
+import { isAgent, langfuseConfig, sessionEnvironment } from "../../lib/env.ts";
 import { postScore, truncate, turnTraceIdFor } from "../../lib/otlp.ts";
 import { digest, readEntries, userGrantedSkip } from "./digest.ts";
 import { docClaimProblems } from "./docclaims.ts";
@@ -32,7 +32,7 @@ export async function gate(input: Record<string, any>, deps = { judge: realJudge
   const cwd: string = input.cwd ?? process.cwd();
 
   // A factory agent's work is judged by the factory's own gates.
-  if (!promptId || !input.session_id || process.env.ALEPH_AGENT) return null;
+  if (!promptId || !input.session_id || isAgent()) return null;
 
   if (event === "UserPromptSubmit") {
     const s = snapshot(cwd);

@@ -25,6 +25,7 @@ import { landBatch } from "../infra/settings.ts";
 import { jobOfFolder, logTo, runFile } from "../records/run-files.ts";
 import { writeTitle } from "../roles/title.ts";
 import * as record from "../records/record.ts";
+import { trailerLine } from "../records/status.ts";
 
 const num = (id: string): number => parseKey(id)?.n ?? 0;
 
@@ -136,9 +137,9 @@ async function landTurn(repo: Repo, id: string, made: number): Promise<() => voi
 function landMessage(subjects: string[], run: Run): string {
   const on = onOf(run);
   const trailers = [
-    ...(on === undefined ? [] : [`Issue: ${key("issue", on)}`]),
-    `Job: ${run.prev ?? run.job}`,
-    ...(run.held ? [`Held-by: ${run.lander ?? "Chris"}`] : []),
+    ...(on === undefined ? [] : [trailerLine("Issue", key("issue", on))]),
+    trailerLine("Job", run.prev ?? run.job),
+    ...(run.held ? [trailerLine("Held-by", run.lander ?? "Chris")] : []),
   ];
   // A subject is never on a line of its own after the title, so none can read as a trailer.
   const body = subjects.length > 1 ? ["", ...subjects.map((s) => `- ${s}`)] : [];

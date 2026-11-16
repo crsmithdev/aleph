@@ -114,8 +114,7 @@ export const reviewerCmd = () => process.env.ALEPH_REVIEWER_CMD ?? workerCmd();
 /** Chris's log of what reached him and why: the director reads it, and code does not. */
 export const needsYouLog = (): string => process.env.ALEPH_NEEDS_YOU_LOG ?? join(dirname(resolve(vaultDir())), "needs-you-log.md");
 
-/** The id of the job this process runs for, if any. */
-export const jobId = (): string | undefined => process.env.ALEPH_JOB_ID;
+export { jobId } from "../../../lib/env.ts";
 /** The command for an agent role (`worker`, `reviewer`, ...), `claude` by default. */
 export const roleCmd = (role: string): string => process.env[`ALEPH_${role}_CMD`] ?? "claude";
 /** How long the chat panel's process waits for the next turn before it ends. The prompt cache lives 5 minutes, so a turn after more costs a cache write whether or not the process lives; 10 minutes covers a pause to read and think. */

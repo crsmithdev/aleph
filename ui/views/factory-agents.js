@@ -3,7 +3,7 @@ import { get, moved, redraw } from "../router.js";
 import { postJson, badCount, card, cardTrend, cell, count, dataTable, day, dur, empty, error, esc, heads, keep, kept, loadingLine, miss, money, notice, pageHead, pct, say, selectBox, shortModel, statCard, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
-import { flowOf, lastPeriod, usageCard, windowTrend } from "./speed.js";
+import { flowOf, lastPeriod, usageCard, windowTrend } from "../flow-parts.js";
 
 const share = (v) => pct(v == null ? v : v * 100);
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */

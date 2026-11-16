@@ -3,7 +3,7 @@
 import { moved, redraw } from "../router.js";
 import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, row, day, localMs, plural, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
-import { findingHtml, findingsList } from "./now.js";
+import { findingHtml, findingsList } from "../feed.js";
 
 export const view = {
   path: "/automation",

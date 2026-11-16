@@ -26,7 +26,7 @@ import { ciRunning, ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
 import { doneChecker } from "./filing.ts";
-import { baselines, sandboxRepos, gates, probeHold, readStalls, setTick, tickRows, writeStalls } from "../gates/factory-status.ts";
+import { baselines, sandboxRepos, gates, probeHold, readStalls, setTick, tickMissed, tickRows, writeStalls } from "../gates/factory-status.ts";
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
@@ -61,7 +61,7 @@ export interface TickState { last: Partial<Record<Periodic, string>>; missed: st
 export function readTick(): TickState {
   const rows = tickRows(), last: TickState["last"] = {};
   for (const k of Object.keys(EVERY_MS) as Periodic[]) if (rows[k]?.last) last[k] = rows[k].last!;
-  return { last, missed: getJson("state", "tick.missed", []), suite: getJson("state", "tick.suite", {}) };
+  return { last, missed: tickMissed(), suite: getJson("state", "tick.suite", {}) };
 }
 
 /** Whether a CI run on a factory main is in progress by the last CI read, or a land on one ended in the last FRESH_MS. */

@@ -6,12 +6,10 @@
  * `POST /api/automation/rules/:reason/grant` (`{ "action": "<action>" }`): `aleph always grant`, the Always side.
  * `POST /api/automation/rules/:reason/timeout` (`{ "minutes": <n>, "then"?: "pick" | "drop" }`): `aleph always timeout`; 0 waits for Chris.
  */
-import { getJson } from "../../lib/db.ts";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/asks/ask.ts";
 import { readTimeouts, TIMED } from "../../jobs/lib/asks/timeout.ts";
-import { allHolds, askReason, backendHold, baselines, sandboxRepos, redLine, stopsStart, tickRows } from "../../jobs/lib/gates/factory-status.ts";
+import { allHolds, askReason, backendHold, baselines, sandboxRepos, redLine, stopsStart, tickMissed, tickRows } from "../../jobs/lib/gates/factory-status.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
@@ -19,10 +17,10 @@ import { readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { parseKey, type EventRow } from "../../lib/naming.ts";
-import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, unitDir, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
+import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 import { noteOf } from "../../issues/lib/todo.ts";
-import { systemctl } from "../../jobs/lib/infra/systemd.ts";
+import { intervalOf, setTimerInterval, TIMERS } from "../../jobs/lib/infra/systemd.ts";
 
 import { aleph, fail, post } from "../action.ts";
 import { reasonText } from "../asks.ts";
@@ -160,41 +158,9 @@ export function repoHeld(): { repo: string; held: string[] }[] {
 /** The settings the Controls panel edits besides the two caps, as the factory reads them now. */
 const settingsNow = () => ({ intakeTries: INTAKE_TRIES(), jobSeconds: jobSeconds(), fixRounds: fixRounds(), landBatch: landBatch(), loadLimit: loadLimit() });
 
-/** The schedules that run on a systemd timer of their own, by the name the Schedules table shows. */
-const TIMERS: Record<string, string> = { tick: "aleph-tick.timer", suite: "aleph-suite.timer" };
-/** An interval the Schedules form takes: a whole number of seconds, minutes or hours, as systemd writes it. */
-const INTERVAL = /^[1-9]\d*(s|min|h)$/;
-
-/** A timer's interval: its OnUnitActiveSec as systemd shows it ("1min", "1h"), or null when systemd does not answer. */
-function intervalOf(timer: string): string | null {
-  const m = /OnUnitActiveUSec=(\S+)/.exec(systemctl("show", timer, "-p", "TimersMonotonic", "--no-pager").out);
-  return m ? m[1] : null;
-}
-
-/**
- * Sets a timer's interval with a drop-in, then reloads systemd and restarts the timer. An empty OnUnitActiveSec= clears
- * every monotonic trigger, so the drop-in restates the boot and startup triggers of the unit file; without them no run
- * follows a reboot. Returns an error text, or null.
- */
-export function setTimerInterval(name: string, every: string): string | null {
-  const timer = TIMERS[name];
-  if (!timer) return `only ${Object.keys(TIMERS).join(" and ")} have an interval`;
-  if (!INTERVAL.test(every)) return `the interval is a whole number with s, min or h, as in 5min, not "${every}"`;
-  const unit = readFileSync(join(import.meta.dir, "../../jobs/systemd", timer), "utf8");
-  const keep = unit.split("\n").filter((l) => /^On(Boot|Startup)Sec=/.test(l));
-  const dir = join(unitDir(), `${timer}.d`);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "interval.conf"), ["# Written by the Automation page. An empty assignment clears every monotonic trigger,", "# so the boot and startup triggers of the unit file follow it.", "[Timer]", "OnUnitActiveSec=", ...keep, `OnUnitActiveSec=${every}`, ""].join("\n"));
-  for (const args of [["daemon-reload"], ["restart", timer]]) {
-    const r = systemctl(...args);
-    if (!r.ok) return `systemctl --user ${args.join(" ")} failed: ${r.out.trim()}`;
-  }
-  return null;
-}
-
 export function schedules(): { name: string; last: string | null; result: string | null; every: string | null; hour?: number }[] {
   // tick.ts is not read here: it loads the factory's actions, which the server must not.
-  const rows = tickRows(), missed = getJson<string[]>("state", "tick.missed", []);
+  const rows = tickRows(), missed = tickMissed();
   const times = ["ci", "firefight", "episodes"].map((k) => Date.parse(rows[k]?.last ?? "")).filter((x) => !Number.isNaN(x));
   const suite: Record<string, { at: string; result: string }> = {};
   for (const [k, v] of Object.entries(rows)) if (k.startsWith("suite ") && v.last) suite[k.slice(6)] = { at: v.last, result: v.result ?? "" };
