@@ -7,20 +7,19 @@
  * committed and pushed; a handoff or an episode is a file. A write clears nothing: the updater's watchers see it.
  */
 import { getJson } from "../../lib/db.ts";
-import { readJsonOr } from "../../lib/json.ts";
 import { daysAgo } from "../../lib/day.ts";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { aleph, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
 import { handoffsDir } from "../../lib/paths.ts";
-import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
+import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from "../../jobs/lib/learning/episode.ts";
 import { tickRows, type TickRow } from "../../jobs/lib/gates/factory-status.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { backlinks, coreNotes, linkTargets, links, lintVault, loadVault, parseOp, RECALL_DAYS, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 
@@ -32,12 +31,10 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
 
 /** Every line the vault's CLI appended to its daily notes, newest first; `at` is the line's local time as ISO UTC. */
 function opLines(root: string) {
-  const dir = join(root, "daily");
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort().reverse().flatMap((f) =>
-    readFileSync(join(dir, f), "utf8").split("\n").reverse().flatMap((l) => {
+  return dailyNotes(root).flatMap(({ day, text }) =>
+    text.split("\n").reverse().flatMap((l) => {
       const m = /^- (\d{2}:\d{2}) (.*)$/.exec(l);
-      return m ? [{ at: new Date(`${f.slice(0, 10)}T${m[1]}`).toISOString(), text: m[2] }] : [];
+      return m ? [{ at: new Date(`${day}T${m[1]}`).toISOString(), text: m[2] }] : [];
     }));
 }
 
@@ -67,11 +64,6 @@ async function runMisses(): Promise<unknown | null> {
   } catch { return null; }
 }
 
-/** When `vault recall` last returned each note, by title; empty when the log is absent. */
-function readLog(root: string): Record<string, string> {
-  return readJsonOr(join(root, ".recall.json"), {});
-}
-
 /** Each note's recall count per day for the last 30 days, oldest first, from the recall log. */
 function recallDays(root: string): Map<string, number[]> {
   const days = Array.from({ length: 30 }, (_, i) => daysAgo(29 - i));
@@ -85,7 +77,7 @@ function recallDays(root: string): Map<string, number[]> {
 
 /** One row per note for the note browser: what it is, when it was written and last returned, and its refusals. */
 function noteRows(wiki: Note[], root: string, refuse: { note: string; rule: string; detail: string }[]) {
-  const read = readLog(root), hist = recallDays(root);
+  const read = recallSeen(root), hist = recallDays(root);
   const problems = new Map<string, { rule: string; detail: string }[]>();
   for (const f of refuse) problems.set(f.note, [...(problems.get(f.note) ?? []), { rule: f.rule, detail: f.detail }]);
   return wiki.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? "none"), scope: scopeOf(n), updated: String(n.fm.updated ?? ""), read: read[n.title] ?? null, history: hist.get(n.title) ?? Array(30).fill(0), problems: problems.get(n.title) ?? [] }));
@@ -103,7 +95,7 @@ async function overview(url: URL): Promise<Response> {
   const slow = misses();
   const project = projectOf(url);
   const root = vaultDir();
-  const all = existsSync(join(root, "Home.md")) ? await vaultNotes(root) : [];
+  const all = hasHome(root) ? await vaultNotes(root) : [];
   const keep = inScope(project);
   const wiki = wikiNotes(all).filter(keep);
   const names = new Set(wiki.map((n) => n.title));
@@ -195,8 +187,7 @@ async function processes(): Promise<Response> {
       return { name, runs, last: run?.at ?? null, next: null, result: run?.result ?? null, detail: run?.detail ?? null, does };
     }),
   ];
-  const dir = episodesDir();
-  const mtimes = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md")).map((f) => statSync(join(dir, f)).mtimeMs) : [];
+  const mtimes = listEpisodes().map((e) => e.mtimeMs);
   const days = Array.from({ length: KEEP_DAYS }, (_, i) => daysAgo(KEEP_DAYS - 1 - i, new Date(now)));
   const perDay = days.map((date) => ({ date, pages: mtimes.filter((t) => today(new Date(t)) === date).length }));
   const all = await allNotes(root);
@@ -210,14 +201,14 @@ async function processes(): Promise<Response> {
 }
 
 /** The vault's notes, or none when it has no Home.md. */
-const allNotes = async (root: string) => (existsSync(join(root, "Home.md")) ? await vaultNotes(root) : []);
+const allNotes = async (root: string) => (hasHome(root) ? await vaultNotes(root) : []);
 
 /** Every memory item of every type, built once until one of its sources changes. */
 const ITEM_SOURCES = ["vault", "handoffs", "episodes", "usage", "later:memory:calls", "later:memory:sessions", "store", "registry", "factory", "action"];
 async function memoryItems(root: string) {
   return once(`memory:items:${root}`, ITEM_SOURCES, async () => {
     const wiki = wikiNotes(await allNotes(root));
-    return { wiki, items: await items(root, wiki, readLog(root)) };
+    return { wiki, items: await items(root, wiki, recallSeen(root)) };
   });
 }
 
@@ -293,33 +284,42 @@ type Post = (b: Record<string, string>) => Promise<unknown>;
 /** A write: the body's fields and the URL's (`title`, `source`, `key`); the URL's win. */
 const write = (f: Post) => post((b, params) => f({ ...strings(b), ...params }));
 
-/** The file a handoff, an episode or MEMORY.md is, or null for a key outside its folder. */
-function fileOf(source: string, key: string): string | null {
-  if (source === "memory-md") return join(vaultDir(), "MEMORY.md");
-  if (source === "handoff" && /^(projects\/)?[^/\\.][^/\\]*\.md$/.test(key)) return join(handoffsDir(), key);
-  if (source === "episode" && /^[^/\\.][^/\\]*\.md$/.test(key)) return join(episodesDir(), key);
-  return null;
+/** The file a handoff is, or null for a key outside its folder. */
+const handoffFile = (key: string): string | null => (/^(projects\/)?[^/\\.][^/\\]*\.md$/.test(key) ? join(handoffsDir(), key) : null);
+
+/** The text of a handoff, an episode or MEMORY.md, or null when there is none. */
+function textOf(source: string, key: string): string | null {
+  if (source === "memory-md") return readMemoryMd(vaultDir())?.text ?? null;
+  if (source === "episode") return readEpisode(key);
+  const path = source === "handoff" ? handoffFile(key) : null;
+  return path && existsSync(path) ? readFileSync(path, "utf8") : null;
 }
 
 function file(source: string, key: string): Response {
-  const path = fileOf(source, key);
-  return path && existsSync(path) ? json({ text: readFileSync(path, "utf8") }) : json({ error: "no such file" }, 404);
+  const text = textOf(source, key);
+  return text === null ? json({ error: "no such file" }, 404) : json({ text });
+}
+
+/** Replaces the text of a file `textOf` finds. */
+function setText(source: string, key: string, text: string): void {
+  if (source === "memory-md") writeMemoryMd(vaultDir(), text);
+  else if (source === "episode") editEpisode(key, text);
+  else writeFileSync(handoffFile(key)!, text);
 }
 
 /** MEMORY.md is written in place, then `vault write` checks it; a refusal puts the old text back. */
 const editFile: Post = async ({ source, key, text }) => {
-  const path = fileOf(source, key);
-  if (!path || !existsSync(path)) fail(404, "no such file");
-  const old = readFileSync(path!, "utf8");
-  writeFileSync(path!, text);
+  const old = textOf(source, key);
+  if (old === null) fail(404, "no such file");
+  setText(source, key, text);
   if (source !== "memory-md") return { op: "edit", source, key };
-  try { return await vault("write", path!, "--why", WHY); } catch (e) { writeFileSync(path!, old); throw e; }
+  try { return await vault("write", memoryFile(vaultDir()), "--why", WHY); } catch (e) { setText(source, key, old!); throw e; }
 };
 
 const deleteFile: Post = async ({ source, key }) => {
-  const path = source === "memory-md" ? null : fileOf(source, key);
-  if (!path || !existsSync(path)) fail(404, "no such file");
-  unlinkSync(path!);
+  const path = source === "handoff" ? handoffFile(key) : null;
+  const gone = source === "episode" ? removeEpisode(key) : !!path && existsSync(path) && (unlinkSync(path), true);
+  if (!gone) fail(404, "no such file");
   return { op: "delete", source, key };
 };
 

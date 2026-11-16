@@ -5,7 +5,7 @@
  * KEEP_DAYS is deleted, and an issue whose last run ended before then gets no
  * page, so a deleted page is not written again.
  */
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { daysAgo, today } from "../../../lib/day.ts";
 import { commitPaths } from "../../../vault/lib/git.ts";
@@ -25,6 +25,38 @@ import { errText } from "../../../lib/errtext.ts";
 
 export const KEEP_DAYS = 90; // Chris, 2026-11-12: an episode stays in recall 90 days
 export const episodesDir = () => { touch("episodes"); return join(factoryDir(), "episodes"); };
+/** The pages under episodesDir() by file name, with each mtime; none when the folder is absent. */
+export function listEpisodes(): { file: string; mtimeMs: number }[] {
+  const dir = episodesDir();
+  return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md")).sort().map((file) => ({ file, mtimeMs: statSync(join(dir, file)).mtimeMs })) : [];
+}
+
+/** The path of an existing page by file name; null for a name outside the folder or a page that is gone. */
+function pageFile(file: string): string | null {
+  const path = /^[^/\\.][^/\\]*\.md$/.test(file) ? join(episodesDir(), file) : null;
+  return path && existsSync(path) ? path : null;
+}
+
+/** A page's text, or null when there is no such page. */
+export function readEpisode(file: string): string | null {
+  const path = pageFile(file);
+  return path ? readFileSync(path, "utf8") : null;
+}
+
+/** Replaces a page's text; false when there is no such page. */
+export function editEpisode(file: string, text: string): boolean {
+  const path = pageFile(file);
+  if (path) writeFileSync(path, text);
+  return !!path;
+}
+
+/** Deletes a page; false when there is no such page. */
+export function removeEpisode(file: string): boolean {
+  const path = pageFile(file);
+  if (path) rmSync(path);
+  return !!path;
+}
+
 const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
 /** The ledger runs of an item: its own runs, a part's under `on: <repo>-<n>.<k>`. */
@@ -44,8 +76,7 @@ function doneIssues(repo: Repo, now = Date.now()): issues.Issue[] {
   const specced = doc.items.filter((i) => !!i.spec.trim());
   if (!specced.length) return [];
   const done = new Set(repoStages(repo, { fetch: true, doc, items: specced.map(issues.refOf) }).filter((s) => s.stage === "done").map((s) => s.id));
-  const dir = episodesDir();
-  const pages = existsSync(dir) ? readdirSync(dir) : [];
+  const pages = listEpisodes().map((e) => e.file);
   const since = now - KEEP_DAYS * 86400_000;
   const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined && (epoch(e.run.ended) || epoch(e.run.started)) >= since).map((e) => String(onOf(e.run))));
   return specced.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(String(issues.idOf(i))) && !written(repo, i, pages));

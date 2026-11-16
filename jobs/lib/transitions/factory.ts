@@ -25,8 +25,7 @@ import { allJobs, checkedBy, isOpen, lookMinutes, openJob } from "../records/job
 import { counting, patchRun } from "../records/record.ts";
 import { mine, proposals, readStore } from "../learning/corrections.ts";
 import { directAll, pendingCases, subjectOfCase, type Decision, type Ports as DirectorPorts } from "../roles/director.ts";
-import { episodesDir, writeEpisodes } from "../learning/episode.ts";
-import { readdirSync } from "node:fs";
+import { listEpisodes, writeEpisodes } from "../learning/episode.ts";
 import { waitingToLand } from "../land/landing.ts";
 import { baselineChecks, type CheckTask, type ChecksStop } from "../gates/checks.ts";
 import { drop, land, recheck, refusal, startIssue, type Refused } from "./transitions.ts";
@@ -495,7 +494,7 @@ const episodesSeenFile = () => join(factoryDir(), "episodes-seen");
  */
 function newEpisodes(): string[] {
   let titles: string[] = [];
-  try { titles = readdirSync(episodesDir()).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).sort(); } catch { return []; }
+  try { titles = listEpisodes().map((e) => e.file.slice(0, -3)); } catch { return []; }
   const seen = new Set(existsSync(episodesSeenFile()) ? readFileSync(episodesSeenFile(), "utf8").split("\n").filter(Boolean) : []);
   const fresh = titles.filter((t) => !seen.has(t));
   if (fresh.length || seen.size !== titles.length - fresh.length) {

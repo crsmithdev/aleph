@@ -589,3 +589,33 @@ export function homeText(notes: Note[], healthLine: string): string {
   }
   return [...out, healthLine, ""].join("\n");
 }
+
+/** Each daily note under `root` as its day and text, newest day first. */
+export function dailyNotes(root: string): { day: string; text: string }[] {
+  const dir = join(root, "daily");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort().reverse()
+    .map((f) => ({ day: f.slice(0, 10), text: readFileSync(join(dir, f), "utf8") }));
+}
+
+/** When `vault recall` last returned each note, by title; empty when the file is absent. */
+export function recallSeen(root: string): Record<string, string> {
+  return readJsonOr(join(root, ".recall.json"), {});
+}
+
+/** Whether the vault has a Home.md, which is what makes a directory a vault. */
+export const hasHome = (root: string): boolean => existsSync(join(root, "Home.md"));
+
+/** The path of MEMORY.md, the standing context that SessionStart loads. */
+export const memoryFile = (root: string): string => join(root, "MEMORY.md");
+
+/** MEMORY.md's text and mtime (ISO), or null when the file is absent. */
+export function readMemoryMd(root: string): { text: string; mtime: string } | null {
+  const file = memoryFile(root);
+  return existsSync(file) ? { text: readFileSync(file, "utf8"), mtime: statSync(file).mtime.toISOString() } : null;
+}
+
+/** Replaces MEMORY.md in place; the caller checks it with `vault write`. */
+export function writeMemoryMd(root: string, text: string): void {
+  writeFileSync(memoryFile(root), text);
+}

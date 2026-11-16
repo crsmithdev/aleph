@@ -9,9 +9,9 @@ import { join } from "node:path";
 import { clip, issueHref } from "../lib/naming.ts";
 import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
 import { readStore } from "../jobs/lib/learning/corrections.ts";
-import { episodesDir, KEEP_DAYS } from "../jobs/lib/learning/episode.ts";
+import { KEEP_DAYS, listEpisodes, readEpisode } from "../jobs/lib/learning/episode.ts";
 import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
-import type { Note } from "../vault/lib/vault.ts";
+import { dailyNotes, readMemoryMd, type Note } from "../vault/lib/vault.ts";
 import { skillsDir } from "../jobs/lib/infra/settings.ts";
 import { claudeSettings } from "../hooks/lib/context.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
@@ -108,11 +108,11 @@ function semantic(root: string, wiki: Note[], log: Record<string, string>): Item
       effect: core ? `Its core line is in the start context of every ${scope} session.` : "Reaches a session when vault recall or the vault-recall hook returns it.",
     };
   });
-  const file = join(root, "MEMORY.md");
-  if (existsSync(file)) {
-    const body = read(file);
+  const memory = readMemoryMd(root);
+  if (memory) {
+    const body = memory.text;
     out.push({ type: "semantic", source: "memory-md", key: "MEMORY.md", title: "MEMORY.md", text: `${body.split("\n").length} lines of standing context`, scope: "global",
-      at: mtime(file), read: null, body, effect: "In the start context of every session." });
+      at: memory.mtime, read: null, body, effect: "In the start context of every session." });
   }
   return out;
 }
@@ -169,15 +169,15 @@ function working(): Item[] {
 }
 
 async function episodic(root: string): Promise<Item[]> {
-  const out: Item[] = files(episodesDir(), /\.md$/).map((f) => {
-    const body = read(join(episodesDir(), f)), fm = parseFrontmatter(splitFrontmatter(body).frontmatter ?? "");
+  const out: Item[] = listEpisodes().map(({ file: f }) => {
+    const body = readEpisode(f) ?? "", fm = parseFrontmatter(splitFrontmatter(body).frontmatter ?? "");
     return { type: "episodic", source: "episode", key: f, title: f.slice(0, -3), text: intent(splitFrontmatter(body).body), scope: String(fm.scope ?? ""), at: String(fm.updated ?? ""),
       read: null, body, effect: `The factory report lists it once; it is deleted after ${KEEP_DAYS} days.` };
   });
-  for (const f of files(join(root, "daily"), /^\d{4}-\d{2}-\d{2}\.md$/).reverse()) {
-    const body = read(join(root, "daily", f)), n = body.split("\n").filter((l) => l.startsWith("- ")).length;
-    out.push({ type: "episodic", source: "daily", key: f, title: `daily ${f.slice(0, 10)}`, text: `${n} vault writes`, scope: "", at: f.slice(0, 10), read: null, body,
-      href: `#/memory/${f.slice(0, 10)}`, effect: "The vault's log of the day; vault compile reads it." });
+  for (const { day, text: body } of dailyNotes(root)) {
+    const n = body.split("\n").filter((l) => l.startsWith("- ")).length;
+    out.push({ type: "episodic", source: "daily", key: `${day}.md`, title: `daily ${day}`, text: `${n} vault writes`, scope: "", at: day, read: null, body,
+      href: `#/memory/${day}`, effect: "The vault's log of the day; vault compile reads it." });
   }
   for (const s of (await sessions()) ?? []) {
     out.push({ type: "episodic", source: "session", key: s.id, title: `session ${s.id.slice(0, 8)}`, text: s.firstPrompt, scope: s.project, at: s.last, read: null, body: s.firstPrompt,
