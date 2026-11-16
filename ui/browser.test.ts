@@ -176,11 +176,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       const pg = await own.open("#/automation");
       const btn = "#gates-log .clamp-btn";
       await pg.when(`document.querySelector("${btn}")`);
-      await pg.ev(`(() => { const b = document.querySelector("${btn}"); b.focus(); b.click(); b.old = true; })()`);
-      // A newer row with its own note lands above the open one; the redraw must keep the same button, not the first one.
+      await pg.ev(`(() => { const b = document.querySelector("${btn}"); b.focus(); b.click(); })()`);
+      // A newer row with its own note lands above the open one; the redraw must keep focus and the open text on the row it was on.
+      // Wait for the second row, not for a new element above the first: the morph may reuse the old button for the new top row.
       logTo(dir, new Date(at + 1000).toISOString(), "other ");
       await pg.ev('document.dispatchEvent(new Event("visibilitychange"))');
-      await pg.when(`document.querySelectorAll("${btn}").length === 2 && !document.querySelector("${btn}").old`);
+      await pg.when(`document.querySelectorAll("${btn}").length === 2`);
       expect(await pg.ev<unknown[]>(`(() => { const b = document.activeElement; return [b.matches("${btn}"), b.previousElementSibling.textContent.startsWith("word"), b.getAttribute("aria-expanded"), b.previousElementSibling.classList.contains("clamp"), b.textContent]; })()`)).toEqual([true, true, "true", false, "Show less"]);
     } finally { own.stop(); }
   }, 60_000);
