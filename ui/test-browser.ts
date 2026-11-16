@@ -78,7 +78,7 @@ interface Chrome { cdp: Pipe; kill(): void }
  * Start Chrome with a profile under `base`. The first call waits for Chrome to start. A Chrome that closes its pipe is
  * killed and started once more, with a new profile.
  */
-async function launchChrome(base: string): Promise<Chrome> {
+export async function launchChrome(base: string): Promise<Chrome> {
   const waits: string[] = [];
   for (let n = 1; ; n++) {
     const profile = mkdtempSync(join(base, `profile${n}-`));
