@@ -38,7 +38,7 @@ test("Per output is cost over built for a size, over verdicts for the reviewer a
   expect(per(row(h, "Intake"))).toBe('<td class="num">$0.50</td>');
   expect(row(h, "Small")).toMatch(/<td class="num warn">60%/);
   expect(row(h, "Intake")).not.toContain("warn");
-  expect(row(h, "Small")).toContain('<td>4 landed <span class="m">· 75% first · 50% review</span></td>');
+  expect(row(h, "Small")).toContain('<td>4 landed <span class="quiet">· 75% first · 50% review</span></td>');
   expect(row(h, "Reviewer")).toContain("<td>6 verdicts</td>");
 });
 
@@ -279,7 +279,7 @@ test("a size on two models shows its current model's figures and a ▸ that open
   try {
     const o = page(outs);
     expect(row(o, "Small")).toContain('aria-expanded="true"');
-    expect(o).toMatch(/<tr class="sub-row"><td><\/td><td>gpt-oss-20b <span class="m">Oct 20 – Oct 23<\/span><\/td><td class="num">14<\/td>/);
+    expect(o).toMatch(/<tr class="sub-row"><td><\/td><td>gpt-oss-20b <span class="quiet">Oct 20 – Oct 23<\/span><\/td><td class="num">14<\/td>/);
   } finally {
     delete (globalThis as any).localStorage;
   }
@@ -308,7 +308,7 @@ test("the Workers group holds Small, Medium, Large and an Unsized row with no co
   expect(workers).toContain('<tr class="grp"><th colspan="10">Workers</th></tr>');
   expect([...workers.matchAll(/<td class="wide" title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large", "Unsized"]);
   const un = row(h, "Unsized");
-  expect(un).toContain('<td>sonnet</td><td class="num">17</td>');
+  expect(un).toContain('<td><span class="fold" aria-hidden="true"></span> sonnet</td><td class="num">17</td>');
   expect(un).not.toMatch(/<select|checkbox/);
   expect([...rolesPart.matchAll(/<td class="wide" title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Lens", "Housekeeper", "Title", "Judge"]);
 });
@@ -316,7 +316,7 @@ test("the Workers group holds Small, Medium, Large and an Unsized row with no co
 test("an off size says where its work goes and shows no select or figures, and the last size on cannot go off", () => {
   const set = (on: string[]) => ({ ...M, models: Object.fromEntries(Object.entries(entries("haiku", "sonnet")).map(([k, v]) => [k, { ...v, enabled: !["small", "medium", "large"].includes(k) || on.includes(k) }])) });
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [full("worker", "opus", { size: "large", runs: 19 })] } }, "live", "week", set(["small", "medium"]));
-  expect(row(h, "Large")).toContain('<td><input type="checkbox" data-name="large" aria-label="Large enabled"> <span class="m">Off · goes to Medium</span></td><td colspan="8"></td></tr>');
+  expect(row(h, "Large")).toContain('<td><span class="fold" aria-hidden="true"></span> <input type="checkbox" data-name="large" aria-label="Large enabled"> <span class="quiet">Off · goes to Medium</span></td><td colspan="8"></td></tr>');
   expect(row(h, "Large")).not.toContain("<select");
   expect(row(h, "Small")).not.toContain("disabled");
   const one = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", set(["medium"]));
@@ -342,9 +342,8 @@ test("the Roles table draws Housekeeper and Maintainer rows, and a size row show
   expect(w).toContain("165 landed");
 });
 
-test("the page shows the first-pass rate to one decimal", () => {
-  expect(page([], { rates: { success: 0.8, baseline: 0.7, firstPass: 0.664, local: 0 } })).toContain("66.4%");
-  expect(page([])).not.toMatch(/First pass \d/);
+test("the Roles card has no first-pass aside: the Success card shows it", () => {
+  expect(page([], { rates: { success: 0.8, baseline: 0.7, firstPass: 0.664, local: 0 } })).not.toMatch(/First pass \d/);
 });
 
 const th = (h: string) => [...h.matchAll(/<th( class="num")?>([^<]+)</g)].map((m) => [m[2], !!m[1]]);
@@ -352,12 +351,12 @@ const one = { role: "worker", size: "small", model: "haiku", runs: 1234, succeed
 
 test("the Roles headers are in Title Case, and every number header has num", () => {
   const heads = th(renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } }));
-  expect(heads.filter(([, n]) => n).map(([h]) => h)).toEqual(["Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per output"]);
+  expect(heads.filter(([, n]) => n).map(([h]) => h)).toEqual(["Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per Output"]);
 });
 
 test("the Roles table heads Agent to Output, with no Failed jobs link, Pass share or worker only cell", () => {
   const h = page([full("worker", "haiku", { size: "small" }), full("reviewer", "opus", { pass: 24, fail: 6 }), full("intake", "opus")]);
-  expect(th(h).map(([t]) => t)).toEqual(["Agent", "Model", "Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per output", "Output"]);
+  expect(th(h).map(([t]) => t)).toEqual(["Agent", "Model", "Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per Output", "Output"]);
   expect(h).not.toMatch(/Failed jobs|failed-jobs|Pass share|worker only/);
   expect(readFileSync(new URL("./app.css", import.meta.url), "utf8")).not.toContain("failed-jobs");
 });

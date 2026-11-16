@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, cell, count, dataTable, day, dur, empty, error, esc, heads, keep, kept, loadingLine, miss, money, notice, pageHead, pct, say, selectBox, shortModel, statCard, tiles, scope } from "../lib.js";
+import { postJson, badCount, card, cardTrend, cell, count, dataTable, day, dur, empty, error, esc, heads, keep, kept, loadingLine, miss, money, notice, pageHead, pct, say, selectBox, shortModel, statCard, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard, windowTrend } from "./speed.js";
@@ -39,8 +39,6 @@ function scorecard(s, d, m, win) {
 const WARN_RATE = 0.7;
 /** A row with fewer ended runs shows its counts, not a rate. */
 const MIN_ENDED = 20;
-/** A share (0 to 1) to one decimal. */
-const share1 = (v) => (v == null ? "–" : `${(v * 100).toFixed(1)}%`);
 
 /** The sizes by their label; the models each offers come from /api/models. */
 const SIZES = { small: "Small", medium: "Medium", large: "Large" };
@@ -57,7 +55,7 @@ function goesTo(key, set) {
 }
 
 function roles(a, m) {
-  const num = ["Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per output"];
+  const num = ["Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per Output"];
   const gone = miss("no runs in this window");
   const outs = a.outcomes ?? [], set = m?.models ?? {}, open = new Set(kept("agents.open", []));
   // The figures of one outcome. Its output is landed builds for a worker, verdicts for the reviewer and OK runs for another role.
@@ -67,9 +65,9 @@ function roles(a, m) {
     const out = worker ? o.built : reviewer ? o.pass + o.fail : o.succeeded, noun = NOUNS[o.role] ?? "run";
     const trend = few ? "" : cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = !few && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    const rate = few ? `${reviewer ? out : o.succeeded} / ${o.ended}` : `${esc(share(o.rate))} <span class="m" title="ended">${count(o.ended)}</span> ${trend}`;
-    const q = worker ? ` <span class="m">· ${share(o.built ? o.firstPass / o.built : null)} first · ${share(o.reviewPass)} review</span>` : "";
-    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${[count(o.stuck), dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td>${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
+    const rate = few ? `${reviewer ? out : o.succeeded} / ${o.ended}` : `${esc(share(o.rate))} <span class="quiet" title="ended">${count(o.ended)}</span> ${trend}`;
+    const q = worker ? ` <span class="quiet">· ${share(o.built ? o.firstPass / o.built : null)} first · ${share(o.reviewPass)} review</span>` : "";
+    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${badCount(o.stuck)}${[dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td>${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
   };
   const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
   const on = Object.keys(SIZES).filter((k) => set[k]?.enabled).length;
@@ -79,10 +77,10 @@ function roles(a, m) {
     const last = [...rs].sort((x, y) => (y.to ?? "").localeCompare(x.to ?? ""));
     const now = set[key]?.model ?? last[0]?.model, cur = rs.find((o) => shortModel(o.model) === shortModel(now));
     const past = last.filter((o) => o !== cur), off = key in SIZES && set[key] && !set[key].enabled, shut = !open.has(key);
-    const fold = past.length ? `<button class="fold" data-fold="${esc(key)}" aria-expanded="${!shut}" aria-label="Earlier models of ${label}">${shut ? "▸" : "▾"}</button> ` : "";
-    const ctrl = !set[key] ? esc(shortModel(now)) : `${key in SIZES ? box(key, label) : ""}${off ? `<span class="m">Off · goes to ${goesTo(key, set)}</span>` : sel(key, label)}`;
+    const fold = past.length ? `<button class="fold" data-fold="${esc(key)}" aria-expanded="${!shut}" aria-label="Earlier models of ${label}">${shut ? "▸" : "▾"}</button> ` : `<span class="fold" aria-hidden="true"></span> `;
+    const ctrl = !set[key] ? esc(shortModel(now)) : `${key in SIZES ? box(key, label) : ""}${off ? `<span class="quiet">Off · goes to ${goesTo(key, set)}</span>` : sel(key, label)}`;
     return `<tr><td class="wide" title="${label}">${label}</td><td>${fold}${ctrl}</td>${off ? `<td colspan="${num.length + 1}"></td>` : stats(cur)}</tr>` +
-      (shut ? "" : past.map((o) => `<tr class="sub-row"><td></td><td>${esc(shortModel(o.model))} <span class="m">${day(o.from)} – ${day(o.to)}</span></td>${stats(o)}</tr>`).join(""));
+      (shut ? "" : past.map((o) => `<tr class="sub-row"><td></td><td>${esc(shortModel(o.model))} <span class="quiet">${day(o.from)} – ${day(o.to)}</span></td>${stats(o)}</tr>`).join(""));
   };
   const of = (role, size) => outs.filter((o) => o.role === role && (size === undefined || o.size === size));
   const grp = (t) => `<tr class="grp"><th colspan="${num.length + 3}">${t}</th></tr>`;
@@ -138,7 +136,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m) {
   const head = scope().bar({ value: win });
   return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${m?.local === "down" ? notice("Local server down", true) : ""}${tiles("Scorecard", scorecard(s, d, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
-    card("Roles", a ? roles(a, m) : wait, { id: "roles", aside: a?.rates?.firstPass == null ? "" : `First pass ${share1(a.rates.firstPass)}` }) + `</div>`;
+    card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + `</div>`;
 }
 
 /** The old address. */
