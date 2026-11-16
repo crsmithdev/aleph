@@ -10,6 +10,7 @@ const ASK = "attention is needed";
 const PAUSED = "the factory is paused";
 const TICK_STOPPED = "the factory tick has stopped";
 const JOBS_UNHEALTHY = "jobs are unhealthy";
+const FLOW_FAILED = "the flow data did not load";
 
 /** The weekly usage, in percent, from which the sentence says how high it is. The raw value is compared, so 89.6 is not yet. */
 const WEEKLY_WARN = 90;
@@ -51,6 +52,8 @@ export interface Facts {
   /** An Ask with `escalated: false` is still with the director. */
   asks?: { escalated?: boolean }[];
   usage?: { now?: { seven_day?: number } | null } | null;
+  /** The page's /api/flow load, if it has one: `{ error }` when it failed. */
+  flow?: { error?: string } | null;
 }
 
 /** An error line: the factory's own trouble, in full, and the key of its alert. */
@@ -91,7 +94,9 @@ export function verdict(s: Facts, stale = false): Verdict {
   const f = s.factory, errors = errorLines(s);
   const alerts = new Set(errors.map((l) => ALERTS.find(([key]) => key === l.key)?.[1] ?? l.text.replace(/\.$/, "")));
   if (s.stuck.length) alerts.add(JOBS_UNHEALTHY);
-  const said: Part[] = [...alerts].sort((a, b) => rank(a) - rank(b)).map((t) => ({ text: t, href: t === JOBS_UNHEALTHY ? "#jobs-stuck" : "#awaiting" }));
+  // Last, so it sorts after the factory's alerts.
+  if (s.flow?.error) alerts.add(FLOW_FAILED);
+  const said: Part[] = [...alerts].sort((a, b) => rank(a) - rank(b)).map((t) => ({ text: t, href: t === JOBS_UNHEALTHY ? "#jobs-stuck" : t === FLOW_FAILED ? "" : "#awaiting" }));
   // An Ask still with the director does not need Chris yet.
   const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
   if (asks.length) said.push({ text: alerts.size || f.paused || stale ? ASK : lead(ASK), href: "#awaiting" });

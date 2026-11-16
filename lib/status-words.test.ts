@@ -24,6 +24,9 @@ test("verdict gives each state its tone, label and sentence", () => {
     ["weekly usage at 89.6%",  at({ usage: { now: { seven_day: 89.6 } } }),              "fine",    "Fine",  "Everything is fine."],
     ["a warning health line",  at({}, { health: [slow] }),                               "warning", "Warn",  "Everything is fine; aleph full suite took 135 s."],
     ["alerts ranked",          at({ stuck: [{}] }, { health: [mainRed, ciRed] }),        "alert",   "Alert", "Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy."],
+    ["a failed flow load",     at({ flow: { error: "Could not load Flow (500)." } }),    "alert",   "Alert", "Alert: The flow data did not load."],
+    ["a stuck job, flow failed", at({ stuck: [{}], flow: { error: "Could not load Flow (500)." } }), "alert", "Alert", "Alert: Jobs are unhealthy; the flow data did not load."],
+    ["a usable flow",          at({ flow: {} }),                                         "fine",    "Fine",  "Everything is fine."],
     ["an alert and an Ask",    at({ asks: [{}] }, { health: [mainRed], paused: true }), "alert",   "Alert", "Alert: The build is failing on main; attention is needed; the factory is paused."],
   ];
   for (const [name, s, tone, label, text] of cases) expect([name, verdict(s)]).toMatchObject([name, { tone, label, text }]);

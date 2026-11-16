@@ -25,6 +25,12 @@ test("with nothing wrong the status sentence is the fine sentence", () => {
   expect(view.renderLede(calmState)).toContain('class="say fine"');
 });
 
+test("a failed flow load is an alert, not the fine sentence", () => {
+  const html = view.renderLede({ ...calmState, flow: { error: "Could not load Flow (500)." } });
+  expect(html).toContain('class="say error"');
+  expect(html).not.toContain("Everything is fine");
+});
+
 test("each error line says its alert, in red", () => {
   const cases: [object, string][] = [
     [{ health: [ciRed] }, "GitHub CI is broken"],
