@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
@@ -194,4 +194,20 @@ test("a JSON answer over 1024 bytes is gzipped when the request accepts gzip, an
   const small = await get(1022, "gzip");
   expect(small.headers.get("content-encoding")).toBeNull();
   expect(await small.text()).toBe(JSON.stringify("x".repeat(1022)));
+});
+
+test("the shelf routes are served, and a send lands in the test's own store", async () => {
+  expect(await (await at("/shelf/ping")).text()).toBe("shelf");
+  const home = await at("/shelf/");
+  expect(home.status).toBe(200);
+  expect(home.headers.get("content-type")).toContain("text/html");
+
+  const markdown = "a note from the page";
+  const sent = await at("/shelf/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ markdown, ids: [], url: "http://127.0.0.1:1/" }) });
+  expect(sent.status).toBe(200);
+
+  const shelfDir = process.env.SHELF_DIR!;
+  expect(shelfDir.startsWith(tmpdir())).toBe(true);
+  expect(existsSync(join(shelfDir, "inbox", "events.jsonl"))).toBe(true);
+  expect(await (await at("/shelf/wait")).text()).toContain(markdown);
 });
