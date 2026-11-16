@@ -18,7 +18,7 @@ const lastOf: Record<string, string> = {};
 function run(job: string, r: Record<string, unknown>) {
   // Each job is its own issue: g1 is issue.1. The runs of one `job` follow each other.
   const target = `issue.${job.slice(1)}`;
-  lastOf[job] = seed({ name: target, told: true, repo: "fx", target, prev: lastOf[job], ...r } as any).id;
+  return (lastOf[job] = seed({ name: target, told: true, repo: "fx", target, prev: lastOf[job], ...r } as any).id);
 }
 const at = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
 const span = (h: number, s: number) => ({ started: at(h), ended: new Date(Date.parse(at(h)) + s * 1000).toISOString() });
@@ -46,6 +46,17 @@ test("issue stats: first-pass share, median fix rounds", () => {
   const g = speed("day", now).issues;
   expect(g).toEqual({ landed: 3, firstPass: 0.6667, fixRounds: 0, week: null, usage: [] });
   expect(g).not.toHaveProperty("cost");
+});
+
+test("a returned review and a retried job both leave a landed issue out of first pass", () => {
+  // g5's reviewer sent its build back with no `failed`; g6's landing job retries a job whose build failed. Both land in the day window of `now`.
+  run("g5", { role: "build", state: "returned", review: { call: "returned" }, cost: 1, ...span(8, 600) });
+  run("g5", { role: "build", state: "passed", round: 1, cost: 1, ...span(9, 600) });
+  run("g5", { role: "land", state: "landed", ...span(10, 30) });
+  const back = run("g6", { role: "build", state: "returned", failed: "tests", cost: 2, ...span(8, 600) });
+  run("g6", { role: "build", state: "passed", retryOf: back, prev: undefined, cost: 2, ...span(9, 600) });
+  run("g6", { role: "land", state: "landed", ...span(10, 30) });
+  expect(speed("day", now).issues).toEqual({ landed: 5, firstPass: 0.4, fixRounds: 0, week: null, usage: [] });
 });
 
 const cls = (key: string, lost: boolean, h: number, causes: any[], top: any[] = []) => ({ key, lost, text: `${key} text.`, hours: h, week: 0, runs: causes.reduce((a, x) => a + x.runs, 0), issues: 2, causes, top });

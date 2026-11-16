@@ -84,7 +84,7 @@ export interface Speed {
   /** Landed issues (one per issue that landed in the window) and what they cost to get there. */
   issues: {
     landed: number;
-    /** Share of landed issues with 0 fix rounds, 0 to 1; null with none landed. */
+    /** Share of landed issues whose landing jobs, and the jobs they retry, had no run sent back, 0 to 1; null with none landed. */
     firstPass: number | null;
     /** Median fix rounds per landed issue; null with none landed. */
     fixRounds: number | null;
@@ -432,6 +432,20 @@ const bare = (m: string | undefined): string | undefined => m?.replace(/^.*\//, 
 const sizeModel = (size: string | undefined): string | undefined => (size && size in OFFERS ? readModels()[size as keyof typeof OFFERS].model : undefined);
 
 /**
+ * The jobs that had a fix round: a run of the job that a check or the reviewer sent back (`failed` set or a
+ * `review.call` of `returned`), and every job that retries such a job (`retryOf`).
+ */
+function fixRoundJobs(entries: Entry[]): Set<string> {
+  const jobs = new Set(entries.map((e) => e.run).filter((r) => r.failed || r.review?.call === "returned").map((r) => r.job));
+  const jobOf = new Map(entries.map((e) => [e.id, e.run.job]));
+  const retriedBy = new Map<string, string[]>();
+  for (const e of entries) { const from = e.run.retryOf ? jobOf.get(e.run.retryOf) : undefined; if (from !== undefined && from !== e.run.job) retriedBy.set(from, [...(retriedBy.get(from) ?? []), e.run.job]); }
+  const queue = [...jobs];
+  while (queue.length) for (const j of retriedBy.get(queue.pop()!) ?? []) if (!jobs.has(j)) { jobs.add(j); queue.push(j); }
+  return jobs;
+}
+
+/**
  * The rows of OutcomeRow for the runs that started in `since`..`now`, without `baseline`.
  * What "succeeded" means, from what each role's run records:
  * - Worker (build, older "agent"): the run ends `passed`, `waiting` or `landed`: its checks passed and the reviewer did not send it back. A run that a reviewer or a check sent back is `returned`: that is a fail, not stuck.
@@ -453,14 +467,9 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
   // The review run of a build: the one whose `prev` is the build's job. Its model serves a verdict that has none.
   const reviews = new Map<string, string>();
   for (const e of entries) if (e.run.role === "review" && e.run.prev && e.run.model) reviews.set(e.run.prev, e.run.model);
-  // A job landed when a land run of it landed; a job had a fix round when a run of it was sent back by a check or by the reviewer, or when it retries a job that had one.
+  // A job landed when a land run of it landed; a fix round is the rule of fixRoundJobs.
   const landedJobs = new Set(runs.filter((r) => r.role === "land" && r.state === "landed").map((r) => r.job));
-  const roundJobs = new Set(runs.filter((r) => r.failed || r.review?.call === "returned").map((r) => r.job));
-  const jobOf = new Map(entries.map((e) => [e.id, e.run.job]));
-  const retriedBy = new Map<string, string[]>();
-  for (const e of entries) { const from = e.run.retryOf ? jobOf.get(e.run.retryOf) : undefined; if (from !== undefined && from !== e.run.job) retriedBy.set(from, [...(retriedBy.get(from) ?? []), e.run.job]); }
-  const queue = [...roundJobs];
-  while (queue.length) for (const j of retriedBy.get(queue.pop()!) ?? []) if (!roundJobs.has(j)) { roundJobs.add(j); queue.push(j); }
+  const roundJobs = fixRoundJobs(entries);
   for (const e of entries) {
     const r = e.run;
     const a = Date.parse(r.started);
@@ -609,6 +618,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     if (!isAgentRun(r.role)) continue;
     if (r.failed) rounds.set(r.job, (rounds.get(r.job) ?? 0) + 1);
   }
+  // First pass reads the whole fix-round rule, as the worker rows do; `fixRounds` keeps the count of `failed` runs.
+  const roundJobs = fixRoundJobs(entries);
   // Landed issues: a land run of an issue with no number all share the one key "none". An issue's fix rounds are the most any of its landing runs' jobs needed.
   const landedBy = new Map<string, Run[]>();
   for (const r of landed) {
@@ -616,10 +627,11 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     landedBy.set(k, [...(landedBy.get(k) ?? []), r]);
   }
   const issuesLanded = landedBy.size;
-  const fixes = [...landedBy.values()].map((rs) => Math.max(...rs.map((r) => rounds.get(r.job) ?? 0)));
+  const perIssue = [...landedBy.values()];
+  const fixes = perIssue.map((rs) => Math.max(...rs.map((r) => rounds.get(r.job) ?? 0)));
   const issues: Speed["issues"] = {
     landed: issuesLanded,
-    firstPass: issuesLanded ? round(fixes.filter((f) => f === 0).length / issuesLanded, 4) : null,
+    firstPass: issuesLanded ? round(perIssue.filter((rs) => rs.every((r) => !roundJobs.has(r.job))).length / issuesLanded, 4) : null,
     fixRounds: quantile(fixes, 0.5),
     week: null,
     usage: [],
