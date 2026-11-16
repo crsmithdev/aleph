@@ -12,6 +12,9 @@ const CHROME = "/usr/bin/google-chrome";
 /** The time Chrome has to answer a command. It is under the 30 s test timeout, so a hung call names its method in the test that made it. */
 const ANSWER_LIMIT = 10_000;
 
+/** The time a starting Chrome has to answer its first command. A loaded 4-core runner takes over 10 s to start it, and a restart only starts the wait over. */
+const START_LIMIT = 30_000;
+
 /** The argv that runs Chrome headless on a pipe (no debugging port), with a profile of its own. */
 function chromeArgv(profileDir: string): string[] {
   return [CHROME, "--headless=new", "--remote-debugging-pipe", `--user-data-dir=${profileDir}`,
@@ -86,7 +89,7 @@ export async function launchChrome(base: string): Promise<Chrome> {
     const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
       env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
     const cdp = new Pipe(chrome.stdio[3] as NodeJS.WritableStream, chrome.stdio[4] as NodeJS.ReadableStream);
-    try { await cdp.send("Browser.getVersion"); return { cdp, kill: () => chrome.kill("SIGKILL") }; } catch (e) {
+    try { await cdp.send("Browser.getVersion", {}, undefined, START_LIMIT); return { cdp, kill: () => chrome.kill("SIGKILL") }; } catch (e) {
       chrome.kill("SIGKILL");
       waits.push(`try ${n}: ${(e as Error).message}`);
       if (n === 2) throw new Error(`Chrome failed both tries; ${waits.join("; ")}`);
