@@ -8,7 +8,7 @@ import { useLog } from "../../lib/episode-use.ts";
 import { layout } from "../../lib/layout.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
-import { Exit, run } from "./ops.ts";
+import { adopt, commitAndPush, lint as lintOp, misses as missesOp, op, requireVault, type Result } from "./ops.ts";
 import { daysAgo, today } from "../../lib/day.ts";
 import { compiledDays, fixFrontmatter, lintVault, loadVault, loadWiki, readRecallLog, readRun, recordRun, trimRecallLog, type Finding } from "./vault.ts";
 
@@ -16,19 +16,6 @@ const HANDOFF_DAYS = 30;
 const SHOWN_UNOPENED = 8;
 const OVERLAP_QUEUE = 10;
 type Json = Record<string, any>;
-type Commit = (subject: string, paths: string[]) => string | null;
-
-/** An op run in this process: its exit code, its JSON (null when it printed none) and its stderr lines. */
-export async function sub(argv: string[]): Promise<{ code: number; json: Json | null; err: string }> {
-  const { log, error } = console;
-  let text = "", err = "", code = 0;
-  console.log = (...a) => { text += a.join(" ") + "\n"; };
-  console.error = (...a) => { err += a.join(" ") + "\n"; };
-  try { await run(argv); }
-  catch (e) { if (!(e instanceof Exit)) throw e; code = e.code; }
-  finally { console.log = log; console.error = error; }
-  return { code, json: text.trim() ? JSON.parse(text) : null, err };
-}
 
 /** `line` with each repeated `[[link]]` removed. */
 const dedupe = (line: string): string => { const seen = new Set<string>(); return line.replace(/\s*\[\[[^\]]+\]\]/g, (m) => (seen.has(m.trim()) ? "" : (seen.add(m.trim()), m))); };
@@ -50,7 +37,9 @@ export function decayQueue(root: string, stale: Finding[]): (Finding & { count: 
 }
 
 /** The pass over the vault at `root`. The report, with `ok` false when a step that changes something failed. */
-export async function maintain(root: string, dry: boolean, commit: Commit): Promise<Json> {
+export const maintain = (root: string, dry: boolean): Promise<Result<Json>> => op(async (w) => {
+  requireVault(root);
+  const commit = (subject: string, paths: string[]) => commitAndPush(root, w, subject, paths);
   const report: Json = { op: "maintain", dry };
   const failed: string[] = [];
   const backup = join(alephPath("ALEPH_BACKUPS_DIR", "backups"), "maintain", today());
@@ -71,16 +60,16 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
   else {
     // Core lines go first: the lint that follows regenerates Home from them.
     for (const c of cores) writeFileSync(c.n.path, c.n.text.replace(/^core:.*$/m, (l) => dedupe(l)));
-    const l = await sub(["lint", "--fix"]);
-    if (!l.json) failed.push("lint");
-    report.lint = { fixed: l.json?.fixed ?? [], commit: l.json?.commit ?? null };
+    const l = await lintOp(root, { fix: true });
+    if (!l.ok) failed.push("lint");
+    report.lint = { fixed: l.ok ? l.value.fixed : [], commit: l.ok ? l.value.commit : null };
     if (cores.length) report.core = { commit: commit(`maintain core: ${cores.length} notes`, cores.map((c) => c.n.path)) };
   }
   report.adopt = [];
   for (const n of untracked) {
-    const r = dry ? null : await sub(["adopt", n.path, "--why", "maintain"]);
-    if (r && r.code) failed.push(`adopt ${n.title}`);
-    report.adopt.push({ note: n.title, ...(r ? { adopted: !r.code } : {}) });
+    const r = dry ? null : await adopt(root, n.path, "maintain");
+    if (r && !r.ok) failed.push(`adopt ${n.title}`);
+    report.adopt.push({ note: n.title, ...(r ? { adopted: r.ok } : {}) });
   }
   report.core = { ...report.core, fixed: cores.map((c) => ({ note: c.n.title, was: c.was, now: c.now })) };
 
@@ -104,8 +93,8 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
 
   const lint = lintVault(await loadVault(root), { overlap: true, tracked: [...tracked] });
   const queue = (rule: string) => lint.warn.filter((f) => f.rule === rule);
-  const misses = await sub(["misses"]);
-  report.queues = { decay: decayQueue(root, queue("stale")), overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.code ? {} : { misses: misses.json }) };
+  const misses = await missesOp();
+  report.queues = { decay: decayQueue(root, queue("stale")), overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.ok ? { misses: misses.value } : {}) };
   const overlaps = queue("overlap").length;
   report.counts = {
     fixed: report.lint.fixed.length, adopt: untracked.length, core: cores.length, handoffs: report.handoffs.length, episodes: report.episodes.length,
@@ -114,4 +103,4 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
   report.ok = !failed.length;
   recordRun(root, "maintain", report.ok ? "ok" : "failed", failed.length ? `failed: ${failed.join(", ")}` : `${dry ? "dry: " : ""}${JSON.stringify(report.counts)}`);
   return report;
-}
+});

@@ -617,14 +617,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
         if (!r.ok || r.corrections?.error || r.compile?.error || r.recheck?.error || r.dedupe?.error) ctx.code = 1;
         break;
       }
-      // The vault ops print through console and end with an Exit: its output goes to this run's stdout and stderr, its exit code is this one's.
-      const { run: vault, Exit } = await import("../vault/lib/ops.ts");
-      const { log, error } = console;
-      console.log = (...a) => ctx.log(a.join(" "));
-      console.error = (...a) => ctx.err(a.join(" "));
-      try { await vault(ctx.command.slice(1)); }
-      catch (e) { if (!(e instanceof Exit)) throw e; ctx.code = e.code; }
-      finally { console.log = log; console.error = error; }
+      ctx.code = await (await import("../vault/lib/cli.ts")).cli(ctx.command.slice(1), { log: ctx.log, err: ctx.err });
       break;
     }
     case "job": await job(ctx); break;

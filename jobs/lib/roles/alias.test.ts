@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git.testkit.ts";
-import { sub } from "../../../vault/lib/maintain.ts";
+import { write } from "../../../vault/lib/ops.ts";
 import { loadWiki } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { alias, findMisses, MISSES } from "./alias.ts";
@@ -28,7 +28,7 @@ async function seed(title: string, core?: string) {
   const file = join(base, `${title}.md`);
   const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "d", evidence: "e", related: ["Home"] }, today());
   writeFileSync(file, core ? text.replace("\nsupersedes", `\ncore: ${core}\nsupersedes`) : text);
-  expect((await sub(["write", file, "--why", "seed"])).code).toBe(0);
+  expect((await write(root, file, "seed")).ok).toBe(true);
 }
 
 /** One turn: its prompt, the hook's span (asked paths, offered), then each recall and read in order. */

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { compileDigest } from "../../../vault/lib/compile.ts";
-import { sub } from "../../../vault/lib/maintain.ts";
+import { outcome, write } from "../../../vault/lib/ops.ts";
 import { markRetry, recordCompiled, recordRun } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { addDays } from "../learning/monitor-table.ts";
@@ -142,16 +142,14 @@ export async function pass(report: { run?: string; error?: string; skipped?: str
 }
 
 /** Write each note through the vault `write` op; a refusal is kept with its rule and the rest go on. */
-const put = (notes: Note[], day: string): Promise<Written[]> => scratch("maintainer", async (dir) => {
+const put = (root: string, notes: Note[], day: string): Promise<Written[]> => scratch("maintainer", async (dir) => {
   const out: Written[] = [];
   for (const n of notes) {
     const w: Written = { title: String(n.title), kind: String(n.kind) };
     if (!n.title || /[\/\\:*?"<>|]/.test(n.title)) { out.push({ ...w, rule: "title", refused: "the title is empty or has a character a file name cannot" }); continue; }
     const file = join(dir, `${n.title}.md`);
     writeFileSync(file, render(n, day));
-    const r = await sub(["write", file, "--why", reason("compile", day)]);
-    const f = r.json?.findings?.[0];
-    out.push(r.code === 0 ? { ...w, commit: r.json?.commit ?? null } : { ...w, rule: f?.rule, refused: f ? `refuse ${f.rule} ${f.note}: ${f.detail}` : r.err.trim() || `exit ${r.code}` });
+    out.push({ ...w, ...outcome(await write(root, file, reason("compile", day))) });
   }
   return out;
 });
@@ -169,7 +167,7 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
   }
   await pass(report, {
     label: "maintainer", day, dry, schema: MAINTAINER_SCHEMA, allowed: ALLOWED, key: "notes", prompt: prompt(day, digest.text),
-    act: async (list) => { report.notes = dry ? list.map((n) => ({ title: String(n.title), kind: String(n.kind) })) : await put(list, day); },
+    act: async (list) => { report.notes = dry ? list.map((n) => ({ title: String(n.title), kind: String(n.kind) })) : await put(root, list, day); },
     done: () => {
       const wrote = report.notes.filter((n) => !n.refused).length;
       return `${wrote} notes${report.notes.length > wrote ? `, ${report.notes.length - wrote} refused` : ""}`;

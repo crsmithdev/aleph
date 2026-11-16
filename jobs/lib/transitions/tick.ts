@@ -11,7 +11,7 @@ import { join, resolve } from "node:path";
 import { today } from "../../../lib/day.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
-import { sub } from "../../../vault/lib/maintain.ts";
+import { maintain } from "../../../vault/lib/maintain.ts";
 import { compileDay, yesterday } from "../roles/maintainer.ts";
 import { recheck } from "../roles/recheck.ts";
 import { dedupe } from "../roles/dedupe.ts";
@@ -95,8 +95,8 @@ const part = async <T>(run: () => Promise<T>): Promise<T | { error: string }> =>
  * already (`dry` while the mechanical pass is dry), then the re-check of the stale notes, the overlap queue, the misses queue. One report: the mechanical fields, `corrections`, `retried`, `compile`, `recheck`, `dedupe`, `alias`, and `counts` with `lessons`, `notes`, `rechecked`, `resolved` and `aliased` added.
  */
 export async function maintainAll(root: string, dry: boolean, now: number, parts: Parts): Promise<Json> {
-  const mech = parts.mech ? await sub(["maintain", ...(dry ? ["--dry"] : [])]) : null;
-  const report: Json = mech ? (mech.json ?? { op: "maintain", dry, ok: false, error: mech.err.trim() }) : { op: "maintain", dry, ok: true };
+  const mech = parts.mech ? await maintain(root, dry) : null;
+  const report: Json = mech ? (mech.ok ? mech.value : { op: "maintain", dry, ok: false, error: mech.error }) : { op: "maintain", dry, ok: true };
   if (parts.corr) report.corrections = await part(() => mineCorrections(now));
   const day = yesterday(now);
   if (parts.compile) {

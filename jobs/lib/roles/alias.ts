@@ -9,12 +9,11 @@ import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
 import { recall } from "../../../vault/lib/index.ts";
-import { sub } from "../../../vault/lib/maintain.ts";
+import { outcome, write } from "../../../vault/lib/ops.ts";
 import { recallQuery } from "../../../vault/lib/recall-query.ts";
 import { loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { pass, reason, scratch, TEXT } from "./maintainer.ts";
-import { outcome } from "./recheck.ts";
 
 /** Misses worked per run, oldest first. */
 export const MISSES = 8;
@@ -131,7 +130,7 @@ async function apply(root: string, misses: Miss[], verdicts: Verdict[], day: str
       if (v.verdict !== "alias" || !n || !add.length) { out.push({ ...w, rule: "reply", refused: !n ? "the note is gone" : v.verdict !== "alias" ? `unknown verdict ${v.verdict}` : "alias verdict names no new alias" }); continue; }
       const file = join(dir, `${n.title}.md`);
       writeFileSync(file, serializeFrontmatter({ ...n.fm, aliases: [...list(n, "aliases"), ...add] }) + n.body);
-      const r = await sub(["write", file, "--why", reason("alias", day, v.why)]);
+      const r = await write(root, file, reason("alias", day, v.why));
       out.push({ ...w, aliases: add, ...outcome(r) });
     }
     return out;

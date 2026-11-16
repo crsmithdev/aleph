@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git.testkit.ts";
-import { sub } from "../../../vault/lib/maintain.ts";
+import { write } from "../../../vault/lib/ops.ts";
 import { readRun } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { dedupe, PAIRS } from "./dedupe.ts";
@@ -28,8 +28,8 @@ async function seed(title: string, extra: Record<string, unknown> = {}) {
   const file = join(base, `${title}.md`);
   const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: ["Home"], ...extra }, today());
   writeFileSync(file, extra.core ? text.replace("\nsupersedes", `\ncore: ${extra.core}\nsupersedes`) : text);
-  const r = await sub(["write", file, "--why", "seed"]);
-  expect(r.code).toBe(0);
+  const r = await write(root, file, "seed");
+  expect(r.ok).toBe(true);
 }
 const v = (a: string, b: string, verdict: string, more: Record<string, unknown> = {}) => ({ a, b, verdict, why: "w", ...more });
 

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recallQuery } from "./recall-query.ts";
 import { use } from "../../lib/langfuse.ts";
-import { Exit, run as vaultOp } from "./ops.ts";
+import { cli as memory } from "./cli.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -35,19 +35,11 @@ const zone = Bun.spawnSync(["bun", "-e", "console.log(Intl.DateTimeFormat().reso
 /** `vault <args>` in-process, under the CLI's environment, with what it prints and its exit code. */
 async function run(env: Record<string, string>, ...args: string[]): Promise<Result> {
   const saved = { ...process.env };
-  const { log, error } = console;
   let stdout = "", stderr = "", code = 0;
   Object.assign(process.env, testEnv, { ALEPH_JUDGE: "haiku", TZ: zone }, env);
-  console.log = (...a: unknown[]) => { stdout += a.map(String).join(" ") + "\n"; };
-  console.error = (...a: unknown[]) => { stderr += a.map(String).join(" ") + "\n"; };
   try {
-    await vaultOp(args);
-  } catch (e) {
-    if (!(e instanceof Exit)) throw e;
-    code = e.code;
+    code = await memory(args, { log: (s) => { stdout += s + "\n"; }, err: (s) => { stderr += s + "\n"; } });
   } finally {
-    console.log = log;
-    console.error = error;
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
     Object.assign(process.env, saved);
     // Bun reads a new TZ when it is set, not when it is deleted: a deleted TZ leaves the machine zone, so set UTC last.

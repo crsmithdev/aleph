@@ -7,11 +7,10 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
-import { sub } from "../../../vault/lib/maintain.ts";
+import { archive, outcome, write } from "../../../vault/lib/ops.ts";
 import { lintVault, loadWiki, recordRun, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
-import { outcome } from "./recheck.ts";
 
 /** Pairs worked per run, most similar first. */
 export const PAIRS = 5;
@@ -84,8 +83,8 @@ async function apply(root: string, pairs: Pair[], verdicts: Verdict[], day: stri
       const why = reason("dedupe", day, v.why);
       const file = "text" in c ? join(dir, `${c.title}.md`) : "";
       if ("text" in c) writeFileSync(file, c.text);
-      const r = await sub("drop" in c ? ["archive", c.drop, "--why", why] : ["write", file, "--why", why]);
-      if (r.code === 0 && v.verdict !== "distinct") gone.add(v.verdict === "archive" ? v.drop! : v.keep === x.title ? y.title : x.title);
+      const r = await ("drop" in c ? archive(root, c.drop, why) : write(root, file, why));
+      if (r.ok && v.verdict !== "distinct") gone.add(v.verdict === "archive" ? v.drop! : v.keep === x.title ? y.title : x.title);
       out.push({ ...w, ...outcome(r) });
     }
     return out;
