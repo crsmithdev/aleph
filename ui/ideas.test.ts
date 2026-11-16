@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +20,8 @@ echo "# found" > result.md
 echo '{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1","total_cost_usd":'$FAKE_COST'}'
 `;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+// Minutes :34 never become :00 in a timezone, so the commit time is never midnight-like.
+const pinned = new Date("2026-03-05T12:34:56Z");
 let base = "", at: (p: string, i?: RequestInit) => Promise<Response>, stop = () => {}, restore = () => {};
 const json = async (p: string) => (await at(p)).json() as Promise<any>;
 const lens = (slug: string, name: string, cost: string) => { process.env.FAKE_COST = cost; return run(["idea", "lens", slug, name], { stderr: () => {}, stdin: async () => "" }); };
@@ -29,7 +31,7 @@ beforeAll(async () => {
   writeFileSync(join(base, "claude"), FAKE);
   chmodSync(join(base, "claude"), 0o755);
   writeRepos({ aleph: { path: base, code: "a" } }, join(base, "issues"));
-  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "issues"), ALEPH_LENS_CMD: join(base, "claude"), FAKE_COST: "0.5", ...gitEnv });
+  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "issues"), ALEPH_LENS_CMD: join(base, "claude"), FAKE_COST: "0.5", ...gitEnv, GIT_COMMITTER_DATE: pinned.toISOString() });
   add("Alpha", "sketch", "aleph");
   add("Beta", "sketch");
   add("Gamma", "sketch");
@@ -144,9 +146,17 @@ test("a queue that fails says the act name, then failed:, then the reason", asyn
 
 test("the Updated cell shows the time of the last commit from /api/ideas, not 00:00", async () => {
   const rows = await json("/api/ideas");
-  const h = renderIdeas(rows, "exploring");
-  expect(h).toContain(`<td class="time">${when(rows[0].last.replace(" ", "T"))}</td>`);
-  expect(h).not.toContain(when(`${rows[0].last.slice(0, 10)}T00:00`));
+  const p = (n: number) => String(n).padStart(2, "0");
+  expect(rows[0].last).toBe(`${pinned.getFullYear()}-${p(pinned.getMonth() + 1)}-${p(pinned.getDate())} ${p(pinned.getHours())}:${p(pinned.getMinutes())}`);
+  // The clock in the commit's year, because when() shows only the date for another year.
+  setSystemTime(pinned);
+  try {
+    const h = renderIdeas(rows, "exploring");
+    expect(h).toContain(`<td class="time">${when(rows[0].last.replace(" ", "T"))}</td>`);
+    expect(h).not.toContain(when(`${rows[0].last.slice(0, 10)}T00:00`));
+  } finally {
+    setSystemTime();
+  }
 });
 
 test("renderIdeas has the Project select in the page head and no Window control, and a chosen project shows only its ideas", () => {
