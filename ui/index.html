@@ -86,7 +86,7 @@
       headers: { "X-Aleph-UI": "1" },
       watch: (fn) => addEventListener("aleph:change", (e) => { if (e.detail.includes("/api/annotations")) fn(); }),
     }),
-    send: (b) => fetch("/shelf/send", { method: "POST", headers: { "content-type": "application/json", "X-Aleph-UI": "1" }, body: JSON.stringify({ ...b, url: location.href }) }).then((r) => { if (!r.ok) throw r.status; }),
+    send: (b) => fetch("/shelf/send", { method: "POST", headers: { "content-type": "application/json", "X-Aleph-UI": "1" }, body: JSON.stringify({ ...b, url: location.href }) }).then((r) => { if (!r.ok) throw r.status; return r.json(); }),
   });
   shelf({ url: "/shelf/" });
   // The chat agent (ui/api/chat.ts) gets the open notes of the page in view, named as annotate.js names a page, and
