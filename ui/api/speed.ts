@@ -13,6 +13,7 @@ import { askHistory, type AskSpan } from "./gates.ts";
 import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, isRunning } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
+import { OFFERS, readModels } from "../../jobs/lib/routing/models.ts";
 import { stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
 import { createdAt, itemsDir, projectsAt, reader } from "../../issues/lib/store.ts";
@@ -414,13 +415,20 @@ type AgentKey = (typeof AGENT_ROLES)[number][0];
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
 const modelName = (m: string) => /^claude-([a-z]+)-/.exec(m)?.[1] ?? m;
 
+/** A model's name without its provider prefix: "deepseek/deepseek-v4.1-flash" as "deepseek-v4.1-flash", the name the models setting carries. */
+const bare = (m: string | undefined): string | undefined => m?.replace(/^.*\//, "");
+
+/** The model a size (small, medium or large) is set to now, or undefined for any other size. */
+const sizeModel = (size: string | undefined): string | undefined => (size && size in OFFERS ? readModels()[size as keyof typeof OFFERS].model : undefined);
+
 /**
  * The rows of OutcomeRow for the runs that started in `since`..`now`, without `baseline`.
  * What "succeeded" means, from what each role's run records:
  * - Worker (build, older "agent"): the run ends `passed`, `waiting` or `landed`: its checks passed and the reviewer did not send it back. A run that a reviewer or a check sent back is `returned`: that is a fail, not stuck.
  * - Intake, Triage, Planner, Director: the run ends `passed` or `done`: the role applied its route or wrote its answer. These roles set no `failed`.
  * - Housekeeper, Maintainer: like Intake, the run ends `passed` or `done`.
- * - Reviewer: its runs, model, cost and times are those of its own `review` jobs. Its pass and fail counts (and so `succeeded`, `failed` and `rate`) are read from the verdicts on the builds: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `returned`) is a fail; `review.call` of `passed` is a pass. A build with no verdict counts as neither. A verdict's model is the build's `review.model`, else "unset".
+ * - Reviewer: its runs, model, cost and times are those of its own `review` jobs. Its pass and fail counts (and so `succeeded`, `failed` and `rate`) are read from the verdicts on the builds: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `returned`) is a fail; `review.call` of `passed` is a pass. A build with no verdict counts as neither. A verdict's model is the build's `review.model`, else that of the review run whose `prev` is the build's job, else "unset".
+ * - A model counts under its name without a provider prefix, and a build with no model under its size's model, so the rows match the names the models setting carries.
  * Stuck is a run that ended `failed` with no `failed` field, or with the cause `timeout` or `stalled`. Failed is any other end that is not running. A running run counts in `runs` only.
  */
 function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[] {
@@ -432,10 +440,14 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     return rows.get(k)!;
   };
   const runs = entries.map((e) => e.run);
+  // The review run of a build: the one whose `prev` is the build's job. Its model serves a verdict that has none.
+  const reviews = new Map<string, string>();
+  for (const e of entries) if (e.run.role === "review" && e.run.prev && e.run.model) reviews.set(e.run.prev, e.run.model);
   // A job landed when a land run of it landed; a job had a fix round when one of its runs was sent back.
   const landedJobs = new Set(runs.filter((r) => r.role === "land" && r.state === "landed").map((r) => r.job));
   const roundJobs = new Set(runs.filter((r) => r.failed).map((r) => r.job));
-  for (const r of runs) {
+  for (const e of entries) {
+    const r = e.run;
     const a = Date.parse(r.started);
     if (!(a >= since && a < now)) continue;
     const ok = passedState(r.state) || r.state === "waiting";
@@ -444,8 +456,9 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     const fail = !ok && !stuck && r.state !== "running";
     const build = isBuild(r.role);
     const role = build ? "worker" : AGENT_ROLES.find(([, , kind]) => kind === r.role)?.[0];
+    const model = bare(r.model) || (build ? sizeModel(r.size) : undefined) || "unset";
     if (role) {
-      const w = row(role, r.model || "unset");
+      const w = row(role, model);
       w.runs++; w.cost += r.cost ?? 0;
       // The reviewer's ends are the verdicts below.
       if (role !== "reviewer") { if (ok) w.succeeded++; else if (stuck) w.stuck++; else if (fail) w.failed++; }
@@ -459,9 +472,9 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     if (build) {
       const back = r.failed === "review" || r.review?.call === "returned", land = ok || r.review?.call === "passed";
       if (back || land) {
-        const v = row("reviewer", r.review?.model || "unset");
+        const v = row("reviewer", bare(r.review?.model) || bare(reviews.get(e.id)) || "unset");
         if (back) { v.fail = (v.fail ?? 0) + 1; v.failed++; } else { v.pass = (v.pass ?? 0) + 1; v.succeeded++; }
-        const w = row("worker", r.model || "unset");
+        const w = row("worker", model);
         w.verdicts++; w.landed += back ? 0 : 1;
       }
     }

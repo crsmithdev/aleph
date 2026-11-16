@@ -18,6 +18,7 @@ import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { averageFigures, figures } from "./api/speed.ts";
 import { writeRepos } from "../tests/projects.ts";
+import { readModels } from "../jobs/lib/routing/models.ts";
 
 let base: string;
 let restore: () => void;
@@ -396,6 +397,32 @@ test("agents: the reviewer's runs, model, cost and times come from its review jo
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
   expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "claude-opus-5-5", runs: 2, cost: 2, p50: 1800, p95: 3600, pass: 1, fail: 0, succeeded: 1, ended: 1 });
   expect(a.roles.find((x) => x.key === "reviewer")).toMatchObject({ live: 0, runs: 2, hours: 1.5, p50: 1800, p95: 3600, models: ["opus"] });
+});
+
+test("agents: a model's provider prefix falls away, so its runs share one reviewer row", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  let n = 0;
+  const e = (a: number, b: number, model: string) => ({ folder: `x${n}`, id: `x${n++}`, run: { n: 1, role: "review", job: `j${n}`, state: "done", started: iso(a), ended: iso(b), model } }) as any;
+  const runs = [e(10, 10.5, "deepseek/deepseek-v4.1-flash"), e(11, 12, "deepseek-v4.1-flash")];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.filter((x) => x.role === "reviewer").map((x) => [x.model, x.runs])).toEqual([["deepseek-v4.1-flash", 2]]);
+});
+
+test("agents: a verdict with no review.model takes the model of the build's review job", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  const runs = [
+    { folder: "vb", id: "b1", run: { n: 1, role: "build", job: "b1", state: "returned", failed: "review", started: iso(10), ended: iso(11), model: "claude-haiku" } },
+    { folder: "vr", id: "r1", run: { n: 1, role: "review", job: "b1", prev: "b1", state: "done", started: iso(10), ended: iso(11), model: "deepseek-v4.1-flash" } },
+  ] as any;
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.filter((x) => x.role === "reviewer").map((x) => [x.model, x.fail, x.runs])).toEqual([["deepseek-v4.1-flash", 1, 1]]);
+});
+
+test("agents: a build with no model counts under its size's configured model", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  const runs = [{ folder: "sz", id: "sz", run: { n: 1, role: "build", job: "sz", state: "passed", size: "small", started: iso(10), ended: iso(11) } }] as any;
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.filter((x) => x.role === "worker").map((x) => [x.model, x.runs])).toEqual([[readModels().small.model, 1]]);
 });
 
 test("agents: housekeeper and maintainer runs are roles with their own outcome rows", () => {
