@@ -274,7 +274,8 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
     const t = await step("timeout", () => timeoutStep(takeOnTimeout, now), (n) => `${n.length} taken`);
     if (t?.length) out.timedOut = t;
     await step("housekeep", () => housekeepDue(now) && (housekeeperDetached(), true), (on) => (on ? "started" : null));
-    const mon = await monitorStep(new Date(now));
+    // monitorStep records its own result; `say` gives null so `step` writes a row only for a failure.
+    const mon = await step("monitor", () => monitorStep(new Date(now)), () => null);
     if (mon) out.monitor = mon.day;
     tx(() => {
       for (const [k, v] of Object.entries(s.last)) setTick(k, { last: v });

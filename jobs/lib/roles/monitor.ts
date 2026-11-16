@@ -82,17 +82,12 @@ export async function runMonitor(day: string): Promise<Report | null> {
   }
 }
 
-/** The tick's daily step: yesterday's report, once. It ignores the pause. An error is logged, never thrown. */
+/** The tick's daily step: yesterday's report, once. It ignores the pause. It records its own result; the tick's `step` logs an error it throws. */
 export async function monitorStep(now = new Date()): Promise<Report | null> {
   if (!monitorOn()) return null;
   const day = monitorDue(now);
   if (!day) return null;
-  try {
-    const r = await runMonitor(day);
-    if (r) recordRan("monitor", r.error ? "no reading" : r.findings.length ? `${r.findings.length} findings` : "nothing looks off");
-    return r;
-  } catch (e: any) {
-    recordRan("monitor", "failed");
-    return null;
-  }
+  const r = await runMonitor(day);
+  if (r) recordRan("monitor", r.error ? "no reading" : r.findings.length ? `${r.findings.length} findings` : "nothing looks off");
+  return r;
 }

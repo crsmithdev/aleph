@@ -22,7 +22,7 @@ export async function oneShot(role: "title" | "judge", cmd: string, system: stri
     MAX_THINKING_TOKENS: "0", // measured: 3 s without thinking, 15-45 s with it, same verdicts
   };
   const model = readModels()[role].model;
-  const run = makeJob({ role: role as Run["role"], name: role, model, state: "running", told: true, shown: true }).id;
+  const run = makeJob({ role: role as Run["role"], name: role, model, told: true, shown: true }).id;
   let r: Reply | undefined;
   const dir = mkdtempSync(join(tmpdir(), "aleph-one-shot-"));
   const [stdout, stderr] = [join(dir, "out"), join(dir, "err")];

@@ -4,6 +4,7 @@
  */
 import { readFetched, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { parseId, parseKey, tail } from "../../../lib/naming.ts";
 import { fetchOrigin, git, jobCommit } from "../infra/git.ts";
 import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
@@ -65,7 +66,7 @@ const revertedOn = (cwd: string, main: string): Set<string> =>
 /** Each item's `since` as the store last fetched it. */
 function storedSince(key: string): (n: string) => string | undefined {
   let doc: issues.Doc | null = null;
-  try { doc = readFetched({ key }); } catch {}
+  try { doc = readFetched({ key }); } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "status", detail: `store read of ${key}: ${String(e?.message ?? e)}` }); }
   return (n) => {
     const hit = doc && issues.find(doc, n);
     return hit ? issues.sinceOf(hit) : undefined;

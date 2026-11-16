@@ -30,9 +30,7 @@ export function serverGraph(root: string): Set<string> {
       const candidates = hasExt ? [base] : [`${base}.ts`, `${base}.js`, `${base}/index.ts`];
       for (const c of candidates) {
         if (c.startsWith("../")) continue;
-        try {
-          if (isFile(join(root, c))) { add(c); break; }
-        } catch {}
+        if (isFile(join(root, c))) { add(c); break; }
       }
     }
   }

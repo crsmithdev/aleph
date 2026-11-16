@@ -52,7 +52,7 @@ export function doneChecker(fetch = true, later?: (repo: string, id: number | st
         k.doc = fetch ? readList(repo) : readFetched(repo);
         for (const s of repoStages(repo, { fetch, doc: k.doc })) k.stages.set(s.id, s.stage);
         k.read = !!k.doc;
-      } catch {}
+      } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "filing", detail: `store read of ${r.repo}: ${String(e?.message ?? e)}` }); }
       known.set(r.repo, k);
     }
     const { doc, stages, read } = known.get(r.repo)!;
