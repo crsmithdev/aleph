@@ -341,7 +341,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(r.length).toBeGreaterThan(0);
     for (const [inner, h] of r) { expect(inner).toBeGreaterThanOrEqual(38); expect(h).toBe(inner); }
     await page.ev('document.documentElement.style.removeProperty("--ctl-h")');
-    await page.go("#/factory/agents");
+    // The Kit page draws the status light specimen: no page shows a live dot since the Agents scorecard dropped the OpenRouter light.
+    await page.go("#/kit");
     await page.when('document.querySelector(".event-dot")');
     expect(await page.ev('getComputedStyle(document.querySelector(".event-dot")).borderRadius')).toBe("999px");
   }, 30_000);

@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, notice, pageHead, pct, row, say, selectBox, shortModel, statCard, statusLight, tiles, scope } from "../lib.js";
+import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, notice, pageHead, pct, row, say, selectBox, shortModel, statCard, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard, windowTrend } from "./speed.js";
@@ -9,12 +9,11 @@ const share = (v) => pct(v == null ? v : v * 100);
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
 const SPEND = { hour: "day", day: "day", week: "week", month: "month" };
 
-/** The OpenRouter tile: what OpenRouter charged for the window's UTC period, and its up or down light. */
+/** The OpenRouter tile: whether OpenRouter is up, over what it charged for the window's UTC period. */
 function openRouterCard(m, win) {
   const up = m ? !m.down.includes("deepseek-v4.1-flash") : null;
   const v = m?.spend?.[SPEND[win] ?? SPEND.week];
-  const extra = `<span class="lights">${statusLight(up == null ? "" : up ? "fine" : "alert", `OpenRouter: ${up == null ? "–" : up ? "up" : "down"}`)}</span>`;
-  return statCard({ k: "OpenRouter", v: v == null ? "–" : money(v), note: "Spend", extra, loading: m === undefined });
+  return statCard({ k: "OpenRouter", v: up == null ? "–" : up ? "up" : "down", v2: v == null ? "–" : money(v), q: ["status", "spend"], loading: m === undefined });
 }
 
 /** The Cost per run card: the mean cost of an agent run over the window and the runs, with its trend against the baseline. `d` is /api/flow for the window with `baseline`, or null while it loads. */
@@ -31,10 +30,8 @@ function successCard(a) {
 
 function scorecard(s, d, m, win) {
   const f = s.factory, a = d?.agents ?? null;
-  // The other live agents: the flow's live count less its worker runs.
-  const others = a ? `${count(a.live - a.workers)} others` : miss("flow not loaded");
   return usageCard(s) + openRouterCard(m, win) +
-    statCard({ k: "Live agents", v: count(f.liveRuns ?? 0), v2: count(f.liveCap), q: ["in use", "cap"], extra: `<span class="q m">${others}</span>` }) +
+    statCard({ k: "Live agents", v: count(f.liveRuns ?? 0), v2: a ? count(a.live - a.workers) : "–", q: ["workers", "other"] }) +
     costPerRunCard(d) + successCard(a);
 }
 
