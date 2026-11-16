@@ -16,7 +16,7 @@ import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { recentRepos } from "../../jobs/lib/records/status.ts";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
-import { askIfPartDropped, askOf, awaitsChris, clearAsk, decideAsk, refIn } from "../../jobs/lib/asks/ask.ts";
+import { askOfItem, awaitsChris, clearAsk, decideAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { triage } from "./triage.ts";
 import { errText } from "../../lib/errtext.ts";
 import { isAgent } from "../../lib/env.ts";
@@ -38,7 +38,7 @@ export interface Fields {
   media?: string[];
 }
 
-export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: issues.updated(i) ?? null, source: store.sourceOf(i), after: store.afterOf(i), refs: store.refsOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
+export const brief = (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: issues.updated(i) ?? null, source: store.sourceOf(i), after: store.afterOf(i), refs: store.refsOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOfItem(i), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
@@ -185,8 +185,8 @@ export function note(repo: store.Place, id: number | string, text: string, answe
   const w = write(repo, `todo: a note on item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     const line = issues.note(i, text);
-    const answered = answer && awaitsChris(refIn(repo.key, i));
-    return { id: i.id, ref: refIn(repo.key, i), line, answered };
+    const answered = answer && awaitsChris(refIn(i));
+    return { id: i.id, ref: refIn(i), line, answered };
   })!;
   if (w.value.answered) clearAsk(w.value.ref);
   return { result: { repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit }, answered: w.value.answered, follow: w.follow };
@@ -202,15 +202,15 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
   text = text.trim() || refuse("give the decision");
   const w = write(repo, `todo: item ${id}: decided`, (doc) => {
     const i = pick(repo, doc, id);
-    const ask = askOf(refIn(repo.key, i));
+    const ask = askOfItem(i);
     if (!ask || (issues.status(i) !== "open" && ask.reason !== "blocker-dropped")) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     issues.note(i, text);
     decideAsk(ask, i, text);
     if (fields.after !== undefined) setKeys(i, "after", fields.after);
     return i;
   })!;
-  clearAsk(refIn(repo.key, w.value));
-  return { result: { repo: repo.key, ...brief(repo.key)(w.value), commit: w.commit }, item: w.value, follow: w.follow };
+  clearAsk(refIn(w.value));
+  return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
 export function edit(repo: store.Place, id: number | string, fields: Fields, reason = "") {
@@ -236,7 +236,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
     if (named !== undefined) setKeys(i, "refs", named);
     return i;
   })!;
-  return { result: { repo: repo.key, ...brief(repo.key)(w.value), commit: w.commit }, item: w.value, follow: w.follow };
+  return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
 /** The commit at origin/<main> of a registry repo, for `since`; null when it cannot be read. */
@@ -255,10 +255,9 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
     const i = pick(repo, doc, id);
     issues.setStatus(i, how === "done" ? "done" : "dropped", undefined, text || undefined);
     if (text) issues.note(i, text);
-    if (how === "drop") askIfPartDropped(doc, i, text);
     return i;
   })!;
-  if (how === "drop") clearAsk(refIn(repo.key, w.value));
+  if (how === "drop") clearAsk(refIn(w.value));
   return { result: { repo: repo.key, id: w.value.id, status: issues.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };
 }
 

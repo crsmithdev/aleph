@@ -23,7 +23,7 @@ import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import * as notes from "../lib/annotations.ts";
 import * as ideas from "../ideas/ideas.ts";
-import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
+import { askOfItem, grant, readAlways, revoke } from "./lib/asks/ask.ts";
 import { readTimeouts, setTimeoutOf } from "./lib/asks/timeout.ts";
 import { behind, directorStep, hookLines, report, runDispatch, runNow, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { dispatchAfterIssue, filing } from "./lib/transitions/filing.ts";
@@ -289,16 +289,16 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     }
     case "list": {
       const rows = verbs.list(repo, { status: stat, label, kind: ctx.flag("kind") });
-      if (json) { ctx.out(rows.map(verbs.brief(repo.key))); return; }
+      if (json) { ctx.out(rows.map(verbs.brief)); return; }
       if (!rows.length) { ctx.log("no issues"); return; }
       printRows(ctx, rows, repo.key);
       return;
     }
     case "show": {
       const i = verbs.show(repo, id);
-      if (json) { ctx.out({ ...verbs.brief(repo.key)(i), request: i.request, spec: i.spec, notes: i.notes, media: store.mediaOf(i) }); return; }
+      if (json) { ctx.out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, media: store.mediaOf(i) }); return; }
       ctx.log(`## ${shown(repo.key, i)}. ${i.title}`);
-      const ask = askOf(refIn(repo.key, i));
+      const ask = askOfItem(i);
       ctx.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${store.priorityOf(i)}   updated ${issues.updated(i) ?? "-"}`);
       ctx.log(`after ${store.afterOf(i).map(shownRef).join(", ") || "-"}   refs ${store.refsOf(i).map(shownRef).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
       ctx.log(`ask ${ask ? `${ask.reason}: ${ask.question}` : "-"}`);
@@ -390,7 +390,7 @@ function todoRecent(ctx: Ctx, sub: "list" | "lint", registry: Record<string, Rep
     return;
   }
   const rows = verbs.listRecent(repos, o).map((r) => ({ repo: r.repo.key, items: r.items }));
-  if (json) { ctx.out(rows.map((r) => ({ repo: r.repo, items: r.items.map(verbs.brief(r.repo)) }))); return; }
+  if (json) { ctx.out(rows.map((r) => ({ repo: r.repo, items: r.items.map(verbs.brief) }))); return; }
   if (!rows.length) { ctx.log("no issues"); return; }
   for (const r of rows) { ctx.log(r.repo); printRows(ctx, r.items, r.repo, "  "); }
 }

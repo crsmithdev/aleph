@@ -1,6 +1,6 @@
 // The hand-written Status state of ui/now.test.ts, in the shape the server sends: runs carry `ask` and `reviewCall`, and `asks` comes from the real attend(). ui/fixtures.test.ts holds its keys to what /api/factory really sends.
 import { attend } from "../asks.ts";
-export const job = (o: object) => ({ repo: "aleph", item: null, state: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
+export const job = (o: object) => ({ repo: "aleph", item: null, state: "running", started: "2026-10-27T16:00:00Z", run: { id: "a1", kind: "build", started: "2026-10-27T16:00:00Z" }, defaults: [], followups: [], ...o });
 /** An awaiting run the repo holds for review: the server's `ask` for it. */
 export const awaitingHeld = (o: object = {}): any => job({ state: "waiting", ask: { reason: "held-path" }, ...o });
 export const held: any = awaitingHeld({ name: "aleph-27", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } });

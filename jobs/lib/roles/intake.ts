@@ -11,7 +11,7 @@ import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { ISSUE_KEY, issueKey, parseKey } from "../../../lib/naming.ts";
 import { pastWork } from "../transitions/continuation.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { areasOf, labels, itemsDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, hasIssue, reader, setAfter, setIntake, setPlan, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
+import { isRedMain, itemsDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, hasIssue, reader, setAfter, setIntake, setPlan, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
 import { always, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -357,7 +357,7 @@ const testOnly = (item: issues.Issue, v: Extract<Route, { route: "build" }>): bo
 
 /** A red-main issue's red, while its repo's main or CI is still red; else null. Intake does not close such an issue: the fix may lie outside the repo, and that is Chris's to decide. */
 function stillRed(repo: Repo, item: issues.Issue): string | null {
-  if (!areasOf(item).includes("red-main") && !labels(item).includes("red-main")) return null;
+  if (!isRedMain(item)) return null;
   return mainRed()(repo) ?? (redCi().some((c) => c.repo === repo.key) ? "GitHub CI on main is red" : null);
 }
 
@@ -370,7 +370,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
       // An open item with an Ask (a proposal too) waits for Chris: an after-link to it would stall this issue on his answer.
       const waits = v.after.filter((r) => {
         const o = issues.find(doc, r);
-        return o !== undefined && issues.status(o) === "open" && awaitsChris(refIn(repo.key, o));
+        return o !== undefined && issues.status(o) === "open" && awaitsChris(refIn(o));
       });
       const after = v.after.filter((r) => !waits.includes(r));
       if (after.length) setAfter(item, after);

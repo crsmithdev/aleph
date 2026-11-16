@@ -13,16 +13,14 @@ import * as record from "../../jobs/lib/records/record.ts";
 import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
 import { layout, logEvent } from "../../lib/layout.ts";
 import { next } from "../../lib/db.ts";
-import { always, logAlways } from "../../jobs/lib/asks/ask.ts";
+import { always, askIfPartDropped, logAlways } from "../../jobs/lib/asks/ask.ts";
 import { CLOSED, issueKey, key as keyOf } from "../../lib/naming.ts";
 import * as issues from "./todo.ts";
-import { labels, parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
+import { parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
 import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { errText } from "../../lib/errtext.ts";
-
-export { labels };
 
 /** A repo of the store. With `author`, intake also takes in an issue filed with a spec before it builds. */
 export interface Place { key: string; author?: boolean }
@@ -274,7 +272,7 @@ function parkWaiter(repo: Place, waiter: Issue, blocker: string): void {
  * because main moved, fetch and apply `change` again. `change` returns null to write nothing. A project the items repo
  * has none for gets one in the same commit only when `create` is set. A new issue takes its number from the counter in
  * `change`, before the push, so a refused push leaves a gap. Each issue the write closes logs `done` or `dropped` as `by`
- * once the push succeeds (git first, then the event): this is the one door for a close, so no caller logs its own.
+ * once the push succeeds (git first, then the event): this is the one door for a close, so no caller logs its own. A dropped part then asks about its parent (`askIfPartDropped`).
  */
 export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false, blobs: Record<string, Uint8Array> = {}, by = "rule"): { value: T; commit: string; follow: string | null } | null {
   const dir = itemsDir();
@@ -313,6 +311,7 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
         logClosed(item, by);
         record.clearIssueState(issueKey(issues.refOf(item)));
         if (status(item) !== "dropped") continue;
+        askIfPartDropped(doc, item, closedWhy(item) ?? "no reason given");
         const blocker = keyOf("issue", item.id);
         for (const w of loadAll(dir, commit.out)) {
           const name = projectName(String(w.fm.project));
@@ -420,6 +419,8 @@ export const refsOf = (item: Issue): string[] => list(item.fm.refs);
 export const referrersOf = (all: Issue[], item: Issue): Issue[] => all.filter((i) => refsOf(i).includes(issueKey(item.id)));
 /** The item's areas: its `areas`. */
 export const areasOf = (item: Issue): string[] => list(item.fm.areas);
+/** The red-main fix issue: `add` writes the label into `areas`; an older issue carries it in `labels`. */
+export const isRedMain = (item: Issue): boolean => areasOf(item).includes("red-main") || issues.labels(item).includes("red-main");
 
 /**
  * An item intake leaves alone: asking, a part, the tracker, or, unless it is to plan, with parts, taken in, or with a spec.

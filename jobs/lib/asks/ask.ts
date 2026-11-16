@@ -145,7 +145,7 @@ export const needsOf = (ask: Ask | undefined): Reason["needs"] => (ask ? ASK_REA
 export const waitOf = (ask: Ask | undefined): Pick<Ask, "reason"> => ({ reason: ask ? ask.reason : "question" });
 
 /** The actions a card offers: its reason's pair of verbs, the same on a run and on an issue. */
-export const actionsOn = (reason: string, _on?: { run: boolean; decision: boolean }): string[] => ASK_REASONS[reason].actions;
+export const actionsOn = (reason: string): string[] => ASK_REASONS[reason].actions;
 
 /** An Ask with no options: the factory's own stop, with the sentence Chris reads. */
 export const plainAsk = (reason: AskReason, question: string, why: string[] = []): Ask => ({ reason, question, options: [], why });
@@ -176,10 +176,13 @@ export function normalizeAsk(raw: any, defaults: { reason?: string } = {}): Ask 
 
 
 /** The key of an item: `issue.<n>`, the key of its row in `issue_state`. */
-export const refIn = (_repo: string, item: issues.Issue): string => key("issue", item.id);
+export const refIn = (item: issues.Issue): string => key("issue", item.id);
 
 /** The Ask on the issue `ref`, or null. A run's Ask is the run's, not the issue's. */
 export const askOf = (ref: string): Ask | null => record.issueAsk(record.read(ref));
+
+/** The Ask on `item`, or null. */
+export const askOfItem = (item: issues.Issue): Ask | null => askOf(refIn(item));
 
 /** The issue `ref` waits for Chris: it has an Ask. */
 export const awaitsChris = (ref: string): boolean => askOf(ref) !== null;
@@ -303,14 +306,14 @@ export const keepsOpen = (said: string): boolean => said.includes(PLAN_REST) || 
 export function askIfPartDropped(doc: issues.Doc, part: issues.Issue, reason: string): void {
   if (issues.status(part) !== "dropped") return;
   const issue = parentOf(doc, part);
-  if (!issue || !doc.repo || issues.status(issue) !== "open" || awaitsChris(refIn(doc.repo, issue))) return;
+  if (!issue || !doc.repo || issues.status(issue) !== "open" || awaitsChris(refIn(issue))) return;
   if (partsOf(doc, issue).some((g) => g !== part && issues.status(g) === "open")) return;
-  askPartDropped(doc.repo, issue, `Sub-issue ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
+  askPartDropped(issue, `Sub-issue ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
 }
 
 /** Put the part-dropped Ask on a parent. */
-export function askPartDropped(key: string, issue: issues.Issue, question: string): void {
-  setAsk(refIn(key, issue), {
+export function askPartDropped(issue: issues.Issue, question: string): void {
+  setAsk(refIn(issue), {
     reason: "part-dropped",
     question,
     options: PART_DROPPED,
@@ -322,15 +325,14 @@ export function askPartDropped(key: string, issue: issues.Issue, question: strin
 export type Actor = "chris" | "director";
 
 /**
- * Why `actor` may not take `action` on `ask`, or null when it may. Chris may take the actions the card offers (`on.run`
- * for a run's Ask). The director may not answer an Ask whose run waits for a spec edit (`on.waiting`, that run's name):
+ * Why `actor` may not take `action` on `ask`, or null when it may. Chris may take the actions the card offers. The director may not answer an Ask whose run waits for a spec edit (`on.waiting`, that run's name):
  * clearing it would leave the job open with no Ask and no run. What the director may not decide at all is the
  * escalation list in director.ts.
  */
-export function may(actor: Actor, action: string, ask: Ask | null | undefined, on: { run?: boolean; waiting?: string } = {}): string | null {
+export function may(actor: Actor, action: string, ask: Ask | null | undefined, on: { waiting?: string } = {}): string | null {
   if (!ask) return "it has no Ask";
   if (actor === "chris") {
-    const offered = ASK_REASONS[ask.reason] ? actionsOn(ask.reason, { run: !!on.run, decision: ask.options.length > 0 }) : [];
+    const offered = ASK_REASONS[ask.reason] ? actionsOn(ask.reason) : [];
     return offered.includes(action) ? null : `its ${ask.reason} Ask offers no ${action}`;
   }
   if (action !== "answer") return null;

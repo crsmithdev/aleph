@@ -12,7 +12,7 @@ import { allRuns, issueKeyOf, loadRegistry, onOf, runsByIssue, type Repo } from 
 import { counting } from "../../jobs/lib/records/record.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
-import { askOf, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
+import { askOfItem, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
 import { afterOf, filed, isBuildable, reader, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
@@ -154,7 +154,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const referencedBy = referrersOf(fetched.map((w) => w.item), item).flatMap((i) => link(i.id));
 
   // The Ask row of an issue that waits for Chris: the item `attend` builds, from the NewIssue as the state builds it.
-  const stored = askOf(refIn(repo.key, item));
+  const stored = askOfItem(item);
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") ask = attend({ runs: [], issues: [card(repo.key, item, "waiting", stored)] }, []).items[0];
 
@@ -243,7 +243,7 @@ const drop = post((b, params) => {
  */
 const decide = post((b, params) => {
   const { repo, n, item } = target(params);
-  const d = askOf(refIn(repo.key, item));
+  const d = askOfItem(item);
   if (!d || (todos.status(item) !== "open" && d.reason !== "blocker-dropped")) return fail(409, "this issue is not waiting for a decision");
   // A part-dropped Ask stored with the old labels takes the card's labels.
   const o = (d.reason === "part-dropped" ? PART_DROPPED : d.options).find((x) => x.label === b.label);
@@ -289,7 +289,7 @@ const addNote = post((b, params) => {
  */
 const answer = (verb: "note" | "decide", text: string) => post((_b, params) => {
   const { repo, n, item } = target(params);
-  if (todos.status(item) !== "open" || !awaitsChris(refIn(repo.key, item))) fail(409, "this issue is not waiting for the user");
+  if (todos.status(item) !== "open" || !awaitsChris(refIn(item))) fail(409, "this issue is not waiting for the user");
   return aleph(["issue", verb, "--", repo.key, String(n), text]);
 });
 

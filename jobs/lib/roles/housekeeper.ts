@@ -14,7 +14,7 @@ import { priorityOf, readFetched, readList } from "../../../issues/lib/store.ts"
 import * as verbs from "../../../issues/lib/issues.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
-import { askOf, asking, refIn } from "../asks/ask.ts";
+import { askOfItem, asking } from "../asks/ask.ts";
 import { paused } from "../gates/pause.ts";
 import { git } from "../infra/git.ts";
 import { held, lock } from "../infra/locks.ts";
@@ -48,7 +48,7 @@ export interface Batch { repo: Repo; items: issues.Issue[]; land?: { from: strin
 const headOf = (repo: Repo): string => git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${repo.main}`).out;
 /** The parked issues of `repo`, but those whose Ask waits for Chris: the housekeeper must not close or drop them. */
 const parked = (repo: Repo): issues.Issue[] =>
-  (readList(repo)?.items ?? []).filter((i) => issues.status(i) === "parked" && !asking(i, askOf(refIn(repo.key, i))));
+  (readList(repo)?.items ?? []).filter((i) => issues.status(i) === "parked" && !asking(i, askOfItem(i)));
 const textOf = (i: issues.Issue): string => [i.title, i.request, i.spec, ...i.notes].join("\n");
 /** Whether `file` is one of the names in `text`: the whole path, or its tail after a slash. */
 const names = (text: string, file: string): boolean => (text.match(PATH) ?? []).some((t) => file === t || file.endsWith(`/${t}`));

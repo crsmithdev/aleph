@@ -10,7 +10,7 @@ import { LANES, lane, shownId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { afterOf, buildableIssue, buildableIssues, close, partsOf, planSet, priorityOf, readLists, reader, reopenReverted, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
-import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
+import { askChris, askOfItem, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { factoryDir, logEvent } from "../../../lib/layout.ts";
 import { itemOnMain, landedIndex, revertedIn } from "../records/status.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
@@ -187,7 +187,7 @@ function sweepMain(repo: Repo, lists: Reader): void {
   for (const item of doc.items) {
     const n = String(item.id), status = issues.status(item), hit = index.get(n)?.[0];
     let bad: string | null = null;
-    if (status === "open" && hit && !askOf(refIn(repo.key, item))) bad = close(repo, item.id, `its work is on origin/${repo.main}: ${hit.slice(0, 7)}`);
+    if (status === "open" && hit && !askOfItem(item)) bad = close(repo, item.id, `its work is on origin/${repo.main}: ${hit.slice(0, 7)}`);
     else if (status === "done" && reverted.has(n)) bad = reopenReverted(repo, item.id, `its commits on origin/${repo.main} are all reverted: the goal runs again`, git(repo.path, "rev-parse", main).out);
     if (bad) logEvent({ subject: "rule", action: "failed", object: issueJob(repo, item.id), detail: `not swept: ${bad}` });
   }
@@ -196,7 +196,7 @@ function sweepMain(repo: Repo, lists: Reader): void {
 /** Whether every part is done or dropped, at least one is done, and the parent is neither asking nor to plan: then it closes. */
 const finished = (doc: issues.Doc, item: issues.Issue, repo: Repo, done: (ref: string) => boolean): boolean => {
   const parts = partsOf(doc, item);
-  if (issues.status(item) !== "open" || !parts.length || askOf(refIn(repo.key, item)) || planSet(item)) return false;
+  if (issues.status(item) !== "open" || !parts.length || askOfItem(item) || planSet(item)) return false;
   const isDone = (p: issues.Issue) => issues.status(p) !== "dropped" && done(`${repo.key}-${issues.refOf(p)}`);
   return parts.some(isDone) && parts.every((p) => issues.status(p) === "dropped" || isDone(p));
 };
@@ -424,7 +424,7 @@ export function hookLines(now = Date.now()): string[] {
   const refs = jobs.filter((j) => isOpen(j) && isWaiting(counting(j).run.state) && counting(j).run.ask).map((j) => j[0].run.name);
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
-      if (issues.status(item) === "open" && askOf(refIn(repo.key, item))) refs.push(`${repo.key}-${issues.idOf(item)}`);
+      if (issues.status(item) === "open" && askOfItem(item)) refs.push(`${repo.key}-${issues.idOf(item)}`);
     }
   }
   refs.push(...proposals().map((l) => l.id));
@@ -486,8 +486,8 @@ export function report(now = Date.now(), peek = false): string {
 /** Each open issue that has an Ask, by its shown key and title. */
 function askLines(): string[] {
   return Object.values(loadRegistry()).flatMap((repo) => (reader({ fetch: false }).list(repo.key)?.items ?? [])
-    .filter((item) => issues.status(item) === "open" && askOf(refIn(repo.key, item)))
-    .map((item) => `${shownId(refIn(repo.key, item), repo.key)} ${item.title}`));
+    .filter((item) => issues.status(item) === "open" && askOfItem(item))
+    .map((item) => `${shownId(refIn(item), repo.key)} ${item.title}`));
 }
 
 const episodesSeenFile = () => join(factoryDir(), "episodes-seen");

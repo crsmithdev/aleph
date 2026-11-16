@@ -166,8 +166,8 @@ describe("issue verbs without argv", () => {
   test("decide needs an issue with an Ask, clears it and makes no issue", () => {
     const r = repo([{ title: "a" }, { title: "b" }]);
     const [one, two] = r.ids;
-    for (const n of [one, two]) store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, n)!), { reason: "question", question: "Q?", options: [], why: [] }); return true; });
-    const three = store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); setAsk(refIn(doc.repo!, i), { reason: "question", question: "Q?", options: [], why: [] }); return i.id; })!.value;
+    for (const n of [one, two]) store.writeList(r, "ask", (doc) => { setAsk(refIn(issues.find(doc, n)!), { reason: "question", question: "Q?", options: [], why: [] }); return true; });
+    const three = store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); setAsk(refIn(i), { reason: "question", question: "Q?", options: [], why: [] }); return i.id; })!.value;
     expect(refusal(() => issueOps.decide(r, 99999, "yes"))).toContain("has no issue");
     issueOps.decide(r, two, "yes");
     expect(askOf(`${r.key}-${two}`)).toBeNull();

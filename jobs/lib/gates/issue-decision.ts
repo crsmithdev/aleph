@@ -6,7 +6,7 @@
  * The dispatch asks the gates in the order of GATES; the first that binds skips the issue,
  * and its word is the kind of the decision and of the hold record.
  */
-import { afterOf, areasOf, labels } from "../../../issues/lib/store.ts";
+import { afterOf, isRedMain } from "../../../issues/lib/store.ts";
 import { RUN_CAP } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import type { Event } from "../../../lib/naming.ts";
@@ -101,8 +101,7 @@ export function issueDecision(f: IssueFacts): IssueDecision {
   if (f.paused) return { kind: "paused", ...f.paused };
   if (f.waiting) return { kind: "waiting", ...f.waiting };
   // The fix of a red main is the one issue a red baseline lets through: it is how main gets green again.
-  // `add` writes the label into `areas`; an older issue may carry it in `labels`, as the firefighter's isRedMain reads.
-  if (f.red && !areasOf(f.item).includes("red-main") && !labels(f.item).includes("red-main")) return { kind: "red", why: f.red, text: f.red, ev: heldEvent("red") };
+  if (f.red && !isRedMain(f.item)) return { kind: "red", why: f.red, text: f.red, ev: heldEvent("red") };
   const not = notReady(f);
   if (not) return not;
   if (f.full) return { kind: "full", ...f.full };

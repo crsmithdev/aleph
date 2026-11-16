@@ -14,7 +14,7 @@ import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, 
 import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting, isStuck } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
-import { askOf, asking, refIn, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
+import { askOfItem, asking, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withProjects } from "./api/scope.ts";
 import { chats, type Chat } from "./api/chat.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
@@ -444,7 +444,7 @@ export function state(now = new Date()): State {
         const ends = mine.map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
         doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(updated(item) ?? "") || 0, repo, item, runs: mine, since: pickedUp(id) });
       }
-      const ask = askOf(refIn(repo.key, item));
+      const ask = askOfItem(item);
       // A core-change Ask sits on a parked issue, so no work starts on it.
       if (status(item) === "parked" && asking(item, ask)) { awaitingItems.push(card(repo.key, item, "waiting", ask)); continue; }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
@@ -472,17 +472,12 @@ export function state(now = new Date()): State {
 
   const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
   const att = attend({ runs: needs, issues: awaitingItems });
-  // The run behind an ask: its live-run mark, its trailers and its notes.
+  // A run's own fields come from `attend`; the part, and an issue's dates, come from here.
   for (const a of att.items) {
     const j = a.key.startsWith("run:") ? needs.find((x) => `run:${x.name}` === a.key) : undefined;
     const key = j?.item ? `${j.repo}-${j.item.id}` : a.id;
-    a.part = partOf.get(key); a.at = awaitingItems.find((c) => c.id === key)?.updated ?? ""; a.since = pickedUp(key);
-    if (!j) continue;
-    a.at = j.run.started; a.since = j.started;
-    if (j.item) a.on = `${j.repo}-${j.item.id}`;
-    a.agent = j.agent ?? false; a.defaults = j.defaults; a.followups = j.followups;
-    if (j.trailers) a.trailers = j.trailers;
-    if (j.due) { a.due = j.due; a.dueAction = j.dueAction; }
+    a.part = partOf.get(key);
+    if (!j) { a.at = awaitingItems.find((c) => c.id === key)?.updated ?? ""; a.since = pickedUp(key); }
   }
   const timers = tickTimer();
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, stuck, asks: att.items, usage: summary(now.getTime()) });

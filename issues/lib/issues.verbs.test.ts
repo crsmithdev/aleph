@@ -9,7 +9,7 @@ import * as issues from "./todo.ts";
 import { addPart } from "./parts.fixture.ts";
 import * as verbs from "./issues.ts";
 import { readEvents } from "../../lib/layout.ts";
-import { askOf, grant, refIn, revoke, setAsk } from "../../jobs/lib/asks/ask.ts";
+import { askOf, grant, refIn, revoke, setAsk, askOfItem } from "../../jobs/lib/asks/ask.ts";
 
 setDefaultTimeout(30000);
 
@@ -31,8 +31,8 @@ async function code<T>(f: () => T | Promise<T>): Promise<{ code: number; value?:
 /** The full id of each issue the verb's filing passed to `after`. */
 let started: string[] = [];
 const add = async (title: string, fields: verbs.Fields = {}) => { verbs.checkFields(fields); return verbs.add(proj(), title, fields, { after: (r, i) => { started.push(`${r.key}-${i.id}`); } }); };
-const list = (o: { status?: string; label?: string } = {}) => verbs.list(proj(), o).map(verbs.brief(proj().key));
-const show = (id: number) => { const i = verbs.show(proj(), id); return { ...verbs.brief(proj().key)(i), request: i.request, spec: i.spec, notes: i.notes }; };
+const list = (o: { status?: string; label?: string } = {}) => verbs.list(proj(), o).map(verbs.brief);
+const show = (id: number) => { const i = verbs.show(proj(), id); return { ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes }; };
 /** The lines `aleph issue lint` prints on stderr, and its exit code. */
 function lint(): { code: number; err: string } {
   try {
@@ -162,10 +162,10 @@ test("add and edit refuse a title over 60 characters, with a final period or wit
 test("drop: clears the Ask on the issue", async () => {
   await add("Asks something");
   const ask = { kind: "input" as const, reason: "question", question: "q?", options: [], why: [] };
-  setAsk(refIn(proj().key, { id: 4 } as any), ask);
-  expect(askOf(refIn(proj().key, { id: 4 } as any))).not.toBeNull();
+  setAsk(refIn({ id: 4 } as any), ask);
+  expect(askOfItem({ id: 4 } as any)).not.toBeNull();
   verbs.close(proj(), 4, "drop", "not needed");
-  expect(askOf(refIn(proj().key, { id: 4 } as any))).toBeNull();
+  expect(askOfItem({ id: 4 } as any)).toBeNull();
 });
 
 test("media: add and attach store images in the store, and a run reads them back", async () => {

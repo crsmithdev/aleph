@@ -19,7 +19,7 @@ import { afterFiling } from "../transitions/filing.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
-import { always, ASK_REASONS, askSub, logAlways, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
+import { always, ASK_REASONS, askSub, logAlways, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn, askOfItem } from "../asks/ask.ts";
 import { allRuns, isAgentRun, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
@@ -82,9 +82,9 @@ export function pendingCases(repos: Repo[] = sandboxRepos(), runs: Entry[] = all
   const out: Case[] = [];
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
-      const ask = askOf(refIn(repo.key, item));
+      const ask = askOfItem(item);
       if (!asking(item, ask)) continue;
-      if (empty(ask)) out.push({ at: "item", on: refIn(repo.key, item), repo, item, ask });
+      if (empty(ask)) out.push({ at: "item", on: refIn(item), repo, item, ask });
     }
   }
   const byKey = new Map(repos.map((r) => [r.key, r]));
@@ -599,7 +599,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     return why ? no(a, why) : done(a, { action: "done", sub, note: a.note });
   }
   if (a.do === "answer" || a.do === "rerun") {
-    const ask = askOf(refIn(repo.key, item));
+    const ask = askOfItem(item);
     const waiting = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === n && waitsForSpecEdit(jobRecord.counting(j)));
     const refused = may("director", "answer", ask, waiting ? { waiting: waiting[0].run.name } : {});
     if (refused) return no(a, refused);

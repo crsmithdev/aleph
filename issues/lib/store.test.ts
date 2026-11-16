@@ -93,9 +93,9 @@ describe("labels", () => {
   const it = (fm: issues.Issue["fm"]): issues.Issue => ({ id: 1, title: "t", fm, request: "", spec: "", notes: [] });
 
   test("a list, a lone label, and none", () => {
-    expect(store.labels(it({ labels: ["a", "b"] }))).toEqual(["a", "b"]);
-    expect(store.labels(it({ labels: "goal" }))).toEqual(["goal"]);
-    expect(store.labels(it({}))).toEqual([]);
+    expect(issues.labels(it({ labels: ["a", "b"] }))).toEqual(["a", "b"]);
+    expect(issues.labels(it({ labels: "goal" }))).toEqual(["goal"]);
+    expect(issues.labels(it({}))).toEqual([]);
   });
 
   test("priorityOf reads the priority, and medium for none or an unknown one", () => {
@@ -230,7 +230,7 @@ describe("the writes", () => {
   test("sort changes an open, unsorted item only", () => {
     const r = repo([{ title: "new" }, { title: "live" }, { title: "closed" }]);
     const [fresh, live, shut] = r.ids;
-    store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, live)!), { reason: "question", question: "Check it.", options: [], why: [] }); return true; });
+    store.writeList(r, "ask", (doc) => { setAsk(refIn(issues.find(doc, live)!), { reason: "question", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, shut, "x");
     const before = commits();
     expect(store.sort(r, live, "intake", () => { })).toBe(false);
@@ -258,6 +258,15 @@ describe("an issue's ask", () => {
     expect(store.close(r, b, "x", "dropped")).toBeNull();
     expect(record.read(`issue.${a}`)).toBeNull();
     expect(record.read(`issue.${b}`)).toBeNull();
+  });
+
+  test("dropping the last open part through close asks on its parent", () => {
+    const r = repo([{ title: "parent" }]);
+    let part = 0;
+    store.writeList(r, "part", (doc) => { part = issues.add(doc, "part", { from: `issue.${r.ids[0]}` }).id; return true; });
+    expect(store.close(r, part, "too big", "dropped")).toBeNull();
+    expect(askOf(`issue.${r.ids[0]}`)?.reason).toBe("part-dropped");
+    clearAsk(`issue.${r.ids[0]}`);
   });
 
   test("a parked issue keeps its Ask; one write that parks one and drops another clears only the dropped one's", () => {

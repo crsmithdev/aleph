@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, needsOf, may, normalizeAsk, CLOSE_DONE, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, askOfItem, grant, needsOf, may, normalizeAsk, CLOSE_DONE, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { ASK_ACTIONS } from "../../../lib/naming.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
@@ -101,8 +101,7 @@ test("actionsOn gives each reason the one pair of verbs of its card, on a run an
   pair(["held-path", "review-held", "core-change", "proposal-check", "proposal-claude-md", "proposal-skill"], ["approve", "disapprove"]);
   pair(["question", "rescue", "part-dropped", "blocker-dropped"], ["resolve", "dismiss"]);
   pair(["no-commit", "intake-failed", "run-cap"], ["continue", "discontinue"]);
-  expect(actionsOn("question", { run: true, decision: false })).toEqual(actionsOn("question", { run: false, decision: true }));
-  expect(ASK_REASONS.rescue.card).toBe("decide");
+    expect(ASK_REASONS.rescue.card).toBe("decide");
   for (const r of Object.values(ASK_REASONS)) for (const a of [...r.actions, r.always]) expect(ASK_ACTIONS.includes(a)).toBe(true);
   for (const [reason, r] of Object.entries(ASK_REASONS)) expect([reason, r.always]).toEqual([reason, r.actions[0]]);
 });
@@ -237,14 +236,14 @@ test("may: the director does not answer an Ask whose run waits for a spec edit",
 });
 
 test("may: Chris takes the actions the card offers, on a run and on an issue", () => {
-  expect(may("chris", "resolve", plain, { run: true })).toBeNull();
+  expect(may("chris", "resolve", plain)).toBeNull();
   expect(may("chris", "resolve", plain)).toBeNull();
   expect(may("chris", "answer", plain)).toBe("its question Ask offers no answer");
-  expect(may("chris", "resolve", plainAsk("held-path", "x"), { run: true })).toBe("its held-path Ask offers no resolve");
-  expect(may("chris", "approve", plainAsk("held-path", "x"), { run: true })).toBeNull();
+  expect(may("chris", "resolve", plainAsk("held-path", "x"))).toBe("its held-path Ask offers no resolve");
+  expect(may("chris", "approve", plainAsk("held-path", "x"))).toBeNull();
   expect(may("chris", "continue", plainAsk("no-commit", "x"))).toBeNull();
-  expect(may("chris", "resolve", { ...plain, reason: "nope" }, { run: true })).toBe("its nope Ask offers no resolve");
-  expect(may("chris", "resolve", undefined, { run: true })).toBe("it has no Ask");
+  expect(may("chris", "resolve", { ...plain, reason: "nope" })).toBe("its nope Ask offers no resolve");
+  expect(may("chris", "resolve", undefined)).toBe("it has no Ask");
 });
 
 test("decideAsk leaves a plain Ask's issue open; on part-dropped the plan option sets plan and any other answer closes the issue", () => {
@@ -253,8 +252,8 @@ test("decideAsk leaves a plain Ask's issue open; on part-dropped the plan option
   expect(issues.status(i)).toBe("open");
   for (const [said, plan, status] of [[`Chris chose ${PLAN_REST}`, "true", "open"], [`Chris chose ${CLOSE_DONE}`, undefined, "done"]] as const) {
     const p = { ...item({ status: "To Do" }), id: status === "done" ? 21 : 22 };
-    askPartDropped("fac", p, "A part was dropped. What now?");
-    const a = askOf(refIn("fac", p));
+    askPartDropped(p, "A part was dropped. What now?");
+    const a = askOfItem(p);
     expect(a?.reason).toBe("part-dropped");
     expect(a?.options.map((o) => o.label)).toEqual(["Close as done", "Keep open"]);
     decideAsk(a, p, said);
@@ -281,10 +280,10 @@ test("askIfPartDropped asks on the parent once its last open part is dropped", (
   const b = issues.add(doc, "b", { from: `issue.${parent.id}` });
   issues.setStatus(a, "dropped");
   askIfPartDropped(doc, a, "too big");
-  expect(askOf(refIn("fac", parent))).toBeNull();
+  expect(askOfItem(parent)).toBeNull();
   issues.setStatus(b, "dropped");
   askIfPartDropped(doc, b, "too big");
-  const a2 = askOf(refIn("fac", parent));
+  const a2 = askOfItem(parent);
   expect(a2).toMatchObject({ reason: "part-dropped", question: `Sub-issue fac-${b.id} was dropped: too big. What now?` });
   const lines = (a2?.options ?? []).map((o) => o.line).join("\n");
   expect(lines).toContain("sub-issue");

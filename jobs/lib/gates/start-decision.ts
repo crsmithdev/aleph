@@ -8,7 +8,7 @@ import { issueDecision, type IssueDecision, type IssueFacts } from "./issue-deci
 import { factoryGates, nextRun } from "./factory-status.ts";
 import { backendHold, heldGoal } from "./holds.ts";
 import { SIZES, type Size } from "../routing/route.ts";
-import { areasOf, labels } from "../../../issues/lib/store.ts";
+import { isRedMain } from "../../../issues/lib/store.ts";
 import type { Job } from "../records/job.ts";
 import type { Repo } from "../records/ledger.ts";
 
@@ -23,7 +23,7 @@ export type StartDecision = IssueDecision & { size?: Size | null };
 
 /** The decision for the issue of `f`, with its size. A red-main fix issue has the fixed size medium, and `route` is not asked. */
 export async function decideStart(repo: Repo, f: IssueFacts, jobs: Job[], route: Route): Promise<StartDecision> {
-  const fixed = areasOf(f.item).includes("red-main") || labels(f.item).includes("red-main");
+  const fixed = isRedMain(f.item);
   if (fixed) route = async () => "medium";
   const run = nextRun(repo.key, f.name, jobs);
   const on = (size: Size | null) => issueDecision({ ...f, ...factoryGates(jobs, size ? { model: size } : {}) });
