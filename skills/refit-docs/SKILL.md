@@ -61,7 +61,7 @@ is **rot**. Report a candidate under one lens only.
    and the docs in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done when
    each subagent has returned.
 4. **Prove, fix and hold, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with
-   this skill's lens files. The report goes to `<tmpdir>/refit-docs-retro-<timestamp>.html`; its header adds the
+   this skill's lens files. The report goes to `<tmpdir>/refit-docs-retro-<timestamp>/`, and its unit is a doc page; its header adds the
    doc count, the `refs.ts` counts and the tools that ran, and a card shows the text before and after. Done when
    PROVE.md's step 3 is done.
 

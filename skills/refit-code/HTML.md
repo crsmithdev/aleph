@@ -2,38 +2,80 @@
 
 Adapted from the HTML report of Matt Pocock's `improve-codebase-architecture` (github.com/mattpocock/skills @4ae2317). [REPORT.md](REPORT.md) says what the report holds; this file says how it looks.
 
-The report is rendered as a single self-contained HTML file in the OS temp directory. Tailwind and Mermaid both come from CDNs. Mermaid handles graph-shaped diagrams reliably; hand-built divs and inline SVG handle the more editorial visuals (mass diagrams, cross-sections). Mix the two: don't lean on Mermaid for everything, it'll start to look generic.
+The report is a directory in the OS temp directory: `index.html` and `app.css`. It uses the aleph classes of `app.css`: `page`, `card`, `sh`, `sub-head`, `facts`, `tbl`, `badge` and `tscroll`. It uses no Tailwind. The one script is the Mermaid import from its CDN, and the report needs it only when a diagram uses Mermaid. Mermaid handles graph-shaped diagrams reliably. Hand-built divs and inline SVG handle the more editorial visuals (mass diagrams, cross-sections). Mix the two: Mermaid for everything looks generic.
 
 ## Scaffold
 
 ```html
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Refit retro for {{repo name}}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module">
-      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
-    </script>
-    <style>
-      /* small custom layer for things Tailwind doesn't cover cleanly:
-         dashed seam lines, hand-drawn-feeling arrow heads, etc. */
-      .seam { stroke-dasharray: 4 4; }
-      .leak { stroke: #dc2626; }
-      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
-    </style>
-  </head>
-  <body class="bg-stone-50 text-slate-900 font-sans">
-    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
-      <header>...</header>
-      <section id="candidates" class="space-y-10">...</section>
-      <section id="top-recommendation">...</section>
-    </main>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Refit retro for {{repo}}</title>
+  <link rel="stylesheet" href="app.css">
+  <style>
+    /* the diagram layer: tokens from app.css, so light and dark both work */
+    .seam { stroke-dasharray: 4 4; }
+    .leak { stroke: var(--stuck); }
+    .deep { background: var(--ink); color: var(--surface); }
+    .caller { background: var(--sunk); color: var(--muted); }
+    /* Mermaid labels ignore classDef color: set it in both themes */
+    .mermaid .deep .nodeLabel, .mermaid .deep .nodeLabel p { color: #fff !important; }
+    .mermaid .leak .nodeLabel, .mermaid .leak .nodeLabel p, .mermaid .caller .nodeLabel, .mermaid .caller .nodeLabel p { color: #292D3E !important; }
+  </style>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral", securityLevel: "loose" });
+  </script>
+</head>
+<body>
+<div class="page sp">
+  <header class="ph"><h1>Refit Retro</h1><span class="count">{{skill}}</span></header>
+
+  <section class="card" id="header" aria-label="Header">
+    <div class="sh"><h2>Header</h2></div>
+    <dl class="facts"><div><dt>Repo</dt><dd>{{repo}}</dd></div><div><dt>Commit</dt><dd>{{sha}}</dd></div></dl>
+    <div class="tscroll"><table class="tbl"><thead><tr><th>Lens</th><th>Candidates</th><th>Findings</th><th>Dropped</th></tr></thead><tbody>...</tbody></table></div>
+  </section>
+
+  <section class="card" id="summary" aria-label="Summary">
+    <div class="sh"><h2>Summary</h2></div>
+    <h3 class="sub-head">{{kind}}: {{theme}}</h3>
+    <ul>...</ul>
+    <h3 class="sub-head">Actions</h3>
+    <ol>...</ol>
+  </section>
+
+  <section class="card" id="raw" aria-label="All candidates">
+    <div class="sh"><h2>All Candidates</h2><span class="count">{{n}}</span></div>
+    <details><summary>Raw listing</summary>
+      <div class="tscroll"><table class="tbl"><thead><tr><th>Lens</th>...<th>Verdict</th><th>Reason</th></tr></thead><tbody>...</tbody></table></div>
+    </details>
+  </section>
+
+  <section class="card" id="units" aria-label="Units">
+    <div class="sh"><h2>Units</h2></div>
+    <div data-annotate="{{unit id}}">
+      <h3 class="sub-head">{{unit}}</h3>
+      <div data-annotate="f{{n}}">
+        <p><strong>{{title}}</strong> <span class="badge stuck">{{lens}}</span> <span class="badge need">{{strength}}</span></p>
+        <ul><li><code>{{file:line}}</code></li></ul>
+        <div class="tscroll">{{diagram}}</div>
+        <p>Proof: ...</p><p>Fix: ...</p><p>Hold: <code>...</code></p>
+      </div>
+    </div>
+    <div data-annotate="{{other unit id}}"><h3 class="sub-head">{{unit}}</h3><p>No issues.</p></div>
+  </section>
+
+  <section class="card" id="proposals" aria-label="Proposals">...</section>
+</div>
+</body>
 </html>
 ```
+
+A report with no Mermaid diagram leaves out the `<script>`. A report draws in light and dark with no extra code, because `app.css` sets both. Without a `ui/app.css`, replace the link with a small `<style>` that defines the same class names.
 
 ## Diagram patterns
 
@@ -41,16 +83,16 @@ Pick the pattern that fits the candidate. Mix them. Don't make every diagram loo
 
 ### Mermaid graph (the workhorse for dependencies / call flow)
 
-Use a Mermaid `flowchart` or `graph` when the point is "X calls Y calls Z, and look at the mess." Wrap it in a Tailwind-styled card so it doesn't feel parachuted in. Style with classDef to colour leakage edges red and the deep module dark. Sequence diagrams work well for "before: 6 round-trips; after: 1."
+Use a Mermaid `flowchart` or `graph` when the point is "X calls Y calls Z, and look at the mess." Put it in a `div.tscroll` inside the finding. Style with classDef to colour leakage edges red and the deep module dark. Give every classDef a `fill` and a `color` pair, so a node reads in light and dark. Sequence diagrams work well for "before: 6 round-trips; after: 1."
 
 ```html
-<div class="rounded-lg border border-slate-200 bg-white p-4">
+<div class="tscroll">
   <pre class="mermaid">
     flowchart LR
       A[OrderHandler] --> B[OrderValidator]
       B --> C[OrderRepo]
       C -.leak.-> D[PricingClient]
-      classDef leak stroke:#dc2626,stroke-width:2px;
+      classDef leak fill:#ECEAF6,color:#292D3E,stroke:#C0304C,stroke-width:2px;
       class C,D leak
   </pre>
 </div>
@@ -62,7 +104,7 @@ Modules as `<div>`s with borders and labels. Arrows as inline SVG `<line>` or `<
 
 ### Cross-section (good for layered shallowness)
 
-Stack horizontal bands (`h-12 border-l-4`) to show layers a call passes through. Before: 6 thin layers each doing nothing. After: 1 thick band labelled with the consolidated responsibility.
+Stack horizontal bands (`div`s of equal height with a left border) to show layers a call passes through. Before: 6 thin layers each doing nothing. After: 1 thick band labelled with the consolidated responsibility.
 
 ### Mass diagram (good for "interface as wide as implementation")
 
@@ -74,11 +116,11 @@ Before: a tree of function calls rendered as nested boxes. After: the same tree 
 
 ## Style guidance
 
-- Lean editorial, not corporate-dashboard. Generous whitespace. Serif optional for headings (`font-serif` works well with stone/slate).
-- Colour sparingly: one accent (emerald or indigo) plus red for leakage and amber for warnings.
+- Use the look of `app.css`. Do not add fonts or a palette. Use its tokens in a diagram.
+- Colour sparingly: red (`--stuck`) for leakage and amber (`--need`) for warnings.
 - Keep diagrams ~320px tall so before/after sits comfortably side by side without scrolling.
-- Use `text-xs uppercase tracking-wider` for module labels inside diagrams, so they read as schematic, not as UI.
-- The only scripts are the Tailwind CDN and the Mermaid ESM import. The report is otherwise static: no app code, no interactivity beyond Mermaid's own rendering.
+- Set module labels inside diagrams in small uppercase letters, so they read as schematic, not as UI.
+- The only script is the Mermaid ESM import. The report is otherwise static: no app code, no interactivity beyond Mermaid's own rendering.
 
 ## Tone
 

@@ -65,7 +65,8 @@ convention is right is **layout**. Report a candidate under one lens only.
 one subagent over the whole repo, with the full seed. Each returns
    candidates as: lens, concept or module, every location with `file:line`, the signal that found it. Done when
    each subagent has returned.
-5. **Prove, hold and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files. Done when its report
+5. **Prove, hold and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files. The report goes to
+   `<tmpdir>/refit-code-retro-<timestamp>/`, and its unit is a module. Done when its report
    is written and the question asked.
 
 ## Act

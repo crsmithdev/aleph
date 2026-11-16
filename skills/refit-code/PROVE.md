@@ -10,7 +10,7 @@ supplies its lens files, its `.refit.json` and its report path.
    has a verdict.
 2. **Owner and hold.** For each finding, its lens's Fix section names what changes, and its Hold section names
    what keeps it from coming back. Done when every finding has both.
-3. **Report.** Write the HTML report of [REPORT.md](REPORT.md), strongest first, then accepted and dropped.
+3. **Report.** Write the HTML report of [REPORT.md](REPORT.md), a directory with `index.html`.
    Give the user its absolute path. Then let the user pick the findings to act on:
    - In an interactive run with `ALEPH_AGENT` unset, put the report on the shelf:
      `bun ~/aleph-tools/shelf.ts put <report file or directory> --kind report`. It prints the item id and URL.

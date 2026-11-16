@@ -56,7 +56,7 @@ its label is **scope**. Report a candidate under one lens only.
    matches, or the difference is listed by row.
 5. **Prove, hold and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lenses.
    A mismatch is a finding only with both values, the query and the moment of the read. The report goes to
-   `<tmpdir>/refit-data-retro-<timestamp>.html`. Its header is a table of each number: the shown value, the
+   `<tmpdir>/refit-data-retro-<timestamp>/`, and its unit is a shown number. Its header is a table of each number: the shown value, the
    recomputed value and the verdict.
 
 Rules:

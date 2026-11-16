@@ -55,8 +55,8 @@ restyles a kit class is seams. A class that no element uses is dead.
    rules it breaks and the rules it follows (each by `docs/design.md` section and rule text) and the Kit specimen id.
    Done when each route has returned and each component has an entry.
 4. **Prove, hold and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files, but write
-   the report of this skill's [REPORT.md](REPORT.md) to `<tmpdir>/refit-design-retro-<timestamp>/index.html` in
-   place of refit-code's. Done when PROVE.md's step 3 is done.
+   the report of this skill's [REPORT.md](REPORT.md) to `<tmpdir>/refit-design-retro-<timestamp>/`, with a component
+   kind as its unit. Done when PROVE.md's step 3 is done.
 
 ## Act
 

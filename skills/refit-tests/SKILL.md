@@ -65,7 +65,7 @@ the tree or git, and never runs the suite.
    when each subagent has returned.
 4. **Prove, fix and hold, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lens
    files. A `stats.ts` hit is a candidate, never a finding: a pattern inside a fixture string, or random data for
-   a unique temp name, drops with that reason. The report goes to `<tmpdir>/refit-tests-retro-<timestamp>.html`;
+   a unique temp name, drops with that reason. The report goes to `<tmpdir>/refit-tests-retro-<timestamp>/`, and its unit is a test file;
    its header adds the test count, wall time, p95, the flake count, and the growth rows as a small chart; a card
    shows the test before and after. Done when PROVE.md's step 3 is done.
 
