@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { OFFERS } from "../jobs/lib/routing/models.ts";
+import { MODELS } from "../lib/models.ts";
 // @ts-ignore plain JS shared with the page
-import { costFrame, liveFrame, renderFactoryAgents, tokensFrame, view } from "./views/factory-agents.js";
+import { MODEL_ORDER, costFrame, liveFrame, renderFactoryAgents, tokensFrame, view } from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import { label, option } from "./chart.js";
 // @ts-ignore plain JS shared with the page
@@ -190,12 +191,33 @@ test("the cost frame has one key per model with the bucket costs, and its axis g
   expect(label(costFrame(E))).toBe("Cost by Model: opus $3.50, sonnet $0.25");
 });
 
-test("the cost frame names keys by shortModel(), colours each, and folds the models past the sixth into Other", () => {
-  const ids = Array.from({ length: 9 }, (_, i) => `claude-m${i}-4-5-20251001`);
-  const f = costFrame({ window: "week", buckets: [{ at: buckets[0].at, cost: Object.fromEntries(ids.map((m, i) => [m, i + 1])) }] });
-  expect(f.by.keys.map((k: any) => k.name)).toEqual([...ids.slice(0, 6).map((m) => shortModel(m)), "Other"]);
-  expect(f.by.keys.every((k: any) => k.color)).toBe(true);
-  expect(f.rows[0]).toEqual({ at: buckets[0].at, ...Object.fromEntries(ids.slice(0, 6).map((m, i) => [m, i + 1])), Other: 7 + 8 + 9 });
+test("a model keeps one colour in every window, and no two keys of a frame share one", () => {
+  const frame = (ms: string[]) => costFrame({ window: "week", buckets: [{ at: buckets[0].at, cost: Object.fromEntries(ms.map((m) => [m, 1])) }] });
+  const day = frame(["haiku", "sonnet"]), week = frame(["opus", "sonnet", "deepseek-v4.1-flash"]);
+  const colour = (f: any, k: string) => f.by.keys.find((x: any) => x.key === k).color;
+  expect(colour(day, "sonnet")).toBe(colour(week, "sonnet"));
+  for (const f of [day, week]) expect(new Set(f.by.keys.map((k: any) => k.color)).size).toBe(f.by.keys.length);
+});
+
+test("model ids with one short name join into one key with their values summed, and the models past the sixth fold into Other", () => {
+  const at = buckets[0].at;
+  const t = tokensFrame({ window: "week", buckets: [{ at, tokens: { "claude-opus-4-5-20251101": 1000, "claude-opus-4-1": 200 } }, { at, tokens: { "claude-opus-4-1": 50 } }] });
+  expect(t.by.keys.map((k: any) => k.key)).toEqual(["opus"]);
+  expect(t.rows.map((r: any) => r.opus)).toEqual([1200, 50]);
+  const ids = ["haiku", "sonnet", "opus", "gpt-oss-20b", "deepseek-v4.1-flash", "gpt-6-luna", "minimax-m3.1-flash", "step-3.5-flash", "mimo-v2.6-flash", "claude-new-5"];
+  const f = costFrame({ window: "week", buckets: [{ at, cost: Object.fromEntries(ids.map((m, i) => [m, i + 1])) }] });
+  expect(f.by.keys.map((k: any) => k.name)).toEqual([...ids.slice(0, 6).sort(), "Other"]);
+  expect(new Set(f.by.keys.map((k: any) => k.color)).size).toBe(7);
+  expect(f.rows[0]).toEqual({ at, ...Object.fromEntries(ids.slice(0, 6).map((m, i) => [m, i + 1])), Other: 7 + 8 + 9 + 10 });
+});
+
+test("the live frame folds the roles after the sixth into one Other key holding their sum, with seven different colours", () => {
+  const roles = Array.from({ length: 10 }, (_, i) => ({ key: `r${i}`, name: `R${i}`, hours: 1 }));
+  const points = [{ at: buckets[0].at, ...Object.fromEntries(roles.map((r, i) => [r.key, i + 1])) }, { at: buckets[1].at, r8: 2, r9: 3 }];
+  const f = liveFrame({ window: "week", agents: { ...agents, roles, points } });
+  expect(f.by.keys.map((k: any) => k.key)).toEqual(["r0", "r1", "r2", "r3", "r4", "r5", "Other"]);
+  expect(new Set(f.by.keys.map((k: any) => k.color)).size).toBe(7);
+  expect(f.rows.map((r: any) => r.Other)).toEqual([7 + 8 + 9 + 10, 5]);
 });
 
 test("the title is the sidebar name, whatever the data", () => {
@@ -415,4 +437,11 @@ test("a failed model change shows the reason beside the control", async () => {
     (globalThis as any).location = was.location;
     (globalThis as any).document = was.document;
   }
+});
+
+test("the chart colour order lists the model table's short names, and the view imports only what the UI server serves", () => {
+  expect(MODEL_ORDER).toEqual([...new Set(Object.keys(MODELS).map(shortModel))]);
+  const served = readFileSync(new URL("./server.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("./views/factory-agents.js", import.meta.url), "utf8");
+  for (const [, lib] of src.matchAll(/from "\.\.\/\.\.\/(lib\/[\w-]+\.ts)"/g)) expect(served).toContain(`"/${lib}"`);
 });

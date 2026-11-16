@@ -90,34 +90,44 @@ function roles(a, m) {
 }
 
 const timed = (a) => a.roles.filter((r) => r.hours != null);
-/** The colour of the role at index `i` of the fixed role list, so a role keeps its colour in every window; the cost chart's keys take them in order. */
+/** The chart colours: the first six go to the first six roles of the fixed role list and the first six models of MODEL_ORDER, the seventh to `Other`. */
 const ROLE_COLORS = ["series-1", "series-2", "series-3", "series-4", "series-5", "chart-6", "chart-7"];
+const OWN = ROLE_COLORS.length - 1;
+/** The models by short name, in the order of the model table (lib/models.ts, which the UI server does not serve); a model's colour is its place here, so it is the same in every window. */
+export const MODEL_ORDER = ["haiku", "sonnet", "opus", "gpt-oss-20b", "deepseek-v4.1-flash", "gpt-6-luna", "minimax-m3.1-flash", "step-3.5-flash", "mimo-v2.6-flash"];
 
-/** The live frame: agents live per point, by role. */
-export const liveFrame = (d) => ({
-  measure: { name: "Agents Live", unit: "count", agg: "max" },
-  over: { kind: "time", window: d.window },
-  by: { name: "Role", keys: d.agents.roles.map((r, i) => ({ key: r.key, name: r.name, color: ROLE_COLORS[i % ROLE_COLORS.length] })).filter((k) => timed(d.agents).some((r) => r.key === k.key)) },
-  rows: d.agents.points.map((p) => ({ ...p })),
-});
-
-/** A per-bucket frame by model: `field` is the bucket's value per model, `measure` what the chart plots. */
-function modelFrame(d, field, measure) {
-  const all = [...new Set((d.buckets ?? []).flatMap((b) => Object.keys(b[field] ?? {})))].sort();
-  // At most seven keys: past that, the models after the sixth fold into Other.
-  const rest = all.length > ROLE_COLORS.length ? all.slice(ROLE_COLORS.length - 1) : [];
-  const keys = all.slice(0, all.length - rest.length).map((m) => ({ key: m, name: shortModel(m) }));
-  if (rest.length) keys.push({ key: "Other", name: "Other" });
+/** `keys` and `rows` with the `rest` keys folded into one `Other` key that holds their sum in each row; with no `rest`, unchanged. */
+function withOther(keys, rest, rows) {
+  if (!rest.length) return { keys, rows };
   return {
-    measure,
-    over: { kind: "time", window: d.window },
-    by: { name: "Model", keys: keys.map((k, i) => ({ ...k, color: ROLE_COLORS[i] })) },
-    rows: (d.buckets ?? []).map((b) => {
-      const row = { at: b.at, ...b[field] };
-      if (rest.length) { row.Other = rest.reduce((n, m) => n + (row[m] ?? 0), 0); for (const m of rest) delete row[m]; }
+    keys: [...keys, { key: "Other", name: "Other", color: ROLE_COLORS[OWN] }],
+    rows: rows.map((r) => {
+      const row = { ...r, Other: rest.reduce((n, k) => n + (r[k] ?? 0), 0) };
+      for (const k of rest) delete row[k];
       return row;
     }),
   };
+}
+
+/** The live frame: agents live per point, by role. The first six roles of the fixed role list keep their colours; the later ones fold into Other. */
+export const liveFrame = (d) => {
+  const on = (r) => timed(d.agents).includes(r), all = d.agents.roles;
+  const { keys, rows } = withOther(all.slice(0, OWN).filter(on).map((r) => ({ key: r.key, name: r.name, color: ROLE_COLORS[all.indexOf(r)] })), all.slice(OWN).filter(on).map((r) => r.key), d.agents.points);
+  return { measure: { name: "Agents Live", unit: "count", agg: "max" }, over: { kind: "time", window: d.window }, by: { name: "Role", keys }, rows };
+};
+
+/** A per-bucket frame by model: `field` is the bucket's value per model, `measure` what the chart plots. Ids with one short name join into one key; the first six models of MODEL_ORDER keep their colours and the others fold into Other. */
+function modelFrame(d, field, measure) {
+  const rows = (d.buckets ?? []).map((b) => {
+    const row = { at: b.at };
+    for (const [m, v] of Object.entries(b[field] ?? {})) row[shortModel(m)] = (row[shortModel(m)] ?? 0) + v;
+    return row;
+  });
+  const has = (m) => rows.some((r) => m in r);
+  const names = MODEL_ORDER.slice(0, OWN).filter(has).sort();
+  const rest = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((m) => m !== "at" && !names.includes(m)).sort();
+  const f = withOther(names.map((m) => ({ key: m, name: m, color: ROLE_COLORS[MODEL_ORDER.indexOf(m)] })), rest, rows);
+  return { measure, over: { kind: "time", window: d.window }, by: { name: "Model", keys: f.keys }, rows: f.rows };
 }
 
 /** The cost frame: cost per bucket, by model. */
