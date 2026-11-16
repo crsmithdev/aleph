@@ -8,6 +8,7 @@ import { readList, writeList } from "../../../issues/lib/store.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { lock } from "../infra/locks.ts";
+import { setModel } from "../routing/models.ts";
 import { setAsk, type Ask } from "../asks/ask.ts";
 import { BATCH, housekeep, housekeepDue, readState, review } from "./housekeeper.ts";
 import { base, branch, calls, fresh, item, key, repoPath, replyWith, sh, useDirectorFixture } from "./director.fixture.ts";
@@ -50,6 +51,14 @@ test("the daily run reviews every parked issue in batches of BATCH, and no open 
   expect(readState().main[key]).toBe(sh(repoPath(), "git", "rev-parse", "main"));
   expect(housekeepDue(NOW + 60_000)).toBe(false);
   expect(housekeepDue(NOW + 86_400_000)).toBe(true);
+});
+
+test("a housekeeper run records the model the housekeeper setting names", async () => {
+  seed([{ title: "Parked issue" }]);
+  act([]);
+  expect(setModel("housekeeper", { model: "sonnet" })).toBeNull();
+  await housekeep(NOW);
+  expect(runs().map((e) => e.run.model)).toEqual(["sonnet"]);
 });
 
 test("code applies each action and refuses one with no evidence, a bad title, or an issue outside the batch", async () => {

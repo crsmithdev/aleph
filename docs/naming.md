@@ -12,7 +12,7 @@ This page is the standard for the names, keys and status words that aleph shows 
 | Job | One execution: an intake, build, review, land, recheck, lens, monitor, housekeeper, maintainer or plain run. It has a role, a state, a cost and a folder. |
 | Role | What a job does. A job has one role. |
 | Size | Which model a build job's worker runs on, as the router picks it: `small` (`haiku`), `medium` (`sonnet`) or `large` (`opus`). Each has an entry in the `models` setting. A build's job row and its start event hold the size word in `size`. |
-| Role model | The model of one role other than the worker: `review`, `intake`, `director`, `monitor`, `maintainer`, `title` or `judge`. Each has an entry in the `models` setting. |
+| Role model | The model of one role other than the worker: `review`, `intake`, `director`, `monitor`, `lens`, `housekeeper`, `maintainer`, `title` or `judge`. Each has an entry in the `models` setting. |
 | Link | A relation between two stored things. A job has `target`, `prev` and `retry_of`. An issue has `from`, `after` and `related`. A hierarchy is a link, never part of a key. |
 | Issue state | The live machine state of one issue: its Ask and its CI result. It outlives each job on the issue. |
 | Event | One sentence of 6 fields that says who did what to which thing. |

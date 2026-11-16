@@ -24,6 +24,8 @@ test("no setting gives small, medium and large on haiku, sonnet and Opus, and ea
     intake: { enabled: true, model: "claude-opus-5-5" },
     director: { enabled: true, model: "claude-opus-5-5" },
     monitor: { enabled: true, model: "deepseek-v4.1-flash" },
+    lens: { enabled: true, model: "claude-opus-5-5" },
+    housekeeper: { enabled: true, model: "claude-opus-5-5" },
     maintainer: { enabled: true, model: "sonnet" },
     title: { enabled: true, model: "haiku" },
     judge: { enabled: true, model: "haiku" },
@@ -36,6 +38,10 @@ test("an entry set to a model it offers reads back; a model it does not offer, a
   const m = readModels();
   expect(m.small).toEqual({ enabled: true, model: "gpt-oss-20b" });
   expect(m.medium).toEqual({ enabled: false, model: "sonnet" });
+  expect(setModel("housekeeper", { model: "sonnet" })).toBeNull();
+  expect(m.housekeeper).toEqual({ enabled: true, model: "claude-opus-5-5" });
+  expect(readModels().housekeeper.model).toBe("sonnet");
+  expect(setModel("lens", { enabled: false })).toContain("can be disabled");
   expect(setModel("small", { model: "sonnet" })).toContain("offers");
   expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown");
   expect(setModel("worker-low", { model: "haiku" })).toContain("unknown");
@@ -43,7 +49,7 @@ test("an entry set to a model it offers reads back; a model it does not offer, a
   expect(setModel("large", { enabled: false })).toContain("can be disabled");
   expect(setModel("review", { enabled: false })).toContain("can be disabled");
   expect(setModel("merge", { model: "haiku" })).toContain("unknown");
-  expect(readModels()).toEqual(m);
+  expect(readModels()).toEqual({ ...m, housekeeper: { enabled: true, model: "sonnet" } });
 });
 
 test("a models setting stored under the old names reads back under small, medium and review", () => {

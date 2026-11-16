@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../jobs/commands.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
+import { setModel } from "../jobs/lib/routing/models.ts";
 import { writeRepos } from "../tests/projects.ts";
 
 // The fake lens agent: it keeps its prompt, writes $FAKE_RESULT in its working directory unless that is "none", and ends as stream-json does.
@@ -162,6 +163,13 @@ test("lens runs the lens skill on the idea as a lens run with its cost, and save
   const prompt = readFileSync(join(r.folder, "prompt.txt"), "utf8");
   expect(prompt).toContain("# Prior Art");
   expect(prompt).toContain(join(store, "1", "idea.md"));
+});
+
+test("a lens run records the model the lens setting names", async () => {
+  await aleph(["idea", "add", "Issue history"]);
+  expect(setModel("lens", { model: "sonnet" })).toBeNull();
+  await aleph(["idea", "lens", "1", "prior-art"]);
+  expect(allRuns().filter((e) => e.run.role === "lens").map((e) => e.run.model)).toEqual(["sonnet"]);
 });
 
 test("lens saves an html result, refuses an unknown lens, and saves nothing when the run wrote no result", async () => {

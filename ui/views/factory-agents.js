@@ -45,7 +45,7 @@ const share1 = (v) => (v == null ? "–" : `${(v * 100).toFixed(1)}%`);
 /** The sizes by their label; the models each offers come from /api/models. */
 const SIZES = { small: "Small", medium: "Medium", large: "Large" };
 /** Each role model's role, whose name and outcomes its rows show; the models it offers come from /api/models. */
-const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", title: "title", judge: "judge" };
+const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", maintainer: "maintainer", lens: "lens", housekeeper: "housekeeper", title: "title", judge: "judge" };
 
 function roles(a, m) {
   const num = ["Jobs", "Success", "p50", "p95", "Cost", "Built", "First pass", "Review pass"];

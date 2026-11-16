@@ -17,7 +17,7 @@ import { commitPaths, git, pushOrigin } from "../vault/lib/git.ts";
 import { openRun } from "../jobs/lib/roles/agent-run.ts";
 import { skillSection } from "../jobs/lib/roles/role-skill.ts";
 import { runFile } from "../jobs/lib/records/run-files.ts";
-import { OPUS_MODEL } from "../lib/models.ts";
+import { readModels } from "../jobs/lib/routing/models.ts";
 
 /** The lenses: each is the skill of the same name. */
 export const LENSES = ["prior-art", "red-team", "explainer"];
@@ -128,7 +128,7 @@ export function drop(slug: string): string | null {
 export async function lens(slug: string, name: string): Promise<{ file: string; warn: string | null }> {
   if (!LENSES.includes(name)) refuse(`no lens named ${name}: use ${LENSES.join(", ")}`);
   read(slug);
-  const run = openRun({ role: "lens", who: `the ${name} lens`, model: OPUS_MODEL, seconds: 3600, flags: LENS_FLAGS, name: `${slug}-${name}`, command: `idea lens ${slug} ${name}`, shown: true });
+  const run = openRun({ role: "lens", who: `the ${name} lens`, model: readModels().lens.model, seconds: 3600, flags: LENS_FLAGS, name: `${slug}-${name}`, command: `idea lens ${slug} ${name}`, shown: true });
   const prompt = `${skillSection(name, `The ${name} skill`)}\n\nThe skill's folder is ${join(import.meta.dir, "..", "skills", name)}.\n\n## The idea\n\nApply the skill to the idea in ${file(slug)}. Write your result to result.html or result.md in your working directory, ${run.folder}.`;
   const error = await run.ask(prompt, run.folder).then(() => undefined, (e: Error) => e.message);
   const out = [runFile(run.folder, "result.html"), runFile(run.folder, "result.md")].find((f) => existsSync(f));

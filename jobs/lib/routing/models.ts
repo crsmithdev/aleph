@@ -129,6 +129,8 @@ export const OFFERS = {
   intake: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   director: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   monitor: ["deepseek-v4.1-flash", "haiku", "sonnet", "claude-opus-5-5", ...OTHERS.filter((m) => m !== "deepseek-v4.1-flash")],
+  lens: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
+  housekeeper: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   maintainer: ["sonnet", "haiku", "claude-opus-5-5", ...OTHERS],
   title: ["haiku", ...OTHERS],
   judge: ["haiku", ...OTHERS],

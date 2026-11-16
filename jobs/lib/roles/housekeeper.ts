@@ -18,7 +18,7 @@ import { askOf, asking, refIn } from "../asks/ask.ts";
 import { gates } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
 import { held, lock } from "../infra/locks.ts";
-import { OPUS_MODEL } from "../../../lib/models.ts";
+import { readModels } from "../routing/models.ts";
 import { dispatchAfterIssue } from "../transitions/filing.ts";
 import { refusal } from "../transitions/transitions.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -217,7 +217,7 @@ export async function review(b: Batch, now: number): Promise<Outcome> {
   const ids = b.items.map(issues.refOf);
   const out: Outcome = { repo: b.repo.key, ids, applied: [], refused: [] };
   const run = openRun({
-    role: "housekeeper", who: "the housekeeper", model: OPUS_MODEL, seconds: SECONDS, cwd: b.repo.path, repo: b.repo.key, schema: SCHEMA,
+    role: "housekeeper", who: "the housekeeper", model: readModels().housekeeper.model, seconds: SECONDS, cwd: b.repo.path, repo: b.repo.key, schema: SCHEMA,
     flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(",")],
     name: `housekeeper-${b.repo.key}`, command: `housekeep ${b.repo.key}${b.land ? ` after ${b.land.to.slice(0, 7)}` : ""}: ${ids.join(", ")}`, shown: true,
   });
