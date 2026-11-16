@@ -106,7 +106,8 @@ on the shelf again. If `put` fails, serve the directory with
 `python3 -m http.server <port> -d docs/mocks/<name>` on a free port at or
 above 3002 instead.
 
-Do not use `wslview`. It looks for `WSLInterop`, but this WSL registers
+Open a URL in Chris's browser with the `cmd.exe /c start` line above. Do not
+use `wslview`: it looks for `WSLInterop`, but this WSL registers
 `WSLInterop-late`, so it fails.
 
 ## Memory
