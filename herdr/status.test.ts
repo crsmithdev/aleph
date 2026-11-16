@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { render } from "./status.ts";
+import { data, render } from "./status.ts";
 import { verdict } from "../lib/status-words.ts";
 
 const plain = (lines: string[]) => lines.map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
@@ -63,4 +63,17 @@ test("the height fills the pane, and the cut drops the oldest events", () => {
   expect(shown(short).length).toBeGreaterThan(0);
   expect(shown(short)).toEqual(shown(tall).slice(0, shown(short).length));
   expect(shown(short)[0]).toStartWith("18:10 aleph-149 landed");
+});
+
+test("the data's Herald is one row per issue with its older events folded, and drops a routine run that changed nothing", () => {
+  const ev = (time: string, subject: string, action: string, object: string, extra = {}) => ({ time: `2026-10-27T${time}:00Z`, subject, action, object, object_target: null, ...extra });
+  const s = { ...state, herald: { titles: { "aleph-7": "Fold the herald" }, runs: { "job.2": "judge", "job.3": "housekeeper" }, events: [
+    ev("10:00", "rule", "filed", "aleph-7"), ev("10:05", "gate", "landed", "aleph-7"),
+    ev("10:01", "gate", "running", "job.2"), ev("10:02", "gate", "done", "job.2"),
+    ev("10:03", "gate", "running", "job.3"), ev("10:04", "job.3", "changed", "aleph-8", { detail: "retitle: New name" }), ev("10:06", "gate", "done", "job.3"),
+  ] } };
+  const rows = data(s, flow).herald;
+  expect(rows.map((r: any) => [r.id, r.word, r.title])).toEqual([["@housekeeper", "ended", "1 change"], ["aleph-7", "landed", "Fold the herald"]]);
+  expect(rows[0].fold.map((f: any) => [f.label, f.text])).toEqual([["retitled", "aleph-8 New name"]]);
+  expect(rows[1].fold.map((f: any) => f.label)).toEqual(["filed"]);
 });
