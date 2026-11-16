@@ -85,14 +85,14 @@ const sum = (rows, f) => rows.reduce((n, r) => n + f(r), 0);
 function toolsCard(d, o) {
   const a = d.activity ?? {}, opts = {};
   if (a.langfuse === "off") return card("Tools", empty("Langfuse off"), opts);
-  if (a.langfuse === "error") return card("Tools", error("The tools did not load.", `${a.error}. Check that Langfuse is running, then reload.`), opts);
+  if (a.langfuse === "error") return card("Tools", error("The tools did not load.", { detail: a.error }), opts);
   const t = toolsOf(d);
   return card("Tools", t.length ? ranked("tool", t.map((x) => ({ name: x.name, n: x.calls, errors: x.errors })), o) : empty(),
     { aside: legendHtml([[counted(sum(t, (x) => x.calls), "call")], [counted(sum(t, (x) => x.errors), "error"), "c-err"]]) });
 }
 
 function skillsCard(d, o) {
-  if (d.skills?.error) return card("Skills", error("The skills did not load.", `${d.skills.error}. Check that Langfuse is running, then reload.`));
+  if (d.skills?.error) return card("Skills", error("The skills did not load.", { detail: d.skills.error }));
   const s = skillsOf(d), unused = d.skills?.unused ?? [];
   return card("Skills", (d.skills?.failed ? notice(`The last reload failed: ${d.skills.failed}.`, true) : "") +
     (s.length ? ranked("skill", s.map((x) => ({ name: x.name, n: x.uses, errors: x.errors })), o) : empty()) +
@@ -114,7 +114,7 @@ function hooksCard(d) {
 }
 
 function renderSessionsTable(d, o) {
-  if (d.sessions?.error) return error("The sessions did not load.", `${d.sessions.error}. Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.`);
+  if (d.sessions?.error) return error("The sessions did not load.", { detail: d.sessions.error });
   const all = shownSessions(d, o);
   if (!all.length) return empty();
   const shown = pageRows(all, o.page, STEP);

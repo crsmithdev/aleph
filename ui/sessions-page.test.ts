@@ -118,11 +118,12 @@ describe("the Sessions page", () => {
     expect(h.indexOf('data-ui="ag-search"')).toBeLessThan(h.indexOf('<div id="ag-sessions">'));
   });
 
-  test("a Langfuse failure names the reason in the hint, not as a raw Langfuse failed line", () => {
+  test("a Langfuse failure puts the reason in Technical details, not as a raw Langfuse failed line", () => {
     const h = v.renderSessions({ ...data(), activity: { langfuse: "error", error: "timeout", tools: [] } }, opts());
     expect(h).not.toContain("Langfuse failed:");
     expect(h).toContain("The tools did not load.");
-    expect(h).toContain("timeout. Check that Langfuse is running");
+    expect(h).toContain("<pre>timeout</pre>");
+    expect(h).not.toContain("Check that");
   });
 
   test("a window past the pages the fetch reads says the counts are of part of it; one inside them says nothing", () => {
@@ -136,9 +137,9 @@ describe("the Sessions page", () => {
     expect(off).toContain("Langfuse off");
     expect(off).not.toMatch(/(Skills|Sessions) failed:/);
     expect(off).toContain("The skills did not load.");
-    expect(off).toContain("boom. Check that Langfuse is running");
+    expect(off).toContain("<pre>boom</pre>");
     expect(off).toContain("The sessions did not load.");
-    expect(off).toContain("down. Check that Langfuse is running");
+    expect(off).toContain("<pre>down</pre>");
     expect(v.renderSessions({ ...data(), skills: { error: "boom" } }, opts())).toContain("dear one");
   });
 });

@@ -5,7 +5,7 @@ import { clamp, count, fold, goQuery, say, facts, chip, chips, costHtml, crumb, 
 import { systemParts } from "../system-parts.js";
 import { detailPanel, renderKpis } from "../timeline.js";
 
-const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
+const down = (d) => `<div class="page">${error("Langfuse is unreachable.", { detail: d.error })}</div>`;
 const langfuse = (base, traceId) => (base && traceId ? linkButton("Open in Langfuse", `${base}/trace/${traceId}`) : "");
 /** One line of `s`, cut at 60 characters with an ellipsis. */
 const line = (s) => { const t = String(s ?? "").replace(/\s+/g, " ").trim(); return t.length > 60 ? `${t.slice(0, 59)}…` : t; };

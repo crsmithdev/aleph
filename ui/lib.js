@@ -85,9 +85,9 @@ export const loadingLine = (what) => `<p class="quiet" role="status">${spin}Load
 /** The first-load state of a view, shown until its API answers. */
 export const loading = (title) => `<div class="page"><p class="quiet loading" role="status">${spin}Loading ${esc(title)}…</p></div>`;
 
-/** The error state: what failed, and what to try. */
-export const error = (line, hint = "Check that aleph-ui is running, then reload.", { detail = "" } = {}) =>
-  `<div class="error" role="alert"><p>${esc(line)}</p><p class="hint">${esc(hint)}</p>${detail ? fold("Technical details", `<pre>${esc(detail)}</pre>`) : ""}</div>`;
+/** The error state: what failed, and under Technical details the upstream text. */
+export const error = (line, { detail = "" } = {}) =>
+  `<div class="error" role="alert"><p>${esc(line)}</p>${detail ? fold("Technical details", `<pre>${esc(detail)}</pre>`) : ""}</div>`;
 
 /** A note above data that still shows: `bad` marks that the data is stale or wrong. */
 export const notice = (line, bad = false, id = "") => `<p class="notice${bad ? " bad" : ""}" role="${bad ? "alert" : "status"}"${id ? ` id="${esc(id)}"` : ""}>${esc(line)}</p>`;
@@ -748,13 +748,18 @@ export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis,
  * `v` and `v2` are text; `q` is `[first, second]`, naming the two values; `note` is text when there is no `q`;
  * `trend` is HTML from `cardTrend`; `extra` is HTML (a bar) between the value and row 3.
  * With `key` it selects the detail below it (a button with `data-tile` and `aria-pressed`); with `href` it goes to another page.
+ * While a figure waits (`loading`) or its fetch failed (`failed`, the error line), a mark takes the trend's place and an
+ * undefined `v` or `v2` leaves its space blank, so the card keeps its height.
  */
-export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key, on = false, loading = false }) {
+export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key, on = false, loading = false, failed = "" }) {
   const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
   const row3 = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>`
     : note ? `<span class="q m" title="${esc(note)}">${esc(note)}</span>` : "";
-  const title = ` title="${esc([`${k} ${v}${v2 === undefined ? "" : ` / ${v2}`}`, q && `${q[0]} / ${q[1]}`].filter(Boolean).join(", "))}"`;
-  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${trend}</span>${loading ? `<b role="status">${spin}<span class="sr">Loading</span></b>` : `<b>${esc(v)}${second}</b>`}${extra}${row3}`;
+  const shown = [v, v2].filter((x) => x !== undefined).join(" / ");
+  const title = ` title="${esc([shown && `${k} ${shown}`, q && `${q[0]} / ${q[1]}`].filter(Boolean).join(", "))}"`;
+  const mark = failed ? `<i class="spin bad" role="img" aria-label="${esc(failed)}" title="${esc(failed)}">!</i>`
+    : loading ? `<i class="spin" role="status" aria-label="Loading"></i>` : trend;
+  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${mark}</span><b>${v === undefined ? "&nbsp;" : esc(v)}${second}</b>${extra}${row3}`;
   if (key) return `<button type="button" class="tile sc"${title} data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
   return href ? `<a class="tile sc"${title} href="${esc(href)}">${inner}</a>` : `<div class="tile sc"${title}>${inner}</div>`;
 }

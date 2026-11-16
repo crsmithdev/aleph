@@ -230,9 +230,9 @@ if (typeof document !== "undefined") {
     out.innerHTML = loadingLine("the log");
     try {
       const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.job)}/logs/${encodeURIComponent(b.dataset.file)}${q}`);
-      if (!res.ok) out.innerHTML = error("Could not load the log.", undefined, { detail: `status ${res.status}` });
+      if (!res.ok) out.innerHTML = error("Could not load the log.", { detail: `status ${res.status}` });
       else if (b.dataset.as) out.innerHTML = renderTranscript(await res.json());
       else out.innerHTML = `<pre class="trailers">${esc(await res.text())}</pre>`;
-    } catch (err) { out.innerHTML = error("Could not load the log.", undefined, { detail: err.message }); }
+    } catch (err) { out.innerHTML = error("Could not load the log.", { detail: err.message }); }
   });
 }

@@ -329,7 +329,7 @@ async function inspect(id) {
     const n = await res.json();
     live.note = res.ok ? n : null;
     const row = live.m.notes?.find((x) => x.title === it.key);
-    box.innerHTML = res.ok ? renderInspector(it, n, live.status.get(it.key), row?.history) : error(n.error ?? `answered ${res.status}`, "The note may have left the vault.");
+    box.innerHTML = res.ok ? renderInspector(it, n, live.status.get(it.key), row?.history) : error(n.error ?? `answered ${res.status}`);
     const chart = box.querySelector("aleph-chart");
     if (chart) chart.frame = recallFrame(row?.history);
   } catch (e) { box.innerHTML = error(`Could not load the note: ${e.message}`); }

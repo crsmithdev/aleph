@@ -88,10 +88,10 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('document.querySelector("#view a[href=\\"#/\\"]").textContent')).toBe("Status");
   }, 30_000);
 
-  test("a failed first load shows a line and a hint, and a stale server shows its command", async () => {
+  test("a failed first load shows one line and no hint, and a stale server shows its command", async () => {
     await page.ev('(() => { const f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/issues") ? Promise.reject(new Error("down")) : f(u, o); })()');
     await page.go("#/issues");
-    expect(await page.ev('document.querySelector("#view .error .hint")?.textContent')).toBeTruthy();
+    expect(await page.ev('document.querySelectorAll("#view .error p").length')).toBe(1);
     expect(await page.ev('document.querySelector("#view .error p").textContent')).toBe("Issues did not load: down");
     await page.reload();
     // The server's stale header shows a notice with the restart command, which is copyable.
@@ -379,11 +379,11 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     })`)).toEqual({ ids: [true, true], list: 2, gap: "16px", lede: "One sentence that sums up the card.", cell: "A title that takes the spare width, with its text as its title", kinds: [true, true, true], acts: true, failed: ["stuck", "stuck"] });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
-    // The empty and loading states are drawn: a line, a status line and a loading metric value, and the empty table and chart.
+    // The empty and loading states are drawn: a line, a status line, a loading and a failed metric card, and the empty table and chart.
     expect(await page.ev(`({
-      states: ["#kit-states .empty", "#kit-states p[role=status]", "#kit-states .tile b[role=status]"].map((q) => !!document.querySelector(q)),
+      states: ["#kit-states .empty", "#kit-states p[role=status]", "#kit-states .tile .spin[role=status]", "#kit-states .tile .spin.bad"].map((q) => !!document.querySelector(q)),
       empties: ["kit-table-empty", "kit-chart-empty"].map((i) => !!document.querySelector("#" + i + " .empty")),
-    })`)).toEqual({ states: [true, true, true], empties: [true, true] });
+    })`)).toEqual({ states: [true, true, true, true], empties: [true, true] });
     // Every :root token (the --wa- and --kit- bridges aside) is named by a code element of a specimen, not of its rules.
     expect(await page.ev(`(() => {
       const named = new Set([...document.querySelectorAll(".kit-specimen code")].flatMap((c) => c.textContent.match(/--[\\w-]+/g) ?? [])), bare = new Set();

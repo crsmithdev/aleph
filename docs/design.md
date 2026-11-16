@@ -290,7 +290,7 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 - Show a count as a muted number after its title, not in brackets.
 - Write an empty state with `empty()`: `No data`, with no hint. Give it another line only for a state that is not missing data, such as `Langfuse off` or `Select a row`, in at most three words.
 - Write a note, a qualifier or a caption in one or two words: `over pace`, `p50 weekly`. Put more in a `title` tooltip.
-- Write an error line as `Could not load X.` and a hint. Put the upstream message in a Technical details fold (`error()` with `detail`).
+- Write an error line as `Could not load X.`, with no hint. Put the upstream message in a Technical details fold (`error()` with `detail`).
 - Offline, the page says "The server is unreachable. Showing the last data." (`ui/index.html`).
 
 | Do | Don't |
@@ -301,7 +301,7 @@ Every displayed value goes through its helper in `ui/lib.js`. The Missing column
 | `running`, `landed`, `critical` | `Running`, `LANDED` |
 | `empty()`, which shows `No data` | `No agent job on an issue ended in the last hour.` with the hint `Widen the window or clear the project.` |
 | `over pace`, with the off-machine share in the bar's tooltip | `2% off this machine, under pace, live` |
-| `Could not load the agents.` with the hint `Check that aleph-ui is running, then reload.` and the upstream message in a Technical details fold | `Error: fetch failed` |
+| `Could not load the agents.` and the upstream message in a Technical details fold | `Error: fetch failed`, or a hint such as `Check that aleph-ui is running, then reload.` |
 | `Loading Jobs…` with the spinner before it | a spinner with no text, or `No data` before the first fetch returns |
 
 ## Components
@@ -570,20 +570,20 @@ A metric card shows one headline number of a list page, with its key.
 
 | Helper | Reference |
 |---|---|
-| `statCard({ k, v, v2, q, note, trend, extra, href, key, on })` in `tiles(label, html)`; `cardTrend()`; `onTile()` | `statusCards()` in `ui/views/speed.js` |
+| `statCard({ k, v, v2, q, note, trend, extra, href, key, on, loading, failed })` in `tiles(label, html)`; `cardTrend()`; `onTile()` | `statusCards()` in `ui/views/speed.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Box | The card | | `--surface`, shadow `--card-lift`, no visible border, radius `--r-card`, padding `--sp-12` `--sp-14` |
 | 2 | Key `k` | The measure | | `--sans` `--fs-xs` `--fw-strong`, capitals, `--muted`; breaks only between words, on up to two lines; the trend stays at the right and the row keeps two lines of height |
-| 3 | Trend | The change from the baseline | yes | `--fs-sm` `--fw-strong`, a pill (radius `--r-pill`); `--good` on `--done-bg` when good, `--need` on `--need-bg` when bad, else `--muted` on `--sunk` |
+| 3 | Trend | The change from the baseline; the spinner while a figure waits, the failed ring when its fetch failed | yes | `--fs-sm` `--fw-strong`, a pill (radius `--r-pill`); `--good` on `--done-bg` when good, `--need` on `--need-bg` when bad, else `--muted` on `--sunk` |
 | 4 | Value `v` | The number | | `--metric` `--fw-strong`, `-0.025em`, from `--fs-metric-min` up to `--fs-metric`, tabular, `--ink`; one line |
-| 5 | Second value `v2` | A second number after ` / `, such as the cap | yes | `--metric` at .62em, `--muted` |
+| 5 | Second value `v2` | A second number after ` / `, such as the cap | yes | `--metric` at .62em, `--fw-strong`, `--ink-2` |
 | 6 | Bar `extra` | A meter | yes | the meter |
 | 7 | Qualifier `q` or `note` | The names of the two values, or a note | | `--fs-xs`; one line; first name `--ink`, second `--muted` |
 
 - Write the key in two or three words. The CSS sets it in capitals.
-- When the value is unknown, write `–`. Give no note to explain it.
+- When the fetch answered and the value is unknown, write `–`. Give no note to explain it. While the fetch waits or after it failed, leave `v` and `v2` undefined: the value row stays blank at its height.
 - With `v2`, give `q` as `[first, second]`: one name for each value, in lower case, in one word or a few words.
 - With no `v2`, you can give a `note` in place of `q`, in one or two words. Put a definition in a tooltip, not in the note.
 - Make the trend only with `cardTrend(value, base, prev, { kind, lowerIsGood, format, basis })`. Set `kind` to `points` for a share, and to `relative` for a time or a count. Set `lowerIsGood` to `null` when no direction is good. With no baseline, `cardTrend()` shows nothing.
@@ -596,6 +596,7 @@ A metric card shows one headline number of a list page, with its key.
 | `q: ["in use", "cap"]` | `q: ["In Use", "Maximum Capacity"]` |
 | `k: "Worker slots"` | `k: "Worker slots in use right now"` |
 | `v: "–"` | `v: "0"` for an unknown value |
+| `statCard({ k: "Success", q, loading: !d, failed: d?.error ?? "" })` | `v: "–"` while the fetch waits or after it failed |
 | `note: "over pace"` | `note: "2% off this machine, under pace, live"` |
 
 #### Table
@@ -1441,7 +1442,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 
 | Helper | Reference |
 |---|---|
-| `empty(line)`, `loadingLine(what)`, `error(line, hint)`, `notice(line, bad, id)`; `loading(title)` in the router only | `ui/views/jobs.js` |
+| `empty(line)`, `loadingLine(what)`, `error(line, { detail })`, `notice(line, bad, id)`; `loading(title)` in the router only | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1451,16 +1452,17 @@ An empty state shows that there is nothing, that data loads, or that the data di
 - The router shows `loading()` while a page loads, and `error()` when the first load fails. A view does not call them for its own data.
 - For a section that loads after the page, use `loadingLine(what)`: `Loading the diff…`. It is the only helper that draws the spinner; `loading(title)` and the metric card use the same mark.
 - Every component that shows data draws `loadingLine` until its first fetch returns: a chart panel, a table, a panel. After the fetch, no data is `empty()` and a failed fetch is `error()`. The spinner never stands for either.
-- A metric card whose figure waits for a fetch takes `loading: true` in `statCard`: the spinner replaces the value, and the card keeps its key and its link.
+- A metric card whose figure waits for a fetch takes `loading: true` in `statCard`: the spinner sits in the trend slot, the value row stays blank at its height, and the card keeps its key and its link.
+- A metric card whose fetch failed takes `failed: line` in `statCard`: a still `--stuck` ring with `!` sits in the trend slot, with the error line as its title. The spinner never stays after a fetch fails.
 - Under `prefers-reduced-motion` the spinner does not turn; the ring stays as a static marker.
-- Use `error(line, hint, { detail })` for a second fetch inside a card that failed. The line is `Could not load X.`; with no hint, it tells the reader to check aleph-ui and reload. The upstream message goes in `detail`, in a Technical details fold.
+- Use `error(line, { detail })` for a second fetch inside a card that failed. The line is `Could not load X.`, in `--stuck` in a card too. The upstream message goes in `detail`, in a Technical details fold.
 - Use `notice(line, bad)` for a note above data that still shows: a stale reload (`bad`, `role="alert"`) or a partial count. Do not write a `<p>` for it by hand.
-- `empty()` takes no hint. The `error()` hint is text.
+- `empty()` and `error()` take no hint.
 
 | Do | Don't |
 |---|---|
 | `empty()` | `<p class="quiet">No data</p>` by hand, or a sentence and a hint |
-| `error("Could not load the agents.", hint, { detail })` | `Error: fetch failed` |
+| `error("Could not load the agents.", { detail })` | `Error: fetch failed`, or a hint line |
 
 ## States
 

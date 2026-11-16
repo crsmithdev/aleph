@@ -11,28 +11,28 @@ const SPEND = { hour: "day", day: "day", week: "week", month: "month" };
 
 /** The OpenRouter tile: whether OpenRouter is up, over what it charged for the window's UTC period. */
 function openRouterCard(m, win) {
-  const up = m ? !m.down.includes("deepseek-v4.1-flash") : null;
   const v = m?.spend?.[SPEND[win] ?? SPEND.week];
-  return statCard({ k: "OpenRouter", v: up == null ? "–" : up ? "up" : "down", v2: v == null ? "–" : money(v), q: ["status", "spend"], loading: m === undefined });
+  return statCard({ k: "OpenRouter", ...(m ? { v: m.down.includes("deepseek-v4.1-flash") ? "down" : "up", v2: v == null ? "–" : money(v) } : {}), q: ["status", "spend"], loading: m === undefined, failed: m === null ? "Could not load the models." : "" });
 }
 
 /** The Follow-ups card: the issues the factory's own actors filed in the window and all the issues filed, with its trend against the baseline (neutral). `d` is /api/flow for the window with `baseline`, or null while it loads. */
 function followupsCard(d) {
   const v = d?.figures?.followups;
-  return statCard({ k: "Follow-ups", v: v == null ? "–" : count(v), ...(v == null ? {} : { v2: count(d.figures.filed) }), q: ["follow-ups", "filed"], trend: windowTrend(d, "followups", v, { kind: "relative", lowerIsGood: null, format: count }), loading: !d });
+  const vs = !d || d.error ? {} : v == null ? { v: "–" } : { v: count(v), v2: count(d.figures.filed) };
+  return statCard({ k: "Follow-ups", ...vs, q: ["follow-ups", "filed"], trend: windowTrend(d, "followups", v, { kind: "relative", lowerIsGood: null, format: count }), loading: !d, failed: d?.error ?? "" });
 }
 
 /** The Success card: the share of runs that succeeded and the share of builds that passed first time, with the success trend against its baseline. */
-function successCard(a) {
-  const r = a?.rates;
-  return statCard({ k: "Success", v: share(r?.success), v2: share(r?.firstPass), q: ["runs", "first pass"], trend: cardTrend(r?.success, r?.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline" }), loading: !a });
+function successCard(d) {
+  const r = d?.agents?.rates;
+  return statCard({ k: "Success", ...(r ? { v: share(r.success), v2: share(r.firstPass) } : d && !d.error ? { v: "–" } : {}), q: ["runs", "first pass"], trend: cardTrend(r?.success, r?.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline" }), loading: !d, failed: d?.error ?? "" });
 }
 
 function scorecard(s, d, m, win) {
-  const f = s.factory, a = d?.agents ?? null;
+  const a = d?.agents;
   return usageCard(s) + openRouterCard(m, win) +
-    statCard({ k: "Live agents", v: count(f.liveRuns), v2: a ? count(a.live - a.workers) : "–", q: ["workers", "other"] }) +
-    followupsCard(d) + successCard(a);
+    statCard({ k: "Live agents", v: count(s.factory.liveRuns), ...(a ? { v2: count(a.live - a.workers) } : {}), q: ["workers", "other"], loading: !d, failed: d?.error ?? "" }) +
+    followupsCard(d) + successCard(d);
 }
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */
@@ -85,7 +85,7 @@ function roles(a, m) {
   const of = (role, size) => outs.filter((o) => o.role === role && (size === undefined || o.size === size));
   const grp = (t) => `<tr class="grp"><th colspan="${num.length + 3}">${t}</th></tr>`;
   const rows = grp("Workers") + Object.entries(SIZES).map(([k, l]) => line(k, l, of("worker", k))).join("") + line("unsized", "Unsized", of("worker", null)) +
-    grp("Roles") + Object.entries(ROLE_MODELS).map(([k, r]) => line(k, NAMES[r], of(r))).join("");
+    grp("Other") + Object.entries(ROLE_MODELS).map(([k, r]) => line(k, NAMES[r], of(r))).join("");
   return m || outs.length ? dataTable(heads(["Agent", "Model", ...num, "Output"], num), rows) : empty();
 }
 
@@ -154,7 +154,7 @@ export const view = {
   // `s.flow` is /api/flow for the window and `s.models` is /api/models, which `more` adds; the page draws without them first.
   render: (s, _params, q) => renderFactoryAgents(s, s.flow ?? null, "live", scope(q).window, s.models),
   more: async (s, q) => {
-    const [flow, models] = await Promise.all([flowOf(scope(q).window, q, true), get("/api/models").then((r) => r.json()).catch(() => null)]);
+    const [flow, models] = await Promise.all([flowOf(scope(q).window, q, true), get("/api/models").then((r) => (r.ok ? r.json() : null)).catch(() => null)]);
     return { ...s, flow, models };
   },
   mount: (root, s) => {

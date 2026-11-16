@@ -66,7 +66,7 @@ test("the tiles are usage, OpenRouter spend for the window's UTC period, live ag
   for (const t of ["<b>1<em> / 0</em></b>", "<b>down<em> / $17.54</em></b>"]) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>down<em> / $1.50</em></b>");
   const loading = renderFactoryAgents(S, D);
-  expect(loading).toContain('<span class="sr">Loading</span></b><span class="q"><span>status</span>');
+  expect(loading).toContain('<i class="spin" role="status" aria-label="Loading"></i></span><b>&nbsp;</b><span class="q"><span>status</span>');
   expect(h).not.toContain("Backends");
   // A failed models fetch is null.
   expect(renderFactoryAgents(S, D, "live", "week", null)).not.toContain("Local server");
@@ -89,10 +89,19 @@ test("one tile holds the live worker runs over the other live agents", () => {
   expect(tiles(h).filter((t) => t.includes("<b>1<em> / 2</em></b>"))).toEqual([live]);
 });
 
-test("with no flow the live tile keeps the worker runs and shows a dash for the other agents", () => {
+test("with no flow the live tile keeps the worker runs and spins in place of the other agents", () => {
   const h = renderFactoryAgents(S, null);
-  expect(tile(h, "Live agents")).toContain("<b>1<em> / –</em></b>");
+  expect(tile(h, "Live agents")).toContain('<i class="spin" role="status" aria-label="Loading"></i></span><b>1</b>');
   expect(h).not.toContain("undefined");
+  expect(h).not.toContain("–");
+});
+
+test("a failed flow fetch stops the spinners: a still ring with the error line in each flow card", () => {
+  const h = renderFactoryAgents(S, { error: "Could not load the flow." } as any, "live", "week", undefined);
+  const ring = '<i class="spin bad" role="img" aria-label="Could not load the flow." title="Could not load the flow.">!</i>';
+  for (const k of ["Live agents", "Follow-ups", "Success"]) expect(tile(h, k)).toContain(ring);
+  expect(tile(h, "Success")).toContain("<b>&nbsp;</b>");
+  expect(tile(h, "Success")).not.toContain('role="status"');
 });
 
 test("the OpenRouter tile holds OpenRouter's status over the window's spend, and nothing else", () => {
@@ -105,9 +114,10 @@ test("the OpenRouter tile holds OpenRouter's status over the window's spend, and
   expect(up).not.toContain("Spend");
   const down = tile(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"])), "OpenRouter");
   expect(down).toContain("<b>down<em> / $17.54</em></b>");
-  expect(tile(renderFactoryAgents(S, D), "OpenRouter")).toContain('<span class="sr">Loading</span>');
-  // A failed models fetch is null, so the status and the spend are both unknown.
-  expect(tile(renderFactoryAgents(S, D, "live", "week", null), "OpenRouter")).toContain("<b>–<em> / –</em></b>");
+  expect(tile(renderFactoryAgents(S, D), "OpenRouter")).toContain('<i class="spin" role="status" aria-label="Loading"></i>');
+  // A failed models fetch is null, so the card shows the failed ring and no figures.
+  const failed = tile(renderFactoryAgents(S, D, "live", "week", null), "OpenRouter");
+  expect(failed).toContain('<i class="spin bad" role="img" aria-label="Could not load the models." title="Could not load the models.">!</i></span><b>&nbsp;</b>');
 });
 
 test("the OpenRouter and Live agents tiles hold one key line, one value line and one qualifier line", () => {
@@ -302,9 +312,9 @@ test("a click on ▸ keeps the size open, and a second click closes it", async (
   }
 });
 
-test("the Workers group holds Small, Medium, Large and an Unsized row with no controls, and the Roles group a row per role model", () => {
+test("the Workers group holds Small, Medium, Large and an Unsized row with no controls, and the Other group a row per role model", () => {
   const h = page([full("worker", "sonnet", { size: null, runs: 17 })]);
-  const [workers, rolesPart] = h.split('<tr class="grp"><th colspan="10">Roles</th></tr>');
+  const [workers, rolesPart] = h.split('<tr class="grp"><th colspan="10">Other</th></tr>');
   expect(workers).toContain('<tr class="grp"><th colspan="10">Workers</th></tr>');
   expect([...workers.matchAll(/<td class="wide" title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large", "Unsized"]);
   const un = row(h, "Unsized");

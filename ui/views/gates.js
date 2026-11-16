@@ -91,7 +91,7 @@ export function renderMonitor(d) {
   const n = m.findings.length, first = n ? ` First: ${findingHtml(m.findings[0])}` : "";
   const summary = `${esc(day(localMs(m.day)))}: ${plural(n, "finding")}.${first}`;
   const body = (n ? findingsList(m.findings) : "") +
-    (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? error("Could not load the monitor.", "Reads again next run", { detail: m.error }) : "");
+    (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? error("Could not load the monitor.", { detail: m.error }) : "");
   return card("Monitor", fold(summary, body), { id: "monitor" });
 }
 

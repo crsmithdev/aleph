@@ -225,10 +225,10 @@ test("actButton kinds, card lede and error detail", () => {
   const c = card("T", "<p>b</p>", { lede: "One line." });
   expect(c).toContain('</div><p class="lede">One line.</p><p>b</p>');
   expect(card("T", "b")).not.toContain("lede");
-  const e = error("Could not load X.", undefined, { detail: "answered 500: <boom>" });
+  const e = error("Could not load X.", { detail: "answered 500: <boom>" });
   expect(e).toContain("Technical details");
   expect(e).toMatch(/<details[^>]*><summary>Technical details<\/summary><pre>answered 500: &lt;boom&gt;<\/pre><\/details>/);
-  expect(e.indexOf("Check that aleph-ui is running")).toBeLessThan(e.indexOf("Technical details"));
+  expect(e).not.toContain("hint");
   expect(error("Could not load X.")).not.toContain("<details");
 });
 
@@ -595,8 +595,10 @@ test("loadingLine, loading() and a loading statCard draw the one spinner; a card
   const spin = '<i class="spin" aria-hidden="true"></i>';
   expect(lib.loadingLine("jobs")).toBe(`<p class="quiet" role="status">${spin}Loading jobs…</p>`);
   expect(loading("Jobs")).toContain(`${spin}Loading Jobs…`);
-  const c = lib.statCard({ k: "Asks", v: "–", loading: true });
-  expect(c).toContain(`<b role="status">${spin}<span class="sr">Loading</span></b>`);
+  const c = lib.statCard({ k: "Asks", loading: true, trend: "<span class=\"tr\">x</span>" });
+  expect(c).toContain(`<span class="r1"><span class="k">Asks</span><i class="spin" role="status" aria-label="Loading"></i></span><b>&nbsp;</b>`);
+  const f = lib.statCard({ k: "Asks", v: "3", failed: "Could not load <x>." });
+  expect(f).toContain(`<i class="spin bad" role="img" aria-label="Could not load &lt;x&gt;." title="Could not load &lt;x&gt;.">!</i></span><b>3</b>`);
   expect(lib.statCard({ k: "Asks", v: "3" })).not.toContain("spin");
   // An empty state is not a loading state.
   expect(empty()).not.toContain("spin");

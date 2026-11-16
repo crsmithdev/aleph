@@ -250,7 +250,7 @@ export async function start() {
       // A refresh of a view whose path is in `morph` is merged into the page by idiomorph, which keeps the elements that match.
       if (morph.has(view.path) && !first) Idiomorph.morph($("view"), out, { morphStyle: "innerHTML", ignoreActiveValue: true });
       else $("view").innerHTML = out;
-    } catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`, "Reload the page. If it stays, this is a bug in the view.")}</div>`; return; }
+    } catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`)}</div>`; return; }
     if (saved) restoreState($("view"), saved);
     swapped?.();
     const mark = markOf(data);
