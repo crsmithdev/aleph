@@ -31,6 +31,10 @@ function run({ on, job: _job, n: _n, ...r }: Record<string, unknown>) {
   made.push(seed({ name: "job", ...(on ? { target: `issue.${String(on).split("-")[1]}` } : {}), ...r } as any).id);
 }
 const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, h), ended: new Date(Date.parse(at(daysAgo, h)) + s * 1000).toISOString() });
+/** The author and committer of the commits a store a test writes takes. */
+const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+/** A git command in the store `dir` a test writes. */
+const storeGit = (dir: string) => (...a: string[]) => Bun.spawnSync(["git", "-C", dir, ...a], { stderr: "ignore", env: { ...process.env, ...GIT } });
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-speed-"));
@@ -104,15 +108,41 @@ test("the Status cards show the answer's figures and trend them against its base
 
 test("figures: the follow-ups are the agent subjects' filed events in the window, and filed is all of them", () => {
   const file = (subject: string, object: string, time: Date) => conn().run("INSERT INTO events (time, subject, action, object) VALUES (?, ?, 'filed', ?)", [time.toISOString(), subject, object]);
-  const t = new Date(2026, 9, 28, 12);
+  // From 2026-11-13T18:09:00Z a filed event names its filer, so the subject decides a follow-up.
+  const t = new Date("2026-11-13T18:30:00Z"), now = new Date("2026-11-13T19:00:00Z");
   for (const s of ["worker", "intake", "gate", "claude", "human"]) file(s, "alpha-9001", t);
-  file("worker", "alpha-9001", new Date(2026, 9, 20)); // before the window
+  file("worker", "alpha-9001", new Date("2026-11-12T10:00:00Z")); // before the window
   conn().run("INSERT INTO events (time, subject, action, object) VALUES (?, 'worker', 'started', 'alpha-9001')", [t.toISOString()]); // not a filing
   file("worker", "beta-9001", t); // another project's
   expect(figures(speed("day", now))).toMatchObject({ followups: 4, filed: 6 });
   expect(figures(speed("day", now, null, "alpha"))).toMatchObject({ followups: 3, filed: 5 });
   expect(figures(speed("day", now, null, "beta"))).toMatchObject({ followups: 1, filed: 1 });
   conn().run("DELETE FROM events WHERE object LIKE '%-9001'");
+});
+
+test("figures: before the filer is named, a filed event counts by the issue's source, not its subject", () => {
+  const store = join(base, "sources");
+  writeRepos({ alpha: {} }, store);
+  for (const [n, source] of [[1, "worker"], [2, "chris"]] as const) {
+    mkdirSync(join(store, "issues", String(n)), { recursive: true });
+    writeFileSync(join(store, "issues", String(n), "issue.md"), `---\nproject: project.1\nsource: ${source}\n---\n`);
+  }
+  const git = storeGit(store);
+  git("init", "-q");
+  git("add", ".");
+  git("commit", "-qm", "alpha: add");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  const restore = withEnv({ ALEPH_ITEMS: store });
+  const file = (object: string, time: string) => conn().run("INSERT INTO events (time, subject, action, object) VALUES (?, 'rule', 'filed', ?)", [time, object]);
+  file("issue.1", "2026-11-13T17:00:00Z"); // source: worker, before the filer is named
+  file("issue.2", "2026-11-13T17:10:00Z"); // source: chris, before it
+  file("issue.2", "2026-11-13T18:30:00Z"); // source: chris, after it: the subject decides
+  try {
+    expect(figures(speed("day", new Date("2026-11-13T19:00:00Z")))).toMatchObject({ followups: 2, filed: 3 });
+  } finally {
+    conn().run("DELETE FROM events WHERE object IN ('issue.1', 'issue.2')");
+    restore();
+  }
 });
 
 test("the Usage card note is the pace word, and the bar title holds the percent off this machine", () => {
@@ -156,7 +186,7 @@ test("filed: an issue's created field is its filing, else its file's add time; a
   mkdirSync(store, { recursive: true });
   writeRepos({ fx: {} }, store);
   const restore = withEnv({ ALEPH_ITEMS: store });
-  const git = (...a: string[]) => Bun.spawnSync(["git", "-C", store, ...a], { stderr: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
+  const git = storeGit(store);
   const add = (when: number, msg: string, ...ids: string[]) => {
     for (const spec of ids) {
       const [id, created] = spec.split("@");
@@ -165,7 +195,7 @@ test("filed: an issue's created field is its filing, else its file's add time; a
     }
     git("add", ".");
     const stamp = `@${when} +0000`;
-    Bun.spawnSync(["git", "-C", store, "commit", "-qm", msg], { env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: stamp, GIT_COMMITTER_DATE: stamp } });
+    Bun.spawnSync(["git", "-C", store, "commit", "-qm", msg], { env: { ...process.env, ...GIT, GIT_AUTHOR_DATE: stamp, GIT_COMMITTER_DATE: stamp } });
     git("update-ref", "refs/remotes/origin/main", "HEAD");
   };
   git("init", "-q");

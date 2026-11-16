@@ -16,11 +16,11 @@ import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import { OFFERS, readModels } from "../../jobs/lib/routing/models.ts";
 import { stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
-import { createdAt, itemsDir, projectsAt, reader } from "../../issues/lib/store.ts";
+import { createdAt, everyFetched, itemsDir, projectsAt, reader, sourceOf } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP, RUN_CAP } from "../../jobs/lib/infra/settings.ts";
-import { clip, issueHref, NAMES, parseId, parseKey, SPEEDS, tail } from "../../lib/naming.ts";
+import { clip, issueHref, NAMES, parseId, parseKey, SPEEDS, tail, type EventRow } from "../../lib/naming.ts";
 import { eventIn, inProject, repoIn, scopeOf } from "./scope.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { BUCKETS, buckets, quantile, WINDOWS, type Window } from "../../lib/windows.ts";
@@ -39,6 +39,11 @@ const splitId = (s: string): [string, string] => {
 const MAX_RUN = 4 * HOUR;
 /** The subjects of an event that file a follow-up: the factory's own actors, not claude and not human. */
 const FOLLOWUPS = ["worker", "intake", "gate", "rule", "director", "housekeeper", "maintainer"];
+/** 2026-11-13T18:09:00Z (10:09 PST): from then a filed event names the filer in its subject. Before it the subject is always `rule`, so only the issue's own `source: worker` makes the filing a follow-up. */
+const NAMED_FILER = Date.parse("2026-11-13T18:09:00Z");
+
+/** The numbers of the store's issues whose front matter says `source: worker`. */
+const workerIssues = (): Set<number> => new Set(everyFetched().filter(({ item }) => sourceOf(item) === "worker").map(({ item }) => item.id));
 export const KINDS = ["land", "intake"] as const;
 
 export interface Pct { count: number; p50: number; p90: number }
@@ -71,7 +76,7 @@ export interface Speed {
   /** The stages of the window, as the monitor counts them. */
   stages: { rows: StageRow[] };
   models: { model: string; count: number; p50: number }[];
-  /** Issues filed in the window by an event of the event table: `all` of them, `followups` those the factory's own actors filed (not claude, not human). */
+  /** Issues filed in the window by an event of the event table: `all` of them, `followups` those the factory's own actors filed (not claude, not human). Before 2026-11-13T18:09:00Z the filer is not in the subject, so there only an issue with `source: worker` counts. */
   filed: { followups: number; all: number };
   flaky: number;
   /** The reruns by check, most first. */
@@ -663,6 +668,13 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     used[model] = (used[model] ?? 0) + (e.run.tokens ?? 0);
   }
   const filings = readEvents(since.getTime()).filter((e) => e.action === "filed" && Date.parse(e.time) <= now.getTime() && eventIn(e.object, project, e.project));
+  // The filer is named in the subject only from NAMED_FILER on; before that the issue's source decides.
+  let workers: Set<number> | undefined;
+  const followup = (e: EventRow) => {
+    if (Date.parse(e.time) >= NAMED_FILER) return FOLLOWUPS.includes(e.subject);
+    const n = numOf(e.object);
+    return n !== undefined && (workers ??= workerIssues()).has(n);
+  };
   return {
     window,
     done: issuesLanded,
@@ -682,7 +694,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     lost: cls.lost,
     hasWeek: fit !== null,
     agents: agentStats(entries, since.getTime(), now.getTime(), BUCKETS[window].fine, LIVE_CAP(), undefined, Array.from({ length: BASELINE[window].n }, (_, i): [number, number] => [since.getTime() - (i + 1) * WINDOWS[window], now.getTime() - (i + 1) * WINDOWS[window]])),
-    filed: { followups: filings.filter((e) => FOLLOWUPS.includes(e.subject)).length, all: filings.length },
+    filed: { followups: filings.filter(followup).length, all: filings.length },
     flaky: recent.length,
     flakes: [...Map.groupBy(recent.flatMap(flakeNames), (f) => f.name)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
   };
