@@ -313,12 +313,13 @@ async function recall(): Promise<void> {
   out(found);
 }
 
-const asValue = (v: unknown): any => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
+const asValue = (v: unknown): unknown => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
+const fieldOf = (v: unknown, k: string): unknown => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined);
 /** A tool's output as text: a bare string, or the stdout of a result object. */
 function outText(v: unknown): string {
   const x = asValue(v);
   if (typeof x === "string") return x.trim();
-  if (x && typeof x === "object" && typeof (x as any).stdout === "string") return (x as any).stdout.trim();
+  if (x && typeof x === "object" && "stdout" in x && typeof x.stdout === "string") return x.stdout.trim();
   return x === undefined || x === null ? "" : JSON.stringify(x);
 }
 const queryWords = (q: string) => new Set(q.toLowerCase().match(/[^\s"']+/g) ?? []);
@@ -337,7 +338,7 @@ async function misses(): Promise<void> {
   catch (e) { console.error(`Langfuse failed: ${e instanceof Error ? e.message : e}`); exit(1); }
   obs = obs.filter((o) => !o.startTime || new Date(o.startTime) >= from).sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
 
-  const cmdOf = (o: Observation): string => { const i = asValue(o.input); return String(typeof i === "string" ? i : i?.command ?? "").trim(); };
+  const cmdOf = (o: Observation): string => { const i = asValue(o.input); return String(typeof i === "string" ? i : fieldOf(i, "command") ?? "").trim(); };
   const queryOf = (o: Observation) => recallQuery(cmdOf(o)) ?? "";
   const recalls = obs.filter((o) => o.name === "Bash" && recallQuery(cmdOf(o)) !== null);
   const empty = recalls.filter((o) => outText(o.output) === "[]");
@@ -357,7 +358,7 @@ async function misses(): Promise<void> {
   const unoffered = obs.filter((o) => {
     if (o.name !== "Read") return false;
     const i = asValue(o.input);
-    const path = String(i?.file_path ?? i?.path ?? "");
+    const path = String(fieldOf(i, "file_path") ?? fieldOf(i, "path") ?? "");
     if (!/(^|\/)wiki\/.+\.md$/.test(path)) return false;
     const seen = offeredIn.get(o.traceId ?? "") ?? [];
     return !seen.some((t) => t.includes(path) || t.includes(noteName(path)));

@@ -69,9 +69,9 @@ export function recordRun(root: string, name: string, result: Run["result"], det
   try { writeJson(runFile(root, name), { at: new Date().toISOString(), result, ...(detail ? { detail } : {}) }); } catch { /* the record must never fail its process */ }
 }
 
-/** The newest run of `name`, or null when it never ran or its record is unreadable. */
+/** The newest run of `name`, or null when it never ran. */
 export function readRun(root: string, name: string): Run | null {
-  try { return readJsonOr<Run | null>(runFile(root, name), null); } catch { return null; }
+  return readJsonOr<Run | null>(runFile(root, name), null);
 }
 
 const compiledFile = (root: string) => join(root, ".index", "compiled.json");

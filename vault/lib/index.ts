@@ -39,7 +39,10 @@ export function openIndex(root: string, notes: Note[]): Database {
     const db = new Database(file);
     try {
       if ((db.query("select value from meta where key = 'head'").get() as { value: string } | null)?.value === at) return db;
-    } catch {}
+    } catch (e) {
+      // A vault.sqlite with no meta table is rebuilt; a busy or corrupt file is not.
+      if (!/no such table/.test((e as Error).message)) { db.close(); throw e; }
+    }
     db.close();
   }
   // Build beside the file and rename, so a hook that reads at the same time sees the old index or the new one.

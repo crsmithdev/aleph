@@ -26,7 +26,7 @@ export async function sub(argv: string[]): Promise<{ code: number; json: Json | 
   try { await run(argv); }
   catch (e) { if (!(e instanceof Exit)) throw e; code = e.code; }
   finally { console.log = log; console.error = error; }
-  try { return { code, json: JSON.parse(text), err }; } catch { return { code, json: null, err }; }
+  return { code, json: text.trim() ? JSON.parse(text) : null, err };
 }
 
 /** `line` with each repeated `[[link]]` removed. */

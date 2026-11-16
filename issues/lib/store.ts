@@ -57,8 +57,11 @@ export async function fetchStore(dir = itemsDir()): Promise<string | null> {
  */
 function fetchNow(dir: string): void {
   const r = fetchOrigin(dir, REFSPEC);
-  if (!r.ok) throw new Error(`work store fetch failed: ${r.out}`);
+  if (!r.ok) throw new FetchFailed(`work store fetch failed: ${r.out}`);
 }
+
+/** The store's fetch failed: the lists on disk may be stale, not missing. */
+class FetchFailed extends Error {}
 
 /** The contents of each `rev:path`, in one `git cat-file --batch`. */
 function readFiles(dir: string, specs: string[]): string[] {
@@ -322,7 +325,7 @@ export const isSorted = (doc: Doc, item: Issue, repo: Place = { key: "" }): bool
 
 /** Lists by repo key, each read from the store once for the reader's life. */
 export interface Reader {
-  /** The repo's list, or null when the store has none or cannot be read. */
+  /** The repo's list, or null when the store has none or its fetch failed (logged). */
   list(key: string): Doc | null;
   /** Item `id` of the repo's list, or undefined. */
   item(key: string, id: number | string): Issue | undefined;
@@ -337,7 +340,10 @@ export function reader(o: { fetch?: boolean; rev?: string } = {}): Reader {
       let doc: Doc | null = null;
       const read = fetched ? (r: Place) => readFetched(r, o.rev) : readList;
       fetched = true;
-      try { doc = read({ key }); } catch {}
+      try { doc = read({ key }); } catch (e) {
+        if (!(e instanceof FetchFailed)) throw e;
+        logEvent({ subject: "gate", action: "failed", object: key, detail: e.message });
+      }
       lists.set(key, doc);
     }
     return lists.get(key)!;
