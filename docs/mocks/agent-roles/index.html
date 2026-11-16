@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mock: Agents roles table</title>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style>
+  /* Mock chrome only: the switcher bar and the notes. The tables use app.css as the UI does. */
+  body { margin: 0; }
+  .mockbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+    padding: 10px 24px; background: var(--sunk); border-bottom: 1px solid var(--rule); font: 500 13px var(--sans); }
+  .mockbar .grp { display: flex; gap: 4px; align-items: center; }
+  .mockbar .lbl { color: var(--muted); margin-right: 4px; }
+  .mockbar button { font: inherit; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .mockbar button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 8px 24px 60px; }
+  .mocknote { margin: 10px 0 14px; padding: 10px 14px; border-left: 3px solid var(--run); background: var(--surface); font: 13px/1.5 var(--sans); color: var(--ink-2); }
+  .mocknote b { color: var(--ink); }
+
+  /* The proposed parts. */
+  .tbl .tw { all: unset; cursor: pointer; display: inline-block; width: 1.2em; color: var(--muted); }
+  .tbl .tw:hover { color: var(--ink); }
+  .tbl .tw.none { cursor: default; visibility: hidden; }
+  .tbl tr.sub td { color: var(--ink-2); font-size: 12px; }
+  .tbl tr.sub td:first-child { padding-left: 2.4em; }
+  .tbl tr.off td:not(.keep) { color: var(--muted); }
+  .tbl tr.off select { display: none; }
+  .tbl tr.grp th { padding-top: 14px; font: 600 11px var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .tbl td.warn { color: var(--need); }
+  .tbl .when { color: var(--muted); font: 11px var(--num); }
+  .tbl .now { font: 600 10px var(--sans); color: var(--done); background: var(--done-bg); padding: 0 5px; border-radius: 4px; margin-left: 4px; }
+  .tbl .m { color: var(--muted); font-weight: 400; }
+  .offnote { color: var(--muted); font-size: 12px; }
+  input.sw { vertical-align: middle; }
+
+  /* Option C: the settings list. */
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 28px; }
+  .slot { display: grid; grid-template-columns: 1.6em 7.5em 1fr; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--rule-2); font-size: 13px; }
+  .slot.off .nm, .slot.off select { color: var(--muted); }
+  .slot .nm { font-weight: 500; }
+  .slot select { min-width: 0; width: 100%; }
+  .seg2 { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; font: 500 12px var(--sans); }
+  .seg2 button { all: unset; padding: 2px 9px; cursor: pointer; color: var(--muted); }
+  .seg2 button[aria-pressed="true"] { background: var(--sunk); color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="mockbar">
+  <div class="grp"><span class="lbl">Layout</span>
+    <button data-opt="A" aria-pressed="true">A · one table</button>
+    <button data-opt="B" aria-pressed="false">B · workers + roles</button>
+    <button data-opt="C" aria-pressed="false">C · settings apart</button>
+  </div>
+  <span class="lbl">Window: month, Oct 16 – Nov 15, real runs</span>
+</div>
+<div class="wrap"><div id="note"></div><div class="page sp" id="out"></div></div>
+
+<script type="module">
+const ROWS = await (await fetch("data.json")).json();
+
+// The settings on 2026-11-15 (readModels()). The housekeeper's select is new (a-03167): today it always runs on opus.
+const SLOTS = [
+  { key: "small", name: "Small", kind: "worker", model: "deepseek-v4.1-flash", on: true },
+  { key: "medium", name: "Medium", kind: "worker", model: "sonnet", on: true },
+  { key: "large", name: "Large", kind: "worker", model: "claude-opus-5-5", on: true },
+  { key: "reviewer", name: "Reviewer", kind: "role", model: "claude-opus-5-5", unit: "verdict" },
+  { key: "intake", name: "Intake", kind: "role", model: "claude-opus-5-5", unit: "triage" },
+  { key: "director", name: "Director", kind: "role", model: "claude-opus-5-5", unit: "step" },
+  { key: "housekeeper", name: "Housekeeper", kind: "role", model: "claude-opus-5-5", unit: "sweep" },
+  { key: "maintainer", name: "Maintainer", kind: "role", model: "sonnet", unit: "run" },
+  { key: "monitor", name: "Monitor", kind: "role", model: "deepseek-v4.1-flash", unit: "reading" },
+  { key: "title", name: "Title", kind: "role", model: "haiku", unit: "title" },
+  { key: "judge", name: "Judge", kind: "role", model: "haiku", unit: "call" },
+];
+const OFFERS = ["claude-opus-5-5", "sonnet", "haiku", "deepseek-v4.1-flash", "gpt-oss-20b"];
+const ORDER = ["small", "medium", "large"];
+
+const short = (m) => m === "unset" ? "unset" : m.replace(/^claude-/, "").replace(/(-\d+)+$/, "");
+const n = (v) => v.toLocaleString("en-US");
+const pc = (v) => v == null ? "–" : `${Math.round(v * 100)}%`;
+const usd = (v) => v == null ? "–" : `$${v < 10 ? v.toFixed(2) : n(Math.round(v))}`;
+const dur = (s) => s == null ? "–" : s < 90 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m`;
+const day = (d) => { const [, m, dd] = d.split("-"); return `${["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+m]} ${+dd}`; };
+
+/** The rows of one slot, newest use first; the slot's current model is `now`. */
+function hist(slot) {
+  const rs = ROWS.filter((r) => r.slot === slot.key).map((r) => ({ ...r, now: r.model === slot.model }));
+  return rs.sort((a, b) => (b.now - a.now) || b.last_at.localeCompare(a.last_at));
+}
+/** The figures every row shows, from one aggregate row. */
+function figs(r, slot) {
+  const ended = r.ok + r.failed + r.stuck;
+  const worker = slot.kind === "worker";
+  const outs = worker ? r.landed : r.ok;
+  return {
+    runs: r.runs, ok: ended ? r.ok / ended : null, stuck: r.stuck, p50: r.p50, p95: r.p95, cost: r.cost,
+    per: outs ? r.cost / outs : null, outs, unit: worker ? "landed" : slot.unit,
+    first: worker && r.landed ? r.first / r.landed : null, review: worker && r.verdicts ? r.pass / r.verdicts : null,
+  };
+}
+/** The sum of several rows of one slot, for an Unsized or all-model total. */
+function sum(rs) {
+  const t = { runs: 0, ok: 0, failed: 0, stuck: 0, cost: 0, landed: 0, first: 0, verdicts: 0, pass: 0, p50: null, p95: null };
+  for (const r of rs) for (const k of Object.keys(t)) if (k !== "p50" && k !== "p95") t[k] += r[k];
+  const big = rs.slice().sort((a, b) => b.runs - a.runs)[0];
+  return { ...t, p50: big?.p50 ?? null, p95: big?.p95 ?? null };
+}
+
+const state = { opt: "A", open: new Set(["medium", "small"]), all: false, on: Object.fromEntries(SLOTS.filter((s) => s.kind === "worker").map((s) => [s.key, s.on])) };
+const onCount = () => ORDER.filter((k) => state.on[k]).length;
+/** Where an off size's work goes: the next size up that is on, else the next one down. */
+const goes = (k) => { const i = ORDER.indexOf(k); return ORDER.slice(i + 1).find((x) => state.on[x]) ?? ORDER.slice(0, i).reverse().find((x) => state.on[x]); };
+
+const sw = (s) => {
+  if (s.kind !== "worker") return "";
+  const last = state.on[s.key] && onCount() === 1;
+  return `<input class="sw" type="checkbox" data-sw="${s.key}" aria-label="${s.name} on"${state.on[s.key] ? " checked" : ""}${last ? ' disabled title="One size stays on"' : ""}>`;
+};
+const sel = (s) => `<select aria-label="${s.name} model">${OFFERS.map((m) => `<option${m === s.model ? " selected" : ""}>${short(m)}</option>`).join("")}</select>`;
+const off = (s) => s.kind === "worker" && !state.on[s.key];
+const offCell = (s) => `<span class="offnote">Off · goes to ${SLOTS.find((x) => x.key === goes(s.key)).name}</span>`;
+const twist = (s, rs) => rs.length > 1 ? `<button class="tw" data-tw="${s.key}" aria-expanded="${state.open.has(s.key)}" title="${rs.length - 1} earlier model${rs.length > 2 ? "s" : ""}">${state.open.has(s.key) ? "▾" : "▸"}</button>` : `<span class="tw none">▸</span>`;
+const okCell = (f, kind) => `<td class="num${f.ok != null && f.ok < 0.7 && kind === "worker" ? " warn" : ""}">${pc(f.ok)}</td>`;
+const used = (r) => `<span class="when">${day(r.first_at)} – ${day(r.last_at)}</span>`;
+
+// ---------- A: one table, every agent on the same columns, plus one Output column in that agent's own noun ----------
+function optionA() {
+  const head = `<tr><th>Agent</th><th>Model</th><th class="num">Runs</th><th class="num">OK</th><th class="num">Stuck</th><th class="num">p50</th><th class="num">p95</th><th class="num">Cost</th><th class="num">Per output</th><th>Output</th></tr>`;
+  const outCell = (f) => {
+    const q = f.first != null ? ` <span class="m">· ${pc(f.first)} first · ${pc(f.review)} review</span>` : "";
+    return `<td>${n(f.outs)} ${f.unit}${f.unit === "landed" ? "" : f.outs === 1 ? "" : "s"}${q}</td>`;
+  };
+  const line = (s, r, sub) => {
+    const f = figs(r, s);
+    return `<td class="num">${n(f.runs)}</td>${okCell(f, s.kind)}<td class="num">${f.stuck || "–"}</td><td class="num">${dur(f.p50)}</td><td class="num">${dur(f.p95)}</td><td class="num">${usd(f.cost)}</td><td class="num">${usd(f.per)}</td>${outCell(f)}`;
+  };
+  let body = "";
+  for (const [label, kind] of [["Workers", "worker"], ["Roles", "role"]]) {
+    body += `<tr class="grp"><th colspan="10">${label}</th></tr>`;
+    for (const s of SLOTS.filter((x) => x.kind === kind)) {
+      const rs = hist(s), cur = rs.find((r) => r.now);
+      const main = off(s) ? `<td colspan="8"></td>` : cur ? line(s, cur) : `<td class="num" colspan="8"><span class="m">No runs on ${short(s.model)} in this window</span></td>`;
+      body += `<tr class="${off(s) ? "off" : ""}"><td class="keep">${twist(s, rs)}${sw(s)} ${s.name}</td><td class="keep">${off(s) ? offCell(s) : sel(s)}</td>${main}</tr>`;
+      if (state.open.has(s.key)) for (const r of rs.filter((x) => !x.now)) body += `<tr class="sub"><td>${short(r.model)}</td><td>${used(r)}</td>${line(s, r, true)}</tr>`;
+    }
+    if (kind === "worker") {
+      const rs = ROWS.filter((r) => r.slot === "none");
+      body += `<tr class="sub" title="Builds started with no size: forced runs, and runs from before sizes"><td style="padding-left:1.2em">Unsized</td><td><span class="m">${rs.length} models</span></td>${line({ kind: "worker" }, sum(rs))}</tr>`;
+    }
+  }
+  return card("Roles", `<div class="tscroll"><table class="tbl" id="roles"><thead>${head}</thead><tbody>${body}</tbody></table></div>`,
+    "Each row is a size or a role on its model now. ▸ shows the models it ran on before.");
+}
+
+// ---------- B: two tables; workers get the build columns, roles only the shared ones ----------
+function optionB() {
+  const wHead = `<tr><th>Size</th><th>Model</th><th class="num">Runs</th><th class="num">OK</th><th class="num">Stuck</th><th class="num">Landed</th><th class="num">First pass</th><th class="num">Review pass</th><th class="num">p50</th><th class="num">p95</th><th class="num">Cost</th><th class="num">$ / landed</th></tr>`;
+  const wLine = (s, r) => { const f = figs(r, s); return `<td class="num">${n(f.runs)}</td>${okCell(f, "worker")}<td class="num">${f.stuck || "–"}</td><td class="num">${n(f.outs)}</td><td class="num">${pc(f.first)}</td><td class="num">${pc(f.review)}</td><td class="num">${dur(f.p50)}</td><td class="num">${dur(f.p95)}</td><td class="num">${usd(f.cost)}</td><td class="num">${usd(f.per)}</td>`; };
+  const rHead = `<tr><th>Role</th><th>Model</th><th class="num">Runs</th><th class="num">OK</th><th class="num">Stuck</th><th class="num">p50</th><th class="num">p95</th><th class="num">Cost</th><th class="num">$ / run</th></tr>`;
+  const rLine = (s, r) => { const f = figs(r, s); return `<td class="num">${n(f.runs)}</td>${okCell(f, "role")}<td class="num">${f.stuck || "–"}</td><td class="num">${dur(f.p50)}</td><td class="num">${dur(f.p95)}</td><td class="num">${usd(f.cost)}</td><td class="num">${usd(f.runs ? f.cost / f.runs : null)}</td>`; };
+  const table = (kind, head, line, cols) => {
+    let body = "";
+    for (const s of SLOTS.filter((x) => x.kind === kind)) {
+      const rs = hist(s), cur = rs.find((r) => r.now);
+      const main = off(s) ? `<td colspan="${cols}"></td>` : cur ? line(s, cur) : `<td colspan="${cols}"><span class="m">No runs in this window</span></td>`;
+      body += `<tr class="${off(s) ? "off" : ""}"><td class="keep">${twist(s, rs)}${sw(s)} ${s.name}</td><td class="keep">${off(s) ? offCell(s) : sel(s)}</td>${main}</tr>`;
+      if (state.open.has(s.key)) for (const r of rs.filter((x) => !x.now)) body += `<tr class="sub"><td>${short(r.model)}</td><td>${used(r)}</td>${line(s, r)}</tr>`;
+    }
+    if (kind === "worker") body += `<tr class="sub" title="Builds started with no size: forced runs, and runs from before sizes"><td style="padding-left:1.2em">Unsized</td><td><span class="m">3 models</span></td>${line({ kind: "worker" }, sum(ROWS.filter((r) => r.slot === "none")))}</tr>`;
+    return `<div class="tscroll"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  };
+  const first = sum(ROWS.filter((r) => r.role === "worker"));
+  return card("Workers", table("worker", wHead, wLine, 10), "A build lands or it does not. Review pass is the reviewer's verdict on these builds.", `First pass ${pc(first.first / first.landed)}`) +
+    card("Roles", table("role", rHead, rLine, 7), "OK is a run that did its job. The reviewer's OK is a verdict given, pass or return.");
+}
+
+// ---------- C: the settings in one list, then a flat table of every agent and model the window used ----------
+function optionC() {
+  const slot = (s) => `<div class="slot${off(s) ? " off" : ""}"><span>${s.kind === "worker" ? sw(s) : ""}</span><span class="nm">${s.name}</span>${off(s) ? offCell(s) : sel(s)}</div>`;
+  const settings = card("Models", `<div class="slots">${SLOTS.map(slot).join("")}</div>`, "A size that is off sends its work to the next size up.");
+  const head = `<tr><th>Agent</th><th>Model</th><th>Used</th><th class="num">Runs</th><th class="num">OK</th><th class="num">Stuck</th><th class="num">p50</th><th class="num">p95</th><th class="num">Cost</th><th class="num">Per output</th><th>Output</th></tr>`;
+  let body = "";
+  for (const s of [...SLOTS.slice(0, 3), { key: "none", name: "Unsized", kind: "worker", model: "" }, ...SLOTS.slice(3)]) {
+    const rs = hist(s).filter((r) => state.all || r.now || s.key === "none");
+    rs.forEach((r, i) => {
+      const f = figs(r, s);
+      const q = f.first != null ? ` <span class="m">· ${pc(f.first)} first · ${pc(f.review)} review</span>` : "";
+      body += `<tr class="${r.now || s.key === "none" ? "" : "sub"}"><td>${i ? "" : s.name}</td><td>${short(r.model)}${r.now ? '<span class="now">now</span>' : ""}</td><td>${used(r)}</td><td class="num">${n(f.runs)}</td>${okCell(f, s.kind)}<td class="num">${f.stuck || "–"}</td><td class="num">${dur(f.p50)}</td><td class="num">${dur(f.p95)}</td><td class="num">${usd(f.cost)}</td><td class="num">${usd(f.per)}</td><td>${n(f.outs)} ${f.unit}${f.unit === "landed" || f.outs === 1 ? "" : "s"}${q}</td></tr>`;
+    });
+  }
+  const seg = `<span class="seg2"><button data-all="0" aria-pressed="${!state.all}">Now</button><button data-all="1" aria-pressed="${state.all}">All models</button></span>`;
+  return settings + card("Roles", `<div class="tscroll"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody></table></div>`, "One row per agent and model in the window.", seg);
+}
+
+function card(title, body, lede, aside = "") {
+  return `<section class="card"><div class="sh"><h2>${title}</h2>${aside ? `<span class="aside">${aside}</span>` : ""}</div>${lede ? `<p class="lede">${lede}</p>` : ""}${body}</section>`;
+}
+
+const NOTES = {
+  A: "<b>A · one table.</b> Every size and role on the same eight columns. The role-specific part goes in one Output column, in that role's own noun, so no column is blank for half the rows. Per output is cost over that noun: $ per landed build, $ per verdict, $ per triage. ▸ opens the models a row used before in this window.",
+  B: "<b>B · workers + roles.</b> Two tables. Workers keep the build columns (Landed, First pass, Review pass, $ / landed). Roles get only the shared columns. The reviewer's pass share moves to the workers as Review pass, because it judges the build, not the reviewer. ▸ opens earlier models.",
+  C: "<b>C · settings apart.</b> The toggles and model selects leave the table for one Models list, as design.md asks (no controls in a table cell). The table is flat: one row per agent and model. Now shows each agent's current model; All models adds the earlier ones with their dates.",
+};
+function draw() {
+  document.getElementById("note").innerHTML = `<p class="mocknote">${NOTES[state.opt]} Try a size's box: an off size shows where its work goes, and the last size on cannot go off.</p>`;
+  document.getElementById("out").innerHTML = { A: optionA, B: optionB, C: optionC }[state.opt]();
+  for (const b of document.querySelectorAll("[data-opt]")) b.setAttribute("aria-pressed", b.dataset.opt === state.opt);
+}
+document.addEventListener("click", (e) => {
+  const o = e.target.closest("[data-opt]"); if (o) { state.opt = o.dataset.opt; return draw(); }
+  const t = e.target.closest("[data-tw]"); if (t) { const k = t.dataset.tw; state.open.has(k) ? state.open.delete(k) : state.open.add(k); return draw(); }
+  const a = e.target.closest("[data-all]"); if (a) { state.all = a.dataset.all === "1"; return draw(); }
+});
+document.addEventListener("change", (e) => { const s = e.target.closest("[data-sw]"); if (s) { state.on[s.dataset.sw] = s.checked; draw(); } });
+draw();
+</script>
+</body>
+</html>

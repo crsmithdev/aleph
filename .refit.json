@@ -221,6 +221,16 @@
         "jobs/lib/roles/intake.ts:16-22"
       ],
       "reason": "Both are import lines, not logic."
+    },
+    {
+      "concept": "design mocks repeat their page chrome and table markup",
+      "copies": [
+        "docs/mocks/agent-roles/index.html:1-19",
+        "docs/mocks/job-controls/index.html:1-19",
+        "docs/mocks/agent-roles/index.html:67-75",
+        "docs/mocks/status-cards/Drill.dc.html:141-146"
+      ],
+      "reason": "Each mock under docs/mocks/ is a standalone page that Chris opens on its own, so it keeps its own head, switcher bar and table rows. Mocks share no code with each other or with ui/ (CLAUDE.md, Mocks)."
     }
   ]
 }
