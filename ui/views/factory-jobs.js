@@ -1,10 +1,12 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
-import { get, moved, redraw } from "../router.js";
-import { card, cell, pagedTable, row, dur, count, empty, error, failMessage, heads, loadingLine, onTile, pageHead, searchBox, setQuery, shortModel, statCard, cardTrend, tiles, scope } from "../lib.js";
+import { get, moved, redraw } from "./lib/router.js";
+import { setQuery, scope } from "./lib/address.js";
+import { dur, count, failMessage, shortModel } from "./lib/format.js";
+import { card, cell, pagedTable, row, empty, error, heads, loadingLine, onTile, pageHead, searchBox, statCard, cardTrend, tiles } from "./lib/html.js";
 import { NAMES } from "../../lib/naming.ts";
-import { panelOf } from "../chart.js";
-import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "../jobs-table.js";
-import { bucketOf, flowOf, lastPeriod, trendOn, usable } from "../flow-parts.js";
+import { panelOf } from "./lib/chart.js";
+import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./lib/jobs-table.js";
+import { bucketOf, flowOf, lastPeriod, trendOn, usable } from "./lib/flow-parts.js";
 
 export const STAGES = [
   ["lead", NAMES.lead],

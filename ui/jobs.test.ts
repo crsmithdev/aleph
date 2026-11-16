@@ -7,12 +7,12 @@ import { setCodes } from "../lib/naming.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { routes, transcript } from "./api/jobs.ts";
 import { withEnv } from "./server.testkit.ts";
-// @ts-ignore lib.js is plain JS, shared with the page
-import * as lib from "./lib.js";
+// @ts-ignore the module is plain JS, shared with the page
+import * as lib from "./views/lib/html.js";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
 // @ts-ignore plain JS, shared with the page
-import * as jt from "./jobs-table.js";
+import * as jt from "./views/lib/jobs-table.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { logTo } from "../jobs/lib/records/run-files.ts";
@@ -375,11 +375,11 @@ describe("render", () => {
   test("the head is pageHead with the title and the nav links as aside", () => {
     const aside = '<a class="act" href="http://lf/sessions/s">Trace</a>';
     const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
-    mock.module("./lib.js", () => ({ ...real, pageHead: tagged }));
+    mock.module("./views/lib/html.js", () => ({ ...real, pageHead: tagged }));
     try {
       expect(v.renderJob(job)).toContain(tagged("Fix <it>", { aside }));
     } finally {
-      mock.module("./lib.js", () => real);
+      mock.module("./views/lib/html.js", () => real);
     }
   });
   test("the head of a job with no item title is its short id, not its full name", () => {

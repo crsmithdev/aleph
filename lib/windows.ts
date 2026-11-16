@@ -1,4 +1,4 @@
-// The windows that a page's `?window=` names: each name, its length and its buckets, and the one quantile the pages use. The server reads `?window=` through `scopeOf` (ui/api/scope.ts) and the page through `scope` (ui/lib.js); the page gets this module as JS from the server (ui/server.ts, SHARED).
+// The windows that a page's `?window=` names: each name, its length and its buckets, and the one quantile the pages use. The server reads `?window=` through `scopeOf` (ui/api/scope.ts) and the page through `scope` (ui/views/lib/html.js); the page gets this module as JS from the server (ui/server.ts, SHARED).
 
 export const DAY = 86_400_000;
 /** The length of each window in ms. */

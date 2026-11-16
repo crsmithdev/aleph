@@ -1,9 +1,11 @@
 // The Ideas views: the list at #/ideas (/api/ideas) and one idea at #/ideas/:slug (/api/ideas/:slug) with a tab for
 // the write-up, one per lens and the log. A lens result is shown from the lens file route in a sandboxed iframe.
-import { actButton, badge, card, chips, count, crumb, dataTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, kept, keep, list, loadingLine, md, money, pageHead, postJson, repoIdLink, say, scope, searchBox, statusRow, subHead, tabs, when, wireScope, wireTable, wireTabs } from "../lib.js";
+import { goQuery, hashQuery, kept, keep, postJson, scope, wireScope } from "./lib/address.js";
+import { count, money, when } from "./lib/format.js";
+import { actButton, badge, card, chips, crumb, dataTable, empty, error, esc, filterBar, heads, list, loadingLine, md, pageHead, repoIdLink, say, searchBox, statusRow, subHead, tabs, wireTable, wireTabs } from "./lib/html.js";
 import { issueHref } from "../../lib/naming.ts";
-import { redraw } from "../router.js";
-import { renderKpis } from "../timeline.js";
+import { redraw } from "./lib/router.js";
+import { renderKpis } from "./lib/timeline.js";
 
 const STATUSES = ["exploring", "built", "dropped"];
 const LENS_TABS = [["prior-art", "Prior art"], ["red-team", "Red team"], ["explainer", "Explainer"]];

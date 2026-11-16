@@ -7,8 +7,8 @@ The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with i
 ## Principles
 
 1. **One token set, two themes.** Colours are custom properties on `:root` in `ui/app.css`, set again for dark by `@media (prefers-color-scheme: dark)` and by `:root[data-theme="dark"]`. A view that uses only tokens gets dark mode free. Light is lavender; dark is Palenight.
-2. **Shared helpers build the parts.** Views call `ui/lib.js`; the CSS is in `ui/app.css`. A fix in one helper fixes every page.
-3. **Meaning is a tone.** `run`, `done`, `need`, `stuck`, `quiet` or `parked`, from `tone()` in `ui/lib.js`. One state has one colour on a badge, a series and a card, so a reader learns it once. A tone comes only from `tone(state)`. A name that is not a state, such as an actor, is a `chip()`. A chart series for a state takes the colour of `tone(state)`.
+2. **Shared helpers build the parts.** Views call `ui/views/lib/html.js` for parts and `ui/views/lib/format.js` for values; the CSS is in `ui/app.css`. A fix in one helper fixes every page.
+3. **Meaning is a tone.** `run`, `done`, `need`, `stuck`, `quiet` or `parked`, from `tone()` in `ui/views/lib/html.js`. One state has one colour on a badge, a series and a card, so a reader learns it once. A tone comes only from `tone(state)`. A name that is not a state, such as an actor, is a `chip()`. A chart series for a state takes the colour of `tone(state)`.
 4. **Numbers are tabular.** Tabular figures, at the right, so digits line up in a column. The class is `.num`; no other rule sets `font-variant-numeric`.
 5. **Plain text states.** An empty state is `No data` from `empty()`, the same on every page. A missing value is `–` from `miss(reason)`, with the reason as its title (Content, Values), never `N/A` or `0`. A zero stays `0`.
 6. **Be terse.** A note, a qualifier or a caption is one or two words. Do not fill a space because it is there. Do not explain what the title, the axis or a tooltip already says. A definition goes in a `title` tooltip or nowhere.
@@ -17,7 +17,7 @@ The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with i
 
 | Use | For |
 |---|---|
-| a colour token; in a chart, a token that `readTokens()` reads (`TOKENS` in `ui/lib.js`) | every colour |
+| a colour token; in a chart, a token that `readTokens()` reads (`TOKENS` in `ui/views/lib/chart-theme.js`) | every colour |
 | `--fs-*`, `--r-*`, `--sp-*`, `--dim`, `--ctl-h`, `--bar-h` | sizes, radii, spacing, dimming, heights |
 | the helpers in Content, Values | every displayed value |
 
@@ -238,7 +238,7 @@ The kit widgets in `aleph-tools` read these. Each points at a base token, so one
 
 ### Values
 
-Every displayed value goes through its helper in `ui/lib.js`. The Missing column gives what the helper shows for no value. Show that; do not replace it.
+Every displayed value goes through its helper in `ui/views/lib/format.js` or `ui/views/lib/html.js`. The Missing column gives what the helper shows for no value. Show that; do not replace it.
 
 - A missing value is always `–`, from the format helper. When there is no helper, write `miss(reason)`: the `–` carries the reason as its title. Zero stays `0`.
 - Show every integer through `count()`.
@@ -397,7 +397,7 @@ A detail panel is one section of a detail page. It has a head and a body.
 
 | Helper | Reference |
 |---|---|
-| `panel(id, title, body, aside)` and `detailPanel(title, aside, body)` in `ui/timeline.js` | `ui/views/jobs.js` |
+| `panel(id, title, body, aside)` and `detailPanel(title, aside, body)` in `ui/views/lib/timeline.js` | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -424,7 +424,7 @@ The KPI strip shows the headline facts of a detail page.
 
 | Helper | Reference |
 |---|---|
-| `renderKpis([{ k, v, sub, text }])` in `ui/timeline.js` | `ui/views/jobs.js` |
+| `renderKpis([{ k, v, sub, text }])` in `ui/views/lib/timeline.js` | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -570,7 +570,7 @@ A metric card shows one headline number of a list page, with its key.
 
 | Helper | Reference |
 |---|---|
-| `statCard({ k, v, v2, q, note, trend, extra, href, key, on, loading, failed })` in `tiles(label, html)`; `cardTrend()`; `onTile()` | `statusCards()` in `ui/flow-parts.js` |
+| `statCard({ k, v, v2, q, note, trend, extra, href, key, on, loading, failed })` in `tiles(label, html)`; `cardTrend()`; `onTile()` | `statusCards()` in `ui/views/lib/flow-parts.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -670,13 +670,13 @@ A row and a cell build the body of a `dataTable()`.
 
 #### Chart panel
 
-A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
+A chart panel is a card that draws a chart from a frame (`ui/views/lib/chart.js`).
 
 **Use:** for a value over time, or for values by category. **Not for:** a share of one whole; use a meter. A single value; use a metric card.
 
 | Helper | Reference |
 |---|---|
-| `panelOf(key, frame)` in `ui/chart.js` | `ui/views/factory-agents.js` |
+| `panelOf(key, frame)` in `ui/views/lib/chart.js` | `ui/views/factory-agents.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -707,7 +707,7 @@ A chart panel is a card that draws a chart from a frame (`ui/chart.js`).
 | a legend on a stacked chart | a stacked chart with no legend |
 | `panelOf("agents/cost", frame)` | an ECharts instance made by the view |
 
-Two charts are allowed outside the chart panel: the Agent Time bar (`ui/flow-parts.js`) and the session waterfall (`ui/views/session.js`).
+Two charts are allowed outside the chart panel: the Agent Time bar (`ui/views/lib/flow-parts.js`) and the session waterfall (`ui/views/session.js`).
 
 #### Legend
 
@@ -717,7 +717,7 @@ A legend gives the colour of each series in a chart that is not a chart panel.
 
 | Helper | Reference |
 |---|---|
-| `legendHtml([[label, cls]])` | `ui/timeline.js` |
+| `legendHtml([[label, cls]])` | `ui/views/lib/timeline.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -768,7 +768,7 @@ The outcome bar shows how the agent time of a window ended, by class.
 
 | Helper | Reference |
 |---|---|
-| `bar(d, key)` in `ui/flow-parts.js`, from `/api/flow` | `ui/flow-parts.js` |
+| `bar(d, key)` in `ui/views/lib/flow-parts.js`, from `/api/flow` | `ui/views/lib/flow-parts.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -792,7 +792,7 @@ The timeline shows the runs of an issue or a job over time, with their events.
 
 | Helper | Reference |
 |---|---|
-| `renderTimeline(segments)`, `laneRow()` in `ui/timeline.js` | `ui/views/jobs.js` |
+| `renderTimeline(segments)`, `laneRow()` in `ui/views/lib/timeline.js` | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -826,7 +826,7 @@ An ask card asks Chris a question. It shows the question, the choices and the bu
 
 | Helper | Reference |
 |---|---|
-| `askCard(i)` in `ui/ask-cards.js` | `ui/views/now.js` |
+| `askCard(i)` in `ui/views/lib/ask-cards.js` | `ui/views/now.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -888,7 +888,7 @@ The findings list shows the numbered findings of a Monitor report.
 
 | Helper | Reference |
 |---|---|
-| `findingsList(findings)` in `ui/feed.js`, one `findingHtml()` `<li>` each in `<ol class="findings">` | `ui/views/gates.js` |
+| `findingsList(findings)` in `ui/views/lib/feed.js`, one `findingHtml()` `<li>` each in `<ol class="findings">` | `ui/views/gates.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -993,7 +993,7 @@ A button starts an action on the server.
 | 6 | Always | An action that a card marks as always allowed | yes | border and text in the colour `--k` of the card, else `--ink-2` |
 
 - Write the label as a short verb.
-- Give `act`, `path` and `label` in `data`. Give `body` as a JSON string when the request has one, and `name` to keep the message across a refresh. `ui/router.js` sends the request. Do not use `diff` or `always` as `act`: the router handles them on their own.
+- Give `act`, `path` and `label` in `data`. Give `body` as a JSON string when the request has one, and `name` to keep the message across a refresh. `ui/views/lib/router.js` sends the request. Do not use `diff` or `always` as `act`: the router handles them on their own.
 - While the request runs, the router disables every button of the row. On success it removes the card and reloads the page. On failure it enables the buttons again and writes the form message.
 - Use one `primary` button in a group, or none.
 - Set `kind` to `danger`, `small` or `always`. Each has its own style.
@@ -1104,7 +1104,7 @@ A form message shows the result of an action, next to its button.
 
 | Helper | Reference |
 |---|---|
-| the router, for `actButton()`; `say(el, text)` for a handler the view wires itself | `ui/router.js` |
+| the router, for `actButton()`; `say(el, text)` for a handler the view wires itself | `ui/views/lib/router.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1126,7 +1126,7 @@ The two-click confirm asks for a second click before an action that is hard to u
 
 | Helper | Reference |
 |---|---|
-| `confirm` in the `data` of `actButton()`; `ui/router.js`. For a handler of your own, `arm(btn, text)` | `ui/views/issues.js` |
+| `confirm` in the `data` of `actButton()`; `ui/views/lib/router.js`. For a handler of your own, `arm(btn, text)` | `ui/views/issues.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1499,7 +1499,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 
 ## Views
 
-A page is a view module in `ui/views/`. The router reads its `view` object (the comment at the top of `ui/router.js`).
+A page is a view module in `ui/views/`. The router reads its `view` object (the comment at the top of `ui/views/lib/router.js`).
 
 | Field | Holds |
 |---|---|
@@ -1529,22 +1529,22 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 |---|---|---|
 | Time column names differ | Tables | aleph-1360 (pending) |
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
-| Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
+| Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/views/lib/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Health in `ui/views/memory.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
-| The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/feed.js` | follow-up |
+| The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/lib/feed.js` | follow-up |
 | Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`) and the feed's rows (`div.event-row`, `div.event-brief`) | `renderPipeline()`, `feedRow()`, `briefRow()` in `ui/views/now.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
-| Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/flow-parts.js`, `ui/views/session.js` | allowed |
+| Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/lib/flow-parts.js`, `ui/views/session.js` | allowed |
 | A lens result is a hand `iframe.lens-frame`, sandboxed: no helper for a result page; the Log pane's lines are a hand `ul` | `renderIdea()` in `ui/views/ideas.js` | follow-up |
-| Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/ask-cards.js` | follow-up |
-| Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/router.js`, `ui/index.html` | follow-up |
-| The outcome bar shows `empty()` with no card | `bar()` in `ui/flow-parts.js` | follow-up |
+| Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/lib/ask-cards.js` | follow-up |
+| Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/views/lib/router.js`, `ui/index.html` | follow-up |
+| The outcome bar shows `empty()` with no card | `bar()` in `ui/views/lib/flow-parts.js` | follow-up |
 | The `@container` queries at 560px (`pipeline`) and 420px (a card) have no breakpoint token: a container query cannot read a custom property | `ui/app.css` | allowed |
 | The `@media (min-width: 721px)` query for the collapsed sidebar has no breakpoint token: a media query cannot read a custom property | `ui/app.css` | allowed |
 | The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |
-| The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/chart.js` | follow-up |
+| The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/views/lib/chart.js` | follow-up |
 | The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/kit.js` | allowed |
 | The Memory rows are hand `li.mrow` and `tr.mrow`: each takes the selection attributes (`tabindex`, `data-id`, `aria-selected`), which `row()` and `cell()` cannot, and a cell with markup is a hand `<td>`, the time one a `td.time` | `noteRow()`, `ruleRow()`, `eventRow()`, `cardRow()` in `ui/views/memory.js` | follow-up |
 | The Memory Source cell is a hand `td.mono` with a link to the memory's page: a rule, a skill or a note has a title, not an ID, so `idLink()` does not fit | `ruleRow()` in `ui/views/memory.js` | allowed |
@@ -1556,8 +1556,8 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | A Jobs trend chart's p90 line takes the `hot` tone | `trendFrame()` in `ui/views/factory-jobs.js` | allowed |
 | The Checks, Build Time by Model and Jobs cards of the Jobs page show no count | `renderFactoryJobs()` in `ui/views/factory-jobs.js` | follow-up |
 | A table row's fold chevron is a hand `<button class="fold">`: no helper for a row toggle | `renderRow()` in `ui/views/issues.js`, `roles()` in `ui/views/factory-agents.js` | follow-up |
-| The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/timeline.js` | follow-up |
-| The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/chart.js` | follow-up |
+| The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/views/lib/timeline.js` | follow-up |
+| The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/views/lib/chart.js` | follow-up |
 | The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |
 | A textarea and a checkbox are written by hand: no helper | `ui/views/issues.js`, and the Memory editor in `ui/views/memory.js` | follow-up |
 | The Job page's Waits-on block is a hand `dp-blocked`, as on the Issue page: `blockersHtml()` writes only the items | `renderJob()` in `ui/views/jobs.js` | follow-up |
@@ -1582,9 +1582,9 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 
 | Rows | Reason |
 |---|---|
-| `ui/lib.js` (31) | the helpers |
+| `ui/views/lib/format.js`, `ui/views/lib/html.js` (31) | the helpers |
 | `ui/activity.ts` (3), `ui/views/issues.js` (3) | date arithmetic, not display |
-| `ui/views/session.js` (2), `ui/timeline.js` (1), `ui/views/memory.js` (1) | percent widths for CSS |
+| `ui/views/session.js` (2), `ui/views/lib/timeline.js` (1), `ui/views/memory.js` (1) | percent widths for CSS |
 | `ui/api/skills.ts` | a server log line |
 | `ui/views/kit.js` (1) | a contrast ratio, `toFixed(2)` |
 

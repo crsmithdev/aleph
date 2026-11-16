@@ -9,7 +9,7 @@ import { LOG_MAX, askHistory, gatesBody, log, metrics, rules, securityFacts } fr
 import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./server.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { day, pct, when } from "./lib.js";
+import { day, pct, when } from "./views/lib/format.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
 import { allHolds, recordHold, type HoldRecord } from "../jobs/lib/gates/holds.ts";

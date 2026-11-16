@@ -1,7 +1,9 @@
 // What the Status pages share: formats, the /api/flow load, the merged causes, tiles and the usage pace.
 import { get } from "./router.js";
-import { count, cardTrend, xLabel, empty, meter, day, dur, hourLabel, esc, hours, pct, plural, statCard, when, scope } from "./lib.js";
-import { BUCKETS } from "../lib/windows.ts";
+import { scope } from "./address.js";
+import { count, xLabel, day, dur, hourLabel, hours, pct, plural, when } from "./format.js";
+import { cardTrend, empty, meter, esc, statCard } from "./html.js";
+import { BUCKETS } from "../../../lib/windows.ts";
 
 /** The period an answer covers, in words. */
 export const period = (d) => (d?.window === "hour" ? "hour" : plural(BUCKETS[d?.window]?.n ?? 7, bucketOf(d)));

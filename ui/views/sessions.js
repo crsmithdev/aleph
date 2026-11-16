@@ -1,7 +1,9 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
-import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, count, barRow, legendHtml, linkButton, meter, miss, plural, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, setQuery, sortHead, hashQuery, pageOf, pageRows, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { setQuery, hashQuery, wireScope, scope } from "./lib/address.js";
+import { count, plural, money, pct, when } from "./lib/format.js";
+import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, barRow, legendHtml, linkButton, meter, miss, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, onTile, pageHead, pager, searchBox, sortHead, pageOf, pageRows, sortRows, wireTable, statCard, tiles } from "./lib/html.js";
 import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
 export const view = {

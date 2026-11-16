@@ -475,7 +475,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     await page.width(390);
     const project = "-home-user-a-very-long-directory-name-another-long-directory-name-and-more";
-    const r = await page.ev<any>(`import("/context-panel.js").then(({ renderContext }) => {
+    const r = await page.ev<any>(`import("/views/lib/context-panel.js").then(({ renderContext }) => {
       const p = document.createElement("div");
       p.className = "page";
       const usage = { input: 1, cacheRead: 0, cacheWrite: 0, output: 1 };
@@ -666,7 +666,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     await page.when('document.querySelector("#view article.issue-row")');
     // A real Ask card with a Deny, from the view's own renderer. After the POST every other fetch hangs, and the mark on #view shows that no render replaced it.
-    await page.ev(`import("/ask-cards.js").then(({ askCard }) => {
+    await page.ev(`import("/views/lib/ask-cards.js").then(({ askCard }) => {
       const f = window.fetch;
       window.posts = [];
       window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push([u, o.body]), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
@@ -769,7 +769,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     test(`at ${w} px the outcome bar shows the whole label of a 2% segment and the page does not scroll sideways`, async () => {
       await page.width(w);
       await page.go("#/");
-      const m = await page.ev<{ clip: boolean[]; widths: number[]; page: number }>(`import("/flow-parts.js").then((v) => {
+      const m = await page.ev<{ clip: boolean[]; widths: number[]; page: number }>(`import("/views/lib/flow-parts.js").then((v) => {
         const classes = [["landed", 40], ["returned", 20], ["failed", 1.6], ["reran", 10], ["dropped", 8]].map(([key, hours], i) => ({ key, lost: i > 1, hours, text: key }));
         const host = document.createElement("div");
         host.id = "obar-probe";
@@ -792,7 +792,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   test("the outcome bar mark is as tall as the segments", async () => {
     await page.width(1100);
     await page.go("#/");
-    const m = await page.ev<{ sep: number[]; segs: number[][] }[]>(`import("/flow-parts.js").then((v) => {
+    const m = await page.ev<{ sep: number[]; segs: number[][] }[]>(`import("/views/lib/flow-parts.js").then((v) => {
       const host = document.createElement("div");
       host.id = "obar-probe";
       document.querySelector("#view").prepend(host);
@@ -817,7 +817,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
 
   test("the second tile figure is a share of the value", async () => {
     await page.go("#/");
-    const m = await page.ev<{ em: number; val: number }>(`import("/lib.js").then(({ statCard }) => {
+    const m = await page.ev<{ em: number; val: number }>(`import("/views/lib/html.js").then(({ statCard }) => {
       const host = document.createElement("div");
       host.id = "tile-probe";
       document.querySelector("#view").prepend(host);
@@ -832,7 +832,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   test("a metric card keeps its second value at phone width", async () => {
     await page.width(400);
     await page.go("#/");
-    const m = await page.ev<{ display: string; w: number; text: string; one: boolean }>(`import("/lib.js").then(({ statCard }) => {
+    const m = await page.ev<{ display: string; w: number; text: string; one: boolean }>(`import("/views/lib/html.js").then(({ statCard }) => {
       const host = document.createElement("div");
       host.id = "tile-probe";
       document.querySelector("#view").prepend(host);
@@ -1095,7 +1095,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.go("#/");
     await page.when('document.querySelector("#view #herald") && document.querySelector("#view #scorecard")');
     await page.ev('window.mark = [document.querySelector("#view #scorecard"), document.querySelector("#view .shead")]; window.n = 0; Element.prototype.scrollIntoView = function () { window.n++; }');
-    for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())');
+    for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())');
     expect(await page.ev('[document.querySelector("#view #scorecard") === mark[0], mark[0].isConnected, document.querySelector("#view .shead") === mark[1]]')).toEqual([true, true, true]);
     await page.ev('mark[1].querySelector(".say").click()');
     expect(await page.ev("window.n")).toBe(1);
@@ -1250,7 +1250,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     await page.go("#/ideas");
     await page.when('document.querySelector("#view tbody tr")');
     await page.ev('window.row = document.querySelector("#view tbody tr")');
-    await page.ev('import("/router.js").then((m) => m.redraw())');
+    await page.ev('import("/views/lib/router.js").then((m) => m.redraw())');
     await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Issue history")');
     return page.ev<[boolean, boolean]>('[document.querySelector("#view tbody tr") === window.row, window.row.isConnected]');
   };
@@ -1260,7 +1260,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     await page.go("#/ideas/1");
     await page.when('document.querySelector("#view [data-tab]")');
     await page.ev('document.querySelector("#view [data-tab]").mark = 1');
-    await page.ev('import("/router.js").then((m) => m.redraw())');
+    await page.ev('import("/views/lib/router.js").then((m) => m.redraw())');
     await page.when('document.querySelector("#view [data-tab]")');
     expect(await page.ev('document.querySelector("#view [data-tab]").mark')).toBe(1);
     expect(page.errors).toEqual([]);
@@ -1273,7 +1273,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     const file = join(idea, "idea.md"), before = readFileSync(file, "utf8");
     writeFileSync(file, before.replace("title: Issue history", "title: Renamed idea"));
     try {
-      await page.ev('import("/router.js").then((m) => m.redraw(true))');
+      await page.ev('import("/views/lib/router.js").then((m) => m.redraw(true))');
       await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Renamed idea")');
       expect(await page.ev('document.querySelector("#view tbody tr") === window.row')).toBe(true);
     } finally { writeFileSync(file, before); }
@@ -1284,7 +1284,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
     await page.go("#/ideas");
     await page.when('document.querySelector("#view .ph select")');
     await page.ev('window.ph = document.querySelector("#view .ph")');
-    for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())');
+    for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())');
     expect(await page.ev('document.querySelector("#view .ph") === window.ph')).toBe(true);
     await page.ev(`(() => {
       window.saved = 0;
@@ -1306,7 +1306,7 @@ describe.skipIf(!chromeUsable)("Automation redraw", () => {
   afterAll(() => rig?.stop());
 
   const ready = () => page.when('document.querySelector("#view .ph select")');
-  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())'); };
+  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
 
   test("a redraw keeps a marked element connected", async () => {
     await ready();
@@ -1344,7 +1344,7 @@ describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
   beforeAll(async () => { rig = await startRig(); page = await rig.open("#/factory/jobs"); }, 150_000);
   afterAll(() => rig?.stop());
 
-  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())'); };
+  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
 
   test("a redraw keeps a marked element connected on Jobs and on Agents", async () => {
     for (const [hash, sel] of [["#/factory/jobs", "#perf"], ["#/factory/agents", "#capacity"]]) {
@@ -1377,7 +1377,7 @@ describe.skipIf(!chromeUsable)("Flow and Sessions redraw", () => {
   beforeAll(async () => { rig = await startRig(); page = await rig.open("#/flow"); }, 150_000);
   afterAll(() => rig?.stop());
 
-  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())'); };
+  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
   // Langfuse is off in the rig, so the sessions come from a fetch that answers with two of them.
   const sessions = `(() => { const f = window.fetch, at = "2026-11-15T10:00:00Z", s = (id, cost) => ({ id, label: id, firstPrompt: "prompt " + id, project: "p", taskTypes: [], turns: 1, cost, start: at, last: at });
     window.fetch = (u, o) => String(u).startsWith("/api/sessions") ? Promise.resolve(new Response(JSON.stringify({ sessions: { sessions: [s("aaa", 1), s("bbb", 2)], projects: [] }, activity: { langfuse: "ok", tools: [], hooks: [] }, skills: { skills: [] } }), { headers: { "content-type": "application/json" } })) : f(u, o); })()`;
@@ -1411,7 +1411,7 @@ describe.skipIf(!chromeUsable)("Memory and Skill redraw", () => {
   beforeAll(async () => { rig = await startRig(); page = await rig.open("#/memory"); }, 150_000);
   afterAll(() => rig?.stop());
 
-  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/router.js").then((m) => m.redraw())'); };
+  const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
 
   test("a redraw keeps a marked element connected on Memory and the search box keeps its typed text", async () => {
     await page.when('document.querySelector("#view #mem-board button[data-tile]") && document.querySelector("#view [data-ui=mem-search]")');

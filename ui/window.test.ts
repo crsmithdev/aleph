@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { parseHash, remember, scope, wireScope } from "./lib.js";
+import { parseHash, remember, scope, wireScope } from "./views/lib/address.js";
 // @ts-ignore plain JS shared with the page
 import * as eff from "./views/efficiency.js";
 // @ts-ignore plain JS shared with the page
@@ -8,7 +8,7 @@ import * as agents from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import * as fjobs from "./views/factory-jobs.js";
 // @ts-ignore plain JS shared with the page
-import { listUrl } from "./jobs-table.js";
+import { listUrl } from "./views/lib/jobs-table.js";
 // @ts-ignore plain JS shared with the page
 // @ts-ignore plain JS shared with the page
 import * as gates from "./views/gates.js";

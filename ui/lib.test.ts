@@ -3,10 +3,16 @@ import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import { renderHerald } from "./views/now.js";
 import { row, withFactory } from "./now.testkit.ts";
-// @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chart, fitGrid, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows, keep, kept } from "./lib.js";
-// @ts-ignore lib.js is plain JS, shared with the page
-import * as lib from "./lib.js";
+// @ts-ignore the module is plain JS, shared with the page
+import { postJson, scope, wireScope, projectKeysOnce, keep, kept } from "./views/lib/address.js";
+// @ts-ignore the module is plain JS, shared with the page
+import { chart, fitGrid, chartTheme } from "./views/lib/chart-theme.js";
+// @ts-ignore the module is plain JS, shared with the page
+import { plural, localMs, shortModel, when, clock, failMessage, money, pct, wkText, span, dur } from "./views/lib/format.js";
+// @ts-ignore the module is plain JS, shared with the page
+import { clamp, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, filterBar, seg, idLink, pageHead, pager, sortHead, sectionHead, card, cmd, diffHtml, loadDiff, empty, error, esc, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows } from "./views/lib/html.js";
+// @ts-ignore the module is plain JS, shared with the page
+import * as lib from "./views/lib/html.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -193,10 +199,10 @@ test("tone maps the feed's actions to the badge tones, and any other action to q
 
 test("miss, plural, meta and shaLink", () => {
   expect(lib.miss("no run")).toBe('<span title="no run">–</span>');
-  expect(lib.plural(1, "run", "runs")).toBe("1 run");
-  expect(lib.plural(2, "run", "runs")).toBe("2 runs");
-  expect(lib.plural(2, "child", "children")).toBe("2 children");
-  expect(lib.plural(0, "run")).toBe("0 runs");
+  expect(plural(1, "run", "runs")).toBe("1 run");
+  expect(plural(2, "run", "runs")).toBe("2 runs");
+  expect(plural(2, "child", "children")).toBe("2 children");
+  expect(plural(0, "run")).toBe("0 runs");
   expect(lib.meta(["a", "", "b"]).match(/<span>/g)).toHaveLength(2);
   expect(lib.meta(["a", "", "b"])).toStartWith('<p class="meta">');
   const hash = "0123456789abcdef";
@@ -339,7 +345,7 @@ test("the legend of the Tests and the Live chart ends above the grid at 390 and 
   // @ts-ignore issues.js is plain JS, shared with the page
   const { testsFrame } = await import("./views/issues.js");
   // @ts-ignore chart.js is plain JS, shared with the page
-  const { option } = await import("./chart.js");
+  const { option } = await import("./views/lib/chart.js");
   const now = new Date("2026-11-04T12:00:00Z");
   const tests = Object.fromEntries(["aleph", "sidetone", "voiceover"].map((p) => [p, [{ at: "2026-11-04T10:00:00Z", ran: 100, rerunPassed: 1 }]]));
   const roles = ["Worker", "Judge", "Planner", "Reviewer", "Intake"];
@@ -452,9 +458,9 @@ describe("loadDiff", () => {
 describe("projectKeysOnce", () => {
   const real = globalThis.fetch;
   afterEach(() => { globalThis.fetch = real; });
-  // lib.js keeps the keys for the page's life: each test takes a copy of the module of its own.
+  // address.js keeps the keys for the page's life: each test takes a copy of the module of its own.
   let copies = 0;
-  const once = async () => (await import(`./lib.js?copy=${++copies}`)).projectKeysOnce as typeof projectKeysOnce;
+  const once = async () => (await import(`./views/lib/address.js?copy=${++copies}`)).projectKeysOnce as typeof projectKeysOnce;
   test("a non-ok response gives an empty list and does not throw, and the next call fetches again", async () => {
     const projectKeysOnce = await once();
     let calls = 0;
@@ -473,7 +479,7 @@ describe("projectKeysOnce", () => {
     expect(urls).toEqual(["/api/projects"]);
   });
   test("the Project select has no label and lists All and aleph, the onboarded repos, then the rest with an open issue, each with its count", async () => {
-    const copy = await import(`./lib.js?copy=${++copies}`);
+    const copy = await import(`./views/lib/address.js?copy=${++copies}`);
     const p = (issues: number, onboarded = false) => ({ code: null, issues, onboarded });
     globalThis.fetch = (async () => Response.json({ zed: p(2), aleph: p(9, true), mid: p(0, true), beta: p(3, true), idle: p(0), alpha: p(1) })) as any;
     await copy.projectKeysOnce();
@@ -535,7 +541,7 @@ test("localMs reads a bare date as local midnight, not UTC midnight", () => {
   const tz = process.env.TZ;
   process.env.TZ = "America/Los_Angeles";
   try {
-    expect(lib.localMs("2026-11-05")).toBe(new Date(2026, 10, 5).getTime());
+    expect(localMs("2026-11-05")).toBe(new Date(2026, 10, 5).getTime());
   } finally {
     // Bun reads a new TZ when it is set, not when it is deleted: set UTC back first.
     process.env.TZ = tz ?? "UTC";

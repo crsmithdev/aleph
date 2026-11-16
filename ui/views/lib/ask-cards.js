@@ -1,6 +1,8 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
-import { actButton, actMessages, fold, clock, codeText, denyReasons, diffHtml, dur, esc, inputBox, meta, note, openDiffs, priorityBadge, repoIdLink, span, subHead, tag, when } from "./lib.js";
-import { shortText, shortId, jobHref, parseId } from "../lib/naming.ts";
+import { actMessages, denyReasons, openDiffs } from "./decisions.js";
+import { clock, dur, span, when } from "./format.js";
+import { actButton, fold, codeText, diffHtml, esc, inputBox, meta, note, priorityBadge, repoIdLink, subHead, tag } from "./html.js";
+import { shortText, shortId, jobHref, parseId } from "../../../lib/naming.ts";
 
 /** A job's id, linking to its page. */
 export const itemId = (j) => repoIdLink(j.name, j.href || jobHref(j.id));

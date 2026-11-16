@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import * as view from "./now.js";
 import { awaitingHeld, state } from "../fixtures/status-state.ts";
 // @ts-ignore
-import { actMessages, openDiffs } from "../lib.js";
+import { actMessages, openDiffs } from "./lib/decisions.js";
 import { asksOf, withAttn } from "../now.testkit.ts";
 
 test("an awaiting row does not show checks as facts", () => {

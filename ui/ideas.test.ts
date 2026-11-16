@@ -6,9 +6,11 @@ import { run } from "../jobs/commands.ts";
 import { add, drop, note } from "../ideas/ideas.ts";
 import { withEnv, withServer } from "./server.testkit.ts";
 // @ts-ignore plain JS, shared with the page
-import { chips, count, empty, error, filterBar, loadingLine, repoIdLink, searchBox, statusRow, when } from "./lib.js";
+import { count, when } from "./views/lib/format.js";
+// @ts-ignore plain JS, shared with the page
+import { chips, empty, error, filterBar, loadingLine, repoIdLink, searchBox, statusRow } from "./views/lib/html.js";
 // @ts-ignore
-import { renderKpis } from "./timeline.js";
+import { renderKpis } from "./views/lib/timeline.js";
 // @ts-ignore
 import { ideaView, renderIdea, renderIdeas } from "./views/ideas.js";
 import { newItems, writeRepos } from "../tests/projects.testkit.ts";

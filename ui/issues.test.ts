@@ -19,15 +19,15 @@ beforeEach(() => updater.reset());
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
 // @ts-ignore plain JS, shared with the page
-import * as lib from "./lib.js";
+import * as lib from "./views/lib/html.js";
 // @ts-ignore plain JS, shared with the page
-import { label, option } from "./chart.js";
+import { label, option } from "./views/lib/chart.js";
 // @ts-ignore plain JS, shared with the page
-import { xLabel } from "./lib.js";
+import { day, xLabel } from "./views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
-import { when } from "./lib.js";
+import { when } from "./views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
-import * as tl from "./timeline.js";
+import * as tl from "./views/lib/timeline.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { logEvent } from "../lib/layout.ts";
@@ -154,13 +154,13 @@ describe("GET /api/issues", () => {
   test("the issue page's head is pageHead: the title as editable() writes it and the Edit button", async () => {
     const d = await getJson("/api/issues/fac-2");
     const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
-    mock.module("./lib.js", () => ({ ...real, pageHead: tagged }));
+    mock.module("./views/lib/html.js", () => ({ ...real, pageHead: tagged }));
     try {
       const h = v.renderIssue(d);
       expect(h.match(/<header class="ph">/g)).toHaveLength(1);
       expect(h).toContain(`<!--pageHead--><header class="ph"><h1><span class="view-only">${d.title}</span><span class="edit-only"><input name="title" type="text" value="${d.title}" class="title-edit" form="issue-edit" required aria-label="Title"></span></h1><div class="aside"><button class="act view-only" type="button" data-editor="start">Edit</button>`);
     } finally {
-      mock.module("./lib.js", () => real);
+      mock.module("./views/lib/html.js", () => real);
     }
   });
 
@@ -513,7 +513,7 @@ describe("views", () => {
     expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, working: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 0, oldest: 12, runs: 5, cost: 1.5 });
     const f = v.flow(rows, "month", now);
     expect(f.ats).toHaveLength(30);
-    expect(lib.day(f.ats.at(-1), now)).toBe("Nov 01");
+    expect(day(f.ats.at(-1), now)).toBe("Nov 01");
     expect(f.filed.at(-1)).toBe(1);
     expect(f.closed.at(-3)).toBe(1);
     const b = v.backlog(rows, "month", now);
@@ -533,7 +533,7 @@ describe("views", () => {
     expect(c.p50).toEqual([4, 3, null, null]);
     expect(c.p90[1]).toBe(5);
     expect(v.flow(rows, "week", now).ats).toHaveLength(7);
-    expect(lib.day(v.flow(rows, "week", now).ats.at(-1), now)).toBe("Nov 01");
+    expect(day(v.flow(rows, "week", now).ats.at(-1), now)).toBe("Nov 01");
     // The frame carries every bucket: the four priorities, then the filed and closed counts of the same buckets.
     const fr = v.backlogFrame(b, f, "month");
     expect(fr.over).toEqual({ kind: "time", window: "month" });
@@ -565,7 +565,7 @@ describe("views", () => {
     expect(dayB.counts.medium.indexOf(1)).toBe(23);
     const w = v.backlog(rows, "week", now), m = v.backlog(rows, "month", now);
     expect(w.ats).toHaveLength(7);
-    expect(lib.day(w.ats.at(-1), now)).toBe("Nov 04");
+    expect(day(w.ats.at(-1), now)).toBe("Nov 04");
     expect(m.ats).toHaveLength(30);
     expect(v.closeTimes(rows, "week", now).p50[1]).toBe(24);
     // A p50 is the nearest rank: of 1 and 5 days, the lower.

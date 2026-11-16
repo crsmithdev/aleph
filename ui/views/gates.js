@@ -1,9 +1,11 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { moved, redraw } from "../router.js";
-import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, row, day, localMs, plural, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
+import { moved, redraw } from "./lib/router.js";
+import { postJson, goQuery, setQuery, scope } from "./lib/address.js";
+import { count, day, localMs, plural, hours, pct, when } from "./lib/format.js";
+import { clamp, fold, toc, wireToc, actButton, say, badge, card, cell, row, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, meter, heads, chip, idLink, pageOf, pageRows, pager, pageHead, seg, statCard, tiles } from "./lib/html.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
-import { findingHtml, findingsList } from "../feed.js";
+import { findingHtml, findingsList } from "./lib/feed.js";
 
 export const view = {
   path: "/automation",

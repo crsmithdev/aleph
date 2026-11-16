@@ -1,7 +1,9 @@
 // The Flow page (was Efficiency): where agent time went, in hours. `d` is /api/flow for the window.
-import { moved, redraw } from "../router.js";
-import { cell, count, card, empty, hours, meter, plural, row, sentence, statCard, dataTable, esc, heads, onTile, pageHead, pct, repoIdLink, setQuery, tiles, pagedTable, scope } from "../lib.js";
-import { bar, cardHours, cardPct, mergeCauses, windowTrend } from "../flow-parts.js";
+import { moved, redraw } from "./lib/router.js";
+import { setQuery, scope } from "./lib/address.js";
+import { count, hours, plural, sentence, pct } from "./lib/format.js";
+import { cell, card, empty, meter, row, statCard, dataTable, esc, heads, onTile, pageHead, repoIdLink, tiles, pagedTable } from "./lib/html.js";
+import { bar, cardHours, cardPct, mergeCauses, windowTrend } from "./lib/flow-parts.js";
 
 const TOP_ISSUES = 5;
 const ALL = "all", FLAKES = "flakes", USAGE = "usage";

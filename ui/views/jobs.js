@@ -1,8 +1,9 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { actButton, runNowButton, fold, pageHead, badCount, blockersHtml, bytes, chip, codeText, tag, tone, count, badge, error, miss, note, shaLink, statusRow, crumb, heads, pagedTable, dur, empty, esc, idLink, plural, linkButton, loadDiff, loadingLine, md, money, priorityBadge, span, when, wkHtml } from "../lib.js";
-import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
+import { bytes, count, dur, plural, money, span, when } from "./lib/format.js";
+import { actButton, runNowButton, fold, pageHead, badCount, blockersHtml, chip, codeText, tag, tone, badge, error, miss, note, shaLink, statusRow, crumb, heads, pagedTable, empty, esc, idLink, linkButton, loadDiff, loadingLine, md, priorityBadge, wkHtml } from "./lib/html.js";
+import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "./lib/timeline.js";
 import { shortText, issueHref } from "../../lib/naming.ts";
 
 /** The Job view, routed at `#/jobs/<job ID>`. */

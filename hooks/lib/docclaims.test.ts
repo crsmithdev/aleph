@@ -31,7 +31,7 @@ describe("claimsDocMatch", () => {
   });
   test("a names-only diff sentence is not a claim, even when a docs/ path is in it", () => {
     expect(claimsDocMatch("The branch now changes only docs/design.md, ui/app.css, ui/gates.test.ts and ui/views/gates.js (checked with `git diff --name-only main...HEAD`).")).toBe(false);
-    expect(claimsDocMatch("I checked docs/design.md against ui/lib.js after the edit.")).toBe(true);
+    expect(claimsDocMatch("I checked docs/design.md against ui/views/lib/html.js after the edit.")).toBe(true);
     expect(claimsDocMatch("docs/factory.md matches the code in jobs/lib/roles/unit.ts.")).toBe(true);
   });
 });
@@ -69,10 +69,10 @@ describe("docClaimProblems", () => {
     const msg = "This run printed every cited code line with a `file:line` prefix, and the doc text matches each one.\n- `bun jobs/cli.ts doc-claims`: every checked doc claim matches the code";
     const run = (out: string) => [...edit(), ...bash("bun jobs/cli.ts doc-claims", out)];
     expect(docClaimProblems(run("every checked doc claim matches the code"), msg)).toEqual([]);
-    const e = [...edit(), ...bash("grep -n act-msg docs/design.md ui/lib.js", "docs/design.md:40: act-msg line")];
+    const e = [...edit(), ...bash("grep -n act-msg docs/design.md ui/views/lib/html.js", "docs/design.md:40: act-msg line")];
     expect(docClaimProblems(e, msg).some((p) => p.includes("`file:line`") && p.includes("no visible output"))).toBe(true);
     expect(docClaimProblems(run("2 doc claims the code does not back"), msg).join()).toContain("file:line");
-    const m = msg.replace("matches each one", "matches each one, as ui/lib.js:12 shows");
-    expect(docClaimProblems(run("every checked doc claim matches the code"), m).join()).toContain("ui/lib.js:12");
+    const m = msg.replace("matches each one", "matches each one, as ui/views/lib/html.js:12 shows");
+    expect(docClaimProblems(run("every checked doc claim matches the code"), m).join()).toContain("ui/views/lib/html.js:12");
   });
 });

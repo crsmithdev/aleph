@@ -1,12 +1,15 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { actButton, fold, keep, kept, recordState, restoreState, clock, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, dur, costHtml, count, empty, error, esc, hours, idLink, mean, money, loadingLine, miss, pageHead, pct, plural, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, tone, undecided, when, scope } from "../lib.js";
+import { keep, kept, scope } from "./lib/address.js";
+import { undecided } from "./lib/decisions.js";
+import { clock, dur, count, hours, mean, money, pct, plural, shortModel, when } from "./lib/format.js";
+import { actButton, fold, recordState, restoreState, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
 import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, targetOf, whoOf } from "../../lib/naming.ts";
-import { panelOf } from "../chart.js";
-import { detail, eventRow, feedRow, isIssue, isRouting, jobOf, parts, routeText, stateWord } from "../feed.js";
-import { share, flowOf, statusCards, usable } from "../flow-parts.js";
-import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "../ask-cards.js";
+import { panelOf } from "./lib/chart.js";
+import { detail, eventRow, feedRow, isIssue, isRouting, jobOf, parts, routeText, stateWord } from "./lib/feed.js";
+import { share, flowOf, statusCards, usable } from "./lib/flow-parts.js";
+import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./lib/ask-cards.js";
 import { verdict } from "../../lib/status-words.ts";
 
 export const view = {

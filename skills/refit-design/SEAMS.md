@@ -1,6 +1,6 @@
 # Seams lens
 
-A kit helper is the seam of a component: `ui/lib.js` builds the markup and `ui/app.css` styles it. A view that
+A kit helper is the seam of a component: `ui/views/lib/html.js` builds the markup and `ui/app.css` styles it. A view that
 restyles a kit class or writes the markup by hand reaches past that seam, so a fix to the helper no longer reaches
 that view. It is the [refit-code](../refit-code/SEAMS.md) lens applied to the UI.
 

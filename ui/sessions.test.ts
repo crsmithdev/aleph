@@ -5,7 +5,9 @@ import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bu
 import { closePass, openPass } from "../lib/sources.ts";
 import { memory, use } from "../lib/langfuse.ts";
 // @ts-ignore plain JS, shared with the page
-import { idLink, pageHead, when } from "./lib.js";
+import { when } from "./views/lib/format.js";
+// @ts-ignore plain JS, shared with the page
+import { idLink, pageHead } from "./views/lib/html.js";
 import { listSessions, routes } from "./api/sessions.ts";
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
@@ -260,7 +262,7 @@ test("a one-turn worker session that Langfuse prices at 0 has its ledger cost on
 test("argSummary picks the key argument, also out of cut JSON", async () => {
   const { argSummary } = await import("./api/sessions.ts");
   expect(argSummary({ command: "bun test ui", description: "Run" })).toBe("bun test ui");
-  expect(argSummary('{"file_path":"/w/ui/lib.js","limit":3}')).toBe("/w/ui/lib.js");
+  expect(argSummary('{"file_path":"/w/ui/views/lib/html.js","limit":3}')).toBe("/w/ui/views/lib/html.js");
   expect(argSummary('{"description":"x","command":"echo \\"hi\\"\\nls", "more": "cut off her')).toBe('echo "hi" ls');
   expect(argSummary({ pattern: "nextTick", path: "jobs" })).toBe("nextTick");
   expect(argSummary({ todos: [] })).toBe('{"todos":[]}');

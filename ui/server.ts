@@ -1,5 +1,5 @@
 /**
- * The factory UI's server. It binds 127.0.0.1 and home-proxy serves it on the LAN, so it has no login. It serves the page, `ui/lib.js`,
+ * The factory UI's server. It binds 127.0.0.1 and home-proxy serves it on the LAN, so it has no login. It serves the page, `ui/views/lib/*.js`,
  * each `ui/views/*.js`, and the routes of every `ui/api/*.ts`, loaded at start.
  * A route file exports `routes`: `"GET /api/x/:id"` → `(req, params, url) => Response`. The answers of the routes in
  * `KEYED` come from the updater (ui/updater.ts), which builds them in its Worker; every other route runs here.
@@ -28,8 +28,8 @@ const KIT = dirname(fileURLToPath(import.meta.resolve("aleph-tools/package.json"
 const START = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
 const TS = new Bun.Transpiler({ loader: "ts" });
-/** The modules that views import, by URL, and each one's file under ui/. `lib/naming.ts` sits at the same path from the page and from the repo, so `ui/lib.js` imports it as `../lib/naming.ts`; the page gets it as JS. */
-const SHARED = new Map([["/lib.js", "lib.js"], ["/router.js", "router.js"], ["/chart.js", "chart.js"], ["/system-parts.js", "system-parts.js"], ["/decision.js", "decision.js"], ["/timeline.js", "timeline.js"], ["/feed.js", "feed.js"], ["/jobs-table.js", "jobs-table.js"], ["/flow-parts.js", "flow-parts.js"], ["/ask-cards.js", "ask-cards.js"], ["/processes.js", "processes.js"], ["/context-panel.js", "context-panel.js"], ["/lib/naming.ts", "../lib/naming.ts"], ["/lib/models.ts", "../lib/models.ts"], ["/lib/status-words.ts", "../lib/status-words.ts"], ["/lib/windows.ts", "../lib/windows.ts"]]);
+/** The server-side modules that views import, by URL, and each one's file under ui/. `lib/naming.ts` sits at the same path from the page and from the repo, so a module in `ui/views/lib/` imports it as `../../../lib/naming.ts`; the page gets it as JS. */
+const SHARED = new Map([["/system-parts.js", "system-parts.js"], ["/decision.js", "decision.js"], ["/lib/naming.ts", "../lib/naming.ts"], ["/lib/models.ts", "../lib/models.ts"], ["/lib/status-words.ts", "../lib/status-words.ts"], ["/lib/windows.ts", "../lib/windows.ts"]]);
 
 /** `/api/jobs/:name` as a regex and its parameter names. */
 export function compile(path: string): { pattern: RegExp; names: string[] } {
@@ -75,11 +75,11 @@ export function views(dir = join(import.meta.dir, "views")): string[] {
 
 /**
  * The value of `x-aleph-version`, computed per answer: the start time plus a fingerprint of the name, mtime and size
- * of index.html, app.css, the SHARED modules and each view. A restart, an edit, an added or a removed file changes it,
+ * of index.html, app.css, the SHARED modules, each view and each module in views/lib. A restart, an edit, an added or a removed file changes it,
  * so an open page sees that its code changed and reloads its modules.
  */
 export function version(dir = import.meta.dir): string {
-  const files = ["index.html", "app.css", ...SHARED.values(), ...views(join(dir, "views")).map((f) => `views/${f}`)];
+  const files = ["index.html", "app.css", ...SHARED.values(), ...views(join(dir, "views")).map((f) => `views/${f}`), ...views(join(dir, "views", "lib")).map((f) => `views/lib/${f}`)];
   const parts = files.map((f) => {
     try {
       const st = statSync(join(dir, f));
@@ -150,8 +150,8 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
         const file = join(dir, SHARED.get(path)!);
         return new Response(file.endsWith(".ts") ? TS.transformSync(readFileSync(file, "utf8")) : Bun.file(file), { headers: JS });
       }
-      const v = path.match(/^\/views\/([^/]+)$/);
-      if (v && VIEW_FILE.test(v[1]) && existsSync(join(dir, "views", v[1]))) return new Response(Bun.file(join(dir, "views", v[1])), { headers: JS });
+      const v = path.match(/^\/(views|views\/lib)\/([^/]+)$/);
+      if (v && VIEW_FILE.test(v[2]) && existsSync(join(dir, v[1], v[2]))) return new Response(Bun.file(join(dir, v[1], v[2])), { headers: JS });
       return new Response("not found", { status: 404 });
     },
   });

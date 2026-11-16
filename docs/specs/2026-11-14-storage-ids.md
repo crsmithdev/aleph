@@ -119,7 +119,7 @@ work mode, the CLI verbs, the issue numbers of `aleph`, git as the history of do
 14. **Data loss allowed:** old `route` (256) and `routed` (268) events, fixture events and records (`tools-N`,
     `fac-N`, `oth-N`, `fac-dup`, `demo-N`), machine note lines and the `*.bak` files.
 15. **Shown IDs are zero-padded, display only** (Chris, 2026-11-14). One function in `lib/naming.ts`, used by the
-    UI (`idLink`, `ui/lib.js:386`) and the terminal printers, shows a key with its number padded to 5 digits:
+    UI (`idLink`, `ui/views/lib/html.js`) and the terminal printers, shows a key with its number padded to 5 digits:
     `a-01234`, `b-00002`, `j-06802`. 5 is fixed, not taken from the counter, so widths never shift; jobs (6,826)
     reach it first, at 99,999. Stored keys stay unpadded (`issue.2`). The parser accepts leading zeros, so a copied
     `b-00002` resolves. The prefix letters of the shown form are decided in branch 2.

@@ -252,7 +252,7 @@ main { min-width: 0; }
 /* Status: Issues rows, then Lands 2/3 beside Jobs 1/3, then Triage; sections hold grids of cards */
 .page > section, .toc-body > section, section.wide { margin: 0 0 var(--sp-28); min-width: 0; }
 
-/* The contents (toc() in ui/lib.js): a rail at the right that stays in view, at 1100px and wider; a fold above the body under that. */
+/* The contents (toc() in ui/views/lib/html.js): a rail at the right that stays in view, at 1100px and wider; a fold above the body under that. */
 .toc-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: var(--sp-28); align-items: start; }
 .toc-body { grid-area: 1 / 1; min-width: 0; }
 /* The rail ends above the kit dock: 136px tall, 16px from the bottom, so 168px with the 16px at the top. */
@@ -934,7 +934,7 @@ table.tbl td.eff { white-space: normal; min-width: 22ch; }
 .ins .macts .field { flex: 1; min-width: 140px; }
 .ins textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: var(--fs-xs); }
 .ins .macts { display: flex; gap: var(--sp-6); flex-wrap: wrap; align-items: center; margin-top: var(--sp-14); padding-top: var(--sp-12); border-top: 1px solid var(--rule-2); }
-/* The Issue page and the Job page (ui/timeline.js): panels, the KPI strip, the Timeline and the Detail panels. */
+/* The Issue page and the Job page (ui/views/lib/timeline.js): panels, the KPI strip, the Timeline and the Detail panels. */
 .dp-page { display: flex; flex-direction: column; gap: var(--sp-16); }
 .dp-page > .ph, .dp-page > .status-row, .dp-page > .crumb, .dp-page > section, .dp-page section.dp-panel { margin: 0; }
 .dp-page .toc-body { display: flex; flex-direction: column; gap: var(--sp-16); }

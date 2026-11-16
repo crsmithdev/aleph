@@ -1,6 +1,7 @@
 // The Processes tab of the Memory page, on /api/memory/processes: the scheduled memory steps of the tick, then a card each
 // for episodes, corrections, the contradiction screen and decay. Every value is read from a file the process wrote.
-import { card, count, dataTable, empty, esc, heads, tag, tone, when } from "./lib.js";
+import { count, when } from "./format.js";
+import { card, dataTable, empty, esc, heads, tag, tone } from "./html.js";
 
 const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
 const flow = (...boxes) => `<p class="quiet" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">${boxes.map((b, i) => `${i ? "to " : ""}${tag(b)}`).join(" ")}</p>`;

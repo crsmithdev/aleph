@@ -1,9 +1,11 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
-import { get, moved, redraw } from "../router.js";
-import { postJson, badCount, card, cardTrend, cell, count, dataTable, day, dur, empty, error, esc, heads, keep, kept, loadingLine, miss, money, notice, pageHead, pct, say, selectBox, shortModel, statCard, tiles, scope } from "../lib.js";
+import { get, moved, redraw } from "./lib/router.js";
+import { postJson, keep, kept, scope } from "./lib/address.js";
+import { count, day, dur, money, pct, shortModel } from "./lib/format.js";
+import { badCount, card, cardTrend, cell, dataTable, empty, error, esc, heads, loadingLine, miss, notice, pageHead, say, selectBox, statCard, tiles } from "./lib/html.js";
 import { NAMES } from "../../lib/naming.ts";
-import { panelOf } from "../chart.js";
-import { flowOf, lastPeriod, usageCard, windowTrend } from "../flow-parts.js";
+import { panelOf } from "./lib/chart.js";
+import { flowOf, lastPeriod, usageCard, windowTrend } from "./lib/flow-parts.js";
 
 const share = (v) => pct(v == null ? v : v * 100);
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */

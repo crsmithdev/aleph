@@ -1,6 +1,8 @@
 // The jobs table of the Jobs page: its data URL, scope bar, filters, rows and wiring. The Job view and the Jobs page share it.
-import { badge, dataTable, empty, esc, filterBar, goQuery, hashQuery, idLink, pageOf, pageRows, money, pager, shortModel, sortHead, sortRows, span, wireTable, when, scope } from "./lib.js";
-import { ACTORS, shortText, jobHref, STATES } from "../lib/naming.ts";
+import { goQuery, hashQuery, scope } from "./address.js";
+import { money, shortModel, span, when } from "./format.js";
+import { badge, dataTable, empty, esc, filterBar, idLink, pageOf, pageRows, pager, sortHead, sortRows, wireTable } from "./html.js";
+import { ACTORS, shortText, jobHref, STATES } from "../../../lib/naming.ts";
 
 /** The most rows the list asks for: one page of the API holds the whole window. */
 const ALL = 2000;

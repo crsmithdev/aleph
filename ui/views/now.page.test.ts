@@ -2,12 +2,12 @@ import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./now.js";
 // @ts-ignore plain JS, shared with the page
-import { error } from "../lib.js";
+import { error } from "./lib/html.js";
 import { setCodes } from "../../lib/naming.ts";
 import { job, state } from "../fixtures/status-state.ts";
 import { full, row, section, withAttn } from "../now.testkit.ts";
 // @ts-ignore plain JS, shared with the page
-import { kept } from "../lib.js";
+import { kept } from "./lib/address.js";
 
 afterEach(() => setCodes({}));
 

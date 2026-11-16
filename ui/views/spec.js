@@ -1,7 +1,7 @@
 // #/specs/<project>/<file>: one spec, rendered as Markdown with the renderer the Memory note view uses.
 // The page reads one `view` per file, so the spec route is its own file.
-import { chips, codeText, crumb, facts, md, pageHead, statusRow } from "../lib.js";
-import { panel } from "../timeline.js";
+import { chips, codeText, crumb, facts, md, pageHead, statusRow } from "./lib/html.js";
+import { panel } from "./lib/timeline.js";
 
 export const view = {
   path: "/specs/:project/:file",

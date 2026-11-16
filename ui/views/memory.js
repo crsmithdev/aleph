@@ -2,12 +2,14 @@
 // the results come grouped by type, each type in its own layout; the inspector shows the selected memory, how it
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
-import { get } from "../router.js";
-import { held, mountContext, renderContext } from "../context-panel.js";
-import { renderProcesses } from "../processes.js";
-import { panelOf } from "../chart.js";
-import { detailPanel, panel } from "../timeline.js";
-import { actButton, badge, bytes, count, fold, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, goQuery, hashQuery, legendHtml, arm, loadingLine, localMs, md, meter, miss, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tag, tiles, when, scope } from "../lib.js";
+import { get } from "./lib/router.js";
+import { held, mountContext, renderContext } from "./lib/context-panel.js";
+import { renderProcesses } from "./lib/processes.js";
+import { panelOf } from "./lib/chart.js";
+import { detailPanel, panel } from "./lib/timeline.js";
+import { goQuery, hashQuery, postJson, setQuery, scope } from "./lib/address.js";
+import { bytes, count, day, localMs, pct, when } from "./lib/format.js";
+import { actButton, badge, fold, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, empty, error, esc, filterBar, legendHtml, arm, loadingLine, md, meter, miss, moreFold, pageHead, pager, say, searchBox, sectionHead, statCard, tag, tiles } from "./lib/html.js";
 
 const TABS = { log: "/api/memory/log", processes: "/api/memory/processes" };
 export const view = {

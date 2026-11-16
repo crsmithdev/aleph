@@ -6,7 +6,7 @@ import { attend } from "../asks.ts";
 import { held, job, state } from "../fixtures/status-state.ts";
 import { asksOf, issue, withAttn, withFactory } from "../now.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { pageHead } from "../lib.js";
+import { pageHead } from "./lib/html.js";
 import { labelOf, verdict } from "../../lib/status-words.ts";
 
 const calmState = { ...withFactory({}), asks: [], stuck: [] };

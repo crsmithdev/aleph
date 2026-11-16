@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 // @ts-ignore router.js is plain JS, shared with the page
-import { loader, keysOf, markOf, moved } from "./router.js";
+import { loader, keysOf, markOf, moved } from "./views/lib/router.js";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { markLine } from "./lib.js";
+import { markLine } from "./views/lib/format.js";
 
 /** A stream the test sends messages on. */
 class FakeStream {

@@ -1,12 +1,15 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, editable, fold, issueApi, runNowButton, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, undecided, remember, keep, kept } from "../lib.js";
+import { issueApi, postJson, projectKeysOnce, setQuery as setHash, hashQuery, scope, remember, keep, kept } from "./lib/address.js";
+import { undecided } from "./lib/decisions.js";
+import { count, days, plural, dur, money, when } from "./lib/format.js";
+import { actButton, editable, fold, runNowButton, say, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
-import { panelOf } from "../chart.js";
+import { panelOf } from "./lib/chart.js";
 import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
-import { askCard } from "../ask-cards.js";
-import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
+import { askCard } from "./lib/ask-cards.js";
+import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "./lib/timeline.js";
 
 export const view = {
   path: "/issues",

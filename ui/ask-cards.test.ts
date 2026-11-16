@@ -6,9 +6,11 @@ import { join } from "node:path";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 // @ts-ignore cards.js is plain JS, shared with the page
-import { askCard } from "./ask-cards.js";
+import { askCard } from "./views/lib/ask-cards.js";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { decided, denyReasons, endDraw, startDraw, when } from "./lib.js";
+import { decided, denyReasons, endDraw, startDraw } from "./views/lib/decisions.js";
+// @ts-ignore lib.js is plain JS, shared with the page
+import { when } from "./views/lib/format.js";
 import { shortId } from "../lib/naming.ts";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { asksOf, prop, withAttn, withFactory } from "./now.testkit.ts";

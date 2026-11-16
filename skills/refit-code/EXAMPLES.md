@@ -32,7 +32,7 @@ and as the bar for a card. Sections are by lens.
 ## Page scope: two meanings of one parameter
 
 - **Signal**: twin parsers and client and server copies.
-- **Copies**: 14 scope functions in `ui/lib.js:426-545` called about 130 times; 17 routes in `ui/api/*.ts`
+- **Copies**: 14 scope functions in the old `ui/lib.js:426-545` called about 130 times; 17 routes in `ui/api/*.ts`
   that parse `?project` and `?window` by hand, with 8 window tables.
 - **Disagreement**: `?window` was a name (`week`) on now, gates and speed, and a number of days on agents,
   skills and sessions.
@@ -52,7 +52,7 @@ and as the bar for a card. Sections are by lens.
 ## Redraw: six views redrew by hand
 
 - **Signal**: repeated fixes (e2ac70562, 653fe63c6 fixed lost folds one view at a time).
-- **Copies**: `ui/router.js:195` (`draw` restores folds and focus); six views that save state, set
+- **Copies**: `ui/views/lib/router.js:195` (`draw` restores folds and focus); six views that save state, set
   `innerHTML` and restore by hand, none with `restoreFolds`.
 - **Disagreement**: a view redraw drops open folds that a router redraw keeps.
 - **Owner**: the router owns every redraw; views return strings. Landed as ba631c570.
@@ -108,5 +108,5 @@ and as the bar for a card. Sections are by lens.
 # Looked alike, not a finding
 
 - `isBuild` and `isAgentRun` in `ledger.ts`: different sets on purpose.
-- `dur` and `durMs` in `ui/lib.js`: different ranges and empty values by contract.
+- `dur` and `durMs` in `ui/views/lib/format.js`: different ranges and empty values by contract.
 - Four `DAY_MS` constants: the same arithmetic, not a policy that can change in one place.

@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { currentFit, fit, gainSince, pollOnce, off, pollOpenRouter, readSnapshots, runShare, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
-import { costHtml, wkText } from "./lib.js";
+import { wkText } from "./views/lib/format.js";
+// @ts-ignore plain JS, shared with the page
+import { costHtml } from "./views/lib/html.js";
 import { openRouterFactor } from "../jobs/lib/routing/models.ts";
 import { memory, use } from "../lib/langfuse.ts";
 

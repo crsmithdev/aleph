@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { speed } from "./api/flow.ts";
 import { withEnv } from "./server.testkit.ts";
 // @ts-ignore plain JS shared with the page
-import { onTile } from "./lib.js";
+import { onTile } from "./views/lib/html.js";
 // @ts-ignore plain JS shared with the page
 import { renderEfficiency, selection } from "./views/efficiency.js";
 import { seed } from "../jobs/job.testkit.ts";

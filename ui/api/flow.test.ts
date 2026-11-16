@@ -14,9 +14,9 @@ import { CLASSES, classify } from "../flow/classes.ts";
 import { buckets } from "../../lib/windows.ts";
 import { activeEnd } from "../../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { bar, statusCards, usageCard } from "../flow-parts.js";
+import { bar, statusCards, usageCard } from "../views/lib/flow-parts.js";
 // @ts-ignore plain JS shared with the page
-import { pct, xLabel } from "../lib.js";
+import { pct, xLabel } from "../views/lib/format.js";
 // @ts-ignore plain JS shared with the page
 import { seed } from "../../jobs/job.testkit.ts";
 import { conn } from "../../lib/db.ts";
@@ -664,7 +664,7 @@ test("GET /api/flow?baseline=1 reads the job records once for the window, the ot
 
 test("cardTrend writes a sub-point change with pct() and keeps the flat marker for 0", async () => {
   // @ts-ignore plain JS shared with the page
-  const { cardTrend } = await import("../lib.js");
+  const { cardTrend } = await import("../views/lib/html.js");
   const o = { kind: "points", lowerIsGood: true, format: String, basis: "b" };
   expect(cardTrend(0.503, 0.5, null, o)).toContain("▲ 0.3%");
   expect(cardTrend(0.5, 0.5, null, o)).toContain("▬ 0%");

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { FORMS, formOf, label, option, panel, title } from "./chart.js";
+import { FORMS, formOf, label, option, panel, title } from "./views/lib/chart.js";
 
 const keys = [{ key: "a", name: "A", color: "series-1" }, { key: "b", name: "B" }, { key: "z", name: "Z" }];
 const at = (d: number) => new Date(2026, 9, d).toISOString();

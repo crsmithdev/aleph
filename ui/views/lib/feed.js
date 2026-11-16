@@ -1,6 +1,7 @@
 // The feed rows and the findings list that more than one view draws: the Status page's Herald, the Monitor findings and the Kit.
-import { clock, esc, idLink, shortModel, tag, tone, when } from "./lib.js";
-import { jobHref, shownId, issueHref, parseId, parseKey, say as sayParts } from "../lib/naming.ts";
+import { clock, shortModel, when } from "./format.js";
+import { esc, idLink, tag, tone } from "./html.js";
+import { jobHref, shownId, issueHref, parseId, parseKey, say as sayParts } from "../../../lib/naming.ts";
 
 /** A finding as HTML: **text** and each number or percentage in bold; all other text escaped. */
 export function findingHtml(text) {

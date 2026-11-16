@@ -10,9 +10,12 @@
 // them, in GROUPS order under the HEADERS, and routes by hash (#/jobs/aleph-52).
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
-import { Idiomorph } from "./vendor/idiomorph.js";
-import { setCodes } from "../lib/naming.ts";
-import { arm, cmd, notice, pageHead, postJson, say, actMessages, decided, denyReasons, endDraw, loadDiff, error, linkButton, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope, startDraw } from "./lib.js";
+import { Idiomorph } from "../../vendor/idiomorph.js";
+import { setCodes } from "../../../lib/naming.ts";
+import { postJson, parseHash, scope } from "./address.js";
+import { actMessages, decided, denyReasons, endDraw, openDiffs, startDraw } from "./decisions.js";
+import { failMessage, markLine } from "./format.js";
+import { arm, cmd, notice, pageHead, say, loadDiff, error, linkButton, esc, loading, mountView, recordState, restoreState, wireFolds, restoreFolds } from "./html.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 

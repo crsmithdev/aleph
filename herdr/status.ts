@@ -9,9 +9,11 @@ import { currentFit } from "../ui/usage.ts";
 import { verdict } from "../lib/status-words.ts";
 import { clip, NAMES, parseId, parseKey, sayText, shortText, shownId, targetOf } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
-import { cardTrend, clock, count, dur, hours, mean, pct, when } from "../ui/lib.js";
+import { clock, count, dur, hours, mean, pct, when } from "../ui/views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
-import { cardHours, cardPct, pace } from "../ui/flow-parts.js";
+import { cardTrend } from "../ui/views/lib/html.js";
+// @ts-ignore plain JS, shared with the page
+import { cardHours, cardPct, pace } from "../ui/views/lib/flow-parts.js";
 import { errText } from "../lib/errtext.ts";
 
 const REFRESH_MS = 10_000;

@@ -2,13 +2,15 @@
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
-import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { scope } from "./lib/address.js";
+import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
+import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
 import { PRIORITIES } from "../../lib/naming.ts";
-import { panelOf } from "../chart.js";
-import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
-import { askCard } from "../ask-cards.js";
-import { eventRow, findingsList } from "../feed.js";
-import { bar } from "../flow-parts.js";
+import { panelOf } from "./lib/chart.js";
+import { detailPanel, panel, renderKpis, renderTimeline } from "./lib/timeline.js";
+import { askCard } from "./lib/ask-cards.js";
+import { eventRow, findingsList } from "./lib/feed.js";
+import { bar } from "./lib/flow-parts.js";
 
 const THEMES = ["system", "light", "dark"];
 const DAY = 864e5, T0 = new Date(2026, 10, 3).getTime();

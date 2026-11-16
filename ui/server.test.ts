@@ -22,7 +22,7 @@ beforeAll(async () => {
   for (const [repo, name] of [["aleph", "issue.1"], ["other", "issue.2"]]) seed({ role: "build", state: "running", started: new Date(NOW).toISOString(), name, target: name, repo });
   // A view added the way a view issue adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");
-  for (const f of ["index.html", "app.css", "lib.js", "router.js", "chart.js", "system-parts.js", "decision.js", "timeline.js", "feed.js", "jobs-table.js", "flow-parts.js", "ask-cards.js", "processes.js", "context-panel.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
+  for (const f of ["index.html", "app.css", "system-parts.js", "decision.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
   cpSync(join(import.meta.dir, "..", "lib"), join(base, "lib"), { recursive: true });
   mkdirSync(apiDir);
   writeFileSync(join(pageDir, "views", "_test.js"), `export const view = { path: "/_test/:id", title: "Test", group: "factory", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
@@ -105,11 +105,12 @@ test("guard: /vendor/kit/<name>.js is the aleph-tools file, not a vendored copy"
   expect((await at("/vendor/kit/nope.js")).status).toBe(404);
 });
 
-test("every module a view imports from ui/ is served", async () => {
+test("every module a view imports is served", async () => {
   const dir = join(import.meta.dir, "views");
-  const shared = new Set(readdirSync(dir).flatMap((f) => [...readFileSync(join(dir, f), "utf8").matchAll(/from "\.\.\/([^"/]+\.js)"/g)].map((m) => m[1])));
-  expect([...shared].sort()).toContain("lib.js");
-  for (const f of shared) expect(`${f}: ${(await at(`/${f}`)).status}`).toBe(`${f}: 200`);
+  const src = readdirSync(dir).filter((f) => f.endsWith(".js")).map((f) => readFileSync(join(dir, f), "utf8")).join("\n");
+  const shared = new Set([...src.matchAll(/from "\.\.\/([^"/]+\.js)"/g)].map((m) => `/${m[1]}`).concat([...src.matchAll(/from "\.\/(lib\/[^"/]+\.js)"/g)].map((m) => `/views/${m[1]}`)));
+  expect([...shared]).toContain("/views/lib/html.js");
+  for (const f of shared) expect(`${f}: ${(await at(f)).status}`).toBe(`${f}: 200`);
 });
 
 test("other paths are 404 and writes are refused", async () => {
@@ -125,10 +126,10 @@ test("every API answer carries the server's version; the page and its modules ar
   const { version } = await import("./server.ts");
   const a = await at("/api/_test/x");
   expect(a.headers.get("x-aleph-version")).toBe(version(pageDir));
-  for (const p of ["/", "/lib.js", "/views/_test.js"]) expect((await at(p)).headers.get("cache-control")).toBe("no-cache");
+  for (const p of ["/", "/views/lib/html.js", "/views/_test.js"]) expect((await at(p)).headers.get("cache-control")).toBe("no-cache");
 });
 
-test("lib/naming.ts reaches the page as JS at the path ui/lib.js imports", async () => {
+test("lib/naming.ts reaches the page as JS at the path ui/views/lib/format.js imports", async () => {
   const r = await at("/lib/naming.ts");
   expect(r.headers.get("content-type")).toContain("text/javascript");
   const js = await r.text();

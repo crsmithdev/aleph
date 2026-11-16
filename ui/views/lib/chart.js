@@ -13,7 +13,10 @@
 //   legend: false hides the legend, for a frame of one key that the title already names.
 //   error, since: the mark of data that failed to rebuild; the panel says how old it is and why.
 // The kind of `over` is the group, and the group gives the forms.
-import { card, chart, count, day, dur, empty, esc, keep, kept, legend, markLine, money, notice, pct, readTokens, seg, xLabel } from "./lib.js";
+import { keep, kept } from "./address.js";
+import { chart, legend, readTokens } from "./chart-theme.js";
+import { count, day, dur, markLine, money, pct, xLabel } from "./format.js";
+import { card, empty, esc, notice, seg } from "./html.js";
 
 /** The forms of each group. The default is the first, except that a time frame of a flow (agg "sum") opens as columns. */
 export const FORMS = {

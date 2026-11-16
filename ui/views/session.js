@@ -1,9 +1,11 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { clamp, count, fold, goQuery, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, heads, idLink, md, pageRows, pager, pageHead, linkButton, shortModel, statusRow, tabs, tag, tone, when } from "../lib.js";
+import { goQuery } from "./lib/address.js";
+import { count, durMs as dur, shortModel, when } from "./lib/format.js";
+import { clamp, fold, say, facts, chip, chips, costHtml, crumb, dataTable, empty, error, esc, heads, idLink, md, pageRows, pager, pageHead, linkButton, statusRow, tabs, tag, tone } from "./lib/html.js";
 import { systemParts } from "../system-parts.js";
-import { detailPanel, renderKpis } from "../timeline.js";
+import { detailPanel, renderKpis } from "./lib/timeline.js";
 
 const down = (d) => `<div class="page">${error("Langfuse is unreachable.", { detail: d.error })}</div>`;
 const langfuse = (base, traceId) => (base && traceId ? linkButton("Open in Langfuse", `${base}/trace/${traceId}`) : "");

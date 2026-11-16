@@ -5,7 +5,7 @@ leaves the other. The apply lens asks whether a value follows a rule; this lens 
 
 ## Signals
 
-**Code view.** List each component the UI builds: each helper of `ui/lib.js` and each class that `ui/app.css`
+**Code view.** List each component the UI builds: each helper of `ui/views/lib/html.js` and each class that `ui/app.css`
 styles as a part. For each one, list its call sites and its hand-built copies, and compare:
 
 - the helper arguments: the same component called with a different order of parts, a different label form or a

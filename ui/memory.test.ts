@@ -12,13 +12,15 @@ import { items } from "./memory-items.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
-import { badge, dataTable, empty, heads, md, pageHead, priorityBadge, scope } from "./lib.js";
+import { scope } from "./views/lib/address.js";
+// @ts-ignore plain JS, shared with the page
+import { badge, dataTable, empty, heads, md, pageHead, priorityBadge } from "./views/lib/html.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
-import { mountContext } from "./context-panel.js";
+import { mountContext } from "./views/lib/context-panel.js";
 // @ts-ignore
-import { panel } from "./timeline.js";
+import { panel } from "./views/lib/timeline.js";
 // @ts-ignore
 import { noteView } from "./views/memory.js";
 import { writeRepos } from "../tests/projects.testkit.ts";

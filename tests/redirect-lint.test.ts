@@ -1,5 +1,5 @@
 /**
- * An old address that a view takes over keeps its whole query, and only `moved` in ui/router.js builds the new one.
+ * An old address that a view takes over keeps its whole query, and only `moved` in ui/views/lib/router.js builds the new one.
  * This test lists each view whose arrow-function `redirect` splits the hash itself.
  */
 import { expect, test } from "bun:test";

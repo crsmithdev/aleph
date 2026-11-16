@@ -5,11 +5,11 @@ import { MODELS } from "../../lib/models.ts";
 // @ts-ignore plain JS shared with the page
 import { MODEL_ORDER, costFrame, liveFrame, renderFactoryAgents, tokensFrame, view } from "./factory-agents.js";
 // @ts-ignore plain JS shared with the page
-import { label, option } from "../chart.js";
+import { label, option } from "./lib/chart.js";
 // @ts-ignore plain JS shared with the page
-import { dur, shortModel } from "../lib.js";
+import { dur, shortModel } from "./lib/format.js";
 // @ts-ignore plain JS shared with the page
-import { pace, usageCard, weekGone } from "../flow-parts.js";
+import { pace, usageCard, weekGone } from "./lib/flow-parts.js";
 
 const S: any = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } }, factory: { runsToday: 198, costToday: 71.94, liveRuns: 1, liveCap: 5, liveLocal: 1, localCap: 1 } };
 const agents = {
