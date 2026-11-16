@@ -216,7 +216,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
   checkFields(fields);
   const title = fields.title?.trim();
   const { kind, request, spec, priority, labels, source, status, after, refs } = fields;
-  if (source !== undefined && !["chris", "worker", "deps", "memory", "agent"].includes(source)) refuse("--source takes chris, worker, deps, memory, agent");
+  if (source !== undefined && !(issues.SOURCES as readonly string[]).includes(source)) refuse(`--source takes ${issues.SOURCES.join(", ")}`);
   if (title === undefined && kind === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined && refs === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after, --refs (or --status, --kind)");
   if (title === "") refuse("the title cannot be empty");
   const kept = after?.filter((r) => r !== "none"), named = refs?.filter((r) => r !== "none");

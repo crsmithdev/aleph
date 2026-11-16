@@ -1,5 +1,5 @@
 /** The model routes: each size's and role model's enable and model, what each offers, which models' backends are down, and OpenRouter's spend. */
-import { MODELS } from "../../lib/models.ts";
+import { isLocal, MODELS } from "../../lib/models.ts";
 import { backendUp, OFFERS, openRouterSpend, readModels, setModel } from "../../jobs/lib/routing/models.ts";
 import { fail, post } from "../action.ts";
 import type { Routes } from "../server.ts";
@@ -12,7 +12,7 @@ const downModels = async (): Promise<string[]> => {
 };
 const body = async () => {
   const [down, spend] = await Promise.all([downModels(), openRouterSpend()]);
-  return { models: readModels(), offers: OFFERS, down, local: down.includes("gpt-oss-20b") ? "down" : "up", spend };
+  return { models: readModels(), offers: OFFERS, down, local: down.some(isLocal) ? "down" : "up", spend };
 };
 
 export const routes: Routes = {

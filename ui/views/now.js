@@ -192,7 +192,7 @@ const routeText = (ev) => {
   if (ev.size) return [ev.size, ev.model, ev.cost !== undefined && `$${Number(ev.cost.toFixed(5))}`].filter(Boolean).join(" · ");
   const note = ev.note ?? "";
   const m = Object.fromEntries([...note.matchAll(/(\w+) (\S+)/g)].map(([, k, v]) => [k, v]));
-  return m.tier ? `${m.tier} · ${shortModel(m.model?.split("/").pop())} · p ${m.p}` : note;
+  return m.tier ? `${m.tier} · ${shortModel(m.model)} · p ${m.p}` : note;
 };
 
 /** Whether an event is a routing choice: it names a size, or is a start whose note is the model, "model default" when routing picked no size. */
@@ -385,7 +385,7 @@ export function renderHerald(s) {
   const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
-  const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", stuck.length || errors ? "stuck" : "need") : tag("OK", "done");
+  const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", tone(stuck.length || errors ? "failed" : "waiting")) : tag("OK", tone("done"));
 
   return card("Herald", `${sticky}${runNow(s)}<div class="herald-show">${["work", "factory"].map((k) => `<label><input type="checkbox" name="show" value="${k}"${show[k] ? " checked" : ""}> ${k === "work" ? "Work" : "Factory"}</label>`).join("")}</div><div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
 }

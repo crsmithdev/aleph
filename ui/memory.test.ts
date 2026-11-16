@@ -569,7 +569,7 @@ test("the Context tab scales the fill line, the part segments and the chart bars
   const parts = [{ name: "Tools · 1", rec: "r", tokens: 250_000, how: "est" }];
   const session = { id: "s1", window: 1_000_000, requests: [{ n: 1, fill: 500_000, usage, parts, since: 0 }], items: [], summaries: [] };
   const h = v.renderContextTab({ sessions: [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }], session }, new URLSearchParams("n=1"));
-  expect(h).toContain("of 1,000,000 tokens · 50.0%");
+  expect(h).toContain("of 1,000,000 tokens · 50%");
   expect(h).toContain("width:25.00%");
   expect(h).toContain("height:50%");
 });
@@ -586,9 +586,9 @@ test("the Context tab unfolds Tools into each tool and Tool results into each to
   const h = v.renderContextTab({ sessions: [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }], session }, new URLSearchParams("n=3"));
   const text = (x: string) => x.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const tools = h.slice(h.indexOf("By tool"), h.indexOf("</details>"));
-  expect(tools.split("<tr>").slice(2).map(text)).toEqual(["mcp__chrome__navigate chrome 300 75.0%", "Bash built-in 100 25.0%"]);
+  expect(tools.split("<tr>").slice(2).map(text)).toEqual(["mcp__chrome__navigate chrome 300 75%", "Bash built-in 100 25%"]);
   // request 4's call is not in request 3; the groups go by tokens
-  expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 66.7%", "Read 1 calls · 30 · 33.3%"]);
+  expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 67%", "Read 1 calls · 30 · 33%"]);
   expect(h).toContain('data-call="b"');
   expect(h).not.toContain('data-call="d"');
 });

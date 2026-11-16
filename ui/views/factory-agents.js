@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
-import { get, redraw } from "../router.js";
+import { get, moved, redraw } from "../router.js";
 import { postJson, badCount, card, cardTrend, cell, count, dataTable, day, dur, empty, error, esc, heads, keep, kept, loadingLine, miss, money, notice, pageHead, pct, say, selectBox, shortModel, statCard, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
@@ -140,7 +140,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m) {
 }
 
 /** The old address. */
-export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/capacity" ? "#/factory/agents" : null);
+export const redirect = (hash) => moved(hash, ["#/status/capacity"], "#/factory/agents");
 
 export const view = {
   path: "/factory/agents",

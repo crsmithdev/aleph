@@ -220,3 +220,11 @@ export function clip(text: unknown, max: number): string {
   const cut = t.slice(0, max - 1);
   return `${cut.slice(0, cut.lastIndexOf(" ") > max / 2 ? cut.lastIndexOf(" ") : cut.length)}…`;
 }
+
+/** The statuses that close an issue; a parked one is neither open nor closed. */
+export const CLOSED = ["done", "dropped"];
+
+/** The four priorities, in rank order. */
+export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
+/** Who can raise an issue. */
+export const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;

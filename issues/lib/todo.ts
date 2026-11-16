@@ -8,7 +8,7 @@
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { today } from "../../lib/day.ts";
 import { next } from "../../lib/db.ts";
-import { ISSUE_KINDS, parseId, parseKey, shownKey, STATUSES } from "../../lib/naming.ts";
+import { ISSUE_KINDS, PRIORITIES, parseId, parseKey, shownKey, SOURCES, STATUSES } from "../../lib/naming.ts";
 
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["project", "created"] as const;
@@ -146,15 +146,13 @@ export const find = (doc: Doc, id: number | string): Issue | undefined => {
 };
 const nextId = (doc: Doc): number => next("issue", Math.max(doc.floor ?? 0, ...doc.items.map((i) => i.id)));
 
-const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;
+export { PRIORITIES, SOURCES };
 export type Source = (typeof SOURCES)[number];
 
 /** Add an issue: `source` (chris unless the caller or a label says otherwise; this reads no environment) and `areas`, with its request and, when given, its spec. */
 /** Labels that say a source or an old state, never an area. */
 const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged", "planned", "proposal", "live-check"];
 
-/** The four priorities, in rank order. */
-export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 
 export const KINDS = ISSUE_KINDS;
 type Kind = (typeof KINDS)[number];

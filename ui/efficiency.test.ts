@@ -49,14 +49,14 @@ test("issue stats: first-pass share, median fix rounds", () => {
 });
 
 test("a returned review and a retried job both leave a landed issue out of first pass", () => {
-  // g5's reviewer sent its build back with no `failed`; g6's landing job retries a job whose build failed. Both land in the day window of `now`.
+  // g5's reviewer sent its build back with no `failed`; g6's landing job retries a job whose build failed. Both land in the day window of `now`, and each had a fix round, so none of g2, g5, g6 is first pass and the median of 0, 2, 0, 1, 1 is 1.
   run("g5", { role: "build", state: "returned", review: { call: "returned" }, cost: 1, ...span(8, 600) });
   run("g5", { role: "build", state: "passed", round: 1, cost: 1, ...span(9, 600) });
   run("g5", { role: "land", state: "landed", ...span(10, 30) });
   const back = run("g6", { role: "build", state: "returned", failed: "tests", cost: 2, ...span(8, 600) });
   run("g6", { role: "build", state: "passed", retryOf: back, prev: undefined, cost: 2, ...span(9, 600) });
   run("g6", { role: "land", state: "landed", ...span(10, 30) });
-  expect(speed("day", now).issues).toEqual({ landed: 5, firstPass: 0.4, fixRounds: 0, week: null, usage: [] });
+  expect(speed("day", now).issues).toEqual({ landed: 5, firstPass: 0.4, fixRounds: 1, week: null, usage: [] });
 });
 
 const cls = (key: string, lost: boolean, h: number, causes: any[], top: any[] = []) => ({ key, lost, text: `${key} text.`, hours: h, week: 0, runs: causes.reduce((a, x) => a + x.runs, 0), issues: 2, causes, top });

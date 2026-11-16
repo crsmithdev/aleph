@@ -1,5 +1,5 @@
 // The Flow page (was Efficiency): where agent time went, in hours. `d` is /api/flow for the window.
-import { redraw } from "../router.js";
+import { moved, redraw } from "../router.js";
 import { cell, count, card, empty, hours, meter, plural, row, sentence, statCard, dataTable, esc, heads, onTile, pageHead, pct, repoIdLink, setQuery, tiles, pagedTable, scope } from "../lib.js";
 import { bar, cardHours, cardPct, mergeCauses, windowTrend } from "./speed.js";
 
@@ -66,10 +66,7 @@ export function renderEfficiency(d, key = ALL) {
 }
 
 /** The old addresses. */
-export const redirect = (hash) => {
-  const [path, query] = String(hash ?? "").split(/\?(.*)/s);
-  return ["#/status/efficiency", "#/factory/efficiency"].includes(path) ? `#/flow${query ? `?${query}` : ""}` : null;
-};
+export const redirect = (hash) => moved(hash, ["#/status/efficiency", "#/factory/efficiency"], "#/flow");
 
 export const view = {
   path: "/flow",

@@ -8,19 +8,20 @@
 import { existsSync } from "node:fs";
 import { flakeNames, flakes } from "../../jobs/lib/gates/factory-status.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
-import { decisions } from "../../jobs/lib/records/record.ts";
+import { decisions, roundsByJob, roundsIn } from "../../jobs/lib/records/record.ts";
 import { askHistory, type AskSpan } from "./gates.ts";
 import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, isRunning } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import { OFFERS, readModels } from "../../jobs/lib/routing/models.ts";
+import { bare, isLocal } from "../../lib/models.ts";
 import { stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
 import { createdAt, everyFetched, itemsDir, projectsAt, reader, sourceOf } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP, RUN_CAP } from "../../jobs/lib/infra/settings.ts";
-import { clip, issueHref, NAMES, parseId, parseKey, SPEEDS, tail, type EventRow } from "../../lib/naming.ts";
+import { CLOSED, clip, issueHref, NAMES, parseId, parseKey, SPEEDS, tail, type EventRow } from "../../lib/naming.ts";
 import { eventIn, inProject, repoIn, scopeOf } from "./scope.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { BUCKETS, buckets, quantile, WINDOWS, type Window } from "../../lib/windows.ts";
@@ -223,10 +224,10 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     else if ([...lands].some((l) => l.job === r.job && t0(l) > a)) cls = "returned";
     else if (afterLand || r.fate === "met" || r.fate === "duplicate") cls = "failed";
     else if (startsBefore >= RUN_CAP() || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "reran";
-    else if (["done", "dropped", GONE].includes(statusOf(g) ?? "")) cls = "dropped";
+    else if ([...CLOSED, GONE].includes(statusOf(g) ?? "")) cls = "dropped";
     if (!cls) { skipped.push(row); continue; }
     const stated = CAUSE_NAME[causeOf(r) ?? "other"];
-    if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
+    if (cls === "landed") row.cause = roundsIn(mine.filter((o) => o.job === r.job && t0(o) < a)) ? "After fix rounds" : "First run of the job";
     else if (cls === "failed") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
     else if (cls === "reran" && startsBefore >= RUN_CAP()) row.cause = "Restart loop";
     else if (r.state === "waiting") row.cause = "Needed the user";
@@ -423,27 +424,10 @@ const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "d
 type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
-const modelName = (m: string) => /^claude-([a-z]+)-/.exec(m)?.[1] ?? m;
-
-/** A model's name without its provider prefix: "deepseek/deepseek-v4.1-flash" as "deepseek-v4.1-flash", the name the models setting carries. */
-const bare = (m: string | undefined): string | undefined => m?.replace(/^.*\//, "");
+const modelName = (m: string) => /^claude-([a-z]+)-/.exec(bare(m))?.[1] ?? bare(m);
 
 /** The model a size (small, medium or large) is set to now, or undefined for any other size. */
 const sizeModel = (size: string | undefined): string | undefined => (size && size in OFFERS ? readModels()[size as keyof typeof OFFERS].model : undefined);
-
-/**
- * The jobs that had a fix round: a run of the job that a check or the reviewer sent back (`failed` set or a
- * `review.call` of `returned`), and every job that retries such a job (`retryOf`).
- */
-function fixRoundJobs(entries: Entry[]): Set<string> {
-  const jobs = new Set(entries.map((e) => e.run).filter((r) => r.failed || r.review?.call === "returned").map((r) => r.job));
-  const jobOf = new Map(entries.map((e) => [e.id, e.run.job]));
-  const retriedBy = new Map<string, string[]>();
-  for (const e of entries) { const from = e.run.retryOf ? jobOf.get(e.run.retryOf) : undefined; if (from !== undefined && from !== e.run.job) retriedBy.set(from, [...(retriedBy.get(from) ?? []), e.run.job]); }
-  const queue = [...jobs];
-  while (queue.length) for (const j of retriedBy.get(queue.pop()!) ?? []) if (!jobs.has(j)) { jobs.add(j); queue.push(j); }
-  return jobs;
-}
 
 /**
  * The rows of OutcomeRow for the runs that started in `since`..`now`, without `baseline`.
@@ -467,9 +451,9 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
   // The review run of a build: the one whose `prev` is the build's job. Its model serves a verdict that has none.
   const reviews = new Map<string, string>();
   for (const e of entries) if (e.run.role === "review" && e.run.prev && e.run.model) reviews.set(e.run.prev, e.run.model);
-  // A job landed when a land run of it landed; a fix round is the rule of fixRoundJobs.
+  // A job landed when a land run of it landed; a fix round is the rule of roundsByJob.
   const landedJobs = new Set(runs.filter((r) => r.role === "land" && r.state === "landed").map((r) => r.job));
-  const roundJobs = fixRoundJobs(entries);
+  const rounds = roundsByJob(entries);
   for (const e of entries) {
     const r = e.run;
     const a = Date.parse(r.started);
@@ -490,7 +474,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
       if (b >= a && b - a <= MAX_RUN) w.secs.push((b - a) / 1000);
       if (ok && build && landedJobs.has(r.job)) {
         w.built = (w.built ?? 0) + 1;
-        if (!roundJobs.has(r.job)) w.firstPass = (w.firstPass ?? 0) + 1;
+        if (!rounds.get(r.job)) w.firstPass = (w.firstPass ?? 0) + 1;
       }
     }
     if (build) {
@@ -565,7 +549,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
   const rates = {
     success: success(outcomes), baseline: base.length ? round(base.reduce((x, y) => x + y, 0) / base.length, 4) : null,
     firstPass: built ? round(outcomes.reduce((n, o) => n + (o.firstPass ?? 0), 0) / built, 4) : null,
-    local: total ? round(own.filter((o) => o.model === "gpt-oss-20b").reduce((n, o) => n + o.runs, 0) / total, 4) : null,
+    local: total ? round(own.filter((o) => isLocal(o.model)).reduce((n, o) => n + o.runs, 0) / total, 4) : null,
   };
   const span = now - since, hours = roles.reduce((n, r) => n + r.hours, 0);
   return {
@@ -613,14 +597,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     models.get(model)!.push(secs);
     agents.push({ name: r.name, state: r.state, model, tests: (r.checks ?? []).find((c) => isTests(c.name))?.seconds ?? null, cost: round(r.cost ?? 0, 2), took: round(secs) });
   }
-  // A fix round is a worker run of the issue that a failed check or the reviewer sent back (`failed` set).
-  const rounds = new Map<string, number>();
-  for (const r of all) {
-    if (!isAgentRun(r.role)) continue;
-    if (r.failed) rounds.set(r.job, (rounds.get(r.job) ?? 0) + 1);
-  }
-  // First pass reads the whole fix-round rule, as the worker rows do; `fixRounds` keeps the count of `failed` runs.
-  const roundJobs = fixRoundJobs(entries);
+  // A fix round is the rule of roundsByJob: first pass and `fixRounds` both read it.
+  const rounds = roundsByJob(entries);
   // Landed issues: a land run of an issue with no number all share the one key "none". An issue's fix rounds are the most any of its landing runs' jobs needed.
   const landedBy = new Map<string, Run[]>();
   for (const r of landed) {
@@ -632,7 +610,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const fixes = perIssue.map((rs) => Math.max(...rs.map((r) => rounds.get(r.job) ?? 0)));
   const issues: Speed["issues"] = {
     landed: issuesLanded,
-    firstPass: issuesLanded ? round(perIssue.filter((rs) => rs.every((r) => !roundJobs.has(r.job))).length / issuesLanded, 4) : null,
+    firstPass: issuesLanded ? round(perIssue.filter((rs) => rs.every((r) => !rounds.get(r.job))).length / issuesLanded, 4) : null,
     fixRounds: quantile(fixes, 0.5),
     week: null,
     usage: [],

@@ -206,6 +206,22 @@
       "disable": [
         "semantic"
       ]
+    },
+    {
+      "name": "fix rounds",
+      "code": [
+        "jobs/lib/records/record.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "jobs/lib/records/record.ts",
+        "**/*.test.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
     }
   ]
 }

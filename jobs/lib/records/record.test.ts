@@ -262,3 +262,11 @@ test("stepOf: a run whose cause is not rescuable, as credit, waits; the rescue n
   expect(record.stepOf(job([credit]))).toEqual({ step: "wait", action: "failed", sub: "credit" });
   expect(record.stepOf(job([{ state: "failed", cause: "no-commit" }])).step).toBe("rescue");
 });
+
+test("fix rounds: a failed check or a returned review sends a build back, and a retry of such a job inherits one", () => {
+  const b = (job: string, o: Partial<Run>) => ({ role: "build", job, ...o }) as Run;
+  expect(record.roundsIn([b("a", { failed: "tests" }), b("a", { review: { call: "returned" } } as Partial<Run>), b("a", {})])).toBe(2);
+  expect(record.roundsIn([b("a", {})], true)).toBe(1);
+  const entries = [{ id: "1", run: b("a", { failed: "review" }) }, { id: "2", run: b("b", { retryOf: "1" }) }, { id: "3", run: b("c", { retryOf: "2" }) }, { id: "4", run: b("d", {}) }] as Entry[];
+  expect([...record.roundsByJob(entries)]).toEqual([["a", 1], ["b", 1], ["c", 1], ["d", 0]]);
+});

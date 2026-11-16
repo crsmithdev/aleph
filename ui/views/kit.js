@@ -3,6 +3,7 @@
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
 import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, bytes, clock, count, day, days, dur, durMs, error, hourLabel, hours, loadingLine, mean, money, notice, pct, scope, shortModel, span, when, wkText, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "../lib.js";
+import { PRIORITIES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "../timeline.js";
 import { askCard } from "./cards.js";
@@ -199,7 +200,7 @@ function renderKit(d, query) {
     spec("findings", "Findings list", findingsList(["Two jobs ran over the cap at `09:12`.", "No check failed."])) +
 
     group("Labels") +
-    spec("badge", "Badge", row(...["open", "running", "landed", "waiting", "failed", "parked", "dropped"].map(badge)) + row(...["critical", "high", "medium", "low"].map(priorityBadge)) + row(tag("any text"), tag("with a title", "need", "the title"))) +
+    spec("badge", "Badge", row(...["open", "running", "landed", "waiting", "failed", "parked", "dropped"].map(badge)) + row(...[...PRIORITIES].reverse().map(priorityBadge)) + row(tag("any text"), tag("with a title", "need", "the title"))) +
     spec("chip", "Chip", chips(["ui", "design", "a-long-label-name"])) +
     spec("status-light", "Status light", row(statusLight("fine", "Local server: up"), statusLight("alert", "OpenRouter: down"), statusLight("unknown", "Monitor: –"))) +
 

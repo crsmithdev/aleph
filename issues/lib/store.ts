@@ -14,7 +14,7 @@ import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles
 import { layout, logEvent } from "../../lib/layout.ts";
 import { next } from "../../lib/db.ts";
 import { always, logAlways } from "../../jobs/lib/asks/ask.ts";
-import { issueKey, key as keyOf } from "../../lib/naming.ts";
+import { CLOSED, issueKey, key as keyOf } from "../../lib/naming.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
 import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
@@ -153,8 +153,6 @@ export function readLists(repos: Place[]): (Doc | null)[] {
   return repos.map((r) => load(dir, `origin/${MAIN}`, r.key));
 }
 
-const CLOSED = ["done", "dropped"];
-
 /** Log the close of `item`: `done` or `dropped` by its `closed_as`, with its `closed_why` as the detail. */
 function logClosed(item: Issue, by: string): void {
   const why = item.fm.closed_why ? String(item.fm.closed_why) : undefined;
@@ -282,9 +280,9 @@ const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeo
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** Who raised the item: its `source`, else agent for a child (a child is made by the planner, never by chris) and chris for an issue. */
-export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" | "agent" {
+export function sourceOf(item: Issue): issues.Source {
   const s = text(item.fm.source);
-  return s === "worker" || s === "deps" || s === "memory" || s === "agent" ? s : issues.parentRef(item) === undefined ? "chris" : "agent";
+  return s !== "chris" && (issues.SOURCES as readonly string[]).includes(s) ? (s as issues.Source) : issues.parentRef(item) === undefined ? "chris" : "agent";
 }
 /** The children of an issue, in number order: the issues with a `from` that names it. */
 export const partsOf = (doc: Doc, item: Issue): Issue[] => doc.items.filter((i) => issues.parentRef(i) === issues.refOf(item));

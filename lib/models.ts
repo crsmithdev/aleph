@@ -25,3 +25,12 @@ export const MODELS: Record<string, Model> = {
   "step-3.5-flash": routed("stepfun/step-3.5-flash", 0.1, 0.3),
   "mimo-v2.6-flash": routed("xiaomi/mimo-v2.6-flash", 0.14, 0.28, 0.0028),
 };
+
+/** A model's name without its provider prefix: "deepseek/deepseek-v4.1-flash" as "deepseek-v4.1-flash", the name the models setting carries. */
+export function bare(model: string): string;
+export function bare(model: string | undefined): string | undefined;
+export function bare(model: string | undefined) {
+  return model?.replace(/^.*\//, "");
+}
+/** Whether a model runs on this machine's GPU, by its name with or without a provider prefix. */
+export const isLocal = (model: string | undefined): boolean => MODELS[bare(model) ?? ""]?.via === "local";

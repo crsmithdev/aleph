@@ -102,12 +102,32 @@ const workOf = (d: Database, root: string): RunRecord[] => {
   return rows.filter((r) => roots.get(r.id) === root).map((r) => fromRow(r, root, asks.get(r.id)));
 };
 
+/** A fix round: a build run that a failed check or a returned review sent back. */
+export const sentBack = (r: Pick<Run, "role" | "failed" | "review">): boolean => r.role === "build" && !!(r.failed || r.review?.call === "returned");
+
+/** The fix rounds of a job from its runs: those it sent back; a job that retries a job with a fix round (`inherits`) has at least one. */
+export const roundsIn = (runs: Pick<Run, "role" | "failed" | "review">[], inherits = false): number => Math.max(runs.filter(sentBack).length, inherits ? 1 : 0);
+
+/** The fix rounds of each job in `entries`: `roundsIn` its runs, where a job inherits from the job its run retries, through any chain of retries. */
+export function roundsByJob(entries: Entry[]): Map<string, number> {
+  const runs = new Map<string, Run[]>(), jobOf = new Map(entries.map((e) => [e.id, e.run.job]));
+  const retriedBy = new Map<string, string[]>();
+  for (const { run } of entries) {
+    runs.set(run.job, [...(runs.get(run.job) ?? []), run]);
+    const from = run.retryOf ? jobOf.get(run.retryOf) : undefined;
+    if (from !== undefined && from !== run.job) retriedBy.set(from, [...(retriedBy.get(from) ?? []), run.job]);
+  }
+  const queue = [...runs].filter(([, rs]) => rs.some(sentBack)).map(([job]) => job), inherits = new Set<string>();
+  while (queue.length) for (const j of retriedBy.get(queue.pop()!) ?? []) if (!inherits.has(j)) { inherits.add(j); queue.push(j); }
+  return new Map([...runs].map(([job, rs]) => [job, roundsIn(rs, inherits.has(job))]));
+}
+
 /** The `rounds` of the newest work on `target`, or of the work of the job with key `target` when it has none: its build runs that a check or the reviewer sent back. */
 export function roundsOf(target: string): number {
   const rows = (conn().query(`SELECT * FROM jobs WHERE target = ? OR id = ? ${ORDER}`).all(target, target) as Row[]);
   if (!rows.length) return 0;
   const last = rows.at(-1)!, root = rootOf(conn(), last.id);
-  return workOf(conn(), root).filter((x) => x.role === "build" && x.failed).length;
+  return roundsIn(workOf(conn(), root));
 }
 
 /** The sum of the costs of the jobs on `target`, in dollars at API rates. */
@@ -335,7 +355,7 @@ export interface Live { ask: Ask | null }
 export function next(runs: RunRecord[], live: Live = { ask: null }): Step {
   if (live.ask) return { step: "ask", action: "waiting", to: "human" };
   const last = runs.findLast(counts);
-  const rounds = runs.filter((x) => x.role === "build" && x.failed).length;
+  const rounds = roundsIn(runs);
   if (last?.state === "running") return { step: "run", action: "running", on: [last.id] };
   if (last?.state === "waiting") return { step: "ask", action: "waiting", on: [last.id], to: "human" };
   if (last?.next === "worker") return { step: "worker", action: "returned", ...subOf(last), count: `${rounds} / ${fixRounds()}` };

@@ -372,7 +372,7 @@ export function day(ts, now = new Date()) {
 }
 
 /** A model as its short name: "claude-opus-5-5" and "opus" are both "opus"; "" for none. */
-export const shortModel = (m) => String(m ?? "").replace(/^claude-/, "").replace(/(-\d+)+(\[.*\])?$/, "");
+export const shortModel = (m) => bare(String(m ?? "")).replace(/^claude-/, "").replace(/(-\d+)+(\[.*\])?$/, "");
 
 /** An id as a link: mono, small, muted, underlined on hover. */
 /** What an issue waits on, one row each; a wait that never ends says so and offers to remove it. */
@@ -426,10 +426,10 @@ export const tag = (text, tone = "quiet", title) => `<span class="badge ${esc(to
 export const badge = (state) => tag(state, tone(state));
 
 /** A priority as a badge: critical is the alert tone, high the warning tone, medium and low quiet. Missing or unknown reads medium. */
-const PRIORITY_TONES = { critical: "stuck", high: "need", medium: "quiet", low: "quiet" };
+const PRIORITY_TONES = ["quiet", "quiet", "need", "stuck"];
 export function priorityBadge(p) {
-  const k = Object.hasOwn(PRIORITY_TONES, p) ? p : "medium";
-  return tag(k, PRIORITY_TONES[k], k);
+  const j = PRIORITIES.indexOf(p), i = j < 0 ? PRIORITIES.indexOf("medium") : j;
+  return tag(PRIORITIES[i], PRIORITY_TONES[i], PRIORITIES[i]);
 }
 
 /** The status row of a detail page around its built parts: the state, the priority, then the labels. */
@@ -953,7 +953,8 @@ export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^
 export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` : "");
 /** The facts list of `[label, html]` pairs. */
 export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
-import { shortId, shortText } from "../lib/naming.ts";
+import { PRIORITIES, shortId, shortText } from "../lib/naming.ts";
+import { bare } from "../lib/models.ts";
 import { FACTORY } from "../lib/windows.ts";
 
 /** The API path of issue `<repo>-<ref>`: `/api/issues/a1430`. */

@@ -1,5 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
-import { get, redraw } from "../router.js";
+import { get, moved, redraw } from "../router.js";
 import { card, cell, pagedTable, row, dur, count, empty, error, failMessage, heads, loadingLine, onTile, pageHead, searchBox, setQuery, shortModel, statCard, cardTrend, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
@@ -87,10 +87,7 @@ export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
 }
 
 /** The old address. */
-export const redirect = (hash) => {
-  const [path, query] = String(hash ?? "").split(/\?(.*)/s);
-  return path === "#/status/performance" ? "#/factory/jobs" : path === "#/jobs" ? `#/factory/jobs${query ? `?${query}` : ""}` : null;
-};
+export const redirect = (hash) => moved(hash, ["#/status/performance", "#/jobs"], "#/factory/jobs");
 
 export const view = {
   path: "/factory/jobs",

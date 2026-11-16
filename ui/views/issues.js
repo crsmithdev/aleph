@@ -4,7 +4,7 @@
 import { actButton, editable, fold, issueApi, postJson, say, count, days, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, plural, row, shaLink, dataTable, heads, pagedTable, dur, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, undecided, remember, keep, kept } from "../lib.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
-import { ISSUE_KINDS as KINDS, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
+import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
 import { askCard } from "./cards.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
@@ -30,8 +30,6 @@ export function redirect(hash) {
 /** The Issues table shows this many rows, and this many more for each press of the pager's button. */
 export const PAGE = 50;
 
-/** The statuses that close an issue; a parked one is neither open nor closed. */
-const CLOSED = ["done", "dropped"];
 /** The Status filter: with no status in the query the table opens on every status, and "any" (the All option) is the same. */
 const statusOf = (s) => (s == null || s === "any" ? "" : s);
 
@@ -252,7 +250,6 @@ export function flow(rows, window = "month", now = new Date()) {
   return out;
 }
 
-const PRIORITY_ORDER = ["low", "medium", "high", "critical"];
 /** The window's buckets: how many rows were open at the start of each, per priority. A row is open from its created time to its closed time. */
 export function backlog(rows, win = "month", now = new Date()) {
   const ats = buckets(win, now.getTime()).starts;
@@ -261,7 +258,7 @@ export function backlog(rows, win = "month", now = new Date()) {
     const from = isoMs(r.createdTime), to = isoMs(r.closedTime);
     return from && from <= t && (!to || t < to);
   }).length;
-  return { ats, counts: Object.fromEntries(PRIORITY_ORDER.map((p) => [p, ats.map((t) => open(p, t))])) };
+  return { ats, counts: Object.fromEntries(PRIORITIES.map((p) => [p, ats.map((t) => open(p, t))])) };
 }
 
 /** For each kind, the p50 and p90 from created to closed over the rows closed inside the window; null for a kind with none. `unit` is "hours" when a row counts and every value is under 2 days; else "days". */
@@ -283,8 +280,8 @@ export function closeTimes(rows, win = "month", now = new Date()) {
 export const backlogFrame = (b, f, win) => ({
   measure: { name: "Open Backlog, Filed and Closed", unit: "count", agg: "max" },
   over: { kind: "time", window: win },
-  by: { keys: [...PRIORITY_ORDER.map((p) => ({ key: p, name: p })), { key: "filed", name: "filed" }, { key: "closed", name: "closed" }] },
-  rows: b.ats.map((at, i) => ({ at, ...Object.fromEntries(PRIORITY_ORDER.map((p) => [p, b.counts[p][i]])), filed: f.filed[i], closed: f.closed[i] })),
+  by: { keys: [...PRIORITIES.map((p) => ({ key: p, name: p })), { key: "filed", name: "filed" }, { key: "closed", name: "closed" }] },
+  rows: b.ats.map((at, i) => ({ at, ...Object.fromEntries(PRIORITIES.map((p) => [p, b.counts[p][i]])), filed: f.filed[i], closed: f.closed[i] })),
   form: "area",
 });
 
@@ -352,7 +349,8 @@ const renderCharts = (o, rows, tests) => {
     panelOf(chartKey("tests"), testsFrame(tests, o.project, win, now), "wide") + `</div>`;
 };
 
-const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medium", "low"];
+const HIGH_FIRST = [...PRIORITIES].reverse();
+const PRIORITY_OPTIONS = [{ value: "", label: "All" }, ...HIGH_FIRST];
 
 /** The project filter scopes the tiles too: a select in the page head. */
 export function renderProjects(projects, _rows, o = {}) {
@@ -465,7 +463,6 @@ export const description = (body) => String(body ?? "").replace(/^\s*## Request[
 /** Each `docs/specs/<file>.md` that this project has becomes a link to its Spec page. */
 const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]+\.md)/g, (m, f) => (files.includes(f) ? `<a href="#/specs/${encodeURIComponent(repo)}/${encodeURIComponent(f)}">${m}</a>` : m));
 
-const PRIORITIES = ["critical", "high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory", "agent"];
 const choose = (name, all, cur) => selectBox(name, name, !cur || all.includes(cur) ? all : [cur, ...all], cur, { attrs: ` ${FORM}` });
 
 const FORM = 'form="issue-edit"';
@@ -635,7 +632,7 @@ export function renderIssue(d) {
   const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`)).join("");
   const pills = statusRow(d.derived ? badge(d.derived.stage) : badge(d.status), priorityBadge(priority), `${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}${idLink(shortText(`${d.repo}-${ref}`))}`);
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
-    field("Priority", choose("priority", PRIORITIES, priority)) + field("Source", choose("source", SOURCES, source)) +
+    field("Priority", choose("priority", HIGH_FIRST, priority)) + field("Source", choose("source", SOURCES, source)) +
     field("Areas", inputBox("areas", areas.join(", "), { attrs: ` ${FORM} aria-label="areas" placeholder="comma separated"` })) + refsPicker(d) + `</div></section>`;
   const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref)}</div>` : "";
   // Plain references: they hold nothing, so each row shows the issue's status, not a wait.

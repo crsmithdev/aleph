@@ -200,6 +200,11 @@ export const get = (url, slot) => (page ? page.get(url, slot) : fetch(url, { cac
 
 /** Draw the shown view again through the one draw, after a choice of the reader changed the address (`setQuery`) or,
  * with `fresh`, the server's data (an action). */
+/** The address `to` with the whole query of `hash`, when the hash's path is one of `olds`; else null. A view's `redirect` calls it for an old address. */
+export function moved(hash, olds, to) {
+  const [path, ...rest] = String(hash ?? "").split("?"), qs = rest.join("?");
+  return olds.includes(path) ? `${to}${qs ? `?${qs}` : ""}` : null;
+}
 export const redraw = (fresh = false) => page?.redraw(parseHash(location.hash).query, fresh);
 
 /** Wire the shell to the page and route to the hash. */

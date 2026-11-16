@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { redraw } from "../router.js";
+import { moved, redraw } from "../router.js";
 import { clamp, fold, toc, wireToc, actButton, postJson, say, count, badge, card, cell, row, day, localMs, plural, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, goQuery, meter, heads, hours, pct, chip, idLink, pageOf, pageRows, pager, pageHead, seg, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./now.js";
@@ -22,10 +22,7 @@ export const view = {
 };
 
 /** `#/gates` (with or without a query) is now `#/automation`. */
-export const redirect = (hash) => {
-  const [path, qs] = String(hash ?? "").split("?");
-  return path === "#/gates" ? `#/automation${qs ? `?${qs}` : ""}` : null;
-};
+export const redirect = (hash) => moved(hash, ["#/gates"], "#/automation");
 
 /** The label of an automatic mode: what it does. */
 export const MODES = { resolve: "Take the pick" };

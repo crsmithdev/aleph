@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore router.js is plain JS, shared with the page
-import { loader, keysOf, markOf } from "./router.js";
+import { loader, keysOf, markOf, moved } from "./router.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { markLine } from "./lib.js";
 
@@ -303,4 +303,10 @@ test("a reconnect's full reload keeps the check on open, and the two draw identi
   }
   await tick();
   expect([p.asked.length, p.drawn]).toEqual([3, [{ n: 1 }, { n: 1 }]]);
+});
+
+test("moved keeps the whole query of an old address, a query with a ? in it too", () => {
+  expect(moved("#/status/capacity?window=day&q=a?b", ["#/status/capacity"], "#/factory/agents")).toBe("#/factory/agents?window=day&q=a?b");
+  expect(moved("#/status/capacity", ["#/status/capacity"], "#/factory/agents")).toBe("#/factory/agents");
+  expect(moved("#/jobs/aleph-1", ["#/jobs"], "#/factory/jobs")).toBeNull();
 });

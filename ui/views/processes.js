@@ -1,13 +1,13 @@
 // The Processes tab of the Memory page, on /api/memory/processes: the scheduled memory steps of the tick, then a card each
 // for episodes, corrections, the contradiction screen and decay. Every value is read from a file the process wrote.
-import { card, count, dataTable, empty, esc, heads, tag, when } from "../lib.js";
+import { card, count, dataTable, empty, esc, heads, tag, tone, when } from "../lib.js";
 
 const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
 const flow = (...boxes) => `<p class="quiet" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">${boxes.map((b, i) => `${i ? "to " : ""}${tag(b)}`).join(" ")}</p>`;
 const time = (ts) => (ts ? esc(when(ts)) : '<span class="quiet">none</span>');
 
 const stepRow = (s) => `<tr><td><strong>${esc(s.name)}</strong></td><td>${esc(s.runs)}</td><td class="time">${time(s.last)}</td><td class="time">${time(s.next)}</td>` +
-  `<td>${s.result ? tag(s.result, s.result.startsWith("failed") ? "stuck" : "done") : ""}${s.detail ? ` <span class="quiet">${esc(s.detail)}</span>` : ""}</td><td class="wide" title="${esc(s.does)}">${esc(s.does)}</td></tr>`;
+  `<td>${s.result ? tag(s.result, tone(s.result.startsWith("failed") ? "failed" : "done")) : ""}${s.detail ? ` <span class="quiet">${esc(s.detail)}</span>` : ""}</td><td class="wide" title="${esc(s.does)}">${esc(s.does)}</td></tr>`;
 
 function episodes(e) {
   const top = Math.max(1, ...e.days.map((d) => d.pages));

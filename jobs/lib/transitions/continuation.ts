@@ -244,7 +244,7 @@ const quoteFailures = (failures: FailedTest[]): string =>
 // Fix rounds: the runs before, and the failures they share. The rule itself is in worker-verdict.ts.
 
 /** The job's fix rounds before run `id`: its other build runs that a check or the reviewer sent back. */
-export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) => e.id !== id && isBuild(e.run.role) && e.run.failed);
+export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) => e.id !== id && record.sentBack(e.run));
 
 /**
  * A check that fails unchanged twice: the run before this one also failed `check` with the same failing test

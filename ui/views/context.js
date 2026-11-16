@@ -4,21 +4,20 @@
 // into each tool and each call; a call's input loads its result text. Every other part unfolds into its items, and
 // the compact summary into its text.
 import { get } from "../router.js";
-import { card, count, dataTable, empty, error, esc, goQuery, hashQuery, heads, keep, kept, loadingLine, setQuery, tag } from "../lib.js";
+import { card, count, dataTable, empty, error, esc, fold, goQuery, hashQuery, heads, keep, kept, loadingLine, pct, setQuery, tag, tone } from "../lib.js";
 
 const SERIES = ["--series-1", "--series-2", "--series-3", "--chart-6", "--chart-7", "--run", "--need", "--done"];
 const colour = (i) => `var(${SERIES[i % SERIES.length]})`;
-const how = (h) => (h === "exact" ? tag("exact", "done") : tag("est.", "need"));
+const how = (h) => (h === "exact" ? tag("exact", tone("done")) : tag("est.", tone("waiting")));
 const pick = (requests, n) => requests.find((r) => r.n === Number(n)) ?? requests.at(-1);
-const share = (n, of) => `${(n / Math.max(of, 1) * 100).toFixed(1)}%`;
-/** The keys of the open folds, so a redraw for another request keeps them open. */
-const opened = new Set();
-const fold = (key, summary, body) => `<details data-key="${esc(key)}"${opened.has(key) ? " open" : ""}><summary>${summary}</summary>${body}</details>`;
+const share = (n, of) => pct(n / Math.max(of, 1) * 100);
+/** A fold that keeps its open state under `context.<key>`, so a redraw for another request keeps it. */
+const kfold = (key, summary, body) => fold(summary, body, { keep: `context.${key}` });
 
 function byTool(tools, total) {
   const rows = [...tools].sort((a, b) => b.tokens - a.tokens).map((t) =>
     `<tr><td class="mono wide" title="${esc(t.name)}">${esc(t.name)}</td><td>${esc(t.name.match(/^mcp__(.+?)__/)?.[1] ?? "built-in")}</td><td class="num">${count(t.tokens)}</td><td class="num">${share(t.tokens, total)}</td></tr>`);
-  return fold("tools", "By tool", dataTable(heads(["Tool", "Server", "Tokens", "Share"], ["Tokens", "Share"]), rows.join("")));
+  return kfold("tools", "By tool", dataTable(heads(["Tool", "Server", "Tokens", "Share"], ["Tokens", "Share"]), rows.join("")));
 }
 
 /** The calls the request holds, those after its `since`, by tool and then by call. */
@@ -29,7 +28,7 @@ function byCall(calls, r, total) {
   return [...groups].sort((a, b) => sum(b[1]) - sum(a[1])).map(([tool, cs]) => {
     const rows = cs.sort((a, b) => b.tokens - a.tokens).map((c) =>
       `<tr><td class="num">${c.n}</td><td class="mono wide" title="${esc(c.input)}"><button type="button" class="link" data-call="${esc(c.id)}">${esc(c.input)}</button></td><td class="num">${count(c.tokens)}</td><td>${how(c.how)}</td></tr>`);
-    return fold(`calls:${tool}`, `${esc(tool)}<span class="peek" title="${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}">${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}</span>`,
+    return kfold(`calls:${tool}`, `${esc(tool)}<span class="peek" title="${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}">${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}</span>`,
       dataTable(heads(["Request", "Input", "Tokens", "How"], ["Request", "Tokens"]), rows.join("")) + `<pre class="stat" data-result hidden style="max-height:360px;overflow:auto"></pre>`);
   }).join("");
 }
@@ -51,12 +50,12 @@ function byItem(items, r, p) {
   if (!groups.size) return "";
   const rows = [...groups].sort((a, b) => b[1].tokens - a[1].tokens).map(([name, g]) =>
     `<tr><td class="wide" title="${esc(name)}">${esc(name)}</td><td class="num">${count(g.count)}</td><td class="num">${count(g.tokens)}</td><td class="num">${share(g.tokens, p.tokens)}</td></tr>`);
-  return fold(`items:${p.rec}`, BY[p.rec] ?? "By item", dataTable(heads(["Item", "Count", "Tokens", "Share"], ["Count", "Tokens", "Share"]), rows.join("")));
+  return kfold(`items:${p.rec}`, BY[p.rec] ?? "By item", dataTable(heads(["Item", "Count", "Tokens", "Share"], ["Count", "Tokens", "Share"]), rows.join("")));
 }
 
 function summary(summaries, r) {
   const s = summaries.find((x) => x.n === r.since);
-  return s ? fold("summary", "Text", `<pre class="stat" style="max-height:360px;overflow:auto;white-space:pre-wrap">${esc(s.text)}</pre>`) : "";
+  return s ? kfold("summary", "Text", `<pre class="stat" style="max-height:360px;overflow:auto;white-space:pre-wrap">${esc(s.text)}</pre>`) : "";
 }
 
 function picker(m, id, session, r) {
@@ -71,7 +70,7 @@ function fillBar(r, limit) {
   const segs = r.parts.map((p, i) => `<i style="width:${(p.tokens / limit * 100).toFixed(2)}%;background:${colour(i)}" title="${esc(p.name)}"></i>`).join("");
   const key = r.parts.map((p, i) => `<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colour(i)}"></i> ${esc(p.name)}</span>`).join("");
   const u = r.usage;
-  return card("Fill of request " + r.n, `<p><strong>${count(r.fill)}</strong> of ${count(limit)} tokens · ${(r.fill / limit * 100).toFixed(1)}% ${how("exact")}</p>` +
+  return card("Fill of request " + r.n, `<p><strong>${count(r.fill)}</strong> of ${count(limit)} tokens · ${pct(r.fill / limit * 100)} ${how("exact")}</p>` +
     `<p class="quiet">input ${count(u.input)} · cache read ${count(u.cacheRead)} · cache write ${count(u.cacheWrite)} · output ${count(u.output)}</p>` +
     `<div style="display:flex;height:22px;border-radius:6px;overflow:hidden;background:var(--sunk)" role="img" aria-label="Context fill by part">${segs}</div><p class="quiet" style="display:flex;flex-wrap:wrap;gap:16px">${key}</p>`);
 }
@@ -144,9 +143,5 @@ export async function mountContext(root, m, query) {
       pre.textContent = `${x.tool} ${JSON.stringify(x.input)}\n\n${x.text}`;
     } catch (err) { pre.textContent = `Could not load the call: ${err.message}`; }
   };
-  root.addEventListener("toggle", (e) => {
-    const k = e.target.dataset?.key;
-    if (k) e.target.open ? opened.add(k) : opened.delete(k);
-  }, true);
   root.onchange = (e) => { if (e.target.id === "ctx-session") goQuery({ session: e.target.value, n: "" }); };
 }
