@@ -17,10 +17,16 @@ function openRouterCard(m, win) {
   return statCard({ k: "OpenRouter", v: v == null ? "–" : money(v), note: "Spend", extra, loading: m === undefined });
 }
 
-/** The Cost per land card: agent spend per issue landed in the window, with its trend against the baseline. `d` is /api/flow for the window with `baseline`, or null while it loads. */
-function costPerLandCard(d) {
-  const v = d?.figures?.costPerLand;
-  return statCard({ k: "Cost per land", v: v == null ? "–" : money(v), trend: windowTrend(d, "costPerLand", v, { kind: "relative", lowerIsGood: true, format: money }), loading: !d });
+/** The Cost per run card: the mean cost of an agent run over the window and the runs, with its trend against the baseline. `d` is /api/flow for the window with `baseline`, or null while it loads. */
+function costPerRunCard(d) {
+  const v = d?.figures?.costPerRun;
+  return statCard({ k: "Cost per run", v: v == null ? "–" : money(v), ...(v == null ? {} : { v2: count(d.figures.runs) }), q: ["per run", "runs"], trend: windowTrend(d, "costPerRun", v, { kind: "relative", lowerIsGood: true, format: money }), loading: !d });
+}
+
+/** The Success card: the share of runs that succeeded and the share of builds that passed first time, with the success trend against its baseline. */
+function successCard(a) {
+  const r = a?.rates;
+  return statCard({ k: "Success", v: share(r?.success), v2: share(r?.firstPass), q: ["runs", "first pass"], trend: cardTrend(r?.success, r?.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline" }), loading: !a });
 }
 
 function scorecard(s, d, m, win) {
@@ -29,8 +35,7 @@ function scorecard(s, d, m, win) {
   const others = a ? `${count(a.live - a.workers)} others` : miss("flow not loaded");
   return usageCard(s) + openRouterCard(m, win) +
     statCard({ k: "Live agents", v: count(f.liveRuns ?? 0), v2: count(f.liveCap), q: ["in use", "cap"], extra: `<span class="q m">${others}</span>` }) +
-    costPerLandCard(d) +
-    statCard({ k: "Queue", v: count((s.queued ?? []).length), v2: dur(d?.phases?.queue?.p90), q: ["waiting", "p90"] });
+    costPerRunCard(d) + successCard(a);
 }
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */

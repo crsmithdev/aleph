@@ -90,7 +90,7 @@ test("GET /api/flow takes a window (default week) and answers JSON", async () =>
   const { baseline: _b, figures: f, ...d } = b;
   expect(f).toEqual(figures(d));
   expect(Object.keys(f).sort()).toEqual(Object.keys(b.baseline.prev).sort());
-  expect(Object.keys(f)).toContain("costPerLand");
+  expect(Object.keys(f)).not.toContain("costPerLand");
 });
 
 test("the Status cards show the answer's figures and trend them against its baseline", () => {
@@ -101,10 +101,11 @@ test("the Status cards show the answer's figures and trend them against its base
   expect(h).toContain("baseline 40%, the previous 7 days");
   });
 
-test("figures: the cost per land is the window's agent cost over its landed issues, null with none landed", () => {
-  const d = (done: number) => ({ classes: [], done, lost: { share: 0, hours: 0 }, phases: { lead: { count: 0 } }, asks: { count: 0 }, issues: { firstPass: null }, buckets: [{ cost: { a: 1, b: 2 } }, { cost: { a: 3.25 } }] }) as any;
-  expect(figures(d(4)).costPerLand).toBe(1.56);
-  expect(figures(d(0)).costPerLand).toBeNull();
+test("figures: the cost per run is the window's agent run cost over its agent runs of all roles, null with no runs", () => {
+  const d = (outcomes: object[]) => ({ classes: [], done: 0, lost: { share: 0, hours: 0 }, phases: { lead: { count: 0 } }, asks: { count: 0 }, issues: { firstPass: null }, agents: { outcomes } }) as any;
+  const f = figures(d([{ runs: 3, cost: 1 }, { runs: 1, cost: 0.5 }]));
+  expect([f.costPerRun, f.runs]).toEqual([0.38, 4]);
+  expect([figures(d([])).costPerRun, figures(d([])).runs]).toEqual([null, null]);
 });
 
 test("the Usage card note is the pace word, and the bar title holds the percent off this machine", () => {

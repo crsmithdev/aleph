@@ -60,11 +60,11 @@ test("an outcome on a full model id joins the row of its short model; an unset m
   expect(h).not.toContain("not recorded");
 });
 
-test("the tiles are usage, OpenRouter spend for the window's UTC period, live agents, cost per land and the queue", () => {
+test("the tiles are usage, OpenRouter spend for the window's UTC period, live agents, cost per run and success", () => {
   const keys = (h: string) => [...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1]);
   const m = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
-  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Live agents", "Cost per land", "Queue"]);
+  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Live agents", "Cost per run", "Success"]);
   for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>$1.50</b>");
   const loading = renderFactoryAgents(S, D);
@@ -233,18 +233,27 @@ test("a down local server shows one alert, an up one shows nothing, and the Role
   expect(renderFactoryAgents(S, null, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server down");
 });
 
-test("the Queue card counts the queued issues with the queue p90, and Cost per land shows its money, trend and a dash with none landed", () => {
-  const queued = [{ repo: "a", id: 1 }, { repo: "a", id: 2 }, { repo: "a", id: 3 }];
-  const phases = { queue: { count: 4, p50: 60, p90: 200 } };
-  const f = { costPerLand: 2.5 };
-  const d = { ...D, phases, figures: f, baseline: { base: { costPerLand: 2 }, prev: { costPerLand: 3 }, basis: "the previous 7 days" } };
-  const h = renderFactoryAgents({ ...S, queued }, d);
-  expect(tile(h, "Queue")).toContain(`<b>3<em> / ${dur(200)}</em></b>`);
-  expect(tile(h, "Cost per land")).toContain("<b>$2.50</b>");
-  expect(tile(h, "Cost per land")).toContain('<span class="tr warn"');
-  expect(tile(renderFactoryAgents(S, { ...d, baseline: undefined }), "Cost per land")).not.toContain('class="tr');
-  const none = tile(renderFactoryAgents(S, { ...d, figures: { costPerLand: null } }), "Cost per land");
-  expect(none).toContain("<b>–</b>");
+test("the Cost per run tile shows the mean cost and the runs, its trend with lower good, and a dash with no runs", () => {
+  const d = { ...D, figures: { costPerRun: 0.21, runs: 412 }, baseline: { base: { costPerRun: 0.2 }, prev: { costPerRun: 0.3 }, basis: "the previous 7 days" } };
+  const t = tile(renderFactoryAgents(S, d), "Cost per run");
+  expect(t).toContain("<b>$0.21<em> / 412</em></b>");
+  expect(t).toContain('<span class="q"><span>per run</span><span class="m"> / runs</span></span>');
+  expect(t).toContain('<span class="tr warn"');
+  expect(t.match(/<(?:span|b|em)\b/g)!.length).toBe(8);
+  expect(tile(renderFactoryAgents(S, { ...d, baseline: { ...d.baseline, base: { costPerRun: 0.3 } } }), "Cost per run")).toContain('<span class="tr good"');
+  expect(tile(renderFactoryAgents(S, { ...d, baseline: undefined }), "Cost per run")).not.toContain('class="tr');
+  expect(tile(renderFactoryAgents(S, { ...d, figures: { costPerRun: null, runs: null } }), "Cost per run")).toContain("<b>–</b>");
+});
+
+test("the Success tile shows the success and first pass shares, its trend with higher good, and none without a baseline", () => {
+  const page = (rates: any) => renderFactoryAgents(S, { ...D, agents: { ...agents, rates } });
+  const t = tile(page({ success: 0.91, baseline: 0.8, firstPass: 0.64 }), "Success");
+  expect(t).toContain("<b>91%<em> / 64%</em></b>");
+  expect(t).toContain('<span class="q"><span>runs</span><span class="m"> / first pass</span></span>');
+  expect(t).toContain('<span class="tr good"');
+  expect(t.match(/<(?:span|b|em)\b/g)!.length).toBe(8);
+  expect(tile(page({ success: 0.7, baseline: 0.8, firstPass: 0.64 }), "Success")).toContain('<span class="tr warn"');
+  expect(tile(page({ success: 0.91, baseline: null, firstPass: 0.64 }), "Success")).not.toContain('class="tr');
 });
 
 test("the OpenRouter light says it is down when the flash model is down, and the Roles card has no status line", () => {
