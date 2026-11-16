@@ -1,7 +1,7 @@
 # Design retro report
 
-The report of a refit-design `retro`. It has the shape of refit-code's [REPORT.md](../refit-code/REPORT.md): Header,
-Summary, All candidates raw, Units, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
+The report of a refit-design `retro`. It has the shape of refit-code's [REPORT.md](../refit-code/REPORT.md): Overview
+(repo line, themes, raw listing), Units, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
 class names are in refit-code's [HTML.md](../refit-code/HTML.md). This file holds only what is specific to design.
 A design report uses the design language of the UI it scans: aleph classes and tokens from `ui/app.css`, no Tailwind.
 It cites only rules of `docs/design.md`.
@@ -13,13 +13,13 @@ Write `<tmpdir>/refit-design-retro-<timestamp>/`. Besides `index.html` and `app.
 
 The report links the live Kit at `/#/kit` on the same origin. The link text names the specimen by its id, the first
 argument of a `spec(id, ...)` call in `ui/views/kit.js`, such as `Kit: metric`. The Kit section of that id has the
-anchor `kit-<id>`. A report opened from a host that has no Kit says so in the Header and drops the links.
+anchor `kit-<id>`. A report opened from a host that has no Kit says so in the Overview's repo line and drops the links.
 
 ## Differences from the shared shape
 
-1. **Summary.** The kinds are missing token, one-off, mismatch and local defect. One line for each finding with its
+1. **Themes** (in the Overview). The kinds are missing token, one-off, mismatch and local defect. One line for each finding with its
    component and rule.
-2. **All candidates, raw.** The fields of a row are the rule, `file:line` or screenshot, kind, lens and the proof
+2. **Raw** (in the Overview). The fields of a row are the rule, `file:line` or screenshot, kind, lens and the proof
    text.
 3. **Units.** The unit is a component kind of the page, in the page's order. Inside it, one subsection per variant of
    the kind. List every component on the page, with or without an issue, one entry each. A metric card is one entry

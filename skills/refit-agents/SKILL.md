@@ -75,7 +75,7 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
    subagent has returned.
 4. **Prove, fix and hold, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with
    this skill's lens files and `.refit.json`. The report goes to `<tmpdir>/refit-agents-retro-<timestamp>/`, and its unit is a loaded file (CLAUDE.md, skill or
-   hook); its header adds the always-loaded token total and the agnix counts, and a card with no diagram shows the text
+   hook); its Overview adds the always-loaded token total and the agnix counts, and a card with no diagram shows the text
    before and after. Done when PROVE.md's step 3 is done.
 
 ## Act

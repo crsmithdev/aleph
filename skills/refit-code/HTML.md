@@ -34,23 +34,15 @@ The report is a directory in the OS temp directory: `index.html` and `app.css`. 
 <div class="page sp">
   <header class="ph"><h1>Refit Retro</h1><span class="count">{{skill}}</span></header>
 
-  <section class="card" id="header" aria-label="Header">
-    <div class="sh"><h2>Header</h2></div>
-    <dl class="facts"><div><dt>Repo</dt><dd>{{repo}}</dd></div><div><dt>Commit</dt><dd>{{sha}}</dd></div></dl>
+  <section class="card" id="overview" aria-label="Overview">
+    <div class="sh"><h2>Overview</h2><span class="count">{{n}} findings</span></div>
+    <dl class="facts"><div><dt>Repo</dt><dd>{{repo}}</dd></div><div><dt>Date</dt><dd>{{date}}</dd></div><div><dt>Commit</dt><dd>{{sha}}</dd></div></dl>
     <div class="tscroll"><table class="tbl"><thead><tr><th>Lens</th><th>Candidates</th><th>Findings</th><th>Dropped</th></tr></thead><tbody>...</tbody></table></div>
-  </section>
-
-  <section class="card" id="summary" aria-label="Summary">
-    <div class="sh"><h2>Summary</h2></div>
     <h3 class="sub-head">{{kind}}: {{theme}}</h3>
     <ul>...</ul>
     <h3 class="sub-head">Actions</h3>
     <ol>...</ol>
-  </section>
-
-  <section class="card" id="raw" aria-label="All candidates">
-    <div class="sh"><h2>All Candidates</h2><span class="count">{{n}}</span></div>
-    <details><summary>Raw listing</summary>
+    <details><summary>Raw listing ({{candidates}})</summary>
       <div class="tscroll"><table class="tbl"><thead><tr><th>Lens</th>...<th>Verdict</th><th>Reason</th></tr></thead><tbody>...</tbody></table></div>
     </details>
   </section>
