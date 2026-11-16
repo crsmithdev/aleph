@@ -47,12 +47,16 @@ restyles a kit class is seams. A class that no element uses is dead.
    `git status --porcelain`. Done when the baseline is green and recorded.
 2. **Scope.** The route's view file and the shared files it imports, or every view for the whole UI. Done when you
    have a list of files and routes.
-3. **Hunt.** Follow each lens file of the table: the code view, then the drawn view. For the whole UI, spawn one
-   Explore subagent per route in one message, each with the Signals sections of the lens files verbatim. Each returns candidates as:
-   rule of `docs/design.md`, `file:line` or screenshot, the kind. Done when each route has returned.
-4. **Prove, hold and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files. The report goes
-   to `<tmpdir>/refit-design-retro-<timestamp>.html`; each finding card shows the screenshot and the Kit specimen
-   side by side. Done when PROVE.md's step 3 is done.
+3. **Hunt.** First list the page's components from its view code and the screenshot: each kind and variant, with an
+   id (`<kind>[/<variant>]`) and the specimen id of `spec(id, ...)` in `ui/views/kit.js`. Then follow each lens
+   file of the table: the code view, then the drawn view. For the whole UI, spawn one Explore subagent per route in one
+   message, each with the Signals sections of the lens files and the component list verbatim. Each returns the
+   candidates as: rule of `docs/design.md`, `file:line` or screenshot, the kind. It also returns, per component, the
+   rules it breaks and the rules it follows (each by `docs/design.md` section and rule text) and the Kit specimen id.
+   Done when each route has returned and each component has an entry.
+4. **Prove, hold and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files, but write
+   the report of this skill's [REPORT.md](REPORT.md) to `<tmpdir>/refit-design-retro-<timestamp>/index.html` in
+   place of refit-code's. Done when PROVE.md's step 3 is done.
 
 ## Act
 
