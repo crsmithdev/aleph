@@ -23,12 +23,25 @@ keep the writer's voice: run `aleph:humanizer` over them.
 ## Sentences (ASD-STE100)
 
 - Active voice (passive only for an unknown actor), simple tenses (no perfect tenses), -ing only as a noun.
-- One idea per sentence: 20 words in a step, 25 in a description. One instruction per sentence, imperative, condition first.
-- Keep articles and logic words (if, because, so, then). No semicolons. Paragraphs of at most 6 sentences.
+- One idea per sentence: 20 words in a step, 25 in a description. A number with its unit, a name or a code identifier
+  counts as one word. One instruction per sentence, imperative, condition first.
+- Keep articles and logic words (if, because, so, then), not "however", "moreover" or "additionally". No semicolons.
+  Paragraphs of at most 6 sentences.
 - One name per thing, one meaning per word. Plain words, no metaphors or idioms. Verbs, not verb-nouns or phrasal verbs ("decide",
   "configure"). Noun clusters of at most three words.
 - Spell out an abbreviation at first use unless Chris uses it. No "simply", "just", "easy", "please" or "!".
-- A warning starts with the command, then the risk. Contractions in chat only. Negations in full elsewhere.
+- Modals: "can", "must", "will". "May" or "should" only for real doubt or advice. Keep the source's certainty.
+- A warning comes before the step it protects. It starts with the command, then the risk. Contractions in chat only.
+  Negations in full elsewhere.
+
+## AI tells
+
+- State, do not stage: no not-X-but-Y contrasts, one-line closers, sayings that only sound deep, run-ups ("Here's the
+  thing") or replies to an objection nobody made.
+- Rhythm follows meaning: three items only when there are three parts, no em dashes, one hedge at most.
+- No inflation: "is", not "serves as". No "robust", "seamless", "leverage", "crucial", "pivotal" or "delve". Name a
+  source, never "experts say". No "-ing" riders (", ensuring X").
+- At the edge of what you know, say what the source does not show. Do not guess past it.
 
 ## Format
 
