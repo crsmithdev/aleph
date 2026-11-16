@@ -23,7 +23,7 @@ import { dispatchAfterIssue } from "../transitions/filing.ts";
 import { refusal } from "../transitions/transitions.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { errText } from "../../../lib/errtext.ts";
-import { issueKey, PRIORITIES } from "../../../lib/naming.ts";
+import { detailOf, issueKey, PRIORITIES } from "../../../lib/naming.ts";
 
 /** Issues per run: a bad reply costs one batch. */
 export const BATCH = 10;
@@ -239,7 +239,7 @@ export async function review(b: Batch, now: number): Promise<Outcome> {
     const why = await applyOne(b, a);
     if (!why) {
       did.push(a);
-      logEvent({ subject: run.id, action: "changed", object: issueKey(a.id), detail: `${a.do}: ${a.do === "retitle" ? a.title : a.do === "reprioritize" ? a.priority : a.why}` });
+      logEvent({ subject: run.id, action: "changed", object: issueKey(a.id), detail: detailOf("changed", a.do, a.do === "retitle" ? a.title : a.do === "reprioritize" ? a.priority : a.why) });
     }
     (why ? out.refused : out.applied).push(why ? `${describe(a)}: refused: ${why}` : describe(a));
   }

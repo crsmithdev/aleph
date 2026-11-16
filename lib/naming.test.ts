@@ -57,6 +57,19 @@ describe("words", () => {
     for (const action of n.OLD_HOLDS) expect(() => n.event({ subject: "gate", action, object: "issue.3" })).toThrow(/action/);
     expect(n.OLD_HOLDS).toContain("looping");
   });
+  test("a detail word round-trips through detailOf, wordOf and factsOf, and a word outside its action's set throws", () => {
+    const cases: [string, string, string | undefined][] = [
+      ["held", "after", "issue.2985 issue.2993"], ["held", "file", "ui/views/issues.js: job.1372"], ["held", "red", undefined],
+      ["changed", "credit", "on: claude: API credit error"], ["changed", "retitle", "A title: with a colon"], ["started", "model", "default"],
+    ];
+    for (const [action, word, facts] of cases) {
+      const detail = n.detailOf(action, word, facts);
+      expect([n.wordOf({ detail }), n.factsOf({ detail })]).toEqual([word, facts ?? ""]);
+    }
+    expect(n.detailOf("changed", "pause", "on")).toBe("pause: on");
+    expect(() => n.detailOf("held", "retitle", "x")).toThrow(/detail word "retitle"/);
+    expect(() => n.detailOf("failed", "after")).toThrow(/action "failed"/);
+  });
   test("credit is a cause with a phrase", () => expect(n.because("credit")).toBe("out of credit"));
   test("every set is lower case with no separator marks", () => {
     const sets = [n.STATUSES, n.ACTIONS, n.ACTORS, n.ROLES, n.STAGES, n.LANES, n.SPEEDS];

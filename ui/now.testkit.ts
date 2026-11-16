@@ -1,5 +1,6 @@
 import { attend } from "./asks.ts";
 import { state } from "./fixtures/status-state.ts";
+import { heraldRows } from "./herald.ts";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 
@@ -26,3 +27,7 @@ export const row = (e: { at: string; by: string; subject: string; action: string
   const detail = hold ? [e.on?.[0], e.action === "busy" ? "holds" : "", e.file, e.note].filter(Boolean).join(" ") : e.note;
   return { time: e.at, subject: e.by, action: e.action, object: !hold && e.on?.[0] ? e.on[0] : e.subject, object_target: !hold && e.on?.[0] ? e.subject : null, ...(detail ? { detail } : {}), size: e.size ?? null, model: e.model ?? null, cost: e.cost ?? null, commit_sha: e.commit ?? null };
 };
+
+/** The Herald as /api/factory sends it for `events` (any order): its rows from ui/herald.ts, with the maps and the status history and chats in `extra`. */
+export const heraldOf = (events: any[], { history = [], chats = [], ...ctx }: any = {}) =>
+  ({ history, seq: 0, chats, rows: heraldRows([...events].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0)), { titles: {}, runs: {}, attempts: {}, reviewed: {}, ...ctx }) });

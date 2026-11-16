@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import { data, render } from "./status.ts";
 import { verdict } from "../lib/status-words.ts";
+import { heraldRows } from "../ui/herald.ts";
+
+const ctx = { titles: {}, runs: {}, attempts: {}, reviewed: {} };
 
 const plain = (lines: string[]) => lines.map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
 const LONG = "Make the status panel cut every line that is longer than the pane";
@@ -13,7 +16,7 @@ const state: any = {
   running: [{ name: "aleph-36", repo: "aleph", started: "2026-10-27T16:00:00Z", item: { id: 36, title: "Run now" } }],
   runningIssues: [], queued: [{ id: 9 }],
   usage: { now: { seven_day: 40, seven_day_resets_at: "2026-10-30T17:00:00Z" } },
-  herald: { events: EVENTS, titles: { "aleph-149": LONG } },
+  herald: { rows: heraldRows(EVENTS as any, { ...ctx, titles: { "aleph-149": LONG } }) },
 };
 const flow: any = {
   figures: { lost: 0.38, hours: 6, leadP50: 1570, leadP90: 16560, landed: 7, firstPass: 0.91 },
@@ -23,7 +26,7 @@ const flow: any = {
   phases: { queue: { count: 2, p90: 90 } },
   active: [{ intake: 1, queue: 2, running: 3, landed: 4 }],
 };
-const first = (lines: string[]) => lines.findIndex((l) => /^\d\d:\d\d aleph-\d+ landed/.test(l));
+const first = (lines: string[]) => lines.findIndex((l) => /^\d\d:\d\d landed aleph-\d+/.test(l));
 
 test("no line is wider than the pane, and a long title is cut with an ellipsis", () => {
   const lines = plain(render(state, flow, { width: 40, height: 60 }));
@@ -62,18 +65,18 @@ test("the height fills the pane, and the cut drops the oldest events", () => {
   expect(shown(tall).length).toBeGreaterThan(shown(short).length);
   expect(shown(short).length).toBeGreaterThan(0);
   expect(shown(short)).toEqual(shown(tall).slice(0, shown(short).length));
-  expect(shown(short)[0]).toStartWith("18:10 aleph-149 landed");
+  expect(shown(short)[0]).toStartWith("18:10 landed aleph-149");
 });
 
 test("the data's Herald is one row per issue with its older events folded, and drops a routine run that changed nothing", () => {
   const ev = (time: string, subject: string, action: string, object: string, extra = {}) => ({ time: `2026-10-27T${time}:00Z`, subject, action, object, object_target: null, ...extra });
-  const s = { ...state, herald: { titles: { "aleph-7": "Fold the herald" }, runs: { "job.2": "judge", "job.3": "housekeeper" }, events: [
+  const s = { ...state, herald: { rows: heraldRows([
     ev("10:00", "rule", "filed", "aleph-7"), ev("10:05", "gate", "landed", "aleph-7"),
     ev("10:01", "gate", "running", "job.2"), ev("10:02", "gate", "done", "job.2"),
     ev("10:03", "gate", "running", "job.3"), ev("10:04", "job.3", "changed", "aleph-8", { detail: "retitle: New name" }), ev("10:06", "gate", "done", "job.3"),
-  ] } };
+  ] as any, { ...ctx, titles: { "aleph-7": "Fold the herald" }, runs: { "job.2": "judge", "job.3": "housekeeper" } }) } };
   const rows = data(s, flow).herald;
-  expect(rows.map((r: any) => [r.id, r.word, r.title])).toEqual([["@housekeeper", "ended", "1 change"], ["aleph-7", "landed", "Fold the herald"]]);
+  expect(rows.map((r: any) => [r.id, r.word, r.title])).toEqual([["j-00003", "ended", "retitled 1"], ["aleph-7", "landed", "Fold the herald"]]);
   expect(rows[0].fold.map((f: any) => [f.label, f.text])).toEqual([["retitled", "aleph-8 New name"]]);
   expect(rows[1].fold.map((f: any) => f.label)).toEqual(["filed"]);
 });

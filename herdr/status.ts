@@ -7,7 +7,8 @@ import { figures } from "../ui/flow/baseline.ts";
 import { stateBody } from "../ui/api/now.ts";
 import { currentFit } from "../ui/usage.ts";
 import { verdict } from "../lib/status-words.ts";
-import { clip, NAMES, parseId, parseKey, sayText, shortText, shownId, targetOf } from "../lib/naming.ts";
+import { clip, NAMES, shortText, shownId } from "../lib/naming.ts";
+import { plain, type Row } from "../ui/herald.ts";
 // @ts-ignore plain JS, shared with the page
 import { clock, count, dur, hours, mean, pct, when } from "../ui/views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
@@ -60,50 +61,11 @@ function pipeline(d: any) {
   });
 }
 
-/** The holds: an issue's state while it waits, not an event, so the Herald leaves them out. */
-const WAITS = ["held", "waiting", "paused", "red", "after", "full", "gpu", "busy", "parent", "credit"];
-/** The events the Herald keeps, as on the page. */
-const HERALD_KEEP = 50;
-const isIssue = (t: string) => Boolean(parseId(t) || parseKey(t)?.kind === "issue");
-const isJob = (id: string) => /^job\.\d+$/.test(id ?? "") || (id ?? "").includes("#");
-/** What happened, never who: a done closes an issue or ends a routine's run. */
-const stateWord = (e: any) => (e.action === "done" ? (isIssue(targetOf(e)) ? "closed" : "ended") : e.action === "running" ? "started" : e.action);
-/** The past word of each verb a housekeeper change's detail starts with (`retitle: New title`). */
-const VERBS: Record<string, string> = { close: "closed", drop: "dropped", retitle: "retitled", reprioritize: "reprioritized", note: "commented", unpark: "unparked" };
-const FAILED = ["failed", "returned", "dropped"];
-const at = (e: any) => clock(e.time) || when(e.time);
+const at = (t: string) => clock(t) || when(t);
 
-/**
- * The Herald's rows, newest first, grouped as on the page but simpler: one row per issue with its older events in the fold,
- * one row per routine run that changed something, failed or still runs (its changes in the fold), and one per other subject.
- * The page also splits an issue's row by attempt; this does not.
- */
-function heraldRows(s: any) {
-  const h = s.herald ?? {}, titles = h.titles ?? {}, runs = h.runs ?? {};
-  const events = [...(h.events ?? [])].sort((a: any, b: any) => (a.time < b.time ? 1 : -1)).slice(0, HERALD_KEEP).filter((e: any) => !WAITS.includes(e.action)).reverse();
-  const routines = new Set(events.filter((e: any) => !isIssue(targetOf(e)) && isJob(e.object)).map((e: any) => e.object));
-  const groups = new Map<string, any[]>();
-  for (const e of events) {
-    const t = targetOf(e), k = e.action === "changed" && routines.has(e.subject) ? e.subject : isIssue(t) ? t : isJob(e.object) ? e.object : t;
-    groups.set(k, [e, ...(groups.get(k) ?? [])]);
-  }
-  const rows = [...groups].flatMap(([k, evs]) => {
-    if (routines.has(k)) {
-      const head = evs.find((e) => e.action !== "changed") ?? evs[0], changes = evs.filter((e) => e.action === "changed").reverse();
-      if (!changes.length && !FAILED.includes(head.action) && !evs.every((e) => e.action === "running")) return [];
-      const fold = changes.map((c) => {
-        const m = /^(\w+): ([\s\S]*)$/.exec(c.detail ?? ""), verb = m && Object.hasOwn(VERBS, m[1]) ? VERBS[m[1]] : stateWord(c);
-        return { at: at(c), label: verb, text: `${shownId(targetOf(c), c.project)} ${m ? m[2] : c.detail ?? ""}`.trim() };
-      });
-      const title = changes.length ? `${changes.length} ${changes.length === 1 ? "change" : "changes"}` : sayText(head);
-      return [{ key: k, time: head.time, at: at(head), word: stateWord(head), id: runs[k] ? `@${runs[k]}` : shownId(k), title, fold }];
-    }
-    const head = evs.find((e) => e.action !== "stalled") ?? evs[0], t = targetOf(head);
-    const fold = evs.filter((e) => e !== head).map((e) => ({ at: at(e), label: runs[e.object] ?? stateWord(e), text: sayText(e) }));
-    return [{ key: k, time: head.time, at: at(head), word: stateWord(head), id: isIssue(t) ? shownId(t, head.project) : shownId(k), title: titles[t] ?? sayText(head), fold }];
-  });
-  return rows.sort((a, b) => (a.time < b.time ? 1 : -1)).map(({ time: _, ...r }) => r);
-}
+/** The Herald's rows as the page draws them, from the server's rows (ui/herald.ts): the time, the chip's word, the ID, the text, and the fold's lines. */
+const heraldRows = (s: any) => (s.herald?.rows ?? []).map((r: Row) => ({ key: r.key, at: at(r.at), word: r.word, id: plain(r.id), title: plain(r.text),
+  fold: r.lines.map((l) => ({ at: at(l.at), label: l.label, text: plain(l.text) })) }));
 
 /** The Status page as data for the Herdr desktop app's mod: the status sentence, the cards and the Herald. */
 export function data(s: any, d: any) {
@@ -155,9 +117,7 @@ export function render(s: any, d: any, { width, height }: { width: number; heigh
     const run = j.run ?? { kind: "build", started: j.started };
     line(`${clock(run.started ?? j.started) || when(run.started ?? j.started)} ${run.kind === "build" ? "implement" : run.kind} ${shownId(j.id ?? j.name)} ${j.item?.title || j.name}`);
   }
-  // The holds are an issue's state, not events: the page's feed leaves them out.
-  const events = (s.herald?.events ?? []).filter((e: any) => !WAITS.includes(e.action)).sort((a: any, b: any) => (a.time < b.time ? 1 : a.time > b.time ? -1 : 0));
-  for (const e of events) line(`${clock(e.time) || when(e.time)} ${sayText(e)} ${s.herald?.titles?.[targetOf(e)] ?? ""}`);
+  for (const r of heraldRows(s)) line(`${r.at} ${r.word} ${r.id} ${r.title}`);
   // The newest events come first, so the cut at the pane's height drops the oldest.
   return out.slice(0, height);
 }

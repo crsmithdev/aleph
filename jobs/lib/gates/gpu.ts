@@ -2,6 +2,7 @@
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { allRuns, isBuild, loadRegistry, type Entry, type Run } from "../records/ledger.ts";
+import { detailOf } from "../../../lib/naming.ts";
 import { lock } from "../infra/locks.ts";
 import { isRunning } from "../infra/process.ts";
 import { LOCAL_CAP } from "../infra/settings.ts";
@@ -13,7 +14,7 @@ export const DAY = 24 * 3600_000;
 export function logCap(full: string | null): void {
   if ((full !== null) === getJson("state", "cap-on", false)) return;
   putJson("state", "cap-on", full !== null);
-  logEvent({ subject: "gate", action: "changed", object: "settings", detail: full === null ? "cap: off" : `cap: on: ${full}` });
+  logEvent({ subject: "gate", action: "changed", object: "settings", detail: detailOf("changed", "cap", full === null ? "off" : `on: ${full}`) });
 }
 
 /** The registry's factory repos: those whose runs are sandboxed. */

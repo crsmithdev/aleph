@@ -11,7 +11,7 @@
  * The `always` setting maps a key to `{ action, at }`. A key is a reason (all projects) or a reason, a colon and a project key (one project).
  */
 import { logEvent, logSetting } from "../../../lib/layout.ts";
-import { BECAUSE, because, key, parseKey, word, type AskAction, type Event } from "../../../lib/naming.ts";
+import { BECAUSE, because, detailOf, key, parseKey, word, type AskAction, type Event } from "../../../lib/naming.ts";
 import { alwaysRow, INTAKE_TRIES, RUN_CAP, setAlwaysRow } from "../infra/settings.ts";
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
@@ -222,7 +222,7 @@ export function grant(reason: string, action: string): string | null {
   if (!r) return `unknown reason ${reason}; known: ${Object.keys(ASK_REASONS).join(", ")}`;
   if (!allows(reason, r, action)) return `${reason} has no action ${action}; actions: ${r.actions.join(", ")}`;
   write({ ...readAlways(), [reason]: { action, at: new Date().toISOString() } });
-  logSetting(`Always: ${reason} is ${action}`);
+  logSetting(detailOf("changed", "Always", `${reason} is ${action}`));
   return null;
 }
 
@@ -231,7 +231,7 @@ export function revoke(reason: string): void {
   if (!(reason in s)) return;
   delete s[reason];
   write(s);
-  logSetting(`Always: ${reason} is Ask me`);
+  logSetting(detailOf("changed", "Always", `${reason} is Ask me`));
 }
 
 /** The sub of an event about an Ask reason: the reason, its new word or its first word, when one of them has a phrase in BECAUSE. `run-cap` is `capped`, `intake-failed` is `intake`. */

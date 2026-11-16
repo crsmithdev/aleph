@@ -146,6 +146,24 @@ export function event({ time, subject, action, object, detail, size }: Omit<Even
   return { time: time ?? new Date().toISOString(), subject, action, object, ...(detail ? { detail } : {}), ...(size ? { size } : {}) };
 }
 
+/** The past word of each housekeeper edit, which a `changed` event's detail starts with (`retitle: New title`). */
+export const EDITS = { close: "closed", drop: "dropped", retitle: "retitled", reprioritize: "reprioritized", note: "commented", unpark: "unparked" } as const;
+/** The words a detail can start with, by action: `<word>: <facts>`. A setting is a pause, a credit hold, the live cap, an Always rule or a model entry. */
+const WORDS: Record<string, readonly string[]> = {
+  held: ["after", "job", "red", "file", "credit", "paused", "gpu", "full", "waiting", "done"],
+  changed: ["pause", "credit", "cap", "Always", "small", "medium", "large", "review", "intake", "director", "monitor", "lens", "housekeeper", "maintainer", "title", "judge", ...Object.keys(EDITS)],
+  started: ["model"],
+};
+/** The detail `<word>: <facts>` of an event of `action`, or the bare word with no facts; throws on a word outside its set. The one writer of a detail word: a later `word` column changes only this and `wordOf`. */
+export function detailOf(action: string, word: string, facts?: string | number): string {
+  if (!WORDS[action]?.includes(word)) throw new Error(`naming: detail word "${word}" is not in the set of action "${action}"`);
+  return facts ? `${word}: ${facts}` : word;
+}
+/** The word of a detail: its start up to the first colon and space, or all of it with none. */
+export const wordOf = (e: Pick<Event, "detail">): string => (e.detail ?? "").split(": ")[0];
+/** The facts of a detail after its word: "" for a bare word. */
+export const factsOf = (e: Pick<Event, "detail">): string => (e.detail ?? "").split(": ").slice(1).join(": ");
+
 /** An ID as the page shows it: a key `j-06802`, an old issue ID `a1421`; anything else unchanged. */
 export const shownId = (s: unknown, repo?: string | null): string => (KEY.test(String(s)) ? shownKey(s, repo ? codes[repo] : undefined) : shortId(s));
 /** The detail of an event as text, each issue ID in its short form. */
@@ -201,7 +219,7 @@ export const targetOf = (e: Partial<EventRow>): string => e.object_target ?? e.o
 export function say(e: Partial<EventRow>): Said[] {
   const tpl = SAY[String(e.action)] ?? `{object} ${e.action}`, inline = tpl.includes("{detail}");
   // A held event's detail is the hold word, a colon and its facts: the sentence reads `held: after issue.2985`.
-  const detail = e.action === "held" ? (e.detail ?? "").replace(": ", " ") : e.detail ?? "";
+  const detail = e.action === "held" ? [wordOf(e), factsOf(e)].filter(Boolean).join(" ") : e.detail ?? "";
   const fill: Record<string, Said[]> = { object: [{ id: e.object ?? "" }], by: [whoOf(e.subject ?? "", e.subject_role)], detail: linked(detail) };
   const out = tpl.split(/(\{\w+\})/).filter(Boolean).flatMap((p) => fill[p.slice(1, -1)] ?? [p]);
   if (e.action === "returned" && (e.subject_role === "review" || e.subject === "reviewer")) out.push(" by review");

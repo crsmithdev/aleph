@@ -855,7 +855,8 @@ A feed row shows one event in a feed on one line. The newest event is first.
 
 | Helper | Reference |
 |---|---|
-| `feedRow()` draws every row of the Herald: the time, then the body. `eventRow(ev, titles)` fills the body of an event; `runNow(s)` draws the Running line; `briefRow()` draws a line of a fold | `ui/views/now.js` |
+| `feedRow()` draws every row of the Herald: the time, then the body. `heraldRow(row)` draws a row the server built (`ui/herald.ts`) and its fold, `eventRow(row)` its one line and `briefRow(line)` a line of the fold | `ui/views/lib/feed.js` |
+| `runNow(s)` draws the Running line | `ui/views/now.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1532,7 +1533,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/views/lib/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Health in `ui/views/memory.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/lib/feed.js` | follow-up |
-| Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`) and the feed's rows (`div.event-row`, `div.event-brief`) | `renderPipeline()`, `feedRow()`, `briefRow()` in `ui/views/now.js` | follow-up |
+| Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`) and the feed's rows (`div.event-row`, `div.event-brief`) | `renderPipeline()` in `ui/views/now.js`; `feedRow()`, `briefRow()` in `ui/views/lib/feed.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |

@@ -9,7 +9,7 @@
 import { afterOf, isRedMain } from "../../../issues/lib/store.ts";
 import { RUN_CAP } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import type { Event } from "../../../lib/naming.ts";
+import { detailOf, type Event } from "../../../lib/naming.ts";
 import { POLICY } from "../records/outcome.ts";
 
 /** Runs of one issue in a row that may end with no commit before the dispatch stops starting it. */
@@ -25,7 +25,7 @@ export type Gate = (typeof GATES)[number] | "parked" | "parent" | "starting";
 export type Hold = Pick<Event, "action"> & Partial<Pick<Event, "detail">>;
 
 /** The `held` event of a hold word and its facts. */
-export const heldEvent = (word: string, facts?: string): Hold => ({ action: "held", detail: facts ? `${word}: ${facts}` : word });
+export const heldEvent = (word: string, facts?: string): Hold => ({ action: "held", detail: detailOf("held", word, facts) });
 
 /** A gate that binds: `why` is the line in the dispatch's skipped list; `text` is the line Chris reads; `ev` is the log event. */
 export interface Bound { why: string; text: string; ev?: Hold }

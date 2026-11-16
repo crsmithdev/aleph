@@ -5,7 +5,7 @@ import * as view from "./now.js";
 import { error } from "./lib/html.js";
 import { setCodes } from "../../lib/naming.ts";
 import { job, state } from "../fixtures/status-state.ts";
-import { full, row, section, withAttn } from "../now.testkit.ts";
+import { full, heraldOf, row, section, withAttn } from "../now.testkit.ts";
 // @ts-ignore plain JS, shared with the page
 import { kept } from "./lib/address.js";
 
@@ -179,7 +179,7 @@ test("the Factory toggle off hides the rows of events with no issue target, and 
   (globalThis as any).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
   try {
     const events = [row({ at: "2026-11-15T13:00:00Z", by: "gate", subject: "aleph-5", action: "landed", on: ["aleph-5#1"] }), row({ at: "2026-11-15T13:05:00Z", by: "gate", subject: "housekeeper", action: "running", on: ["job.57"] })];
-    const s = { ...state, now: "2026-11-15T14:00:00Z", herald: { history: [], events, titles: {}, chats: [], runs: {} } };
+    const s = { ...state, now: "2026-11-15T14:00:00Z", herald: heraldOf(events) };
     view.view.render(s, {}, new URLSearchParams());
     const both = view.renderHerald(s);
     expect(both).toContain('href="#/issues/aleph/5"');

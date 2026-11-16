@@ -4,7 +4,7 @@ import { setCodes } from "../../lib/naming.ts";
 import * as view from "./now.js";
 import { attend } from "../asks.ts";
 import { held, job, state } from "../fixtures/status-state.ts";
-import { asksOf, issue, withAttn, withFactory } from "../now.testkit.ts";
+import { asksOf, heraldOf, issue, withAttn, withFactory } from "../now.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { pageHead } from "./lib/html.js";
 import { labelOf, verdict } from "../../lib/status-words.ts";
@@ -214,7 +214,7 @@ const fresh = () => import(`./now.js?status=${++copies}`);
 const at = (m: number) => `2026-10-27T17:${String(m).padStart(2, "0")}:00Z`;
 const entry = (m: number, tone: string, text: string) => ({ at: at(m), tone, label: tone, text });
 /** The state at minute `m` with a live tick, so its own status is the fine one, and the server's `history`. */
-const at_ = (m: number, history: object[], paused = false) => ({ ...calmState, now: at(m), factory: { ...calmState.factory, nextTick: "2026-10-27T18:59:00Z", paused }, herald: { history, events: [], titles: {}, chats: [], runs: {} } });
+const at_ = (m: number, history: object[], paused = false) => ({ ...calmState, now: at(m), factory: { ...calmState.factory, nextTick: "2026-10-27T18:59:00Z", paused }, herald: heraldOf([], { history }) });
 const statusRows = (h: string) => [...h.matchAll(/<div data-key="status[^"]*" id="[^"]*" class="event-row (?:fine|warning|alert)[^"]*"><span class="event-time">[^<]*<\/span><span class="event-body[^"]*">(.*?)<\/span><\/div>/g)].map((m) => m[1].replace(/<[^>]*>/g, ""));
 
 test("the first render of a page load draws no status row, whatever its history holds", async () => {

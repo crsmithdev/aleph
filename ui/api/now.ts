@@ -2,25 +2,38 @@
 import type { Routes } from "../server.ts";
 import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import { eventIn, factoryWide, inProject, known, repoIn, scopeOf } from "./scope.ts";
-import { state, type State } from "../state.ts";
+import { heraldContext, heraldEvents, state, type State } from "../state.ts";
+import { heraldRows } from "../herald.ts";
+import { reader } from "../../issues/lib/store.ts";
+import { allRuns } from "../../jobs/lib/records/ledger.ts";
+import type { EventRow } from "../../lib/naming.ts";
 import { verdict } from "../../lib/status-words.ts";
 import { annotate, currentFit, summaryOff } from "../usage.ts";
+
+/** `events` narrowed to `project`'s: none of a factory-wide job. */
+const mineOf = (events: EventRow[], project: string | null) => (project ? events.filter((e) => !factoryWide(e) && eventIn(e.object, project, e.project)) : events);
 
 /** The state with only `project`'s jobs, issues, asks and Herald events (none of a factory-wide job, no chat); the factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
   if (!project) return s;
   const mine = <T extends { repo?: string }>(a: T[]) => a.filter((x) => repoIn(x.repo, project));
   const ours = <T extends { id: string }>(a: T[]) => a.filter((x) => inProject(x.id, project));
-  const herald = s.herald && { ...s.herald, events: s.herald.events.filter((e) => !factoryWide(e) && eventIn(e.object, project, e.project)), chats: [] };
+  const herald = s.herald && { ...s.herald, events: mineOf(s.herald.events, project), chats: [] };
   return { ...s, stuck: mine(s.stuck), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
 }
 
-/** The `/api/factory` body for one project (null for all), with its asks. */
+/** The Herald's rows for one project (null for all) as of now, with the `seq` of the newest event: what the `ev` stream sends when an event is added. */
+export function heraldNow(project: string | null) {
+  const events = heraldEvents(Date.now()), mine = mineOf(events, project);
+  return { seq: events.at(-1)?.seq ?? 0, rows: heraldRows(mine, heraldContext(mine, allRuns(), reader())) };
+}
+
+/** The `/api/factory` body for one project (null for all), with its asks and the Herald as rows. */
 export async function stateBody(project: string | null) {
-  const { doneStamps, ...s } = forProject(state(), project);
+  const { doneStamps, herald, ...s } = forProject(state(), project);
   const fit = await currentFit();
   annotate([...s.stuck, ...s.running], fit);
-  return { ...s, usage: await summaryOff(fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
+  return { ...s, herald: herald && { history: herald.history, seq: herald.seq, rows: heraldRows(herald.events, herald), chats: herald.chats }, usage: await summaryOff(fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
 }
 
 export const routes: Routes = {

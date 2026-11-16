@@ -1,5 +1,6 @@
 /** The factory's pause: the one predicate that asks it, and the command that sets it. */
 import { logSetting } from "../../../lib/layout.ts";
+import { detailOf } from "../../../lib/naming.ts";
 import { pausedAt, setPausedAt } from "../infra/settings.ts";
 
 export const paused = () => pausedAt() !== null;
@@ -8,5 +9,5 @@ export const paused = () => pausedAt() !== null;
 export function setPaused(on: boolean): void {
   const was = paused();
   setPausedAt(on ? new Date().toISOString() : null);
-  if (was !== on) logSetting(`pause: ${on ? "on" : "off"}`);
+  if (was !== on) logSetting(detailOf("changed", "pause", on ? "on" : "off"));
 }

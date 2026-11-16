@@ -76,7 +76,7 @@ test("a run's write to its job row sends a change naming the kept key, and the r
 test("an event written by another process sends its change within 3 s", async () => {
   const code = `import { logEvent } from "./lib/layout.ts"; logEvent({ subject: "human", action: "changed", object: "settings", detail: "x" });`;
   const text = await changeAfter(() => { Bun.spawn(["bun", "-e", code], { cwd: join(import.meta.dir, ".."), env: process.env }); });
-  expect(text).toMatch(/event: ev\ndata: .*"object":"settings".*\n\nevent: change\ndata: \{"keys":\["\/api\/factory"\]\}/s);
+  expect(text).toMatch(/event: ev\ndata: .*"key":"issue:settings".*\n\nevent: change\ndata: \{"keys":\["\/api\/factory"\]\}/s);
 }, 3_000);
 
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {
@@ -84,32 +84,37 @@ test("a change in the factory folder or to the store's origin/main sends a chang
   expect(await changeAfter(() => writeFileSync(join(ref, "main"), "abc"))).not.toBeNull();
 });
 
-test("a run that starts sends its event as an ev, before the change, with the event as JSON", async () => {
+/** The pages the `ev` events of `text` link: each row's leading ID. */
+const linked = (text: string) => [...text.matchAll(/event: ev\ndata: (.*)\n/g)].flatMap((m) => JSON.parse(m[1]).rows.flatMap((r: any) => [...r.id, ...r.lines.flatMap((l: any) => l.text)].flatMap((p: any) => (p.to ? [p.to] : []))));
+
+test("a run that starts sends the Herald's rows as an ev, before the change, with the new event's row among them", async () => {
   let id = "";
   const text = (await changeAfter(() => { id = seed(run("p", 3)).id; }))!;
   const ev = /event: ev\ndata: (.*)\n/.exec(text);
   expect(ev).not.toBeNull();
-  expect(JSON.parse(ev![1])).toMatchObject({ subject: "gate", object: id, action: "running" });
+  const { seq, rows } = JSON.parse(ev![1]);
+  expect(seq).toBeGreaterThan(0);
+  expect(rows.find((r: any) => r.id[0]?.to === "#/issues/p/3")).toMatchObject({ by: "gate", word: "started", kind: "work" });
+  expect(JSON.stringify(rows)).toContain(`#/jobs/${id}`);
   expect(text.indexOf("event: ev")).toBeLessThan(text.indexOf("event: change"));
 });
 
 test("a stream with a project sends only the ev events of that project, and a change to all", async () => {
   const ids: Record<string, string> = {};
   const text = (await changeAfter(() => { for (const repo of ["q", "p-x", "p"]) ids[repo] = seed(run(repo, 9)).id; }, "?project=p"))!;
-  const subjects = [...text.matchAll(/event: ev\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]).object);
-  expect(subjects).toContain(ids.p);
-  expect(subjects).not.toContain(ids.q);
-  expect(subjects).not.toContain(ids["p-x"]);
+  const to = linked(text);
+  expect(to).toContain(`#/jobs/${ids.p}`);
+  expect(to).not.toContain(`#/jobs/${ids.q}`);
+  expect(to).not.toContain(`#/jobs/${ids["p-x"]}`);
 }, 10_000);
 
-test("a stream with a project sends an ev for an event on an issue of that project, with the project, and none for another's", async () => {
+test("a stream with a project sends an ev with the row of an event on an issue of that project, and none for another's", async () => {
   // The test above leaves a bad ref in the items repo.
   writeFileSync(join(ref, "main"), `${main}\n`);
   // Logged here, not by a process the test starts: the ref's change above comes 500 ms on, and under load a new bun can start later.
   const text = (await changeAfter(() => { for (const n of [1, 2]) logEvent({ subject: "human", action: "changed", object: `issue.${n}` }); }, "?project=p"))!;
-  const rows = [...text.matchAll(/event: ev\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]));
-  expect(rows.map((r) => r.object)).toEqual(["issue.1"]);
-  expect(rows[0].project).toBe("p");
+  expect(linked(text)).toContain("#/issues/p/1");
+  expect(linked(text)).not.toContain("#/issues/q/2");
 }, 10_000);
 
 // The watchers pass names relative to the folder, as the tests above show; these files must not count.

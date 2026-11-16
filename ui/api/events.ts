@@ -1,14 +1,15 @@
 /**
  * `GET /api/events`: a server-sent stream. It sends `change` with `{ keys }` when the updater (ui/updater.ts) has
  * built those keys again and their answers changed; a page then loads again the keys it reads. It sends an `ev`
- * event for each event added to the event table, with the row as JSON, at once, and a `ping` every 25 s, so that the
- * page can tell a quiet stream from a dead one. With `?project=<key>` the `ev` events are only those of an issue or
- * job of that project and those whose subject names no project (a routine), and none for a key that is not in the
- * registry; `change` and `ping` go to every client.
+ * event for the events added to the event table, with the Herald's rows as JSON, at once, and a `ping` every 25 s, so that the
+ * page can tell a quiet stream from a dead one. The `ev` data is `{ seq, rows }`: all of the Herald's rows as of the newest event, not
+ * the rows of the new event only, so a group the event changed or ended is whole and a row that left is gone. With `?project=<key>` the
+ * `ev` events follow only the events of an issue or job of that project and those whose subject names no project (a routine), and
+ * none for a key that is not in the registry; `change` and `ping` go to every client.
  */
 import { eventsAfter, lastSeq } from "../../lib/layout.ts";
-import type { EventRow } from "../../lib/naming.ts";
 import { eventIn, projectOf, withProjects } from "./scope.ts";
+import { heraldNow } from "./now.ts";
 import type { Routes } from "../server.ts";
 import { eventTails, updater } from "../updater.ts";
 
@@ -22,11 +23,8 @@ const event = (name: string, data: string) => encoder.encode(`event: ${name}\nda
 const clients = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
 let ping: Timer | undefined;
 
-function send(bytes: Uint8Array, row?: EventRow): void {
-  for (const [c, project] of clients) {
-    if (row && !eventIn(row.object, project, row.project)) continue;
-    try { c.enqueue(bytes); } catch { clients.delete(c); }
-  }
+function send(bytes: Uint8Array): void {
+  for (const c of clients.keys()) try { c.enqueue(bytes); } catch { clients.delete(c); }
 }
 
 updater.onChange((keys) => send(event("change", JSON.stringify({ keys }))));
@@ -34,12 +32,17 @@ updater.onChange((keys) => send(event("change", JSON.stringify({ keys }))));
 /** The `seq` of the last event the stream sent. */
 let sent = 0;
 
-/** Send the events added since the last send, each as an `ev` event. */
+/** Send the Herald's rows to each client whose project has an event added since the last send; the rows of a project are built once. */
 function tail(): void {
   if (!clients.size) return;
-  for (const row of withProjects(eventsAfter(sent))) {
-    sent = row.seq!;
-    send(encoder.encode(`event: ev\ndata: ${JSON.stringify(row)}\n\n`), row);
+  const added = withProjects(eventsAfter(sent));
+  if (!added.length) return;
+  sent = added.at(-1)!.seq!;
+  const built = new Map<string, Uint8Array>();
+  for (const [c, project] of clients) {
+    if (!added.some((row) => eventIn(row.object, project, row.project))) continue;
+    if (!built.has(project)) built.set(project, event("ev", JSON.stringify(heraldNow(project || null))));
+    try { c.enqueue(built.get(project)!); } catch { clients.delete(c); }
   }
 }
 

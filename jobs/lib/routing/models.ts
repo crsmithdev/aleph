@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { lastFactor } from "../../../lib/usage.ts";
 import { modelsRow, setModelsRow } from "../infra/settings.ts";
 import { logSetting } from "../../../lib/layout.ts";
+import { detailOf } from "../../../lib/naming.ts";
 import { openRouterKey } from "../../../lib/env.ts";
 import { MODELS, type Via } from "../../../lib/models.ts";
 import { NO_SKILLS } from "../roles/role-skill.ts";
@@ -169,6 +170,6 @@ export function setModel(name: string, change: Partial<Setting>): string | null 
   const m = readModels();
   if (change.enabled === false && DISABLES.every((s) => s === t || !m[s].enabled)) return "one size stays on";
   write({ ...m, [t]: { ...m[t], ...change } });
-  logSetting(`${t}: ${Object.entries(change).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+  logSetting(detailOf("changed", t, Object.entries(change).map(([k, v]) => `${k} ${v}`).join(", ")));
   return null;
 }

@@ -1,6 +1,6 @@
 /** Why an issue waits: its hold records in the log, and the backend the factory holds after the API credit error. */
 import { heldEvent, type Bound, type Gate, type Hold } from "./issue-decision.ts";
-import { event, type Event, OLD_HOLDS, parseKey } from "../../../lib/naming.ts";
+import { detailOf, event, type Event, OLD_HOLDS, parseKey, wordOf } from "../../../lib/naming.ts";
 import { eventsOf, logEvent, readEvents } from "../../../lib/layout.ts";
 import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { tell } from "../records/ledger.ts";
@@ -24,7 +24,7 @@ function holdOf(e: Event): HoldRecord | null {
   if (parseKey(e.object)?.kind !== "issue") return null;
   if (e.subject === "rule" && e.action === "started") return { at: e.time, name: e.object, kind: "started", text: e.detail ?? "" };
   if (e.subject !== "gate" || !HOLD_ACTIONS.includes(e.action)) return null;
-  return { at: e.time, name: e.object, kind: e.action === "held" ? (e.detail ?? "").split(":")[0] : e.action, text: e.detail ?? "", event: e };
+  return { at: e.time, name: e.object, kind: e.action === "held" ? wordOf(e) : e.action, text: e.detail ?? "", event: e };
 }
 
 /** Every hold record of every issue, oldest first. */
@@ -89,7 +89,7 @@ export function holdGoal(name: string): void {
 export async function holdBackend(via: Via, why: string): Promise<void> {
   if (backendHold()?.via === via) return;
   putJson("state", "backend-hold", { via, why, since: new Date().toISOString() });
-  logEvent({ subject: "gate", action: "changed", object: "settings", detail: `credit: on: ${via}: ${why}` });
+  logEvent({ subject: "gate", action: "changed", object: "settings", detail: detailOf("changed", "credit", `on: ${via}: ${why}`) });
   await tell(`the factory holds ${BACKENDS[via]}: ${why}`);
 }
 
@@ -99,6 +99,6 @@ export async function probeHold(up: (via: Via) => Promise<boolean> = probeBacken
   if (!h || !(await up(h.via))) return null;
   putJson("state", "backend-hold", null);
   const line = `${BACKENDS[h.via]} answers again: the hold is off`;
-  logEvent({ subject: "gate", action: "changed", object: "settings", detail: "credit: off" });
+  logEvent({ subject: "gate", action: "changed", object: "settings", detail: detailOf("changed", "credit", "off") });
   return line;
 }

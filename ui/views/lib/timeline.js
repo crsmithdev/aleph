@@ -3,7 +3,7 @@
 // Plain JS with no DOM, so the pages and the tests both import it.
 import { dur, money, shortModel, when } from "./format.js";
 import { clamp, codeText, legendHtml, esc, sectionHead, tag, tone } from "./html.js";
-import { contentText } from "../../../lib/naming.ts";
+import { contentText, wordOf } from "../../../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -102,7 +102,7 @@ export function waitEvent(w, holds = []) {
   const h = topHold(w, Array.isArray(holds) ? holds : []); // `waits.map(waitEvent)` passes an index
   const e = h?.event ?? {};
   const text = [contentText(e), dur((w.end - w.start) / 1000), h?.text].filter(Boolean).join(" · ");
-  const state = e.action === "held" ? (e.detail ?? "").split(":")[0] : e.action ?? h?.kind ?? "waiting";
+  const state = e.action === "held" ? wordOf(e) : e.action ?? h?.kind ?? "waiting";
   return { at: w.start, tag: state, tone: tone(state), html: esc(text) };
 }
 

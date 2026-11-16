@@ -3,11 +3,11 @@
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { keep, kept, scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { clock, dur, count, hours, mean, money, pct, plural, shortModel, when } from "./lib/format.js";
+import { dur, count, hours, mean, pct, plural, shortModel, when } from "./lib/format.js";
 import { actButton, fold, recordState, restoreState, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
-import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref, targetOf, whoOf } from "../../lib/naming.ts";
+import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
-import { detail, eventRow, feedRow, isIssue, isRouting, jobOf, parts, routeText, stateWord } from "./lib/feed.js";
+import { feedRow, heraldRow } from "./lib/feed.js";
 import { share, flowOf, statusCards, usable } from "./lib/flow-parts.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./lib/ask-cards.js";
 import { verdict } from "../../lib/status-words.ts";
@@ -35,18 +35,17 @@ export const view = {
     };
     if (usable(s.flow)) root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow);
   },
-  // An event from the stream goes into the Herald at once; the reload that follows draws it from the state.
-  event: (root, ev) => {
-    page.streamed.push(ev);
-    if (page.streamed.length > HERALD_KEEP) page.streamed.shift();
+  // The stream sends the Herald's rows when an event is added; the page draws them at once, until a state with a newer or equal `seq` replaces them.
+  event: (root, live) => {
+    page.live = live;
     redrawHerald(root);
   },
   swap: (root) => heraldMotion(root),
 };
 
 let lastState = null;
-/** What the Herald keeps between draws: the shell's out-of-date verdict, the events the stream sent since the page loaded (oldest first), and the text and time of the first render of the page load, which no status row repeats or precedes. `renderHerald` takes it as a parameter. */
-const page = { stale: false, streamed: [], loaded: null };
+/** What the Herald keeps between draws: the shell's out-of-date verdict, the last rows the stream sent (`{ seq, rows }`), and the text and time of the first render of the page load, which no status row repeats or precedes. `renderHerald` takes it as a parameter. */
+const page = { stale: false, live: null, loaded: null };
 
 /** The Herald drawn again from the last state, with its folds and motion kept. */
 function redrawHerald(root) {
@@ -136,121 +135,11 @@ const rowId = (key) => esc(`h-${key.replace(/\s+/g, "-")}`);
 /** A short hash of a text, to key a row by its text. */
 const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString(36);
 
-/** An event row as the rows below read it: its time in `at`, its subject in `by`, the issue or routine it is about in `subject`, its job in `on`, its detail in `note`, and the run facts of its job; `row` is the row itself. */
-const shaped = (r) => ({ row: r, at: r.time, by: r.subject, subject: targetOf(r), on: [r.object], note: r.detail, size: r.size ?? undefined, model: r.model ?? undefined, cost: r.cost ?? undefined, commit: r.commit_sha ?? undefined, action: r.action, project: r.project ?? undefined });
-
-/** An event's identity: the same event from the stream and from the state has the same key. */
-const eventKey = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
-
 /** The key of the Herald's Work and Factory toggles in keep(): whether each shows its events. */
 const SHOW = "herald.show", ALL = { work: true, factory: true };
 
-const HERALD_KEEP = 50;
-
-/** The events of the state and of the stream, each once, newest first. */
-export function heraldEvents(s, more = page.streamed) {
-  const all = new Map([...(s.herald?.events ?? []), ...more].map(shaped).map((e) => [eventKey(e), e]));
-  return [...all.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, HERALD_KEEP);
-}
-
-/** The holds: an issue's state while it waits, not an event, so the feed leaves them out. The ones that need Chris are alerts. */
-const WAITS = new Set(["held", "waiting", "paused", "red", "after", "full", "gpu", "busy", "parent", "credit"]);
 /** The word for a run kind in a row's line: a build run implements the issue. */
 const role = (kind) => (kind === "build" ? "implement" : kind);
-/** The mark of a run's result in an older row. */
-const MARK = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returned: "✗", dropped: "✗" };
-/** The newest event of `all` (newest first) at or before `at` that `ok` takes. */
-const lastBefore = (all, at, ok) => all.find((e) => e.at <= at && ok(e));
-
-/** A job's facts after its mark: for a build, the size it was routed to and the model it ran on, both from its start's event, then a land's commit, its time and its cost. */
-function jobFacts(ev, job, run, all) {
-  // The job's first start: the gate logs it again as the run moves on after its result.
-  const start = all.findLast((e) => e.action === "running" && jobOf(e) === job && e.at <= ev.at);
-  const picked = start && run === "build" ? lastBefore(all, start.at, (e) => e.action === "started" && /^model /.test(e.note ?? "")) : undefined;
-  const model = picked?.note.slice(6);
-  const took = start && ev !== start ? dur((Date.parse(ev.at) - Date.parse(start.at)) / 1000) : "";
-  return [picked?.size, model, ev.commit && String(ev.commit).slice(0, 7), took, ev.cost !== undefined && money(ev.cost)].filter(Boolean).map(esc).join(" · ");
-}
-
-/** An older event as a label and a short text: a run's kind, then its linked job ID, its mark and its facts; or the chip word and what the sentence adds. `all` is the group's events, newest first. */
-function brief(ev, runs = {}, all = [ev]) {
-  const job = jobOf(ev), run = runs[job];
-  const cut = (s) => esc(s ?? "");
-  if (ev.action === "routed") return { ev, label: "routed", text: cut(routeText(ev)) };
-  if (ev.action === "stalled") return { ev, label: "", text: `stalled ${esc(shownId(ev.subject, ev.project))}${run ? ` · ${esc(role(run))}` : ""}` };
-  const { lead, rest } = parts(ev), more = detail(ev) && ` ${detail(ev)}`;
-  if (run) {
-    const fx = jobFacts(ev, job, run, all);
-    return { ev, label: role(run), text: `${idLink(shownId(job), jobHref(job))} ${MARK[ev.action] ? `<span class="brief-mark">${MARK[ev.action]}</span>` : cut(ev.action)}${rest ? ` ${rest}` : ""}${fx ? ` ${fx}` : ""}${more}` };
-  }
-  // The group already names its issue, so a row whose sentence adds only the actor says who did it.
-  const by = ev.by && whoOf(ev.by, ev.row.subject_role);
-  const said = isIssue(ev.subject) && by && (!rest || rest === esc(by)) ? `by ${esc(by)}` : rest || lead;
-  return { ev, label: stateWord(ev), text: said + more };
-}
-
-/** The rows of a group's fold, newest first: its events but a head with no run and no detail, which its row says; no start of a job with another event, nor of a run kind with a newer one, and no routing or start of an issue that a later job start draws as that job's facts. */
-function briefs(all, runs = {}) {
-  const drawn = (ev) => (ev.action === "routed" || ev.action === "started") && all.some((e) => e.action === "running" && jobOf(e) && e.at >= ev.at);
-  // The gate can log a job's start after its result, so any other event of the job hides the start.
-  const ended = new Set(all.filter((ev) => ev.action !== "running").map(jobOf));
-  const seen = new Set(), out = [];
-  for (const ev of all) {
-    const job = jobOf(ev), run = runs[job];
-    if (ev === all[0] && !isRouting(ev) && !run && (!ev.note || ev.action === "routed")) continue;
-    if (ev.action === "running" && (ended.has(job) || (run && seen.has(run)))) continue;
-    if (drawn(ev)) continue;
-    seen.add(run);
-    out.push(brief(ev, runs, all));
-  }
-  return out;
-}
-
-/** An older row: the time, the label and the text, in the event's tone. */
-const briefRow = ({ ev, label, text }) => `<div class="event-brief ${tone(ev.action)}"><span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
-  `<span class="brief-label" title="${esc(label)}">${esc(label)}</span><span class="brief-text" title="${text.replace(/<[^>]*>/g, "")}">${text}</span></div>`;
-
-/** Rows of `groups`, each `[id, events]` newest first: the newest event's row, but a stall, with the events briefly behind it, the head's run among them; `row(head, more)` draws the head. The fold is named by `id`, so it keeps its state when its text or place changes. */
-const grouped = (groups, row, runs) => groups.map(([id, events]) => {
-  const head = events.find((e) => e.action !== "stalled") ?? events[0];
-  const inner = briefs([head, ...events.filter((e) => e !== head)], runs).map(briefRow);
-  return { at: head.at, key: id, html: inner.length ? fold(row(head, inner.length), `<div class="herald-older">${inner.join("")}</div>`, { cls: "herald-group", id }) : row(head, 0) };
-});
-
-/** The past word of each verb a housekeeper change's detail starts with (`retitle: New title`). */
-const VERBS = { close: "closed", drop: "dropped", retitle: "retitled", reprioritize: "reprioritized", note: "commented", unpark: "unparked" };
-
-/** A routine run that ended and changed nothing has no row; one still running, or one that failed, has. */
-const FAILED = ["failed", "returned", "dropped"];
-
-/**
- * The rows of the issue and routine events. An issue's row is one per attempt (`attempts`: the first job of a job's `prev` chain), its older events in the fold;
- * an event with no job takes the attempt of the one before it, else of the first. A routine's run is one row that says "N changes", each change a line in its fold.
- */
-function eventRows(events, titles = {}, runs = {}, attempts = {}, reviewed = {}) {
-  const issues = new Map(), routine = new Map(), first = new Map(), add = (m, k, ev) => m.set(k, [ev, ...(m.get(k) ?? [])]);
-  const live = [...events].reverse().filter((ev) => !WAITS.has(ev.action)), attemptOf = (ev) => attempts[jobOf(ev)] ?? "";
-  for (const ev of live) if (isIssue(ev.subject) && attemptOf(ev) && !first.has(ev.subject)) first.set(ev.subject, attemptOf(ev));
-  const runIds = new Set(live.filter((ev) => !isIssue(ev.subject) && jobOf(ev)).map(jobOf)), now = new Map(first);
-  for (const ev of live) {
-    if (ev.action === "changed" && runIds.has(ev.by)) add(routine, ev.by, ev);
-    else if (isIssue(ev.subject)) { now.set(ev.subject, attemptOf(ev) || now.get(ev.subject) || ""); add(issues, `${ev.subject}${now.get(ev.subject) && `:${now.get(ev.subject)}`}`, ev); }
-    else if (jobOf(ev)) add(routine, jobOf(ev), ev);
-    else add(issues, ev.subject, ev);
-  }
-  const runRows = [...routine].flatMap(([job, evs]) => {
-    const head = evs.find((e) => e.action !== "changed") ?? evs[0], changes = evs.filter((e) => e.action === "changed");
-    if (!changes.length && !FAILED.includes(head.action) && !evs.every((e) => e.action === "running")) return [];
-    const verb = (c) => { const m = /^(\w+): ([\s\S]*)$/.exec(c.note ?? ""); return m && Object.hasOwn(VERBS, m[1]) ? m : null; };
-    const lines = [...changes].reverse().map((c) => { const m = verb(c), note = m ? m[2] : c.note;
-      return briefRow({ ev: c, label: m ? VERBS[m[1]] : stateWord(c), text: `${idLink(shownId(c.subject, c.project), issueHref(c.subject, c.project))}${note ? ` ${esc(note)}` : ""}` }); });
-    const count = (v) => changes.filter((c) => verb(c)?.[1] === v).length;
-    const said = !changes.length ? "" : [reviewed[job] !== undefined && `reviewed ${reviewed[job]}`, ...changes.every(verb) ? Object.keys(VERBS).filter(count).map((v) => `${VERBS[v]} ${count(v)}`) : [plural(changes.length, "change")]].filter(Boolean).join(" · ");
-    const row = eventRow(head, titles, changes.length, said);
-    return [{ at: head.at, key: `event ${hash(eventKey(head))}`, html: lines.length ? fold(row, `<div class="herald-older">${lines.join("")}</div>`, { cls: "herald-group", id: `issue:${head.subject}:${job}` }) : row }];
-  });
-  return [...grouped([...issues].map(([k, v]) => [`issue:${k}`, v]), (ev, more) => eventRow(ev, titles, more), runs), ...runRows];
-}
 
 /** A status text without the "health: " of each health line, which older history entries carry. */
 const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
@@ -297,13 +186,14 @@ export function renderHerald(s, st = page) {
   // A status row's key is its tone and text, numbered from the oldest, so a new status on top does not rename the rows below it.
   const seen = new Map();
   for (const r of [...status].reverse()) { const n = (seen.get(r.key) ?? 0) + 1; seen.set(r.key, n); r.key += ` ${n}`; }
-  // The Work and Factory toggles: an event whose target is an issue is Work, any other is Factory.
+  // The Work and Factory toggles: a row of an issue is Work, any other is Factory. The stream's rows stand in for the state's while they are newer.
   const show = kept(SHOW, ALL);
-  const events = heraldEvents(s, st.streamed).filter((e) => show[isIssue(e.subject) ? "work" : "factory"]);
+  const live = st.live && st.live.seq > (s.herald?.seq ?? 0) ? st.live : s.herald;
+  const events = (live?.rows ?? []).filter((r) => show[r.kind]).map((r) => ({ at: r.at, key: r.key, html: heraldRow(r) }));
   // A chat conversation is one row, read from its session: its last turn's time, its latest prompt.
   const chats = (s.herald?.chats ?? []).map((c) => ({ at: c.last, key: `chat ${c.id}`, html: feedRow({ tone: "quiet", at: c.last, by: "claude",
     body: `<span class="event-line">${tag("chat", "quiet")}${idLink(c.id.slice(0, 8))}<span class="event-title" title="${esc(c.title)}">${esc(c.title)}</span><span></span></span>` }) }));
-  const rows = [...status, ...chats, ...eventRows(events, s.herald?.titles, s.herald?.runs, s.herald?.attempts, s.herald?.reviewed)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const rows = [...status, ...chats, ...events].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
   // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.

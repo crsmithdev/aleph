@@ -695,7 +695,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       s.asks = [{ id: "tools-5", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a third input file",
         situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", path: "/api/issues/tools-5/drop", body: {}, input: { name: "reason", lead: "" } }] }];
       view.render(s, {}, new URLSearchParams());
-      window.beat = () => view.event(document.querySelector("#view"), { time: "2026-11-13T12:00:00Z", subject: "gate", action: "waiting", object: "issue.1" });
+      window.beat = () => view.event(document.querySelector("#view"), { seq: 1e9, rows: [] });
       window.beat();
       const f = window.fetch;
       window.posts = [];
@@ -1150,7 +1150,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   const drawRig = `Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
     const root = document.querySelector("#view");
     window.view = view; window.root = root;
-    window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, events: [], chats: ids.map((id, i) => ({ id, last: "2026-11-15T10:0" + (9 - i) + ":00Z", title: "chat " + id })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
+    window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, rows: [], chats: ids.map((id, i) => ({ id, last: "2026-11-15T10:0" + (9 - i) + ":00Z", title: "chat " + id })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
     window.rows = () => Object.fromEntries([...root.querySelectorAll("#herald .herald-feed > [data-key]")].map((r) => [r.dataset.key, r]));
     window.herald(["a", "b", "c"]);
   })`;

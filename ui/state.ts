@@ -17,6 +17,7 @@ import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.
 import { askOfItem, asking, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withProjects } from "./api/scope.ts";
 import { chats, type Chat } from "./api/chat.ts";
+import type { Context as HeraldContext } from "./herald.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
 import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
@@ -73,6 +74,20 @@ export function heraldReviewed(events: EventRow[], runs: Entry[]): Record<string
     if (n !== undefined) reviewed[e.object] = n;
   }
   return reviewed;
+}
+
+/** The newest HERALD_EVENTS events of the last day at `now` (ms), oldest first, each with its project. */
+export const heraldEvents = (now: number): EventRow[] => withProjects(readEvents(now - 86_400_000).slice(-HERALD_EVENTS));
+
+/** What the Herald's rows name besides the events: the title of each issue they target (a project's list gives it), and the run, attempt and reviewed maps. */
+export function heraldContext(events: EventRow[], runs: Entry[], lists: ReturnType<typeof reader>): HeraldContext {
+  const titles: Record<string, string> = {};
+  for (const e of events) {
+    const issue = targetOf(e), k = parseKey(issue), p = parseId(issue) ?? (k?.kind === "issue" && e.project ? { repo: e.project, n: k.n, sub: undefined } : null);
+    const item = p && !(issue in titles) ? lists.item(p.repo, p.sub === undefined ? p.n : `${p.n}.${p.sub}`) : undefined;
+    if (item) titles[issue] = item.title;
+  }
+  return { titles, runs: heraldRuns(events, runs), attempts: heraldAttempts(events, runs), reviewed: heraldReviewed(events, runs) };
 }
 
 export interface Job {
@@ -187,10 +202,7 @@ export interface State {
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
   /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
-  herald?: { history: HeraldHistoryItem[]; events: EventRow[]; /** The title of each issue the events name, by the event's target. */ titles: Record<string, string>;
-    /** The title of each run an issue event names, by its job ID. */ runs: Record<string, string>;
-    /** The attempt of each job an issue event names, by its job ID: its first job of the `prev` chain. */ attempts: Record<string, string>;
-    /** The issues each housekeeper run reviewed, by its job ID; a run with no stored count has none. */ reviewed: Record<string, number>;
+  herald?: HeraldContext & { history: HeraldHistoryItem[]; /** The `seq` of the newest event: a later push of rows replaces these. */ seq: number; events: EventRow[];
     /** The UI chat conversations with a turn in the last day, oldest first. */ chats: Chat[] };
 }
 
@@ -459,16 +471,11 @@ export function state(now = new Date()): State {
   const timers = tickTimer();
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, stuck, asks: att.items, usage: summary(now.getTime()) });
   recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
-  const events = withProjects(readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS)), titles: Record<string, string> = {};
-  for (const e of events) {
-    const issue = targetOf(e), k = parseKey(issue), p = parseId(issue) ?? (k?.kind === "issue" && e.project ? { repo: e.project, n: k.n, sub: undefined } : null);
-    const item = p && !(issue in titles) ? lists.item(p.repo, p.sub === undefined ? p.n : `${p.n}.${p.sub}`) : undefined;
-    if (item) titles[issue] = item.title;
-  }
+  const events = heraldEvents(now.getTime());
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), events, titles, runs: heraldRuns(events, jobs.flat()), attempts: heraldAttempts(events, jobs.flat()), reviewed: heraldReviewed(events, jobs.flat()), chats: chats(now.getTime() - 86_400_000) },
+    herald: { history: currentStatusHistory(), seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), lists), chats: chats(now.getTime() - 86_400_000) },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {

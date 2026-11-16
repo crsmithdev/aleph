@@ -26,7 +26,7 @@ import { logEvent } from "../../../lib/layout.ts";
 import { raise, route, type Size } from "../routing/route.ts";
 import { heldEvent, type Gate, type Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
-import { key, parseId } from "../../../lib/naming.ts";
+import { detailOf, key, parseId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "../infra/settings.ts";
@@ -366,7 +366,7 @@ export async function startIssue(repo: Repo, name: string, id: number | string, 
   const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.role) && e.run.state === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
   const routed = picked && failed ? raise(picked) : picked;
   const model = routed ? readModels()[routed].model : null;
-  logEvent({ subject: "rule", action: "started", object: name, detail: `model ${model ?? "default"}`, size: routed });
+  logEvent({ subject: "rule", action: "started", object: name, detail: detailOf("started", "model", model ?? "default"), size: routed });
   const start = startCmd();
   if (start) {
     const p = Bun.spawn([start, repo.key, name, String(id)], { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });

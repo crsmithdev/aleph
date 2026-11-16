@@ -10,7 +10,7 @@ import { surfacePaths } from "../roles/issue-spec.ts";
 import { openJob, type Job } from "../records/job.ts";
 import { isOpen, allRuns, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { heldEvent, type Bound, type Gate } from "./issue-decision.ts";
-import { issueKey } from "../../../lib/naming.ts";
+import { issueKey, wordOf } from "../../../lib/naming.ts";
 import { eventsOf, readEvents } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
 import { held } from "../infra/locks.ts";
@@ -213,7 +213,7 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
 }
 
 /** The reason of a `question` event's detail: the detail before its facts (`no-commit: 3 / 3 jobs with no commit`). */
-export const askReason = (detail?: string | null): string => (detail ?? "").split(": ")[0];
+export const askReason = (detail?: string | null): string => wordOf({ detail });
 
 /** When an Ask of `reason` was last set on the issue (ms), or null: the time of its latest `question` event. Setting the no-commit streak's Ask is what marks the streak. */
 const askedAt = (name: string, reason: string): number | null => {
