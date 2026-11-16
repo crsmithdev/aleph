@@ -1357,7 +1357,7 @@ A settings list is a group of rows. Each row holds one setting: its label, its c
 
 | Helper | Reference |
 |---|---|
-| `settings(label, rows)`; `setting(label, control, { id, hint, save, attrs })` | `ui/views/gates.js`; `ui/views/factory-agents.js`, which still builds the size checkbox by hand |
+| `settings(label, rows)`; `setting(label, control, { id, hint, save, attrs })` | `ui/views/gates.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1369,7 +1369,7 @@ A settings list is a group of rows. Each row holds one setting: its label, its c
 - Give the setting that needs a Save button `save: "Save"`. The row is then a form of its own, and the view wires `submit` on the attributes it gives in `attrs`, for example `' data-schedule="suite"'`. A row with no `save` is a `div`: the control applies on `change`.
 - Pass the same `id` to `setting()` and to the control, so the label names the control.
 - Write a hint in at most four words, counting a number as a word. Put the rest in a `title` on the row, through `attrs`.
-- Put the settings of one page in one list, or one list per card. Do not put a control or a Save button in a table cell.
+- Put the settings of one page in one list, or one list per card. Do not put a control or a Save button in a table cell. The one exception is the Model column of the Roles table on the Agents page: its `selectBox()` applies on `change`, with the on/off box of Small and Medium beside it.
 - Show a setting that is read-only as text in the control place. Do not show a disabled control.
 - Under 720px the label goes over the control, and the hint under it.
 - Show a failure in the row with `say()`, from the Save button.

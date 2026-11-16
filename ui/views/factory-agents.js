@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, notice, pageHead, pct, row, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, scope } from "../lib.js";
+import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, notice, pageHead, pct, row, say, selectBox, shortModel, statCard, statusLight, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard, windowTrend } from "./speed.js";
@@ -58,31 +58,26 @@ function roles(a, m) {
     const warn = !few && !reviewer && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
     const rate = few ? `${o.succeeded} / ${o.ended}` : `${esc(share(o.rate))} <span class="m" title="ended">${count(o.ended)}</span> ${trend}`;
     const per = worker && o.perBuilt != null ? ` <span class="m">${money(o.perBuilt)} / built</span>` : "";
-    const built = worker ? [cell(count(o.built), { num: true }), cell(share1(o.built ? o.firstPass / o.built : null), { num: true }), cell(share1(o.reviewPass), { num: true })] : Array(3).fill(cell("", { num: true }));
+    const built = worker ? [cell(count(o.built), { num: true }), cell(share1(o.built ? o.firstPass / o.built : null), { num: true }), cell(share1(o.reviewPass), { num: true })] : Array(3).fill(`<td class="num">${miss("worker only")}</td>`);
     return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${reviewer ? '<span class="m">Pass share</span> ' : ""}${rate}</td>${cell(dur(o.p50), { num: true })}${cell(dur(o.p95), { num: true })}<td class="num">${money(o.cost)}${per}</td>${built.join("")}<td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&state=failed">Failed jobs</a></td>`;
   };
-  // The rows of a role: one per model its keys set, with the outcome of that model, then one per other model it has outcomes on.
-  const pick = ([role, keys]) => {
-    const set = [...new Set(keys.map((k) => shortModel(m.models[k]?.model)))], mine = outs.filter((x) => x.role === role);
-    return [...set.map((sm) => [sm, mine.find((x) => shortModel(x.model) === sm)]), ...mine.filter((x) => !set.includes(shortModel(x.model))).map((x) => [shortModel(x.model), x])]
-      .map(([sm, o]) => row([cell(NAMES[role], { wide: true }), cell(sm), stats(o)])).join("");
+  // One row per size and role model, with a select for its model and the outcome of that model; then a row per outcome no select covers.
+  const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), m.models[key]?.model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
+  const used = new Set();
+  const pick = ([key, label, role]) => {
+    const o = outs.find((x) => x.role === role && shortModel(x.model) === shortModel(m.models[key]?.model));
+    if (o) used.add(o);
+    const box = key in SIZES && key !== "large" ? `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${m.models[key]?.enabled ? " checked" : ""}> ` : "";
+    return row([cell(label, { wide: true }), `<td>${box}${sel(key, label)}</td>`, stats(o)]);
   };
-  const setRoles = new Set(["worker", "merge", ...Object.values(ROLE_MODELS)]);
-  const config = m ? [["worker", Object.keys(SIZES)], ...Object.entries(ROLE_MODELS).map(([key, role]) => [role, [key]])].map(pick).join("") : "";
-  const rows = config + (m ? outs.filter((o) => !setRoles.has(o.role)) : outs).map((o) => row([cell(names[o.role] ?? o.role, { wide: true }), cell(shortModel(o.model)), stats(o)])).join("");
+  const config = m ? [...Object.entries(SIZES).map(([key, label]) => [key, label, "worker"]), ...Object.entries(ROLE_MODELS).map(([key, role]) => [key, NAMES[role], role])].map(pick).join("") : "";
+  const rows = config + outs.filter((o) => !used.has(o) && !(m && o.role === "merge")).map((o) => row([cell(NAMES[o.role] ?? names[o.role] ?? o.role, { wide: true }), cell(shortModel(o.model)), stats(o)])).join("");
   return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty();
 }
 
 const timed = (a) => a.roles.filter((r) => r.hours != null);
 /** The colour of the role at index `i` of the fixed role list, so a role keeps its colour in every window; the cost chart's keys take them in order. */
 const ROLE_COLORS = ["series-1", "series-2", "series-3", "series-4", "series-5", "chart-6", "chart-7"];
-
-/** The model of each size and role model, and whether small and medium are on. A row applies on change. */
-function models(m) {
-  const sel = (key, label, id) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), m.models[key]?.model, { id, attrs: ` data-name="${esc(key)}"` });
-  const size = ([key, label]) => setting(label, (key === "large" ? "" : `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${m.models[key]?.enabled ? " checked" : ""}> `) + sel(key, label, `model-${key}`), { id: `model-${key}` });
-  return settings("Models", [...Object.entries(SIZES).map(size), ...Object.entries(ROLE_MODELS).map(([key, role]) => setting(NAMES[role], sel(key, NAMES[role], `model-${key}`), { id: `model-${key}` }))]);
-}
 
 /** The live frame: agents live per point, by role. */
 export const liveFrame = (d) => ({
@@ -127,7 +122,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m) {
   const head = scope().bar({ value: win });
   return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${m?.local === "down" ? notice("Local server down", true) : ""}${tiles("Scorecard", scorecard(s, d, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
-    card("Roles", a ? roles(a, m) : wait, { id: "roles", aside: a?.rates?.firstPass == null ? "" : `First pass ${share1(a.rates.firstPass)}` }) + (m === undefined ? card("Models", loadingLine("the models"), { id: "models" }) : m ? card("Models", models(m), { id: "models" }) : "") + `</div>`;
+    card("Roles", a ? roles(a, m) : wait, { id: "roles", aside: a?.rates?.firstPass == null ? "" : `First pass ${share1(a.rates.firstPass)}` }) + `</div>`;
 }
 
 /** The old address. */
@@ -152,7 +147,7 @@ export const view = {
     scope().wire(root);
     if (s.flow?.agents) for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(s.flow);
     root.onchange = async (e) => {
-      const b = e.target.closest?.("#models [data-name]");
+      const b = e.target.closest?.("#roles [data-name]");
       if (!b || e.type !== "change") return;
       const m = await postJson("/api/models", { name: b.dataset.name, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => say(b, err.message));
       if (m) await redraw(true);
