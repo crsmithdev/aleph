@@ -195,10 +195,10 @@ function generations(entries: Record<string, any>[], parent: string | undefined)
  * block's timestamp, so the chat view can show what Claude said between tool
  * calls. Thinking blocks are stored empty and are skipped.
  */
-function textBlocks(transcriptPath: string, promptId: string, finalMessage: string): Span[] {
+function textBlocks(entries: Record<string, any>[]): Span[] {
   const out: Span[] = [];
   let previous = 0;
-  for (const entry of settledEntries(transcriptPath, promptId, finalMessage)) {
+  for (const entry of entries) {
     const at = Date.parse(entry.timestamp ?? "") || previous || now;
     previous = at;
     if (entry.type !== "assistant" || !Array.isArray(entry.message?.content)) continue;
@@ -275,8 +275,11 @@ switch (event) {
     const tag = failed ? {} : await taskType(turnSlot!.get()?.input, message);
     spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || "StopFailure") : undefined, tag));
     // a failed turn's message is the API error, which never reaches the transcript, so do not wait for it
-    if (input.transcript_path) spans.push(...generations(settledEntries(input.transcript_path, input.prompt_id, failed ? "" : message), turnSpanId));
-    if (input.transcript_path && !failed) spans.push(...textBlocks(input.transcript_path, input.prompt_id, message));
+    if (input.transcript_path) {
+      const entries = settledEntries(input.transcript_path, input.prompt_id, failed ? "" : message);
+      spans.push(...generations(entries, turnSpanId));
+      if (!failed) spans.push(...textBlocks(entries));
+    }
     break;
   }
 

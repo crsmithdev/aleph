@@ -2,7 +2,7 @@
  * What one prompt's turn did, read from the transcript: edits, commands and
  * their output, other tool calls, the last user text, the final message.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { resultContent, resultEntries } from "../../lib/toolresult.ts";
 
 type Entry = Record<string, any>;
@@ -49,8 +49,13 @@ export function resultText(entry: Entry): string {
   return resultContent(block?.content);
 }
 
-/** Every entry of a JSONL transcript, or none when the file cannot be read. */
+let parsed: { path: string; size: number; entries: Entry[] } | null = null;
+
+/** Every entry of a JSONL transcript, or none when the file cannot be read. A hook process parses a path once while its size holds: a parse of a 25 MB transcript takes about 110 ms. */
 export function readLines(transcriptPath: string): Entry[] {
+  let size: number;
+  try { size = statSync(transcriptPath).size; } catch { return []; }
+  if (parsed?.path === transcriptPath && parsed.size === size) return parsed.entries;
   let raw: string;
   try { raw = readFileSync(transcriptPath, "utf8"); } catch { return []; }
   const entries: Entry[] = [];
@@ -58,6 +63,7 @@ export function readLines(transcriptPath: string): Entry[] {
     if (!line) continue;
     try { entries.push(JSON.parse(line)); } catch { /* partial last line */ }
   }
+  parsed = { path: transcriptPath, size, entries };
   return entries;
 }
 

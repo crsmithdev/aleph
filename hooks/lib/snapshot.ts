@@ -36,7 +36,27 @@ function fileHash(path: string): string {
   }
 }
 
-const names = (out: string | null) => (out ?? "").split("\0").filter(Boolean);
+/**
+ * HEAD and the dirty paths of one tree from a single `git status`: a record `# branch.oid <sha>`, then `1`, `2`, `u` (changed
+ * against HEAD or the index) and `?` (untracked, not ignored) records. A rename record is followed by its old path, which is skipped.
+ * With no commit yet, only untracked files count, as `git diff HEAD` fails there.
+ */
+function treeState(tree: string): { head: string; dirty: string[] } {
+  const records = (git(tree, "status", "--porcelain=v2", "--branch", "--untracked-files=all", "-z") ?? "").split("\0");
+  const oid = records.find((r) => r.startsWith("# branch.oid "))?.slice("# branch.oid ".length) ?? "";
+  const head = oid === "(initial)" ? "" : oid;
+  const dirty: string[] = [];
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i];
+    const kind = r[0];
+    if (kind === "?") dirty.push(r.slice(2));
+    else if (!head) continue;
+    else if (kind === "1") dirty.push(r.split(" ").slice(8).join(" "));
+    else if (kind === "2") { dirty.push(r.split(" ").slice(9).join(" ")); i++; }
+    else if (kind === "u") dirty.push(r.split(" ").slice(10).join(" "));
+  }
+  return { head, dirty };
+}
 
 /** null when cwd is not inside a git repo. */
 export function snapshot(cwd: string): Snapshot | null {
@@ -44,8 +64,8 @@ export function snapshot(cwd: string): Snapshot | null {
   if (trees.length === 0) return null;
   const snap: Snapshot = {};
   for (const tree of trees) {
-    snap[`${tree}\0HEAD`] = git(tree, "rev-parse", "HEAD")?.trim() ?? "";
-    const dirty = [...names(git(tree, "diff", "HEAD", "--name-only", "-z")), ...names(git(tree, "ls-files", "--others", "--exclude-standard", "-z"))];
+    const { head, dirty } = treeState(tree);
+    snap[`${tree}\0HEAD`] = head;
     for (const name of dirty) snap[`${tree}\0${name}`] = fileHash(join(tree, name));
   }
   return snap;

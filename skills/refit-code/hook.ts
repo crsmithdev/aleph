@@ -13,12 +13,27 @@
  * start, and a session with no start record is skipped.
  */
 import { createHash } from "node:crypto";
-import { denials, once, session } from "../../hooks/lib/handshake.ts";
+import { join } from "node:path";
+import { probe } from "../../lib/git.ts";
+import { readJsonOr, writeJson } from "../../lib/json.ts";
+import { denials, once, session, spoolDir } from "../../hooks/lib/handshake.ts";
 import { scan } from "./clones.ts";
-import { accepted, base, changed, history, holes, isAccepted, rules } from "./cochange.ts";
+import { accepted, base, changed, history, holes, isAccepted, rules, type Rule } from "./cochange.ts";
 
 const MAX_BLOCKS = 3;
 const at = (s: { name: string; start: number; function?: string }) => `${s.name}:${s.start}${s.function ? ` (${s.function})` : ""}`;
+
+/** The co-change rules of the commits at HEAD: history and rules cost about 240 ms, so one file per repo keeps the rules for the HEAD they came from. */
+function headRules(root: string): Map<string, Rule[]> {
+  const r = probe(root, "rev-parse", "HEAD");
+  const head = r.ok ? r.out.trim() : "";
+  const file = join(spoolDir(), `cochange-${createHash("sha1").update(root).digest("hex").slice(0, 12)}.json`);
+  const kept = readJsonOr<{ head: string; rules: [string, Rule[]][] } | null>(file, null);
+  if (head && kept?.head === head) return new Map(kept.rules);
+  const all = rules(history(root));
+  if (head) writeJson(file, { head, rules: [...all] });
+  return all;
+}
 
 /** The block reason for the findings, or null when there are none. */
 function reason(root: string, since = 0): string | null {
@@ -26,7 +41,7 @@ function reason(root: string, since = 0): string | null {
   const change = changed(root, from, since);
   if (!change.size) return null;
   const ok = accepted(root);
-  const left = holes(root, change, rules(history(root)), ok);
+  const left = holes(root, change, headRules(root), ok);
   const { clones, violations } = scan(root, from || undefined);
   const copies = violations.filter((v) => change.has(v.copy.name));
   const pasted = clones.filter((c) => c.isNew && (change.has(c.a.name) || change.has(c.b.name)) && !copies.some((v) => v.copy.name === c.a.name || v.copy.name === c.b.name) && !isAccepted(ok, c.a.name, c.b.name));

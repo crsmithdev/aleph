@@ -17,9 +17,9 @@
  * reason.
  */
 import { readJsonOr } from "../../lib/json.ts";
-import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { readLines } from "./digest.ts";
 
 const HEADROOM = 33_000;
 const DEFAULT_WINDOW = 1_000_000;
@@ -33,15 +33,10 @@ export interface Reading {
 
 /** The last assistant request's context size, and whether the session has compacted. */
 export function read(transcriptPath: string): Reading {
-  let raw: string;
-  try { raw = readFileSync(transcriptPath, "utf8"); } catch { return { fill: 0, compacted: false, requests: 0 }; }
   let fill = 0;
   let compacted = false;
   let requests = 0;
-  for (const line of raw.split("\n")) {
-    if (!line) continue;
-    let e: Record<string, any>;
-    try { e = JSON.parse(line); } catch { continue; }
+  for (const e of readLines(transcriptPath)) {
     if (e.isSidechain) continue;
     if (e.type === "system" && e.subtype === "compact_boundary") compacted = true;
     if (e.isCompactSummary) compacted = true;
