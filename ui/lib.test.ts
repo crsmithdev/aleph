@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { renderHerald } from "./views/now.js";
 import { row, withFactory } from "./test-now.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chart, fitGrid, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -51,7 +51,7 @@ test("chart on() attaches a handler that survives a re-theme", () => {
   g.echarts = {
     registerTheme() {},
     init() {
-      const c: any = { ons: [], getOption: () => ({}), setOption() {}, dispose() {}, resize() {} };
+      const c: any = { ons: [], getOption: () => ({ legend: [{ show: false }] }), setOption() {}, dispose() {}, resize() {} };
       c.on = (ev: string, fn: unknown) => c.ons.push([ev, fn]);
       made.push(c);
       return c;
@@ -347,15 +347,24 @@ test("the legend of the Tests and the Live chart ends above the grid at 390 and 
     measure: { name: "Agents Live", unit: "count", agg: "max" }, over: { kind: "time", window: "week" }, by: { name: "Role", keys: roles.map((n) => ({ key: n, name: n })) },
     rows: [{ at: Date.parse("2026-11-04T10:00:00Z"), ...Object.fromEntries(roles.map((n, i) => [n, i + 1])) }, { at: Date.parse("2026-11-04T11:00:00Z"), ...Object.fromEntries(roles.map((n, i) => [n, i + 2])) }],
   };
-  const charts = { tests: option(testsFrame(tests, "", "week", now), "lines", {}), live: option(live, "area", {}) };
+  const models = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5", "gpt-5-codex", "gpt-5-mini", "gemini-2.5-pro", "Other"].map((m): string => shortModel(m));
+  const cost = {
+    measure: { name: "Cost", unit: "usd", agg: "sum" }, over: { kind: "time", window: "week" }, by: { name: "Model", keys: models.map((n) => ({ key: n, name: n })) },
+    rows: [{ at: Date.parse("2026-11-04T10:00:00Z"), ...Object.fromEntries(models.map((n, i) => [n, i + 1])) }],
+  };
+  const charts = { tests: option(testsFrame(tests, "", "week", now), "lines", {}), live: option(live, "area", {}), cost: option(cost, "columns", {}) };
   for (const [name, chartOption] of Object.entries(charts)) for (const width of [390, 1440]) {
     const ec = echarts.init(null, chartTheme({ ink: "#000", rule: "#ccc", sans: "sans" }), { renderer: "svg", ssr: true, width, height: 240 });
     ec.setOption(chartOption);
+    fitGrid(ec);
     const model = ec.getModel(), group = ec.getViewOfComponentModel(model.getComponent("legend")).group;
     const box = group.getBoundingRect().clone();
     box.applyTransform(group.getLocalTransform());
     const grid = model.getComponent("grid").coordinateSystem.getRect();
+    const drawn: string[] = [];
+    group.traverse((g: any) => { if (models.includes(g.style?.text)) drawn.push(g.style.text); });
     ec.dispose();
+    if (name === "cost") { expect(chartOption.legend.type).not.toBe("scroll"); expect(drawn, `${width}px`).toEqual(models); }
     expect(box.y + box.height, `${name} at ${width}px`).toBeLessThanOrEqual(grid.y);
   }
 });

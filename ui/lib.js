@@ -198,6 +198,15 @@ export const readTokens = (el = document.documentElement) => {
 };
 
 let seq = 0;
+/** Start the grid of ECharts instance `c` below the last legend line, so a legend that wraps never covers the plot. */
+export function fitGrid(c) {
+  if (c.getOption().legend?.[0]?.show === false) return;
+  const group = c.getViewOfComponentModel(c.getModel().getComponent("legend")).group;
+  const box = group.getBoundingRect().clone();
+  box.applyTransform(group.getLocalTransform());
+  c.setOption({ grid: { top: Math.ceil(box.y + box.height) + 14 } });
+}
+
 /**
  * Init an ECharts chart on `el` with `option`, themed from the page tokens. It re-themes when
  * prefers-color-scheme changes and resizes with the element. Returns a wrapper over the instance.
@@ -210,16 +219,18 @@ export function chart(el, option) {
   const handlers = [];
   let c = build();
   c.setOption(option);
+  fitGrid(c);
   const mq = matchMedia("(prefers-color-scheme: dark)");
   const retheme = () => {
     const opt = c.getOption();
     c.dispose();
     c = build();
     c.setOption(opt);
+    fitGrid(c);
     for (const [ev, fn] of handlers) c.on(ev, fn);
   };
   mq.addEventListener("change", retheme);
-  const ro = new ResizeObserver(() => c.resize());
+  const ro = new ResizeObserver(() => { c.resize(); fitGrid(c); });
   ro.observe(el);
   return {
     get instance() { return c; },
@@ -805,8 +816,8 @@ export function barRow(label, pct, value, { top = false, key, on = false, bar } 
 /** The rows of a bar list on one grid, so their bars start and end together. */
 export const barList = (rows) => `<div class="bars">${rows}</div>`;
 
-/** The legend of every chart: one line at the top that scrolls when its items do not fit, so it never covers the grid. */
-export const legend = { type: "scroll", top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
+/** The legend of every chart: at the top, wrapping onto more lines when its items do not fit on one; `fitGrid` moves the grid below it. */
+export const legend = { top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
 /** The HTML legend: one `<li>` per `[label, cls]`; a `cls` gives the item a swatch that CSS colours. */
 export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls]) => `<li>${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}</li>`).join("")}</ul>`;
 /** The sort after a click on `key`: the same key flips; a new key starts largest first when `downFirst` has it, else smallest first. */
