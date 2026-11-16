@@ -52,4 +52,4 @@ keep the writer's voice: run `aleph:humanizer` over them.
 ## Comments and commits
 
 - A comment gives a reason, a unit or a source, never what the next line does.
-- A commit subject follows the repo convention and reads alone in the log. The body says why.
+- A commit subject reads alone in the log: imperative and lowercase, no trailing punctuation, at most 50 characters. The body says why.
