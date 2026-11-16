@@ -1369,7 +1369,7 @@ A settings list is a group of rows. Each row holds one setting: its label, its c
 - Give the setting that needs a Save button `save: "Save"`. The row is then a form of its own, and the view wires `submit` on the attributes it gives in `attrs`, for example `' data-schedule="suite"'`. A row with no `save` is a `div`: the control applies on `change`.
 - Pass the same `id` to `setting()` and to the control, so the label names the control.
 - Write a hint in at most four words, counting a number as a word. Put the rest in a `title` on the row, through `attrs`.
-- Put the settings of one page in one list, or one list per card. Do not put a control or a Save button in a table cell. The one exception is the Model column of the Roles table on the Agents page: its `selectBox()` applies on `change`, with the on/off box of Small and Medium beside it.
+- Put the settings of one page in one list, or one list per card. Do not put a control or a Save button in a table cell. The one exception is the Model column of the Roles table on the Agents page: its `selectBox()` applies on `change`, with the on/off box of Small, Medium and Large beside it.
 - Show a setting that is read-only as text in the control place. Do not show a disabled control.
 - Under 720px the label goes over the control, and the hint under it.
 - Show a failure in the row with `say()`, from the Save button.
@@ -1551,10 +1551,10 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Memory page head has a Window control that does nothing: the memory API takes no window, and `scope().bar()` always draws one | `renderMemory()` in `ui/views/memory.js` | follow-up |
 | The Memory inspector's buttons carry `data-mact` and a handler of their own, not the router's `act`: a write reads the Why field and the open memory, and a form submits to the same handler | `act()`, `write()` in `ui/views/memory.js` | allowed |
 | A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |
-| The Roles table's rows are hand `<tr>`s and its Failed Jobs link a hand `a.failed-jobs` | `roles()` in `ui/views/factory-agents.js` | follow-up |
+| The Roles table's rows are hand `<tr>`s, its group rows hand `tr.grp`s and its sub-rows hand `tr.sub-row`s | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | A Jobs trend chart's p90 line takes the `hot` tone | `trendFrame()` in `ui/views/factory-jobs.js` | allowed |
 | The Checks, Build Time by Model and Jobs cards of the Jobs page show no count | `renderFactoryJobs()` in `ui/views/factory-jobs.js` | follow-up |
-| A table row's fold chevron is a hand `<button class="fold">`: no helper for a row toggle | `renderRow()` in `ui/views/issues.js` | follow-up |
+| A table row's fold chevron is a hand `<button class="fold">`: no helper for a row toggle | `renderRow()` in `ui/views/issues.js`, `roles()` in `ui/views/factory-agents.js` | follow-up |
 | The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/timeline.js` | follow-up |
 | The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/chart.js` | follow-up |
 | The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |

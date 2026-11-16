@@ -30,33 +30,31 @@ test("the share of the week gone comes from seven_day_resets_at", () => {
   expect(pace({ ...S, usage: { now: { ...S.usage.now, seven_day: 50 } } }).word).toBe("over");
 });
 
-test("the Roles table has a row per role and model, with the warn tone under 70% and a link to the failed runs", () => {
-  const o = (role: string, model: string, rate: number, extra = {}) => ({ role, model, runs: 20, succeeded: rate * 20, failed: 20 - rate * 20, stuck: 0, ended: 20, rate, p50: 60, cost: 1.5, baseline: 0.7, ...extra });
-  const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "haiku", 0.6, { firstPass: 4, reviewPass: 0.5 }), o("worker", "gpt-oss-20b", 0.8, { firstPass: 6, reviewPass: 1 }), o("reviewer", "unset", 0.9, { pass: 9, fail: 1 })] } });
-  const row = (name: string) => html.match(new RegExp(`<tr><td class="wide" title="${name.split(" · ")[0]}">${name.split(" · ")[0]}</td><td>${name.split(" · ")[1]}</td>.*?</tr>`))![0];
-  expect(row("Worker · haiku")).toMatch(/<td class="num warn">60%.*?class="tr[^"]*"/);
-  expect(row("Worker · haiku")).toContain('href="#/factory/jobs?role=worker&state=failed"');
-  expect(row("Worker · gpt-oss-20b")).toMatch(/<td class="num">80%.*?class="tr[^"]*"/);
-  expect(row("Worker · gpt-oss-20b")).not.toContain("warn");
-  expect(row("Worker · gpt-oss-20b")).toContain('<td class="num">20</td><td class="num">80%');
-  expect(row("Reviewer · unset")).toContain('<td class="num">20</td><td class="num"><span class="m">Pass share</span> 90%');
+test("Per output is cost over built for a size, over verdicts for the reviewer and over OK runs for another role, and a worker OK under 70% has the warn tone", () => {
+  const h = page([full("worker", "haiku", { size: "small", rate: 0.6, cost: 12, built: 4, firstPass: 3, reviewPass: 0.5 }), full("reviewer", "opus", { cost: 12, pass: 5, fail: 1 }), full("intake", "opus", { cost: 12, succeeded: 24 })]);
+  const per = (r: string) => r.match(/<td[^>]*>.*?<\/td>/g)![8];
+  expect(per(row(h, "Small"))).toBe('<td class="num">$3.00</td>');
+  expect(per(row(h, "Reviewer"))).toBe('<td class="num">$2.00</td>');
+  expect(per(row(h, "Intake"))).toBe('<td class="num">$0.50</td>');
+  expect(row(h, "Small")).toMatch(/<td class="num warn">60%/);
+  expect(row(h, "Intake")).not.toContain("warn");
+  expect(row(h, "Small")).toContain('<td>4 landed <span class="m">· 75% first · 50% review</span></td>');
+  expect(row(h, "Reviewer")).toContain("<td>6 verdicts</td>");
 });
 
 const row = (h: string, name: string) => h.match(new RegExp(`<tr><td class="wide" title="${name}">${name}</td>.*?</tr>`))![0];
-/** The row of a role and its model, for a model no select covers. */
-const rowOf = (h: string, name: string, model: string) => h.match(new RegExp(`<tr><td class="wide" title="${name}">${name}</td><td>${model}</td>.*?</tr>`))![0];
 
 test("an outcome on a full model id joins the row of its short model; an unset model never reads not recorded", () => {
   const o = (role: string, model: string, runs: number) => ({ role, model, runs, succeeded: runs, failed: 0, stuck: 0, ended: runs, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 });
-  const outcomes = [o("intake", "claude-opus-5-5", 151), o("worker", "claude-haiku-4-5-20251001", 7), o("reviewer", "unset", 3)];
+  const outcomes = [o("intake", "claude-opus-5-5", 151), { ...o("worker", "claude-haiku-4-5-20251001", 7), size: "small" }, o("reviewer", "unset", 3)];
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Intake")).toMatch(/<\/select><\/td><td class="num">151<\/td>/);
   expect(h.match(/<td class="wide" title="Intake">Intake<\/td>/g)!.length).toBe(1);
   expect(row(h, "Small")).toMatch(/<\/select><\/td><td class="num">7<\/td>/);
   expect(h).not.toMatch(/<td>claude-/);
-  expect(rowOf(h, "Reviewer", "unset")).not.toContain("<select");
-  // The reviewer's set model and its unset outcome are two rows.
-  expect(h.match(/<td class="wide" title="Reviewer">Reviewer<\/td>/g)!.length).toBe(2);
+  // The reviewer's unset outcome is an earlier model under its one row.
+  expect(row(h, "Reviewer")).toContain('data-fold="review"');
+  expect(h.match(/<td class="wide" title="Reviewer">/g)!.length).toBe(1);
   expect(h).not.toContain("not recorded");
 });
 
@@ -203,6 +201,9 @@ const entries = (small: string, medium: string) => ({
   intake: { enabled: true, model: "opus" },
   director: { enabled: true, model: "opus" },
   monitor: { enabled: true, model: "deepseek-v4.1-flash" },
+  maintainer: { enabled: true, model: "sonnet" },
+  lens: { enabled: true, model: "opus" },
+  housekeeper: { enabled: true, model: "opus" },
   title: { enabled: true, model: "haiku" },
   judge: { enabled: true, model: "haiku" },
 });
@@ -211,7 +212,7 @@ test("the Roles table holds a select per size and role model in its Model cell, 
   const keys: Record<string, string> = { Small: "small", Medium: "medium", Large: "large", Reviewer: "review", Intake: "intake", Director: "director", Monitor: "monitor", Maintainer: "maintainer", Lens: "lens", Housekeeper: "housekeeper", Title: "title", Judge: "judge" };
   // The second offer of each key is configured, so a select that kept its first option fails.
   const want = Object.fromEntries(Object.values(keys).map((k) => [k, (OFFERS as any)[k][1]]));
-  const models = Object.fromEntries(Object.entries(want).map(([k, model]) => [k, { enabled: k === "small", model }]));
+  const models = Object.fromEntries(Object.entries(want).map(([k, model]) => [k, { enabled: true, model }]));
   const html = renderFactoryAgents(S, E, "live", "week", { models, local: "up", offers: OFFERS, down: [] });
   expect(html).not.toContain('id="models"');
   expect(html).not.toContain(">Models</h2>");
@@ -223,30 +224,18 @@ test("the Roles table holds a select per size and role model in its Model cell, 
     expect(sel).toMatch(new RegExp(`<option value="${want[key]}"[^>]* selected>`));
     expect(cells[1].includes("checkbox")).toBe(["small", "medium", "large"].includes(key));
   }
-  expect(row(html, "Small")).toContain('type="checkbox" data-name="small" aria-label="Small enabled" checked');
-  expect(row(html, "Medium")).toContain('type="checkbox" data-name="medium" aria-label="Medium enabled">');
-  expect(row(html, "Large")).toContain('type="checkbox" data-name="large" aria-label="Large enabled">');
+  for (const k of ["Small", "Medium", "Large"]) expect(row(html, k)).toContain(`type="checkbox" data-name="${k.toLowerCase()}" aria-label="${k} enabled" checked>`);
   expect((html.match(/type="checkbox"/g) ?? []).length).toBe(3);
   expect(html).not.toContain(">Merge<");
   expect(html).not.toContain(">Succeeded<");
   expect(html).not.toContain(">Failed<");
 });
 
-test("Built, First pass and Review pass hold a dash on every role but a worker's, which shows its numbers", () => {
-  const h = page([full("worker", "haiku", { built: 165, firstPass: 110, reviewPass: 0.875, perBuilt: 0.91 }), ...Object.entries({ intake: "opus", director: "opus", monitor: "deepseek-v4.1-flash", title: "haiku", judge: "haiku" }).map(([r, m]) => full(r, m, { built: 9, firstPass: 9, reviewPass: 0.5, perBuilt: 0.5 }))]);
-  const cells = (r: string) => r.match(/<td[^>]*>.*?<\/td>/g)!.slice(7, 10);
-  expect(cells(row(h, "Small")).join("")).toMatch(/165.*66\.7%.*87\.5%/);
-  expect(row(h, "Small")).toContain("$0.91 / built");
-  for (const n of ["Intake", "Director", "Monitor", "Title", "Judge"]) {
-    expect(cells(row(h, n))).toEqual(Array(3).fill('<td class="num"><span title="worker only">–</span></td>'));
-    expect(row(h, n)).not.toContain("/ built");
-  }
-});
-
 test("a down local server shows one alert, an up one shows nothing, and the Roles table disables gpt-oss-20b to match", () => {
   const down = renderFactoryAgents(S, D, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] });
   expect(down).toMatch(/role="alert"[^>]*>Local server down</);
-  expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(12);
+  // Medium is off, so it has no select.
+  expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(11);
   const up = renderFactoryAgents(S, D, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(up).not.toContain("Local server");
   expect(up).not.toContain("role=\"alert\"");
@@ -276,64 +265,81 @@ test("the Success tile shows the success and first pass shares, its trend with h
   expect(tile(page({ success: 0.91, baseline: null, firstPass: 0.64 }), "Success")).not.toContain('class="tr');
 });
 
-test("an outcome joins the row of its role and model; roles with no model setting stay their own row", () => {
-  const o = (role: string, model: string, rate: number) => ({ role, model, runs: 20, succeeded: rate * 20, failed: 20 - rate * 20, stuck: 0, ended: 20, rate, p50: 60, cost: 1.5, baseline: 0.7 });
-  const row = (h: string, name: string) => h.match(new RegExp(`<tr><td class="wide" title="${name}">${name}</td>.*?</tr>`))![0];
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("intake", "opus", 0.95), o("triage", "opus", 0.9)] } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(row(h, "Intake")).toMatch(/<\/select><\/td><td class="num">20<\/td><td class="num">95%/);
-  expect(h.match(/<td class="wide" title="Intake">Intake<\/td>/g)!.length).toBe(1);
-  expect(row(h, "Triage")).toContain("90%");
-});
-
 const full = (role: string, model: string, extra: any = {}) => ({ role, model, runs: 30, succeeded: 24, failed: 6, stuck: 0, ended: 30, rate: 0.8, p50: 60, p95: 300, cost: 1.5, baseline: 0.7, ...extra });
 const M = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] };
 const page = (outcomes: any[], extra: any = {}) => renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes, ...extra } }, "live", "week", M);
 
-test("the size rows are one per size and the Worker row one per other worker model, each with its own runs and p50", () => {
-  const h = page([full("worker", "haiku", { runs: 11, p50: 61 }), full("worker", "sonnet", { runs: 12, p50: 125 }), full("worker", "opus", { runs: 13, p50: 3700 }), full("worker", "gpt-oss-20b", { runs: 14, p50: 9 })]);
-  expect(h.match(/<td class="wide" title="Worker">Worker<\/td>/g)!.length).toBe(1);
+test("a size on two models shows its current model's figures and a ▸ that opens a sub-row of the earlier model with its dates", () => {
+  const outs = [full("worker", "gpt-oss-20b", { size: "small", runs: 14, from: "2026-10-20T08:00:00Z", to: "2026-10-23T08:00:00Z" }), full("worker", "haiku", { size: "small", runs: 11 })];
+  const h = page(outs);
   expect(row(h, "Small")).toContain('<td class="num">11</td>');
-  expect(row(h, "Small")).toContain(`<td class="num">${dur(61)}</td>`);
-  expect(row(h, "Medium")).toContain('<td class="num">12</td>');
-  expect(row(h, "Medium")).toContain(`<td class="num">${dur(125)}</td>`);
-  expect(row(h, "Large")).toContain('<td class="num">13</td>');
-  expect(row(h, "Large")).toContain(`<td class="num">${dur(3700)}</td>`);
-  expect(rowOf(h, "Worker", "gpt-oss-20b")).toContain('<td class="num">14</td>');
-  expect(rowOf(h, "Worker", "gpt-oss-20b")).toContain(`<td class="num">${dur(9)}</td>`);
+  expect(row(h, "Small")).toContain('<button class="fold" data-fold="small" aria-expanded="false" aria-label="Earlier models of Small">▸</button>');
+  expect(h).not.toContain("sub-row");
+  (globalThis as any).localStorage = { getItem: (k: string) => (k === "aleph.agents.open" ? '["small"]' : null), setItem() {} };
+  try {
+    const o = page(outs);
+    expect(row(o, "Small")).toContain('aria-expanded="true"');
+    expect(o).toMatch(/<tr class="sub-row"><td><\/td><td>gpt-oss-20b <span class="m">Oct 20 – Oct 23<\/span><\/td><td class="num">14<\/td>/);
+  } finally {
+    delete (globalThis as any).localStorage;
+  }
 });
 
-test("the Reviewer shows every outcome model, and its rate is a Pass share with no trend tone", () => {
-  const h = page([full("reviewer", "opus", { runs: 21, pass: 24, fail: 6 }), full("reviewer", "unset", { runs: 22, pass: 24, fail: 6 })]);
-  expect(row(h, "Reviewer")).toContain('<td class="num">21</td>');
-  expect(rowOf(h, "Reviewer", "unset")).toContain('<td class="num">22</td>');
-  for (const r of [row(h, "Reviewer"), rowOf(h, "Reviewer", "unset")]) {
-    expect(r).toContain("Pass share");
-    expect(r).toMatch(/class="tr"/);
-    expect(r).not.toMatch(/class="tr (good|warn)"|class="num warn"/);
+test("a click on ▸ keeps the size open, and a second click closes it", async () => {
+  const store: Record<string, string> = {};
+  (globalThis as any).localStorage = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } };
+  const root: any = { querySelector: () => null };
+  const b: any = { dataset: { fold: "small" } };
+  const click = () => root.onclick({ target: { closest: (q: string) => (q === "#roles button[data-fold]" ? b : null) } });
+  try {
+    await view.mount(root, S);
+    click();
+    expect(store["aleph.agents.open"]).toBe('["small"]');
+    click();
+    expect(store["aleph.agents.open"]).toBe("[]");
+  } finally {
+    delete (globalThis as any).localStorage;
   }
-  expect(row(h, "Small")).not.toContain("Pass share");
+});
+
+test("the Workers group holds Small, Medium, Large and an Unsized row with no controls, and the Roles group a row per role model", () => {
+  const h = page([full("worker", "sonnet", { size: null, runs: 17 })]);
+  const [workers, rolesPart] = h.split('<tr class="grp"><th colspan="10">Roles</th></tr>');
+  expect(workers).toContain('<tr class="grp"><th colspan="10">Workers</th></tr>');
+  expect([...workers.matchAll(/<td class="wide" title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large", "Unsized"]);
+  const un = row(h, "Unsized");
+  expect(un).toContain('<td>sonnet</td><td class="num">17</td>');
+  expect(un).not.toMatch(/<select|checkbox/);
+  expect([...rolesPart.matchAll(/<td class="wide" title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Lens", "Housekeeper", "Title", "Judge"]);
+});
+
+test("an off size says where its work goes and shows no select or figures, and the last size on cannot go off", () => {
+  const set = (on: string[]) => ({ ...M, models: Object.fromEntries(Object.entries(entries("haiku", "sonnet")).map(([k, v]) => [k, { ...v, enabled: !["small", "medium", "large"].includes(k) || on.includes(k) }])) });
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [full("worker", "opus", { size: "large", runs: 19 })] } }, "live", "week", set(["small", "medium"]));
+  expect(row(h, "Large")).toContain('<td><input type="checkbox" data-name="large" aria-label="Large enabled"> <span class="m">Off · goes to Medium</span></td><td colspan="8"></td></tr>');
+  expect(row(h, "Large")).not.toContain("<select");
+  expect(row(h, "Small")).not.toContain("disabled");
+  const one = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", set(["medium"]));
+  expect(row(one, "Medium")).toContain('aria-label="Medium enabled" checked disabled');
+  expect(row(one, "Small")).toContain("Off · goes to Medium");
+  expect(row(one, "Large")).toContain("Off · goes to Medium");
 });
 
 test("a row under 20 ended runs shows its counts and no percent; 20 or more shows the rate with its ended count", () => {
-  const h = page([full("worker", "haiku", { ended: 7, succeeded: 5, failed: 2, rate: 5 / 7 }), full("worker", "sonnet", { ended: 24, succeeded: 20, failed: 4, rate: 20 / 24 })]);
+  const h = page([full("worker", "haiku", { size: "small", ended: 7, succeeded: 5, failed: 2, rate: 5 / 7 }), full("worker", "opus", { size: "large", ended: 24, succeeded: 20, failed: 4, rate: 20 / 24 })]);
   expect(row(h, "Small")).toContain("5 / 7");
-  expect(row(h, "Small")).not.toMatch(/%|class="tr/);
-  expect(row(h, "Medium")).toMatch(/83%.*?>24</);
-  expect(row(h, "Medium")).toContain('class="tr');
+  expect(row(h, "Small").match(/<td class="num[^"]*">.*?<\/td>/g)![1]).not.toMatch(/%|class="tr/);
+  expect(row(h, "Large")).toMatch(/83%.*?>24</);
+  expect(row(h, "Large")).toContain('class="tr');
 });
 
-test("the Roles table heads p95, draws Housekeeper and Maintainer rows, and a worker row shows built, cost per built, first pass and review pass", () => {
-  const roles = [...agents.roles, { key: "housekeeper", name: "Housekeeper", runs: 1, hours: 1, p50: 1, p95: 1, models: [], live: 0 }, { key: "maintainer", name: "Maintainer", runs: 1, hours: 1, p50: 1, p95: 1, models: [], live: 0 }];
-  const h = page([full("worker", "haiku", { built: 165, perBuilt: 0.91, firstPass: 110, reviewPass: 0.875 }), full("housekeeper", "opus", { runs: 31 }), full("maintainer", "opus", { runs: 32 })], { roles });
-  expect(th(h).map(([t]) => t)).toContain("p95");
-  expect(rowOf(h, "Housekeeper", "opus")).toContain('<td class="num">31</td>');
-  expect(rowOf(h, "Maintainer", "opus")).toContain('<td class="num">32</td>');
+test("the Roles table draws Housekeeper and Maintainer rows, and a size row shows p95 and its landed builds", () => {
+  const h = page([full("worker", "haiku", { size: "small", built: 165, firstPass: 110, reviewPass: 0.875 }), full("housekeeper", "opus", { runs: 31 }), full("maintainer", "sonnet", { runs: 32 })]);
+  expect(row(h, "Housekeeper")).toContain('<td class="num">31</td>');
+  expect(row(h, "Maintainer")).toContain('<td class="num">32</td>');
   const w = row(h, "Small");
   expect(w).toContain(`<td class="num">${dur(300)}</td>`);
-  expect(w).toContain("$0.91");
-  expect(w).toContain('<td class="num">165</td>');
-  expect(w).toContain("66.7%");
-  expect(w).toContain("87.5%");
+  expect(w).toContain("165 landed");
 });
 
 test("the page shows the first-pass rate to one decimal", () => {
@@ -342,27 +348,18 @@ test("the page shows the first-pass rate to one decimal", () => {
 });
 
 const th = (h: string) => [...h.matchAll(/<th( class="num")?>([^<]+)</g)].map((m) => [m[2], !!m[1]]);
-const one = { role: "worker", model: "haiku", runs: 1234, succeeded: 1, failed: 0, stuck: 0, ended: 1, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 };
+const one = { role: "worker", size: "small", model: "haiku", runs: 1234, succeeded: 1, failed: 0, stuck: 0, ended: 1, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 };
 
 test("the Roles headers are in Title Case, and every number header has num", () => {
   const heads = th(renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } }));
-  expect(heads.filter(([, n]) => n).map(([h]) => h)).toEqual(["Jobs", "Success", "p50", "p95", "Cost", "Built", "First pass", "Review pass"]);
+  expect(heads.filter(([, n]) => n).map(([h]) => h)).toEqual(["Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per output"]);
 });
 
-test("the Roles table heads its job count Jobs, and no head keeps the old words", () => {
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } });
-  const names = th(h).map(([t]) => String(t));
-  expect(names).toContain("Jobs");
-  expect(names.filter((t) => /runs|goal|part/i.test(t))).toEqual([]);
-  expect(h).toContain(">Failed jobs</a>");
-});
-
-test("the Failed jobs link has no underline until hover or focus", () => {
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } });
-  expect(h).toContain('<a class="failed-jobs" href="#/factory/jobs?role=worker&state=failed">Failed jobs</a>');
-  const css = readFileSync(new URL("./app.css", import.meta.url), "utf8");
-  expect(css).toMatch(/^a\.failed-jobs \{[^}]*text-decoration: none;/m);
-  expect(css).toMatch(/^a\.failed-jobs:hover, a\.failed-jobs:focus-visible \{[^}]*text-decoration: underline;/m);
+test("the Roles table heads Agent to Output, with no Failed jobs link, Pass share or worker only cell", () => {
+  const h = page([full("worker", "haiku", { size: "small" }), full("reviewer", "opus", { pass: 24, fail: 6 }), full("intake", "opus")]);
+  expect(th(h).map(([t]) => t)).toEqual(["Agent", "Model", "Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per output", "Output"]);
+  expect(h).not.toMatch(/Failed jobs|failed-jobs|Pass share|worker only/);
+  expect(readFileSync(new URL("./app.css", import.meta.url), "utf8")).not.toContain("failed-jobs");
 });
 
 test("a Roles count goes through count()", () => {
@@ -371,7 +368,7 @@ test("a Roles count goes through count()", () => {
 
 test("a Roles row with no outcome shows a dash in every cell, with num on the number cells", () => {
   const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(row(html, "Director")).toMatch(new RegExp(`</select></td>${'<td class="num"><span title="no runs in this window">–</span></td>'.repeat(8)}<td><span title="no runs in this window">–</span></td>`));
+  expect(row(html, "Director")).toMatch(new RegExp(`</select></td>${'<td class="num"><span title="no runs in this window">–</span></td>'.repeat(7)}<td><span title="no runs in this window">–</span></td>`));
 });
 
 test("an empty Roles table shows the empty line", () => {

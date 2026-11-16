@@ -419,8 +419,8 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
   expect(by("worker", "claude-haiku")).toMatchObject({ runs: 3, succeeded: 1, failed: 1, stuck: 1, rate: 0.3333, p50: 3600, cost: 1.5, firstPass: 1, reviewPass: 0.5, baseline: 0.5 });
   expect(by("worker", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 0, failed: 1, stuck: 0, rate: 0, cost: 0.25, firstPass: 0, reviewPass: null, baseline: null });
   expect(by("intake", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 1, rate: 1 });
-  // The verdicts give the pass and fail counts; the runs are those of the review jobs, and there are none here.
-  expect(by("reviewer", "unset")).toMatchObject({ pass: 1, fail: 1, runs: 0, rate: 0.5 });
+  // The verdicts give the pass and fail counts; the runs are those of the review jobs, and there are none here, so no rate.
+  expect(by("reviewer", "unset")).toMatchObject({ pass: 1, fail: 1, runs: 0, ended: 0, rate: null });
   expect(a.outcomes.map((x) => x.role)).toEqual(["worker", "worker", "intake", "reviewer"]);
 });
 
@@ -454,8 +454,29 @@ test("agents: the reviewer's runs, model, cost and times come from its review jo
     e("build", 10, 11, { model: "claude-haiku", review: { call: "passed", model: "claude-opus-5-5" } }),
   ];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
-  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "claude-opus-5-5", runs: 2, cost: 2, p50: 1800, p95: 3600, pass: 1, fail: 0, succeeded: 1, ended: 1 });
+  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "claude-opus-5-5", runs: 2, cost: 2, p50: 1800, p95: 3600, pass: 1, fail: 0, succeeded: 2, ended: 2 });
   expect(a.roles.find((x) => x.key === "reviewer")).toMatchObject({ live: 0, runs: 2, hours: 1.5, p50: 1800, p95: 3600, models: ["opus"] });
+});
+
+test("agents: the reviewer's rate is its verdicts over its ended runs, and a worker's reviewPass the pass share of its verdicts", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  let n = 0;
+  const e = (kind: string, a: number, extra: object = {}) => ({ folder: `q${n}`, id: `q${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "done", started: iso(a), ended: iso(a + 1), model: "claude-opus-5-5", ...extra } }) as any;
+  const verdict = (call: string) => ({ model: "claude-haiku", size: "small", state: call === "passed" ? "passed" : "returned", review: { call, model: "claude-opus-5-5" } });
+  // Four review runs end, one fails: three verdicts, two passes.
+  const runs = [e("review", 10), e("review", 11), e("review", 12), e("review", 13, { state: "failed", failed: "x" }), e("build", 10, verdict("passed")), e("build", 11, verdict("passed")), e("build", 12, verdict("returned"))];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ ended: 4, pass: 2, fail: 1, rate: 0.75 });
+  expect(a.outcomes.find((x) => x.role === "worker")).toMatchObject({ reviewPass: 0.6667 });
+});
+
+test("agents: worker rows are one per size and model, a build with no size has size null, and each row runs from its first to its last start", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  let n = 0;
+  const e = (a: number, extra: object = {}) => ({ folder: `s${n}`, id: `s${n++}`, run: { n: 1, role: "build", job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
+  const runs = [e(14, { size: "small" }), e(11, { size: "small" }), e(12, { size: "medium" }), e(13), e(9, { size: "small" })];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.filter((x) => x.role === "worker").map((x) => [x.size, x.model, x.runs, x.from, x.to])).toEqual([["small", "claude-haiku", 2, iso(11), iso(14)], ["medium", "claude-haiku", 1, iso(12), iso(12)], [null, "claude-haiku", 1, iso(13), iso(13)]]);
 });
 
 test("agents: a model's provider prefix falls away, so its runs share one reviewer row", () => {

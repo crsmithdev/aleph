@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, notice, pageHead, pct, row, say, selectBox, shortModel, statCard, tiles, scope } from "../lib.js";
+import { postJson, card, cardTrend, cell, count, dataTable, day, dur, empty, error, esc, heads, keep, kept, loadingLine, miss, money, notice, pageHead, pct, say, selectBox, shortModel, statCard, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { flowOf, lastPeriod, usageCard, windowTrend } from "./speed.js";
@@ -47,34 +47,48 @@ const SIZES = { small: "Small", medium: "Medium", large: "Large" };
 /** Each role model's role, whose name and outcomes its rows show; the models it offers come from /api/models. */
 const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", maintainer: "maintainer", lens: "lens", housekeeper: "housekeeper", title: "title", judge: "judge" };
 
+/** The noun of each role's output; a role not named here counts its OK runs. */
+const NOUNS = { worker: "landed", reviewer: "verdict", intake: "triage", director: "step", monitor: "reading", housekeeper: "sweep", title: "title", judge: "call" };
+
+/** Where an off size's work goes, as route() picks it: the next size up that is on, else the next one down. */
+function goesTo(key, set) {
+  const ks = Object.keys(SIZES), i = ks.indexOf(key);
+  return SIZES[[...ks.slice(i + 1), ...ks.slice(0, i).reverse()].find((k) => set[k]?.enabled)];
+}
+
 function roles(a, m) {
-  const num = ["Jobs", "Success", "p50", "p95", "Cost", "Built", "First pass", "Review pass"];
-  const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
-  const gone = `<td class="num">${miss("no runs in this window")}</td>`;
-  const outs = a.outcomes ?? [];
+  const num = ["Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per output"];
+  const gone = miss("no runs in this window");
+  const outs = a.outcomes ?? [], set = m?.models ?? {}, open = new Set(kept("agents.open", []));
+  // The figures of one outcome. Its output is landed builds for a worker, verdicts for the reviewer and OK runs for another role.
   const stats = (o) => {
-    if (!o) return `${gone.repeat(num.length)}<td>${miss("no runs in this window")}</td>`;
-    const few = o.ended < MIN_ENDED, reviewer = o.role === "reviewer", worker = o.role === "worker";
-    // A reviewer's rate is a share of verdicts, not better or worse.
-    const trend = few ? "" : cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: reviewer ? null : false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
-    const warn = !few && !reviewer && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    const rate = few ? `${o.succeeded} / ${o.ended}` : `${esc(share(o.rate))} <span class="m" title="ended">${count(o.ended)}</span> ${trend}`;
-    const per = worker && o.perBuilt != null ? ` <span class="m">${money(o.perBuilt)} / built</span>` : "";
-    const built = worker ? [cell(count(o.built), { num: true }), cell(share1(o.built ? o.firstPass / o.built : null), { num: true }), cell(share1(o.reviewPass), { num: true })] : Array(3).fill(`<td class="num">${miss("worker only")}</td>`);
-    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${reviewer ? '<span class="m">Pass share</span> ' : ""}${rate}</td>${cell(dur(o.p50), { num: true })}${cell(dur(o.p95), { num: true })}<td class="num">${money(o.cost)}${per}</td>${built.join("")}<td><a class="failed-jobs" href="#/factory/jobs?role=${esc(o.role)}&state=failed">Failed jobs</a></td>`;
+    if (!o) return `<td class="num">${gone}</td>`.repeat(num.length) + `<td>${gone}</td>`;
+    const few = o.ended < MIN_ENDED, worker = o.role === "worker", reviewer = o.role === "reviewer";
+    const out = worker ? o.built : reviewer ? o.pass + o.fail : o.succeeded, noun = NOUNS[o.role] ?? "run";
+    const trend = few ? "" : cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
+    const warn = !few && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
+    const rate = few ? `${reviewer ? out : o.succeeded} / ${o.ended}` : `${esc(share(o.rate))} <span class="m" title="ended">${count(o.ended)}</span> ${trend}`;
+    const q = worker ? ` <span class="m">· ${share(o.built ? o.firstPass / o.built : null)} first · ${share(o.reviewPass)} review</span>` : "";
+    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${[count(o.stuck), dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td>${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
   };
-  // One row per size and role model, with a select for its model and the outcome of that model; then a row per outcome no select covers.
-  const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), m.models[key]?.model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
-  const used = new Set();
-  const pick = ([key, label, role]) => {
-    const o = outs.find((x) => x.role === role && shortModel(x.model) === shortModel(m.models[key]?.model));
-    if (o) used.add(o);
-    const box = key in SIZES ? `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${m.models[key]?.enabled ? " checked" : ""}> ` : "";
-    return row([cell(label, { wide: true }), `<td>${box}${sel(key, label)}</td>`, stats(o)]);
+  const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
+  const on = Object.keys(SIZES).filter((k) => set[k]?.enabled).length;
+  const box = (key, label) => `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${set[key].enabled ? ` checked${on === 1 ? ' disabled title="Last on"' : ""}` : ""}> `;
+  // A row per size and role: the figures of the model it is set to (with no setting, of the model it ran on last), then under ▸ a sub-row per earlier model.
+  const line = (key, label, rs) => {
+    const last = [...rs].sort((x, y) => (y.to ?? "").localeCompare(x.to ?? ""));
+    const now = set[key]?.model ?? last[0]?.model, cur = rs.find((o) => shortModel(o.model) === shortModel(now));
+    const past = last.filter((o) => o !== cur), off = key in SIZES && set[key] && !set[key].enabled, shut = !open.has(key);
+    const fold = past.length ? `<button class="fold" data-fold="${esc(key)}" aria-expanded="${!shut}" aria-label="Earlier models of ${label}">${shut ? "▸" : "▾"}</button> ` : "";
+    const ctrl = !set[key] ? esc(shortModel(now)) : `${key in SIZES ? box(key, label) : ""}${off ? `<span class="m">Off · goes to ${goesTo(key, set)}</span>` : sel(key, label)}`;
+    return `<tr><td class="wide" title="${label}">${label}</td><td>${fold}${ctrl}</td>${off ? `<td colspan="${num.length + 1}"></td>` : stats(cur)}</tr>` +
+      (shut ? "" : past.map((o) => `<tr class="sub-row"><td></td><td>${esc(shortModel(o.model))} <span class="m">${day(o.from)} – ${day(o.to)}</span></td>${stats(o)}</tr>`).join(""));
   };
-  const config = m ? [...Object.entries(SIZES).map(([key, label]) => [key, label, "worker"]), ...Object.entries(ROLE_MODELS).map(([key, role]) => [key, NAMES[role], role])].map(pick).join("") : "";
-  const rows = config + outs.filter((o) => !used.has(o) && !(m && o.role === "merge")).map((o) => row([cell(NAMES[o.role] ?? names[o.role] ?? o.role, { wide: true }), cell(shortModel(o.model)), stats(o)])).join("");
-  return rows ? dataTable(heads(["Role", "Model", ...num, "Failed Jobs"], num), rows) : empty();
+  const of = (role, size) => outs.filter((o) => o.role === role && (size === undefined || o.size === size));
+  const grp = (t) => `<tr class="grp"><th colspan="${num.length + 3}">${t}</th></tr>`;
+  const rows = grp("Workers") + Object.entries(SIZES).map(([k, l]) => line(k, l, of("worker", k))).join("") + line("unsized", "Unsized", of("worker", null)) +
+    grp("Roles") + Object.entries(ROLE_MODELS).map(([k, r]) => line(k, NAMES[r], of(r))).join("");
+  return m || outs.length ? dataTable(heads(["Agent", "Model", ...num, "Output"], num), rows) : empty();
 }
 
 const timed = (a) => a.roles.filter((r) => r.hours != null);
@@ -148,6 +162,14 @@ export const view = {
   mount: (root, s) => {
     scope().wire(root);
     if (s.flow?.agents) for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(s.flow);
+    root.onclick = (e) => {
+      const b = e.target.closest?.("#roles button[data-fold]");
+      if (!b) return;
+      const open = new Set(kept("agents.open", []));
+      if (!open.delete(b.dataset.fold)) open.add(b.dataset.fold);
+      keep("agents.open", [...open]);
+      redraw();
+    };
     root.onchange = async (e) => {
       const b = e.target.closest?.("#roles [data-name]");
       if (!b || e.type !== "change") return;
