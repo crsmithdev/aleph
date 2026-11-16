@@ -24,9 +24,11 @@ function costPerLandCard(d) {
 }
 
 function scorecard(s, d, m, win) {
-  const f = s.factory;
+  const f = s.factory, a = d?.agents ?? null;
+  // The other live agents: the flow's live count less its worker runs.
+  const others = a ? `${count(a.live - a.workers)} others` : miss("flow not loaded");
   return usageCard(s) + openRouterCard(m, win) +
-    statCard({ k: "Worker slots", v: count(f.liveRuns ?? 0), v2: count(f.liveCap), q: ["in use", "cap"] }) +
+    statCard({ k: "Live agents", v: count(f.liveRuns ?? 0), v2: count(f.liveCap), q: ["in use", "cap"], extra: `<span class="q m">${others}</span>` }) +
     costPerLandCard(d) +
     statCard({ k: "Queue", v: count((s.queued ?? []).length), v2: dur(d?.phases?.queue?.p90), q: ["waiting", "p90"] });
 }

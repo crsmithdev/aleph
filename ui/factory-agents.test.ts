@@ -58,11 +58,11 @@ test("an outcome on a full model id joins the row of its short model; an unset m
   expect(h).not.toContain("not recorded");
 });
 
-test("the tiles are usage, OpenRouter spend for the window's UTC period, worker slots, cost per land and the queue", () => {
+test("the tiles are usage, OpenRouter spend for the window's UTC period, live agents, cost per land and the queue", () => {
   const keys = (h: string) => [...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1]);
   const m = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
-  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Worker slots", "Cost per land", "Queue"]);
+  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Live agents", "Cost per land", "Queue"]);
   for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>$1.50</b>");
   const loading = renderFactoryAgents(S, D);
@@ -75,11 +75,25 @@ test("the tiles are usage, OpenRouter spend for the window's UTC period, worker 
   expect(failed).not.toContain("Loading the models");
 });
 
-/** The HTML of one scorecard tile alone: from its key to the next tile. */
-const tile = (h: string, k: string) => {
-  const at = h.indexOf(`<span class="k">${k}</span>`), end = h.indexOf('<div class="tile sc"', at);
-  return h.slice(at, end < 0 ? undefined : end);
-};
+/** The inner HTML of each metric tile of the scorecard. */
+const tiles = (h: string) => [...h.matchAll(/<(?:div|a|button) class="tile sc"[^>]*>([\s\S]*?)<\/(?:div|a|button)>/g)].map((m) => m[1]);
+/** The tile whose key is `k`. */
+const tile = (h: string, k: string) => tiles(h).find((t) => t.includes(`<span class="k">${k}</span>`))!;
+
+test("one tile holds the worker runs of the cap and the count of the other live agents", () => {
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, live: 3, workers: 1 } });
+  const live = tile(h, "Live agents");
+  expect(live).toContain("<b>1<em> / 5</em></b>");
+  expect(live).toContain('<span class="q m">2 others</span>');
+  // No other tile shows a live count.
+  expect(tiles(h).filter((t) => t.includes("others") || t.includes("<b>1<em> / 5</em></b>"))).toEqual([live]);
+});
+
+test("with no flow the live tile keeps the worker runs and shows a dash for the other agents", () => {
+  const live = tile(renderFactoryAgents(S, null), "Live agents");
+  expect(live).toContain("<b>1<em> / 5</em></b>");
+  expect(live).toContain('<span class="q m"><span title="flow not loaded">–</span></span>');
+});
 
 test("the OpenRouter tile alone holds the window's cost and OpenRouter's light", () => {
   const m = (down: string[]) => ({ models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down, spend: { day: 1.5, week: 17.54, month: 18 } });
@@ -339,7 +353,7 @@ test("a failed load shows the error state", () => {
   expect(renderFactoryAgents(S, { error: "no data" })).toContain('<div class="error" role="alert"><p>no data</p>');
 });
 
-test("Worker slots shows a dash for a missing cap, and the Usage card is the Status one", () => {
+test("Live agents shows a dash for a missing cap, and the Usage card is the Status one", () => {
   const html = renderFactoryAgents({ ...S, factory: { ...S.factory, liveCap: undefined } }, { ...D, agents }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(html).toContain("<b>1<em> / –</em></b>");
   expect(html).not.toContain("undefined");
