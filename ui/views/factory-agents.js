@@ -69,7 +69,7 @@ function roles(a, m) {
   const pick = ([key, label, role]) => {
     const o = outs.find((x) => x.role === role && shortModel(x.model) === shortModel(m.models[key]?.model));
     if (o) used.add(o);
-    const box = key in SIZES && key !== "large" ? `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${m.models[key]?.enabled ? " checked" : ""}> ` : "";
+    const box = key in SIZES ? `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${m.models[key]?.enabled ? " checked" : ""}> ` : "";
     return row([cell(label, { wide: true }), `<td>${box}${sel(key, label)}</td>`, stats(o)]);
   };
   const config = m ? [...Object.entries(SIZES).map(([key, label]) => [key, label, "worker"]), ...Object.entries(ROLE_MODELS).map(([key, role]) => [key, NAMES[role], role])].map(pick).join("") : "";

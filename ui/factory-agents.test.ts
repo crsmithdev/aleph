@@ -207,7 +207,7 @@ const entries = (small: string, medium: string) => ({
   judge: { enabled: true, model: "haiku" },
 });
 
-test("the Roles table holds a select per size and role model in its Model cell, a checkbox on Small and Medium only, and no Models card", () => {
+test("the Roles table holds a select per size and role model in its Model cell, a checkbox on each size only, and no Models card", () => {
   const keys: Record<string, string> = { Small: "small", Medium: "medium", Large: "large", Reviewer: "review", Intake: "intake", Director: "director", Monitor: "monitor", Maintainer: "maintainer", Lens: "lens", Housekeeper: "housekeeper", Title: "title", Judge: "judge" };
   // The second offer of each key is configured, so a select that kept its first option fails.
   const want = Object.fromEntries(Object.values(keys).map((k) => [k, (OFFERS as any)[k][1]]));
@@ -221,11 +221,12 @@ test("the Roles table holds a select per size and role model in its Model cell, 
     expect([...sel.matchAll(/<option value="([^"]+)"/g)].map((x) => x[1])).toEqual((OFFERS as any)[key]);
     expect(sel).toContain(`data-name="${key}"`);
     expect(sel).toMatch(new RegExp(`<option value="${want[key]}"[^>]* selected>`));
-    expect(cells[1].includes("checkbox")).toBe(key === "small" || key === "medium");
+    expect(cells[1].includes("checkbox")).toBe(["small", "medium", "large"].includes(key));
   }
   expect(row(html, "Small")).toContain('type="checkbox" data-name="small" aria-label="Small enabled" checked');
   expect(row(html, "Medium")).toContain('type="checkbox" data-name="medium" aria-label="Medium enabled">');
-  expect((html.match(/type="checkbox"/g) ?? []).length).toBe(2);
+  expect(row(html, "Large")).toContain('type="checkbox" data-name="large" aria-label="Large enabled">');
+  expect((html.match(/type="checkbox"/g) ?? []).length).toBe(3);
   expect(html).not.toContain(">Merge<");
   expect(html).not.toContain(">Succeeded<");
   expect(html).not.toContain(">Failed<");

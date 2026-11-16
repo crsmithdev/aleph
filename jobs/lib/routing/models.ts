@@ -139,7 +139,7 @@ export const OFFERS = {
 export type Name = keyof typeof OFFERS;
 export type Setting = { enabled: boolean; model: string };
 /** The sizes that can be disabled. */
-const DISABLES = ["small", "medium"] as const;
+const DISABLES = ["small", "medium", "large"] as const;
 /** The size of a run's model: a size word, which unit.ts replaces with the size's model, or the Claude model of a merge run. */
 export const SIZE_OF: Record<string, Name | undefined> = { small: "small", medium: "medium", large: "large", haiku: "small", sonnet: "medium", opus: "large" };
 /** The name each entry had in a models setting stored before the sizes. */
@@ -160,13 +160,14 @@ export function readModels(): Record<Name, Setting> {
   return all;
 }
 
-/** Changes one entry; returns an error text for an unknown name, a model the entry does not offer, or a disable of an entry that cannot be disabled, else null. */
+/** Changes one entry; returns an error text for an unknown name, a model the entry does not offer, a disable of an entry that cannot be disabled, or of the last enabled size, else null. */
 export function setModel(name: string, change: Partial<Setting>): string | null {
   if (!Object.hasOwn(OFFERS, name)) return `unknown name "${name}"; names: ${Object.keys(OFFERS).join(", ")}`;
   const t = name as Name;
   if (change.model !== undefined && !OFFERS[t].includes(change.model)) return `${t} offers ${OFFERS[t].join(", ")}, not "${change.model}"`;
-  if (change.enabled === false && !(DISABLES as readonly string[]).includes(t)) return `only ${DISABLES.join(" and ")} can be disabled`;
+  if (change.enabled === false && !(DISABLES as readonly string[]).includes(t)) return `only ${DISABLES.join(", ")} can be disabled`;
   const m = readModels();
+  if (change.enabled === false && DISABLES.every((s) => s === t || !m[s].enabled)) return "one size stays on";
   write({ ...m, [t]: { ...m[t], ...change } });
   logSetting(`${t}: ${Object.entries(change).map(([k, v]) => `${k} ${v}`).join(", ")}`);
   return null;

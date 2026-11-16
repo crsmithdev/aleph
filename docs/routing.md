@@ -54,7 +54,7 @@ Every role runs with `--disable-slash-commands`, so it loads no skill. The worke
 | `medium` | `sonnet` | A typical change across several files, with a clear Oracle |
 | `large` | `claude-opus-5-5` | A design-heavy or cross-cutting change, or one whose approach is open |
 
-Jev's answer counts when its probability is at least 0.6. Otherwise, or when Jev fails or the judge choice is `haiku`, the run gets no `--model` and uses the CLI default. A disabled size steps up to the next enabled one; `large` is always on.
+Jev's answer counts when its probability is at least 0.6. Otherwise, or when Jev fails or the judge choice is `haiku`, the run gets no `--model` and uses the CLI default. A disabled size steps up to the next enabled one, else down to the next enabled one below it.
 
 A goal with the `red-main` area or label is not routed: it starts on `medium`, with no Jev call. A rerun after a failed build still steps up.
 
@@ -86,12 +86,12 @@ The `models` setting maps each size and role model ([Naming](naming.md#terms)) t
 | `maintainer` | `sonnet` |
 | `title`, `judge` | `haiku` |
 
-Only `small` and `medium` can be off. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
+Any one size can be off, but one size stays on. A role model is always on. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
 
 ```bash
 aleph models                          # show the sizes and role models
 aleph models set small deepseek-v4.1-flash
-aleph models disable medium           # only small and medium can be off
+aleph models disable large            # one size stays on
 ```
 
 A build routed to a size records the model that ran as `model` and the size word as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.

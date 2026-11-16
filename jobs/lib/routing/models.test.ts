@@ -32,7 +32,7 @@ test("no setting gives small, medium and large on haiku, sonnet and Opus, and ea
   });
 });
 
-test("an entry set to a model it offers reads back; a model it does not offer, an unknown or old name, or a disable of large or a role model is an error text", () => {
+test("an entry set to a model it offers reads back; a model it does not offer, an unknown or old name, or a disable of a role model is an error text", () => {
   expect(setModel("small", { model: "gpt-oss-20b" })).toBeNull();
   expect(setModel("medium", { enabled: false })).toBeNull();
   const m = readModels();
@@ -46,10 +46,19 @@ test("an entry set to a model it offers reads back; a model it does not offer, a
   expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown");
   expect(setModel("worker-low", { model: "haiku" })).toContain("unknown");
   expect(setModel("intake", { model: "nonexistent" })).toContain("offers");
-  expect(setModel("large", { enabled: false })).toContain("can be disabled");
   expect(setModel("review", { enabled: false })).toContain("can be disabled");
   expect(setModel("merge", { model: "haiku" })).toContain("unknown");
   expect(readModels()).toEqual({ ...m, housekeeper: { enabled: true, model: "sonnet" } });
+});
+
+test("any one size can be disabled, and a disable of the last enabled size is an error text that changes nothing", () => {
+  expect(setModel("large", { enabled: false })).toBeNull();
+  expect(readModels().large.enabled).toBe(false);
+  expect(setModel("large", { enabled: true })).toBeNull();
+  expect(setModel("small", { enabled: false })).toBeNull();
+  expect(setModel("medium", { enabled: false })).toBeNull();
+  expect(setModel("large", { enabled: false })).toContain("one size stays on");
+  expect(readModels().large.enabled).toBe(true);
 });
 
 test("a models setting stored under the old names reads back under small, medium and review", () => {

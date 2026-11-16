@@ -17,7 +17,7 @@ const SIZE_QUESTION = {
   },
 };
 
-/** The size for a spec, or null (no --model) when Jev is off, errs, or is not sure enough. A disabled size gives the next enabled size up. */
+/** The size for a spec, or null (no --model) when Jev is off, errs, or is not sure enough. A disabled size gives the next enabled size up, else the next enabled size down. */
 export async function route(spec: string, subject = "route"): Promise<Size | null> {
   if (judgeChoice() === "haiku") return null;
   try {
@@ -28,7 +28,8 @@ export async function route(spec: string, subject = "route"): Promise<Size | nul
     try { logEvent({ subject: "rule", action: "routed", object: subject, detail: `${a.choice} by classifier ${d.model.split("/").pop()}` }); } catch { /* the cost event is a note; it never changes the size */ }
     if (!(SIZES as readonly string[]).includes(a.choice) || p < CUT) return null;
     const models = readModels();
-    return SIZES.slice(SIZES.indexOf(a.choice as Size)).find((s) => models[s].enabled)!;
+    const i = SIZES.indexOf(a.choice as Size);
+    return [...SIZES.slice(i), ...SIZES.slice(0, i).reverse()].find((s) => models[s].enabled)!;
   } catch {
     return null;
   }

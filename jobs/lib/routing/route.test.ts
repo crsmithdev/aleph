@@ -44,6 +44,14 @@ test("a small pick gives medium when small is disabled, and large when both are 
   expect(await route("x")).toBe("large");
 });
 
+test("a large pick gives medium when large is disabled, and small when large and medium are disabled", async () => {
+  reply = { status: 200, body: { answers: { size: { type: "choice", choice: "large", probabilities: { large: 0.7 } } }, cost: 0, model: "m" } };
+  expect(setModel("large", { enabled: false })).toBeNull();
+  expect(await route("x")).toBe("medium");
+  expect(setModel("medium", { enabled: false })).toBeNull();
+  expect(await route("x")).toBe("small");
+});
+
 test("raise gives the next enabled size up, skips a disabled one, and stays at the top", () => {
   const on = { enabled: true, model: "m" }, off = { enabled: false, model: "m" };
   const models: any = { small: on, medium: on, large: on };
