@@ -62,8 +62,7 @@ const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vaul
 /** Hooks in Claude Code's settings file (`claudeSettings()`): event, matcher and command, with 7-day call counts where Langfuse has them. */
 async function hooks() {
   const file = claudeSettings();
-  let cfg: any = {};
-  cfg = readJsonOr(file, {});
+  const cfg = readJsonOr<{ hooks?: Record<string, { matcher?: string; hooks?: { command?: string; type?: string }[] }[]> }>(file, {});
   // activity() reads Langfuse for about 100 s cold: a build answers without the counts until the read ends.
   const counts = await later("memory:calls", ["usage"], async () => {
     try {
@@ -73,7 +72,7 @@ async function hooks() {
   }, null);
   const counted = counts !== null, calls = counts ?? new Map<string, number>();
   const out: { event: string; matcher: string; command: string; calls: number | null }[] = [];
-  for (const [event, groups] of Object.entries<any>(cfg.hooks ?? {}))
+  for (const [event, groups] of Object.entries(cfg.hooks ?? {}))
     for (const g of Array.isArray(groups) ? groups : [])
       for (const h of g.hooks ?? []) {
         const command = String(h.command ?? h.type ?? "");

@@ -18,11 +18,17 @@ export interface Scope { project: string | null; window: string; ms: number; day
 /** The project of `?project=`; null when it is missing or "". */
 export const projectOf = (url: URL) => url.searchParams.get("project") || null;
 
-/** The scope of `url`: `?window=` is a name of `names`, `fallback` when missing or "", and any other value is a 400. */
-export function scopeOf(url: URL, fallback = "week", names: readonly string[] = FACTORY): Scope | Response {
+/** The scope of `url`: `?window=` is a name of `names`, `fallback` when missing or "", and any other value is an error text. */
+export function parseScope(url: URL, fallback = "week", names: readonly string[] = FACTORY): Scope | { error: string } {
   const window = url.searchParams.get("window") || fallback;
-  if (!names.includes(window)) return Response.json({ error: `window must be one of ${names.join(", ")}` }, { status: 400 });
+  if (!names.includes(window)) return { error: `window must be one of ${names.join(", ")}` };
   return { project: projectOf(url), window, ms: WINDOWS[window], days: WINDOWS[window] / DAY };
+}
+
+/** The scope of `url` as `parseScope` reads it, or a 400 for a window that is not in `names`. */
+export function scopeOf(url: URL, fallback = "week", names: readonly string[] = FACTORY): Scope | Response {
+  const sc = parseScope(url, fallback, names);
+  return "error" in sc ? Response.json(sc, { status: 400 }) : sc;
 }
 
 /** Whether `project` is a registry key. */

@@ -10,11 +10,11 @@ import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "n
 import { dirname, join } from "node:path";
 import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { scopeOf, traceProject } from "./scope.ts";
+import { parseScope, scopeOf, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
 import { once, touch } from "../../lib/sources.ts";
-import { langfuse, type Langfuse, type ObservationQuery, type TraceQuery } from "../../lib/langfuse.ts";
+import { langfuse, type Langfuse, type Lists, type Rows, type Observation as LfObservation, type ObservationQuery, type Trace, type TraceQuery } from "../../lib/langfuse.ts";
 import { skillsDir, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 86400_000;
@@ -55,16 +55,16 @@ async function settled<T extends readonly unknown[]>(ps: { [K in keyof T]: Promi
 }
 
 /** Every row of a paged Langfuse list. Logs the page count and the time per page, so the journal shows what a load costs. */
-async function allRows(lf: Langfuse, kind: "traces" | "observations", q: TraceQuery & ObservationQuery, label: string): Promise<any[]> {
+async function allRows<K extends keyof Lists>(lf: Langfuse, kind: K, q: TraceQuery & ObservationQuery, label: string): Promise<Lists[K][]> {
   const t0 = Date.now();
-  const { rows, pages } = await lf[kind](q);
+  const { rows, pages } = await (lf[kind] as (q: TraceQuery & ObservationQuery) => Promise<Rows<Lists[K]>>)(q);
   const ms = Date.now() - t0;
   console.log(`skills: ${label}: ${rows.length} rows, ${pages} pages in ${(ms / 1000).toFixed(1)} s (${Math.round(ms / pages)} ms per page, 4 at a time)`);
   return rows;
 }
 
 /** Only the fields `analyse` reads: the store holds 30 days of rows, in memory and on disk. */
-function compact(o: any): Observation {
+function compact(o: LfObservation): Observation {
   const isSkill = o.metadata?.tool === "Skill" || o.name === "Skill" || o.name?.startsWith("skill:");
   const failed = String(o.level ?? "").toUpperCase() === "ERROR" || o.statusMessage;
   const m = o.metadata ?? {};
@@ -78,7 +78,7 @@ function compact(o: any): Observation {
     ...(failed ? { output: text(o.output).slice(0, 200) } : {}),
   } as Observation;
 }
-const compactTrace = (t: any): TraceInfo => ({ id: t.id, sessionId: t.sessionId, metadata: t.metadata?.cwd ? { cwd: t.metadata.cwd } : {}, tags: (t.tags ?? []).filter((x: string) => x.startsWith("project:")) });
+const compactTrace = (t: Trace): TraceInfo => ({ id: t.id, sessionId: t.sessionId, metadata: t.metadata?.cwd ? { cwd: t.metadata.cwd } : {}, tags: (t.tags ?? []).filter((x) => x.startsWith("project:")) });
 
 /**
  * Skills reads turns (type AGENT) and tool calls (type TOOL) only: model calls (GENERATION) are
@@ -257,8 +257,8 @@ function detail(a: Analysis, name: string) {
 
 /** The analysis of the window `url` names; a Langfuse failure throws its message. */
 async function analysed(url: URL): Promise<Analysis> {
-  const sc = scopeOf(url, "month", SESSIONS);
-  if (sc instanceof Response) throw new Error(((await sc.json()) as any).error);
+  const sc = parseScope(url, "month", SESSIONS);
+  if ("error" in sc) throw new Error(sc.error);
   const { days, project } = sc;
   try { return await once(`skills:${langfuse()?.base}:${days}:${project}`, ["langfuse", "registry", "skills"], () => analyse(days, project)); }
   catch (e) { throw new Error(`Langfuse failed: ${(e as Error).message}`); }

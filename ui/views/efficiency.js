@@ -13,9 +13,9 @@ export function selection(d, key) {
     return { title: "Reruns", causes: rows.map((f) => ({ name: f.name, runs: f.count })), top: [] };
   }
   if (key === USAGE) return { title: "Usage per issue", causes: [], top: d.issues?.usage ?? [] };
-  const c = key !== ALL && (d.classes ?? []).find((x) => x.key === key);
+  const c = key !== ALL && d.classes.find((x) => x.key === key);
   if (c) return { title: c.key[0].toUpperCase() + c.key.slice(1), causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
-  const causes = mergeCauses(d), lost = (d.classes ?? []).filter((x) => x.lost);
+  const causes = mergeCauses(d), lost = d.classes.filter((x) => x.lost);
   return {
     title: "Lost Time",
     causes,
@@ -24,7 +24,7 @@ export function selection(d, key) {
 }
 
 function scorecard(d, key) {
-  const returned = (d.classes ?? []).find((c) => c.key === "returned"), f = d.figures;
+  const returned = d.classes.find((c) => c.key === "returned"), f = d.figures;
   const points = { kind: "points", format: cardPct }, flaky = d.baseline?.base?.flaky;
   const usage = d.issues.week;
   return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: windowTrend(d, "lost", f.lost, { ...points, lowerIsGood: true }), key: ALL, on: key === ALL }) +
@@ -47,7 +47,7 @@ const usageTable = (rows) => pagedTable(heads(["Issue", "Usage", "Jobs"], ["Usag
   row([`<td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td>`, cell(pct(x.week), { num: true }), cell(count(x.runs), { num: true })])));
 
 function usagePage(d, key) {
-  const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
+  const total = d.classes.reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
   const head = scope().bar({ value: d.window ?? "week" });
   return `<div class="page sp" id="eff">${pageHead("Flow", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined }) +
@@ -57,7 +57,7 @@ function usagePage(d, key) {
 /** The page body for a selection. `d` is /api/flow for the window, with its `baseline` when there is one. */
 export function renderEfficiency(d, key = ALL) {
   if (key === USAGE) return usagePage(d, key);
-  const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
+  const s = selection(d, key), total = d.classes.reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
   const head = scope().bar({ value: d.window ?? "week" });
   return `<div class="page sp" id="eff">${pageHead("Flow", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined }) +

@@ -4,13 +4,12 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { langfuse, type Langfuse } from "../../lib/langfuse.ts";
+import { langfuse, type Langfuse, type Observation, type Trace } from "../../lib/langfuse.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 import { citedTraces, loadVault } from "./vault.ts";
 
 const TRACE_CAP = 12 * 1024;
 
-interface Obs { id: string; type: string; name?: string; parentObservationId?: string; input?: unknown; output?: unknown; metadata?: Record<string, any>; startTime?: string }
 
 function dayRange(date: string): { from: Date; to: Date } {
   const from = new Date(`${date}T00:00:00`);
@@ -22,13 +21,13 @@ function str(v: unknown, max: number): string {
   return s.replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-function inputOf(o: Obs): any {
+function inputOf(o: Observation): any {
   if (typeof o.input === "string") { try { return JSON.parse(o.input); } catch { return o.input; } }
   return o.input;
 }
 
 /** One block per turn: cwd, final message, guardrail verdict, commands run. */
-function digestTrace(trace: { id: string; name?: string; metadata?: any; observations?: Obs[] }): string {
+function digestTrace(trace: Trace & { observations?: Observation[] }): string {
   const obs = trace.observations ?? [];
   const cwd = trace.metadata?.cwd ?? trace.name ?? "";
   const turns = obs.filter((o) => o.name === "turn").sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));

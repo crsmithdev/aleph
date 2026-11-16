@@ -182,7 +182,7 @@ function located(id: string, project: string | null): { e: Entry; runs: Entry[] 
 /** The Job page's data: the job's runs, its record and its files, with `id`, the job asked for. */
 async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
   const v = view(runs);
-  const fit = await currentFit().catch(() => null);
+  const fit = await currentFit();
   const projector = jobProjector();
   const job = projector.toJob(runs, v);
   const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit), holds: readHolds([job.name]), open: isOpen(runs) };

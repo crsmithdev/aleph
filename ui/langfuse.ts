@@ -1,12 +1,12 @@
 /** The UI's use of the Langfuse port (lib/langfuse.ts): a list read once per build pass, and the rows kept between passes. */
-import { LangfuseError, type Langfuse, type ObservationQuery, type Rows, type TraceQuery } from "../lib/langfuse.ts";
+import { LangfuseError, type Langfuse, type Lists, type ObservationQuery, type Rows, type TraceQuery } from "../lib/langfuse.ts";
 import type { Observation } from "../lib/otlp.ts";
 import { once, passEnv } from "../lib/sources.ts";
 
 /** Every row of a list, read once per pass of the UI's builds (sources.ts); failures are not kept. */
-export function list(lf: Langfuse, kind: "traces" | "observations", q: TraceQuery & ObservationQuery, source = "langfuse"): Promise<Rows> {
+export function list<K extends keyof Lists>(lf: Langfuse, kind: K, q: TraceQuery & ObservationQuery, source = "langfuse"): Promise<Rows<Lists[K]>> {
   return once(`${source}:${lf.base}:${kind}:${JSON.stringify(q)}`, [source], async () => {
-    try { return await lf[kind](q, source); }
+    try { return await (lf[kind] as (q: TraceQuery & ObservationQuery, source: string) => Promise<Rows<Lists[K]>>)(q, source); }
     catch (e) { throw new LangfuseError(`Langfuse at ${lf.base} failed on ${kind}: ${(e as Error).message}`); }
   });
 }

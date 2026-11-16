@@ -18,7 +18,7 @@ export function forProject(s: State, project: string | null): State {
 /** The `/api/factory` body for one project (null for all), with its asks. */
 export async function stateBody(project: string | null) {
   const { doneStamps, ...s } = forProject(state(), project);
-  const fit = await currentFit().catch(() => null);
+  const fit = await currentFit();
   annotate([...s.stuck, ...s.running], fit);
   return { ...s, usage: await summaryOff(fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
 }

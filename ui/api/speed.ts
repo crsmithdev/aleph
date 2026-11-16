@@ -778,7 +778,7 @@ export const routes: Routes = {
     if (sc instanceof Response) return sc;
     // `project`: only the runs and issues of that repo count.
     const w = sc.window as Window, project = sc.project ?? undefined;
-    const fit = await currentFit().catch(() => null), inp = inputs(), now = new Date(), d = speed(w, now, fit, project, inp);
+    const fit = await currentFit(), inp = inputs(), now = new Date(), d = speed(w, now, fit, project, inp);
     // `baseline=1`: the trend baseline of the window in the same answer, so the Status page makes one request.
     // `figures`: what the Status cards show for the window, the same function the baseline's spans use.
     const out = { ...d, figures: figures(d) };

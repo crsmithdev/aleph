@@ -66,7 +66,7 @@ function renderOutcome(d) {
   const outcome = (body, aside = "") => card("Agent Time", body, { id: "outcome", label: "Agent time", aside });
   if (!d) return outcome(loadingLine("the outcomes"));
   if (d.error) return outcome(error(d.error));
-  const cs = d.classes ?? [], sum = (xs) => xs.reduce((a, c) => a + c.hours, 0), total = sum(cs);
+  const cs = d.classes, sum = (xs) => xs.reduce((a, c) => a + c.hours, 0), total = sum(cs);
   return outcome(share(d), total > 0 ? `${esc(hours(sum(cs.filter((c) => !c.lost))))} of ${esc(hours(total))}` : "");
 }
 
@@ -338,7 +338,7 @@ function runNow(s) {
   const row = (id, who, word, title, t, model, size = "") => feedRow({ tone: "run", at: t, cls: " run-now", attrs: ` data-job="${esc(id)}" id="${rowId(`job ${id}`)}"`,
     body: `<span class="event-line">${tag(word, "run")}${who}<span class="event-title run-title" title="${esc(title)}">${esc(title)}</span>` +
       `<span class="run-size"${model ? ` title="${esc(model)}"` : ""}><span class="run-dot"></span>${esc(size)}</span></span>` });
-  const rows = (s.runningIssues ?? []).map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat((s.running ?? []).map((j) => {
+  const rows = s.runningIssues.map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat(s.running.map((j) => {
     const run = j.run ?? { kind: "build", started: j.started };
     const size = run.kind === "build" ? j.size : "";
     return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), role(run.kind), j.item?.title || j.name, run.started ?? j.started, j.model, size);
@@ -350,7 +350,7 @@ function runNow(s) {
 export function renderHerald(s) {
   const cur = verdict(s, outOfDateNow);
   // An error is not pinned: the newest event already says it.
-  const asks = undecided(s.asks ?? []).map((i) => askCard(i, s.now));
+  const asks = undecided(s.asks).map((i) => askCard(i, s.now));
   const stuck = (s.stuck ?? []).map(stuckRow(s));
   const errors = cur.errors.length;
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");

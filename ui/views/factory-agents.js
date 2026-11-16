@@ -31,7 +31,7 @@ function successCard(a) {
 function scorecard(s, d, m, win) {
   const f = s.factory, a = d?.agents ?? null;
   return usageCard(s) + openRouterCard(m, win) +
-    statCard({ k: "Live agents", v: count(f.liveRuns ?? 0), v2: a ? count(a.live - a.workers) : "–", q: ["workers", "other"] }) +
+    statCard({ k: "Live agents", v: count(f.liveRuns), v2: a ? count(a.live - a.workers) : "–", q: ["workers", "other"] }) +
     followupsCard(d) + successCard(a);
 }
 

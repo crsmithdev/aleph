@@ -34,7 +34,7 @@ export const usable = (d) => (d && !d.error ? d : null);
 /** The causes of all lost time: one row per name, largest first. */
 export function mergeCauses(d) {
   const by = new Map();
-  for (const c of (d.classes ?? []).filter((x) => x.lost)) for (const x of c.causes ?? []) {
+  for (const c of d.classes.filter((x) => x.lost)) for (const x of c.causes ?? []) {
     const m = by.get(x.name) ?? { name: x.name, hours: 0, runs: 0 };
     m.hours += x.hours; m.runs += x.runs;
     by.set(x.name, m);
@@ -72,8 +72,7 @@ export function statusCards(s, d, { efficiency, performance }) {
   const lost = statCard({ k: "Lost time", loading, v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
   const lead = statCard({ k: "Completion", loading, v: dur(f?.leadP50), v2: dur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance });
   const landed = statCard({ k: "Landed", loading, v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
-  const live = s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length;
-  const jobs = statCard({ k: "Jobs", v: count(live), v2: count((s.queued ?? []).length), q: ["running", "queued"], href: "#/factory/jobs" });
+  const jobs = statCard({ k: "Jobs", v: count(s.factory.liveRuns), v2: count(s.queued.length), q: ["running", "queued"], href: "#/factory/jobs" });
   return lost + lead + landed + jobs + usageCard(s);
 }
 
@@ -90,7 +89,7 @@ export function usageCard(s, link = { href: "#/factory/agents" }) {
 
 /** The kept share of agent time, for the Status card: the share that reached main as the figure, a thin bar, and a legend of two columns, kept then lost. `d` is /api/flow for the window. */
 export function share(d) {
-  const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
+  const cs = d.classes.filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
   if (!(total > 0)) return empty();
   const good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost), kept = good.reduce((a, c) => a + c.hours, 0);
   const seg = (c) => `<i class="seg-${esc(c.key)}" style="flex:${c.hours / total}" title="${esc(`${c.key} ${hours(c.hours)}${c.text ? `: ${c.text}` : ""}`)}"></i>`;
@@ -104,7 +103,7 @@ export function share(d) {
 
 /** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/flow for the window. */
 export function bar(d, key) {
-  const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
+  const cs = d.classes.filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
   if (!(total > 0)) return empty();
   const said = (c) => `${hours(c.hours)} ${pct((c.hours / total) * 100)}`;
   // Flex grows are shares that sum to 1 in each row: grows summing under 1 leave the row part empty.

@@ -16,7 +16,7 @@ const partOf = (part: Promise<any>) => part.catch((e: Error) => ({ error: e.mess
 /** Each tool's sessions: its traces read through the window's trace to session map. */
 async function toolSessions(toolTraces: Record<string, string[]>, days: number, project: string | null): Promise<Record<string, string[]>> {
   const session = new Map((await windowTraces(days, project)).rows.map((t) => [t.id, t.sessionId]));
-  return Object.fromEntries(Object.entries(toolTraces).map(([tool, ids]) => [tool, [...new Set(ids.map((id) => session.get(id)).filter(Boolean))]]));
+  return Object.fromEntries(Object.entries(toolTraces).map(([tool, ids]) => [tool, [...new Set(ids.flatMap((id) => session.get(id) ?? []))]]));
 }
 
 /** The response of `GET /api/sessions` for `url`. */

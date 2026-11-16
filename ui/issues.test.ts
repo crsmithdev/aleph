@@ -440,9 +440,9 @@ describe("views", () => {
 
   test("the best match comes first with a search and no sort; a chosen sort wins; the hits are marked", () => {
     const rows = v.issueRows({ issues: [
-      { id: 1, repo: "fac", title: "Workstatus page", status: "open", labels: [], updatedTime: iso("2026-10-30") },
-      { id: 2, repo: "fac", title: "status of the land", status: "open", labels: [], updatedTime: iso("2026-10-01") },
-      { id: 3, repo: "fac", title: "Set up a tiny ultra stack", status: "open", labels: [], updatedTime: iso("2026-10-31") },
+      { id: 1, ref: "1", repo: "fac", title: "Workstatus page", status: "open", labels: [], updatedTime: iso("2026-10-30") },
+      { id: 2, ref: "2", repo: "fac", title: "status of the land", status: "open", labels: [], updatedTime: iso("2026-10-01") },
+      { id: 3, ref: "3", repo: "fac", title: "Set up a tiny ultra stack", status: "open", labels: [], updatedTime: iso("2026-10-31") },
     ] });
     const titles = (o: object) => [...v.renderTable(rows, { status: "open", ...o }).matchAll(/<td class="wide"[^>]*><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1].replace(/<\/?mark>/g, ""));
     expect(titles({ q: "status" })[0]).toBe("status of the land");
@@ -453,11 +453,11 @@ describe("views", () => {
 
   describe("grouping sub-issues", () => {
     const rows = () => v.issueRows({ issues: [
-      { id: 1, repo: "fac", title: "parent", status: "open", labels: [], updatedTime: iso("2026-10-01") },
-      { id: 2, repo: "fac", title: "other", status: "open", labels: [], updatedTime: iso("2026-10-20") },
-      { id: 3, repo: "fac", title: "child", parent: "1", status: "open", labels: [], updatedTime: iso("2026-10-31") },
+      { id: 1, ref: "1", repo: "fac", title: "parent", status: "open", labels: [], updatedTime: iso("2026-10-01") },
+      { id: 2, ref: "2", repo: "fac", title: "other", status: "open", labels: [], updatedTime: iso("2026-10-20") },
+      { id: 3, ref: "3", repo: "fac", title: "child", parent: "1", status: "open", labels: [], updatedTime: iso("2026-10-31") },
       { id: 1, ref: "1.1", parent: "1", repo: "fac", title: "old part", status: "open", labels: [], updatedTime: iso("2026-10-30") },
-      { id: 4, repo: "fac", title: "lone child", parent: "9", status: "open", labels: [], updatedTime: iso("2026-10-10") },
+      { id: 4, ref: "4", repo: "fac", title: "lone child", parent: "9", status: "open", labels: [], updatedTime: iso("2026-10-10") },
     ] });
     const store = (group: boolean, open: string[] = []) => {
       const m: Record<string, string> = { "aleph.issues.group": JSON.stringify(group), "aleph.issues.open": JSON.stringify(open) };
@@ -504,10 +504,10 @@ describe("views", () => {
   test("the numbers: open, filed and closed in 7 days, the week before, age and runs; a part's run counts once, by its own total", () => {
     const now = new Date("2026-11-01T12:00");
     const rows = v.issueRows({ issues: [
-      { id: 1, repo: "f", title: "a", status: "open", stage: "new", labels: [], createdTime: iso("2026-11-01"), runs: 2, cost: 1, own: { runs: 0, cost: 0 } },
+      { id: 1, ref: "1", repo: "f", title: "a", status: "open", stage: "new", labels: [], createdTime: iso("2026-11-01"), runs: 2, cost: 1, own: { runs: 0, cost: 0 } },
       { id: 1, ref: "1.1", parent: "1", repo: "f", title: "a part", status: "open", stage: "working", labels: [], createdTime: iso("2026-10-20"), runs: 2, cost: 1, own: { runs: 2, cost: 1 } },
-      { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-21"), closedTime: iso("2026-10-30T12:00"), runs: 3, cost: 0.5, own: { runs: 3, cost: 0.5 } },
-      { id: 3, repo: "f", title: "c", status: "dropped", labels: [], createdTime: iso("2026-10-26"), closedTime: iso("2026-10-25"), runs: 0, cost: 0 },
+      { id: 2, ref: "2", repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-21"), closedTime: iso("2026-10-30T12:00"), runs: 3, cost: 0.5, own: { runs: 3, cost: 0.5 } },
+      { id: 3, ref: "3", repo: "f", title: "c", status: "dropped", labels: [], createdTime: iso("2026-10-26"), closedTime: iso("2026-10-25"), runs: 0, cost: 0 },
     ] });
     expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, working: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 0, oldest: 12, runs: 5, cost: 1.5 });
     const f = v.flow(rows, "month", now);
@@ -548,9 +548,9 @@ describe("views", () => {
   test("the window sets the Open backlog buckets, the Time to close rows and the backlog card title", async () => {
     const now = new Date("2026-11-04T16:00");
     const rows = v.issueRows({ issues: [
-      { id: 1, repo: "f", title: "a", status: "open", labels: [], createdTime: iso("2026-11-04T15:30") },
-      { id: 2, repo: "f", title: "b", status: "done", kind: "bug", labels: [], createdTime: iso("2026-10-20"), closedTime: iso("2026-10-25") },
-      { id: 3, repo: "f", title: "c", status: "done", kind: "bug", labels: [], createdTime: iso("2026-11-01"), closedTime: iso("2026-11-02") },
+      { id: 1, ref: "1", repo: "f", title: "a", status: "open", labels: [], createdTime: iso("2026-11-04T15:30") },
+      { id: 2, ref: "2", repo: "f", title: "b", status: "done", kind: "bug", labels: [], createdTime: iso("2026-10-20"), closedTime: iso("2026-10-25") },
+      { id: 3, ref: "3", repo: "f", title: "c", status: "done", kind: "bug", labels: [], createdTime: iso("2026-11-01"), closedTime: iso("2026-11-02") },
     ] });
     const one = rows.filter((r: any) => r.id === "f-1");
     const hour = v.backlog(one, "hour", now), dayB = v.backlog(one, "day", now);
@@ -608,8 +608,8 @@ describe("views", () => {
 
   const now = new Date("2026-11-01T12:00");
   const twoDone = () => v.issueRows({ issues: [
-    { id: 1, repo: "f", title: "a", status: "done", labels: [], createdTime: iso("2026-11-01"), closedTime: iso("2026-11-01"), runs: 0, cost: 0 },
-    { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-28"), closedTime: iso("2026-10-28"), runs: 0, cost: 0 },
+    { id: 1, ref: "1", repo: "f", title: "a", status: "done", labels: [], createdTime: iso("2026-11-01"), closedTime: iso("2026-11-01"), runs: 0, cost: 0 },
+    { id: 2, ref: "2", repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-28"), closedTime: iso("2026-10-28"), runs: 0, cost: 0 },
   ] });
 
   test("the window sets the Filed and Closed counts and the table under their tiles", () => {
@@ -676,8 +676,8 @@ describe("views", () => {
 
   test("each number column sorts; age counts to the closing", () => {
     const rows = v.issueRows({ issues: [
-      { id: 1, repo: "f", title: "a", status: "open", priority: "low", labels: [], createdTime: iso("2026-10-01"), notes: 1, runs: 9, cost: 0 },
-      { id: 2, repo: "f", title: "b", status: "open", priority: "high", labels: [], createdTime: iso("2026-10-20"), notes: 5, runs: 1, cost: 3 },
+      { id: 1, ref: "1", repo: "f", title: "a", status: "open", priority: "low", labels: [], createdTime: iso("2026-10-01"), notes: 1, runs: 9, cost: 0 },
+      { id: 2, ref: "2", repo: "f", title: "b", status: "open", priority: "high", labels: [], createdTime: iso("2026-10-20"), notes: 5, runs: 1, cost: 3 },
     ] });
     const first = (key: string, dir = -1) => v.sortRows(rows, { key, dir })[0].title;
     expect(first("priority")).toBe("b");
@@ -912,8 +912,8 @@ describe("a parked issue", () => {
     expect((await getJson(`/api/issues/oth-${n}`)).status).toBe("parked");
     const all = v.issueRows({ issues: [
       ...rows,
-      { id: 8, repo: "f", title: "o", status: "open", stage: "new", labels: [], createdTime: iso("2026-11-01") },
-      { id: 9, repo: "f", title: "d", status: "done", labels: [], createdTime: iso("2026-10-30"), closedTime: iso("2026-11-01") },
+      { id: 8, ref: "8", repo: "f", title: "o", status: "open", stage: "new", labels: [], createdTime: iso("2026-11-01") },
+      { id: 9, ref: "9", repo: "f", title: "d", status: "done", labels: [], createdTime: iso("2026-10-30"), closedTime: iso("2026-11-01") },
     ] });
     expect(v.renderFilters(all, { status: "" })).toContain("parked");
     const only = v.renderTable(all, { status: "parked" });
@@ -1062,9 +1062,9 @@ describe("exact times in the Hour window", () => {
   test("the Hour window counts by the minute, and the Day window by the day", () => {
     const now = new Date("2026-11-04T16:00");
     const rows = v.issueRows({ issues: [
-      { id: 1, repo: "f", title: "a", status: "done", labels: [], createdTime: iso("2026-11-04T15:30"), closedTime: iso("2026-11-04T15:45"), runs: 0, cost: 0 },
-      { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-11-04T09:00"), closedTime: iso("2026-11-04T08:00"), runs: 0, cost: 0 },
-      { id: 3, repo: "f", title: "c", status: "done", labels: [], createdTime: iso("2026-11-04"), closedTime: iso("2026-11-04"), runs: 0, cost: 0 },
+      { id: 1, ref: "1", repo: "f", title: "a", status: "done", labels: [], createdTime: iso("2026-11-04T15:30"), closedTime: iso("2026-11-04T15:45"), runs: 0, cost: 0 },
+      { id: 2, ref: "2", repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-11-04T09:00"), closedTime: iso("2026-11-04T08:00"), runs: 0, cost: 0 },
+      { id: 3, ref: "3", repo: "f", title: "c", status: "done", labels: [], createdTime: iso("2026-11-04"), closedTime: iso("2026-11-04"), runs: 0, cost: 0 },
     ] });
     expect(v.stats(rows, now, "hour")).toMatchObject({ filed: 1, closed: 1 });
     expect(v.stats(rows, now, "day")).toMatchObject({ filed: 3, closed: 3 });

@@ -206,7 +206,7 @@ test("currentFit reads Langfuse's hourly spend, and a snapshot dated after the c
   const t0 = Math.floor((NOW - 10 * H) / H) * H;
   const reset = new Date(NOW + 5 * 24 * H).toISOString();
   const good = Array.from({ length: 9 }, (_, h) => ({ at: new Date(t0 + h * H + 60_000).toISOString(), seven_day: 10 + h, seven_day_resets_at: reset }));
-  const observations = Array.from({ length: 8 }, (_, h) => ({ id: `o${h}`, startTime: new Date(t0 + h * H + 5 * 60_000).toISOString(), providedModelName: "claude-opus-5-5", calculatedTotalCost: 4 }));
+  const observations = Array.from({ length: 8 }, (_, h) => ({ id: `o${h}`, traceId: "t", startTime: new Date(t0 + h * H + 5 * 60_000).toISOString(), providedModelName: "claude-opus-5-5", calculatedTotalCost: 4 }));
   const write = (rows: Parameters<typeof insert>[0]) => { conn().run("DELETE FROM usage"); insert(rows); };
   use(memory({ traces: [], observations }));
   try {
@@ -226,7 +226,7 @@ test("the OpenRouter rate is the bill's rise less Jev over the list price Langfu
   process.env.OPENROUTER_API_KEY = "or-test";
   let usage = 10;
   globalThis.fetch = (async () => Response.json({ data: { usage, usage_daily: 0, usage_weekly: 0, usage_monthly: 0 } })) as any;
-  const obs = (h: number, cost: number) => ({ id: `o${h}`, startTime: new Date(NOW - h * H).toISOString(), providedModelName: "deepseek/deepseek-v4.1-flash", calculatedTotalCost: cost });
+  const obs = (h: number, cost: number) => ({ id: `o${h}`, traceId: "t", startTime: new Date(NOW - h * H).toISOString(), providedModelName: "deepseek/deepseek-v4.1-flash", calculatedTotalCost: cost });
   use(memory({ traces: [], observations: [obs(2, 1), obs(1, 1), obs(1.5, 99)].map((o, i) => i === 2 ? { ...o, providedModelName: "claude-opus-5-5" } : o) }));
   try {
     expect(openRouterFactor()).toBe(1);

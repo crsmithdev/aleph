@@ -1,9 +1,9 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { clip } from "../../lib/naming.ts";
-import { LangfuseError, need, type Langfuse } from "../../lib/langfuse.ts";
+import { LangfuseError, need, type Langfuse, type Observation, type Trace } from "../../lib/langfuse.ts";
 import { list } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { projectOf as projectOfUrl, scopeOf, traceIn, traceProject } from "./scope.ts";
+import { projectOf as projectOfUrl, parseScope, traceIn, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
 import { currentFit, share } from "../usage.ts";
@@ -18,9 +18,9 @@ const text = (s: unknown) => (typeof s === "string" ? s : s == null ? "" : JSON.
 const ms = (iso?: string) => Date.parse(iso ?? "") || 0;
 
 /** A trace's project, by the rule that the Skills page uses too. */
-const projectOf = (t: any): string => traceProject(t.metadata?.cwd, t.tags);
+const projectOf = (t: Trace): string => traceProject(t.metadata?.cwd, t.tags);
 
-const taskTypes = (ts: any[]): string[] => {
+const taskTypes = (ts: Trace[]): string[] => {
   const out = new Set<string>();
   for (const t of ts) {
     if (typeof t.metadata?.task_type === "string") out.add(t.metadata.task_type);
@@ -29,8 +29,8 @@ const taskTypes = (ts: any[]): string[] => {
   return [...out];
 };
 
-const byTime = (a: any, b: any) => ms(a.timestamp) - ms(b.timestamp);
-const isType = (o: any, type: string) => String(o.type ?? "").toLowerCase() === type;
+const byTime = (a: Trace, b: Trace) => ms(a.timestamp) - ms(b.timestamp);
+const isType = (o: Observation, type: string) => String(o.type ?? "").toLowerCase() === type;
 
 /** Job id → name and ledger cost (the sum over the job's runs), read once per request. */
 function jobs(): Map<string, { name: string; cost: number; model?: string }> {
@@ -66,7 +66,7 @@ async function sessionTraces(id: string, project: string | null) {
 
 const observationsOf = async (lf: Langfuse, trace: string) => (await list(lf, "observations", { trace })).rows;
 
-function modelOf(obs: any[]): string | null {
+function modelOf(obs: Observation[]): string | null {
   const counts = new Map<string, number>();
   for (const o of obs) if (isType(o, "generation") && o.model) counts.set(o.model, (counts.get(o.model) ?? 0) + 1);
   return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
@@ -74,16 +74,19 @@ function modelOf(obs: any[]): string | null {
 
 /** Seconds from ms. */
 const sec = (n: number) => n / 1000;
-/** An observation's or a trace's duration in seconds, or null. */
-const secondsOf = (o: any): number | null => { const d = durationMs(o); return d === null ? null : sec(d); };
+/** The start, end and latency (seconds) of an observation or a trace. */
+type Span = { startTime?: string; endTime?: string; latency?: number };
 
-const durationMs = (o: any): number | null => {
+/** An observation's or a trace's duration in seconds, or null. */
+const secondsOf = (o: Span): number | null => { const d = durationMs(o); return d === null ? null : sec(d); };
+
+const durationMs = (o: Span): number | null => {
   if (o.endTime && o.startTime) return Math.max(0, ms(o.endTime) - ms(o.startTime));
   return typeof o.latency === "number" ? Math.round(o.latency * 1000) : null; // Langfuse reports latency in seconds
 };
 
 /** The first prompt the user typed: system text (a `<task-notification>`, a `<system-reminder>`) skipped. */
-const firstTyped = (ts: any[]) => ts.map((t) => systemParts(text(t.input)).text).find(Boolean) ?? text(ts[0]?.input);
+const firstTyped = (ts: Trace[]) => ts.map((t) => systemParts(text(t.input)).text).find(Boolean) ?? text(ts[0]?.input);
 
 /** A tool input as an object, when it is one or is JSON for one. */
 function inputObject(input: unknown): Record<string, unknown> | null {
@@ -113,7 +116,7 @@ const pretty = (input: unknown) => { const o = inputObject(input); return o ? JS
  * Each subagent's `agent` span paired with the `Agent` tool span that launched it (hooks/obs.ts writes it as the tool span's sibling): agent span id → tool span id.
  * The agent span lies inside the tool span in time; of several overlapping calls, the one whose `subagent_type` (default `general-purpose`) is the agent_type wins.
  */
-function pairAgents(obs: any[]): Map<string, string> {
+function pairAgents(obs: Observation[]): Map<string, string> {
   const tools = obs.filter((o) => isType(o, "tool") && o.name === "Agent");
   const taken = new Set<string>();
   const out = new Map<string, string>();
@@ -122,7 +125,7 @@ function pairAgents(obs: any[]): Map<string, string> {
     const from = ms(a.startTime), to = a.endTime ? ms(a.endTime) : from;
     const type = a.metadata?.agent_type ?? a.name;
     const inside = tools.filter((t) => !taken.has(t.id) && ms(t.startTime) <= from && (!t.endTime || to <= ms(t.endTime)));
-    const subtype = (t: any) => { const v = inputObject(t.input)?.subagent_type; return typeof v === "string" && v ? v : "general-purpose"; };
+    const subtype = (t: Observation) => { const v = inputObject(t.input)?.subagent_type; return typeof v === "string" && v ? v : "general-purpose"; };
     const best = inside.find((t) => subtype(t) === type) ?? inside[0];
     if (!best) continue;
     taken.add(best.id);
@@ -132,31 +135,31 @@ function pairAgents(obs: any[]): Map<string, string> {
 }
 
 /** A turn's tool calls in start order; a subagent's calls nest under the `Agent` call that launched it, and those of an unpaired subagent are left to the turn page. */
-function toolCalls(obs: any[], t0: number) {
+function toolCalls(obs: Observation[], t0: number) {
   const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
   const spanOf = new Map([...pairAgents(obs)].map(([a, t]) => [t, a]));
-  const call = (o: any, parent: string | null = null): any => ({
+  const call = (o: Observation, parent: string | null = null): any => ({
     id: o.id, parent, name: o.name, start: o.startTime, from: sec(Math.max(0, ms(o.startTime) - t0)), to: sec(Math.max(0, ms(o.startTime) - t0) + (durationMs(o) ?? 0)), args: argSummary(o.input), input: pretty(o.input), output: text(o.output),
     error: o.level === "ERROR" ? o.statusMessage || "error" : null, seconds: secondsOf(o),
     kind: spanOf.has(o.id) ? "subagent" : "tool",
     children: spanOf.has(o.id) ? list((p) => p === spanOf.get(o.id), o.id) : [],
   });
-  const list = (under: (parent: string | undefined) => boolean, parent: string | null = null) =>
-    obs.filter((o) => isType(o, "tool") && under(o.parentObservationId)).sort((a, b) => ms(a.startTime) - ms(b.startTime)).map((o) => call(o, parent));
-  return list((p) => !agents.has(p as string));
+  const list = (under: (parent: string) => boolean, parent: string | null = null) =>
+    obs.filter((o) => isType(o, "tool") && under(o.parentObservationId ?? "")).sort((a, b) => ms(a.startTime) - ms(b.startTime)).map((o) => call(o, parent));
+  return list((p) => !agents.has(p));
 }
 
 /** A turn's model calls (GENERATION observations) in start order, apart from the tool calls; one in a paired subagent has the `Agent` call's id as parent, one in an unpaired subagent is left out. */
-function generations(obs: any[], t0: number) {
+function generations(obs: Observation[], t0: number) {
   const agents = new Set(obs.filter((o) => isType(o, "agent") && o.name !== "turn").map((o) => o.id));
   const spanTool = pairAgents(obs);
   const num = (v: unknown) => (typeof v === "number" ? v : null);
-  return obs.filter((o) => isType(o, "generation") && (!agents.has(o.parentObservationId) || spanTool.has(o.parentObservationId)))
+  return obs.filter((o) => isType(o, "generation") && (!agents.has(o.parentObservationId ?? "") || spanTool.has(o.parentObservationId ?? "")))
     .sort((a, b) => ms(a.startTime) - ms(b.startTime))
     .map((o) => {
       const startMs = Math.max(0, ms(o.startTime) - t0), durMs = durationMs(o);
       return {
-        id: o.id, parent: agents.has(o.parentObservationId) ? spanTool.get(o.parentObservationId)! : null, kind: "generation", name: o.name, model: o.model ?? null,
+        id: o.id, parent: agents.has(o.parentObservationId ?? "") ? spanTool.get(o.parentObservationId!)! : null, kind: "generation", name: o.name, model: o.model ?? null,
         start: o.startTime, from: sec(startMs), to: sec(startMs + (durMs ?? 0)), seconds: durMs === null ? null : sec(durMs),
         cost: num(o.calculatedTotalCost) ?? num(o.totalCost), inputTokens: num(o.usage?.input ?? o.usageDetails?.input), outputTokens: num(o.usage?.output ?? o.usageDetails?.output),
         error: o.level === "ERROR" ? o.statusMessage || "error" : null, input: cut(o.input, 400), output: cut(o.output, 400),
@@ -165,29 +168,32 @@ function generations(obs: any[], t0: number) {
 }
 
 /** A turn's assistant text blocks (hooks/obs.ts writes each as an event named `text`) in time order; the final reply, which the turn's output already holds, is left out. */
-function textBlocks(obs: any[], output: string) {
+function textBlocks(obs: Observation[], output: string) {
   return obs.filter((o) => isType(o, "event") && o.name === "text" && text(o.output).trim())
     .sort((a, b) => ms(a.startTime) - ms(b.startTime) || (a.metadata?.seq ?? 0) - (b.metadata?.seq ?? 0))
     .map((o) => ({ at: o.startTime, text: text(o.output) }))
     .filter((t) => t.text.trim() !== output.trim());
 }
 
+/** A trace that has a session. */
+type Session = Trace & { sessionId: string };
+
 /** The traces with a session over the last `days` days, at most 90 (the widest window the page offers), and whether Langfuse held more pages than the read. */
-export async function windowTraces(days: number, project: string | null): Promise<{ rows: any[]; partial: boolean }> {
+export async function windowTraces(days: number, project: string | null): Promise<{ rows: Session[]; partial: boolean }> {
   const hour = 3600_000; // whole hours, so the cache key holds
   const from = new Date(Math.floor((Date.now() - Math.min(days > 0 ? days : 7, 90) * 86400_000) / hour) * hour);
   const { rows, partial } = await list(need(), "traces", { from });
-  return { rows: rows.filter((t) => t.sessionId && traceIn(t, project)), partial };
+  return { rows: rows.filter((t): t is Session => !!t.sessionId && traceIn(t, project)), partial };
 }
 
 const LIMIT = 100, MAX = 2000;
 
 /** One row per session of `traces`, newest last turn first: a factory worker's session has its job's name, and its ledger cost when Langfuse prices it at 0. */
-export async function sessionRows(traces: any[]) {
-  const groups = new Map<string, any[]>();
+export async function sessionRows(traces: Session[]) {
+  const groups = new Map<string, Session[]>();
   for (const t of traces) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
   const ledger = jobs();
-  const fit = await currentFit().catch(() => null);
+  const fit = await currentFit();
   return [...groups].map(([id, ts]) => {
     ts.sort(byTime);
     const job = ledger.get(id);
@@ -209,7 +215,7 @@ export async function sessionRows(traces: any[]) {
 }
 
 /** The fields of turn `i` that the session and chat views share. A factory worker's session is one turn Langfuse prices at 0: it has the ledger's cost, as on the list. */
-function turnOf(id: string, ts: any[], i: number, obs: any[], fit: Parameters<typeof share>[0]) {
+function turnOf(id: string, ts: Trace[], i: number, obs: Observation[], fit: Parameters<typeof share>[0]) {
   const t = ts[i], job = ts.length === 1 && !t.totalCost ? jobs().get(id) : undefined;
   const model = modelOf(obs), cost = t.totalCost || job?.cost || 0;
   return { n: i + 1, ...wkOf(fit, cost, job?.cost ? job.model : model), traceId: t.id, start: t.timestamp, model, seconds: secondsOf(t), cost };
@@ -218,8 +224,8 @@ function turnOf(id: string, ts: any[], i: number, obs: any[], fit: Parameters<ty
 /** The sessions of a window for the Agents view: newest last turn first, `?limit=` of them before the `?before=` time, and `next`, the `before` of the next page. A bad query or a Langfuse failure throws its message. */
 export async function listSessions(req: Request) {
   const url = new URL(req.url);
-  const sc = scopeOf(url, "week", SESSIONS);
-  if (sc instanceof Response) throw new Error(((await sc.json()) as any).error);
+  const sc = parseScope(url, "week", SESSIONS);
+  if ("error" in sc) throw new Error(sc.error);
   const { days, project } = sc;
   const limit = Number(url.searchParams.get("limit") ?? LIMIT), before = url.searchParams.get("before");
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX) throw new Error(`limit must be 1 to ${MAX}`);
@@ -237,7 +243,7 @@ export const routes: Routes = {
       const { lf, ts } = await sessionTraces(params.id, projectOfUrl(url));
       if (!ts.length) return Response.json({ error: `No session ${params.id}` }, { status: 404 });
       const all = await Promise.all(ts.map((t) => observationsOf(lf, t.id)));
-      const fit = await currentFit().catch(() => null);
+      const fit = await currentFit();
       const turns = ts.map((t, i) => ({
         ...turnOf(params.id, ts, i, all[i], fit),
         prompt: clip(text(t.input), 300),
@@ -256,7 +262,7 @@ export const routes: Routes = {
       const limit = Math.min(50, Math.max(1, Math.floor(Number(url.searchParams.get("limit")) || 20)));
       const page = ts.slice(from - 1, from - 1 + limit);
       const all = await Promise.all(page.map((t) => observationsOf(lf, t.id)));
-      const fit = await currentFit().catch(() => null);
+      const fit = await currentFit();
       const t0 = ms(ts[0].timestamp); // the waterfall's axis starts at the session's first turn
       const turns = page.map((t, i) => ({
         ...turnOf(params.id, ts, from - 1 + i, all[i], fit),
@@ -279,30 +285,31 @@ export const routes: Routes = {
       const t = Number.isInteger(n) ? ts[n - 1] : undefined;
       if (!t) return Response.json({ error: `No turn ${params.n} in session ${params.id}` }, { status: 404 });
       const obs = (await observationsOf(lf, t.id)).sort((a, b) => ms(a.startTime) - ms(b.startTime));
-      const node = (o: any) => {
+      type Node = { id: string; kind: string; name?: string; input: unknown; output: unknown; seconds: number | null; error: string | null; children: Node[]; recall?: unknown; verify?: unknown; model?: unknown };
+      const node = (o: Observation): Node => {
         const m = o.metadata ?? {};
         const kind = isType(o, "tool") ? "tool" : isType(o, "guardrail") || o.name === "verify-gate" || o.name === "vault-recall" ? "hook" : isType(o, "agent") ? "subagent" : isType(o, "generation") ? "generation" : "event";
-        const out: Record<string, unknown> = {
+        const out: Node = {
           id: o.id, kind, name: o.name, input: cut(o.input, 400), output: cut(o.output, 400),
-          seconds: secondsOf(o), error: o.level === "ERROR" ? o.statusMessage || "error" : null, children: [] as unknown[],
+          seconds: secondsOf(o), error: o.level === "ERROR" ? o.statusMessage || "error" : null, children: [],
         };
         if (o.name === "vault-recall") out.recall = { candidates: m.candidates ?? null, asked: m.asked ?? null, kept: m.kept ?? null };
         if (o.name === "verify-gate") out.verify = { kind: m.kind ?? null, verdict: m.verdict ?? null };
         if (kind === "generation") out.model = o.model ?? null;
-        return out as any;
+        return out;
       };
-      const nodes = new Map<string, any>(obs.map((o) => [o.id, node(o)]));
+      const nodes = new Map(obs.map((o) => [o.id, node(o)]));
       const paired = pairAgents(obs); // a subagent hangs off its `Agent` tool span, not off the turn
-      const roots: any[] = [];
+      const roots: Node[] = [];
       for (const o of obs) {
         const pid = paired.get(o.id) ?? o.parentObservationId;
         const parent = pid ? nodes.get(pid) : undefined;
-        (parent ? parent.children : roots).push(nodes.get(o.id));
+        (parent ? parent.children : roots).push(nodes.get(o.id)!);
       }
       // The turn span is the tree's root; show its children as the top level.
       const top = roots.length === 1 && roots[0].name === "turn" ? roots[0].children : roots;
       return Response.json({
-        ...wkOf(await currentFit().catch(() => null), t.totalCost, modelOf(obs)),
+        ...wkOf(await currentFit(), t.totalCost, modelOf(obs)),
         base: lf.base, id: params.id, ...labelOf(params.id), n, total: ts.length, traceId: t.id, project: projectOf(t), start: t.timestamp,
         prompt: cut(t.input, 400), output: cut(t.output, 400), cost: t.totalCost ?? 0, seconds: secondsOf(t), observations: top,
       });

@@ -95,7 +95,7 @@ export async function pollOnce(): Promise<Snapshot | null> {
 
 /** Polls now and every `ms`, and calls `polled` after each snapshot it keeps. Returns a stop function. */
 export function startPoller(ms = POLL_MS, polled = () => {}): () => void {
-  const poll = () => { void pollOnce().then((s) => { if (s) polled(); }); void pollOpenRouter().catch(() => {}); };
+  const poll = () => { void pollOnce().then((s) => { if (s) polled(); }); void pollOpenRouter().catch((e) => console.error(`ui/usage: cannot poll OpenRouter: ${e instanceof Error ? e.message : "error"}`)); };
   poll();
   const timer = setInterval(poll, ms);
   timer.unref?.();

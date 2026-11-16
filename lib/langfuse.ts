@@ -16,16 +16,54 @@ export interface TraceQuery extends Span { session?: string; core?: boolean }
 export interface ObservationQuery extends Span { trace?: string; type?: string }
 /** One model's cost in one UTC hour: `at` is the hour's start in ms, `cost` is USD. */
 export interface Hourly { at: number; model: string; cost: number }
+/** The fields of a Langfuse trace that the code reads. */
+export interface Trace {
+  id: string;
+  name?: string;
+  sessionId?: string;
+  timestamp?: string;
+  input?: unknown;
+  output?: unknown;
+  metadata?: Record<string, any> | null;
+  tags?: string[];
+  totalCost?: number;
+  latency?: number;
+}
+/** The fields of a Langfuse observation that the code reads. */
+export interface Observation {
+  id: string;
+  traceId: string;
+  sessionId?: string;
+  parentObservationId?: string | null;
+  type?: string;
+  name?: string;
+  input?: unknown;
+  output?: unknown;
+  metadata?: Record<string, any> | null;
+  startTime?: string;
+  endTime?: string;
+  latency?: number;
+  level?: string;
+  statusMessage?: string;
+  model?: string;
+  providedModelName?: string;
+  calculatedTotalCost?: number;
+  totalCost?: number;
+  usage?: { input?: number; output?: number };
+  usageDetails?: { input?: number; output?: number };
+}
+/** The lists a read takes: each by name, with its row type. */
+export interface Lists { traces: Trace; observations: Observation }
 /** Every row of a list; `partial` says the list held more pages than a read takes, `pages` is how many were read. */
-export interface Rows { rows: any[]; partial: boolean; pages: number }
+export interface Rows<T> { rows: T[]; partial: boolean; pages: number }
 
 /** Reads of one Langfuse. `source` is the source a read counts as (sources.ts). */
 export interface Langfuse {
   base: string;
-  traces(q: TraceQuery, source?: string): Promise<Rows>;
-  observations(q: ObservationQuery, source?: string): Promise<Rows>;
+  traces(q: TraceQuery, source?: string): Promise<Rows<Trace>>;
+  observations(q: ObservationQuery, source?: string): Promise<Rows<Observation>>;
   /** The trace with its observations, or null when Langfuse does not have it. */
-  trace(id: string): Promise<any | null>;
+  trace(id: string): Promise<(Trace & { observations: Observation[] }) | null>;
   /** True when Langfuse knows the session; false when it does not or does not answer. */
   session(id: string): Promise<boolean>;
   /** The cost of the observations that start in [from, to), by hour and model. One request: a week of observations is 1,218 pages. */
@@ -70,13 +108,13 @@ export function http(cfg: LangfuseConfig): Langfuse {
 }
 
 /** A Langfuse that holds `rows`, for tests. `asked` lists each list read; a set `down` fails each one. */
-export function memory(rows: { traces: any[]; observations: any[] }) {
+export function memory(rows: { [K in keyof Lists]: Lists[K][] }) {
   const asked: { list: string; q: Span }[] = [];
   const within = (at: string | undefined, q: Span) => { const t = Date.parse(at ?? ""); return (!q.from || t >= q.from.getTime()) && (!q.to || t < q.to.getTime()); };
-  const read = async (list: string, q: Span, keep: (r: any) => boolean): Promise<Rows> => {
+  const read = async <K extends keyof Lists>(list: K, q: Span, keep: (r: Lists[K]) => boolean): Promise<Rows<Lists[K]>> => {
     asked.push({ list, q });
     if (lf.down) throw lf.down;
-    return { rows: (rows as any)[list].filter(keep), partial: false, pages: 1 };
+    return { rows: rows[list].filter(keep), partial: false, pages: 1 };
   };
   const lf = {
     base: "http://langfuse.test", asked, down: null as Error | null,
@@ -92,9 +130,9 @@ export function memory(rows: { traces: any[]; observations: any[] }) {
       if (lf.down) throw lf.down;
       const sum = new Map<string, Hourly>();
       for (const o of rows.observations) {
-        const cost = o.calculatedTotalCost ?? o.totalCost, model = o.providedModelName ?? o.model;
+        const cost = o.calculatedTotalCost ?? o.totalCost ?? 0, model = o.providedModelName ?? o.model;
         if (!within(o.startTime, q) || !model || !(cost > 0)) continue;
-        const at = Math.floor(Date.parse(o.startTime) / 3600_000) * 3600_000, k = `${at} ${model}`;
+        const at = Math.floor(Date.parse(o.startTime ?? "") / 3600_000) * 3600_000, k = `${at} ${model}`;
         const h = sum.get(k) ?? { at, model, cost: 0 };
         h.cost += cost;
         sum.set(k, h);
@@ -132,7 +170,7 @@ const PAGE = 100, POOL = 4, MAX_PAGES = 2000;
  * outlives its caller. `partial` says the list held more pages than `MAX_PAGES`; `pages` is how many were read.
  * `source` is the source the read counts as (sources.ts): the usage fit's read is renewed with the usage, not by the Langfuse poll.
  */
-async function allPages(cfg: LangfuseConfig, path: string, params: Record<string, string>, source = "langfuse"): Promise<Rows> {
+async function allPages<T>(cfg: LangfuseConfig, path: string, params: Record<string, string>, source = "langfuse"): Promise<Rows<T>> {
   touch(source);
   const get = async (n: number) => {
     const res = await fetch(`${cfg.baseUrl}${path}?${new URLSearchParams({ ...params, limit: String(PAGE), page: String(n) })}`, { headers: { authorization: auth(cfg) }, signal: AbortSignal.timeout(TIMEOUT) });

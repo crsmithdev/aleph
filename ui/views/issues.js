@@ -46,7 +46,7 @@ export function hashOptions(q = new URLSearchParams()) {
 }
 
 /** A row's own number: `910` for an issue, `910.1` for a sub-issue. */
-const own = (r) => r.ref ?? r.id;
+const own = (r) => r.ref;
 export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => issueHref(ref(r));
 
@@ -546,7 +546,7 @@ const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "imp
  * Sub-issues (one row per sub-issue), After the sub-issues (to the close). Without: one Work row. Notes are events at their time.
  */
 export function issueSegments(d, now = Date.now()) {
-  const id = `${d.repo}-${d.ref ?? d.id}`, parts = d.goals ?? [], open = !CLOSED.includes(d.status);
+  const id = `${d.repo}-${d.ref}`, parts = d.goals, open = !CLOSED.includes(d.status);
   const all = spans(d.timeline?.runs ?? [], now), filed = filedAt(d, all);
   const notes = (d.notes ?? []).map(noteEvent).filter(Boolean).map(noteItem);
   // A closed issue closes at its last stamped note after its jobs, else at its last job.
@@ -582,7 +582,7 @@ export function issueSegments(d, now = Date.now()) {
 
 /** The KPI strip of an issue: sub-issues or stage, elapsed, waiting, cost and commits. */
 function issueKpis(d, segments, now = Date.now()) {
-  const parts = d.goals ?? [], open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
+  const parts = d.goals, open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
   const times = rows.flatMap((r) => [...r.bars.flatMap((b) => [b.start, b.end]), ...r.waits.flatMap((w) => [w.start, w.end]), ...(r.marks ?? []).map((m) => m.at)]).filter(Number.isFinite);
   const lo = Math.min(...times), hi = open ? now : Math.max(...times);
   // Waiting is the time no job ran, on the whole issue, so a sub-issue waiting beside a running sub-issue does not count.
@@ -629,7 +629,7 @@ export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
   const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? (d.issue ? "agent" : "chris");
   const tracker = fm.tracker === "true";
-  const ref = String(d.ref ?? d.id), inventory = "#/issues", project = [d.repo, `#/issues?project=${encodeURIComponent(d.repo)}`];
+  const ref = d.ref, inventory = "#/issues", project = [d.repo, `#/issues?project=${encodeURIComponent(d.repo)}`];
   const place = d.issue ? [project, ["issues", inventory], [shortText(d.issue.id), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   // Front matter the page shows nowhere else: a chip each.
   const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`)).join("");
@@ -637,12 +637,12 @@ export function renderIssue(d) {
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     field("Priority", choose("priority", PRIORITIES, priority)) + field("Source", choose("source", SOURCES, source)) +
     field("Areas", inputBox("areas", areas.join(", "), { attrs: ` ${FORM} aria-label="areas" placeholder="comma separated"` })) + refsPicker(d) + `</div></section>`;
-  const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
+  const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref)}</div>` : "";
   // Plain references: they hold nothing, so each row shows the issue's status, not a wait.
   // The picker shows the refs in edit mode, so these lines show only in view mode.
-  const linked = (label, rows) => (rows?.length ? `<div class="dp-blocked view-only"><span class="quiet">${label}</span>${blockersHtml(rows.map((r) => ({ ...r, state: r.status })), d.repo, d.ref ?? d.id)}</div>` : "");
+  const linked = (label, rows) => (rows?.length ? `<div class="dp-blocked view-only"><span class="quiet">${label}</span>${blockersHtml(rows.map((r) => ({ ...r, state: r.status })), d.repo, d.ref)}</div>` : "");
   const references = linked("Refs", d.refs) + linked("Referenced by", d.referencedBy);
-  const partList = d.goals ?? [];
+  const partList = d.goals;
   const part = (id, title, name, text) => (text || !partList.length
     ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
     : "");
