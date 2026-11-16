@@ -460,14 +460,14 @@ function statusCmd(ctx: Ctx): void {
 
 /** `aleph status` with no issue: the stage of each open issue in each recent repo. */
 function statusRecent(ctx: Ctx): void {
-  const states: Stage[] = [], ofRepo: { key: string; code?: string; rows: Stage[] }[] = [];
+  const states: Stage[] = [], ofRepo: { key: string; code?: string; rows: Stage[] }[] = [], jobs = allJobs();
   for (const { repo, doc } of listRecent()) {
     const open = (doc?.items ?? []).filter((i) => issues.status(i) === "open");
     if (!open.length) continue;
     try {
       fetchOrigin(repo.path);
-      const f = facts(repo, doc);
-      const rows = stages(f, open.map((i) => issues.refOf(i)));
+      const refs = open.map((i) => issues.refOf(i));
+      const rows = stages(facts(repo, doc, jobs, refs), refs);
       states.push(...rows);
       if (rows.length) ofRepo.push({ key: repo.key, code: repo.code, rows });
     }

@@ -96,11 +96,20 @@ export function getRun(id: string): RunRecord | null {
   return r ? fromRow(r, rootOf(d, id), runAsks(d).get(id)) : null;
 }
 
-/** The jobs of the work that starts at `root`, oldest first. */
-const workOf = (d: Database, root: string): RunRecord[] => {
-  const rows = d.query(`SELECT * FROM jobs ${ORDER}`).all() as Row[], roots = rootsOf(rows), asks = runAsks(d);
-  return rows.filter((r) => roots.get(r.id) === root).map((r) => fromRow(r, root, asks.get(r.id)));
+/** The jobs with role `role`, oldest first. */
+export const runsOfRole = (role: string): RunRecord[] => {
+  const d = conn(), asks = runAsks(d);
+  return (d.query(`SELECT * FROM jobs WHERE role = ? ${ORDER}`).all(role) as Row[]).map((r) => fromRow(r, rootOf(d, r.id), asks.get(r.id)));
 };
+
+/** The jobs of the work that starts at `root`, oldest first: `root` and every job that follows it by `prev`. */
+const workOf = (d: Database, root: string): RunRecord[] => {
+  const rows = d.query(`WITH RECURSIVE w(id) AS (SELECT ?1 UNION SELECT j.id FROM jobs j JOIN w ON j.prev = w.id) SELECT jobs.* FROM jobs JOIN w USING (id) ${ORDER}`).all(root) as Row[], asks = runAsks(d);
+  return rows.map((r) => fromRow(r, root, asks.get(r.id)));
+};
+
+/** The jobs of the work that holds `id`, oldest first; empty when no row holds `id`. */
+export const workOfRun = (id: string): RunRecord[] => (rowOf(conn(), id) ? workOf(conn(), rootOf(conn(), id)) : []);
 
 /** A fix round: a build run that a failed check or a returned review sent back. */
 export const sentBack = (r: Pick<Run, "role" | "failed" | "review">): boolean => r.role === "build" && !!(r.failed || r.review?.call === "returned");

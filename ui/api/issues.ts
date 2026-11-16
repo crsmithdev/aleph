@@ -47,8 +47,8 @@ function issueOf(id: string): { repo: Repo; ref: string } | null {
 
 
 /** Each item's stage by ref, from the list already read and one pass over main's trailers; empty when the trailers cannot be read. */
-function stagesBy(repo: Repo, doc: todos.Doc, items?: string[]): Map<string, Stage> {
-  try { return new Map(repoStages(repo, { fetch: false, doc, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch (e) { logOnce("stages", e); return new Map(); }
+function stagesBy(repo: Repo, doc: todos.Doc, items?: string[], jobs?: ReturnType<typeof allJobs>): Map<string, Stage> {
+  try { return new Map(repoStages(repo, { fetch: false, doc, jobs, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch (e) { logOnce("stages", e); return new Map(); }
 }
 
 function list(url: URL): Response {
@@ -83,9 +83,9 @@ function jobRow(runs: ReturnType<typeof allJobs>[number]) {
  * What `aleph dispatch <key>` (Run now) would do with an open issue that has no open job: `runNow` is null when it starts the issue, else the text of
  * the gate that binds. Nothing for a closed issue or one with an open job, which have no Run now.
  */
-export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue): { runNow?: string | null } {
+export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue, jobs = allJobs()): { runNow?: string | null } {
   if (todos.status(item) !== "open") return {};
-  const f = issueFacts(repo, item, allJobs(), Date.now(), reader({ fetch: false }));
+  const f = issueFacts(repo, item, jobs, Date.now(), reader({ fetch: false }));
   if (f.open) return {};
   if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${f.name} is not a queued issue` };
   const d = issueDecision({ ...f, done: jobProjector().isDone, red: mainRed()(repo) });
@@ -105,12 +105,12 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const main = `refs/remotes/origin/${repo.main}`;
   const partRefs = partsOf(doc, item).map(todos.refOf);
-  const states = stagesBy(repo, doc, [ref, ...partRefs]);
+  const every = allRuns(), jobsAll = allJobs(every);
+  const states = stagesBy(repo, doc, [ref, ...partRefs], jobsAll);
   const mine = todos.status(item) === "parked" ? undefined : states.get(ref);
   const state = mine ? { item: `${repo.key}-${ref}`, stage: mine.stage, why: mine.why } : null;
 
-  const all = allJobs().filter((runs) => runs[0].run.repo === repo.key);
-  const every = allRuns();
+  const all = jobsAll.filter((runs) => runs[0].run.repo === repo.key);
   const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === issueKey(r))).map((runs) => jobRow(runs));
   // The runs on this issue, its old parts and its children.
   const by = runsByIssue(every.filter((e) => e.run.repo === repo.key)), keys = [ref, ...partRefs].map((r) => issueKey(r));
@@ -157,7 +157,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") ask = attend({ runs: [], issues: [card(repo.key, item, "waiting", stored)] }, []).items[0];
 
-  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item, jobsAll), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 /**

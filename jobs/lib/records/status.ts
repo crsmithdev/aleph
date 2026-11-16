@@ -27,10 +27,20 @@ export interface Facts {
   touched: number[];
 }
 
-/** `doc` is the repo's list, and `jobs` every job, when the caller has read them already. */
-export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs: Entry[][] = allJobs()): Facts {
+/**
+ * `doc` is the repo's list, and `jobs` every job, when the caller has read them already. `only` limits `items` to
+ * those refs and the parts below them, which is all stage() reads of an item: a subject costs one event read.
+ */
+export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs: Entry[][] = allJobs(), only?: (number | string)[]): Facts {
   const items: Record<string, Subject> = {};
-  for (const i of doc?.items ?? []) items[issues.refOf(i)] = subjectOf(i, repo.key, doc!);
+  const byRef = new Map((doc?.items ?? []).map((i) => [issues.refOf(i), i]));
+  const queue = (only ? only.map(String) : [...byRef.keys()]).reverse();
+  for (let ref = queue.pop(); ref !== undefined; ref = queue.pop()) {
+    const i = byRef.get(ref);
+    if (!i || items[ref]) continue;
+    items[ref] = subjectOf(i, repo.key, doc!);
+    if (only) queue.push(...items[ref].parts.map((p) => p.slice(repo.key.length + 1)));
+  }
   const runs: Record<string, RunView[]> = {};
   const open: Record<string, State> = {};
   const touched = new Set<number>();
@@ -148,12 +158,12 @@ export function stages(f: Facts, refs: (number | string)[]): Stage[] {
 /**
  * The stages of `items` (all the repo's items when omitted), from the repo's
  * origin/<main>. `fetch` says whether to fetch origin first; `doc` is the
- * list when the caller has read it already. Items the store lacks are left
+ * list and `jobs` every job, when the caller has read them already. Items the store lacks are left
  * out. It throws when the store cannot be read.
  */
-export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: issues.Doc | null; items?: (number | string)[] }): Stage[] {
+export function repoStages(repo: Repo, opts: { fetch: boolean; doc?: issues.Doc | null; jobs?: Entry[][]; items?: (number | string)[] }): Stage[] {
   if (opts.fetch) fetchOrigin(repo.path);
-  const f = facts(repo, opts.doc);
+  const f = facts(repo, opts.doc, opts.jobs, opts.items);
   return stages(f, opts.items ?? Object.keys(f.items));
 }
 

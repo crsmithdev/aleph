@@ -4,7 +4,7 @@
  * records; the body is the description. The registry (jobs/lib/records/ledger.ts `loadRegistry`) reads them from the
  * items checkout on disk.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { splitFrontmatter } from "../../lib/frontmatter.ts";
 import { layout } from "../../lib/layout.ts";
@@ -36,16 +36,27 @@ export function parseProject(n: number, text: string): Project {
   return { n, name: String(name ?? ""), description: frontmatter === null ? "" : body.trim(), fields };
 }
 
-/** Every project on disk, by number. */
-export function readProjects(): Project[] {
+/** Each project file as last parsed, with the time and size it had: a file that has not changed is not read or parsed again. */
+const parsed = new Map<string, { stamp: string; project: Project }>();
+
+/** The projects on disk, by number: the cached objects, which a caller must not change. */
+function projects(): Project[] {
   const dir = projectsDir();
   if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((d) => /^\d+$/.test(d) && existsSync(projectFile(Number(d)))).map(Number).sort((a, b) => a - b)
-    .map((n) => parseProject(n, readFileSync(projectFile(n), "utf8")));
+  return readdirSync(dir).filter((d) => /^\d+$/.test(d) && existsSync(projectFile(Number(d)))).map(Number).sort((a, b) => a - b).map((n) => {
+    const file = projectFile(n), st = statSync(file, { bigint: true }), stamp = `${st.mtimeNs}:${st.size}`, hit = parsed.get(file);
+    if (hit?.stamp === stamp) return hit.project;
+    const project = parseProject(n, readFileSync(file, "utf8"));
+    parsed.set(file, { stamp, project });
+    return project;
+  });
 }
 
+/** Every project on disk, by number. */
+export const readProjects = (): Project[] => structuredClone(projects());
+
 /** The key of the project named `name`, `project.3`, or undefined when the items repo has none. */
-export const projectKey = (name: string): string | undefined => { const p = readProjects().find((x) => x.name === name); return p && key("project", p.n); };
+export const projectKey = (name: string): string | undefined => { const p = projects().find((x) => x.name === name); return p && key("project", p.n); };
 
 /** The name of the project with key `k` (`project.3`), or undefined. */
-export const projectName = (k: string): string | undefined => readProjects().find((p) => key("project", p.n) === k)?.name;
+export const projectName = (k: string): string | undefined => projects().find((p) => key("project", p.n) === k)?.name;

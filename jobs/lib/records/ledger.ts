@@ -190,15 +190,25 @@ export function allRuns(): Entry[] {
   return record.allRunRecords().map(({ id, ...run }) => ({ id, folder: jobFolder(id), run }));
 }
 
-/** Runs grouped by work (the `prev` chain of each), each group oldest first, in the order the work started. */
-export function allJobs(): Entry[][] {
+/** Runs grouped by work (the `prev` chain of each), each group oldest first, in the order the work started. `runs` is `allRuns()` when the caller has read it already. */
+export function allJobs(runs: Entry[] = allRuns()): Entry[][] {
   const jobs = new Map<string, Entry[]>();
-  for (const e of allRuns()) {
+  for (const e of runs) {
     const list = jobs.get(e.run.job) ?? [];
     list.push(e);
     jobs.set(e.run.job, list);
   }
   return [...jobs.values()];
+}
+
+/** The runs with role `role`, oldest first. */
+export function runsOfRole(role: Run["role"]): Entry[] {
+  return record.runsOfRole(role).map(({ id, ...run }) => ({ id, folder: jobFolder(id), run }));
+}
+
+/** The runs grouped with run `id`, oldest first, as `allJobs` groups them; empty when `id` names no run. */
+export function jobOfRun(id: string): Entry[] {
+  return record.workOfRun(id).map(({ id, ...run }) => ({ id, folder: jobFolder(id), run }));
 }
 
 /** The job with key `id`, or undefined. */

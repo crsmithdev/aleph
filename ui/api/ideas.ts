@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cliOverride } from "../../jobs/lib/infra/settings.ts";
-import { allRuns } from "../../jobs/lib/records/ledger.ts";
+import { runsOfRole } from "../../jobs/lib/records/ledger.ts";
 import { LENSES, ideasDir, lenses, list, read } from "../../ideas/ideas.ts";
 import { projectName } from "../../issues/lib/projects.ts";
 import { refuse } from "../../lib/refusal.ts";
@@ -18,11 +18,11 @@ const missing = (what: string) => Response.json({ error: `no ${what}` }, { statu
 /** The idea, or null when the slug names none. */
 const find = (slug: string) => { try { return SLUG.test(slug) ? read(slug) : null; } catch { return null; } };
 
-const lensRuns = (slug: string) => allRuns().filter((e) => e.run.role === "lens" && LENSES.some((l) => e.run.name === `${slug}-${l}`));
+const lensRuns = (slug: string) => runsOfRole("lens").filter((e) => LENSES.some((l) => e.run.name === `${slug}-${l}`));
 
 export const routes: Routes = {
   "GET /api/ideas": (_req, _params, url) => {
-    const runs = allRuns().filter((e) => e.run.role === "lens");
+    const runs = runsOfRole("lens");
     return Response.json(list(url.searchParams.get("status") ?? undefined).map(({ idea, lenses, last }) => ({
       slug: idea.slug, title: idea.fm.title, target: projectName(String(idea.fm.project ?? "")), status: idea.fm.status, lenses, last,
       questions: idea.log.filter((l) => /^- \S+ \S+ \?/.test(l)).length,

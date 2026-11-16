@@ -50,21 +50,22 @@ export function logTo(folder: string, section: Section, text: string): void {
   appendFileSync(logStream(folder, section), text.endsWith("\n") ? text : `${text}\n`);
 }
 
-/** The text of every block of `section` in `log.txt`, in order; undefined when the file or the section is not there. */
-export function readSection(folder: string, section: Section): string | undefined {
+/** The text of every block of each section in `log.txt`, in order, for the sections it has; empty when the file is not there. */
+export function readSections(folder: string): Map<Section, string> {
   const file = runFile(folder, "log.txt");
-  if (!existsSync(file)) return undefined;
-  let at: string | undefined, found = false;
-  const out: string[] = [];
+  const lines = new Map<Section, string[]>();
+  if (!existsSync(file)) return new Map();
+  let at: Section | undefined;
   for (const line of readFileSync(file, "utf8").split("\n")) {
     const h = HEADER.exec(line);
-    if (h) { at = h[1]; found ||= at === section; continue; }
-    if (at === section) out.push(line);
+    if (h) { at = h[1] as Section; if (!lines.has(at)) lines.set(at, []); continue; }
+    if (at) lines.get(at)!.push(line);
   }
-  if (!found) return undefined;
-  const text = out.join("\n").replace(/\n+$/, "");
-  return text ? `${text}\n` : "";
+  return new Map([...lines].map(([k, out]) => { const text = out.join("\n").replace(/\n+$/, ""); return [k, text ? `${text}\n` : ""]; }));
 }
+
+/** The text of every block of `section` in `log.txt`, in order; undefined when the file or the section is not there. */
+export const readSection = (folder: string, section: Section): string | undefined => readSections(folder).get(section);
 
 /** The path of the job's spec: `spec.md` in the folder of the work's first job, a sibling of the folders of its jobs. */
 export const jobSpecFile = (run: { job: string }): string => join(jobFolder(run.job), "spec.md");

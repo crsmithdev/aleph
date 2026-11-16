@@ -1,11 +1,11 @@
 /** `GET /api/jobs`, `/api/jobs/:id`, and its diff and logs: the Jobs and Job views' data. `:id` is a job key, `job.6802`. */
 import { roundsOf, stepOf, type Step as NextStep } from "../../jobs/lib/records/record.ts";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { allRuns, isBuild, isOpen, issueKeyOf, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
-import { allJobs, checkedBy, lookMinutes, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
+import { allRuns, isBuild, isOpen, issueKeyOf, jobOfRun, loadRegistry, onOf, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { checkedBy, lookMinutes, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
@@ -13,7 +13,7 @@ import { currentFit, runShare, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
 import { resultContent } from "../../lib/toolresult.ts";
 import { issueHref, shownId } from "../../lib/naming.ts";
-import { isSection, readSection } from "../../jobs/lib/records/run-files.ts";
+import { isSection, readSection, readSections } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { runNowOf } from "./issues.ts";
@@ -38,10 +38,13 @@ function logText(folder: string, name: keyof typeof LOG_SOURCE): string | undefi
 }
 /** The known logs a job folder has. */
 function logsOf(folder: string): LogFile[] {
-  const out: LogFile[] = [];
+  const out: LogFile[] = [], sections = readSections(folder);
   for (const name of LOGS) {
-    const text = logText(folder, name);
-    if (text !== undefined) out.push({ name, size: Buffer.byteLength(text) });
+    const src: { file: string } | { section: string } = LOG_SOURCE[name];
+    let size: number | undefined;
+    if ("section" in src) { const text = isSection(src.section) ? sections.get(src.section) : undefined; if (text !== undefined) size = Buffer.byteLength(text); }
+    else try { size = statSync(join(folder, src.file)).size; } catch {}
+    if (size !== undefined) out.push({ name, size });
   }
   return out;
 }
@@ -171,12 +174,12 @@ function rowsOf(runs: Entry[]): Row[] {
   });
 }
 
-/** The run of job `id` and the runs grouped with it (`allJobs`), in `project` when given; null for none. */
+/** The run of job `id` and the runs grouped with it (as `allJobs` groups them), in `project` when given; null for none. */
 function located(id: string, project: string | null): { e: Entry; runs: Entry[] } | null {
   loadRegistry();
-  const e = runOfJob(id);
+  const runs = jobOfRun(id), e = runs.find((x) => x.id === id);
   if (!e || !repoIn(e.run.repo, project)) return null;
-  return { e, runs: allJobs().find((g) => g.some((x) => x.id === e.id))! };
+  return { e, runs };
 }
 
 /** The Job page's data: the job's runs, its record and its files, with `id`, the job asked for. */
