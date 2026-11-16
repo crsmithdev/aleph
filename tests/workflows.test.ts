@@ -29,3 +29,15 @@ test("ci.yml bails the test step after three failures, and no script bails", () 
   expect(scripts.test).not.toContain("--bail");
   expect(scripts["test:all"]).not.toContain("--bail");
 });
+
+test("guard: ci.yml loads the aleph-tools deploy key in a step before the install step", () => {
+  const ci = Bun.YAML.parse(readFileSync(join(DIR, "ci.yml"), "utf8")) as {
+    jobs: { test: { steps: { run?: string }[] } };
+  };
+  const steps = ci.jobs.test.steps;
+  const key = steps.findIndex((step) => JSON.stringify(step).includes("secrets.ALEPH_TOOLS_DEPLOY_KEY"));
+  const install = steps.findIndex((step) => step.run === "bun install --frozen-lockfile");
+  expect(install).toBeGreaterThan(-1);
+  expect(key).toBeGreaterThan(-1);
+  expect(key).toBeLessThan(install);
+});
