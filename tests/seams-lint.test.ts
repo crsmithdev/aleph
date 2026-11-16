@@ -22,7 +22,7 @@ test("only lib/git.ts defines an exported git runner", () => {
 });
 
 test("only lib/paths.ts reads home or ~/.aleph", () => {
-  expect(offenders(/HOME \|\| homedir\(\)|homedir\(\), "\.aleph"|"~\/\.aleph/, ["lib/paths.ts"])).toEqual([]);
+  expect(offenders(/HOME \|\| homedir\(\)|homedir\(\), "\.aleph"|"~\/\.aleph|homedir\(\), "\.claude", "projects"|HOME, "\.aleph|HOME, "\.claude\/projects"/, ["lib/paths.ts"])).toEqual([]);
 });
 
 test("lib/, vault/, jobs/ and issues/ do not import ui/", () => {
@@ -43,6 +43,18 @@ test("the issue store reads from jobs/ only an issue's Ask: its job record and t
 
 test("only lib/day.ts writes a date as toISOString().slice(0, 10)", () => {
   expect(offenders(/toISOString\(\)\.slice\(0, 10\)/, ["lib/day.ts"])).toEqual([]);
+});
+
+test("only lib/day.ts subtracts days from a date with a ms-day literal next to today(", () => {
+  expect(offenders(/today\(new Date\([^\n]*(?:86400_000|86_400_000|864e5)/, ["lib/day.ts"])).toEqual([]);
+});
+
+test("only vault/lib/vault.ts names the recall log file", () => {
+  expect(offenders(/\.recall-log\.jsonl/, ["vault/lib/vault.ts", "vault/lib/templates.ts"])).toEqual([]);
+});
+
+test("only lib/frontmatter.ts splits a file's frontmatter by a regex", () => {
+  expect(offenders(/\/\^---/, ["lib/frontmatter.ts"])).toEqual([]);
 });
 
 test("only lib/git.ts and skills/refit-code/ spawn git directly", () => {

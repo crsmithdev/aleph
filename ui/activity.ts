@@ -7,6 +7,7 @@
 import type { Observation } from "../lib/langfuse.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { today } from "../issues/lib/todo.ts";
+import { daysAgo } from "../lib/day.ts";
 import { once } from "../lib/sources.ts";
 import { traceIn } from "./api/scope.ts";
 import { langfuse, type Langfuse } from "../lib/langfuse.ts";
@@ -20,7 +21,7 @@ const TYPES = ["TOOL", "GUARDRAIL", "SPAN"];
 
 /** The local dates of the last `days` days, oldest first, ending today. */
 function dayKeys(days: number, now: Date): string[] {
-  return Array.from({ length: days }, (_, i) => today(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - i), 12)));
+  return Array.from({ length: days }, (_, i) => daysAgo(days - 1 - i, now));
 }
 const dayOf = (iso: string | number | undefined): string | null => {
   const d = new Date(iso ?? NaN);

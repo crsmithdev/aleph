@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendRecallLog, lintVault, loadVault, loadWiki, readRun, screenCandidates, wikiNotes, type Note } from "./vault.ts";
+import { appendDaily, appendRecallLog, parseOp, today, lintVault, loadVault, loadWiki, readRecallLog, readRun, screenCandidates, trimRecallLog, wikiNotes, type Note } from "./vault.ts";
 
 let root: string;
 const N = 300;
@@ -43,15 +43,30 @@ test("consistent_with leaves a note out of screenCandidates and out of the overl
   rmSync(r, { recursive: true, force: true });
 });
 
-test("appendRecallLog records a recall trim run and drops a line older than 30 days", () => {
+test("appendDaily writes an op line that parseOp reads back, a delete without a link", () => {
+  const r = mkdtempSync(join(tmpdir(), "vault-daily-"));
+  const ops = [{ op: "write", title: "A Note", why: "because" }, { op: "delete", title: "Gone Note", why: "wrong" }];
+  const files = ops.map((o) => appendDaily(r, o));
+  expect(files).toEqual(Array(2).fill(join(r, "daily", `${today()}.md`)));
+  const lines = readFileSync(join(r, "daily", `${today()}.md`), "utf8").split("\n").filter((l) => l.startsWith("- "));
+  expect(lines.map((l) => l.slice(8))).toEqual(["write [[A Note]] — because", "delete Gone Note — wrong"]);
+  expect(lines.map((l) => parseOp(l.slice(8)))).toEqual(ops);
+  expect(parseOp("build abc — not a note")).toBeNull();
+  rmSync(r, { recursive: true, force: true });
+});
+
+test("trimRecallLog records a recall trim run and drops a line older than 30 days; appendRecallLog keeps every line", () => {
   setSystemTime(Date.parse("2026-11-04T12:00:00Z"));
   const r = mkdtempSync(join(tmpdir(), "vault-trim-"));
   const line = (date: string, title: string) => JSON.stringify({ date, title, query: "q", session: null, source: "cli" });
-  writeFileSync(join(r, ".recall-log.jsonl"), [line("2026-09-25", "Old"), line("2026-11-02", "Kept")].join("\n") + "\n");
-  expect(readRun(r, "recall trim")).toBeNull();
+  writeFileSync(join(r, ".recall-log.jsonl"), [line("2026-09-25", "Old"), line("2026-11-02", "Kept"), "{bad"].join("\n") + "\n");
+  const titles = () => readFileSync(join(r, ".recall-log.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l).title);
   appendRecallLog(r, ["New"], "q");
-  const titles = readFileSync(join(r, ".recall-log.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l).title);
-  expect(titles).toEqual(["Kept", "New"]);
+  expect(readRun(r, "recall trim")).toBeNull();
+  expect(readFileSync(join(r, ".recall-log.jsonl"), "utf8")).toContain("Old");
+  expect(readRecallLog(r).map((e) => e.title)).toEqual(["Kept", "New"]);
+  trimRecallLog(r);
+  expect(titles()).toEqual(["Kept", "New"]);
   expect(readRun(r, "recall trim")).toEqual({ at: "2026-11-04T12:00:00.000Z", result: "ok" });
   rmSync(r, { recursive: true, force: true });
   setSystemTime();

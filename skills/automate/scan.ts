@@ -11,6 +11,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { git } from "../../lib/git.ts";
+import { claudeProjects, vaultDir } from "../../lib/paths.ts";
 
 export type Kind = "hook" | "tool" | "gate" | "loop" | "reload" | "dupe" | "command" | "prompt" | "lookup" | "misled";
 export interface Signal { kind: Kind; key: string; session: string; at: string; cli: boolean; cwd: string; text: string }
@@ -25,7 +26,7 @@ const LOOP = 3; // gate denials in a row, with no prompt from Chris between them
 const HOME = homedir();
 const PATH = /\/(?:[\w.@+-]+\/)+[\w.@+-]+\.\w+/g;
 const READS = /^(sed -n|cat|head|tail|ls|grep|rg|find|wc|jq|echo|git (diff|log|status|show))\b/; // a lookup, not a command
-const WIKI = join(HOME, ".aleph/vault/wiki/");
+const WIKI = join(vaultDir(), "wiki/");
 const EDITS = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
 const CAUSE = /[a-z]{3}/i; // a key with no word in it names no cause
 
@@ -167,7 +168,7 @@ const files = (root: string, since: number): string[] =>
 
 if (import.meta.main) {
   const { values: o } = parseArgs({
-    options: { days: { type: "string", default: "14" }, root: { type: "string", default: join(HOME, ".claude/projects") }, top: { type: "string", default: "25" } },
+    options: { days: { type: "string", default: "14" }, root: { type: "string", default: claudeProjects() }, top: { type: "string", default: "25" } },
   });
   const t0 = Date.now();
   const since = t0 - Number(o.days) * 86_400_000;

@@ -5,9 +5,9 @@
  *   bun turns.ts [--since <ISO time>] [--repo <path>] [--root ~/.claude/projects]
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { claudeProjects } from "../../lib/paths.ts";
 import { said as text } from "../automate/scan.ts";
 
 const WEEK = 7 * 864e5;
@@ -70,7 +70,7 @@ if (import.meta.main) {
     options: {
       since: { type: "string", default: new Date(Date.now() - WEEK).toISOString() },
       repo: { type: "string", default: process.cwd() },
-      root: { type: "string", default: join(homedir(), ".claude", "projects") },
+      root: { type: "string", default: claudeProjects() },
     },
   });
   const since = new Date(v.since!).toISOString();

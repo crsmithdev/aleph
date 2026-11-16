@@ -1,8 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findings, norm, signals } from "./scan.ts";
+import { vaultDir } from "../../lib/paths.ts";
 
 const line = (session: string, at: string, r: object) => JSON.stringify({ sessionId: session, timestamp: at, entrypoint: "cli", cwd: `/w/${session}`, ...r });
 const hook = (s: string, at: string, stderr: string) =>
@@ -63,7 +64,7 @@ test("findings keeps a lookup from three sessions", () => {
 });
 
 test("signals and findings count the first prompt after a vault note read as misled", () => {
-  const note = join(homedir(), ".aleph/vault/wiki/gotchas/Docker Runs Natively.md");
+  const note = join(vaultDir(), "wiki/gotchas/Docker Runs Natively.md");
   const recall = (id: string, cmd: string) => [bash("a", "2026-11-10T00:00:03Z", id, cmd),
     user("a", "2026-11-10T00:00:04Z", [{ type: "tool_result", tool_use_id: id, content: JSON.stringify([{ title: "Use bun" }, { title: "Pin ports" }]) }])];
   const ss = signals([

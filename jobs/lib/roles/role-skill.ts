@@ -5,6 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { splitFrontmatter } from "../../../lib/frontmatter.ts";
 
 /** The flag on every agent role's `claude -p`: no skills and no slash commands. */
 export const NO_SKILLS = "--disable-slash-commands";
@@ -12,6 +13,6 @@ export const NO_SKILLS = "--disable-slash-commands";
 /** The body of `skills/<name>/SKILL.md`, without its frontmatter, as a prompt section. A relative link becomes an absolute path, so the agent can Read the file it names. */
 export function skillSection(name: string, title: string): string {
   const dir = join(import.meta.dir, "..", "..", "..", "skills", name);
-  const body = readFileSync(join(dir, "SKILL.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n/, "").trim().replace(/\]\((\.\.?\/[^)]+)\)/g, (_, rel) => `](${join(dir, rel)})`);
+  const body = splitFrontmatter(readFileSync(join(dir, "SKILL.md"), "utf8")).body.trim().replace(/\]\((\.\.?\/[^)]+)\)/g, (_, rel) => `](${join(dir, rel)})`);
   return `## ${title}\n\n${body}`;
 }

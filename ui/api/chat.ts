@@ -14,13 +14,12 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { MEDIA_BYTES, MEDIA_TYPES } from "../../issues/lib/store.ts";
 import { startChat } from "../../jobs/lib/roles/agent-call.ts";
 import { chatIdleMs } from "../../jobs/lib/infra/settings.ts";
 import { read, type Note } from "../../lib/annotations.ts";
-import { alephPath } from "../../lib/paths.ts";
+import { alephPath, claudeProjects } from "../../lib/paths.ts";
 import { clip } from "../../lib/naming.ts";
 import { file as ideaFile } from "../../ideas/ideas.ts";
 import { sameSite } from "../http.ts";
@@ -55,7 +54,7 @@ export interface Chat { id: string; start: string; last: string; title: string }
 
 /** The conversations with a turn at or after `since` (ms), oldest first, each read from its Claude Code transcript; one with no transcript is left out. */
 export function chats(since: number): Chat[] {
-  const root = process.env.ALEPH_CLAUDE_PROJECTS ?? join(homedir(), ".claude", "projects");
+  const root = claudeProjects();
   if (!existsSync(sessions()) || !existsSync(root)) return [];
   const out: Chat[] = [];
   for (const id of readdirSync(sessions())) {

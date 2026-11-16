@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { langfuse, type Langfuse, type Observation } from "../../../lib/langfuse.ts";
 import { decide, nouls } from "../../../lib/jev.ts";
+import { splitFrontmatter } from "../../../lib/frontmatter.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 
@@ -58,10 +59,9 @@ function repoSkills(repo: Repo): Record<string, string> {
   for (const n of names) {
     const f = join(dir, n, "SKILL.md");
     if (!existsSync(f)) continue;
-    const fm = readFileSync(f, "utf8").match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
-    const name = fm.match(/^name:\s*(.+)$/m)?.[1].trim().replace(/^["']|["']$/g, "") || n;
-    const block = fm.match(/^description:\s*[>|]-?\s*\n((?:[ \t]+.+\n?)+)/m)?.[1];
-    out[name] = block ? block.trim().replace(/\s*\n\s*/g, " ") : fm.match(/^description:\s*(.+)$/m)?.[1].trim().replace(/^["']|["']$/g, "") ?? "";
+    const { frontmatter } = splitFrontmatter(readFileSync(f, "utf8"));
+    const fm = (frontmatter === null ? {} : Bun.YAML.parse(frontmatter)) as Record<string, unknown>;
+    out[String(fm.name || n)] = String(fm.description ?? "").trim().replace(/\s*\n\s*/g, " ");
   }
   return out;
 }

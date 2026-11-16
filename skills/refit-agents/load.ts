@@ -15,6 +15,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+import { splitFrontmatter } from "../../lib/frontmatter.ts";
 
 type Item = { file: string; kind: string; tokens: number; note?: string };
 type Skill = { file: string; name: string; description: number; lines: number; invoked: "model" | "user" };
@@ -30,8 +31,8 @@ const glob = (root: string, ...patterns: string[]) => [...new Set(patterns.flatM
 
 /** The frontmatter of a markdown file, or {} when it has none. */
 function front(text: string): Record<string, unknown> {
-  const m = text.match(/^---\n([\s\S]*?)\n---/);
-  return m ? (Bun.YAML.parse(m[1]) as Record<string, unknown>) ?? {} : {};
+  const { frontmatter } = splitFrontmatter(text);
+  return frontmatter === null ? {} : (Bun.YAML.parse(frontmatter) as Record<string, unknown>) ?? {};
 }
 
 /** A memory file and every file its @imports reach, depth first, each once. */

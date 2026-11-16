@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { today } from "../../../lib/day.ts";
+import { daysAgo, today } from "../../../lib/day.ts";
 import { commitPaths } from "../../../vault/lib/git.ts";
 import { appendDaily, vaultDir } from "../../../vault/lib/vault.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
@@ -180,10 +180,10 @@ function pruneEpisodes(now = Date.now()): void {
     const p = join(dir, f);
     if (statSync(p).mtimeMs < now - KEEP_DAYS * 86400_000) { rmSync(p); deleted++; }
   }
-  trimUse(today(new Date(now - KEEP_DAYS * 86400_000)));
+  trimUse(daysAgo(KEEP_DAYS, new Date(now)));
   if (!deleted) return;
-  appendDaily(vaultDir(), `prune episodes before ${today(new Date(now - KEEP_DAYS * 86400_000))} — ${deleted} pages older than ${KEEP_DAYS} days`);
-  commitPaths(vaultDir(), "prune episodes", [join(vaultDir(), "daily", `${today()}.md`)]);
+  const daily = appendDaily(vaultDir(), { op: "prune episodes", title: `before ${daysAgo(KEEP_DAYS, new Date(now))}`, why: `${deleted} pages older than ${KEEP_DAYS} days` });
+  commitPaths(vaultDir(), "prune episodes", [daily]);
 }
 
 /** The done issues of `repos`, the one whose last run ended longest ago first, at most `cap` pages. */

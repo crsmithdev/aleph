@@ -13,6 +13,7 @@
  */
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { splitFrontmatter } from "../../lib/frontmatter.ts";
 import { main } from "./load.ts";
 
 type Kind = "skill" | "agent" | "command" | "plugin" | "mcp" | "hook" | "memory";
@@ -26,8 +27,8 @@ const ls = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);
 /** The description length of a SKILL.md or an agent or command file, or undefined when it has none. */
 function described(file: string): number | undefined {
   if (!existsSync(file)) return undefined;
-  const m = readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/);
-  const fm = m ? ((Bun.YAML.parse(m[1]) as Record<string, unknown>) ?? {}) : {};
+  const { frontmatter } = splitFrontmatter(readFileSync(file, "utf8"));
+  const fm = frontmatter === null ? {} : ((Bun.YAML.parse(frontmatter) as Record<string, unknown>) ?? {});
   return fm.description && fm["disable-model-invocation"] !== true ? String(fm.description).length : undefined;
 }
 

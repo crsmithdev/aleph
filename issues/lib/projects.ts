@@ -6,6 +6,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { splitFrontmatter } from "../../lib/frontmatter.ts";
 import { layout } from "../../lib/layout.ts";
 import { key } from "../../lib/naming.ts";
 
@@ -30,9 +31,9 @@ export function renderProject({ name, description, fields }: Omit<Project, "n">)
 
 /** The project from the text of its file. */
 export function parseProject(n: number, text: string): Project {
-  const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text);
-  const { name, ...fields } = (m ? Bun.YAML.parse(m[1]) : {}) as Record<string, any>;
-  return { n, name: String(name ?? ""), description: (m?.[2] ?? "").trim(), fields };
+  const { frontmatter, body } = splitFrontmatter(text);
+  const { name, ...fields } = (frontmatter === null ? {} : Bun.YAML.parse(frontmatter)) as Record<string, any>;
+  return { n, name: String(name ?? ""), description: frontmatter === null ? "" : body.trim(), fields };
 }
 
 /** Every project on disk, by number. */

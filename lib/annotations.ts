@@ -6,8 +6,7 @@
  * A note is v 2 of the kit's shape. `url` "" puts a note on every page where its selector finds an element, which is
  * how an agent pins a note on an item by its `data-annotate` id without knowing which page shows it.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { readJsonOr, writeJson } from "./json.ts";
 import { annotationsFile } from "./paths.ts";
 import { refuse } from "./refusal.ts";
 
@@ -21,17 +20,12 @@ const STATUS: Status[] = ["open", "resolved"];
 
 /** Every note, oldest first; a v 1 note reads as open, by you, with no replies. */
 export function read(): Note[] {
-  const file = annotationsFile();
-  if (!existsSync(file)) return [];
-  return (JSON.parse(readFileSync(file, "utf8")) as Partial<Note>[]).map((n) => ({ url: "", text: "", html: "", status: "open", by: "you", replies: [], ...n, v: 2 }) as Note);
+  return readJsonOr<Partial<Note>[]>(annotationsFile(), []).map((n) => ({ url: "", text: "", html: "", status: "open", by: "you", replies: [], ...n, v: 2 }) as Note);
 }
 
 /** Replaces the file whole: a rename, so a reader never sees half of it. */
 function write(all: Note[]): void {
-  const file = annotationsFile();
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(`${file}.tmp`, `${JSON.stringify(all, null, 2)}\n`);
-  renameSync(`${file}.tmp`, file);
+  writeJson(annotationsFile(), all);
 }
 
 const now = () => new Date().toISOString();

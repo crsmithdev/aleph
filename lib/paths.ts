@@ -38,6 +38,8 @@ export function alephPath(name: string, rel: string): string {
   return p;
 }
 
+/** The folder of Claude Code's transcripts, `<project>/<session>.jsonl`. */
+export const claudeProjects = (): string => expand(process.env.ALEPH_CLAUDE_PROJECTS ?? join(home(), ".claude", "projects"));
 /** The vault folder. */
 export const vaultDir = (): string => { touch("vault"); return alephPath("ALEPH_VAULT", "vault"); };
 /** The handoffs folder: beside the vault (the link, not its target) unless the environment names it. */

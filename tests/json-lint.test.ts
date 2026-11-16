@@ -20,3 +20,10 @@ test("no source file in jobs/, ui/, vault/ or hooks/ parses a JSON file but the 
     .sort();
   expect(found).toEqual([]);
 });
+
+test("no source file writes a fixed `${file}.tmp` for a rename: two writers would collide, so writeJson names it by pid", () => {
+  const found = [...new Glob("{jobs,ui,vault,hooks,lib}/**/*.ts").scanSync(ROOT)]
+    .filter((f) => !SKIPPED.test(f) && /\$\{\w+\}\.tmp/.test(readFileSync(join(ROOT, f), "utf8")))
+    .sort();
+  expect(found).toEqual([]);
+});

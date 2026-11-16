@@ -5,7 +5,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
-import { today } from "../../lib/day.ts";
+import { daysAgo, today } from "../../lib/day.ts";
 import { readJsonOr, writeJson } from "../../lib/json.ts";
 import { vaultDir } from "../../lib/paths.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
@@ -102,13 +102,27 @@ export function markRetry(root: string, date: string, on: boolean): void {
   if (on !== marked) writeJson(retryFile(root), on ? [...days, date].sort() : days.filter((d) => d !== date));
 }
 
-/** Every logged return, one JSON line of date, title and query, for 30 days. Outside git; the CLI and the hook both append through here. */
+/** Days the recall log keeps. */
+export const RECALL_DAYS = 30;
+const recallLog = (root: string) => join(root, ".recall-log.jsonl");
+
+/** Appends one JSON line of date, title and query per returned title. Outside git; the CLI and the hook both append through here. */
 export function appendRecallLog(root: string, titles: string[], query: string): void {
-  const file = join(root, ".recall-log.jsonl");
-  const cut = today(new Date(Date.now() - 30 * 86400_000));
+  appendFileSync(recallLog(root), titles.map((title) => JSON.stringify({ date: today(), title, query }) + "\n").join(""));
+}
+
+/** The logged returns dated `since` or later, oldest first; a line that does not parse is skipped. */
+export function readRecallLog(root: string, since = daysAgo(RECALL_DAYS)): { date: string; title: string; query: string }[] {
+  if (!existsSync(recallLog(root))) return [];
+  return readFileSync(recallLog(root), "utf8").split("\n").flatMap((l) => {
+    try { const e = JSON.parse(l); return e.date >= since ? [e] : []; } catch { return []; }
+  });
+}
+
+/** Rewrites the recall log without the lines older than `RECALL_DAYS`, and records the run. */
+export function trimRecallLog(root: string): void {
   try {
-    const old = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l && JSON.parse(l).date >= cut) : [];
-    writeFileSync(file, [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query }))].join("\n") + "\n");
+    if (existsSync(recallLog(root))) writeFileSync(recallLog(root), readRecallLog(root).map((e) => JSON.stringify(e) + "\n").join(""));
   } catch (e) { recordRun(root, "recall trim", "failed", errText(e)); throw e; }
   recordRun(root, "recall trim", "ok");
 }
@@ -118,13 +132,28 @@ export function clock(d = new Date()): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** Append `- HH:MM <line>` to today's daily note under `root`, making the note when it is new. */
-export function appendDaily(root: string, line: string): void {
+/** One op line of a daily note. `title` is a note's title for the ops that link it, else free text. */
+export type Op = { op: string; title: string; why: string };
+
+/** The ops whose line links the note as `[[title]]`. A delete does not: its note is gone, and the link would dangle. */
+const LINKED = ["write", "supersede", "archive", "adopt"];
+
+const opText = ({ op, title, why }: Op): string => `${op} ${LINKED.includes(op) ? `[[${title}]]` : title} — ${why}`;
+
+/** The note op that `text` (an op line without its time) records, or null for any other line. */
+export function parseOp(text: string): Op | null {
+  const linked = /^(write|supersede|archive|adopt) \[\[([^\]]+)\]\]\s*(.*)$/.exec(text) ?? /^(delete) (.+?) — (.*)$/.exec(text);
+  return linked && { op: linked[1], title: linked[2], why: linked[3].replace(/\[\[|\]\]/g, "").replace(/^[—–-]\s*/, "") };
+}
+
+/** Append `- HH:MM <op>` to today's daily note under `root`, making the note when it is new. Returns the note's path, which a commit of the line names. */
+export function appendDaily(root: string, op: Op): string {
   const dir = join(root, "daily");
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `${today()}.md`);
   if (!existsSync(file)) writeFileSync(file, `# ${today()}\n\n`);
-  appendFileSync(file, `- ${clock()} ${line}\n`);
+  appendFileSync(file, `- ${clock()} ${opText(op)}\n`);
+  return file;
 }
 
 export function readNote(path: string, root: string): Note {

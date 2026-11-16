@@ -5,9 +5,9 @@
  * A reload fetches only the rows that are new since the last one (see `sync`). When it fails, the
  * last good rows are analysed and the answer says so: `asOf` is when they were fetched, `failed` why the reload failed.
  */
-import { readJsonOr } from "../../lib/json.ts";
-import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readJsonOr, writeJson } from "../../lib/json.ts";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { parseScope, scopeOf, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
@@ -112,10 +112,7 @@ function loadStore(base: string): Store | null {
 }
 function saveStore(s: Store): void {
   try {
-    const f = storeFile(s.base);
-    mkdirSync(dirname(f), { recursive: true });
-    writeFileSync(`${f}.tmp`, JSON.stringify({ v: 1, base: s.base, from: s.from, through: s.through, built: s.built, obs: [...s.obs.values()], traces: [...s.traces.values()] }));
-    renameSync(`${f}.tmp`, f);
+    writeJson(storeFile(s.base), { v: 1, base: s.base, from: s.from, through: s.through, built: s.built, obs: [...s.obs.values()], traces: [...s.traces.values()] });
   } catch (e) { console.error(`skills: store not saved: ${(e as Error).message}`); }
 }
 

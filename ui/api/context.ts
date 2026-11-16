@@ -1,12 +1,12 @@
 /** `/api/context`, `/api/context/:id`, `/api/context/:id/calls/:call`: the Context view's data, from the Claude Code transcripts under `~/.claude/projects/<project>/<session>.jsonl`. */
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { claudeProjects } from "../../lib/paths.ts";
 import { window } from "../../hooks/lib/context.ts";
 import { call, parseExact } from "../context.ts";
 import type { Routes } from "../server.ts";
 
-const root = () => process.env.ALEPH_CLAUDE_PROJECTS ?? join(homedir(), ".claude", "projects");
+const root = claudeProjects;
 const transcripts = () => existsSync(root()) ? [...new Bun.Glob("*/*.jsonl").scanSync({ cwd: root() })] : [];
 
 const file = (id: string) => { const f = transcripts().find((t) => t.endsWith(`/${id}.jsonl`)); return f && join(root(), f); };

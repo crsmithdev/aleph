@@ -8,6 +8,7 @@
  */
 import { getJson } from "../../lib/db.ts";
 import { readJsonOr } from "../../lib/json.ts";
+import { daysAgo } from "../../lib/day.ts";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,7 +20,7 @@ import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
 import { tickRows, type TickRow } from "../../jobs/lib/gates/factory-status.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { backlinks, coreNotes, linkTargets, links, lintVault, loadVault, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { backlinks, coreNotes, linkTargets, links, lintVault, loadVault, parseOp, RECALL_DAYS, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 
@@ -73,15 +74,11 @@ function readLog(root: string): Record<string, string> {
 
 /** Each note's recall count per day for the last 30 days, oldest first, from the recall log. */
 function recallDays(root: string): Map<string, number[]> {
-  const days = Array.from({ length: 30 }, (_, i) => today(new Date(Date.now() - (29 - i) * 86400_000)));
+  const days = Array.from({ length: 30 }, (_, i) => daysAgo(29 - i));
   const by = new Map<string, number[]>();
-  let lines: string[] = [];
-  try { lines = readFileSync(join(root, ".recall-log.jsonl"), "utf8").split("\n"); } catch { /* no log yet */ }
-  for (const l of lines) {
-    try {
-      const e = JSON.parse(l), i = days.indexOf(e.date);
-      if (i >= 0) { const c = by.get(e.title) ?? Array(30).fill(0); c[i]++; by.set(e.title, c); }
-    } catch { /* a bad line is skipped */ }
+  for (const e of readRecallLog(root)) {
+    const i = days.indexOf(e.date);
+    if (i >= 0) { const c = by.get(e.title) ?? Array(30).fill(0); c[i]++; by.set(e.title, c); }
   }
   return by;
 }
@@ -128,20 +125,13 @@ async function overview(url: URL): Promise<Response> {
   return json(body);
 }
 
-const LOG_DAYS = 30;
 /** One recall event per call: the recall log appends a call's titles in a row, in rank order, so a run of lines with one day and query is one call. */
 function recallEvents(root: string, since: string) {
   const out: { date: string; query: string; titles: string[] }[] = [];
-  let lines: string[] = [];
-  try { lines = readFileSync(join(root, ".recall-log.jsonl"), "utf8").split("\n"); } catch { /* no log yet */ }
-  for (const l of lines) {
-    try {
-      const e = JSON.parse(l);
-      if (e.date < since) continue;
-      const last = out.at(-1);
-      if (last && last.date === e.date && last.query === e.query && !last.titles.includes(e.title)) last.titles.push(e.title);
-      else out.push({ date: e.date, query: e.query, titles: [e.title] });
-    } catch { /* a bad line is skipped */ }
+  for (const e of readRecallLog(root, since)) {
+    const last = out.at(-1);
+    if (last && last.date === e.date && last.query === e.query && !last.titles.includes(e.title)) last.titles.push(e.title);
+    else out.push({ date: e.date, query: e.query, titles: [e.title] });
   }
   return out;
 }
@@ -151,12 +141,12 @@ async function log(url: URL): Promise<Response> {
   const slow = misses();
   const project = projectOf(url), root = vaultDir(), keep = inScope(project);
   const all = await allNotes(root), targets = linkTargets(all);
-  const since = today(new Date(Date.now() - LOG_DAYS * 86400_000));
+  const since = daysAgo(RECALL_DAYS);
   const mine = (title: string) => { const hit = targets.get(title.toLowerCase()); return !project || (!!hit && keep(hit)); };
   const rows: { at: string; kind: string; op: string; note: string; why: string; titles: string[] }[] = [];
   for (const l of opLines(root)) {
-    const m = /^(write|update|supersede|archive|adopt) \[\[([^\]]+)\]\]\s*(.*)$/.exec(l.text);
-    if (l.at.slice(0, 10) >= since && m && mine(m[2])) rows.push({ at: l.at, kind: "write", op: m[1], note: m[2], why: m[3].replace(/\[\[|\]\]/g, "").replace(/^[—–-]\s*/, ""), titles: [] });
+    const o = parseOp(l.text);
+    if (l.at.slice(0, 10) >= since && o && mine(o.title)) rows.push({ at: l.at, kind: "write", op: o.op, note: o.title, why: o.why, titles: [] });
   }
   for (const e of recallEvents(root, since)) {
     const titles = e.titles.filter(mine);
@@ -200,14 +190,14 @@ async function processes(): Promise<Response> {
   const steps = [
     step("episodes", "every 30 min", tick.episodes?.last ?? undefined, tick.episodes?.last ? new Date(Date.parse(tick.episodes.last) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
     maintain(root, tick.maintain),
-    ...([["seen prune", "with each recall that injects a note", "deletes seen lists older than 7 days"], ["recall trim", "with each logged recall", "keeps 30 days of the recall log"], ["vault push", "with each vault write", "pushes the vault commit to origin"]] as const).map(([name, runs, does]) => {
+    ...([["seen prune", "with each recall that injects a note", "deletes seen lists older than 7 days"], ["recall trim", "daily with maintain", "keeps 30 days of the recall log"], ["vault push", "with each vault write", "pushes the vault commit to origin"]] as const).map(([name, runs, does]) => {
       const run = readRun(root, name);
       return { name, runs, last: run?.at ?? null, next: null, result: run?.result ?? null, detail: run?.detail ?? null, does };
     }),
   ];
   const dir = episodesDir();
   const mtimes = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".md")).map((f) => statSync(join(dir, f)).mtimeMs) : [];
-  const days = Array.from({ length: KEEP_DAYS }, (_, i) => today(new Date(now - (KEEP_DAYS - 1 - i) * 86400_000)));
+  const days = Array.from({ length: KEEP_DAYS }, (_, i) => daysAgo(KEEP_DAYS - 1 - i, new Date(now)));
   const perDay = days.map((date) => ({ date, pages: mtimes.filter((t) => today(new Date(t)) === date).length }));
   const all = await allNotes(root);
   const stale = lintVault(all).warn.filter((f) => f.rule === "stale");

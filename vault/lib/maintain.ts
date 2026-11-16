@@ -9,7 +9,8 @@ import { layout } from "../../lib/layout.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
 import { Exit, run } from "./ops.ts";
-import { compiledDays, fixFrontmatter, lintVault, loadVault, readRun, recordRun, today, wikiNotes, type Finding } from "./vault.ts";
+import { daysAgo } from "../../lib/day.ts";
+import { compiledDays, fixFrontmatter, lintVault, loadVault, readRecallLog, readRun, recordRun, today, trimRecallLog, wikiNotes, type Finding } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
 const SHOWN_UNOPENED = 8;
@@ -32,8 +33,6 @@ export async function sub(argv: string[]): Promise<{ code: number; json: Json | 
 /** `line` with each repeated `[[link]]` removed. */
 const dedupe = (line: string): string => { const seen = new Set<string>(); return line.replace(/\s*\[\[[^\]]+\]\]/g, (m) => (seen.has(m.trim()) ? "" : (seen.add(m.trim()), m))); };
 
-const ago = (days: number): string => today(new Date(Date.now() - days * 86400_000));
-
 /** The handoffs of `dir` whose day (from `day`) is before the cutoff and that `keep` allows, moved to `to` unless `dry`. */
 function move(dir: string, to: string, dry: boolean, day: (f: string) => string | null, cut: string, keep: (d: string) => boolean = () => true): string[] {
   if (!existsSync(dir)) return [];
@@ -45,9 +44,8 @@ function move(dir: string, to: string, dry: boolean, day: (f: string) => string 
 
 /** The stale findings, most recalled first, each with its count in the recall log (30 days); ties keep lint order. */
 export function decayQueue(root: string, stale: Finding[]): (Finding & { count: number })[] {
-  const file = join(root, ".recall-log.jsonl");
   const n = new Map<string, number>();
-  for (const l of existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean) : []) { const t = JSON.parse(l).title; n.set(t, (n.get(t) ?? 0) + 1); }
+  for (const { title } of readRecallLog(root)) n.set(title, (n.get(title) ?? 0) + 1);
   return stale.map((f) => ({ ...f, count: n.get(f.note) ?? 0 })).sort((a, b) => b.count - a.count);
 }
 
@@ -89,7 +87,7 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
   // A handoff counts as compiled when `aleph memory compile` ran for its day.
   const dated = (f: string) => f.match(/^(\d{4}-\d{2}-\d{2})-\d{6}(-.*)?\.md$/)?.[1] ?? null;
   const compiled = compiledDays(root);
-  report.handoffs = move(handoffsDir(), join(backup, "handoffs"), dry, dated, ago(HANDOFF_DAYS), (d) => compiled.includes(d));
+  report.handoffs = move(handoffsDir(), join(backup, "handoffs"), dry, dated, daysAgo(HANDOFF_DAYS), (d) => compiled.includes(d));
 
   // An episode page shown often and never opened does not help: it moves to the backup, and nothing is deleted.
   const uses = existsSync(useLog()) ? readFileSync(useLog(), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
@@ -99,6 +97,10 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
     .filter((t) => shown(t, "shown") >= SHOWN_UNOPENED && !shown(t, "opened"));
   if (!dry && report.episodes.length) mkdirSync(join(backup, "episodes"), { recursive: true });
   if (!dry) for (const t of report.episodes) renameSync(join(pages, `${t}.md`), join(backup, "episodes", `${t}.md`));
+
+  if (!dry) {
+    try { trimRecallLog(root); } catch { failed.push("recall trim"); }
+  }
 
   const lint = lintVault(await loadVault(root), { overlap: true, tracked: [...tracked] });
   const queue = (rule: string) => lint.warn.filter((f) => f.rule === rule);

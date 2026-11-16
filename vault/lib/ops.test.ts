@@ -550,6 +550,11 @@ describe("relative dates", () => {
 });
 
 describe("archive", () => {
+  test("finds the note by an alias", async () => {
+    (await cli("write", note("Aliased Subject", { aliases: "[old name]" }), "--why", "x"));
+    const r = await cli("archive", "Old Name", "--why", "over");
+    expect(r.json).toMatchObject({ op: "archive", title: "Aliased Subject" });
+  });
   test("retires a note with no replacement, drops its Home line, names its callers", async () => {
     // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
     (await cli("write", note("Retired Subject", { kind: "decision" }), "--why", "x"));
@@ -677,7 +682,7 @@ describe("decay", () => {
 });
 
 describe("recall", () => {
-  test("a logged recall adds one entry per returned note, drops entries over 30 days, and --unlogged adds none", async () => {
+  test("a logged recall adds one entry per returned note and keeps the old ones, and --unlogged adds none", async () => {
     const file = join(vault, ".recall-log.jsonl");
     const lines = () => readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
     (await cli("write", note("Log Probe"), "--why", "x"));
@@ -686,9 +691,9 @@ describe("recall", () => {
     await run({ ALEPH_VAULT: vault, CLAUDE_CODE_SESSION_ID: "" }, "recall", "probe");
     const day = JSON.parse(readFileSync(join(vault, ".recall.json"), "utf8"))["Log Probe"];
     expect(day).toMatch(/^\d{4}-\d\d-\d\d$/);
-    expect(lines()).toEqual([{ date: day, title: "Log Probe", query: "log probe" }, { date: day, title: "Log Probe", query: "probe" }]);
+    expect(lines()).toEqual([{ date: "2000-01-01", title: "Ancient", query: "old" }, { date: day, title: "Log Probe", query: "log probe" }, { date: day, title: "Log Probe", query: "probe" }]);
     await run({ ALEPH_VAULT: vault, CLAUDE_CODE_SESSION_ID: "sess-1" }, "recall", "log probe", "--unlogged");
-    expect(lines()).toHaveLength(2);
+    expect(lines()).toHaveLength(3);
   });
   test("a bare flag keeps the word after it in the query, wherever the flag stands", async () => {
     const file = join(vault, ".recall-log.jsonl");

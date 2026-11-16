@@ -447,13 +447,14 @@ test("the inspector says how a memory reaches the agent, shows its recall histor
 
 test("/api/memory/log lists writes and recalls newest first, one recall per call, and honours the project", async () => {
   const root = join(base, "vault"), log = join(root, ".recall-log.jsonl"), daily = join(root, "daily", "2026-11-03.md");
-  writeFileSync(daily, "# d\n\n- 09:00 supersede [[Use Bun]] → [[Other trap]]\n- 09:10 build abc — not a note\n");
+  writeFileSync(daily, "# d\n\n- 09:00 supersede [[Use Bun]] → [[Other trap]]\n- 09:10 build abc — not a note\n- 09:20 delete Gone Note — wrong claim\n");
   writeFileSync(log, [["Use Bun", "q1"], ["Other trap", "q1"], ["Use Bun", "q2"]].map(([title, query]) => JSON.stringify({ date: "2026-11-03", title, query })).join("\n") + "\n");
   await fresh();
   try {
     const m = await (await at("/api/memory/log")).json() as any;
     expect(m.rows.map((r: any) => [r.kind, r.op, r.note, r.why, r.titles])).toEqual([
       ["write", "write", "Other trap", "why", []], ["write", "write", "Use Bun", "why", []],
+      ["write", "delete", "Gone Note", "wrong claim", []],
       ["write", "supersede", "Use Bun", "→ Other trap", []],
       ["recall", "recall", "Use Bun", "q1", ["Use Bun", "Other trap"]], ["recall", "recall", "Use Bun", "q2", ["Use Bun"]],
     ]);

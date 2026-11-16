@@ -16,7 +16,7 @@ import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { maintain } from "./maintain.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
+import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, linkTargets, loadVault, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
 import { layout } from "../../lib/layout.ts";
 import { logUse } from "../../lib/episode-use.ts";
 import { errText } from "../../lib/errtext.ts";
@@ -65,7 +65,10 @@ function requireVault(): void {
   if (!existsSync(join(root, "Home.md"))) { console.error(`no vault at ${root}; run: aleph memory init`); exit(1); }
 }
 
-function appendDaily(line: string): void { writeDaily(root, line); }
+/** The live wiki notes by title and alias. */
+const live = (notes: Note[]) => linkTargets(wikiNotes(notes));
+
+function appendDaily(op: Op): string { return writeDaily(root, op); }
 
 /**
  * Undo exactly the paths one write touched, and nothing else.
@@ -179,9 +182,9 @@ async function write(): Promise<void> {
     const dangling = r.filter((f) => f.note === name);
     if (dangling.length) refuse(dangling);
     warn(w);
-    appendDaily(`write [[${name}]] — ${why}`);
+    const daily = appendDaily({ op: "write", title: name, why });
     await writeHome();
-    const commit = commitAndPush(`write: ${name}`, [join(root, `${name}.md`), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+    const commit = commitAndPush(`write: ${name}`, [join(root, `${name}.md`), join(root, "Home.md"), daily]);
     out({ op: "write", title: name, path: `${name}.md`, warnings: w, commit });
     return;
   }
@@ -195,16 +198,17 @@ async function write(): Promise<void> {
   const findings = validateNote(placed, notes);
   const supersedes = Array.isArray(draft.fm.supersedes) ? draft.fm.supersedes : [];
   const old: Note[] = [];
+  const names = live(notes);
   for (const title of supersedes) {
-    const hit = wikiNotes(notes).find((n) => n.title.toLowerCase() === title.toLowerCase());
+    const hit = names.get(title.toLowerCase());
     if (!hit) findings.push({ note: draft.title, rule: "supersedes", detail: `supersedes [${title}] but no live wiki note has that title` });
     else old.push(hit);
   }
   for (const title of Array.isArray(draft.fm.consistent_with) ? draft.fm.consistent_with : []) {
-    if (!wikiNotes(notes).some((n) => n.title.toLowerCase() === String(title).toLowerCase())) findings.push({ note: draft.title, rule: "consistent_with", detail: `consistent_with [${title}] but no live wiki note has that title` });
+    if (!names.has(String(title).toLowerCase())) findings.push({ note: draft.title, rule: "consistent_with", detail: `consistent_with [${title}] but no live wiki note has that title` });
   }
   for (const title of Array.isArray(draft.fm.distinct) ? draft.fm.distinct : []) {
-    if (!wikiNotes(notes).some((n) => n.title.toLowerCase() === String(title).toLowerCase())) findings.push({ note: draft.title, rule: "distinct", detail: `distinct [${title}] but no live wiki note has that title` });
+    if (!names.has(String(title).toLowerCase())) findings.push({ note: draft.title, rule: "distinct", detail: `distinct [${title}] but no live wiki note has that title` });
   }
   // A draft that already sits at its destination and that no write has ever
   // accepted is invisible to git but not to lint or to [[links]]. Name it; do
@@ -240,7 +244,8 @@ async function write(): Promise<void> {
     }
   }
 
-  const touched: string[] = [join(root, "Home.md"), join(root, "daily", `${today()}.md`), dest];
+  const touched: string[] = [join(root, "Home.md"), dest];
+  const log = (op: Op) => { const p = appendDaily(op); if (!touched.includes(p)) touched.push(p); };
   mkdirSync(dirname(dest), { recursive: true });
   const stamped = stampProvenance(draft, process.env.CLAUDE_CODE_SESSION_ID || undefined);
   if (srcPath !== dest) copyFileSync(srcPath, dest);
@@ -253,9 +258,9 @@ async function write(): Promise<void> {
     touched.push(target, o.path);
     unlinkSync(o.path);
     archived.push(o.title);
-    appendDaily(`supersede [[${o.title}]] → [[${draft.title}]]`);
+    log({ op: "supersede", title: o.title, why: `superseded by [[${draft.title}]]` });
   }
-  appendDaily(`write [[${draft.title}]] — ${why}`);
+  log({ op: "write", title: draft.title, why });
   await writeHome();
   const after = await loadVault(root);
   const budget = budgetFindings(after).filter((f) => !overBudget.some((b) => b.detail === f.detail));
@@ -436,9 +441,9 @@ async function adopt(): Promise<void> {
   const hard = findings.filter((f) => f.rule !== "template");
   if (hard.length) refuse(hard, "adopt forgives the template, not the schema");
 
-  appendDaily(`adopt [[${note.title}]] — ${why}`);
+  const daily = appendDaily({ op: "adopt", title: note.title, why });
   await writeHome();
-  const commit = commitAndPush(`adopt: ${note.title}`, [path, join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+  const commit = commitAndPush(`adopt: ${note.title}`, [path, join(root, "Home.md"), daily]);
   warn(template);
   out({ op: "adopt", title: note.title, path: rel, template, commit });
 }
@@ -464,10 +469,10 @@ async function renameScopeOp(): Promise<void> {
   let commit: string | null = null;
   if (apply && changes.length) {
     for (const c of changes) writeFileSync(c.note.path, c.text);
-    appendDaily(`rename-scope ${from} → ${to} — ${changes.length} notes`);
+    const daily = appendDaily({ op: "rename-scope", title: `${from} → ${to}`, why: `${changes.length} notes` });
     await writeHome();
     commit = commitAndPush(`rename-scope: ${from} → ${to}, ${changes.length} notes`,
-      [...changes.map((c) => c.note.path), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+      [...changes.map((c) => c.note.path), join(root, "Home.md"), daily]);
   }
   out({ op: "rename-scope", from, to, applied: apply, notes: changes.map((c) => c.note.rel), count: changes.length, commit });
   if (!apply && changes.length) console.error(`rename-scope changed nothing; rerun with --apply to move ${changes.length} notes from ${from} to ${to}`);
@@ -487,7 +492,7 @@ async function archive(): Promise<void> {
   const why = flag("why");
   if (!title || !why) { console.error('usage: aleph memory archive "<title>" --why "<one line>"'); exit(1); }
   const notes = await loadVault(root);
-  const hit = wikiNotes(notes).find((n) => n.title.toLowerCase() === title.toLowerCase());
+  const hit = live(notes).get(title.toLowerCase());
   if (!hit) refuse([{ note: title, rule: "archive", detail: "no live wiki note has that title" }]);
 
   // Wiki notes only. Home's line goes with the plan below, and a daily note is
@@ -498,9 +503,9 @@ async function archive(): Promise<void> {
   writeFileSync(dest, serializeFrontmatter(fm) + hit.body);
   unlinkSync(hit.path);
   const home = join(root, "Home.md");
-  appendDaily(`archive [[${hit.title}]] — ${why}`);
+  const daily = appendDaily({ op: "archive", title: hit.title, why });
   await writeHome();
-  const commit = commitAndPush(`archive: ${hit.title}`, [dest, hit.path, home, join(root, "daily", `${today()}.md`)]);
+  const commit = commitAndPush(`archive: ${hit.title}`, [dest, hit.path, home, daily]);
   // An archived note stays a link target, so nothing dangles; the callers are
   // named because each one now points at a retired claim.
   warn(inbound.map((n) => ({ note: n.title, rule: "inbound", detail: `links [[${hit.title}]], which is now archived` })));
@@ -517,14 +522,14 @@ async function del(): Promise<void> {
   const why = flag("why");
   if (!title || !why) { console.error('usage: aleph memory delete "<title>" --why "<one line>"'); exit(1); }
   const notes = await loadVault(root);
-  const hit = wikiNotes(notes).find((n) => n.title.toLowerCase() === title.toLowerCase());
+  const hit = live(notes).get(title.toLowerCase());
   if (!hit) refuse([{ note: title, rule: "delete", detail: "no live wiki note has that title" }]);
   const inbound = backlinks(notes, hit).filter((n) => n.wiki);
   if (inbound.length) refuse(inbound.map((n) => ({ note: n.title, rule: "inbound", detail: `links [[${hit.title}]]; unlink it or archive [${hit.title}] instead` })));
   unlinkSync(hit.path);
-  appendDaily(`delete ${hit.title} — ${why}`);
+  const daily = appendDaily({ op: "delete", title: hit.title, why });
   await writeHome();
-  const commit = commitAndPush(`delete: ${hit.title}`, [hit.path, join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
+  const commit = commitAndPush(`delete: ${hit.title}`, [hit.path, join(root, "Home.md"), daily]);
   out({ op: "delete", title: hit.title, why, commit });
 }
 
