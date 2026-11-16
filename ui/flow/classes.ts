@@ -9,7 +9,7 @@ import { goalOf, HOUR, MAX_RUN, passedState, round, splitId } from "./phases.ts"
 /** What `classify`'s `statusOf` returns for an issue that is no longer in the store: closed issues left it, so one with no landing was closed without landing. */
 export const GONE = "gone";
 export const CLASSES = SPEEDS;
-export type Class = (typeof CLASSES)[number];
+type Class = (typeof CLASSES)[number];
 /** The classes whose work did not reach main: their hours are the lost time. */
 const LOST: Class[] = ["failed", "reran", "dropped"];
 const CLASS_TEXT: Record<Class, string> = {

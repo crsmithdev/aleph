@@ -11,10 +11,10 @@ import { pendingWaits } from "./issue-decision.ts";
 import type { Repo } from "../records/ledger.ts";
 
 /** `doc`: the item's list; `red`: the line of the repo's baseline when it is red, else null. */
-export interface IntakeFacts { doc: issues.Doc; done: (ref: string) => boolean; red: string | null }
+interface IntakeFacts { doc: issues.Doc; done: (ref: string) => boolean; red: string | null }
 
 /** `why` names the state that stops intake, or what intake does. */
-export interface IntakeDecision { kind: "plan" | "take-in" | "none"; why: string }
+interface IntakeDecision { kind: "plan" | "take-in" | "none"; why: string }
 
 /** The decision for `item` of `repo`. */
 export function decideIntake(repo: Repo, item: issues.Issue, f: IntakeFacts): IntakeDecision {

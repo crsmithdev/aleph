@@ -210,7 +210,7 @@ export function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
 }
 
 /** The step for a lost run: a host restart's step, as the issue did not cause it either. The rescue counts it once per issue. */
-export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
+function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
   const text = `${r.role} run ${last.id} was lost: its process ended with no end written`;
   if (r.role === "land") return { action: "land again", noted: `${text}: landed again, once`, told: `${text}: landing again` };
   if (isAgentRun(r.role) && hasWork) return { action: "recheck", noted: `${text}: rechecked once, its branch has the worker's commits`, told: `${text}: rechecking its branch` };

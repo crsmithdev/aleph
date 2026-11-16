@@ -86,7 +86,7 @@ function titleTier(n: Note, q: string, want: Set<string>): { tier: number; hits:
   return hits ? { tier: 2, hits } : undefined;
 }
 
-export interface Ranked { note: Note; rank: number }
+interface Ranked { note: Note; rank: number }
 
 /**
  * The index for `notes`, searched for `query` among `among` (all of `notes` by default) and closed again.

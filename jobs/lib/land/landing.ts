@@ -41,7 +41,7 @@ export interface LandPorts {
 
 /** What a land says about a run. */
 type Verdict = Pick<Run, "state" | "reason" | "cause" | "checkName" | "commit" | "conflicts" | "checkItem">;
-export type Landing = { outcome: Verdict; code: number };
+type Landing = { outcome: Verdict; code: number };
 
 /** The run a land of this job takes its terms from: the last agent or recheck run. */
 export const agentOf = (runs: Entry[]): Entry | undefined => runs.filter((e) => isAgentRun(e.run.role)).at(-1);

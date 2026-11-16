@@ -25,7 +25,7 @@ const DEPTH = { hook: 100, recall: 10 } as const;
 /** Read-only: the files and the vault's recall. */
 const ALLOWED = ["Read", "Grep", "Glob", "Bash(aleph memory recall:*)"];
 
-export const ALIAS_SCHEMA = {
+const ALIAS_SCHEMA = {
   type: "object",
   properties: {
     verdicts: {
@@ -45,7 +45,7 @@ export interface Miss { query: string; note: Note; source: keyof typeof DEPTH; a
 type Verdict = { miss: number; note: string; verdict: string; why: string; aliases?: string[] };
 /** One verdict's outcome: its commit, or the op's refusal with its rule; a dry run has neither. */
 export interface Aliased { query: string; note: string; verdict: string; why: string; aliases?: string[]; commit?: string | null; rule?: string; refused?: string }
-export interface AliasReport { day: string; dry: boolean; run?: string; misses: Aliased[]; skipped?: string; error?: string }
+interface AliasReport { day: string; dry: boolean; run?: string; misses: Aliased[]; skipped?: string; error?: string }
 
 const asValue = (v: unknown): any => { if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } } return v; };
 const outText = (v: unknown): string => { const x = asValue(v); return typeof x === "string" ? x : typeof x?.stdout === "string" ? x.stdout : JSON.stringify(x ?? ""); };

@@ -47,7 +47,7 @@ function digestTrace(trace: Trace & { observations?: Observation[] }): string {
   return out.join("\n");
 }
 
-export async function traceDigest(lf: Langfuse, date: string): Promise<{ text: string; error?: string }> {
+async function traceDigest(lf: Langfuse, date: string): Promise<{ text: string; error?: string }> {
   const { from, to } = dayRange(date);
   const parts: string[] = [];
   let size = 0;
@@ -65,7 +65,7 @@ export async function traceDigest(lf: Langfuse, date: string): Promise<{ text: s
   return { text: parts.length ? parts.join("\n\n") : "no traces on this date" };
 }
 
-export function handoffsFor(dir: string, date: string): string {
+function handoffsFor(dir: string, date: string): string {
   if (!existsSync(dir)) return "";
   return readdirSync(dir).filter((f) => f.startsWith(date) && f.endsWith(".md")).sort()
     .map((f) => `### ${f}\n${readFileSync(join(dir, f), "utf8").slice(0, 6000)}`).join("\n\n");

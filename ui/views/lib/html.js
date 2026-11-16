@@ -521,7 +521,7 @@ export function pager(page, total, step = 50, { cls = "" } = {}) {
   return `<div class="pager${cls ? ` ${cls}` : ""}">${prev}${next}<span class="of">${to - from > 1 && total > step ? `${from + 1}–${to}` : to} of ${total}</span></div>`;
 }
 /** Show page `page` of the rows in `box` (its `tbody` rows, or its list items) and hide the rest. */
-export function turnPage(box, page, step = 50) {
+function turnPage(box, page, step = 50) {
   const rows = [...box.querySelectorAll(":scope tbody > tr, :scope > ul > li")], p = pageIn(page, rows.length, step);
   rows.forEach((r, i) => { r.hidden = i < (p - 1) * step || i >= p * step; });
   box.querySelector(".pager").outerHTML = pager(p, rows.length, step);

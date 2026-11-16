@@ -33,7 +33,7 @@ const PAUSED: Bound = { why: "paused", text: "The factory is paused", ev: heldEv
 /** The gates of the whole factory, in the order of GATES: the others are each issue's own. */
 const FACTORY_GATES = ["paused", "waiting", "full"] as const satisfies readonly Gate[];
 
-export type FactoryGate = (typeof FACTORY_GATES)[number];
+type FactoryGate = (typeof FACTORY_GATES)[number];
 
 /**
  * Each factory gate that binds now, or null: the pause, the backend the factory holds, the live cap. `jobs`, when given,

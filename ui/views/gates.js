@@ -27,7 +27,7 @@ export const view = {
 export const redirect = (hash) => moved(hash, ["#/gates"], "#/automation");
 
 /** The label of an automatic mode: what it does. */
-export const MODES = { resolve: "Take the pick" };
+const MODES = { resolve: "Take the pick" };
 const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 
 /** The log's actors, in filter order. */

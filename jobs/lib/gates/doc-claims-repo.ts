@@ -21,7 +21,7 @@ import { probe } from "../../../lib/git.ts";
 export const ROOT = resolve(import.meta.dir, "..", "..", "..");
 
 /** The docs the check reads: README.md, docs/*.md, llms.txt and compose/README.md. Specs and findings are records of their day, not claims about main. */
-export function repoDocs(root = ROOT): Doc[] {
+function repoDocs(root = ROOT): Doc[] {
   const docs = existsSync(join(root, "docs")) ? readdirSync(join(root, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`) : [];
   return ["README.md", "llms.txt", "compose/README.md", ...docs].filter((f) => existsSync(join(root, f))).map((file) => ({ file, text: readFileSync(join(root, file), "utf8") }));
 }
@@ -47,7 +47,7 @@ function bare<T>(name: string, fn: () => T, extra: Record<string, string> = {}):
 const plain = (name: string, fn: () => string | number) => () => bare(name, fn);
 
 /** Each setting a doc may give a default for, read from the code with its variable unset. */
-export const DEFAULTS: Truth["defaults"] = {
+const DEFAULTS: Truth["defaults"] = {
   ALEPH_LIVE_CAP: () => s.LIVE_CAP_DEFAULT,
   ALEPH_DIRECTOR_CAP: plain("ALEPH_DIRECTOR_CAP", s.DIRECTOR_CAP),
   ALEPH_INTAKE_CAP: plain("ALEPH_INTAKE_CAP", s.INTAKE_CAP),

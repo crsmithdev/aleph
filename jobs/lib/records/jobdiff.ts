@@ -13,7 +13,7 @@ import { errText } from "../../../lib/errtext.ts";
 const DIFF_FILE = "diff.patch";
 const STAT_FILE = "diff.stat";
 
-export interface JobDiff { diff: string; stat: string }
+interface JobDiff { diff: string; stat: string }
 
 const branchOf = (runs: Entry[]) => runs.findLast((e) => e.run.branch)?.run.branch;
 

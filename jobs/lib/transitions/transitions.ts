@@ -73,7 +73,7 @@ interface Started { run: string; job: string; folder: string }
 export interface Start { started: Started; child?: ReturnType<typeof Bun.spawn> }
 
 /** How a start is made: the `aleph` argv it is written down as in the `command` section of `log.txt`, who starts it, where a foreground unit writes, and `now` (Run now) to skip the live cap. */
-export interface StartOpts { command?: string[]; output?: Output; by?: string; now?: boolean }
+interface StartOpts { command?: string[]; output?: Output; by?: string; now?: boolean }
 
 /**
  * Make the job and start its unit, under the dispatch lock. The lock
@@ -127,7 +127,7 @@ async function dispatch(run: NewJob, cwd: string, command: string[], output: Out
   return { started: { run: id!, job: getRun(id!)!.job, folder: folder! }, child };
 }
 
-export interface JobArgs {
+interface JobArgs {
   /** The repo's key in the registry, as typed: case and spaces do not count. */
   repo: string;
   name: string;

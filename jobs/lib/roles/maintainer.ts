@@ -20,7 +20,7 @@ import { errText } from "../../../lib/errtext.ts";
 
 /** The run's time box, in seconds. */
 export const SECONDS = 900;
-export const MODEL = () => readModels().maintainer?.model ?? "sonnet";
+const MODEL = () => readModels().maintainer?.model ?? "sonnet";
 /** Read-only: the vault's recall and Read. */
 const ALLOWED = ["Bash(aleph memory recall:*)", "Read"];
 const KINDS = ["decision", "project", "concept", "entity", "gotcha"];
@@ -28,7 +28,7 @@ export const TEXT = { type: "string" } as const;
 const LIST = { type: "array", items: TEXT } as const;
 
 /** The JSON schema of the reply: the notes to write, possibly none. */
-export const MAINTAINER_SCHEMA = {
+const MAINTAINER_SCHEMA = {
   type: "object",
   properties: {
     notes: {
@@ -49,7 +49,7 @@ export const MAINTAINER_SCHEMA = {
 type Note = Record<string, any>;
 /** One note's outcome: written (with its commit), or refused with the rule, or only drafted by a dry compile. */
 export interface Written { title: string; kind: string; commit?: string | null; rule?: string; refused?: string }
-export interface CompileReport { day: string; dry: boolean; run?: string; notes: Written[]; skipped?: string; error?: string }
+interface CompileReport { day: string; dry: boolean; run?: string; notes: Written[]; skipped?: string; error?: string }
 
 /** The `## write` section of the vault skill: where the vault's write rules live. */
 const writeRules = (): string => /^## write\n[\s\S]*?(?=^## |(?![\s\S]))/m.exec(readFileSync(join(import.meta.dir, "../../../skills/vault/SKILL.md"), "utf8"))?.[0] ?? "";

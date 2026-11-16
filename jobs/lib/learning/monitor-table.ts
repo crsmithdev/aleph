@@ -70,7 +70,7 @@ interface Window {
   quota: number | null;
 }
 
-export interface FlakeSection {
+interface FlakeSection {
   /** `<repo> <test|check> <name>` and its reruns in 7 days, two or more, most first, at most 5. */
   reruns: { key: string; n: number }[];
   /** Each tracker with notes in 7 days. */

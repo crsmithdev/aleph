@@ -20,7 +20,7 @@ import { costDetails, type Usage } from "../../../lib/pricing.ts";
 export type AgentRole = "worker" | "reviewer" | "title" | "judge" | "intake" | "director" | "monitor" | "lens" | "housekeeper" | "maintainer";
 
 /** Why a call gave no usable reply, and its kind. */
-export interface AgentCause { kind: "stalled" | "timeout" | "credit" | "other"; reason: string }
+interface AgentCause { kind: "stalled" | "timeout" | "credit" | "other"; reason: string }
 
 /** How a call ended: its exit code, and whether the time box or the stall watch stopped it. */
 export interface Step { code: number; timedOut: boolean; stalled: boolean }
@@ -56,7 +56,7 @@ export interface Reply { text: string; data: unknown; session?: string; cost?: n
 const KILL_AFTER_MS = 30_000;
 
 /** The reason of a call that the stall watch stopped. */
-export const stallReason = (): string => {
+const stallReason = (): string => {
   const s = stallSeconds();
   return `stalled: no output for ${s % 60 === 0 ? `${s / 60} minutes` : `${s} seconds`}`;
 };

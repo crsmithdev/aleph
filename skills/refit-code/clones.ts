@@ -17,7 +17,7 @@ const JSCPD = jscpd(join(import.meta.dir, "../.."));
 
 type Side = { name: string; start: number; end: number };
 export type Clone = { a: Side; b: Side; lines: number; isNew: boolean };
-export type Violation = { rule: string; copy: Side & { function?: string }; owner: Side & { function?: string } };
+type Violation = { rule: string; copy: Side & { function?: string }; owner: Side & { function?: string } };
 
 /** The clones and boundary violations of the working tree, or nothing when the repo has no `.jscpd.json`. */
 export function scan(root: string, base?: string): { clones: Clone[]; violations: Violation[] } {

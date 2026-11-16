@@ -273,7 +273,7 @@ export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
 };
 
 /** A test file that a branch adds or changes with new cases: its path, its text on the head and the names of its new cases. */
-export interface NewTests { path: string; text: string; names: string[] }
+interface NewTests { path: string; text: string; names: string[] }
 
 
 /** A removed or added line of a diff, not a `---` or `+++` file header. */

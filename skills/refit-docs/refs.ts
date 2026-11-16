@@ -17,7 +17,7 @@ import { dirname, join, normalize, resolve } from "node:path";
 import { git } from "../../lib/git.ts";
 import { isTestFile } from "../../lib/test-files.ts";
 
-export type Ref = { doc: string; line: number; kind: "link" | "anchor" | "path" | "env" | "flag"; ref: string };
+type Ref = { doc: string; line: number; kind: "link" | "anchor" | "path" | "env" | "flag"; ref: string };
 
 const SKIP = /(^|\/)(node_modules|\.git|\.worktrees|dist|build|vendor)\//;
 const AGENT = /(^|\/)(CLAUDE\.md|CLAUDE\.local\.md|AGENTS\.md|SKILL\.md)$|(^|\/)(skills|\.claude|identity)\//;

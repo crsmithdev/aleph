@@ -81,7 +81,7 @@ const isTests = (name: string) => /^tests?$/.test(name);
 
 /** `project` names one repo: then only its runs, Asks and flakes count. */
 /** What `speed` reads: the Asks and the director's decisions, the store's lists and history at origin/main, and the flakes. A baseline reads them once for all its spans. */
-export interface Inputs { asks: AskSpan[]; decisions: { at: string; ref: string; outcome?: string }[]; head: string; lists: ReturnType<typeof reader>; filed: Filed; flakes: ReturnType<typeof flakes> }
+interface Inputs { asks: AskSpan[]; decisions: { at: string; ref: string; outcome?: string }[]; head: string; lists: ReturnType<typeof reader>; filed: Filed; flakes: ReturnType<typeof flakes> }
 export function inputs(): Inputs {
   const head = headOnMain();
   return { asks: askHistory(), decisions: decisions<{ at: string; ref: string; outcome?: string }>(), head, lists: reader({ fetch: false, rev: head || undefined }), filed: filed(undefined, head), flakes: flakes() };

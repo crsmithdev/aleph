@@ -86,7 +86,7 @@ export const activeFrame = (d) => ({
 });
 
 /** The Active Issues chart above the Pipeline card. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
-export function renderActive(d) {
+function renderActive(d) {
   if (!d) return card("Active Issues", loadingLine("the active issues"), { id: "active-issues" });
   if (d.error) return card("Active Issues", error(d.error), { id: "active-issues" });
   return panelOf("status/active", activeFrame(d), "active-issues");
@@ -100,7 +100,7 @@ const health = (share) => (share < 0.1 ? "fine" : share <= 0.25 ? "warning" : "a
 /** The Jobs filter of each stage: its stage tile there and the role of its runs. Review and Recheck have no stage tile, so they filter by role alone; a recheck is a worker run. */
 const DRILL = { intake: { stage: "intake", role: "intake" }, queue: { stage: "queue" }, build: { stage: "implement", role: "worker" }, review: { role: "reviewer" }, recheck: { role: "worker" }, land: { stage: "land" } };
 /** The Jobs page for a stage, in the window and project of `q`. */
-export const drillHref = (k, q, extra = {}) => {
+const drillHref = (k, q, extra = {}) => {
   const s = scope(q), out = new URLSearchParams({ ...DRILL[k], ...extra });
   if (s.window !== "week") out.set("window", s.window);
   if (s.project) out.set("project", s.project);

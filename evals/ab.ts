@@ -10,7 +10,7 @@ import { parseArgs } from "node:util";
 import { langfuseConfig, type LangfuseConfig } from "../lib/env.ts";
 import { postScore } from "../lib/otlp.ts";
 
-export interface Variant { name: string; dir: string }
+interface Variant { name: string; dir: string }
 export interface Case { prompt: string; cwd: string }
 export interface Row { case: number; variant: string; session: string; cost: number; scores: Record<string, number> }
 export interface Options {

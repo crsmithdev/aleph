@@ -57,7 +57,7 @@ export const WORKER_SCHEMA = {
 /** A follow-up the worker found: `location` is a `path:line`, and impact, risk and effort are integers from 1 to 5. */
 export interface Followup { title: string; location: string; saw: string; why: string; impact: number; risk: number; effort: number }
 
-export interface WorkerReply { summary: string; defaults: string[]; followups: Followup[]; flakes: string[]; alreadyMet: string | null; question: string | null }
+interface WorkerReply { summary: string; defaults: string[]; followups: Followup[]; flakes: string[]; alreadyMet: string | null; question: string | null }
 
 /** A follow-up, or null when it has no title, no `path:line` location, or a score that is not an integer from 1 to 5. */
 function followup(f: any): Followup | null {

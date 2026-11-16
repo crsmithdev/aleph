@@ -101,7 +101,7 @@ const shape = (name: string, fields: Record<string, object> = {}) => ({
 });
 
 /** The JSON schema of the reply: the actions, none for an issue left as it is. */
-export const SCHEMA = {
+const SCHEMA = {
   type: "object", additionalProperties: false, required: ["actions"],
   properties: {
     actions: {

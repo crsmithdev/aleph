@@ -29,11 +29,11 @@ export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" "
 export const markOf = (data) => (typeof data?.error === "string" && typeof data?.since === "string" ? { error: data.error, since: data.since } : null);
 
 /** The URL of a route's data: `view.api` with its ":params" filled in. */
-export const urlOf = ({ view, params, query }) =>
+const urlOf = ({ view, params, query }) =>
   typeof view.api === "function" ? view.api(params, query) : view.api.replace(/:(\w+)/g, (_, n) => encodeURIComponent(params[n] ?? ""));
 
 /** A route's data: the answer of its URL, or of each URL `view.api` lists, joined by `view.combine`. */
-export async function dataOf(route, get) {
+async function dataOf(route, get) {
   const answers = await Promise.all([urlOf(route)].flat().map(async (url) => {
     const res = await get(url);
     if (!res.ok) throw new Error(failMessage(url, res.status, await res.text().catch(() => "")));

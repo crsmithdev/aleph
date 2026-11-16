@@ -40,7 +40,7 @@ function open(o: Output): { fd: "inherit" | "ignore" | number; close: () => void
   return { fd, close: () => closeSync(fd) };
 }
 
-export interface UnitOpts {
+interface UnitOpts {
   /** The systemd unit's name. */
   unit: string;
   cwd: string;

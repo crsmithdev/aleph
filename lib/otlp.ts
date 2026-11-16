@@ -9,7 +9,7 @@ import { auth } from "./langfuse.ts";
 const MAX_FIELD = 4096;
 
 export type AttrValue = string | number | boolean | string[];
-export type OtlpAttr = { key: string; value: Record<string, unknown> };
+type OtlpAttr = { key: string; value: Record<string, unknown> };
 
 export interface Span {
   traceId: string;
@@ -65,7 +65,7 @@ export function attrs(record: Record<string, AttrValue | undefined | null>): Otl
     .map(([key, value]) => ({ key, value: encode(value as AttrValue) }));
 }
 
-export interface PostResult { ok: boolean; status?: number; error?: string }
+interface PostResult { ok: boolean; status?: number; error?: string }
 
 export async function postSpans(cfg: LangfuseConfig, spans: Span[], timeoutMs = 8000): Promise<PostResult> {
   const body = {

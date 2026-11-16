@@ -32,7 +32,7 @@ export const setModelsRow = (row: unknown): void => putJson("settings", "models"
 const capsRow = (): Record<string, unknown> => getJson("settings", "caps", {});
 
 export const CAP_KEYS = ["live", "run", "intakeTries", "jobSeconds", "fixRounds", "landBatch", "loadLimit"] as const;
-export type CapKey = (typeof CAP_KEYS)[number];
+type CapKey = (typeof CAP_KEYS)[number];
 /** The environment variable that overrides each key of the `caps` setting. */
 export const CAP_ENV: Record<CapKey, string> = {
   live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP", intakeTries: "ALEPH_INTAKE_TRIES", jobSeconds: "ALEPH_JOB_TIMEOUT",

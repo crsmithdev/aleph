@@ -54,12 +54,12 @@ export function keyOf(url: URL): string {
 }
 
 /** A key's answer and, while its last build failed, why and since when (ISO). */
-export interface Got { answer: Answer; error?: string; since?: string }
+interface Got { answer: Answer; error?: string; since?: string }
 type Mark = { error: string; since: string };
 
 interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked?: number; built?: number; again?: boolean; building?: Promise<void> }
 
-export interface Deps {
+interface Deps {
   build: (key: string, gens: Record<string, number>) => Promise<Built>;
   now?: () => number;
   /** Where the kept keys are saved; null: nowhere. */

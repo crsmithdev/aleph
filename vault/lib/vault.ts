@@ -345,7 +345,7 @@ function staleness(note: Note, now = new Date()): string | null {
   return `${kind}/${note.fm.confidence} wants a re-check every ${window} days; updated ${updated}, ${days} days ago`;
 }
 
-export interface LintOptions { overlap?: boolean; now?: Date; tracked?: string[]; templates?: boolean }
+interface LintOptions { overlap?: boolean; now?: Date; tracked?: string[]; templates?: boolean }
 
 export function lintVault(notes: Note[], { overlap = false, now = new Date(), tracked = [], templates = false }: LintOptions = {}): { refuse: Finding[]; warn: Finding[] } {
   const refuse: Finding[] = [];

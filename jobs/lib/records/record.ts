@@ -289,7 +289,7 @@ export const decisions = <T>(): T[] =>
 // What the issue and its jobs share.
 
 /** The live machine state of one issue: its Ask and its CI result. */
-export interface IssueState {
+interface IssueState {
   /** What the issue or its run waits on from Chris, or null. */
   ask: Ask | null;
   /** The run whose Ask `ask` is, while that run waits for Chris; absent when the Ask is on the issue. */

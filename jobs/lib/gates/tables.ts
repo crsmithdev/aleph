@@ -31,7 +31,7 @@ export const writeBaseline = (key: string, decide: (old: Baseline | undefined) =
 });
 
 /** One full suite run: the test counts of its bun test checks, and the tests that failed on the first run and passed on the rerun. */
-export interface SuiteRecord { repo: string; commit: string; at: string; ran: number; passed: number; failed: number; skipped: number; rerunPassed: number }
+interface SuiteRecord { repo: string; commit: string; at: string; ran: number; passed: number; failed: number; skipped: number; rerunPassed: number }
 
 /** The suite records in the order they were added, of `repo` when given. */
 export const suiteHistory = (repo?: string): SuiteRecord[] =>
@@ -45,7 +45,7 @@ export const appendSuiteHistory = (r: SuiteRecord): void => {
 export const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
 
 /** A red main: a failed baseline or a red GitHub CI streak. `id` names the red commit or streak; `line` says it with the repo. */
-export interface RedMain { repo: string; source: "baseline" | "ci"; id: string; line: string }
+interface RedMain { repo: string; source: "baseline" | "ci"; id: string; line: string }
 
 /** Every red main now, the baselines first: what the health lines and the Gates page report, and the firefighter files. */
 export function redMains(): RedMain[] {

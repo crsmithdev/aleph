@@ -18,7 +18,7 @@ export const PAIRS = 5;
 /** Read-only: the files and the vault's recall. */
 const ALLOWED = ["Read", "Grep", "Glob", "Bash(aleph memory recall:*)"];
 
-export const DEDUPE_SCHEMA = {
+const DEDUPE_SCHEMA = {
   type: "object",
   properties: {
     verdicts: {
@@ -36,8 +36,8 @@ export const DEDUPE_SCHEMA = {
 type Verdict = { a: string; b: string; verdict: string; why: string; keep?: string; drop?: string; claim?: string; details?: string; evidence?: string };
 type Pair = [Note, Note];
 /** One verdict's outcome: its commit, or the op's refusal with its rule; a dry run has neither. */
-export interface Resolved { a: string; b: string; verdict: string; why: string; commit?: string | null; rule?: string; refused?: string }
-export interface DedupeReport { day: string; dry: boolean; run?: string; pairs: Resolved[]; skipped?: string; error?: string }
+interface Resolved { a: string; b: string; verdict: string; why: string; commit?: string | null; rule?: string; refused?: string }
+interface DedupeReport { day: string; dry: boolean; run?: string; pairs: Resolved[]; skipped?: string; error?: string }
 
 export function prompt(pairs: Pair[], day: string): string {
   return [

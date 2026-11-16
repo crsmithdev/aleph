@@ -11,7 +11,7 @@ import { logTo, runFile } from "../records/run-files.ts";
 import { resultOf } from "../roles/agent-call.ts";
 import { errText } from "../../../lib/errtext.ts";
 
-export interface TraceInput {
+interface TraceInput {
   runId: string; run: Run; repoKey: string;
   /** The prompt the worker got, and its stream-json output. */
   prompt: string; stream: string;

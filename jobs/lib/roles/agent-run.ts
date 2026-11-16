@@ -45,7 +45,7 @@ export interface Opening extends Call {
   lock?: (id: string) => string;
 }
 
-export interface AgentRun {
+interface AgentRun {
   /** The job's key. */
   id: string;
   folder: string;

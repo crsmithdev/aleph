@@ -20,7 +20,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { load, main } from "./load.ts";
 
-export type Hit = { line: number; check: string; text: string };
+type Hit = { line: number; check: string; text: string };
 type File = { file: string; sentences: number; hits: Hit[] };
 
 const CHECKS: [string, RegExp][] = [

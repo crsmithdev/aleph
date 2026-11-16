@@ -55,7 +55,7 @@ export function recordHold(name: string, kind: Gate | "started", ev?: Hold): voi
 }
 
 /** The backend the factory holds after a call on it ended with the API credit error: `via` is the backend, `why` the call's line, `goals` the issues with no run that it held. */
-export interface BackendHold { via: Via; why: string; since: string; goals?: string[] }
+interface BackendHold { via: Via; why: string; since: string; goals?: string[] }
 
 /** The backend the factory holds now, or null. */
 export function backendHold(): BackendHold | null {

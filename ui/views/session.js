@@ -281,5 +281,5 @@ function mountTurn(root, d) {
 export const sessionView = { path: "/sessions/:id", title: "Session", group: "claude",
   api: (params, q = new URLSearchParams()) => `/api/sessions/${encodeURIComponent(params.id)}${isTable(q) ? "" : `/chat?limit=${CHAT_PAGE}`}`,
   render: renderSession, mount: mountSession };
-export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "claude", api: "/api/sessions/:id/turns/:n", render: renderTurn, mount: mountTurn };
+const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "claude", api: "/api/sessions/:id/turns/:n", render: renderTurn, mount: mountTurn };
 export const views = [sessionView, turnView];

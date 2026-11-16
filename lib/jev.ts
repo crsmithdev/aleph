@@ -9,7 +9,7 @@ import { openRouterKey } from "./env.ts";
 import { logSetting } from "./layout.ts";
 
 const JEV_MODEL = "typesafe/jev-1.13";
-export type JudgeChoice = "jev" | "haiku";
+type JudgeChoice = "jev" | "haiku";
 
 /**
  * Whether Jev screens before Haiku, everywhere aleph uses it: ALEPH_JUDGE,

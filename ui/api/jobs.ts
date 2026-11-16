@@ -24,13 +24,13 @@ import * as todos from "../../issues/lib/todo.ts";
 /** `id` is the job key, the key of its logs; `job` is the key the page shows. */
 interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "lens" | "housekeeper" | "maintainer"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
-export interface LogFile { name: string; size: number }
+interface LogFile { name: string; size: number }
 /**
  * The log files the Job page serves, and no others: the names the page asks for, each a file of the job folder or a section of its `log.txt`.
  * A reviewer's transcript is the `output.log` of its own job.
  */
 const LOG_SOURCE = { "output.log": { file: "transcript.jsonl" }, "stderr.log": { section: "stderr" }, "setup.log": { section: "setup" }, "checks.log": { section: "checks" }, "land.log": { section: "land" } } as const;
-export const LOGS = Object.keys(LOG_SOURCE) as (keyof typeof LOG_SOURCE)[];
+const LOGS = Object.keys(LOG_SOURCE) as (keyof typeof LOG_SOURCE)[];
 /** The text of the log `name` of the run `e`, or undefined when it has none. */
 function logText(e: Entry, name: keyof typeof LOG_SOURCE): string | undefined {
   const src: { file: "transcript.jsonl" } | { section: string } = LOG_SOURCE[name];

@@ -28,7 +28,7 @@ export const BUDGET = 5;
 const ALLOWED = ["Read", "Grep", "Glob", "Bash(git log:*)", "Bash(aleph memory recall:*)"];
 /** The verdicts held for Chris, by note title: outside the vault, so no vault op or commit touches them. */
 
-export const RECHECK_SCHEMA = {
+const RECHECK_SCHEMA = {
   type: "object",
   properties: {
     verdicts: {
@@ -45,8 +45,8 @@ export const RECHECK_SCHEMA = {
 
 type Verdict = { title: string; verdict: string; why: string; claim?: string; details?: string; evidence?: string };
 /** One verdict's outcome: its commit, or the op's refusal with its rule; a dry run has neither. */
-export interface Rechecked { title: string; verdict: string; why: string; commit?: string | null; rule?: string; refused?: string }
-export interface RecheckReport { day: string; dry: boolean; run?: string; notes: Rechecked[]; skipped?: string; error?: string }
+interface Rechecked { title: string; verdict: string; why: string; commit?: string | null; rule?: string; refused?: string }
+interface RecheckReport { day: string; dry: boolean; run?: string; notes: Rechecked[]; skipped?: string; error?: string }
 
 export function prompt(notes: Note[], day: string): string {
   const repos = Object.values(loadRegistry()).map((r) => `- ${r.key}: ${r.path}`).join("\n");

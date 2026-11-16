@@ -8,7 +8,7 @@ import { systemctl } from "./systemd.ts";
  * A run's process: `starting` (made, no `pid` yet, for STARTING_MS), `live` (`pid`, no `exit`, and that process names
  * the folder), `lost` (`pid`, no `exit`, the process is gone), `ended` (`exit`), or `none` (none of these).
  */
-export type ProcessState = "starting" | "live" | "lost" | "ended" | "none";
+type ProcessState = "starting" | "live" | "lost" | "ended" | "none";
 
 /**
  * A run that was started and has not written `pid` yet: its unit is still coming up, or `dispatch` gave up waiting

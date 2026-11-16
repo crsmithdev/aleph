@@ -177,7 +177,7 @@ export function renderInspector(it, n = null, status = "", hist = []) {
     (n ? `<p class="hint"><code>${esc(n.path)}</code></p>` : "") + `<div class="medit" hidden></div>`;
 }
 
-export function renderWrites(m) {
+function renderWrites(m) {
   return (m.writes.length
     ? moreFold(m.writes, (w) => `${q(esc(when(w.at) || w.at))} ${md(w.text).replace(/^<p>|<\/p>$/g, "")}`)
     : empty());
@@ -194,7 +194,7 @@ function renderHealth(m) {
 }
 
 /** Lint by rule, largest first. */
-export function lintRules(lint) {
+function lintRules(lint) {
   const add = (m, f, key) => { const r = m.get(f.rule) ?? { rule: f.rule, refused: 0, warned: 0 }; r[key]++; m.set(f.rule, r); };
   const m = new Map();
   for (const f of lint?.refuse ?? []) add(m, f, "refused");

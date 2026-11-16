@@ -92,7 +92,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
 const usage = (cmd: string) => `usage: ${COMMANDS[cmd].usage}`;
 
 /** Where a call of `aleph` writes and reads. `stdout` gets each write as it happens; `run` also returns them all as `out`. */
-export interface Io { stdout?: (s: string) => void; stderr?: (s: string) => void; stdin?: () => Promise<string> }
+interface Io { stdout?: (s: string) => void; stderr?: (s: string) => void; stdin?: () => Promise<string> }
 
 /** One call's argv, parsed, with its output and its exit code. */
 interface Ctx {

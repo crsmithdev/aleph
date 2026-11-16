@@ -57,7 +57,7 @@ export interface Reason {
   /** What the `continue` action is called and does for this reason. */
   continue?: { label: string; hint: string };
 }
-export interface Granted { action: string; at: string }
+interface Granted { action: string; at: string }
 
 const proposal = (name: string, line: string): Reason =>
   ({ actions: ["approve", "disapprove"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change." });

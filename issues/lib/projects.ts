@@ -21,8 +21,8 @@ export interface Project {
   fields: Record<string, any>;
 }
 
-export const projectsDir = (): string => join(layout().items, "projects");
-export const projectFile = (n: number): string => join(projectsDir(), String(n), "project.md");
+const projectsDir = (): string => join(layout().items, "projects");
+const projectFile = (n: number): string => join(projectsDir(), String(n), "project.md");
 
 /** The text of a project file, the frontmatter first. */
 export function renderProject({ name, description, fields }: Omit<Project, "n">): string {

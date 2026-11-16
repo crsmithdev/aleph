@@ -59,7 +59,7 @@ type Periodic = keyof typeof EVERY_MS;
  * (each is acted on once while it stays), and the main commit of each red repo that the sweep started a suite for
  * (both in `state`).
  */
-export interface TickState { last: Partial<Record<Periodic, string>>; missed: string[]; suite: Record<string, string> }
+interface TickState { last: Partial<Record<Periodic, string>>; missed: string[]; suite: Record<string, string> }
 
 export function readTick(): TickState {
   const rows = tickRows(), last: TickState["last"] = {};

@@ -7,7 +7,7 @@ import { conn } from "./db.ts";
 /** One poll of the plan: the 7-day percent and when it resets. */
 export interface Snapshot { at: string; seven_day: number; seven_day_resets_at: string | null }
 /** One poll of the OpenRouter key: its lifetime USD, and the rate over list price when the poll could fit one. */
-export interface KeyRow { at: string; usage: number; factor: number | null }
+interface KeyRow { at: string; usage: number; factor: number | null }
 
 export const addSnapshot = (s: Snapshot): void => { conn().query("INSERT INTO usage (time, seven_day, seven_day_resets_at) VALUES (?, ?, ?)").run(s.at, s.seven_day, s.seven_day_resets_at); };
 

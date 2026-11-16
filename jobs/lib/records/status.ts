@@ -75,7 +75,7 @@ export const trailerLine = (name: "Issue" | "Job" | "Held-by", value: string): s
 export const jobGrep = (values: string[]): string => `--grep=^Job: (${[...new Set(values)].map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`;
 
 /** The commit of a job on `origin/<main>` (the newest whose message has a `Job:` trailer with one of `values`), or an empty string. */
-export function jobCommit(cwd: string, main: string, values: string[]): string {
+function jobCommit(cwd: string, main: string, values: string[]): string {
   return git(cwd, "log", `origin/${main}`, "-1", "--format=%H", "-E", jobGrep(values)).out;
 }
 

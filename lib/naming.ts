@@ -16,7 +16,7 @@ export const ACTIONS: readonly string[] = [...STATES, ...HOLDS, ...ASKS, "reran"
 /** Why a run stopped: the closed set of causes (outcome.ts `Cause`). */
 export const CAUSES = ["no-commit", "timeout", "stalled", "infra", "locked", "credit", "check", "conflict", "moved", "review", "unanswered", "other"] as const;
 /** The subjects that are not a job: code (`gate`, `rule`), Chris and an interactive session. */
-export const SUBJECTS = ["gate", "rule", "human", "claude"] as const;
+const SUBJECTS = ["gate", "rule", "human", "claude"] as const;
 /** Role words of events written before jobs had keys; read for old data only. */
 const OLD_ROLES = ["worker", "reviewer", "check", "intake", "director", "monitor", "firefighter"] as const;
 export const ACTORS: readonly string[] = [...SUBJECTS, ...OLD_ROLES];
@@ -69,8 +69,8 @@ export function setCodes(map: Record<string, string>): void {
 }
 
 /** The kinds of a stored thing: its key is `<kind>.<n>`. */
-export const KEY_KINDS = ["project", "issue", "idea", "job"] as const;
-export type KeyKind = (typeof KEY_KINDS)[number];
+const KEY_KINDS = ["project", "issue", "idea", "job"] as const;
+type KeyKind = (typeof KEY_KINDS)[number];
 /** The lower-case letter that shows a key's kind. A project code is 1–2 letters too, so `setCodes` refuses the codes `p`, `d` and `j`. */
 const LETTER: Record<KeyKind, string> = { project: "p", issue: "i", idea: "d", job: "j" };
 const KEY = /^(project|issue|idea|job)\.(\d+)$/;
@@ -181,7 +181,7 @@ const WHO: Record<string, string> = { human: "you", rule: "a rule", gate: "the g
 export const whoOf = (subject: string, role?: string | null): string => (role ?? WHO[subject] ?? subject);
 
 /** A piece of a sentence: text, or a key the page links. */
-export type Said = string | { id: string };
+type Said = string | { id: string };
 const IN_TEXT = new RegExp(`(?:(?<![\\w.-])(?:project|issue|idea|job)\\.\\d+(?![\\w-])|${FREE.source})`, "g");
 /** Free text in pieces: each key, and each full issue ID, as a link. */
 export function linked(text: string): Said[] {

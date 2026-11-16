@@ -799,7 +799,7 @@ if (typeof document !== "undefined") {
   });
 }
 
-export const issueView = {
+const issueView = {
   path: "/issues/:repo/:n",
   title: "Issue",
   group: "factory",

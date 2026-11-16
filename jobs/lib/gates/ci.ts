@@ -9,14 +9,14 @@ import { getJson, putJson } from "../../../lib/db.ts";
 
 /** A repo's CI on main: green, or red since the first failed run of the current streak. */
 /** `older` marks a streak that runs past the runs read, so `since` and `runs` are a lower bound. */
-export interface Ci { repo: string; ok: boolean; sha: string; url: string; since?: string; sinceSha?: string; runs?: number; older?: boolean }
+interface Ci { repo: string; ok: boolean; sha: string; url: string; since?: string; sinceSha?: string; runs?: number; older?: boolean }
 /** One run as `gh run list --json` gives it. */
 export interface GhRun { conclusion: string; status: string; headSha: string; url: string; createdAt: string }
 /** A `gh` call in `repo`: its stdout when it exits 0, else its error. Every `gh` call of the CI watch goes through one; tests replace it. */
 export type Gh = (repo: Repo, args: string[]) => { ok: boolean; out: string };
 
 /** `Gh` that does not block, so the repos are read at once. */
-export type GhAsync = (repo: Repo, args: string[]) => Promise<{ ok: boolean; out: string }>;
+type GhAsync = (repo: Repo, args: string[]) => Promise<{ ok: boolean; out: string }>;
 
 export const gh: Gh = (repo, args) => {
   const r = spawnSync("gh", args, { cwd: repo.path, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });

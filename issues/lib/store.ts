@@ -115,7 +115,7 @@ function loadAll(dir: string, rev: string): Issue[] {
 }
 
 /** The name of the project of each issue at `rev`, by issue number, with no fetch. */
-export const projectsAt = (dir: string, rev: string): Map<number, string> => new Map(loadAll(dir, rev).flatMap((i) => { const name = projectName(String(i.fm.project)); return name ? [[i.id, name] as [number, string]] : []; }));
+const projectsAt = (dir: string, rev: string): Map<number, string> => new Map(loadAll(dir, rev).flatMap((i) => { const name = projectName(String(i.fm.project)); return name ? [[i.id, name] as [number, string]] : []; }));
 
 /** Whether the items repo has issue `n` on its origin/main as last fetched. */
 export const hasIssue = (n: number): boolean => loadAll(itemsDir(), `origin/${MAIN}`).some((i) => i.id === n);
@@ -241,7 +241,8 @@ export function storeLog(dir = itemsDir()): StoreChange[] {
   return out.filter((c) => c.added.length || c.removed.length);
 }
 
-export const REMOVE_LINK = "Remove the link", DROP_WAITER = "Drop the waiter";
+const REMOVE_LINK = "Remove the link";
+export const DROP_WAITER = "Drop the waiter";
 
 /**
  * Called after the write that dropped issue `blocker`, for each open issue whose `after` names it: with the Always rule
