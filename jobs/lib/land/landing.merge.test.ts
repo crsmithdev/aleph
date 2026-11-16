@@ -6,7 +6,7 @@ import { afterLand, bounceNote, brief as unitPrompt, isMergeBounce, MERGE_MODEL,
 import { land, landTerms } from "./landing.ts";
 import { type Run } from "../records/ledger.ts";
 import { seed, reseed } from "../../job.testkit.ts";
-import { dir, job, landLog, mainFiles, moveMain, ports, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
+import { dir, job, landLog, mainFiles, moveMain, ports, remote, repo, sh, useLandingFixture } from "./landing.testkit.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

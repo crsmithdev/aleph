@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const ALLOWED = ["lib/usage.ts", "lib/db.ts"];
-const SKIPPED = /\.test\.ts$|\.fixture\.ts$|\.testkit\.ts$|\.helpers\.ts$/;
+const SKIPPED = /\.test\.ts$|\.testkit\.ts$/;
 
 test("no source file but lib/usage.ts runs SQL on the usage or openrouter table", () => {
   const found = [...new Glob("{jobs,ui,vault,hooks,lib,ideas,issues}/**/*.ts").scanSync(ROOT)]

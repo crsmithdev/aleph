@@ -23,7 +23,7 @@ test("no teardown deletes an env variable it should restore, except the files in
   expect([...found.filter((f) => !EXCEPT.includes(f)), ...EXCEPT.filter((f) => !found.includes(f)).map((f) => `${f} no longer deletes: remove it from EXCEPT`)].sort()).toEqual([]);
 });
 
-const SKIPPED = /\.(test|helpers|fixture|testkit)\.ts$/;
+const SKIPPED = /\.(test|testkit)\.ts$/;
 
 test("only lib/env.ts reads ALEPH_AGENT or ALEPH_JOB_ID: callers use isAgent() and jobId()", () => {
   const found = [...new Bun.Glob("**/*.ts").scanSync({ cwd: ROOT })]

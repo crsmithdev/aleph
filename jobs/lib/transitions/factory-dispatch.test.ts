@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { base, issueRuns, remote, sh, state, setup, teardown, seedItem } from "../../cli.helpers";
+import { base, issueRuns, remote, sh, state, setup, teardown, seedItem } from "../../cli.testkit";
 import { dispatch, issueShow } from "../../flow.testkit.ts";
 
 // Each run's unit is a process of its own.

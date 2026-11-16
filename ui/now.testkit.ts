@@ -3,7 +3,7 @@ import { state } from "./fixtures/status-state.ts";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 
-/** Fixtures and helpers shared by the ui/now-*.test.ts files, after ui/test-browser.ts. */
+/** Fixtures and helpers shared by the ui/now-*.test.ts files, after ui/browser.testkit.ts. */
 
 // The asks the server builds from the awaiting runs, the issues with an Ask, and the proposals.
 export const asksOf = (runs: any[] = [], issues: any[] = [], lessons: any[] = []) => attend({ runs, issues }, lessons).items;

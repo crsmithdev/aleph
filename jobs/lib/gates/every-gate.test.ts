@@ -4,12 +4,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Runner } from "./checks.ts";
-import { setup, teardown } from "../transitions/factory.helpers.ts";
+import { setup, teardown } from "../transitions/factory.testkit.ts";
 import { git } from "../../../lib/git.ts";
 import type { Repo, Run } from "../records/ledger.ts";
 import { branchPorts } from "../roles/unit.ts";
 import { workerVerdict } from "./worker-verdict.ts";
-import { fixture } from "../../../tests/git-fixture.ts";
+import { fixture } from "../../../tests/git.testkit.ts";
 import { seed } from "../../job.testkit.ts";
 
 setDefaultTimeout(120_000);

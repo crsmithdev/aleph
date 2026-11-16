@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
-import * as view from "./views/now.js";
-import { awaitingHeld, state } from "./fixtures/status-state.ts";
+import * as view from "./now.js";
+import { awaitingHeld, state } from "../fixtures/status-state.ts";
 // @ts-ignore
-import { actMessages, openDiffs } from "./lib.js";
-import { asksOf, withAttn } from "./test-now.ts";
+import { actMessages, openDiffs } from "../lib.js";
+import { asksOf, withAttn } from "../now.testkit.ts";
 
 test("an awaiting row does not show checks as facts", () => {
   expect(withAttn(state)).not.toContain("s ✓");
@@ -47,6 +47,6 @@ test("Status times use the state's own now for the year check", () => {
 });
 
 test("app.css colours the Pause or Resume button from the need tokens", async () => {
-  const css = await Bun.file(`${import.meta.dir}/app.css`).text();
+  const css = await Bun.file(`${import.meta.dir}/../app.css`).text();
   expect(css).toMatch(/\.act\.warn \{[^}]*var\(--need-bg\)[^}]*var\(--need\)/);
 });

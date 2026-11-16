@@ -12,8 +12,8 @@ import { allRuns, type Repo } from "../records/ledger.ts";
 import { getRun } from "../records/record.ts";
 import { seed } from "../../job.testkit.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
-import { newItems } from "../../../tests/projects.ts";
-import { factoryRepos } from "../../../tests/git-fixture.ts";
+import { newItems } from "../../../tests/projects.testkit.ts";
+import { factoryRepos } from "../../../tests/git.testkit.ts";
 import { readEvents } from "../../../lib/layout.ts";
 
 // The test's clock: the counts and the fixtures read it.

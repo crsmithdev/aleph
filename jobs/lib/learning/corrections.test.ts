@@ -7,10 +7,10 @@ import { readList } from "../../../issues/lib/store.ts";
 import { section, status, titleProblem } from "../../../issues/lib/todo.ts";
 import { approve, decline, explainLesson, mine, proposals, readStore } from "./corrections.ts";
 import { missingSections } from "../roles/issue-spec.ts";
-import { storeRepos } from "../../../tests/git-fixture.ts";
+import { storeRepos } from "../../../tests/git.testkit.ts";
 import { reseed, seed } from "../../job.testkit.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { writeRepos } from "../../../tests/projects.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 

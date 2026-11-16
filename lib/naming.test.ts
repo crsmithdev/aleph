@@ -115,7 +115,7 @@ test("no file outside lib/naming.ts reads an issue ID with its own regex", () =>
   const OK: [string, string][] = [
     ["hooks/lib/docclaims.ts", ":\\d+(?:-\\d+)?"], ["hooks/lib/docclaims.ts", "(\\d+)(?:-\\d+)?"], ["hooks/lib/scan.ts", "@@ -\\d+"],
     ["jobs/lib/gates/doc-claims.ts", "(?::\\d+(?:-\\d+)?)?"], ["jobs/lib/gates/doc-claims.ts", ":(\\d+)(?:-(\\d+))?"], ["ui/decision.js", ":\\d+(?:-\\d+)?"], ["ui/decision.js", "lines? \\d+(?:-\\d+)?"],
-    ["ui/lib.js", "(-\\d+)+(\\[.*\\])?$"], ["jobs/cli.helpers.ts", "-fac-${id}-\\\\d+$"],
+    ["ui/lib.js", "(-\\d+)+(\\[.*\\])?$"], ["jobs/cli.testkit.ts", "-fac-${id}-\\\\d+$"],
   ];
   const root = join(import.meta.dir, "..");
   const files = (d: string): string[] => readdirSync(d).flatMap((f) => {

@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { add } from "../issues/lib/todo.ts";
 import { fetchStore, readFetched, readList, skipFetches, writeList } from "../issues/lib/store.ts";
 import { routes } from "./api/issues.ts";
-import { withEnv, withServer } from "./test-server.ts";
+import { withEnv, withServer } from "./server.testkit.ts";
 import { state } from "./state.ts";
 import { seed } from "../jobs/job.testkit.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 let base: string, log: string, stale: string, staleRemote: string;
 let restoreEnv: () => void;

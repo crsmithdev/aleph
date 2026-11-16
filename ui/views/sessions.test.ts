@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import * as v from "./views/sessions.js";
+import * as v from "./sessions.js";
 // @ts-ignore plain JS, shared with the page
-import { when } from "./lib.js";
+import { when } from "../lib.js";
 
 const data = () => ({
   window: 7, project: null,

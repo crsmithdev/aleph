@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { close, readList, writeList } from "../../../issues/lib/store.ts";
-import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
+import { factoryRepos, vault } from "../../../tests/git.testkit.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
 import { readEvents } from "../../../lib/layout.ts";
@@ -23,7 +23,7 @@ import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 import { ciStep } from "../gates/ci.ts";
-import { newItems, writeRepos } from "../../../tests/projects.ts";
+import { newItems, writeRepos } from "../../../tests/projects.testkit.ts";
 
 // The test's clock: the run that holds the live slot is `starting` against it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

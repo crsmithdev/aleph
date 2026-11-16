@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../jobs/commands.ts";
 import { add, drop, note } from "../ideas/ideas.ts";
-import { withEnv, withServer } from "./test-server.ts";
+import { withEnv, withServer } from "./server.testkit.ts";
 // @ts-ignore plain JS, shared with the page
 import { chips, count, empty, error, filterBar, loadingLine, repoIdLink, searchBox, statusRow, when } from "./lib.js";
 // @ts-ignore
 import { renderKpis } from "./timeline.js";
 // @ts-ignore
 import { ideaView, renderIdea, renderIdeas } from "./views/ideas.js";
-import { newItems, writeRepos } from "../tests/projects.ts";
+import { newItems, writeRepos } from "../tests/projects.testkit.ts";
 
 // The fake lens agent: it writes result.md and ends as stream-json does, with the cost $FAKE_COST.
 const FAKE = `#!/usr/bin/env bash

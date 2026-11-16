@@ -18,7 +18,7 @@ import { held } from "../infra/locks.ts";
 import { startJob } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { change, ctx, dispatch, fakes, newIssue, mk, setup, teardown } from "./factory.helpers.ts";
+import { change, ctx, dispatch, fakes, newIssue, mk, setup, teardown } from "./factory.testkit.ts";
 import { writeList } from "../../../issues/lib/store.ts";
 
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */

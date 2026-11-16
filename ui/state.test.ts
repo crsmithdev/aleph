@@ -6,7 +6,7 @@ import * as store from "../issues/lib/store.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { jobProjector, state } from "./state.ts";
-import { withEnv } from "./test-server.ts";
+import { withEnv } from "./server.testkit.ts";
 import { loadRegistry, allJobs } from "../jobs/lib/records/ledger.ts";
 import { seed, reseed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
@@ -14,9 +14,9 @@ import { jobFolder } from "../jobs/lib/records/run-files.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/records/status.ts";
 import { state as fixture } from "./fixtures/status-state.ts";
-import { rows, withAttn } from "./test-now.ts";
+import { rows, withAttn } from "./now.testkit.ts";
 import { setAsk } from "../jobs/lib/asks/ask.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 import { logEvent } from "../lib/layout.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.

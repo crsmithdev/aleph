@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:
 import { existsSync, writeFileSync } from "node:fs";
 import { allRuns } from "./lib/records/ledger.ts";
 import { join } from "node:path";
-import { aleph, base, branchExists, section, itemsRemote, moveMain, remote, repo, seedItem, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, branchExists, section, itemsRemote, moveMain, remote, repo, seedItem, sh, state, told, worktree, setup, teardown } from "./cli.testkit";
 import { actionJob as job, checked, drop, issueShow, jobView, land } from "./flow.testkit.ts";
 
 beforeAll(setup);

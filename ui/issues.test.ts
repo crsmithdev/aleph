@@ -7,10 +7,10 @@ import { join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
 import { add, noteOf, setStatus, type Doc } from "../issues/lib/todo.ts";
-import { addPart } from "../issues/lib/parts.fixture.ts";
+import { addPart } from "../issues/lib/parts.testkit.ts";
 import * as todos from "../issues/lib/todo.ts";
 import { askOf, setAsk, refIn, type Ask } from "../jobs/lib/asks/ask.ts";
-import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { updater } from "./updater.ts";
 import { run as alephRun } from "../jobs/commands.ts";
 
@@ -31,7 +31,7 @@ import * as tl from "./timeline.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { logEvent } from "../lib/layout.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const ISO_UTC = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;

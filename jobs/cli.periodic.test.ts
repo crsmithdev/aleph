@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, other, setup, sh, teardown } from "./cli.helpers";
+import { base, other, setup, sh, teardown } from "./cli.testkit";
 import { cli } from "./flow.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { memory, use } from "../lib/langfuse.ts";

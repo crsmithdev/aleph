@@ -9,10 +9,10 @@ import type { EventRow } from "../lib/naming.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 import { SESSIONS } from "../lib/windows.ts";
-import { withEnv } from "./test-server.ts";
+import { withEnv } from "./server.testkit.ts";
 import { forProject } from "./api/now.ts";
 import { seed } from "../jobs/job.testkit.ts";
-import { newItems, writeRepos } from "../tests/projects.ts";
+import { newItems, writeRepos } from "../tests/projects.testkit.ts";
 
 let dir: string, restore: () => void;
 beforeAll(() => {

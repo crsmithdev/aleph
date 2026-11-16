@@ -3,7 +3,7 @@ import { conn, getJson, putJson } from "../lib/db.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withEnv, withServer } from "./test-server.ts";
+import { withEnv, withServer } from "./server.testkit.ts";
 
 let base: string, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>;
 const realFetch = globalThis.fetch;

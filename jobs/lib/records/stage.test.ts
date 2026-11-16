@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { aleph, env, repo, seedPart, seedItem, seedRun, setup, sh, teardown } from "../../cli.helpers";
+import { aleph, env, repo, seedPart, seedItem, seedRun, setup, sh, teardown } from "../../cli.testkit";
 import * as issues from "../../../issues/lib/todo.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { loadRegistry } from "./ledger.ts";
@@ -16,7 +16,7 @@ beforeAll(async () => {
 });
 afterAll(() => { restore(); teardown(); });
 
-// One fixture item per stage, each built through the CLI seam of cli.helpers:
+// One fixture item per stage, each built through the CLI seam of cli.testkit:
 // seeded new-shape item and run files.
 interface Row { name: string; stage: string; of?: { n: number; m: number }; action?: string; count?: string; on?: RegExp; why?: RegExp; build: () => Promise<number | string> }
 

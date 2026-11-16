@@ -1,9 +1,9 @@
 /**
  * `aleph` in the test's own process, for the tests that need a command's effects and not a process of its own: each
- * call runs jobs/commands.ts `run` under the environment and working directory that `aleph` gets from cli.helpers,
+ * call runs jobs/commands.ts `run` under the environment and working directory that `aleph` gets from cli.testkit,
  * and gives the result in the shape of `aleph()`: the exit code, stdout, stderr and the printed JSON.
  */
-import { base, env } from "./cli.helpers";
+import { base, env } from "./cli.testkit";
 import { run as aleph } from "./commands.ts";
 import { Refusal } from "../lib/refusal.ts";
 import { findJob, view } from "./lib/records/job.ts";
@@ -21,7 +21,7 @@ const localZone = () => zone ||= Bun.spawnSync(["bun", "-e", "console.log(Intl.D
 
 let depth = 0, saved: Record<string, string | undefined> = {}, savedCwd = "";
 /**
- * Run `f` under the CLI's environment (cli.helpers `env(extra)`) and in `base`, as `aleph` runs; then put both back.
+ * Run `f` under the CLI's environment (cli.testkit `env(extra)`) and in `base`, as `aleph` runs; then put both back.
  * Calls that overlap share one environment: the first sets it and the last puts it back, so they take the same `extra`.
  */
 async function asCli<T>(extra: Record<string, string>, f: () => T | Promise<T>): Promise<T> {
@@ -73,7 +73,7 @@ const flags = (fields: verbs.Fields): string[] => Object.entries(fields).flatMap
 /** `aleph job <repo> <name> --spec -` with the spec's text. */
 export const job = (repo: string, name: string, spec: string, o: { on?: string; land?: boolean; model?: string } = {}, extra: Record<string, string> = {}) =>
   cli(["job", repo, name, "--spec", "-", ...(o.on ? ["--on", o.on] : []), ...(o.land ? ["--land"] : []), ...(o.model ? ["--model", o.model] : [])], extra, spec);
-/** `aleph job demo <name>` with the one-action spec of cli.helpers `job`. */
+/** `aleph job demo <name>` with the one-action spec of cli.testkit `job`. */
 export const actionJob = (name: string, action: string, extra: Record<string, string> = {}, repo = "demo") =>
   job(repo, name, `Goal: ${name}\nACTION: ${action}\n`, {}, extra);
 /** `aleph land <name> [--checked]`. */

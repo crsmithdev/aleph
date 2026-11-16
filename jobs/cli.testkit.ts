@@ -7,9 +7,9 @@ import { getRun } from "./lib/records/record.ts";
 import { seed, type Seed } from "./job.testkit.ts";
 import { readSection, type Section } from "./lib/records/run-files.ts";
 import { unitAlive } from "./lib/infra/process.ts";
-import { projectOf, writeRepos } from "../tests/projects.ts";
+import { projectOf, writeRepos } from "../tests/projects.testkit.ts";
 import { renderItem } from "../issues/lib/todo.ts";
-import { fixture } from "../tests/git-fixture.ts";
+import { fixture } from "../tests/git.testkit.ts";
 import { issueKey } from "../lib/naming.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");

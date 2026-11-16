@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { run } from "../jobs/commands.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
 import { setModel } from "../jobs/lib/routing/models.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 // The fake lens agent: it keeps its prompt, writes $FAKE_RESULT in its working directory unless that is "none", and ends as stream-json does.
 const FAKE = `#!/usr/bin/env bash

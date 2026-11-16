@@ -8,7 +8,7 @@ import { issueFacts } from "./factory-status.ts";
 import { holdBackend } from "./holds.ts";
 import { decideStart } from "./start-decision.ts";
 import { dispatchIssues, stalled } from "../transitions/factory.ts";
-import { mk, newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
+import { mk, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 
 const NOW = Date.parse("2026-11-04T00:00:00Z");
 const CREDIT = "API Error: 402 This request would exceed your available credits";

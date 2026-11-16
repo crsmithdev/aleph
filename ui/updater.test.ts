@@ -304,7 +304,7 @@ test("a change during a build builds the key once more, and the signal waits for
 });
 
 test("while a build runs in the Worker, the server answers other routes: /api/projects comes back before a slow /api/factory", async () => {
-  const { withEnv, withServer } = await import("./test-server.ts");
+  const { withEnv, withServer } = await import("./server.testkit.ts");
   const restore = withEnv({ ALEPH_STATE_SLOW_MS: "1500", ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_JOBS_DIR: join(dir, "runs") });
   const { at, stop } = await withServer({ warm: false });
   try {

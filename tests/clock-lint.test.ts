@@ -12,7 +12,7 @@ const ROOT = join(import.meta.dir, "..");
 const LIST = "tests/clock-exceptions.txt";
 
 /** Test files and the helpers that only tests import. */
-const SCANNED = ["**/*.test.ts", "tests/**/*.ts", "**/*.helpers.ts", "**/*.fixture.ts", "**/fixture.ts", "**/*.testkit.ts", "**/test-*.ts", "ui/fixtures/**/*.ts"];
+const SCANNED = ["**/*.test.ts", "tests/**/*.ts", "**/*.testkit.ts", "ui/fixtures/**/*.ts"];
 const SKIPPED = /^(node_modules|vendor|\.worktrees|acceptance)\//;
 
 const RULES: [string, RegExp][] = [

@@ -16,7 +16,7 @@ import { readStore } from "../learning/corrections.ts";
 import { getRun } from "../records/record.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";
 import { eventsOf } from "../../../lib/layout.ts";
-import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, repoPath, run, sh, started, useDirectorFixture } from "./director.fixture.ts";
+import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, repoPath, run, sh, started, useDirectorFixture } from "./director.testkit.ts";
 
 useDirectorFixture();
 

@@ -9,7 +9,7 @@ import { seed } from "../../job.testkit.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readList } from "../../../issues/lib/store.ts";
 import { takeOnTimeout } from "../transitions/tick.ts";
-import { mk, newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
+import { mk, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 import { allRuns } from "../records/ledger.ts";
 import { setAsk, type Ask } from "./ask.ts";
 import { dueAt, issueAsks, readTimeouts, setTimeoutOf, timeoutStep } from "./timeout.ts";

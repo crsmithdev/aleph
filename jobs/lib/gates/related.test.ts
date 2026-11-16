@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildChecks, buildTests, importMap, testsOf, type ImportMap } from "./related.ts";
 import type { Repo } from "../records/ledger.ts";
-import { fixture } from "../../../tests/git-fixture.ts";
+import { fixture } from "../../../tests/git.testkit.ts";
 
 let dir: string;
 let commit: string;

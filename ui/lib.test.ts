@@ -2,7 +2,7 @@ import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import { renderHerald } from "./views/now.js";
-import { row, withFactory } from "./test-now.ts";
+import { row, withFactory } from "./now.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chart, fitGrid, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page

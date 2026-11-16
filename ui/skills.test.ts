@@ -5,11 +5,11 @@ import { join } from "node:path";
 import { clearCache, listSkills, routes } from "./api/skills.ts";
 import { http, memory, use } from "../lib/langfuse.ts";
 import { closePass, openPass } from "../lib/sources.ts";
-import { withEnv, withServer } from "./test-server.ts";
+import { withEnv, withServer } from "./server.testkit.ts";
 import { updater } from "./updater.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/skills.js";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 const today = "2026-11-09";
 const NOW = Date.parse(`${today}T12:00:00.000Z`);

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { jobFolder } from "../jobs/lib/records/run-files.ts";
 import { closePass, openPass } from "../lib/sources.ts";
-import { withEnv } from "./test-server.ts";
+import { withEnv } from "./server.testkit.ts";
 import { filed } from "../issues/lib/store.ts";
 import { activeIssues, agentStats, CLASSES, classify, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { buckets } from "../lib/windows.ts";
@@ -18,7 +18,7 @@ import { pct, xLabel } from "./lib.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { averageFigures, figures } from "./api/speed.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 import { readModels } from "../jobs/lib/routing/models.ts";
 
 let base: string;

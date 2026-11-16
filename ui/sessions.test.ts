@@ -13,7 +13,7 @@ import { conn } from "../lib/db.ts";
 import * as v from "./views/session.js";
 // @ts-ignore plain JS, shared with the page
 import { options, renderSessions } from "./views/sessions.js";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 const trace = (id: string, session: string, name: string, at: string, extra: object = {}) =>
   ({ id, sessionId: session, name, timestamp: at, input: `prompt ${id}\nsecond line`, output: "x".repeat(600), totalCost: 0.5, latency: 12, metadata: { cwd: `/w/${name}`, task_type: "code_edit" }, ...extra });

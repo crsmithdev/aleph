@@ -7,7 +7,7 @@ import { loadRegistry } from "../records/ledger.ts";
 import { writeBaseline } from "./tables.ts";
 import { decideIntake } from "./intake-decision.ts";
 import { dispatchIssues, intakeQueued, runDispatch, stalled } from "../transitions/factory.ts";
-import { change, newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
+import { change, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 
 beforeEach(setup);
 afterEach(teardown);

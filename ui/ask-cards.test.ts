@@ -11,7 +11,7 @@ import { askCard } from "./ask-cards.js";
 import { decided, denyReasons, endDraw, startDraw, when } from "./lib.js";
 import { shortId } from "../lib/naming.ts";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
-import { asksOf, prop, withAttn, withFactory } from "./test-now.ts";
+import { asksOf, prop, withAttn, withFactory } from "./now.testkit.ts";
 import { job } from "./fixtures/status-state.ts";
 
 const CASE = (actions: string[], rec: string) => ({

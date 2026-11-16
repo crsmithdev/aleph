@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, diagnose, issueRuns, jobsDir, startScript, stateNow, setup, teardown, idle, when, seedItem } from "./cli.helpers";
+import { aleph, base, diagnose, issueRuns, jobsDir, startScript, stateNow, setup, teardown, idle, when, seedItem } from "./cli.testkit";
 import { drop, issueClose } from "./flow.testkit.ts";
 
 beforeAll(setup);

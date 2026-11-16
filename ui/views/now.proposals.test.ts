@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { getJson, putJson } from "../lib/db.ts";
+import { getJson, putJson } from "../../lib/db.ts";
 // @ts-ignore now.js is plain JS, shared with the page
-import * as view from "./views/now.js";
-import { state } from "./fixtures/status-state.ts";
-import { withEnv } from "./test-server.ts";
-import { asksOf, prop } from "./test-now.ts";
+import * as view from "./now.js";
+import { state } from "../fixtures/status-state.ts";
+import { withEnv } from "../server.testkit.ts";
+import { asksOf, prop } from "../now.testkit.ts";
 
 // ---- proposals ----
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -13,11 +13,11 @@ import { tmpdir } from "node:os";
 
 import { join } from "node:path";
 
-import { readList } from "../issues/lib/store.ts";
+import { readList } from "../../issues/lib/store.ts";
 
-import { routes as proposalRoutes } from "./api/proposals.ts";
-import { storeRepos } from "../tests/git-fixture.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { routes as proposalRoutes } from "../api/proposals.ts";
+import { storeRepos } from "../../tests/git.testkit.ts";
+import { writeRepos } from "../../tests/projects.testkit.ts";
 
 test("the lede says proposals need your attention", () => {
   // A proposal reaches Chris once the director wrote its case text.

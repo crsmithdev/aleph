@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chromeUsable } from "../../ui/test-browser.ts";
+import { chromeUsable } from "../../ui/browser.testkit.ts";
 
 test.skipIf(!chromeUsable)("the check runs on an unfilled base.html and prints its faults and three screenshots", async () => {
   const dir = mkdtempSync(join(tmpdir(), "explainer-test-"));

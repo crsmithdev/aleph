@@ -10,7 +10,7 @@ import { readEvents } from "../../../lib/layout.ts";
 import { loadRegistry, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { askOf } from "../asks/ask.ts";
 import { claimStep, conflictStep, duplicateStep, infraStep, killedStep, rerunStep, rescueCase, type Stuck } from "./rescue.ts";
-import { newIssue, mk, ask, fakes, setup, teardown } from "../transitions/factory.helpers.ts";
+import { newIssue, mk, ask, fakes, setup, teardown } from "../transitions/factory.testkit.ts";
 
 beforeEach(setup);
 afterEach(teardown);

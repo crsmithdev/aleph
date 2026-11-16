@@ -6,7 +6,7 @@ import { dispatchIssues } from "./factory.ts";
 import * as record from "../records/record.ts";
 import { readHolds } from "../gates/holds.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { newIssue, change, mk, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
+import { newIssue, change, mk, fakes, dispatch, setup, teardown } from "./factory.testkit.ts";
 
 beforeEach(setup);
 afterEach(teardown);

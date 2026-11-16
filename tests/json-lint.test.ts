@@ -12,7 +12,7 @@ const ROOT = join(import.meta.dir, "..");
 const OWNER = "lib/json.ts";
 /** Reads of a file that must be there: a missing one throws too. */
 const READS = ["jobs/lib/gates/keep-earn.ts"];
-const SKIPPED = /\.test\.ts$|\.fixture\.ts$|\.testkit\.ts$|\.helpers\.ts$/;
+const SKIPPED = /\.test\.ts$|\.testkit\.ts$/;
 
 test("no source file in jobs/, ui/, vault/ or hooks/ parses a JSON file but the owner", () => {
   const found = [...new Glob("{jobs,ui,vault,hooks}/**/*.ts").scanSync(ROOT)]

@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const OWNER = "jobs/lib/infra/process.ts";
-const SKIPPED = /\.test\.ts$|\.fixture\.ts$|\.testkit\.ts$|\.helpers\.ts$/;
+const SKIPPED = /\.test\.ts$|\.testkit\.ts$/;
 
 test("no source file in jobs/, ui/, vault/ or hooks/ signals a process group but the owner", () => {
   const found = [...new Glob("{jobs,ui,vault,hooks}/**/*.ts").scanSync(ROOT)]

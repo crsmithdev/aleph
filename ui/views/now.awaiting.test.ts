@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
-import * as view from "./views/now.js";
-import { attend } from "./asks.ts";
-import { setCodes } from "../lib/naming.ts";
-import { job, state } from "./fixtures/status-state.ts";
-import { asksOf, withAttn, issue, full, rows, problem, prop } from "./test-now.ts";
+import * as view from "./now.js";
+import { attend } from "../asks.ts";
+import { setCodes } from "../../lib/naming.ts";
+import { job, state } from "../fixtures/status-state.ts";
+import { asksOf, withAttn, issue, full, rows, problem, prop } from "../now.testkit.ts";
 
 afterEach(() => setCodes({}));
 

@@ -14,7 +14,7 @@ import { listUrl } from "./jobs-table.js";
 import * as gates from "./views/gates.js";
 // @ts-ignore plain JS shared with the page
 import * as now from "./views/now.js";
-import { full } from "./test-now.ts";
+import { full } from "./now.testkit.ts";
 
 const WINDOWS = ["hour", "day", "week", "month"] as const;
 

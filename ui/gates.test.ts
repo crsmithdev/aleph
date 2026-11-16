@@ -7,7 +7,7 @@ import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
 import { CAP_ENV, CAP_KEYS, capMin } from "../jobs/lib/infra/settings.ts";
 import { LOG_MAX, askHistory, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
 import { reasonText, type AskItem } from "./asks.ts";
-import { withEnv, withServer } from "./test-server.ts";
+import { withEnv, withServer } from "./server.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { day, pct, when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
@@ -19,7 +19,7 @@ import { conn, getJson, putJson } from "../lib/db.ts";
 import { seed } from "../jobs/job.testkit.ts";
 import { logEvent } from "../lib/layout.ts";
 import { contentText, setCodes } from "../lib/naming.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 /** Make `rows` the only hold records: a hold is the event of its gate on an issue, a `started` record the rule's `started` event. */
 function setHolds(rows: HoldRecord[]): void {

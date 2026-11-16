@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
-import { aleph, base, dispatched, itemsRemote, jobsDir, sh, setup, teardown } from "./cli.helpers";
+import { aleph, base, dispatched, itemsRemote, jobsDir, sh, setup, teardown } from "./cli.testkit";
 import { issueAdd, issueClose, issueShow } from "./flow.testkit.ts";
 
 // Acceptance criterion 14 at the CLI seam: `aleph issue add <repo> "<title>" --goal -` files the issue and its part `.1`

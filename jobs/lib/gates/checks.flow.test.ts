@@ -3,10 +3,10 @@ import { conn } from "../../../lib/db.ts";
 import { flakes } from "./tables.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, section, state, setup, teardown } from "../../cli.helpers";
+import { base, section, state, setup, teardown } from "../../cli.testkit";
 import { call, job, reportText } from "../../flow.testkit.ts";
 import { noteFlake } from "../../../issues/lib/store.ts";
-import { readRepos, writeRepos } from "../../../tests/projects.ts";
+import { readRepos, writeRepos } from "../../../tests/projects.testkit.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 beforeAll(setup);

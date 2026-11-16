@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
 import { renderItem, type Issue } from "./lib/todo.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 /** `repo` is a product repo; `items` is the work store's checkout and `remote` its origin. Set again before each test. */
 export const fx = { base: "", remote: "", repo: "", repoRemote: "", items: "" };

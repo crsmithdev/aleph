@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { close, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { addPart } from "../../../issues/lib/parts.fixture.ts";
+import { addPart } from "../../../issues/lib/parts.testkit.ts";
 import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
 import { loadRegistry, type Run } from "../records/ledger.ts";
 import { seed } from "../../job.testkit.ts";
 import { clock } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
-import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
-import { writeRepos } from "../../../tests/projects.ts";
+import { factoryRepos, vault } from "../../../tests/git.testkit.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {

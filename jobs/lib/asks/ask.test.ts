@@ -11,7 +11,7 @@ import * as record from "../records/record.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { readList } from "../../../issues/lib/store.ts";
 import { seed } from "../../job.testkit.ts";
-import { newIssue, setup, teardown } from "../transitions/factory.helpers.ts";
+import { newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
 const ask: Ask = { reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };

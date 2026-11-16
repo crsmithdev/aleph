@@ -6,7 +6,7 @@ import { land } from "./landing.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as record from "../records/record.ts";
-import { both, dir, given, job, landLog, mainFiles, ports, pushes, queued, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
+import { both, dir, given, job, landLog, mainFiles, ports, pushes, queued, remote, repo, sh, useLandingFixture } from "./landing.testkit.ts";
 
 useLandingFixture();
 

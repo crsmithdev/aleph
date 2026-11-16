@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setPaused } from "../jobs/lib/gates/pause.ts";
-import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { verdict } from "../lib/status-words.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 let base: string, factory: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 

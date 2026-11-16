@@ -6,7 +6,7 @@ import { wallStepSince } from "./clock.ts";
 import { emptyObjects, fix, gitChecks, homeCheck, linkCheck, lostCheck, unitChecks, doctor } from "./doctor.ts";
 import { seed } from "../../job.testkit.ts";
 import { mkdirSync, symlinkSync } from "node:fs";
-import { writeRepos } from "../../../tests/projects.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 
 let dir: string, repo: string;
 const saved = { ...process.env };

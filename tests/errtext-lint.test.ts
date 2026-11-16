@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const OWNER = "lib/errtext.ts";
-const SKIPPED = /\.test\.ts$|\.fixture\.ts$|\.testkit\.ts$|\.helpers\.ts$/;
+const SKIPPED = /\.test\.ts$|\.testkit\.ts$/;
 const SLOP = /\?\.message \?\? String\(|catch \(\w+: any\)/;
 
 test("no source file hand-writes an error's text or types a catch as any but the owner", () => {

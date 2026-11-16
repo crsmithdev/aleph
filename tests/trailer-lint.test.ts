@@ -9,7 +9,7 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const OWNER = "jobs/lib/records/status.ts";
 const LITERAL = /[`"'](?:Job|Issue): /;
-const SKIPPED = /\.(test|helpers|fixture|testkit)\.ts$/;
+const SKIPPED = /\.(test|testkit)\.ts$/;
 
 test("only status.ts writes or greps a Job: or Issue: trailer", () => {
   const found = [...new Bun.Glob("{jobs,ui,vault,hooks,lib,issues}/**/*.ts").scanSync({ cwd: ROOT })]

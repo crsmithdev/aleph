@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, other, remote, repo, sh, state, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, other, remote, repo, sh, state, worktree, setup, teardown } from "./cli.testkit";
 import { actionJob, drop, issueAdd, issueShow, job, land } from "./flow.testkit.ts";
 
 // The jobs list, whose reading of fate from git is in jobs/cli.ts itself.

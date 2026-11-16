@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
-import { storeRepos, vault } from "../../../tests/git-fixture.ts";
+import { storeRepos, vault } from "../../../tests/git.testkit.ts";
 import { readList } from "../../../issues/lib/store.ts";
 import { status } from "../../../issues/lib/todo.ts";
 import { askOf } from "../asks/ask.ts";
@@ -13,7 +13,7 @@ import { lintVault, loadVault, readRun } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { render } from "./maintainer.ts";
 import { answerHeld, BUDGET, recheck } from "./recheck.ts";
-import { writeRepos } from "../../../tests/projects.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_ITEMS", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

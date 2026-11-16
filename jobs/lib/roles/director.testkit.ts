@@ -12,7 +12,7 @@ import type { Run } from "../records/ledger.ts";
 import { seed, type Seed } from "../../job.testkit.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { newItems, writeRepos } from "../../../tests/projects.ts";
+import { newItems, writeRepos } from "../../../tests/projects.testkit.ts";
 import { issueKey } from "../../../lib/naming.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

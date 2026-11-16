@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { land } from "./landing.ts";
 import { reseed } from "../../job.testkit.ts";
-import { dir, job, landLog, moveMain, ports, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
+import { dir, job, landLog, moveMain, ports, remote, repo, sh, useLandingFixture } from "./landing.testkit.ts";
 
 useLandingFixture();
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { asks, stuckBlocker } from "./asks.ts";
 import { ASK_REASONS, type Ask } from "../jobs/lib/asks/ask.ts";
 import type { Lesson } from "../jobs/lib/learning/corrections.ts";
-import { withEnv } from "./test-server.ts";
+import { withEnv } from "./server.testkit.ts";
 import { reasonText } from "./asks.ts";
 import type { Job, NewIssue } from "./state.ts";
 

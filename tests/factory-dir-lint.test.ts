@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const OWNER = "lib/layout.ts";
-const SKIPPED = /\.(test|helpers|fixture|testkit)\.ts$/;
+const SKIPPED = /\.(test|testkit)\.ts$/;
 
 test("only lib/layout.ts defines factoryDir or names dispatch.log", () => {
   const found = [...new Bun.Glob("{jobs,ui,vault,hooks,lib,issues}/**/*.ts").scanSync({ cwd: ROOT })]

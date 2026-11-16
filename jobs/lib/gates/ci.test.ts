@@ -6,7 +6,7 @@ import { ciRunning, ciState, ciStep, redCi, type Gh, type GhRun } from "./ci.ts"
 import { health } from "./factory-status.ts";
 import { reds } from "./firefighter.ts";
 import type { Repo } from "../records/ledger.ts";
-import { writeRepos } from "../../../tests/projects.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_ITEMS", "ALEPH_JOBS_DIR"];
 let base: string;

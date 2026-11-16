@@ -6,7 +6,7 @@ import { seed } from "../../job.testkit.ts";
 import { STARTING_MS } from "../infra/process.ts";
 import { recheck, startJob, type Start } from "./transitions.ts";
 import { Refusal } from "../../../lib/refusal.ts";
-import { writeRepos } from "../../../tests/projects.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};

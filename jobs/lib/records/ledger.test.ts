@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { admit, issueKeyOf, loadRegistry, runsByIssue, type Entry, type Run } from "./ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { setCodes, shortId } from "../../../lib/naming.ts";
-import { writeRepos, type Repos } from "../../../tests/projects.ts";
+import { writeRepos, type Repos } from "../../../tests/projects.testkit.ts";
 
 let base: string;
 let saved: string | undefined;

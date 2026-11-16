@@ -14,7 +14,7 @@ import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { logTo } from "../records/run-files.ts";
-import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.fixture.ts";
+import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.testkit.ts";
 
 useDirectorFixture();
 

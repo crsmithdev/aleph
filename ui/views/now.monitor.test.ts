@@ -1,19 +1,19 @@
 import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
-import * as view from "./views/now.js";
+import * as view from "./now.js";
 // @ts-ignore feed.js is plain JS, shared with the page
-import { eventRow } from "./feed.js";
-import { row, withFactory } from "./test-now.ts";
+import { eventRow } from "../feed.js";
+import { row, withFactory } from "../now.testkit.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { heraldReviewed, heraldRuns } from "./state.ts";
-import { withEnv } from "./test-server.ts";
-import { allRuns } from "../jobs/lib/records/ledger.ts";
-import { seed } from "../jobs/job.testkit.ts";
-import { setCodes } from "../lib/naming.ts";
+import { heraldReviewed, heraldRuns } from "../state.ts";
+import { withEnv } from "../server.testkit.ts";
+import { allRuns } from "../../jobs/lib/records/ledger.ts";
+import { seed } from "../../jobs/job.testkit.ts";
+import { setCodes } from "../../lib/naming.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clock } from "./lib.js";
+import { clock } from "../lib.js";
 
 const calm = { ...withFactory({}), asks: [], stuck: [] };
 test("the Pipeline card shows the 6 stages in order, each a ring of runs per issue in its health tone with its p90 time, and no other role", () => {
@@ -152,7 +152,7 @@ test("the Herald merges the state's events and the streamed ones, each once, new
 
 // The stream path keeps its events in now.js for the page's life: each such test takes a copy of the module of its own.
 let copies = 0;
-const fresh = () => import(`./views/now.js?copy=${++copies}`);
+const fresh = () => import(`./now.js?copy=${++copies}`);
 
 test("an event from the stream goes into the Herald at once", async () => {
   const view = await fresh();

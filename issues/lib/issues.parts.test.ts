@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { seedPart, setup, teardown } from "../../jobs/cli.helpers";
+import { seedPart, setup, teardown } from "../../jobs/cli.testkit";
 import { issueAdd, issueClose, issueEdit, issueNote, issueShow, status } from "../../jobs/flow.testkit.ts";
 
 // The verbs of `aleph issue` on a child (an issue with `from`), and the drop of a child, called in-process as the CLI calls them.

@@ -2,13 +2,13 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withEnv, withServer } from "./test-server.ts";
-import { withAlias, withCore, withLink, withoutLink } from "./api/memory.ts";
-import { updater } from "./updater.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { withEnv, withServer } from "../server.testkit.ts";
+import { withAlias, withCore, withLink, withoutLink } from "./memory.ts";
+import { updater } from "../updater.ts";
+import { writeRepos } from "../../tests/projects.testkit.ts";
 
 // The Memory page's search and writes against a real vault: `aleph memory init`, then notes through `aleph memory write`.
-const CLI = join(import.meta.dir, "..", "jobs", "cli.ts");
+const CLI = join(import.meta.dir, "..", "..", "jobs", "cli.ts");
 const day = "2026-11-04";  // write checks only the date format, so a fixed one serves
 let base: string, vault: string, hand: string, eps: string, restore: () => void, stop: () => void;
 let at: (p: string, init?: RequestInit) => Promise<Response>;

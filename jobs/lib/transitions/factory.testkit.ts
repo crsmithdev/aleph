@@ -11,8 +11,8 @@ import { setState } from "../records/record.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { seed } from "../../job.testkit.ts";
 import type { ChecksStop } from "../gates/checks.ts";
-import { factoryRepos } from "../../../tests/git-fixture.ts";
-import { writeRepos } from "../../../tests/projects.ts";
+import { factoryRepos } from "../../../tests/git.testkit.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 import { issueKey } from "../../../lib/naming.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

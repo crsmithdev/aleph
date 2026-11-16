@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, issueRuns, jobsDir, now, startScript, stateNow as state, state as record, setup, teardown, idle, when, addOld, seedItem } from "./cli.helpers";
+import { aleph, base, issueRuns, jobsDir, now, startScript, stateNow as state, state as record, setup, teardown, idle, when, addOld, seedItem } from "./cli.testkit";
 import { dispatch, drop, issueClose } from "./flow.testkit.ts";
 import { hookLines } from "./lib/transitions/factory.ts";
 import { setState } from "./lib/records/record.ts";

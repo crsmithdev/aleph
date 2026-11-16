@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const ALLOWED = ["jobs/lib/infra/settings.ts", "lib/db.ts", "lib/jev.ts"];
-const SKIPPED = /\.test\.ts$|\.fixture\.ts$|\.testkit\.ts$|\.helpers\.ts$/;
+const SKIPPED = /\.test\.ts$|\.testkit\.ts$/;
 
 test("no source file but settings.ts reads or writes the settings table", () => {
   const found = [...new Glob("{jobs,ui,vault,hooks,lib}/**/*.ts").scanSync(ROOT)]

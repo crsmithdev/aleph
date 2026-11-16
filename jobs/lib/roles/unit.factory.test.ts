@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fakeLog, file, repo, sh, state, told, setup, teardown, worktree } from "../../cli.helpers";
+import { fakeLog, file, repo, sh, state, told, setup, teardown, worktree } from "../../cli.testkit";
 import { actionJob, drop, issueAdd, issueClose, issueList, issueShow } from "../../flow.testkit.ts";
 import { AGENT_SETTINGS } from "../routing/models.ts";
 

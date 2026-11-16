@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withEnv, withServer } from "./test-server.ts";
+import { withEnv, withServer } from "./server.testkit.ts";
 import { add, drop, read } from "../lib/annotations.ts";
 
 let base: string, at: Awaited<ReturnType<typeof withServer>>["at"], stop: () => void, restoreEnv: () => void;

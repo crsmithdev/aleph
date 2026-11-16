@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, seedItem, setup, teardown } from "./cli.helpers";
+import { aleph, base, seedItem, setup, teardown } from "./cli.testkit";
 import { issueShow } from "./flow.testkit.ts";
-import { readRepos, writeRepos } from "../tests/projects.ts";
+import { readRepos, writeRepos } from "../tests/projects.testkit.ts";
 
 // The wiring of `aleph intake`; intake's own cases are in jobs/lib/roles/intake.test.ts.
 beforeAll(setup);

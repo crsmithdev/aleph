@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, file, other, remote, section, sh, state, told, setup, teardown } from "../../cli.helpers";
+import { base, file, other, remote, section, sh, state, told, setup, teardown } from "../../cli.testkit";
 import { allRuns } from "../records/ledger.ts";
 import { actionJob, land } from "../../flow.testkit.ts";
 

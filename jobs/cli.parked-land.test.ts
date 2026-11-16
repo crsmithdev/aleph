@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { jobRuns, repo, setup, sh, state, teardown, seedItem } from "./cli.helpers";
+import { jobRuns, repo, setup, sh, state, teardown, seedItem } from "./cli.testkit";
 import { dispatch, issueEdit, job } from "./flow.testkit.ts";
 
 beforeAll(setup);

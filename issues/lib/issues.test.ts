@@ -8,7 +8,7 @@ import * as issueOps from "./issues.ts";
 import { Refusal } from "../../lib/refusal.ts";
 import { askOf, setAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { readEvents } from "../../lib/layout.ts";
-import { storeRepos } from "../../tests/git-fixture.ts";
+import { storeRepos } from "../../tests/git.testkit.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;

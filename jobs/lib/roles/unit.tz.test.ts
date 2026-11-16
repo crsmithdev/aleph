@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "../records/ledger.ts";
 import { checkEnv, checksAt, runOnCommit } from "../gates/checks.ts";
-import { fixture } from "../../../tests/git-fixture.ts";
+import { fixture } from "../../../tests/git.testkit.ts";
 import { readSection } from "../records/run-files.ts";
 
 // The check path through checksAt: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.

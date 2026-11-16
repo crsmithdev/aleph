@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } fro
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
-import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
+import { chromeUsable, startRig, type Page, type Rig } from "./browser.testkit.ts";
 
 /** The last test to start, and whether it ran to its end: one that threw or timed out leaves `ok` false, and the next test gets a clean page. */
 let last = { ok: true };

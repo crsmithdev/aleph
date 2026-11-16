@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, now, section, seedRun, setupLog, sh, state, stateNow, told, worktree, setup, teardown, when } from "./cli.helpers";
+import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, now, section, seedRun, setupLog, sh, state, stateNow, told, worktree, setup, teardown, when } from "./cli.testkit";
 import { actionJob, cli, drop, jobView } from "./flow.testkit.ts";
 
 // The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in jobs/cli.ts itself: the jobs list,

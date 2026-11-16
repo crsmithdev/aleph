@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
-import { addPart } from "../issues/lib/parts.fixture.ts";
-import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { addPart } from "../issues/lib/parts.testkit.ts";
+import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { seed } from "../jobs/job.testkit.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

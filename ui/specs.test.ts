@@ -2,12 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
 // @ts-ignore
 import { view as specView } from "./views/spec.js";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]) {

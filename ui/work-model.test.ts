@@ -4,15 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../issues/lib/store.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
-import { addPart } from "../issues/lib/parts.fixture.ts";
+import { addPart } from "../issues/lib/parts.testkit.ts";
 import { setAsk, refIn } from "../jobs/lib/asks/ask.ts";
 import { logEvent } from "../lib/layout.ts";
 import { state } from "./state.ts";
-import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 // @ts-ignore plain JS, shared with the page
 import { refHits, renderIssue } from "./views/issues.js";
 import { seed } from "../jobs/job.testkit.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 // /api/factory on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).

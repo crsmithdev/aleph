@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const SKIPPED = /\.test\.ts$|\.fixture\.ts$|\.testkit\.ts$|\.helpers\.ts$/;
+const SKIPPED = /\.test\.ts$|\.testkit\.ts$/;
 
 test("no source file outside issues/lib commits into the items repo", () => {
   const found = [...new Glob("{jobs,ui,vault,hooks,lib,ideas}/**/*.ts").scanSync(ROOT)]

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, watch, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeRepos } from "../projects.ts";
+import { writeRepos } from "../projects.testkit.ts";
 
 const live = process.env.ALEPH_LIVE === "1";
 const describeLive = live ? describe : describe.skip;

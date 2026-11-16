@@ -2,8 +2,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, job, other, remote, section, setup, sh, state, teardown } from "./cli.helpers";
-import { readRepos, writeRepos } from "../tests/projects.ts";
+import { aleph, base, job, other, remote, section, setup, sh, state, teardown } from "./cli.testkit";
+import { readRepos, writeRepos } from "../tests/projects.testkit.ts";
 
 beforeAll(() => {
   setup();

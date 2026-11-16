@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
-import { vault } from "../../../tests/git-fixture.ts";
+import { vault } from "../../../tests/git.testkit.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { allRuns } from "../records/ledger.ts";
 import { compileDay, render, yesterday } from "./maintainer.ts";

@@ -11,7 +11,7 @@ import { lock } from "../infra/locks.ts";
 import { setModel } from "../routing/models.ts";
 import { setAsk, type Ask } from "../asks/ask.ts";
 import { BATCH, housekeep, housekeepDue, readState, review } from "./housekeeper.ts";
-import { base, branch, calls, fresh, item, key, repoPath, replyWith, sh, useDirectorFixture } from "./director.fixture.ts";
+import { base, branch, calls, fresh, item, key, repoPath, replyWith, sh, useDirectorFixture } from "./director.testkit.ts";
 
 useDirectorFixture();
 beforeAll(() => { process.env.ALEPH_HOUSEKEEPER_CMD = join(base, "fake"); });

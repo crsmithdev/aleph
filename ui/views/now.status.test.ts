@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
-import { setCodes } from "../lib/naming.ts";
+import { setCodes } from "../../lib/naming.ts";
 // @ts-ignore now.js is plain JS, shared with the page
-import * as view from "./views/now.js";
-import { attend } from "./asks.ts";
-import { held, job, state } from "./fixtures/status-state.ts";
-import { asksOf, issue, withAttn, withFactory } from "./test-now.ts";
+import * as view from "./now.js";
+import { attend } from "../asks.ts";
+import { held, job, state } from "../fixtures/status-state.ts";
+import { asksOf, issue, withAttn, withFactory } from "../now.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { pageHead } from "./lib.js";
-import { labelOf, verdict } from "../lib/status-words.ts";
+import { pageHead } from "../lib.js";
+import { labelOf, verdict } from "../../lib/status-words.ts";
 
 const calmState = { ...withFactory({}), asks: [], stuck: [] };
 
@@ -160,7 +160,7 @@ test("a held run asks for your attention once the director escalates it, and not
 });
 
 test("the status sentence wraps instead of clipping: .shead .say has no ellipsis or hidden overflow, and wraps", async () => {
-  const html = await Bun.file(new URL("./app.css", import.meta.url)).text();
+  const html = await Bun.file(new URL("../app.css", import.meta.url)).text();
   const say = [...html.matchAll(/\.shead \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
   expect(say).not.toContain("text-overflow: ellipsis");
   expect(say).not.toContain("overflow: hidden");
@@ -209,7 +209,7 @@ test("one mapping gives each status sentence its Herald label, on the page too",
 
 // The Herald keeps the text of its first render for the page's life: each such test takes a copy of the module of its own.
 let copies = 0;
-const fresh = () => import(`./views/now.js?status=${++copies}`);
+const fresh = () => import(`./now.js?status=${++copies}`);
 
 const at = (m: number) => `2026-10-27T17:${String(m).padStart(2, "0")}:00Z`;
 const entry = (m: number, tone: string, text: string) => ({ at: at(m), tone, label: tone, text });

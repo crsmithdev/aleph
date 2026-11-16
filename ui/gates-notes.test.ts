@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { writeList } from "../issues/lib/store.ts";
 import { add, note } from "../issues/lib/todo.ts";
 import { gatesBody, securityFacts } from "./api/gates.ts";
-import { withEnv } from "./test-server.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { withEnv } from "./server.testkit.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 // Its own git issue store and sandbox repo, set up as ui/issues.test.ts does; ui/gates.test.ts may have neither.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

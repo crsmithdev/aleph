@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, branchExists, fakeLog, section, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../../cli.helpers";
+import { base, branchExists, fakeLog, section, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../../cli.testkit";
 import { actionJob, drop, dropAs, job, jobView, run } from "../../flow.testkit.ts";
 import { seed } from "../../job.testkit.ts";
 

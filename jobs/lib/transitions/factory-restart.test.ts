@@ -10,7 +10,7 @@ import { rescued } from "./continuation.ts";
 
 /** The rescue mark of the run `mk` made. */
 const rescuedOf = (r: { folder: string }) => rescued({ id: jobOfFolder(r.folder), folder: r.folder, run: getRun(jobOfFolder(r.folder))! });
-import { ctx, newIssue, mk, notes, ask, fakes, dispatch, setup, sh, teardown } from "./factory.helpers.ts";
+import { ctx, newIssue, mk, notes, ask, fakes, dispatch, setup, sh, teardown } from "./factory.testkit.ts";
 
 beforeEach(setup);
 afterEach(teardown);

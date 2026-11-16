@@ -10,7 +10,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { launchChrome } from "../../ui/test-browser.ts";
+import { launchChrome } from "../../ui/browser.testkit.ts";
 
 const file = resolve(process.argv[2] ?? "");
 const html = readFileSync(file, "utf8");

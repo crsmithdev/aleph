@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "./todo.ts";
-import { addPart } from "./parts.fixture.ts";
+import { addPart } from "./parts.testkit.ts";
 import * as store from "./store.ts";
 import * as verbs from "./issues.ts";
 import { askChris, askOf, setAsk, refIn, clearAsk } from "../../jobs/lib/asks/ask.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { seed as seedJob } from "../../jobs/job.testkit.ts";
-import { storeRepos } from "../../tests/git-fixture.ts";
+import { storeRepos } from "../../tests/git.testkit.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { lockRetry } from "../../lib/git.ts";
 

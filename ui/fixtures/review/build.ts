@@ -11,8 +11,8 @@ import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync } from "n
 import { join, resolve } from "node:path";
 import { writeList } from "../../../issues/lib/store.ts";
 import { add, clock, note, setStatus } from "../../../issues/lib/todo.ts";
-import { addPart } from "../../../issues/lib/parts.fixture.ts";
-import { writeRepos } from "../../../tests/projects.ts";
+import { addPart } from "../../../issues/lib/parts.testkit.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 import { setIssueAsk } from "../../../jobs/lib/records/record.ts";
 import { seed } from "../../../jobs/job.testkit.ts";
 import { issueKey } from "../../../lib/naming.ts";

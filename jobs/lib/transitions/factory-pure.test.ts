@@ -12,8 +12,8 @@ import { writeBaseline, baselines, suiteHistory } from "../gates/tables.ts";
 import { plainAsk, setAsk } from "../asks/ask.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { reseed, seed } from "../../job.testkit.ts";
-import { ctx, sh, newIssue, change, mk, setup, teardown } from "./factory.helpers.ts";
-import { readRepos, writeRepos } from "../../../tests/projects.ts";
+import { ctx, sh, newIssue, change, mk, setup, teardown } from "./factory.testkit.ts";
+import { readRepos, writeRepos } from "../../../tests/projects.testkit.ts";
 
 beforeEach(setup);
 afterEach(() => { setSystemTime(); teardown(); });

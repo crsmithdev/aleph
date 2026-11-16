@@ -6,7 +6,7 @@ import { readList, writeList } from "../issues/lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { routes, transcript } from "./api/jobs.ts";
-import { withEnv } from "./test-server.ts";
+import { withEnv } from "./server.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 // @ts-ignore jobs.js is plain JS, shared with the page
@@ -16,7 +16,7 @@ import * as jt from "./jobs-table.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { logTo } from "../jobs/lib/records/run-files.ts";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 let base: string, jobsDir: string;
 let restore: () => void;

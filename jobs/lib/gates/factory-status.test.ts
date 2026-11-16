@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readList } from "../../../issues/lib/store.ts";
-import { setup, teardown, mk, newIssue } from "../transitions/factory.helpers.ts";
+import { setup, teardown, mk, newIssue } from "../transitions/factory.testkit.ts";
 import { logTo } from "../records/run-files.ts";
 import { firefighterLines, issueFacts, nextRun, gates } from "./factory-status.ts";
 import { backendHold, heldGoal, holdBackend, holdGoal, probeHold, recordHold } from "./holds.ts";

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { speed } from "./api/speed.ts";
-import { withEnv } from "./test-server.ts";
+import { withEnv } from "./server.testkit.ts";
 // @ts-ignore plain JS shared with the page
 import { onTile } from "./lib.js";
 // @ts-ignore plain JS shared with the page

@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, base, fakeLog, other, remote, section, sh, state, setup, teardown } from "./cli.helpers";
+import { CLI, base, fakeLog, other, remote, section, sh, state, setup, teardown } from "./cli.testkit";
 import { actionJob as job, cli, drop, issueAdd, issueClose, job as startJob, land, status as statusOf } from "./flow.testkit.ts";
 import { logEvent } from "../lib/layout.ts";
-import { readRepos, writeRepos } from "../tests/projects.ts";
+import { readRepos, writeRepos } from "../tests/projects.testkit.ts";
 
 beforeAll(setup);
 afterAll(teardown);

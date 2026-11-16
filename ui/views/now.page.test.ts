@@ -1,13 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
-import * as view from "./views/now.js";
+import * as view from "./now.js";
 // @ts-ignore plain JS, shared with the page
-import { error } from "./lib.js";
-import { setCodes } from "../lib/naming.ts";
-import { job, state } from "./fixtures/status-state.ts";
-import { full, row, section, withAttn } from "./test-now.ts";
+import { error } from "../lib.js";
+import { setCodes } from "../../lib/naming.ts";
+import { job, state } from "../fixtures/status-state.ts";
+import { full, row, section, withAttn } from "../now.testkit.ts";
 // @ts-ignore plain JS, shared with the page
-import { kept } from "./lib.js";
+import { kept } from "../lib.js";
 
 afterEach(() => setCodes({}));
 
@@ -94,7 +94,7 @@ test("an ask keeps its action buttons on the page", () => {
 
 test("the sidebar links and the routes exist", async () => {
   for (const [f, path, old] of [["factory-jobs", "/factory/jobs", "#/status/performance"], ["efficiency", "/flow", "#/status/efficiency"], ["factory-agents", "/factory/agents", "#/status/capacity"]]) {
-    const m = await import(`./views/${f}.js`);
+    const m = await import(`./${f}.js`);
     expect(m.view.path).toBe(path);
     expect(m.redirect(old)).toBe(`#${path}`);
     expect(m.redirect(`#${path}`)).toBeNull();

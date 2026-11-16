@@ -5,7 +5,7 @@ import { chmodSync, mkdirSync, utimesSync, readFileSync, mkdtempSync, rmSync, wr
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { updater } from "./updater.ts";
 import { onLater } from "./build.ts";
 import { items } from "./memory-items.ts";
@@ -21,7 +21,7 @@ import { mountContext } from "./context-panel.js";
 import { panel } from "./timeline.js";
 // @ts-ignore
 import { noteView } from "./views/memory.js";
-import { writeRepos } from "../tests/projects.ts";
+import { writeRepos } from "../tests/projects.testkit.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

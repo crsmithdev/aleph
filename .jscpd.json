@@ -2,9 +2,7 @@
   "ignore": [
     "**/*.test.ts",
     "**/fixtures/**",
-    "**/fixture.ts",
     "**/*.testkit.ts",
-    "**/*.helpers.ts",
     "acceptance/**",
     "docs/specs/**",
     "**/*.json"

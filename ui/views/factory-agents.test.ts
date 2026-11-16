@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { OFFERS } from "../jobs/lib/routing/models.ts";
-import { MODELS } from "../lib/models.ts";
+import { OFFERS } from "../../jobs/lib/routing/models.ts";
+import { MODELS } from "../../lib/models.ts";
 // @ts-ignore plain JS shared with the page
-import { MODEL_ORDER, costFrame, liveFrame, renderFactoryAgents, tokensFrame, view } from "./views/factory-agents.js";
+import { MODEL_ORDER, costFrame, liveFrame, renderFactoryAgents, tokensFrame, view } from "./factory-agents.js";
 // @ts-ignore plain JS shared with the page
-import { label, option } from "./chart.js";
+import { label, option } from "../chart.js";
 // @ts-ignore plain JS shared with the page
-import { dur, shortModel } from "./lib.js";
+import { dur, shortModel } from "../lib.js";
 // @ts-ignore plain JS shared with the page
-import { pace, usageCard, weekGone } from "./flow-parts.js";
+import { pace, usageCard, weekGone } from "../flow-parts.js";
 
 const S: any = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } }, factory: { runsToday: 198, costToday: 71.94, liveRuns: 1, liveCap: 5, liveLocal: 1, localCap: 1 } };
 const agents = {
@@ -392,7 +392,7 @@ test("the Roles table heads Agent to Output, with no Failed jobs link, Pass shar
   const h = page([full("worker", "haiku", { size: "small" }), full("reviewer", "opus", { pass: 24, fail: 6 }), full("intake", "opus")]);
   expect(th(h).map(([t]) => t)).toEqual(["Agent", "Model", "Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per Output", "Output"]);
   expect(h).not.toMatch(/Failed jobs|failed-jobs|Pass share|worker only/);
-  expect(readFileSync(new URL("./app.css", import.meta.url), "utf8")).not.toContain("failed-jobs");
+  expect(readFileSync(new URL("../app.css", import.meta.url), "utf8")).not.toContain("failed-jobs");
 });
 
 test("a Roles count goes through count()", () => {
@@ -478,7 +478,7 @@ test("a refused turn-off puts the reason beside the last size's box and checks t
 
 test("the chart colour order lists the model table's short names, and the view imports only what the UI server serves", () => {
   expect(MODEL_ORDER).toEqual([...new Set(Object.keys(MODELS).map(shortModel))]);
-  const served = readFileSync(new URL("./server.ts", import.meta.url), "utf8");
-  const src = readFileSync(new URL("./views/factory-agents.js", import.meta.url), "utf8");
+  const served = readFileSync(new URL("../server.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("./factory-agents.js", import.meta.url), "utf8");
   for (const [, lib] of src.matchAll(/from "\.\.\/\.\.\/(lib\/[\w-]+\.ts)"/g)) expect(served).toContain(`"/${lib}"`);
 });
