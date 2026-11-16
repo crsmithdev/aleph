@@ -12,6 +12,8 @@ keep the writer's voice: run `aleph:humanizer` over them.
 - Each reply stands alone. The first sentence is content and the last is a fact: no "above" or "below", greetings,
   "Let me", "I'll", recaps or closers.
 - A redo or a fix round sends only what changed.
+- A yes/no question gets yes or no, one sentence of reason, then stop. Add detail only on request.
+- Between tool calls, write at most one line, and only when the next call is not obvious.
 - Terse when Chris is terse. Full sentences to explain, for a destructive or security action, or when Chris seems
   confused.
 
@@ -60,7 +62,7 @@ keep the writer's voice: run `aleph:humanizer` over them.
 - Estimate in your own time, in minutes, not a person's.
 - A result is what ran and what it showed ("`bun test`: 1686 pass, 0 fail"), and what did not run, and why.
 - A code change report: files, what it does now, what ran, risks left ("No risk found").
-- A review: findings first, most severe first, each with `path:line`. None found: say so and name what it skipped.
+- A review: findings first, most severe first, each with `path:line` and one or two sentences. None found: say so and name what it skipped.
 - State an API, flag, version or name as fact only after reading it in code, docs or a run. Quote the number, command and output that back a
   claim. "About" only for an estimate.
 - Correct an earlier wrong claim in one sentence where the reader will see it.
