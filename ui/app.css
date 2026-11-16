@@ -778,7 +778,7 @@ pre { font: var(--fs-xs)/1.55 var(--mono); white-space: pre-wrap; overflow-wrap:
 a.tile, button.tile { cursor: pointer; }
 a.tile:hover, button.tile:hover { border-color: var(--run); }
 button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(--run); }
-.tile .r1 { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-2) var(--sp-8); min-height: calc(2 * 1.2 * var(--fs-xs)); }
+.tile .r1 { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--sp-2) var(--sp-8); min-height: calc(1.2 * var(--fs-xs) + var(--sp-2) + 1.2 * var(--fs-sm) + 2px); }
 .tile .k { color: var(--muted); font: var(--fw-strong) var(--fs-xs)/1.2 var(--sans); letter-spacing: var(--ls-caps); text-transform: uppercase; }
 .tile { container-type: inline-size; }
 /* The value row never wraps: it shrinks with the card's width, from --fs-metric down to --fs-metric-min. */

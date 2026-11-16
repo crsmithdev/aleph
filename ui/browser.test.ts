@@ -888,7 +888,10 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       const floor = parseFloat(getComputedStyle(probe).fontSize);
       probe.remove();
       return {
-        wrapped: tiles.some((t) => t.querySelector(".k").getBoundingClientRect().height > 1.5 * parseFloat(getComputedStyle(t.querySelector(".k")).fontSize)),
+        wrapped: tiles.some((t) => {
+          const k = t.querySelector(".k").getBoundingClientRect();
+          return k.height > 1.5 * parseFloat(getComputedStyle(t.querySelector(".k")).fontSize) || [...t.querySelectorAll(".r1 > *")].some((c) => c.getBoundingClientRect().top > k.top + 1);
+        }),
         tops: Object.values(rows).map((ts) => new Set(ts.map((t) => t.querySelector("b").getBoundingClientRect().top)).size),
         smallest: Math.min(...[...document.querySelectorAll(".tile b")].map((b) => parseFloat(getComputedStyle(b).fontSize))),
         floor,

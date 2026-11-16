@@ -63,7 +63,7 @@ test("the tiles are usage, OpenRouter spend for the window's UTC period, live ag
   const keys = (h: string) => [...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1]);
   const m = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
-  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Live agents", "Follow-ups", "Success"]);
+  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Live agents", "Follow\u2011ups", "Success"]);
   for (const t of ["<b>1<em> / 0</em></b>", "<b>down<em> / $17.54</em></b>"]) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>down<em> / $1.50</em></b>");
   const loading = renderFactoryAgents(S, D);
@@ -100,7 +100,7 @@ test("with no flow the live tile keeps the worker runs and spins in place of the
 test("a failed flow fetch stops the spinners: a still ring with the error line in each flow card", () => {
   const h = renderFactoryAgents(S, { error: "Could not load the flow." } as any, "live", "week", undefined);
   const ring = '<i class="spin bad" role="img" aria-label="Could not load the flow." title="Could not load the flow.">!</i>';
-  for (const k of ["Live agents", "Follow-ups", "Success"]) expect(tile(h, k)).toContain(ring);
+  for (const k of ["Live agents", "Follow\u2011ups", "Success"]) expect(tile(h, k)).toContain(ring);
   expect(tile(h, "Success")).toContain("<b>&nbsp;</b>");
   expect(tile(h, "Success")).not.toContain('role="status"');
 });
@@ -277,13 +277,13 @@ test("a down local server shows one alert, an up one shows nothing, and the Role
 
 test("the Follow-ups tile shows the follow-ups and all filed, its neutral trend, and none without a baseline", () => {
   const d = { ...D, figures: { followups: 184, filed: 259 }, baseline: { base: { followups: 150 }, prev: { followups: 160 }, basis: "the previous 7 days" } };
-  const t = tile(renderFactoryAgents(S, d), "Follow-ups");
+  const t = tile(renderFactoryAgents(S, d), "Follow\u2011ups");
   expect(t).toContain("<b>184<em> / 259</em></b>");
   expect(t).toContain('<span class="q"><span>follow-ups</span><span class="m"> / filed</span></span>');
   expect(t).toContain('<span class="tr"');
   expect(t).not.toMatch(/class="tr (good|warn)/);
   expect(t.match(/<(?:span|b|em)\b/g)!.length).toBe(8);
-  expect(tile(renderFactoryAgents(S, { ...d, baseline: undefined }), "Follow-ups")).not.toContain('class="tr');
+  expect(tile(renderFactoryAgents(S, { ...d, baseline: undefined }), "Follow\u2011ups")).not.toContain('class="tr');
 });
 
 test("the Success tile shows the success and first pass shares, its trend with higher good, and none without a baseline", () => {
@@ -345,16 +345,18 @@ test("the Workers group holds Small, Medium, Large and an Unsized row with no co
   expect([...rolesPart.matchAll(/<td class="wide" title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Lens", "Housekeeper", "Title", "Judge"]);
 });
 
-test("an off size says where its work goes and shows no select or figures, and the last size on cannot go off", () => {
+test("an off size says where its work goes and shows no select or figures, and the last size on keeps a live checked box", () => {
   const set = (on: string[]) => ({ ...M, models: Object.fromEntries(Object.entries(entries("haiku", "sonnet")).map(([k, v]) => [k, { ...v, enabled: !["small", "medium", "large"].includes(k) || on.includes(k) }])) });
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [full("worker", "opus", { size: "large", runs: 19 })] } }, "live", "week", set(["small", "medium"]));
-  expect(row(h, "Large")).toContain('<td><span class="fold" aria-hidden="true"></span> <input type="checkbox" data-name="large" aria-label="Large enabled"> <span class="quiet">Off · goes to Medium</span></td><td colspan="8"></td></tr>');
+  expect(row(h, "Large")).toContain('<td><span class="fold" aria-hidden="true"></span> <input type="checkbox" data-name="large" aria-label="Large enabled"> <span class="quiet" title="Goes to Medium">Off</span></td><td colspan="8"></td></tr>');
   expect(row(h, "Large")).not.toContain("<select");
+  expect(row(h, "Large")).not.toContain("Off · goes to");
   expect(row(h, "Small")).not.toContain("disabled");
   const one = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", set(["medium"]));
-  expect(row(one, "Medium")).toContain('aria-label="Medium enabled" checked disabled');
-  expect(row(one, "Small")).toContain("Off · goes to Medium");
-  expect(row(one, "Large")).toContain("Off · goes to Medium");
+  expect(row(one, "Medium")).toContain('aria-label="Medium enabled" checked>');
+  expect(row(one, "Medium")).not.toContain("disabled");
+  expect(row(one, "Small")).toContain('title="Goes to Medium">Off<');
+  expect(row(one, "Large")).toContain('title="Goes to Medium">Off<');
 });
 
 test("a row under 20 ended runs shows its counts and no percent; 20 or more shows the rate with its ended count", () => {
@@ -408,8 +410,20 @@ test("an empty Roles table shows the empty line", () => {
   expect(html).not.toContain("<table");
 });
 
-test("a failed load shows the error state", () => {
-  expect(renderFactoryAgents(S, { error: "no data" })).toContain('<div class="error" role="alert"><p>no data</p>');
+test("a failed flow shows one error line with no hint in the Agents and Roles cards and the status under Technical details", () => {
+  const h = renderFactoryAgents(S, { error: "Could not load Flow (500)." } as any, "live", "week", M);
+  expect(h.match(/<div class="error" role="alert"><p>Could not load the agents\.<\/p>/g)!.length).toBe(2);
+  expect(h).not.toContain("Could not load Flow</p>");
+  expect(h).not.toContain('class="hint"');
+  expect(h.match(/Technical details[\s\S]*?<pre>Could not load Flow \(500\)\.<\/pre>/g)!.length).toBe(2);
+});
+
+test("a failed models fetch with the agents loaded shows a bad notice before the Roles table", () => {
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [full("worker", "opus", { size: "large" })] } }, "live", "week", null);
+  const roles = h.slice(h.indexOf('id="roles"'));
+  expect(roles).toContain('<p class="notice bad" role="alert">Could not load the models.</p>');
+  expect(roles.indexOf("notice bad")).toBeLessThan(roles.indexOf("<table"));
+  expect(renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [full("worker", "opus")] } }, "live", "week", M)).not.toContain("Could not load the models.</p>");
 });
 
 test("the Usage card is the Status one", () => {
@@ -432,6 +446,29 @@ test("a failed model change shows the reason beside the control", async () => {
     await root.onchange({ target: select, type: "change" });
     expect(msg.className).toBe("act-msg");
     expect(msg.textContent).toContain("the backend of x is down");
+  } finally {
+    globalThis.fetch = was.fetch;
+    (globalThis as any).location = was.location;
+    (globalThis as any).document = was.document;
+  }
+});
+
+test("a refused turn-off puts the reason beside the last size's box and checks the box again", async () => {
+  const was = { fetch: globalThis.fetch, location: (globalThis as any).location, document: (globalThis as any).document };
+  (globalThis as any).location = { hash: "" };
+  (globalThis as any).document = { createElement: () => ({ setAttribute() {} }) };
+  globalThis.fetch = ((_url: string, init?: any) =>
+    Promise.resolve(init?.method === "POST" ? Response.json({ error: "one size stays on" }, { status: 422 }) : { ok: false, status: 500, json: async () => ({}) })) as any;
+  const root: any = { innerHTML: "", querySelector: () => null };
+  const box: any = { after() {}, dataset: { name: "medium" }, type: "checkbox", checked: false, parentElement: { querySelector: () => null } };
+  box.closest = (q: string) => (q === "#roles [data-name]" ? box : null);
+  try {
+    await view.mount(root, S);
+    const msg: any = {};
+    (globalThis as any).document.createElement = () => Object.assign(msg, { setAttribute() {} });
+    await root.onchange({ target: box, type: "change" });
+    expect(msg.textContent).toContain("one size stays on");
+    expect(box.checked).toBe(true);
   } finally {
     globalThis.fetch = was.fetch;
     (globalThis as any).location = was.location;

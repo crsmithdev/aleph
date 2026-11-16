@@ -19,7 +19,7 @@ function openRouterCard(m, win) {
 function followupsCard(d) {
   const v = d?.figures?.followups;
   const vs = !d || d.error ? {} : v == null ? { v: "–" } : { v: count(v), v2: count(d.figures.filed) };
-  return statCard({ k: "Follow-ups", ...vs, q: ["follow-ups", "filed"], trend: windowTrend(d, "followups", v, { kind: "relative", lowerIsGood: null, format: count }), loading: !d, failed: d?.error ?? "" });
+  return statCard({ k: "Follow‑ups", ...vs, q: ["follow-ups", "filed"], trend: windowTrend(d, "followups", v, { kind: "relative", lowerIsGood: null, format: count }), loading: !d, failed: d?.error ?? "" });
 }
 
 /** The Success card: the share of runs that succeeded and the share of builds that passed first time, with the success trend against its baseline. */
@@ -70,15 +70,14 @@ function roles(a, m) {
     return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${badCount(o.stuck)}${[dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td>${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
   };
   const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
-  const on = Object.keys(SIZES).filter((k) => set[k]?.enabled).length;
-  const box = (key, label) => `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${set[key].enabled ? ` checked${on === 1 ? ' disabled title="Last on"' : ""}` : ""}> `;
+  const box = (key, label) => `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${set[key].enabled ? " checked" : ""}> `;
   // A row per size and role: the figures of the model it is set to (with no setting, of the model it ran on last), then under ▸ a sub-row per earlier model.
   const line = (key, label, rs) => {
     const last = [...rs].sort((x, y) => (y.to ?? "").localeCompare(x.to ?? ""));
     const now = set[key]?.model ?? last[0]?.model, cur = rs.find((o) => shortModel(o.model) === shortModel(now));
     const past = last.filter((o) => o !== cur), off = key in SIZES && set[key] && !set[key].enabled, shut = !open.has(key);
     const fold = past.length ? `<button class="fold" data-fold="${esc(key)}" aria-expanded="${!shut}" aria-label="Earlier models of ${label}">${shut ? "▸" : "▾"}</button> ` : `<span class="fold" aria-hidden="true"></span> `;
-    const ctrl = !set[key] ? esc(shortModel(now)) : `${key in SIZES ? box(key, label) : ""}${off ? `<span class="quiet">Off · goes to ${goesTo(key, set)}</span>` : sel(key, label)}`;
+    const ctrl = !set[key] ? esc(shortModel(now)) : `${key in SIZES ? box(key, label) : ""}${off ? `<span class="quiet" title="Goes to ${goesTo(key, set)}">Off</span>` : sel(key, label)}`;
     return `<tr><td class="wide" title="${label}">${label}</td><td>${fold}${ctrl}</td>${off ? `<td colspan="${num.length + 1}"></td>` : stats(cur)}</tr>` +
       (shut ? "" : past.map((o) => `<tr class="sub-row"><td></td><td>${esc(shortModel(o.model))} <span class="quiet">${day(o.from)} – ${day(o.to)}</span></td>${stats(o)}</tr>`).join(""));
   };
@@ -142,11 +141,11 @@ const key = (k) => `factory/agents/${k}`;
 /** The page body. `d` is /api/flow for the window, or null while it loads. `m` is /api/models: undefined while it loads, null when it failed. */
 export function renderFactoryAgents(s, d, _key = "live", window = "week", m) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
-  const wait = d?.error ? error(d.error) : loadingLine("the agents");
+  const wait = d?.error ? error("Could not load the agents.", { detail: d.error }) : loadingLine("the agents");
   const head = scope().bar({ value: win });
   return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${m?.local === "down" ? notice("Local server down", true) : ""}${tiles("Scorecard", scorecard(s, d, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
-    card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + `</div>`;
+    card("Roles", a ? (m === null ? notice("Could not load the models.", true) : "") + roles(a, m) : wait, { id: "roles" }) + `</div>`;
 }
 
 /** The old address. */
@@ -181,7 +180,7 @@ export const view = {
     root.onchange = async (e) => {
       const b = e.target.closest?.("#roles [data-name]");
       if (!b || e.type !== "change") return;
-      const m = await postJson("/api/models", { name: b.dataset.name, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => say(b, err.message));
+      const m = await postJson("/api/models", { name: b.dataset.name, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => { say(b, err.message); if (b.type === "checkbox") b.checked = !b.checked; });
       if (m) await redraw(true);
     };
   },
