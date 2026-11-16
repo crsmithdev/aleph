@@ -35,7 +35,7 @@ import { writeRerun } from "../transitions/continuation.ts";
 import { answerHeld } from "./recheck.ts";
 import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { because, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
+import { because, ISSUE_KEY, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
 import { DIRECTOR_CAP, needsYouLog } from "../infra/settings.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { OPUS_MODEL } from "../../../lib/models.ts";
@@ -346,7 +346,7 @@ export type Action =
   | { do: "note"; text: string };
 
 const nonEmpty = { type: "string", minLength: 1 };
-const refList = { type: "array", items: { type: "string", pattern: "^issue\\.\\d+$" } };
+const refList = { type: "array", items: { type: "string", pattern: ISSUE_KEY.source } };
 const shape = (name: string, fields: Record<string, object> = {}, required: string[] = []) => ({
   type: "object", additionalProperties: false, required: ["do", ...required], properties: { do: { const: name }, ...fields },
 });

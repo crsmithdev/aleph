@@ -13,6 +13,7 @@ import { seed, type Seed } from "../../job.testkit.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { newItems, writeRepos } from "../../../tests/projects.ts";
+import { issueKey } from "../../../lib/naming.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export let base: string;
@@ -48,7 +49,7 @@ export function fresh(items: { title: string; body?: string; specced?: boolean; 
     for (const i of items) {
       const it = issues.add(doc, i.title, { ...(i.specced ? { spec: i.body ?? "Ship the thing." } : { request: i.body }), ...(i.source ? { source: i.source } : {}) });
       for (const note of i.notes ?? []) issues.note(it, note);
-      if (i.ask) setAsk(`issue.${it.id}`, i.ask);
+      if (i.ask) setAsk(issueKey(it.id), i.ask);
     }
     return true;
   }, true);
@@ -57,7 +58,7 @@ export function fresh(items: { title: string; body?: string; specced?: boolean; 
 export const choice = (reason = "question"): Ask => ({ reason, question: "Which page?", options: [{ label: "A", line: "page A" }, { label: "B", line: "page B" }], recommended: "A", why: [] });
 /** A plain question with no options: a how-to-build one. */
 export const plain = (question = "which module?"): Ask => ({ reason: "question", question, options: [], why: [] });
-export const asked = (id: number) => askOf(`issue.${id}`);
+export const asked = (id: number) => askOf(issueKey(id));
 export const item = (id: number) => issues.find(readList({ key })!, id)!;
 /** A stream-json result event whose structured output is `o`. */
 const result = (o: object) => JSON.stringify({ type: "result", is_error: false, result: "", structured_output: o });

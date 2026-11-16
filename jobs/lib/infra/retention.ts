@@ -11,6 +11,7 @@ import { today } from "../../../lib/day.ts";
 import { jobsDir } from "../records/ledger.ts";
 import { allRunRecords } from "../records/record.ts";
 import { conn } from "../../../lib/db.ts";
+import { parseKey } from "../../../lib/naming.ts";
 
 const KEEP_DAYS = 90;
 
@@ -30,8 +31,9 @@ export function retain(now = Date.now()): number {
   const dir = jobsDir();
   const held = new Set<string>();
   for (const r of allRunRecords()) {
-    held.add(r.id.slice(4));
-    if (r.ended && Date.parse(r.ended) < cut && existsSync(join(dir, r.id.slice(4)))) drop(join(dir, r.id.slice(4)));
+    const folder = String(parseKey(r.id)!.n);
+    held.add(folder);
+    if (r.ended && Date.parse(r.ended) < cut && existsSync(join(dir, folder))) drop(join(dir, folder));
   }
   if (existsSync(dir)) for (const f of readdirSync(dir)) if (!f.startsWith(".") && !held.has(f) && changed(join(dir, f)) < cut) drop(join(dir, f));
 

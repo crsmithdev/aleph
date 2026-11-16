@@ -24,7 +24,7 @@ import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, logOnce } from "../state.ts";
 import { card, row, stageOf, type Row } from "../issue.ts";
-import { issueHref, jobHref, parseId, parseKey } from "../../lib/naming.ts";
+import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { filed } from "./speed.ts";
 import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
@@ -64,7 +64,7 @@ function list(url: URL): Response {
   });
   // A director job has no repo: its target alone names the issue.
   const by = runsByIssue(allRuns()), key = (r: Row) => `${r.repo}-${r.ref}`;
-  const own = (r: Row) => { const es = (by.get(`issue.${r.ref}`) ?? []).filter((e) => !e.run.repo || e.run.repo === r.repo); return { runs: es.length, cost: es.reduce((n, e) => n + (e.run.cost ?? 0), 0) }; };
+  const own = (r: Row) => { const es = (by.get(issueKey(r.ref)) ?? []).filter((e) => !e.run.repo || e.run.repo === r.repo); return { runs: es.length, cost: es.reduce((n, e) => n + (e.run.cost ?? 0), 0) }; };
   // A child's jobs also count for its parent: `runs` and `cost` hold both, `own` the row's alone.
   const kids = Map.groupBy(rows.filter((r) => r.parent !== null), (r) => `${r.repo}-${r.parent}`);
   const totals = (r: Row) => [own(r), ...(kids.get(key(r)) ?? []).map(own)].reduce((a, t) => ({ runs: a.runs + t.runs, cost: a.cost + t.cost }));
@@ -111,9 +111,9 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const all = allJobs().filter((runs) => runs[0].run.repo === repo.key);
   const every = allRuns();
-  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === `issue.${r}`)).map((runs) => jobRow(runs));
+  const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === issueKey(r))).map((runs) => jobRow(runs));
   // The runs on this issue, its old parts and its children.
-  const by = runsByIssue(every.filter((e) => e.run.repo === repo.key)), keys = [ref, ...partRefs].map((r) => `issue.${r}`);
+  const by = runsByIssue(every.filter((e) => e.run.repo === repo.key)), keys = [ref, ...partRefs].map((r) => issueKey(r));
   const ours = new Set(keys.flatMap((k) => by.get(k) ?? []).map((e) => e.id));
   const jobs = all.filter((runs) => runs.some((e) => ours.has(e.id))).map((runs) => jobRow(runs));
 
@@ -147,7 +147,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const fetched = everyFetched(), where = new Map(fetched.map((w) => [w.item.id, w]));
   const link = (n: number | undefined) => {
     const w = n === undefined ? undefined : where.get(n), id = w && `${w.repo}-${w.item.id}`;
-    return w && id ? [{ id, key: `issue.${w.item.id}`, title: w.item.title, status: todos.status(w.item), href: issueHref(id) }] : [];
+    return w && id ? [{ id, key: issueKey(w.item.id), title: w.item.title, status: todos.status(w.item), href: issueHref(id) }] : [];
   };
   const refs = refsOf(item).flatMap((k) => link(parseKey(k)?.n));
   const referencedBy = referrersOf(fetched.map((w) => w.item), item).flatMap((i) => link(i.id));
@@ -253,7 +253,7 @@ const decide = post((b, params) => {
 });
 
 /** `aleph dispatch <key>`: Run now starts the issue at once. The key never starts with `--`, so it is no flag; after `--` the CLI would read it as the tail and run the whole dispatch. */
-const runNow = post((_b, params) => aleph(["dispatch", `issue.${target(params).n}`]));
+const runNow = post((_b, params) => aleph(["dispatch", issueKey(target(params).n)]));
 
 /** Stop Waiting: removes the waits that never end, and keeps the others. */
 const unblock = post(async (_b, params) => {

@@ -14,7 +14,7 @@ import { counting } from "./record.ts";
 import { eventsOf } from "../../../lib/layout.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { parseKey, say, sayText, type StageName } from "../../../lib/naming.ts";
+import { issueKey, parseKey, say, sayText, type StageName } from "../../../lib/naming.ts";
 
 
 /** Why an item stands where it does: the event fields of docs/naming.md. A field the naming sets have no word for is left out. */
@@ -61,7 +61,7 @@ export interface Ctx {
 
 export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Subject {
   const a = askOf(refIn(key, item));
-  const hold = issues.status(item) === "open" ? eventsOf(`issue.${issues.refOf(item)}`, "held", "started").at(-1) : undefined;
+  const hold = issues.status(item) === "open" ? eventsOf(issueKey(issues.refOf(item)), "held", "started").at(-1) : undefined;
   return {
     id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
     ...(hold?.action === "held" ? { held: say(hold).map((p) => (typeof p === "string" ? p : p.id)).join("") } : {}),

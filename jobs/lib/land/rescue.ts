@@ -12,7 +12,7 @@
  * restart explains it) is marked failed and gets the same action, once per issue; a second lost run of the issue sets the Ask.
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */
-import { key as keyOf, parseId, shortId } from "../../../lib/naming.ts";
+import { issueKey, key as keyOf, parseId, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { isVersion } from "../roles/issue-spec.ts";
 import { close, partsOf, reader, writeList } from "../../../issues/lib/store.ts";
@@ -168,7 +168,7 @@ async function releaseEdited(act: Rescue): Promise<void> {
     try {
       const why = await act.drop(r.name, "the goal's spec was edited after the run asked about it; the goal starts again on the new spec");
       if (why) { logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed (${why})` }); continue; }
-      if (askOf(`issue.${issue}`)?.question === question) clearAsk(`issue.${issue}`);
+      if (askOf(issueKey(issue))?.question === question) clearAsk(issueKey(issue));
       await tell(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
     } catch (e) {
       logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed: ${errText(e)}` });

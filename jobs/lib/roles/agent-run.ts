@@ -10,7 +10,7 @@ import { getRun, makeJob, patchRun, setState } from "../records/record.ts";
 import { lock, lockSync } from "../infra/locks.ts";
 import { roleSeconds } from "../infra/settings.ts";
 import { logStream, logTo, runFile } from "../records/run-files.ts";
-import { callAgent, stallReason } from "./agent-call.ts";
+import { callAgent } from "./agent-call.ts";
 import type { AgentRole } from "../../../lib/naming.ts";
 
 interface Call {
@@ -97,8 +97,8 @@ export function openRun(o: Opening): AgentRun {
     if (r.tokens !== undefined) { tokens = (tokens ?? 0) + r.tokens; patchRun(id, { tokens }); }
     if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; patchRun(id, { cost: spent }); }
     if (r.cause?.kind === "credit") credit = true;
-    const failure = r.step.stalled ? stallReason() : r.step.timedOut ? `${o.who} timed out` : r.step.code !== 0 ? `${o.who} exited ${r.step.code}` : undefined;
-    if (failure) throw new Error(failure);
+    // Exit 0 with no result event is what a test's fake prints: its stdout is the reply.
+    if (r.cause && (r.found || r.step.code !== 0)) throw new Error(`${o.who}: ${r.cause.reason}`);
     return r;
   };
   return {

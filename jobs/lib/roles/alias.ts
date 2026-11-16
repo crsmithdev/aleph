@@ -4,8 +4,7 @@
  * `write` op in-process, so each change is a pushed, revertible vault commit and each refusal is the op's own. The model
  * never writes a file, and a note with a `core:` line is never touched: its line is in the start context already.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
@@ -13,10 +12,8 @@ import { openIndex, rankNotes } from "../../../vault/lib/index.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
 import { recallQuery } from "../../../vault/lib/recall-query.ts";
 import { loadVault, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
-import { lock } from "../infra/locks.ts";
-import { endLost, openRun } from "./agent-run.ts";
-import { MODEL, outcome, SECONDS, TEXT } from "./recheck.ts";
-import { errText } from "../../../lib/errtext.ts";
+import { pass, reason, scratch, TEXT } from "./maintainer.ts";
+import { outcome } from "./recheck.ts";
 
 /** Misses worked per run, oldest first. */
 export const MISSES = 8;
@@ -124,8 +121,7 @@ const list = (n: Note, key: string): string[] => (Array.isArray(n.fm[key]) ? n.f
 
 /** Add each `alias` verdict's aliases through the `write` op; a refusal is kept with its rule and the rest go on. */
 async function apply(root: string, misses: Miss[], verdicts: Verdict[], day: string): Promise<Aliased[]> {
-  const dir = mkdtempSync(join(tmpdir(), "alias-"));
-  try {
+  return scratch("alias", async (dir) => {
     const out: Aliased[] = [];
     for (const [i, m] of misses.entries()) {
       const v = verdicts.find((x) => x.miss === i + 1 && x.note === m.note.title);
@@ -139,13 +135,11 @@ async function apply(root: string, misses: Miss[], verdicts: Verdict[], day: str
       if (v.verdict !== "alias" || !n || !add.length) { out.push({ ...w, rule: "reply", refused: !n ? "the note is gone" : v.verdict !== "alias" ? `unknown verdict ${v.verdict}` : "alias verdict names no new alias" }); continue; }
       const file = join(dir, `${n.title}.md`);
       writeFileSync(file, serializeFrontmatter({ ...n.fm, aliases: [...list(n, "aliases"), ...add] }) + n.body);
-      const r = await sub(["write", file, "--why", `maintainer alias ${day}: ${v.why.replace(/\s+/g, " ")}`]);
+      const r = await sub(["write", file, "--why", reason("alias", day, v.why)]);
       out.push({ ...w, aliases: add, ...outcome(r) });
     }
     return out;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  });
 }
 
 /**
@@ -157,27 +151,17 @@ export async function alias(root: string, dry: boolean, now = Date.now()): Promi
   const notes = wikiNotes(await loadVault(root));
   const queue = (await findMisses(root, notes, now)).slice(0, MISSES);
   if (!queue.length) return { ...report, skipped: "no misses" };
-  await endLost("maintainer", () => "maintainer", "a reply");
-  const release = await lock("maintainer", 0);
-  if (!release) return { ...report, skipped: "another maintainer holds the lock" };
-  try {
-    const run = openRun({ role: "maintainer", who: "the maintainer", model: MODEL(), seconds: SECONDS, flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(",")], schema: ALIAS_SCHEMA, env: dry ? { ALEPH_RECALL_UNLOGGED: "1" } : undefined, name: `alias-${day}`, command: `alias ${day}${dry ? " --dry" : ""}`, shown: false });
-    report.run = run.folder;
-    try {
-      const reply = (await run.askData(prompt(queue, day))) as { verdicts?: Verdict[] } | undefined;
-      if (!Array.isArray(reply?.verdicts)) throw new Error("malformed reply: no verdicts list");
+  await pass(report, {
+    label: "alias", day, dry, schema: ALIAS_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
+    act: async (list) => {
       const asked = (v: Verdict) => queue[v.miss - 1]?.note.title === v.note;
-      report.misses = dry ? reply.verdicts.filter(asked).map(({ miss, note, verdict, why, aliases }) => ({ query: queue[miss - 1].query, note, verdict, why, ...(aliases ? { aliases } : {}) })) : await apply(root, queue, reply.verdicts, day);
-    } catch (e) {
-      report.error = errText(e);
-      run.end(`failed: ${report.error}`, { cause: "unanswered" });
-      return report;
-    }
-    const done = report.misses.filter((m) => m.verdict === "alias" && !m.refused).length;
-    const refused = report.misses.filter((m) => m.refused).length;
-    run.end(`${dry ? "dry: " : ""}${done} aliased${refused ? `, ${refused} refused` : ""}`);
-    return report;
-  } finally {
-    release();
-  }
+      report.misses = dry ? list.filter(asked).map(({ miss, note, verdict, why, aliases }) => ({ query: queue[miss - 1].query, note, verdict, why, ...(aliases ? { aliases } : {}) })) : await apply(root, queue, list, day);
+    },
+    done: () => {
+      const done = report.misses.filter((m) => m.verdict === "alias" && !m.refused).length;
+      const refused = report.misses.filter((m) => m.refused).length;
+      return `${done} aliased${refused ? `, ${refused} refused` : ""}`;
+    },
+  });
+  return report;
 }

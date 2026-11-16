@@ -10,7 +10,7 @@ import { surfacePaths } from "../roles/issue-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { isOpen, openJob, type Job } from "../records/job.ts";
 import { heldEvent, type Bound, type Gate, type Hold } from "./issue-decision.ts";
-import { event, OLD_HOLDS, type Event } from "../../../lib/naming.ts";
+import { event, type Event, issueKey, OLD_HOLDS, parseKey } from "../../../lib/naming.ts";
 import { eventsOf, layout, logEvent, logSetting, readEvents } from "../../../lib/layout.ts";
 import { conn, getJson, putJson, tx } from "../../../lib/db.ts";
 import * as record from "../records/record.ts";
@@ -39,7 +39,7 @@ const HOLD_ACTIONS = ["held", ...OLD_HOLDS, "gpu", "waiting", "parent", "parked"
 
 /** The hold of an event: a `started` event of the rule, or an event of the gate in HOLD_ACTIONS on an issue; else null. The text is the event's detail, and the kind the hold word: that of a `held` event is its detail before the first colon. */
 function holdOf(e: Event): HoldRecord | null {
-  if (!e.object.startsWith("issue.")) return null;
+  if (parseKey(e.object)?.kind !== "issue") return null;
   if (e.subject === "rule" && e.action === "started") return { at: e.time, name: e.object, kind: "started", text: e.detail ?? "" };
   if (e.subject !== "gate" || !HOLD_ACTIONS.includes(e.action)) return null;
   return { at: e.time, name: e.object, kind: e.action === "held" ? (e.detail ?? "").split(":")[0] : e.action, text: e.detail ?? "", event: e };
@@ -372,7 +372,7 @@ export const changedLinesOf = (stat: string): number =>
   [...stat.matchAll(/(\d+) (?:insertion|deletion)/g)].reduce((a, m) => a + Number(m[1]), 0);
 
 /** The work's name for an issue: its key, `issue.28`. */
-export const issueJob = (_repo: Repo, id: number | string) => `issue.${id}`;
+export const issueJob = (_repo: Repo, id: number | string) => issueKey(id);
 
 /** A file is busy when this many land runs of its repo conflicted on it in the last BUSY_MS. */
 const BUSY_CONFLICTS = 3;

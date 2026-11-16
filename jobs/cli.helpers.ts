@@ -10,6 +10,7 @@ import { unitAlive } from "./lib/infra/process.ts";
 import { projectOf, writeRepos } from "../tests/projects.ts";
 import { renderItem } from "../issues/lib/todo.ts";
 import { fixture } from "../tests/git-fixture.ts";
+import { issueKey } from "../lib/naming.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
 export let base: string, remote: string, repo: string, other: string, itemsRemote: string, jobsDir: string, fakeLog: string, setupLog: string;
@@ -102,7 +103,7 @@ export async function when(f: () => boolean, dir = base): Promise<void> {
 }
 
 /** The folders of the jobs on the issue `issue.<id>`, by name: the job number, oldest first. A reviewer job has no unit of its own and is left out. */
-export const issueRuns = (id: string | number): string[] => allRuns().filter((e) => e.run.target === `issue.${id}` && e.run.role !== "review").map((e) => basename(e.folder));
+export const issueRuns = (id: string | number): string[] => allRuns().filter((e) => e.run.target === issueKey(id) && e.run.role !== "review").map((e) => basename(e.folder));
 /** The keys of the jobs named `name`, oldest first, only those of `kind` when given. */
 export const jobRuns = (name: string, kind?: string): string[] => allRuns().filter((e) => e.run.name === name && (!kind || e.run.role === kind)).map((e) => e.id);
 
@@ -466,7 +467,7 @@ function seedFile(repoKey: string, title: string, fm: Record<string, unknown>, b
 export const seedItem = (repoKey: string, title: string, fm: Record<string, unknown> = {}, body = "Body."): number => seedFile(repoKey, title, fm, body, false);
 
 /** Files a child of issue `n` in one commit on the test store's origin/main: an issue with `from: issue.<n>`. Returns its number. */
-export const seedPart = (repoKey: string, n: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): number => seedFile(repoKey, title, { from: `issue.${n}`, ...fm }, body, true);
+export const seedPart = (repoKey: string, n: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): number => seedFile(repoKey, title, { from: issueKey(n), ...fm }, body, true);
 
 /** Puts a job into the test ledger: `run` holds the fields the test cares about. Returns the job key. */
 export function seedRun(repoKey: string, run: Seed): string {

@@ -91,10 +91,10 @@ test("monitorStep writes its own tick row and keeps the rows the tick wrote", as
 test("a reader that fails leaves a report with the table and the error, and the run states no-answer", async () => {
   process.env.ALEPH_MONITOR_CMD = "false";
   const r = (await monitorStep(now))!;
-  expect(r.error).toBe("the monitor reader exited 1");
+  expect(r.error).toBe("the monitor reader: exited 1: no output");
   expect(r.findings).toEqual([]);
   expect(allRuns().find((e) => e.run.role === "monitor")!.run).toMatchObject({ state: "done", cause: "unanswered" });
-  expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 has no reading: the monitor reader exited 1");
+  expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 has no reading: the monitor reader: exited 1: no output");
 });
 
 test("ALEPH_MONITOR=off keeps the tick's step from running", async () => {

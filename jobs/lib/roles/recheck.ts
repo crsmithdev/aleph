@@ -6,8 +6,7 @@
  * dir and put to Chris as a core-change Ask on a parked issue, and the note is not re-checked while its held verdict
  * waits. His Approve applies the verdict through the same ops; his Decline keeps the claim and bumps `updated`.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
@@ -17,21 +16,15 @@ import { find, note, parseIssueRef, setStatus } from "../../../issues/lib/todo.t
 import { clearAsk, setAsk } from "../asks/ask.ts";
 import { decayQueue, sub } from "../../../vault/lib/maintain.ts";
 import { lintVault, loadVault, recordRun, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
-import { lock } from "../infra/locks.ts";
 import { loadRegistry } from "../records/ledger.ts";
-import { readModels } from "../routing/models.ts";
-import { endLost, openRun } from "./agent-run.ts";
-import { body } from "./maintainer.ts";
+import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
-import { errText } from "../../../lib/errtext.ts";
+import { issueKey } from "../../../lib/naming.ts";
 
-export const SECONDS = 900;
 /** Notes re-checked per run, most recalled first. */
 export const BUDGET = 5;
-export const MODEL = () => readModels().maintainer?.model ?? "sonnet";
 /** Read-only: the files, git history and the vault's recall. */
 const ALLOWED = ["Read", "Grep", "Glob", "Bash(git log:*)", "Bash(aleph memory recall:*)"];
-export const TEXT = { type: "string" } as const;
 /** The verdicts held for Chris, by note title: outside the vault, so no vault op or commit touches them. */
 
 export const RECHECK_SCHEMA = {
@@ -96,14 +89,13 @@ function hold(n: Note, v: Verdict, day: string): void {
   const request = [`The memory re-check of the core note ${n.title} gives the verdict ${v.verdict}.`, `Why: ${v.why}`, claim].filter(Boolean).join("\n\n");
   const issue = fileIssue(repo, { title: cutTitle(`Apply the ${v.verdict} of core note ${n.title}`), kind: "task", source: "memory", parked: true, request }, "rule", { after: () => {} });
   const ref = `${repo.key}-${issue.id}`;
-  setAsk(`issue.${issue.id}`, { reason: "core-change", question: `Apply the ${v.verdict} verdict to the core note ${n.title}?`, options: [], why: [v.why, claim].filter(Boolean) });
+  setAsk(issueKey(issue.id), { reason: "core-change", question: `Apply the ${v.verdict} verdict to the core note ${n.title}?`, options: [], why: [v.why, claim].filter(Boolean) });
   putJson("state", "recheck-held", { ...getJson<Record<string, Held>>("state", "recheck-held", {}), [n.title]: { ...v, day, issue: ref } });
 }
 
 /** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. `approved` applies a held core verdict. */
 async function apply(notes: Note[], verdicts: Verdict[], day: string, approved = false): Promise<Rechecked[]> {
-  const dir = mkdtempSync(join(tmpdir(), "recheck-"));
-  try {
+  return scratch("recheck", async (dir) => {
     const out: Rechecked[] = [];
     for (const n of notes) {
       const v = verdicts.find((x) => x.title === n.title);
@@ -114,7 +106,7 @@ async function apply(notes: Note[], verdicts: Verdict[], day: string, approved =
         out.push({ ...w, rule: "core", refused: "held for Chris" });
         continue;
       }
-      const why = `maintainer recheck ${day}: ${v.why.replace(/\s+/g, " ")}`;
+      const why = reason("recheck", day, v.why);
       const file = join(dir, `${n.title}.md`);
       const t = v.verdict === "archive" ? "" : text(n, v, day);
       if (t === null) { out.push({ ...w, rule: "reply", refused: `${v.verdict} verdict has no claim, details and evidence` }); continue; }
@@ -123,9 +115,7 @@ async function apply(notes: Note[], verdicts: Verdict[], day: string, approved =
       out.push({ ...w, ...outcome(r) });
     }
     return out;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  });
 }
 
 /**
@@ -140,29 +130,18 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
   const held = getJson<Record<string, unknown>>("state", "recheck-held", {});
   const queue = stale.map((f) => byTitle.get(f.note)!).filter((n) => !held[n.title]).slice(0, BUDGET);
   if (!queue.length) return { ...report, skipped: "nothing to re-check" };
-  await endLost("maintainer", () => "maintainer", "a reply");
-  const release = await lock("maintainer", 0);
-  if (!release) return { ...report, skipped: "another maintainer holds the lock" };
-  try {
-    const run = openRun({ role: "maintainer", who: "the maintainer", model: MODEL(), seconds: SECONDS, flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(",")], schema: RECHECK_SCHEMA, env: dry ? { ALEPH_RECALL_UNLOGGED: "1" } : undefined, name: `recheck-${day}`, command: `recheck ${day}${dry ? " --dry" : ""}`, shown: false });
-    report.run = run.folder;
-    try {
-      const reply = (await run.askData(prompt(queue, day))) as { verdicts?: Verdict[] } | undefined;
-      if (!Array.isArray(reply?.verdicts)) throw new Error("malformed reply: no verdicts list");
-      report.notes = dry ? queue.flatMap((n) => reply.verdicts!.filter((v) => v.title === n.title).map(({ title, verdict, why }) => ({ title, verdict, why }))) : await apply(queue, reply.verdicts, day);
-    } catch (e) {
-      report.error = errText(e);
-      run.end(`failed: ${report.error}`, { cause: "unanswered" });
-      recordRun(root, "recheck", "failed", report.error);
-      return report;
-    }
-    const done = report.notes.filter((n) => !n.refused).length;
-    run.end(`${dry ? "dry: " : ""}${done} rechecked${report.notes.length > done ? `, ${report.notes.length - done} refused` : ""}`);
-    recordRun(root, "recheck", "ok", `${dry ? "dry: " : ""}${done} rechecked`);
-    return report;
-  } finally {
-    release();
-  }
+  await pass(report, {
+    label: "recheck", day, dry, schema: RECHECK_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
+    act: async (list) => {
+      report.notes = dry ? queue.flatMap((n) => list.filter((v) => v.title === n.title).map(({ title, verdict, why }) => ({ title, verdict, why }))) : await apply(queue, list, day);
+    },
+    done: () => {
+      const done = report.notes.filter((n) => !n.refused).length;
+      return `${done} rechecked${report.notes.length > done ? `, ${report.notes.length - done} refused` : ""}`;
+    },
+    settle: (error) => recordRun(root, "recheck", error ? "failed" : "ok", error ?? `${dry ? "dry: " : ""}${report.notes.filter((n) => !n.refused).length} rechecked`),
+  });
+  return report;
 }
 
 /**
@@ -188,6 +167,6 @@ export async function answerHeld(ref: string, approved: boolean): Promise<string
   // Read again: a recheck may have held another verdict while the op ran.
   const { [title]: _, ...rest } = getJson<Record<string, Held>>("state", "recheck-held", {});
   putJson("state", "recheck-held", rest);
-  clearAsk(`issue.${at.id}`);
+  clearAsk(issueKey(at.id));
   return r.refused ?? null;
 }

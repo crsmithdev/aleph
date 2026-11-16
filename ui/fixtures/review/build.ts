@@ -15,6 +15,7 @@ import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { writeRepos } from "../../../tests/projects.ts";
 import { setIssueAsk } from "../../../jobs/lib/records/record.ts";
 import { seed } from "../../../jobs/job.testkit.ts";
+import { issueKey } from "../../../lib/naming.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };
@@ -82,7 +83,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
       try { run = JSON.parse(readPlain(join(dir, "state.json"))); } catch { continue; }
       const { kind, condition, on, job, n: _n, ...rest } = run;
       for (const k of ["started", "ended"]) if (rest[k]) rest[k] = new Date(Date.parse(rest[k]) + shift).toISOString();
-      const target = on ? { target: `issue.${String(on).split("-").at(-1)}` } : {};
+      const target = on ? { target: issueKey(String(on).split("-").at(-1)!) } : {};
       const { id, folder } = seed({ ...rest, ...target, role: kind === "plan" ? "intake" : kind, state: condition, ...(lastOf[job] ? { prev: lastOf[job] } : {}) });
       lastOf[job] = id;
       for (const f of readdirSync(dir)) if (f === "result.md") copyFileSync(join(dir, f), join(folder, f));
@@ -122,7 +123,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
           // Status reads the Ask from the issue's state row, so the fixture's ask is stored there.
           if (r.ask) {
             const [action, why = ""] = (r.recommend ?? "").split(" :: ");
-            setIssueAsk(`issue.${item.id}`, {
+            setIssueAsk(issueKey(item.id), {
               reason: r.reason ?? "", question: r.question ?? "", options: [], why: [],
               situation: r.situation,
               effects: (r.effects ?? []).map((e) => { const [a, ...t] = e.split(" :: "); return { action: a, text: t.join(" :: ") }; }),

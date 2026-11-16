@@ -66,7 +66,7 @@ test("a run records the cost of its result event, also when the command fails, a
 
   fake(`echo '${result(0.25, true, "out of turns")}'; exit 1`);
   const bad = openRun(opening);
-  await expect(bad.ask("x")).rejects.toThrow("the reviewer exited 1");
+  await expect(bad.ask("x")).rejects.toThrow("the reviewer: out of turns");
   expect(getRun(bad.id)!.cost).toBe(0.25);
 
   fake("echo plain");
@@ -94,14 +94,14 @@ test("a run past its time box is killed and says it timed out", async () => {
   fake("exec tail -f /dev/null");
   process.env.ALEPH_INTAKE_TIMEOUT = "2";
   const run = openRun(opening);
-  await expect(run.ask("x")).rejects.toThrow("the reviewer timed out");
+  await expect(run.ask("x")).rejects.toThrow("the reviewer: timed out");
   expect(existsSync(join(run.folder, "transcript.jsonl"))).toBe(true);
 });
 
 test("a run that ends with the API credit error has cause credit and holds its backend", async () => {
   fake(`echo '{"type":"result","is_error":true,"result":"API Error: 402 no credit"}'; exit 1`);
   const run = openRun(opening);
-  await expect(run.ask("x")).rejects.toThrow("the reviewer exited 1");
+  await expect(run.ask("x")).rejects.toThrow("the reviewer: API Error: 402 no credit");
   run.end("failed: no credit", { cause: "unanswered" });
   expect(getRun(run.id)).toMatchObject({ state: "done", cause: "credit" });
   expect(backendHold()).toMatchObject({ why: "API Error: 402 no credit" });
@@ -116,7 +116,7 @@ test("a run that prints nothing for the stall time fails with the stall reason",
 test("the time box ends the call's children too, so a child that holds the output pipe does not hold the run", async () => {
   fake(`tail -f /dev/null & echo $! > ${join(base, "child")}; exec tail -f /dev/null`);
   process.env.ALEPH_INTAKE_TIMEOUT = "2";
-  await expect(openRun(opening).ask("x")).rejects.toThrow("the reviewer timed out");
+  await expect(openRun(opening).ask("x")).rejects.toThrow("the reviewer: timed out");
   const child = Number(readFileSync(join(base, "child"), "utf8"));
   // The pipe closed, so the child is dead; its new parent may take a moment to reap it under load.
   await Bun.spawn(["tail", "--pid", String(child), "-f", "/dev/null"]).exited;

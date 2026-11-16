@@ -18,12 +18,12 @@ import { endLost, openRun } from "./agent-run.ts";
 import { errText } from "../../../lib/errtext.ts";
 
 /** The run's time box, in seconds. */
-const SECONDS = 900;
-const MODEL = () => readModels().maintainer?.model ?? "sonnet";
+export const SECONDS = 900;
+export const MODEL = () => readModels().maintainer?.model ?? "sonnet";
 /** Read-only: the vault's recall and Read. */
 const ALLOWED = ["Bash(aleph memory recall:*)", "Read"];
 const KINDS = ["decision", "project", "concept", "entity", "gotcha"];
-const TEXT = { type: "string" } as const;
+export const TEXT = { type: "string" } as const;
 const LIST = { type: "array", items: TEXT } as const;
 
 /** The JSON schema of the reply: the notes to write, possibly none. */
@@ -81,25 +81,79 @@ export function render(n: Note, day: string): string {
   return serializeFrontmatter(fm) + body(n, day, (n.related?.length ? n.related : ["Home"]).map((t: string) => `- [[${t}]]`).join("\n"));
 }
 
-/** Write each note through the vault `write` op; a refusal is kept with its rule and the rest go on. */
-async function put(notes: Note[], day: string): Promise<Written[]> {
-  const dir = mkdtempSync(join(tmpdir(), "maintainer-"));
+/** A scratch dir for the files of one pass; `fn` gets it and it is removed after. */
+export async function scratch<T>(prefix: string, fn: (dir: string) => Promise<T>): Promise<T> {
+  const dir = mkdtempSync(join(tmpdir(), `${prefix}-`));
   try {
-    const out: Written[] = [];
-    for (const n of notes) {
-      const w: Written = { title: String(n.title), kind: String(n.kind) };
-      if (!n.title || /[\/\\:*?"<>|]/.test(n.title)) { out.push({ ...w, rule: "title", refused: "the title is empty or has a character a file name cannot" }); continue; }
-      const file = join(dir, `${n.title}.md`);
-      writeFileSync(file, render(n, day));
-      const r = await sub(["write", file, "--why", `maintainer compile ${day}`]);
-      const f = r.json?.findings?.[0];
-      out.push(r.code === 0 ? { ...w, commit: r.json?.commit ?? null } : { ...w, rule: f?.rule, refused: f ? `refuse ${f.rule} ${f.note}: ${f.detail}` : r.err.trim() || `exit ${r.code}` });
-    }
-    return out;
+    return await fn(dir);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+/** The `--why` of a vault op: who, which pass, which day, then the reason when there is one. */
+export const reason = (verb: string, day: string, why?: string): string => `maintainer ${verb} ${day}${why === undefined ? "" : `: ${why.replace(/\s+/g, " ")}`}`;
+
+/** What a maintainer pass gives the harness. */
+export interface Pass {
+  /** The pass's name: the run's name and command. */
+  label: string;
+  day: string;
+  dry: boolean;
+  schema: object;
+  /** The `--allowedTools` list: the tools the run gets are the names in it. */
+  allowed: string[];
+  /** The reply's list: its key. */
+  key: "notes" | "verdicts";
+  prompt: string;
+  /** Put the reply's list into the report; a throw fails the run. */
+  act: (list: any[]) => Promise<void>;
+  /** The run's end text when `act` succeeded. */
+  done: () => string;
+  /** Called after the run ends: the error text, or undefined when it succeeded. */
+  settle?: (error?: string) => void;
+}
+
+/** Run one maintainer pass under the maintainer lock. The report gets `run`, `error` or `skipped`. */
+export async function pass(report: { run?: string; error?: string; skipped?: string }, p: Pass): Promise<void> {
+  await endLost("maintainer", () => "maintainer", "a reply");
+  const release = await lock("maintainer", 0);
+  if (!release) { report.skipped = "another maintainer holds the lock"; return; }
+  try {
+    const tools = [...new Set(p.allowed.map((a) => a.replace(/\(.*/, "")))].join(",");
+    const run = openRun({ role: "maintainer", who: "the maintainer", model: MODEL(), seconds: SECONDS, flags: ["--tools", tools, "--allowedTools", p.allowed.join(",")], schema: p.schema, env: p.dry ? { ALEPH_RECALL_UNLOGGED: "1" } : undefined, name: `${p.label}-${p.day}`, command: `${p.label} ${p.day}${p.dry ? " --dry" : ""}`, shown: false });
+    report.run = run.folder;
+    try {
+      const list = ((await run.askData(p.prompt)) as Record<string, unknown> | undefined)?.[p.key];
+      if (!Array.isArray(list)) throw new Error(`malformed reply: no ${p.key} list`);
+      await p.act(list);
+    } catch (e) {
+      report.error = errText(e);
+      run.end(`failed: ${report.error}`, { cause: "unanswered" });
+      p.settle?.(report.error);
+      return;
+    }
+    run.end(`${p.dry ? "dry: " : ""}${p.done()}`);
+    p.settle?.();
+  } finally {
+    release();
+  }
+}
+
+/** Write each note through the vault `write` op; a refusal is kept with its rule and the rest go on. */
+const put = (notes: Note[], day: string): Promise<Written[]> => scratch("maintainer", async (dir) => {
+  const out: Written[] = [];
+  for (const n of notes) {
+    const w: Written = { title: String(n.title), kind: String(n.kind) };
+    if (!n.title || /[\/\\:*?"<>|]/.test(n.title)) { out.push({ ...w, rule: "title", refused: "the title is empty or has a character a file name cannot" }); continue; }
+    const file = join(dir, `${n.title}.md`);
+    writeFileSync(file, render(n, day));
+    const r = await sub(["write", file, "--why", reason("compile", day)]);
+    const f = r.json?.findings?.[0];
+    out.push(r.code === 0 ? { ...w, commit: r.json?.commit ?? null } : { ...w, rule: f?.rule, refused: f ? `refuse ${f.rule} ${f.note}: ${f.detail}` : r.err.trim() || `exit ${r.code}` });
+  }
+  return out;
+});
 
 /**
  * Compile `day` under the vault at `root`. A real compile writes the notes and records the day; a dry one does neither.
@@ -112,32 +166,21 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
     if (!dry) recordCompiled(root, day);
     return { ...report, skipped: "nothing on the day" };
   }
-  await endLost("maintainer", () => "maintainer", "a reply");
-  const release = await lock("maintainer", 0);
-  if (!release) return { ...report, skipped: "another maintainer holds the lock" };
-  try {
-    const run = openRun({ role: "maintainer", who: "the maintainer", model: MODEL(), seconds: SECONDS, flags: ["--tools", "Bash,Read", "--allowedTools", ALLOWED.join(",")], schema: MAINTAINER_SCHEMA, env: dry ? { ALEPH_RECALL_UNLOGGED: "1" } : undefined, name: `maintainer-${day}`, command: `maintainer ${day}${dry ? " --dry" : ""}`, shown: false });
-    report.run = run.folder;
-    try {
-      const reply = (await run.askData(prompt(day, digest.text))) as { notes?: Note[] } | undefined;
-      if (!Array.isArray(reply?.notes)) throw new Error("malformed reply: no notes list");
-      report.notes = dry ? reply.notes.map((n) => ({ title: String(n.title), kind: String(n.kind) })) : await put(reply.notes, day);
-    } catch (e) {
-      report.error = errText(e);
-      run.end(`failed: ${report.error}`, { cause: "unanswered" });
-      recordRun(root, "compile", "failed", `${day}: ${report.error}`);
-      markRetry(root, day, true);
-      return report;
-    }
-    const wrote = report.notes.filter((n) => !n.refused).length;
-    run.end(`${dry ? "dry: " : ""}${wrote} notes${report.notes.length > wrote ? `, ${report.notes.length - wrote} refused` : ""}`);
-    if (!dry) recordCompiled(root, day);
-    markRetry(root, day, false);
-    recordRun(root, "compile", "ok", `${dry ? "dry: " : ""}${day}: ${wrote} notes`);
-    return report;
-  } finally {
-    release();
-  }
+  await pass(report, {
+    label: "maintainer", day, dry, schema: MAINTAINER_SCHEMA, allowed: ALLOWED, key: "notes", prompt: prompt(day, digest.text),
+    act: async (list) => { report.notes = dry ? list.map((n) => ({ title: String(n.title), kind: String(n.kind) })) : await put(list, day); },
+    done: () => {
+      const wrote = report.notes.filter((n) => !n.refused).length;
+      return `${wrote} notes${report.notes.length > wrote ? `, ${report.notes.length - wrote} refused` : ""}`;
+    },
+    settle: (error) => {
+      const wrote = report.notes.filter((n) => !n.refused).length;
+      recordRun(root, "compile", error ? "failed" : "ok", error ? `${day}: ${error}` : `${dry ? "dry: " : ""}${day}: ${wrote} notes`);
+      if (!error && !dry) recordCompiled(root, day);
+      markRetry(root, day, !!error);
+    },
+  });
+  return report;
 }
 
 /** The vault's date (local) before `now`. */

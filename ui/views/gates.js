@@ -14,7 +14,7 @@ export const view = {
   icon: "shield-halved",
   // The caps' use and the live counts come from the factory block of /api/factory.
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/automation?window=${s.window}`), s.url(`/api/factory?window=${s.window}`)]; },
-  combine: ([d, s]) => ({ ...d, factory: { ...s.factory, capEnv: d.capEnv, settings: d.settings } }),
+  combine: ([d, s]) => ({ ...d, factory: { ...s.factory, caps: d.caps, settings: d.settings } }),
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),
@@ -45,12 +45,10 @@ export function renderGates(d, q = new URLSearchParams()) {
     renderHeld(d) + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
 }
 
-/** The environment variable that overrides each key of the `caps` setting, as jobs/lib/infra/settings.ts names it. */
-const CAP_ENV = { live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP", intakeTries: "ALEPH_INTAKE_TRIES", jobSeconds: "ALEPH_JOB_TIMEOUT", fixRounds: "ALEPH_FIX_ROUNDS", landBatch: "ALEPH_LAND_BATCH", loadLimit: "ALEPH_LOAD_LIMIT" };
 /** One cap as a setting: a number input with a Save button, `hint` of at most four words, `tip` as the row's title, and a mark in the hint and a warning in the title when its environment variable overrides the `caps` setting. */
 function capSetting(f, key, label, value, hint, tip) {
-  const id = `cap-${key}`, env = f.capEnv?.[key] ? ` ${CAP_ENV[key]} is set: an edit has no effect while that variable is set.` : "";
-  return setting(label, inputBox(key, value, { id, type: "number", attrs: ` min="${key === "fixRounds" ? 0 : 1}" step="1" inputmode="numeric" required` }),
+  const c = f.caps[key], id = `cap-${key}`, env = c.set ? ` ${c.env} is set: an edit has no effect while that variable is set.` : "";
+  return setting(label, inputBox(key, value, { id, type: "number", attrs: ` min="${c.min}" step="1" inputmode="numeric" required` }),
     { id, save: "Save", hint: env ? `${hint}, env` : hint, attrs: ` data-cap="${key}" title="${esc(`${tip}.${env}`)}"` });
 }
 

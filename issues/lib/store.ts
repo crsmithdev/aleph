@@ -14,7 +14,7 @@ import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles
 import { layout, logEvent } from "../../lib/layout.ts";
 import { next } from "../../lib/db.ts";
 import { always, logAlways } from "../../jobs/lib/asks/ask.ts";
-import { key as keyOf } from "../../lib/naming.ts";
+import { issueKey, key as keyOf } from "../../lib/naming.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
 import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
@@ -232,7 +232,7 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
       for (const item of doc.items) {
         if (!CLOSED.includes(status(item)) || !(open.has(item.id) || !before.has(item.id))) continue;
         logClosed(item, by);
-        record.clearIssueState(`issue.${issues.refOf(item)}`);
+        record.clearIssueState(issueKey(issues.refOf(item)));
         if (status(item) !== "dropped") continue;
         const blocker = keyOf("issue", item.id);
         for (const w of loadAll(dir, commit.out)) {
@@ -276,7 +276,7 @@ export function runMedia(key: string, id: number | string, lists: Reader = reade
 }
 
 /** An item with an Ask in its issue state: it waits for Chris, so it is never dispatched and never triaged. */
-const asks = (_doc: Doc, item: Issue, _repo: Place): boolean => record.issueAsk(record.read(`issue.${issues.refOf(item)}`)) !== null;
+const asks = (_doc: Doc, item: Issue, _repo: Place): boolean => record.issueAsk(record.read(issueKey(issues.refOf(item)))) !== null;
 
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -312,7 +312,7 @@ export const isDropped = (ref: string): boolean => loadAll(itemsDir(), `origin/$
 /** The issues an issue names as plain references: its `refs`. They hold nothing. */
 export const refsOf = (item: Issue): string[] => list(item.fm.refs);
 /** The issues of `all` whose `refs` name `item`. Numbers are global, so a ref can cross projects. */
-export const referrersOf = (all: Issue[], item: Issue): Issue[] => all.filter((i) => refsOf(i).includes(`issue.${item.id}`));
+export const referrersOf = (all: Issue[], item: Issue): Issue[] => all.filter((i) => refsOf(i).includes(issueKey(item.id)));
 /** The item's areas: its `areas`. */
 export const areasOf = (item: Issue): string[] => list(item.fm.areas);
 

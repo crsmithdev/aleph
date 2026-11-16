@@ -13,6 +13,7 @@ import { seed } from "../../job.testkit.ts";
 import type { ChecksStop } from "../gates/checks.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 import { writeRepos } from "../../../tests/projects.ts";
+import { issueKey } from "../../../lib/naming.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export function sh(cwd: string, ...args: string[]): void {
@@ -68,7 +69,7 @@ export function mk(name: string, role: Run["role"], state: Run["state"], extra: 
   const { job: work, ...rest } = extra;
   const prev = work ? allRuns().findLast((e) => e.run.job === work)?.id : undefined;
   const n = name.split("-")[1];
-  const made = seed({ role, name: `issue.${n}`, repo: "fac", target: `issue.${n}`, state, shown: true, started: new Date(now).toISOString(), ...(prev ? { prev } : {}), ...rest });
+  const made = seed({ role, name: issueKey(n), repo: "fac", target: issueKey(n), state, shown: true, started: new Date(now).toISOString(), ...(prev ? { prev } : {}), ...rest });
   for (const [f, text] of Object.entries(files)) writeFileSync(join(made.folder, f), text);
   return { folder: made.folder, job: made.run.job };
 }
@@ -76,9 +77,9 @@ export const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${
 /** What was said of issue `id`: its notes, why it closed, and the `changed` events code logged for it, as code writes no note. */
 export const notes = (id: number) => {
   const item = readList({ key: "fac" })!.items.find((i) => i.id === id)!;
-  return [...item.notes, item.fm.closed_why ?? "", ...readEvents().filter((e) => e.action === "changed" && e.object === `issue.${id}`).map((e) => e.detail)].join("\n");
+  return [...item.notes, item.fm.closed_why ?? "", ...readEvents().filter((e) => e.action === "changed" && e.object === issueKey(id)).map((e) => e.detail)].join("\n");
 };
-export const ask = (id: number) => askOf(`issue.${id}`);
+export const ask = (id: number) => askOf(issueKey(id));
 
 /** Fake actions that log their calls: a drop marks the run dropped, a recheck starts a passed recheck run. */
 export function fakes() {

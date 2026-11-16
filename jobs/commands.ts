@@ -43,7 +43,7 @@ import { facts, repoStages, stages } from "./lib/records/status.ts";
 import type { Stage } from "./lib/records/stage.ts";
 import { jobId } from "./lib/infra/settings.ts";
 import { readModels, setModel } from "./lib/routing/models.ts";
-import { key, parseId, parseKey, shortText, shownKey } from "../lib/naming.ts";
+import { issueKey, key, parseId, parseKey, shortText, shownKey } from "../lib/naming.ts";
 import { projectName } from "../issues/lib/projects.ts";
 import { errText } from "../lib/errtext.ts";
 
@@ -282,7 +282,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     case "add": {
       const a = await verbs.add(repo, args.join(" "), fields, filing);
       warn(a.follow);
-      for (const m of a.result.maybeSame ?? []) ctx.err(`${shownKey(`issue.${m.id}`, repo.code)} may be the same task: ${m.title}`);
+      for (const m of a.result.maybeSame ?? []) ctx.err(`${shownKey(issueKey(m.id), repo.code)} may be the same task: ${m.title}`);
       ctx.out(a.result);
       return;
     }
@@ -353,7 +353,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
     case "retitle": {
       const r = await verbs.retitle(repo, fit);
       warn(r.follow);
-      for (const t of r.result.retitled) ctx.log(`${shownKey(`issue.${t.id}`, repo.code)}: ${t.title}`);
+      for (const t of r.result.retitled) ctx.log(`${shownKey(issueKey(t.id), repo.code)}: ${t.title}`);
       return;
     }
     case "lint": {
@@ -485,7 +485,7 @@ const shownRef = (r: string): string => {
 };
 const ready = (i: issues.Issue) => (store.afterOf(i).length ? `after ${store.afterOf(i).map(shownRef).join(",")}` : "");
 /** The issue's key as the terminal shows it: `a-01234`, with its project's code. */
-const shown = (key: string, i: issues.Issue): string => shownKey(`issue.${i.id}`, loadRegistry()[key]?.code);
+const shown = (key: string, i: issues.Issue): string => shownKey(issueKey(i.id), loadRegistry()[key]?.code);
 
 function printRows(ctx: Ctx, rows: issues.Issue[], key: string, indent = ""): void {
   const refs = rows.map((i) => shown(key, i));

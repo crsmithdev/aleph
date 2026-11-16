@@ -4,7 +4,7 @@
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
 import { logEvent, readEvents } from "../lib/layout.ts";
-import { issueHref, parseId, parseKey, targetOf, type EventRow } from "../lib/naming.ts";
+import { type EventRow, issueHref, issueKey, parseId, parseKey, targetOf } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
@@ -255,7 +255,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
 
   // The trailer the land writes.
   const needsYouIssue = (todo: number | string | undefined): { key: string; value: string }[] =>
-    todo === undefined ? [] : [{ key: "Issue", value: `issue.${todo}` }];
+    todo === undefined ? [] : [{ key: "Issue", value: issueKey(todo) }];
 
   const toJob = (runs: Runs, v: JobView = view(runs)): Job => {
     const repo = v.repo ? registry[v.repo] : undefined;

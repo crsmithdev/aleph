@@ -18,8 +18,8 @@ import * as record from "../../jobs/lib/records/record.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
-import type { EventRow } from "../../lib/naming.ts";
-import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, unitDir, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
+import { parseKey, type EventRow } from "../../lib/naming.ts";
+import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, unitDir, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 import { noteOf } from "../../issues/lib/todo.ts";
 import { systemctl } from "../../jobs/lib/infra/systemd.ts";
@@ -47,7 +47,7 @@ export interface AskSpan { issue: string; reason: string; set: string; cleared?:
 export function askHistory(): AskSpan[] {
   const out: AskSpan[] = [], open = new Map<string, AskSpan>();
   for (const e of readEvents(0)) {
-    if (e.subject !== "gate" || !e.object?.startsWith("issue.")) continue;
+    if (e.subject !== "gate" || parseKey(e.object)?.kind !== "issue") continue;
     if (e.action === "question" && e.detail) { const a = { issue: e.object, reason: askReason(e.detail), set: e.time }; open.set(e.object, a); out.push(a); }
     else if (e.action === "answered") { const a = open.get(e.object); if (a) { a.cleared = e.time; open.delete(e.object); } }
   }
@@ -253,7 +253,7 @@ export function gatesBody(security: { held: string[] }, ms = LOG_DAYS * DAY, pro
   const hold = backendHold();
   return {
     now: new Date().toISOString(),
-    capEnv: Object.fromEntries(CAP_KEYS.map((k) => [k, capEnvSet(CAP_ENV[k])])),
+    caps: Object.fromEntries(CAP_KEYS.map((k) => [k, { env: CAP_ENV[k], min: capMin(k), set: capEnvSet(CAP_ENV[k]) }])),
     settings: settingsNow(),
     metrics: metrics(all, holds, Date.now(), jobs.filter((j) => repoIn(j[0].run.repo, project)), ms),
     schedules: schedules(),

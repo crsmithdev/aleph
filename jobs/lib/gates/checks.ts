@@ -155,17 +155,18 @@ export const checkEnv = (env: Record<string, string | undefined> = process.env):
   ({ ...env, ...CHECK_ENV, ALEPH_JOB_ID: undefined, CLAUDECODE: undefined, ANTHROPIC_API_KEY: undefined });
 
 /**
- * Run `cmd` with bash in `cwd`, its output appended to `out`, under `timeout`, which puts it in a process group of its
- * own and signals the group. Whether it timed out comes from this clock, not from the exit code.
+ * Run `cmd` with bash in `cwd`, its output appended to `out`. With a `limit` (seconds) it runs under `timeout`, which puts it
+ * in a process group of its own and signals the group. Whether it timed out comes from performance.now(), which only moves
+ * forward (Date.now() follows the wall clock, which WSL can set back), not from the exit code, which the command can return itself.
  */
-export async function shell(cmd: string, o: { cwd: string; env: Record<string, string | undefined>; out: string; limit: number; onSpawn?: CheckTask["onSpawn"] }): Promise<{ code: number; timedOut: boolean; killed: boolean }> {
+export async function shell(cmd: string, o: { cwd: string; env: Record<string, string | undefined>; out: string; limit?: number; onSpawn?: CheckTask["onSpawn"] }): Promise<{ code: number; timedOut: boolean; killed: boolean }> {
   const fd = openSync(o.out, "a");
   const start = performance.now();
   try {
-    const p = Bun.spawn(["timeout", "--kill-after=30", String(o.limit), "bash", "-c", cmd], { cwd: o.cwd, env: o.env, stdin: "ignore", stdout: fd, stderr: fd });
+    const p = Bun.spawn(o.limit ? ["timeout", "--kill-after=30", String(o.limit), "bash", "-c", cmd] : ["bash", "-c", cmd], { cwd: o.cwd, env: o.env, stdin: "ignore", stdout: fd, stderr: fd });
     o.onSpawn?.(p);
     const code = await p.exited;
-    return { code, timedOut: performance.now() - start >= o.limit * 1000, killed: p.signalCode !== null };
+    return { code, timedOut: o.limit !== undefined && performance.now() - start >= o.limit * 1000, killed: p.signalCode !== null };
   } finally {
     closeSync(fd);
   }

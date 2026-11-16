@@ -173,6 +173,39 @@
       "disable": [
         "semantic"
       ]
+    },
+    {
+      "name": "maintainer pass",
+      "code": [
+        "jobs/lib/roles/maintainer.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "jobs/lib/roles/maintainer.ts",
+        "**/*.test.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
+    },
+    {
+      "name": "timed command",
+      "code": [
+        "jobs/lib/gates/checks.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "jobs/lib/gates/checks.ts",
+        "**/*.test.ts",
+        "jobs/lib/gates/keep-earn.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
     }
   ]
 }

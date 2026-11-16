@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
+import { CAP_ENV, CAP_KEYS, capMin } from "../jobs/lib/infra/settings.ts";
 import { LOG_MAX, askHistory, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
 import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
@@ -79,7 +80,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(await securityFacts
 
 test("the body of /api/automation has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "capEnv", "held", "log", "metrics", "monitor", "now", "repoHeld", "rules", "schedules", "settings"]);
+  expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "caps", "held", "log", "metrics", "monitor", "now", "repoHeld", "rules", "schedules", "settings"]);
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) { expect(r.mode).not.toBe(""); expect(r.mode).toBe(ASK_REASONS[r.reason].always); }
@@ -200,10 +201,12 @@ test("rules() gives each reason row its timeout minutes and no-answer action, an
 const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, card: "decide", label: "Decide", headline: `t ${id}`, tag: "", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
   actions: [], details: {}, repo: "r" });
 
+const CAPS = Object.fromEntries(CAP_KEYS.map((k) => [k, { env: CAP_ENV[k], min: capMin(k), set: false }]));
+
 const data = () => ({
   now: new Date(NOW).toISOString(),
   schedules: [{ name: "tick", last: null, result: null }],
-  factory: { paused: false, liveRuns: 5, liveCap: 5, runCap: 3, runStarts: 2, capEnv: { live: false, run: false } },
+  factory: { paused: false, liveRuns: 5, liveCap: 5, runCap: 3, runStarts: 2, caps: CAPS },
   metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { goals: 2, hours: 3 } },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
@@ -270,7 +273,7 @@ test("each hint and note of the page is at most four words, and the longer text 
 });
 
 test("a cap set by its environment variable keeps its use in the hint, marks env, and keeps the long warning as a title", () => {
-  const h = gates.renderCaps({ ...data(), factory: { ...data().factory, capEnv: { live: true } } });
+  const h = gates.renderCaps({ ...data(), factory: { ...data().factory, caps: { ...CAPS, live: { ...CAPS.live, set: true } } } });
   expect(h).toContain('<small class="hint">5 of 5, env</small>');
   expect(h).toContain("ALEPH_LIVE_CAP is set: an edit has no effect while that variable is set.");
 });

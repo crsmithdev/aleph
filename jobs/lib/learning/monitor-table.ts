@@ -19,6 +19,7 @@ import { conn } from "../../../lib/db.ts";
 import { flakeTracker, reader, itemsDir, type Reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { quantile } from "../../../lib/windows.ts";
+import { issueKey } from "../../../lib/naming.ts";
 
 const DAY = 24 * 3600_000;
 
@@ -291,7 +292,7 @@ export function storeLog(dir = itemsDir()): StoreChange[] {
   for (const line of r.out.split("\n")) {
     if (line.startsWith("\x01")) { at = new Date(line.slice(1)).toISOString(); cur = null; continue; }
     const f = /^diff --git a\/\S+ b\/(\S+)$/.exec(line);
-    if (f) { cur = { at, item: f[1].replace(/^issues\/(\d+)\/issue\.md$/, "issue.$1"), added: [], removed: [] }; out.push(cur); continue; }
+    if (f) { cur = { at, item: f[1].replace(/^issues\/(\d+)\/issue\.md$/, (_, n) => issueKey(n)), added: [], removed: [] }; out.push(cur); continue; }
     if (!cur || line.startsWith("+++") || line.startsWith("---")) continue;
     const m = /^([+-])((?:reason|closed_as): .*)$/.exec(line);
     if (m) (m[1] === "+" ? cur.added : cur.removed).push(m[2]);

@@ -25,7 +25,7 @@ export const CAP_ENV: Record<CapKey, string> = {
   fixRounds: "ALEPH_FIX_ROUNDS", landBatch: "ALEPH_LAND_BATCH", loadLimit: "ALEPH_LOAD_LIMIT",
 };
 /** The least value of each key: a job may have no fix round; every other key needs 1. */
-const capMin = (k: CapKey): number => (k === "fixRounds" ? 0 : 1);
+export const capMin = (k: CapKey): number => (k === "fixRounds" ? 0 : 1);
 
 /** Merges the given caps into the `caps` setting. Throws on a value that is not an integer of at least its key's least value. */
 export function writeCaps(patch: Partial<Record<CapKey, unknown>>): Record<string, unknown> {
@@ -43,7 +43,8 @@ export function writeCaps(patch: Partial<Record<CapKey, unknown>>): Record<strin
 export const capEnvSet = (envName: string): boolean => (process.env[envName] ?? "") !== "";
 
 /** The environment variable first, then the `caps` setting, then the default. */
-function cap(envName: string, key: string, dflt: number): number {
+function cap(key: CapKey, dflt: number): number {
+  const envName = CAP_ENV[key];
   if (capEnvSet(envName)) return num(envName, 0);
   const f = capsRow()[key];
   return typeof f === "number" && Number.isFinite(f) ? f : dflt;
@@ -55,17 +56,17 @@ function cap(envName: string, key: string, dflt: number): number {
  */
 /** The live cap's default as the docs state it; the number depends on the machine. */
 export const LIVE_CAP_DEFAULT = "cores / 6, at least 1";
-export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", Math.max(1, Math.floor(availableParallelism() / 6)));
+export const LIVE_CAP = () => cap("live", Math.max(1, Math.floor(availableParallelism() / 6)));
 /** The most local-backend agent runs live at once, apart from the live cap: the one GPU serves one gpt-oss call. */
 export const LOCAL_CAP = 1;
 /** The most agent runs one issue starts in any 60 minutes, whatever the trigger: the next start is an Ask. */
 export const RUN_CAP_DEFAULT = 3;
-export const RUN_CAP = () => cap("ALEPH_RUN_CAP", "run", RUN_CAP_DEFAULT);
+export const RUN_CAP = () => cap("run", RUN_CAP_DEFAULT);
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
 export const INTAKE_CAP = () => num("ALEPH_INTAKE_CAP", 5);
 export const INTAKE_TRIES_DEFAULT = 2;
-export const INTAKE_TRIES = () => cap("ALEPH_INTAKE_TRIES", "intakeTries", INTAKE_TRIES_DEFAULT);
+export const INTAKE_TRIES = () => cap("intakeTries", INTAKE_TRIES_DEFAULT);
 /** How many signals make a lesson a proposal. */
 export const PROPOSE_AT = (): number => {
   const n = num("ALEPH_PROPOSE_AT", 3);
@@ -73,7 +74,7 @@ export const PROPOSE_AT = (): number => {
 };
 
 export const JOB_SECONDS_DEFAULT = 1800;
-export const jobSeconds = () => cap("ALEPH_JOB_TIMEOUT", "jobSeconds", JOB_SECONDS_DEFAULT);
+export const jobSeconds = () => cap("jobSeconds", JOB_SECONDS_DEFAULT);
 /** How long an agent call may print nothing before the stall watch stops it. */
 export const stallSeconds = (): number => num("ALEPH_STALL_SECONDS", 600);
 export const checkSeconds = () => num("ALEPH_CHECK_TIMEOUT", 1200);
@@ -82,17 +83,17 @@ export const suiteBudgetSeconds = () => num("ALEPH_SUITE_BUDGET_S", 120);
 export const reviewSeconds = () => num("ALEPH_REVIEW_TIMEOUT", 600);
 export const reviewDiffMax = () => num("ALEPH_REVIEW_DIFF_MAX", 200000);
 export const FIX_ROUNDS_DEFAULT = 2;
-export const fixRounds = () => cap("ALEPH_FIX_ROUNDS", "fixRounds", FIX_ROUNDS_DEFAULT);
+export const fixRounds = () => cap("fixRounds", FIX_ROUNDS_DEFAULT);
 /** How long a dispatch waits for another dispatch's issue lock before it skips the issue. */
 export const issueLockWaitMs = () => num("ALEPH_GOAL_LOCK_WAIT_MS", 20_000);
 export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
 export const pidWaitMs = () => num("ALEPH_PID_WAIT_MS", 10_000);
 export const LAND_BATCH_DEFAULT = 8;
-export const landBatch = () => Math.max(1, Math.floor(cap("ALEPH_LAND_BATCH", "landBatch", LAND_BATCH_DEFAULT)) || 1);
+export const landBatch = () => Math.max(1, Math.floor(cap("landBatch", LAND_BATCH_DEFAULT)) || 1);
 /** The load limit's default as the docs state it; the number depends on the machine. */
 export const LOAD_LIMIT_DEFAULT = "cores";
 /** A check, a worker or a land starts only while the 1-minute load average is under this. */
-export const loadLimit = () => cap("ALEPH_LOAD_LIMIT", "loadLimit", availableParallelism());
+export const loadLimit = () => cap("loadLimit", availableParallelism());
 /** How long the UI keeps a computed read, 0 when off. */
 
 export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";

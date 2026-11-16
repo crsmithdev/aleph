@@ -29,6 +29,7 @@ import * as record from "../records/record.ts";
 import { askSlowLands } from "../land/rescue.ts";
 import { afterFiling } from "../transitions/filing.ts";
 import { errText } from "../../../lib/errtext.ts";
+import { issueKey } from "../../../lib/naming.ts";
 
 /** The most of a log that goes into an issue's request: its last LOG_LINES lines, cut to LOG_CHARS. */
 const LOG_LINES = 200;
@@ -150,7 +151,7 @@ function fileRed(r: Red, effects: store.Effects = defaultPorts): Filed | null {
     return { ...at, filed: file({ title: titleOf(r), kind: "bug", priority: "critical", labels: ["red-main"], source: "agent", request }).id };
   });
   const f = w?.value ?? null;
-  if (f && "filed" in f && r.source === "ci") record.editIssueState(`issue.${f.filed}`, (x) => { x.ci = { url: r.url!, commit: r.commit, failure: log }; });
+  if (f && "filed" in f && r.source === "ci") record.editIssueState(issueKey(f.filed), (x) => { x.ci = { url: r.url!, commit: r.commit, failure: log }; });
   return f;
 }
 
@@ -169,7 +170,7 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
     if (!c || !repo) continue;
     for (const i of store.reader().list(key)?.items ?? []) {
       const ref = `${key}-${issues.refOf(i)}`;
-      const ci = issues.status(i) === "open" && isRedMain(i) ? record.read(`issue.${issues.refOf(i)}`)?.ci : undefined;
+      const ci = issues.status(i) === "open" && isRedMain(i) ? record.read(issueKey(issues.refOf(i)))?.ci : undefined;
       if (!ci) continue;
       // A landed issue waits for a run at or after the land; one that never landed, for a run past its failing commit.
       const at = ci.landed ?? ci.commit;
@@ -188,7 +189,7 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
         store.reopen(doc, item, ci.landed!);
         return issues.note(item, `firefighter: GitHub CI on main is still red at ${c.sha.slice(0, 7)} (${c.url}), after the land ${ci.landed!.slice(0, 7)}: the goal runs again. The failure:\n\n\`\`\`\n${failure}\n\`\`\``);
       });
-      record.editIssueState(`issue.${issues.refOf(i)}`, (x) => { x.ci = { url: c.url, commit: c.sha, failure }; });
+      record.editIssueState(issueKey(issues.refOf(i)), (x) => { x.ci = { url: c.url, commit: c.sha, failure }; });
       out.push(`${ref} sent back: CI red at ${c.sha.slice(0, 7)} after its land`);
     }
   }

@@ -10,6 +10,7 @@ import { OPUS_MODEL } from "../../../lib/models.ts";
 import { BACKENDS, modelArgv, modelEnv, onGpu, openRouterFactor, viaOf } from "../routing/models.ts";
 import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
 import { policyOf } from "../records/outcome.ts";
+import { killGroup } from "../infra/process.ts";
 import { roleCmd, stallSeconds } from "../infra/settings.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { costDetails, type Usage } from "../../../lib/pricing.ts";
@@ -48,7 +49,7 @@ export interface Ask {
 }
 
 /** A call's reply: its text, its structured output, its session, its cost in USD, its tokens (input, output, cache read and cache creation), its model (the fallback it fell back to, else the CLI's init model), how it ended, and why it gave no usable reply, or null. */
-export interface Reply { text: string; data: unknown; session?: string; cost?: number; tokens?: number; model?: string; step: Step; cause: AgentCause | null }
+export interface Reply { text: string; data: unknown; session?: string; cost?: number; tokens?: number; model?: string; step: Step; cause: AgentCause | null; found: boolean }
 
 /** How long a call that the time box or the stall watch stopped gets after SIGTERM before SIGKILL. */
 const KILL_AFTER_MS = 30_000;
@@ -65,8 +66,8 @@ const CREDIT_ERROR = /API Error: 402/;
 /** The cause the call states: a stall, the time box, the API credit error, or a reply that is not ok; null when the reply is ok. */
 export function agentCause(r: Step, o: Outcome): AgentCause | null {
   if (r.stalled) return { kind: "stalled", reason: stallReason() };
-  if (r.timedOut) return { kind: "timeout", reason: "time box" };
-  if (!o.ok) return CREDIT_ERROR.test(o.line) ? { kind: "credit", reason: o.line } : { kind: "other", reason: o.line || `exit ${r.code}` };
+  if (r.timedOut) return { kind: "timeout", reason: "timed out" };
+  if (!o.ok) return CREDIT_ERROR.test(o.line) ? { kind: "credit", reason: o.line } : { kind: "other", reason: !o.found && r.code !== 0 ? `exited ${r.code}: ${o.line}` : o.line || `exited ${r.code}` };
   return null;
 }
 
@@ -149,7 +150,7 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   const res = resultOf(out);
   const cause = agentCause(step, res);
   if (cause && policyOf(cause.kind).holdsBackend) await holdBackend(viaOf(model), cause.reason);
-  return { text: step.code === 0 && !res.found ? out : res.result, data: res.data, session: res.session, cost: costOf(model, res), ...(res.usage ? { tokens: Object.values(res.usage).reduce((n, t) => n + t, 0) } : {}), ...(model !== o.model ? { model } : res.model ? { model: res.model } : {}), step, cause };
+  return { text: step.code === 0 && !res.found ? out : res.result, data: res.data, session: res.session, cost: costOf(model, res), ...(res.usage ? { tokens: Object.values(res.usage).reduce((n, t) => n + t, 0) } : {}), ...(model !== o.model ? { model } : res.model ? { model: res.model } : {}), step, cause, found: res.found };
 }
 
 /**
@@ -165,11 +166,6 @@ export function startChat(session: string, fresh: boolean, system: string, cwd: 
   ], true);
   const env = { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(OPUS_MODEL), ALEPH_UI_PASSWORD: undefined };
   return Bun.spawn(argv, { cwd, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
-}
-
-/** Signal the process group that `pid` leads, and `pid` itself when the group is gone. */
-function killGroup(pid: number, signal: NodeJS.Signals): void {
-  try { process.kill(-pid, signal); } catch { try { process.kill(pid, signal); } catch {} }
 }
 
 /**

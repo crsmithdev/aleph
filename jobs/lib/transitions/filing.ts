@@ -12,6 +12,7 @@ import { refDone } from "../gates/issue-decision.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
 import { dispatchDetached, intakeDetached } from "./launch.ts";
 import { errText } from "../../../lib/errtext.ts";
+import { parseKey } from "../../../lib/naming.ts";
 
 /** After a write that leaves an open issue of a factory repo buildable: a dispatch, so the issue starts at once. */
 export function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
@@ -42,8 +43,8 @@ export function doneChecker(fetch = true, later?: (repo: string, id: number | st
   const known = new Map<string, { doc: issues.Doc | null; stages: Map<string, string>; read: boolean }>();
   return (key) => {
     // An `issue.<n>` key names its project through the items repo; the rest of the check reads `<repo>-<n>`.
-    const n = /^issue\.(\d+)$/.exec(key)?.[1];
-    const ref = n ? `${projectOfIssue(Number(n))}-${n}` : key;
+    const k = parseKey(key);
+    const ref = k?.kind === "issue" ? `${projectOfIssue(k.n)}-${k.n}` : key;
     const r = issues.parseIssueRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;

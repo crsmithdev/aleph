@@ -4,17 +4,13 @@
  * revertible vault commit and each refusal is the op's own. The model never writes a file, and a pair with a note
  * that has a `core:` line is never touched.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
 import { lintVault, loadVault, recordRun, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
-import { lock } from "../infra/locks.ts";
-import { endLost, openRun } from "./agent-run.ts";
-import { body } from "./maintainer.ts";
-import { MODEL, outcome, SECONDS, TEXT } from "./recheck.ts";
-import { errText } from "../../../lib/errtext.ts";
+import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
+import { outcome } from "./recheck.ts";
 
 /** Pairs worked per run, most similar first. */
 export const PAIRS = 5;
@@ -71,8 +67,7 @@ function change(a: Note, b: Note, v: Verdict, day: string): { title: string; tex
 
 /** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. */
 async function apply(root: string, pairs: Pair[], verdicts: Verdict[], day: string): Promise<Resolved[]> {
-  const dir = mkdtempSync(join(tmpdir(), "dedupe-"));
-  try {
+  return scratch("dedupe", async (dir) => {
     const out: Resolved[] = [];
     const gone = new Set<string>();
     for (const [x, y] of pairs) {
@@ -85,7 +80,7 @@ async function apply(root: string, pairs: Pair[], verdicts: Verdict[], day: stri
       const [a, b] = [live.get(x.title)!, live.get(y.title)!];
       const c = change(a, b, v, day);
       if ("bad" in c) { out.push({ ...w, rule: "reply", refused: c.bad }); continue; }
-      const why = `maintainer dedupe ${day}: ${v.why.replace(/\s+/g, " ")}`;
+      const why = reason("dedupe", day, v.why);
       const file = "text" in c ? join(dir, `${c.title}.md`) : "";
       if ("text" in c) writeFileSync(file, c.text);
       const r = await sub("drop" in c ? ["archive", c.drop, "--why", why] : ["write", file, "--why", why]);
@@ -93,9 +88,7 @@ async function apply(root: string, pairs: Pair[], verdicts: Verdict[], day: stri
       out.push({ ...w, ...outcome(r) });
     }
     return out;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  });
 }
 
 /**
@@ -109,28 +102,17 @@ export async function dedupe(root: string, dry: boolean): Promise<DedupeReport> 
   const queue = lintVault(all, { overlap: true }).warn.filter((f) => f.rule === "overlap")
     .map((f): Pair => [byTitle.get(f.note)!, byTitle.get(f.other!)!]).filter(([a, b]) => !a.fm.core && !b.fm.core).slice(0, PAIRS);
   if (!queue.length) return { ...report, skipped: "no overlapping pairs" };
-  await endLost("maintainer", () => "maintainer", "a reply");
-  const release = await lock("maintainer", 0);
-  if (!release) return { ...report, skipped: "another maintainer holds the lock" };
-  try {
-    const run = openRun({ role: "maintainer", who: "the maintainer", model: MODEL(), seconds: SECONDS, flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(",")], schema: DEDUPE_SCHEMA, env: dry ? { ALEPH_RECALL_UNLOGGED: "1" } : undefined, name: `dedupe-${day}`, command: `dedupe ${day}${dry ? " --dry" : ""}`, shown: false });
-    report.run = run.folder;
-    try {
-      const reply = (await run.askData(prompt(queue, day))) as { verdicts?: Verdict[] } | undefined;
-      if (!Array.isArray(reply?.verdicts)) throw new Error("malformed reply: no verdicts list");
+  await pass(report, {
+    label: "dedupe", day, dry, schema: DEDUPE_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
+    act: async (list) => {
       const asked = (v: Verdict) => queue.some(([a, b]) => (v.a === a.title && v.b === b.title) || (v.a === b.title && v.b === a.title));
-      report.pairs = dry ? reply.verdicts.filter(asked).map(({ a, b, verdict, why }) => ({ a, b, verdict, why })) : await apply(root, queue, reply.verdicts, day);
-    } catch (e) {
-      report.error = errText(e);
-      run.end(`failed: ${report.error}`, { cause: "unanswered" });
-      recordRun(root, "dedupe", "failed", report.error);
-      return report;
-    }
-    const done = report.pairs.filter((p) => !p.refused).length;
-    run.end(`${dry ? "dry: " : ""}${done} resolved${report.pairs.length > done ? `, ${report.pairs.length - done} refused` : ""}`);
-    recordRun(root, "dedupe", "ok", `${dry ? "dry: " : ""}${done} resolved`);
-    return report;
-  } finally {
-    release();
-  }
+      report.pairs = dry ? list.filter(asked).map(({ a, b, verdict, why }) => ({ a, b, verdict, why })) : await apply(root, queue, list, day);
+    },
+    done: () => {
+      const done = report.pairs.filter((p) => !p.refused).length;
+      return `${done} resolved${report.pairs.length > done ? `, ${report.pairs.length - done} refused` : ""}`;
+    },
+    settle: (error) => recordRun(root, "dedupe", error ? "failed" : "ok", error ?? `${dry ? "dry: " : ""}${report.pairs.filter((p) => !p.refused).length} resolved`),
+  });
+  return report;
 }

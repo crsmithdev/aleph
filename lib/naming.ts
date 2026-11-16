@@ -77,7 +77,11 @@ const KEY = /^(project|issue|idea|job)\.(\d+)$/;
 const SHOWN = /^([a-z]{1,2})-(\d+)$/;
 
 /** `issue.2072` from a kind and a number. */
-export const key = (kind: KeyKind, n: number): string => `${kind}.${n}`;
+export const key = (kind: KeyKind, n: number | string): string => `${kind}.${n}`;
+/** What an issue key matches, as a pattern a JSON schema can take. */
+export const ISSUE_KEY = /^issue\.\d+$/;
+/** `issue.2072` from an issue's number. */
+export const issueKey = (n: number | string): string => key("issue", n);
 /** `{kind, n}` for a key, or for its shown form: `i-02072` and `a-02072` (a known project code) read as an issue; or null. */
 export function parseKey(s: unknown): { kind: KeyKind; n: number } | null {
   const t = String(s ?? "").trim(), k = KEY.exec(t), sh = k ? null : SHOWN.exec(t);

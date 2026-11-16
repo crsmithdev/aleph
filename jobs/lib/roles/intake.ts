@@ -8,7 +8,7 @@
  */
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
-import { parseKey } from "../../../lib/naming.ts";
+import { ISSUE_KEY, issueKey, parseKey } from "../../../lib/naming.ts";
 import { pastWork } from "../transitions/continuation.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { areasOf, labels, itemsDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, hasIssue, reader, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
@@ -50,9 +50,7 @@ export type Counts = Partial<Record<Applied, number>>;
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 const str = { type: "string", minLength: 1 };
-/** An issue key, as a verdict names one in `after`. */
-const REF = /^issue\.\d+$/;
-const refs = { type: "array", items: { type: "string", pattern: REF.source } };
+const refs = { type: "array", items: { type: "string", pattern: ISSUE_KEY.source } };
 const SPEC_SCHEMA = {
   type: "object", additionalProperties: false, required: ["goal", "edit_surface", "oracle"],
   properties: {
@@ -101,7 +99,7 @@ export const INTAKE_SCHEMA = {
           question: str,
           options: {
             type: "array", minItems: 2, maxItems: 4,
-            items: { type: "object", additionalProperties: false, required: ["label", "line"], properties: { label: str, line: str, after: { type: "string", pattern: REF.source } } },
+            items: { type: "object", additionalProperties: false, required: ["label", "line"], properties: { label: str, line: str, after: { type: "string", pattern: ISSUE_KEY.source } } },
           },
           recommended: str,
           why: { type: "array", minItems: 2, maxItems: 4, items: str },
@@ -127,7 +125,7 @@ export function parseRoute(reply: any): Route | string {
   if (!reason) return `${raw.route} without a reason`;
   switch (raw.route) {
     case "build": {
-      const after = (Array.isArray(raw.after) ? raw.after : []).map((x: unknown) => String(x).trim()).filter((x: string) => REF.test(x));
+      const after = (Array.isArray(raw.after) ? raw.after : []).map((x: unknown) => String(x).trim()).filter((x: string) => ISSUE_KEY.test(x));
       const parts = Array.isArray(raw.parts) && raw.parts.length
         ? raw.parts.map((p: any) => ({ title: (text(p?.title) ?? "").replace(/\s+/g, " "), spec: specOf(p?.spec) ?? { goal: "", surface: [], oracle: [] }, after: Array.isArray(p?.after) ? p.after : [] }))
         : undefined;
@@ -225,7 +223,7 @@ export function problems(repo: Repo, item: issues.Issue, v: Extract<Route, { rou
     out.push("a build gives a spec or parts");
   }
   for (const r of v.after) {
-    if (r === `issue.${item.id}`) { out.push(`after names this issue, ${r}`); continue; }
+    if (r === issueKey(item.id)) { out.push(`after names this issue, ${r}`); continue; }
     if (!hasIssue(parseKey(r)!.n)) out.push(`after names ${r}, which is not an issue`);
   }
   return out;
@@ -234,7 +232,7 @@ export function problems(repo: Repo, item: issues.Issue, v: Extract<Route, { rou
 /** The open issues of the repo, one line each, but not the issue taken in: the others a duplicate can name. */
 function openIssues(repo: Repo, item: issues.Issue): string {
   const others = (reader().list(repo.key)?.items ?? []).filter((o) => o.id !== item.id && issues.status(o) === "open");
-  return others.map((o) => `issue.${o.id}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
+  return others.map((o) => `${issueKey(o.id)}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
 }
 
 /** The ref of the repo's main, `origin/<main>`, when the repo has it. */
@@ -336,13 +334,13 @@ ${PART_RULES}
  */
 export function addParts(file: File, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
   const refs: string[] = [];
-  const from = `issue.${issue.id}`;
+  const from = issueKey(issue.id);
   const source = sourceOf(issue) === "chris" ? "agent" : sourceOf(issue);
   // A store from before a kind was dropped (such as `goal`) still splits: a kind the store does not know gives the parts `task`.
   const kind = issues.kindOf(issue);
   for (const c of parts) {
     const part = file({ title: c.title, kind: issues.kindProblem(kind) ? "task" : kind, priority: priorityOf(issue), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
-    refs.push(`issue.${part.id}`);
+    refs.push(issueKey(part.id));
   }
   delete issue.fm.plan;
   issue.spec = "";
@@ -390,7 +388,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
     } else {
     }
   }, effects);
-  if (ok && v.route === "ask" && !standing) setAsk(`issue.${id}`, v.ask);
+  if (ok && v.route === "ask" && !standing) setAsk(issueKey(id), v.ask);
   if (ok && standing) logAlways("question", ref, "answered", { detail: "the recommended answer" });
   return ok ? v.route : null;
 }
@@ -399,7 +397,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
 function askFailed(repo: Repo, id: number, why: string): string | null {
   const ref = `${repo.key}-${id}`;
   const written = sort(repo, id, `intake ${ref}: failed`, () => {});
-  if (written) setAsk(`issue.${id}`, plainAsk("intake-failed", `Intake failed: ${why}`));
+  if (written) setAsk(issueKey(id), plainAsk("intake-failed", `Intake failed: ${why}`));
   return written ? `${ref}: intake failed; asked Chris` : null;
 }
 
@@ -475,7 +473,7 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
       return;
     }
     // `shown`: the tick's own line reports an intake, so the report has no line for the run.
-    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(aleph memory recall:*)", ...(mediaOf(item).length ? ["--add-dir", join(itemsDir(), "issues", String(item.id))] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, target: `issue.${id}` });
+    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(aleph memory recall:*)", ...(mediaOf(item).length ? ["--add-dir", join(itemsDir(), "issues", String(item.id))] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, target: issueKey(id) });
     const noAnswer = (reason: string) => run.end(reason, { cause: "unanswered" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.

@@ -115,6 +115,11 @@ async function gone(folder: string, ms: number): Promise<boolean> {
   return !unitAlive(folder);
 }
 
+/** Send `signal` to the process group that `pid` leads and to `pid` itself, which is not in it when it did not lead a group. */
+export function killGroup(pid: number, signal: NodeJS.Signals): void {
+  for (const p of [-pid, pid]) try { process.kill(p, signal); } catch {}
+}
+
 /**
  * Stop a live run and wait until its process is gone: its systemd unit (the whole cgroup), else SIGTERM to its process
  * group and its pid; after `ms`, SIGKILL to both. False when the process still lives after that: the caller treats the
@@ -124,10 +129,9 @@ export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
   systemctl("stop", unitOf(e.id));
   const pid = pidOf(e.folder);
   if (pid === null || !unitAlive(e.folder)) return true;
-  const signal = (s: NodeJS.Signals) => { for (const p of [-pid, pid]) try { process.kill(p, s); } catch {} };
-  signal("SIGTERM");
+  killGroup(pid, "SIGTERM");
   if (await gone(e.folder, ms)) return true;
-  signal("SIGKILL");
+  killGroup(pid, "SIGKILL");
   return gone(e.folder, 5_000);
 }
 

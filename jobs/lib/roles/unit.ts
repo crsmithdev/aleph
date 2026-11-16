@@ -6,22 +6,22 @@
 import { logEvent } from "../../../lib/layout.ts";
 import * as jobRecord from "../records/record.ts";
 import { skillSection } from "./role-skill.ts";
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { file as fileIssues, note, noteFlake, reader } from "../../../issues/lib/store.ts";
 import { filing } from "../transitions/filing.ts";
-import { callAgent, resultOf, stallReason, type Reply } from "./agent-call.ts";
+import { callAgent, resultOf, type Reply } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, type Followup, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, issueKeyOf, loadRegistry, newsLine, readEnvFile, tell, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { isLive, markEnded, markStarted } from "../infra/process.ts";
+import { isLive, killGroup, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
 import { allJobs, isOpen, jobById, openJob } from "../records/job.ts";
-import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "../gates/checks.ts";
+import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, shell, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "../gates/checks.ts";
 import { gates } from "../gates/factory-status.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
@@ -43,25 +43,11 @@ import { errText } from "../../../lib/errtext.ts";
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
 
-interface Exec { code: number; timedOut: boolean; killed: boolean }
-
-/**
- * Run a command with its output appended to `out`. With a limit, it runs under
- * `timeout`, which puts the command in its own process group and signals the
- * group. Whether it timed out comes from this clock, not from the exit code,
- * which the command can return by itself. The clock is performance.now(), which
- * only moves forward: Date.now() follows the wall clock, which WSL can set back.
- */
-async function exec(argv: string[], o: { cwd: string; env: Record<string, string | undefined>; out: string; limit?: number; stdin?: string }): Promise<Exec> {
-  const cmd = o.limit ? ["timeout", "--kill-after=30", String(o.limit), ...argv] : argv;
-  const fd = openSync(o.out, "a");
-  const start = performance.now();
-  child = Bun.spawn(cmd, { cwd: o.cwd, env: o.env, stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: fd, stderr: fd });
-  const code = await child.exited;
-  const killed = child.signalCode !== null;
+/** `shell` with the process kept in `child` while it runs, so the unit's stop signal reaches it. */
+async function exec(cmd: string, o: { cwd: string; env: Record<string, string | undefined>; out: string; limit?: number }): Promise<Awaited<ReturnType<typeof shell>>> {
+  const r = await shell(cmd, { ...o, onSpawn: (p) => { child = p; } });
   child = null;
-  closeSync(fd);
-  return { code, timedOut: o.limit !== undefined && performance.now() - start >= o.limit * 1000, killed };
+  return r;
 }
 
 /** The text of the last result event (resultOf); else the last assistant text; else empty. */
@@ -126,7 +112,7 @@ function landPorts({ folder, run }: Entry, repo: Repo, env: Record<string, strin
 }
 
 /** Runs one check in the tree `wt`, with the given environment. */
-const inWorktree = (wt: string, env: Record<string, string | undefined>): CheckExec => (check, out, limit) => exec(["bash", "-c", check.run], { cwd: wt, env, out, limit });
+const inWorktree = (wt: string, env: Record<string, string | undefined>): CheckExec => (check, out, limit) => exec(check.run, { cwd: wt, env, out, limit });
 
 /** One run of checks: its steps are recorded in the run, and the process of each is kept in `child`. */
 const taskOf = (folder: string, repo: Repo, changed: string[], phase: (p: string) => void): CheckTask =>
@@ -164,10 +150,7 @@ export function docClaims(folder: string, result: string): string | null {
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
   process.on("SIGTERM", () => {
-    if (child) {
-      try { process.kill(-child.pid, "SIGKILL"); } catch {}
-      try { child.kill("SIGKILL"); } catch {}
-    }
+    if (child) killGroup(child.pid, "SIGKILL");
     process.exit(143);
   });
   markStarted(folder);
@@ -198,7 +181,7 @@ export async function unit(folder: string): Promise<void> {
       jobRecord.patchRun(id, { phase: undefined });
     }
     if (run.role === "plain") {
-      const r = await exec(["bash", "-c", readSection(folder, "command") ?? ""], { cwd: process.cwd(), env, out: runFile(folder, "transcript.jsonl") });
+      const r = await exec(readSection(folder, "command") ?? "", { cwd: process.cwd(), env, out: runFile(folder, "transcript.jsonl") });
       code = r.code;
       outcome = code === 0 ? { state: "done" } : { state: "failed", cause: "other", reason: `exited ${code}` };
     } else if (run.role === "land") {
@@ -361,7 +344,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     phase("setup");
     for (const cmd of repo.setup) {
       logTo(folder, "setup", `## ${cmd}\n`);
-      const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: logStream(folder, "setup"), limit: checkSeconds() });
+      const r = await exec(cmd, { cwd: wt, env: checkEnv, out: logStream(folder, "setup"), limit: checkSeconds() });
       if (r.timedOut) return fail("stalled", `timed out: setup ${cmd}`);
       if (r.code !== 0) return fail("other", `setup failed: ${cmd}`);
     }
@@ -389,11 +372,11 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   writeFileSync(runFile(folder, "result.md"), result);
 
   // The state rule: the first match wins.
-  if (w.step.stalled) return fail("stalled", stallReason());
-  if (w.step.timedOut) {
+  if (w.cause?.kind === "stalled") return fail("stalled", w.cause.reason);
+  if (w.cause?.kind === "timeout") {
     const s = workSeconds(run);
     const last = result.trim() && ` Last message: ${result.trim().slice(0, 500)}`;
-    return fail("timeout", `The worker ran past its ${s % 60 === 0 ? `${s / 60}-minute` : `${s}-second`} time box and was stopped.${last}`);
+    return fail("timeout", `The worker ${w.cause.reason} at its ${s % 60 === 0 ? `${s / 60}-minute` : `${s}-second`} time box and was stopped.${last}`);
   }
   if (w.cause?.kind === "credit") return fail("credit", w.cause.reason);
   if (w.step.code !== 0) return { outcome: { state: "failed", cause: "other", reason: `worker exited ${w.step.code}` }, code: w.step.code };
