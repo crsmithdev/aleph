@@ -81,7 +81,7 @@ function chart(requests, r, limit) {
   const bars = requests.map((x, i) => {
     const cut = i && x.fill < requests[i - 1].fill;
     return `<button type="button" data-n="${x.n}" aria-label="request ${x.n}, ${count(x.fill)} tokens${cut ? ", after a compaction" : ""}"` +
-      ` aria-pressed="${x === r}" style="flex:1;min-width:0;padding:0;border:0;background:${x === r ? "var(--stuck)" : "var(--run)"};height:${Math.min(x.fill / limit, 1) * 100}%${cut ? ";outline:1px dashed var(--stuck)" : ""}"></button>`;
+      ` aria-pressed="${x === r}" style="flex:1;min-width:0;padding:0;border:0;background:${x === r ? "var(--error)" : "var(--run)"};height:${Math.min(x.fill / limit, 1) * 100}%${cut ? ";outline:1px dashed var(--error)" : ""}"></button>`;
   }).join("");
   return card("Fill per request", `<div style="display:flex;align-items:flex-end;gap:2px;height:170px;border-bottom:1px solid var(--rule)">${bars}</div><p class="quiet">Click a bar to inspect that request. A dashed bar follows a compaction.</p>`);
 }

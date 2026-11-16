@@ -8,7 +8,7 @@ The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with i
 
 1. **One token set, two themes.** Colours are custom properties on `:root` in `ui/app.css`, set again for dark by `@media (prefers-color-scheme: dark)` and by `:root[data-theme="dark"]`. A view that uses only tokens gets dark mode free. Light is lavender; dark is Palenight.
 2. **Shared helpers build the parts.** Views call `ui/views/lib/html.js` for parts and `ui/views/lib/format.js` for values; the CSS is in `ui/app.css`. A fix in one helper fixes every page.
-3. **Meaning is a tone.** `run`, `done`, `need`, `stuck`, `quiet` or `parked`, from `tone()` in `ui/views/lib/html.js`. One state has one colour on a badge, a series and a card, so a reader learns it once. A tone comes only from `tone(state)`. A name that is not a state, such as an actor, is a `chip()`. A chart series for a state takes the colour of `tone(state)`.
+3. **Meaning is a tone.** `run`, `done`, `need`, `error`, `quiet` or `parked`, from `tone()` in `ui/views/lib/html.js`. One state has one colour on a badge, a series and a card, so a reader learns it once. A tone comes only from `tone(state)`. A name that is not a state, such as an actor, is a `chip()`. A chart series for a state takes the colour of `tone(state)`.
 4. **Numbers are tabular.** Tabular figures, at the right, so digits line up in a column. The class is `.num`; no other rule sets `font-variant-numeric`.
 5. **Plain text states.** An empty state is `No data` from `empty()`, the same on every page. A missing value is `–` from `miss(reason)`, with the reason as its title (Content, Values), never `N/A` or `0`. A zero stays `0`.
 6. **Be terse.** A note, a qualifier or a caption is one or two words. Do not fill a space because it is there. Do not explain what the title, the axis or a tooltip already says. A definition goes in a `title` tooltip or nowhere.
@@ -62,12 +62,12 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 | `--run` / `--run-bg` | #3B5FC8 / #EBEFFA | #82AAFF / #353E59 | running |
 | `--done` / `--done-bg` | #437018 / #EDF2E8 | #A9C77D / #3B4347 | delivered |
 | `--need` / `--need-bg` | #8A5A00 / #F3EEE6 | #FFCB6B / #474344 | needs you |
-| `--stuck` / `--stuck-bg` | #C0304C / #F9EAED | #F07178 / #3D2C39 | stuck, error |
+| `--error` / `--error-bg` | #C0304C / #F9EAED | #F07178 / #3D2C39 | error, a stuck job |
 | `--good`, `--hot` | #437018, #C2521F | #C3E88D, #F78C6C | an improving trend; the largest cause |
 | `--add`, `--del` | #437018, #C0304C | #A9C77D, #F07178 | diff lines |
 | `--focus` | #7E57C2 | #C792EA | focus ring |
 | `--approve`, `--decide`, `--unstick` | see `--approve` in `ui/app.css` | dark block | Ask cards, each with `-bg` and `-ring` |
-| `--kind` / `--kind-bg` | `--stuck` / `--stuck-bg` | the same | an issue row's kind: the stuck and error cards |
+| `--kind` / `--kind-bg` | `--error` / `--error-bg` | the same | an issue row's kind: the stuck and error cards |
 | `--k` / `--k-bg` / `--k-ring` | `--approve` / `--approve-bg` / `--approve-ring` | the same | an Ask card: `decide` and `unstick` set their own |
 
 #### Data colours
@@ -77,19 +77,19 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #169A69, #C28000, #DC5F92 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #A079DC, #2398B8 | extra series |
 | `--seg-landed`, `-returned`, `-failed`, `-reran`, `-dropped` | `--seg-landed` in `ui/app.css` | not set again | outcome bar, under white text |
-| `--fill-run`, `--fill-stuck`, `--fill-done`, `--fill-aux` | `--fill-run` in `ui/app.css` | not set again | timeline bar fills, under white text |
+| `--fill-run`, `--fill-error`, `--fill-done`, `--fill-aux` | `--fill-run` in `ui/app.css` | not set again | timeline bar fills, under white text |
 
 | Do | Don't |
 |---|---|
-| a tone for a state: `--stuck` on a failed job | a tone for decoration |
+| a tone for a state: `--error` on a failed job | a tone for decoration |
 | `--series-*` for roles, the same role in the same colour on every chart | a new colour per chart |
 | an eighth key folded into `Other` | a colour made for an eighth key |
 | a value or a label in `--ink` next to its swatch | a value in the colour of its series |
-| text on its own `-bg`: `--need` on `--need-bg` | `--need` on `--stuck-bg` |
+| text on its own `-bg`: `--need` on `--need-bg` | `--need` on `--error-bg` |
 
 #### Contrast
 
-The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` tests the stuck pair and the dark `--muted` pairs. When you change a data colour, run `validate_palette.js` from the `dataviz` skill on the seven series colours, once with `--mode light --surface "#FFFFFF"` and once with `--mode dark --surface "#292D3E"`. Deviations lists the checks that fail now.
+The minimum is 4.5:1 for text and 3:1 for a mark. `ui/error-contrast.test.ts` tests the error pair and the dark `--muted` pairs. When you change a data colour, run `validate_palette.js` from the `dataviz` skill on the seven series colours, once with `--mode light --surface "#FFFFFF"` and once with `--mode dark --surface "#292D3E"`. Deviations lists the checks that fail now.
 
 | Pair | Light | Dark |
 |---|---|---|
@@ -100,7 +100,7 @@ The minimum is 4.5:1 for text and 3:1 for a mark. `ui/stuck-contrast.test.ts` te
 | `--muted` on `--sunk` | 4.57 | 6.75 |
 | `--muted` on `--raised` | 4.57 | 4.67 |
 | `--need` on `--need-bg` | 5.13 | 6.50 |
-| `--stuck` on `--stuck-bg` | 4.78 | 4.54 |
+| `--error` on `--error-bg` | 4.78 | 4.54 |
 | `--done` on `--done-bg` | 5.17 | 5.36 |
 | `--run` on `--run-bg` | 4.99 | 4.61 |
 | `--hot` on `--surface` | 4.65 | 5.80 |
@@ -626,7 +626,7 @@ A table shows items that have the same columns.
 - Make an id with `idLink()` or `repoIdLink()`, a state with `badge()`, and labels with `chips()`.
 - Put the title in `td.wide`. Do not let other cells wrap.
 - Put each number in `td.num`. For `heads()`, list the column's label in `num`. For `sortHead()`, pass `{ num: true }`.
-- Make a count of bad things, such as errors or failures, with `badCount()`. It turns `--stuck` above 0.
+- Make a count of bad things, such as errors or failures, with `badCount()`. It turns `--error` above 0.
 - Put the time in `td.time`. It aligns to the right. For `heads()`, list its label in `num`. For `sortHead()`, pass
   `{ num: true }`. A time that comes first goes in `td.time.lead`, which aligns to the left.
 - When a row goes to a page, make it `tr.rowlink` and put the link in `td.wide`.
@@ -692,7 +692,7 @@ A chart panel is a card that draws a chart from a frame (`ui/views/lib/chart.js`
 - Set `measure.unit` to `count`, `usd` or `seconds`. The unit sets the format of the axis and the tooltip.
 - Set `measure.agg` to `sum` for a flow, and to `max` for a level. A flow opens as Columns. A level opens as Area.
 - Show one measure on one value axis. For two measures, use two panels.
-- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to the colour of `tone(state)`: `run`, `done`, `need` or `stuck`. Two states can share a colour, such as Failed and Stuck, which are both `stuck` in the Agents outcome chart; the legend tells them apart. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
+- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to the colour of `tone(state)`: `run`, `done`, `need` or `error`. Two states can share a colour, such as Failed and Stuck, which are both `error` in the Agents outcome chart; the legend tells them apart. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
 - Keep the colour of a key the same in all windows. If a key can have no value in a window, set `color` on each key, because the keys after it move up one colour.
 - Show at most seven keys. Fold the rest into one key, `Other`.
 - Show a legend. When the frame has one key and the title names it, set `legend: false`.
@@ -916,14 +916,14 @@ A badge shows a state. It has square corners.
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Badge | The state | | `--fs-xs` `--fw-strong`; radius `--r-tag`; one line |
-| 2 | Tone | The colour of the state | | run, done, need or stuck: the tone on its `-bg`; quiet: `--muted` on `--sunk`; parked: a `--muted` outline |
+| 2 | Tone | The colour of the state | | run, done, need or error: the tone on its `-bg`; quiet: `--muted` on `--sunk`; parked: a `--muted` outline |
 
 - For other short status text, use `tag()`.
 - When you add a state, add it to the tone map of `tone()`. Do not add a class by hand. A tone comes only from `tone(state)`.
 
 | Do | Don't |
 |---|---|
-| `badge("failed")` | `tag("failed", "stuck")` |
+| `badge("failed")` | `tag("failed", "error")` |
 | `badge("failed")` | a chip for a state |
 
 #### Chip
@@ -960,7 +960,7 @@ A status light shows whether one thing is up: a dot and a word.
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Dot | The state: `fine` is `--done`, `alert` is `--stuck`, anything else is unknown and `--muted` | | 6px round |
+| 1 | Dot | The state: `fine` is `--done`, `alert` is `--error`, anything else is unknown and `--muted` | | 6px round |
 | 2 | Label | The name and the state in words: `Local server: up` | | the text of the parent |
 
 - Give the state in words too. A colour alone is not enough.
@@ -988,7 +988,7 @@ A button starts an action on the server.
 | 1 | Button | A verb | | `--sans` `--fs-sm` `--fw-mid`, `--ink` on `--surface`, border `--rule`; `--ctl-h` high; radius `--r-ctl`; border `--ink-2` on hover |
 | 2 | Primary | The main action | yes | `--surface` on `--ink` |
 | 3 | Warn | An action that stops or drops work | yes | `--need` on `--need-bg`, border `--need` |
-| 4 | Danger | An action that cannot be undone | yes | `--stuck` text |
+| 4 | Danger | An action that cannot be undone | yes | `--error` text |
 | 5 | Small | An action in a row | yes | padding `--sp-6`, `--fs-2xs` |
 | 6 | Always | An action that a card marks as always allowed | yes | border and text in the colour `--k` of the card, else `--ink-2` |
 
@@ -1108,7 +1108,7 @@ A form message shows the result of an action, next to its button.
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Message | What failed and why, in one line | | `--fs-sm`, `--stuck` |
+| 1 | Message | What failed and why, in one line | | `--fs-sm`, `--error` |
 
 - For an `actButton()` button, the router writes `<act> failed: <reason>`. Do not write it yourself.
 - In a handler of your own, call `say()` with what failed, then why. `say()` writes into the `.act-msg` of the button's parent, else adds one after the button.
@@ -1218,7 +1218,7 @@ A diff shows the lines that a change adds and deletes.
 
 | Do | Don't |
 |---|---|
-| `diffHtml(patch)` | `--done` and `--stuck` on diff lines |
+| `diffHtml(patch)` | `--done` and `--error` on diff lines |
 
 ### Controls
 
@@ -1446,16 +1446,16 @@ An empty state shows that there is nothing, that data loads, or that the data di
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Line | `No data`; an error line is one sentence | | `--fs-sm`, `--muted`; an error `--stuck` |
+| 1 | Line | `No data`; an error line is one sentence | | `--fs-sm`, `--muted`; an error `--error` |
 | 2 | Loading | the spinner, then `Loading <what>…` | | `--muted`; the spinner is `--dot-l` wide, a `--rule` ring with one `--muted` arc |
 
 - The router shows `loading()` while a page loads, and `error()` when the first load fails. A view does not call them for its own data.
 - For a section that loads after the page, use `loadingLine(what)`: `Loading the diff…`. It is the only helper that draws the spinner; `loading(title)` and the metric card use the same mark.
 - Every component that shows data draws `loadingLine` until its first fetch returns: a chart panel, a table, a panel. After the fetch, no data is `empty()` and a failed fetch is `error()`. The spinner never stands for either.
 - A metric card whose figure waits for a fetch takes `loading: true` in `statCard`: the spinner sits in the trend slot, the value row stays blank at its height, and the card keeps its key and its link.
-- A metric card whose fetch failed takes `failed: line` in `statCard`: a still `--stuck` ring with `!` sits in the trend slot, with the error line as its title. The spinner never stays after a fetch fails.
+- A metric card whose fetch failed takes `failed: line` in `statCard`: a still `--error` ring with `!` sits in the trend slot, with the error line as its title. The spinner never stays after a fetch fails.
 - Under `prefers-reduced-motion` the spinner does not turn; the ring stays as a static marker.
-- Use `error(line, { detail })` for a second fetch inside a card that failed. The line is `Could not load X.`, in `--stuck` in a card too. The upstream message goes in `detail`, in a Technical details fold.
+- Use `error(line, { detail })` for a second fetch inside a card that failed. The line is `Could not load X.`, in `--error` in a card too. The upstream message goes in `detail`, in a Technical details fold.
 - Use `notice(line, bad)` for a note above data that still shows: a stale reload (`bad`, `role="alert"`) or a partial count. Do not write a `<p>` for it by hand.
 - `empty()` and `error()` take no hint.
 
@@ -1488,7 +1488,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 | Part | Rule |
 |---|---|
 | Sidebar | `#nav`, 208px open, 48px when collapsed (`.shell.collapsed`); at 720px and narrower, a sticky bar at the top: one row, the links scroll sideways, and the current link scrolls into view |
-| Status entry | Its label and icon take the tone of the status sentence from `/api/status`: `alert` is `--stuck`, `warning` and `ask` are `--need`, `fine` is `--ink`, white on the dark theme |
+| Status entry | Its label and icon take the tone of the status sentence from `/api/status`: `alert` is `--error`, `warning` and `ask` are `--need`, `fine` is `--ink`, white on the dark theme |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
 | Browser | `::selection` is `--sel`; scrollbars are thin, `--rule` on transparent |
 | Grid | `.tiles` holds metric cards; `.pair` holds two cards side by side, stacked under two cards of width; `.trio` holds chart panels; `.browse` is a list with its detail beside it, one column under 1100px |

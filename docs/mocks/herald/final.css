@@ -4,8 +4,8 @@
 .B .rn .aside::after { content:""; display:inline-block; width:var(--dot-s); height:var(--dot-s); border-radius:var(--r-pill); background:var(--run); margin-left:6px; vertical-align:1px; animation: breathe 2s ease-in-out infinite; }
 .B .rn .aside { font-size:12px; color:var(--muted); }
 .B .rnbox { padding-bottom:4px; margin-bottom:2px; border-bottom:1px solid var(--rule); }
-.word { font-weight: var(--fw-mid); font-size: 13px; } .word.done { color: var(--done); } .word.run { color: var(--run); } .word.stuck { color: var(--stuck); } .word.quiet { color: var(--muted); }
-.stat-new { color: var(--ink); } .stat-new.stuck { color: var(--stuck); } .stat-new.done { color: var(--done); }
+.word { font-weight: var(--fw-mid); font-size: 13px; } .word.done { color: var(--done); } .word.run { color: var(--run); } .word.stuck { color: var(--error); } .word.quiet { color: var(--muted); }
+.stat-new { color: var(--ink); } .stat-new.stuck { color: var(--error); } .stat-new.done { color: var(--done); }
 .pill { font-size:12px; font-weight:500; padding:0 4px 0 6px; border-radius:var(--r-tag); background:var(--sunk); color:var(--ink-2); display:inline-flex; gap:4px; align-items:center; }
 .pill b { color:var(--muted); font-weight:500; cursor:pointer; }
 .hid { font-size:12px; color:var(--muted); text-align:center; padding:6px 0 0; }
@@ -19,7 +19,7 @@
 /* A status row: its tone's background, the text centred. */
 .m-row.st { display:block; text-align:center; border-radius:var(--r-tag); margin:3px 0; padding:4px 8px; border-bottom:0; }
 .m-row.st .m-t { display:none; }
-.m-row.st.stuck { background:var(--stuck-bg); } .m-row.st.done { background:var(--done-bg); } .m-row.st.need { background:var(--need-bg); }
+.m-row.st.stuck { background:var(--error-bg); } .m-row.st.done { background:var(--done-bg); } .m-row.st.need { background:var(--need-bg); }
 .m-row.st .stat-new { font-weight: var(--fw-mid); }
 .m-row.st .when { font-family:var(--mono); font-size:12px; color:var(--muted); margin-left:8px; }
 .cs { font-family:var(--mono); font-size:12px; font-weight:var(--fw-mid); color:var(--muted); letter-spacing:.02em; }

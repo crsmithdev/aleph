@@ -509,7 +509,7 @@ describe("render", () => {
   test("the Review tag is the reviewer's JSON verdict, not a line of review.md", () => {
     const h = (o: object) => v.renderJob({ ...job, review: "Text says VERDICT: hold x.", ...o });
     expect(h({ verdict: "pass" })).toContain('class="badge done">passed<');
-    expect(h({ verdict: "hold" })).toContain('class="badge stuck">returned<');
+    expect(h({ verdict: "hold" })).toContain('class="badge error">returned<');
     expect(h({})).not.toContain("returned<");
   });
   test("the Job page of a job with no parent issue links back to the merged Jobs page only", () => {
@@ -521,7 +521,7 @@ describe("render", () => {
   test("a failed run's event names it, gives its reason as the note with code set as code, and offers its logs", () => {
     const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });
     const ev = h.match(/<div class="dp-ev">.*?<\/div><\/div><\/div>/)?.[0] ?? "";
-    expect(ev).toContain('<span class="badge stuck">failed</span>');
+    expect(ev).toContain('<span class="badge error">failed</span>');
     expect(ev).toContain("implement · opus · checks failed in <code>a.ts</code>");
     expect(ev).toContain('data-log="1" data-job="fac-9#1" data-file="output.log" data-as="transcript"');
     expect(ev).toContain('data-file="checks.log" title="checks.log, 2.0KiB">checks</button>');

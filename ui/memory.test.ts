@@ -491,13 +491,13 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
     const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(2).map((s: any) => [s.name, s.last, s.result, s.detail]);
     expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok", null], ["recall trim", null, null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed", "no route"]]);
     const row = v.renderProcessesTab(await (await at("/api/memory/processes")).json()).split("<tr>").find((t: string) => t.includes("vault push"))!;
-    expect(row).toContain('<span class="badge stuck">failed</span> <span class="quiet">no route</span>');
+    expect(row).toContain('<span class="badge error">failed</span> <span class="quiet">no route</span>');
     expect(m.episodes.pages).toBe(1);
     expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1 });
     expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ sentence: "Run the checks.", state: "proposed" }] });
     const h = v.renderProcessesTab(m);
     expect(h).toContain("Run the checks.");
-    expect(h).toContain('<span class="badge stuck">failed: no page</span>');
+    expect(h).toContain('<span class="badge error">failed: no page</span>');
     expect(v.renderProcessesTab({ ...m, steps: [{ ...m.steps[0], result: "2 written" }] })).toContain('<span class="badge done">2 written</span>');
     expect(h).toContain("No note is stale.");
     expect(h).toContain('<a href="#/memory?tab=processes" aria-current="page">Processes</a>');

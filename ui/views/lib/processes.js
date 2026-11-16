@@ -12,7 +12,7 @@ const stepRow = (s) => `<tr><td><strong>${esc(s.name)}</strong></td><td>${esc(s.
 
 function episodes(e) {
   const top = Math.max(1, ...e.days.map((d) => d.pages));
-  const bars = e.days.map((d, i) => `<div title="${esc(d.date)}: ${d.pages} pages" style="flex:1;height:${(d.pages / top * 100).toFixed(1)}%;background:${i === e.days.length - 1 ? "var(--stuck)" : "var(--run)"};border-radius:3px 3px 0 0"></div>`).join("");
+  const bars = e.days.map((d, i) => `<div title="${esc(d.date)}: ${d.pages} pages" style="flex:1;height:${(d.pages / top * 100).toFixed(1)}%;background:${i === e.days.length - 1 ? "var(--error)" : "var(--run)"};border-radius:3px 3px 0 0"></div>`).join("");
   const prunes = e.prunes.length ? `<ul>${e.prunes.map((p) => `<li>${esc(when(p.at))} · ${esc(p.text.replace(/^prune episodes/, "prune"))}</li>`).join("")}</ul>` : `<p class="quiet">No prune is logged yet.</p>`;
   return card("Episodes · every 30 min", flow("transcripts", `episode pages · ${count(e.pages)}`, `pruned after ${e.keep} days`) +
     `<div style="display:flex;align-items:flex-end;gap:4px;height:90px;border-bottom:1px solid var(--rule)" role="img" aria-label="Episode pages last written per day, last ${e.keep} days">${bars}</div>` +

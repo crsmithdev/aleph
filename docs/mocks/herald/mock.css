@@ -52,9 +52,9 @@ body { background: var(--bg); padding: 16px; font-family: var(--sans); color: va
 .D .m-feed::before { content: ""; position: absolute; left: 41px; top: 6px; bottom: 6px; width: 1px; background: var(--rule); }
 .D .m-row { display: grid; grid-template-columns: 36px 12px minmax(0,1fr); gap: 0 6px; padding: 4px 0; align-items: baseline; }
 .D .m-pip { width: 8px; height: 8px; border-radius: 9px; background: var(--muted); position: relative; top: 0; justify-self: center; align-self: start; margin-top: 5px; box-shadow: 0 0 0 3px var(--surface); }
-.D .m-pip.done { background: var(--done); } .D .m-pip.m-runrow { background: var(--run); } .D .m-pip.stuck { background: var(--stuck); } .D .m-pip.quiet { background: var(--muted); }
+.D .m-pip.done { background: var(--done); } .D .m-pip.m-runrow { background: var(--run); } .D .m-pip.stuck { background: var(--error); } .D .m-pip.quiet { background: var(--muted); }
 .D .m-pip.m-sm { width: 5px; height: 5px; margin-top: 6px; }
 .D .m-w { color: var(--ink-2); }
 .D .m-w b { font-weight: 600; }
-.D .m-done-w { color: var(--done); font-weight: 600; } .D .m-run-w { color: var(--run); font-weight: 600; } .D .m-q-w { color: var(--muted); font-weight: 600; } .D .m-stuck-w { color: var(--stuck); font-weight: 600; }
+.D .m-done-w { color: var(--done); font-weight: 600; } .D .m-run-w { color: var(--run); font-weight: 600; } .D .m-q-w { color: var(--muted); font-weight: 600; } .D .m-stuck-w { color: var(--error); font-weight: 600; }
 .D .m-s { font-size: 12px; color: var(--ink-2); padding: 1px 0; }

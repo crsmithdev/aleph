@@ -277,7 +277,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await say("fine");
     const fine = await colour();
     await say("alert");
-    expect(await colour()).toBe(await token("--stuck"));
+    expect(await colour()).toBe(await token("--error"));
     await say("ask");
     expect(await colour()).toBe(await token("--need"));
     await say("fine");
@@ -376,7 +376,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       kinds: ["danger", "small", "always"].map((k) => !!document.querySelector("#kit-button .act." + k)),
       acts: !!document.querySelector("#kit-row-actions tbody td.acts:last-child .act.small"),
       failed: document.querySelector('aleph-chart[key="kit/category"]').frame.by.keys.map((k) => k.color).slice(1),
-    })`)).toEqual({ ids: [true, true], list: 2, gap: "16px", lede: "One sentence that sums up the card.", cell: "A title that takes the spare width, with its text as its title", kinds: [true, true, true], acts: true, failed: ["stuck", "stuck"] });
+    })`)).toEqual({ ids: [true, true], list: 2, gap: "16px", lede: "One sentence that sums up the card.", cell: "A title that takes the spare width, with its text as its title", kinds: [true, true, true], acts: true, failed: ["error", "error"] });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
     // The empty and loading states are drawn: a line, a status line, a loading and a failed metric card, and the empty table and chart.

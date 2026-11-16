@@ -50,11 +50,11 @@ function contrast(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-describe("dark theme --stuck on --stuck-bg", () => {
+describe("dark theme --error on --error-bg", () => {
   for (const block of darkBlocks()) {
     test(`${block.name} block meets 4.5:1`, () => {
-      const fg = token(block.body, "stuck");
-      const bg = token(block.body, "stuck-bg");
+      const fg = token(block.body, "error");
+      const bg = token(block.body, "error-bg");
       const ratio = contrast(fg, bg);
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });

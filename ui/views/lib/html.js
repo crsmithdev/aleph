@@ -8,7 +8,7 @@ import { PRIORITIES, shortId, shortText } from "../../../lib/naming.ts";
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
-/** A number cell for a count of bad things (errors, failures): `--stuck` when above 0. */
+/** A number cell for a count of bad things (errors, failures): `--error` when above 0. */
 export const badCount = (n) => `<td class="num${n > 0 ? " bad" : ""}">${count(n)}</td>`;
 const WK_TIP = "An estimate of the share of the weekly plan limit: the cost times the rise in weekly % per Claude dollar this machine spent, fit hour by hour over 28 days, one rate for Fable and one for the other Claude models. A week's estimate missed by about ±25% in holdout, because use off this machine (claude.ai chat, other devices) is not in the dollars. OpenRouter and local models use none of the plan.";
 /** The weekly share (HTML) with its tooltip. */
@@ -190,8 +190,8 @@ export async function loadDiff(el, url) {
     return t;
   } catch (err) { return msg(`The diff failed to load: ${err.message}`); }
 }
-const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "stuck", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "stuck", failed: "stuck", dropped: "quiet", parked: "parked", exploring: "run", built: "done", reran: "run", escalated: "need", red: "stuck", filed: "done", answered: "done", human: "need", rule: "done", director: "parked", firefighter: "stuck", gate: "run" };
-/** The badge tone of a state (a job's, land's or issue's): run, done, need, stuck, or quiet for any other. */
+const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "error", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "error", failed: "error", dropped: "quiet", parked: "parked", exploring: "run", built: "done", reran: "run", escalated: "need", red: "error", filed: "done", answered: "done", human: "need", rule: "done", director: "parked", firefighter: "error", gate: "run" };
+/** The badge tone of a state (a job's, land's or issue's): run, done, need, error, or quiet for any other. */
 export const tone = (state) => TONES[state] ?? "quiet";
 
 // The CSS for these is in app.css (.ph, table.tbl, .idl, .chips, .fbar, .seg, .pager).
@@ -202,7 +202,7 @@ export const pageHead = (title, { count, aside = "", cls = "", after = "", head 
 /** An id as a link: mono, small, muted, underlined on hover. */
 /** What an issue waits on, one row each; a wait that never ends says so and offers to remove it. */
 export function blockersHtml(waits, repo, id) {
-  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(shortText(b.id))}</a>` : esc(shortText(b.id))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` ${tag(b.dead, "stuck")}` : b.state ? ` ${tag(b.state)}` : ""}</div>`).join("");
+  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(shortText(b.id))}</a>` : esc(shortText(b.id))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` ${tag(b.dead, "error")}` : b.state ? ` ${tag(b.state)}` : ""}</div>`).join("");
   const dead = waits.filter((b) => b.dead);
   if (!dead.length) return rows;
   const label = `Stop waiting on ${dead.map((b) => shortText(b.id)).join(", ")}`;
@@ -242,7 +242,7 @@ export const tag = (text, tone = "quiet", title) => `<span class="badge ${esc(to
 /** A state as a badge, toned by `tone`. */
 export const badge = (state) => tag(state, tone(state));
 /** A priority as a badge: critical is the alert tone, high the warning tone, medium and low quiet. Missing or unknown reads medium. */
-const PRIORITY_TONES = ["quiet", "quiet", "need", "stuck"];
+const PRIORITY_TONES = ["quiet", "quiet", "need", "error"];
 export function priorityBadge(p) {
   const j = PRIORITIES.indexOf(p), i = j < 0 ? PRIORITIES.indexOf("medium") : j;
   return tag(PRIORITIES[i], PRIORITY_TONES[i], PRIORITIES[i]);

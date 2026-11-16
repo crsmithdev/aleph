@@ -74,7 +74,7 @@ test("the Herald shows its alerts under a Not OK badge in the worst alert's tone
   expect(h).not.toContain("data-herald-tab");
   expect(h).toContain('class="herald-feed"');
   const red = view.renderHerald({ ...calm, asks: [ask], factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }] } });
-  expect(red).toContain('<span class="badge stuck">Not OK</span>');
+  expect(red).toContain('<span class="badge error">Not OK</span>');
 });
 
 test("the Herald lists each running job as a row on the feed grid between the alerts and the feed, and no section with none", () => {
@@ -125,7 +125,7 @@ test("an error is not pinned: the badge says Not OK, and no row repeats the erro
   const h = v.renderHerald({ ...calm, herald, factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }, { text: "health: koans main is red", kind: "warn" }] } });
   expect(h).not.toContain("ask-head");
   expect(h).not.toContain("No active alerts");
-  expect(h).toContain('<span class="badge stuck">Not OK</span>');
+  expect(h).toContain('<span class="badge error">Not OK</span>');
   expect(h).not.toContain("Alert: Health:");
   expect(h).not.toContain("aleph main is red");
 });
@@ -143,8 +143,8 @@ test("the Herald merges the state's events and the streamed ones, each once, new
   expect(order).toEqual(["alert", "run", "warning"]);
   const line = eventRow(merged[0], { "aleph-5": "Fix the flaky land test" });
   // Two columns: the time, then one line: the chip, the issue linked, the title.
-  expect(line).toContain('<div class="event-row stuck" data-by="gate"><span class="event-time">');
-  expect(line).toContain('<span class="event-line"><span class="badge stuck">failed</span><a class="idl" href="#/issues/aleph/5">aleph-5</a><span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span></span>');
+  expect(line).toContain('<div class="event-row error" data-by="gate"><span class="event-time">');
+  expect(line).toContain('<span class="event-line"><span class="badge error">failed</span><a class="idl" href="#/issues/aleph/5">aleph-5</a><span class="event-title" title="Fix the flaky land test">Fix the flaky land test</span></span>');
   // A row with no title takes what its sentence adds in the title's place.
   expect(eventRow(merged[0], {})).toContain('<span class="event-title" title="past its time box">past its time box</span>');
   expect(line).not.toContain("event-tone");

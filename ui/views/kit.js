@@ -50,7 +50,7 @@ const FRAMES = {
   category: {
     measure: { name: "Outcomes", unit: "count", agg: "sum" },
     over: { kind: "category", name: "Role" },
-    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: "stuck" }, { key: "stuck", name: "Stuck", color: "stuck" }] },
+    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: "error" }, { key: "stuck", name: "Stuck", color: "error" }] },
     rows: [{ name: "Worker", succeeded: 31, failed: 4, stuck: 1 }, { name: "Triage", succeeded: 12, failed: 1, stuck: 0 }, { name: "Reviewer", succeeded: 9, failed: 2, stuck: 2 }],
   },
   cost: {
@@ -98,7 +98,7 @@ const DIFF = `diff --git a/ui/app.css b/ui/app.css
 
 const H = (h, m = 0) => new Date(2026, 10, 10, h, m).getTime();
 const TIMELINE = [{ title: "Runs", rows: [
-  { head: "<span class=\"t\" title=\"build 1\">build 1</span>", bars: [{ start: H(8, 10), end: H(8, 30), tone: "build", label: "build" }, { start: H(8, 30), end: H(8, 34), tone: "bad", label: "checks" }], waits: [{ start: H(8, 34), end: H(9, 2), chris: true }], marks: [], result: badge("returned"), time: dur(1440), cost: money(2.3), events: [{ at: H(8, 34), tag: "returned", tone: "stuck", html: "Checks failed: <code>ui/page.test.ts</code>." }] },
+  { head: "<span class=\"t\" title=\"build 1\">build 1</span>", bars: [{ start: H(8, 10), end: H(8, 30), tone: "build", label: "build" }, { start: H(8, 30), end: H(8, 34), tone: "bad", label: "checks" }], waits: [{ start: H(8, 34), end: H(9, 2), chris: true }], marks: [], result: badge("returned"), time: dur(1440), cost: money(2.3), events: [{ at: H(8, 34), tag: "returned", tone: "error", html: "Checks failed: <code>ui/page.test.ts</code>." }] },
   { head: "<span class=\"t\" title=\"build 2\">build 2</span>", bars: [{ start: H(9, 2), end: H(9, 20), tone: "build", label: "build" }, { start: H(9, 20), end: H(9, 24), tone: "land", label: "land" }], waits: [], marks: [{ at: H(9, 24), tone: "done", tip: "landed" }], result: badge("landed"), time: dur(1320), cost: money(1.82), events: [{ at: H(9, 24), tag: "landed", tone: "done", html: "Landed on main." }] },
 ] }];
 const NOW = "2026-11-10T17:00:00Z";
@@ -115,11 +115,11 @@ const FEED = [
 const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }] };
 
 const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill|sel)$/],
-  ["tones", "Tones", /^--(run|done|need|stuck|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/],
+  ["tones", "Tones", /^--(run|done|need|error|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/],
   ["data", "Data colours", /^--(series|chart|seg|fill)-/]];
 // The pairs of the doc's Contrast table.
 const PAIRS = [["--ink", "--surface"], ["--ink-2", "--surface"], ["--muted", "--surface"], ["--muted", "--bg"], ["--muted", "--sunk"], ["--muted", "--raised"],
-  ["--need", "--need-bg"], ["--stuck", "--stuck-bg"], ["--done", "--done-bg"], ["--run", "--run-bg"], ["--hot", "--surface"], ["--focus", "--surface"], ["--on-fill", "--seg-reran"]];
+  ["--need", "--need-bg"], ["--error", "--error-bg"], ["--done", "--done-bg"], ["--run", "--run-bg"], ["--hot", "--surface"], ["--focus", "--surface"], ["--on-fill", "--seg-reran"]];
 const AGO = new Date(T0 - 3 * 36e5);
 const VALUES = [
   ["Absolute time", "when()", when, [AGO]], ["Day", "day()", day, [AGO]], ["Axis hour", "hourLabel()", hourLabel, [new Date(2026, 10, 10, 4), new Date(2026, 10, 10, 13, 36)], "none"],
@@ -287,7 +287,7 @@ function drawTokens(root) {
   const colours = names.filter((n) => CSS.supports("color", t[n].light));
   for (const [id, , re] of COLOURS) fill(id, colours.filter((n) => re.test(n)).map((n) =>
     `<div class="kit-swatch"><i><b style="background:${t[n].light}"></b><b style="background:${t[n].dark}"></b></i><code>${n}</code><span class="quiet">${t[n].light} / ${t[n].dark}</span></div>`).join(""));
-  const cell = (r) => `<td class="num">${r.toFixed(2)}${r < 4.5 ? ` ${tag("below 4.5", "stuck")}` : ""}</td>`;
+  const cell = (r) => `<td class="num">${r.toFixed(2)}${r < 4.5 ? ` ${tag("below 4.5", "error")}` : ""}</td>`;
   fill("contrast", dataTable(heads(["Pair", "Light", "Dark"], ["Light", "Dark"]), PAIRS.map(([f, b]) =>
     `<tr><td><code>${f}</code> on <code>${b}</code></td>${cell(ratio(t[f].light, t[b].light))}${cell(ratio(t[f].dark, t[b].dark))}</tr>`).join(""), { fit: true }));
   fill("type", names.filter((n) => n.startsWith("--fs-")).map((n) =>

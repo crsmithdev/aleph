@@ -1028,7 +1028,7 @@ describe("priority badges", () => {
     expect(rows.find((r: string) => r.includes("hot part"))).toContain(">critical<");
     expect(rows.find((r: string) => r.includes("plain part"))).not.toContain(">medium<");
     const row = v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "critical", labels: [], notes: 0, runs: 0, cost: 0, at: null });
-    expect(row).toContain('<td><span class="badge stuck" title="critical">critical</span></td>');
+    expect(row).toContain('<td><span class="badge error" title="critical">critical</span></td>');
   });
 });
 

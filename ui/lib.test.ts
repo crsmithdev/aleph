@@ -193,7 +193,7 @@ test("repoIdLink shows the short id", () => {
 });
 
 test("tone maps the feed's actions to the badge tones, and any other action to quiet", () => {
-  expect(["reran", "escalated", "red", "filed", "answered"].map(tone)).toEqual(["run", "need", "stuck", "done", "done"]);
+  expect(["reran", "escalated", "red", "filed", "answered"].map(tone)).toEqual(["run", "need", "error", "done", "done"]);
   expect(tone("no-such-action")).toBe("quiet");
 });
 

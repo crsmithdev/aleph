@@ -13,10 +13,10 @@ numbers are the findings of the retro report (`/tmp/refit-design-retro-2026-11-1
 - Fixed applies each fix to that markup: `badCount()` on Stuck, `span.quiet` for `span.m`, `Per Output`, no
   First pass aside, `Could not load the agents.` with no hint and the status in Technical details,
   and `notice()` when the models fail.
-- CSS fixes sit in the page's style block, scoped to `.fix`: the error line in `--stuck` inside a card, the fold
+- CSS fixes sit in the page's style block, scoped to `.fix`: the error line in `--error` inside a card, the fold
   mark in a fixed gutter, and a trend that wraps under a metric card key.
 - Metric cards (decided by Chris, 2026-11-16): the spinner sits at the upper right while a figure waits. A failed
-  fetch leaves a still `--stuck` ring with `!` in that spot, with the error line as its title. Line 2 keeps its
+  fetch leaves a still `--error` ring with `!` in that spot, with the error line as its title. Line 2 keeps its
   height and shows no `–`, because a dash does not tell no data from no API.
 - Error cards have no hint line: "Check that aleph-ui is running, then reload." is never used (Chris, 2026-11-16).
 - `options.html` draws two choices on the live markup, A beside B. Chris picked B for line 2: the second value

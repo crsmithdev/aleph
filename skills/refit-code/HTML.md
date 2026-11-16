@@ -17,7 +17,7 @@ The report is a directory in the OS temp directory: `index.html` and `app.css`. 
   <style>
     /* the diagram layer: tokens from app.css, so light and dark both work */
     .seam { stroke-dasharray: 4 4; }
-    .leak { stroke: var(--stuck); }
+    .leak { stroke: var(--error); }
     .deep { background: var(--ink); color: var(--surface); }
     .caller { background: var(--sunk); color: var(--muted); }
     /* Mermaid labels ignore classDef color: set it in both themes */
@@ -52,7 +52,7 @@ The report is a directory in the OS temp directory: `index.html` and `app.css`. 
     <div data-annotate="{{unit id}}">
       <h3 class="sub-head">{{unit}}</h3>
       <div data-annotate="f{{n}}">
-        <p><strong>{{title}}</strong> <span class="badge stuck">{{lens}}</span> <span class="badge need">{{strength}}</span></p>
+        <p><strong>{{title}}</strong> <span class="badge error">{{lens}}</span> <span class="badge need">{{strength}}</span></p>
         <ul><li><code>{{file:line}}</code></li></ul>
         <div class="tscroll">{{diagram}}</div>
         <p>Proof: ...</p><p>Fix: ...</p><p>Hold: <code>...</code></p>
@@ -109,7 +109,7 @@ Before: a tree of function calls rendered as nested boxes. After: the same tree 
 ## Style guidance
 
 - Use the look of `app.css`. Do not add fonts or a palette. Use its tokens in a diagram.
-- Colour sparingly: red (`--stuck`) for leakage and amber (`--need`) for warnings.
+- Colour sparingly: red (`--error`) for leakage and amber (`--need`) for warnings.
 - Keep diagrams ~320px tall so before/after sits comfortably side by side without scrolling.
 - Set module labels inside diagrams in small uppercase letters, so they read as schematic, not as UI.
 - The only script is the Mermaid ESM import. The report is otherwise static: no app code, no interactivity beyond Mermaid's own rendering.

@@ -56,12 +56,12 @@ An entry with no issue has the followed list only. An entry with issues has both
   <div class="sh"><h2>Components</h2></div>
   <h3 class="sub-head">{{kind}}</h3>
   <div data-annotate="{{kind}}/{{variant}}">
-    <p><span class="badge stuck">broken</span> {{component}} <a href="/#/kit">kit {{id}}</a></p>
+    <p><span class="badge error">broken</span> {{component}} <a href="/#/kit">kit {{id}}</a></p>
     <img src="shots/{{file}}.png" alt="{{component}}">
     <ul><li>{{rule}}</li></ul>
   </div>
 </section>
 ```
 
-Use `badge` tones for a status: `stuck` for a broken entry, `done` for a passing one. Give an image a
+Use `badge` tones for a status: `error` for a broken entry, `done` for a passing one. Give an image a
 `max-width: 100%` through a `style` attribute only when `app.css` has no class for it. Add no `<script>`.

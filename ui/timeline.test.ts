@@ -92,16 +92,16 @@ describe("the event tags", () => {
   const tagTone = (e: any) => [e.tag, e.tone];
 
   test("a run's tag is its job state: returned for a sent-back run, failed for a broken one", () => {
-    expect(tagTone(runTag({ state: "returned", failed: "review" }))).toEqual(["returned", "stuck"]);
-    expect(tagTone(runTag({ state: "failed" }))).toEqual(["failed", "stuck"]);
+    expect(tagTone(runTag({ state: "returned", failed: "review" }))).toEqual(["returned", "error"]);
+    expect(tagTone(runTag({ state: "failed" }))).toEqual(["failed", "error"]);
     expect(tagTone(runTag({ state: "waiting" }))).toEqual(["waiting", "need"]);
     expect(tagTone(runTag({ state: "landed" }))).toEqual(["landed", "done"]);
   });
 
-  test("a wait's tone is the tone of its state: a red hold is stuck", () => {
+  test("a wait's tone is the tone of its state: a red hold is error", () => {
     const w = { start: Date.parse(iso(0)), end: Date.parse(iso(9)) };
     const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "x" }]);
-    expect([e.tag, e.tone]).toEqual(["red", "stuck"]);
+    expect([e.tag, e.tone]).toEqual(["red", "error"]);
   });
 
   test("a wait's tag is waiting, for the factory's wait and yours", () => {
@@ -232,10 +232,10 @@ describe("waitEvent", () => {
   });
   test("a held event gives its hold word as the tag and takes that word's tone; an old event gives its action", () => {
     const held = waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "at 298a44e: tests", event: { action: "held", detail: "red: at 298a44e: tests" } }]);
-    expect([held.tag, held.tone]).toEqual(["red", "stuck"]);
+    expect([held.tag, held.tone]).toEqual(["red", "error"]);
     expect(held.html).toContain("9m 00s · at 298a44e: tests");
     const old = waitEvent(w, [{ at: iso(-1), name: "a", kind: "red", text: "", event: { action: "red" } }]);
-    expect([old.tag, old.tone]).toEqual(["red", "stuck"]);
+    expect([old.tag, old.tone]).toEqual(["red", "error"]);
     expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "after", text: "", event: { action: "held", detail: "after: issue.2985" } }]).tag).toBe("after");
   });
   test("the hold in force the longest gives the tag, and a started record ends one", () => {

@@ -76,7 +76,7 @@ const renderFails = (d, o) => tiles("Failing Most", failing(d).map((r) => statCa
 
 function ranked(kind, rows, o) {
   const top = Math.max(1, ...rows.map((r) => r.n));
-  const row = (r) => barRow(esc(r.name), 0, `${count(r.n)}${r.errors ? ` ${tag(counted(r.errors, "error"), "stuck")}` : ""}`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
+  const row = (r) => barRow(esc(r.name), 0, `${count(r.n)}${r.errors ? ` ${tag(counted(r.errors, "error"), "error")}` : ""}`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
     bar: meter([{ pct: ((r.n - r.errors) / top) * 100 }, { pct: (r.errors / top) * 100, cls: "c-err" }]) });
   const rest = rows.slice(ROWS);
   return barList(rows.slice(0, ROWS).map(row).join("")) + (rest.length ? fold(`${rest.length} more`, barList(rest.map(row).join("")), { cls: "more", open: rest.some((r) => o.pick === `${kind}:${r.name}`) }) : "");
