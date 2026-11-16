@@ -91,6 +91,7 @@ test("GET /api/flow takes a window (default week) and answers JSON", async () =>
   expect(f).toEqual(figures(d));
   expect(Object.keys(f).sort()).toEqual(Object.keys(b.baseline.prev).sort());
   expect(Object.keys(f)).not.toContain("costPerLand");
+  for (const k of ["costPerRun", "runs"]) expect([Object.keys(f), Object.keys(b.baseline.prev)].flat()).not.toContain(k);
 });
 
 test("the Status cards show the answer's figures and trend them against its baseline", () => {
@@ -101,11 +102,17 @@ test("the Status cards show the answer's figures and trend them against its base
   expect(h).toContain("baseline 40%, the previous 7 days");
   });
 
-test("figures: the cost per run is the window's agent run cost over its agent runs of all roles, null with no runs", () => {
-  const d = (outcomes: object[]) => ({ classes: [], done: 0, lost: { share: 0, hours: 0 }, phases: { lead: { count: 0 } }, asks: { count: 0 }, issues: { firstPass: null }, agents: { outcomes } }) as any;
-  const f = figures(d([{ runs: 3, cost: 1 }, { runs: 1, cost: 0.5 }]));
-  expect([f.costPerRun, f.runs]).toEqual([0.38, 4]);
-  expect([figures(d([])).costPerRun, figures(d([])).runs]).toEqual([null, null]);
+test("figures: the follow-ups are the agent subjects' filed events in the window, and filed is all of them", () => {
+  const file = (subject: string, object: string, time: Date) => conn().run("INSERT INTO events (time, subject, action, object) VALUES (?, ?, 'filed', ?)", [time.toISOString(), subject, object]);
+  const t = new Date(2026, 9, 28, 12);
+  for (const s of ["worker", "intake", "gate", "claude", "human"]) file(s, "alpha-9001", t);
+  file("worker", "alpha-9001", new Date(2026, 9, 20)); // before the window
+  conn().run("INSERT INTO events (time, subject, action, object) VALUES (?, 'worker', 'started', 'alpha-9001')", [t.toISOString()]); // not a filing
+  file("worker", "beta-9001", t); // another project's
+  expect(figures(speed("day", now))).toMatchObject({ followups: 4, filed: 6 });
+  expect(figures(speed("day", now, null, "alpha"))).toMatchObject({ followups: 3, filed: 5 });
+  expect(figures(speed("day", now, null, "beta"))).toMatchObject({ followups: 1, filed: 1 });
+  conn().run("DELETE FROM events WHERE object LIKE '%-9001'");
 });
 
 test("the Usage card note is the pace word, and the bar title holds the percent off this machine", () => {

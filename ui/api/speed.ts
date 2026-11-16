@@ -21,7 +21,8 @@ import { status } from "../../issues/lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP, RUN_CAP } from "../../jobs/lib/infra/settings.ts";
 import { clip, issueHref, NAMES, parseId, parseKey, SPEEDS, tail } from "../../lib/naming.ts";
-import { inProject, repoIn, scopeOf } from "./scope.ts";
+import { eventIn, inProject, repoIn, scopeOf } from "./scope.ts";
+import { readEvents } from "../../lib/layout.ts";
 import { BUCKETS, buckets, quantile, WINDOWS, type Window } from "../../lib/windows.ts";
 
 /** The goal a run works on, as the issue store names it (`<repo>-<n>`), or undefined for a run on no issue. */
@@ -36,6 +37,8 @@ const splitId = (s: string): [string, string] => {
 };
 
 const MAX_RUN = 4 * HOUR;
+/** The subjects of an event that file a follow-up: the factory's own actors, not claude and not human. */
+const FOLLOWUPS = ["worker", "intake", "gate", "rule", "director", "housekeeper", "maintainer"];
 export const KINDS = ["land", "intake"] as const;
 
 export interface Pct { count: number; p50: number; p90: number }
@@ -68,6 +71,8 @@ export interface Speed {
   /** The stages of the window, as the monitor counts them. */
   stages: { rows: StageRow[] };
   models: { model: string; count: number; p50: number }[];
+  /** Issues filed in the window by an event of the event table: `all` of them, `followups` those the factory's own actors filed (not claude, not human). */
+  filed: { followups: number; all: number };
   flaky: number;
   /** The reruns by check, most first. */
   flakes: { name: string; count: number }[];
@@ -657,6 +662,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     const used = tokens[b.slotOf(t)];
     used[model] = (used[model] ?? 0) + (e.run.tokens ?? 0);
   }
+  const filings = readEvents(since.getTime()).filter((e) => e.action === "filed" && Date.parse(e.time) <= now.getTime() && eventIn(e.object, project, e.project));
   return {
     window,
     done: issuesLanded,
@@ -676,6 +682,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     lost: cls.lost,
     hasWeek: fit !== null,
     agents: agentStats(entries, since.getTime(), now.getTime(), BUCKETS[window].fine, LIVE_CAP(), undefined, Array.from({ length: BASELINE[window].n }, (_, i): [number, number] => [since.getTime() - (i + 1) * WINDOWS[window], now.getTime() - (i + 1) * WINDOWS[window]])),
+    filed: { followups: filings.filter((e) => FOLLOWUPS.includes(e.subject)).length, all: filings.length },
     flaky: recent.length,
     flakes: [...Map.groupBy(recent.flatMap(flakeNames), (f) => f.name)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
   };
@@ -691,13 +698,12 @@ function asksOf(inp: Inputs, project: string | undefined, since: number, now: nu
 }
 
 /** What a Status card shows for one span; a field is null when the span has no data for it. */
-export interface Figures { lost: number | null; hours: number | null; leadP50: number | null; leadP90: number | null; asks: number | null; landed: number | null; firstPass: number | null; costPerRun: number | null; runs: number | null }
+export interface Figures { lost: number | null; hours: number | null; leadP50: number | null; leadP90: number | null; asks: number | null; landed: number | null; firstPass: number | null; followups: number | null; filed: number | null }
 /** The trend baseline of a window: `prev` is the span just before, `base` the average the trend compares with, `basis` says how it is taken. */
 export interface Baseline { prev: Figures; base: Figures; basis: string }
 
 export function figures(s: Speed): Figures {
   const total = s.classes.reduce((a, c) => a + c.hours, 0), any = total > 0 || s.done > 0;
-  const runs = s.agents.outcomes.reduce((n, o) => n + o.runs, 0);
   return {
     lost: total > 0 ? s.lost.share : null,
     hours: total > 0 ? s.lost.hours : null,
@@ -706,8 +712,8 @@ export function figures(s: Speed): Figures {
     asks: s.asks.count,
     landed: any ? s.done : null,
     firstPass: s.issues.firstPass,
-    costPerRun: runs ? round(s.agents.outcomes.reduce((n, o) => n + o.cost, 0) / runs, 2) : null,
-    runs: runs || null,
+    followups: s.filed.followups,
+    filed: s.filed.all,
   };
 }
 
@@ -720,7 +726,7 @@ export function averageFigures(xs: Figures[]): Figures {
   }
   return out;
 }
-const figures0 = (): Figures => ({ lost: null, hours: null, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: null, costPerRun: null, runs: null });
+const figures0 = (): Figures => ({ lost: null, hours: null, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: null, followups: null, filed: null });
 
 // Hour: the average of the last 12 hours; day: of the last 7 days; week and month: the span before.
 const BASELINE: Record<Window, { n: number; avg: boolean; basis: string; prev: string }> = {

@@ -16,10 +16,10 @@ function openRouterCard(m, win) {
   return statCard({ k: "OpenRouter", v: up == null ? "–" : up ? "up" : "down", v2: v == null ? "–" : money(v), q: ["status", "spend"], loading: m === undefined });
 }
 
-/** The Cost per run card: the mean cost of an agent run over the window and the runs, with its trend against the baseline. `d` is /api/flow for the window with `baseline`, or null while it loads. */
-function costPerRunCard(d) {
-  const v = d?.figures?.costPerRun;
-  return statCard({ k: "Cost per run", v: v == null ? "–" : money(v), ...(v == null ? {} : { v2: count(d.figures.runs) }), q: ["per run", "runs"], trend: windowTrend(d, "costPerRun", v, { kind: "relative", lowerIsGood: true, format: money }), loading: !d });
+/** The Follow-ups card: the issues the factory's own actors filed in the window and all the issues filed, with its trend against the baseline (neutral). `d` is /api/flow for the window with `baseline`, or null while it loads. */
+function followupsCard(d) {
+  const v = d?.figures?.followups;
+  return statCard({ k: "Follow-ups", v: v == null ? "–" : count(v), ...(v == null ? {} : { v2: count(d.figures.filed) }), q: ["follow-ups", "filed"], trend: windowTrend(d, "followups", v, { kind: "relative", lowerIsGood: null, format: count }), loading: !d });
 }
 
 /** The Success card: the share of runs that succeeded and the share of builds that passed first time, with the success trend against its baseline. */
@@ -32,7 +32,7 @@ function scorecard(s, d, m, win) {
   const f = s.factory, a = d?.agents ?? null;
   return usageCard(s) + openRouterCard(m, win) +
     statCard({ k: "Live agents", v: count(f.liveRuns ?? 0), v2: a ? count(a.live - a.workers) : "–", q: ["workers", "other"] }) +
-    costPerRunCard(d) + successCard(a);
+    followupsCard(d) + successCard(a);
 }
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */

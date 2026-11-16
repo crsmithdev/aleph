@@ -33,11 +33,11 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     held: ["string"], repoHeld: "array", log: { days: "number", max: "number", entries: "array" },
   },
   "/api/flow": {
-    window: "string", done: "number", kinds: "object", phases: "object", asks: { count: "number", manual: "number" }, checks: "array",
+    window: "string", done: "number", kinds: "object", phases: "object", asks: { count: "number", manual: "number" }, filed: { followups: "number", all: "number" }, checks: "array",
     buckets: [{ at: "time", runs: "number" }], active: [{ at: "time", intake: "number", queue: "number", running: "number", landed: "number" }], times: [{ id: "string", href: "string", outcome: "string", filed: "time?" }], slowest: "array",
     stages: "object", models: "array", issues: "object", classes: [{ key: "string", lost: "boolean", hours: "number" }], notCounted: "any", lost: "any", hasWeek: "boolean", agents: "any",
     flaky: "number", flakes: "any", "baseline?": "any",
-    figures: { lost: "number?", hours: "number?", leadP50: "number?", leadP90: "number?", asks: "number?", landed: "number?", firstPass: "number?", costPerRun: "number?", runs: "number?" },
+    figures: { lost: "number?", hours: "number?", leadP50: "number?", leadP90: "number?", asks: "number?", landed: "number?", firstPass: "number?", followups: "number?", filed: "number?" },
   },
   "/api/issues": { issues: [{ ...issue, runs: "number", cost: "number" }], projects: ["string"], tests: { "*": "array" } },
   "/api/issues/:id": {

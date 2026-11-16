@@ -60,11 +60,11 @@ test("an outcome on a full model id joins the row of its short model; an unset m
   expect(h).not.toContain("not recorded");
 });
 
-test("the tiles are usage, OpenRouter spend for the window's UTC period, live agents, cost per run and success", () => {
+test("the tiles are usage, OpenRouter spend for the window's UTC period, live agents, follow-ups and success", () => {
   const keys = (h: string) => [...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1]);
   const m = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
-  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Live agents", "Cost per run", "Success"]);
+  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Live agents", "Follow-ups", "Success"]);
   for (const t of ["<b>1<em> / 0</em></b>", "<b>down<em> / $17.54</em></b>"]) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>down<em> / $1.50</em></b>");
   const loading = renderFactoryAgents(S, D);
@@ -253,16 +253,15 @@ test("a down local server shows one alert, an up one shows nothing, and the Role
   expect(renderFactoryAgents(S, null, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server down");
 });
 
-test("the Cost per run tile shows the mean cost and the runs, its trend with lower good, and a dash with no runs", () => {
-  const d = { ...D, figures: { costPerRun: 0.21, runs: 412 }, baseline: { base: { costPerRun: 0.2 }, prev: { costPerRun: 0.3 }, basis: "the previous 7 days" } };
-  const t = tile(renderFactoryAgents(S, d), "Cost per run");
-  expect(t).toContain("<b>$0.21<em> / 412</em></b>");
-  expect(t).toContain('<span class="q"><span>per run</span><span class="m"> / runs</span></span>');
-  expect(t).toContain('<span class="tr warn"');
+test("the Follow-ups tile shows the follow-ups and all filed, its neutral trend, and none without a baseline", () => {
+  const d = { ...D, figures: { followups: 184, filed: 259 }, baseline: { base: { followups: 150 }, prev: { followups: 160 }, basis: "the previous 7 days" } };
+  const t = tile(renderFactoryAgents(S, d), "Follow-ups");
+  expect(t).toContain("<b>184<em> / 259</em></b>");
+  expect(t).toContain('<span class="q"><span>follow-ups</span><span class="m"> / filed</span></span>');
+  expect(t).toContain('<span class="tr"');
+  expect(t).not.toMatch(/class="tr (good|warn)/);
   expect(t.match(/<(?:span|b|em)\b/g)!.length).toBe(8);
-  expect(tile(renderFactoryAgents(S, { ...d, baseline: { ...d.baseline, base: { costPerRun: 0.3 } } }), "Cost per run")).toContain('<span class="tr good"');
-  expect(tile(renderFactoryAgents(S, { ...d, baseline: undefined }), "Cost per run")).not.toContain('class="tr');
-  expect(tile(renderFactoryAgents(S, { ...d, figures: { costPerRun: null, runs: null } }), "Cost per run")).toContain("<b>–</b>");
+  expect(tile(renderFactoryAgents(S, { ...d, baseline: undefined }), "Follow-ups")).not.toContain('class="tr');
 });
 
 test("the Success tile shows the success and first pass shares, its trend with higher good, and none without a baseline", () => {
