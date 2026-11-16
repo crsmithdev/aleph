@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { flakeHealth, flakeSection, measure, renderTable, storeLog, type Sources } from "./monitor-table.ts";
+import { flakeHealth, flakeSection, measure, renderTable, stageRows, storeLog, type Sources } from "./monitor-table.ts";
 import type { Entry, Run } from "../records/ledger.ts";
 
 const DAY = "2026-10-20";
@@ -66,6 +66,28 @@ describe("stages", () => {
     const cost = (stage: string) => w.today.stages.find((s) => s.stage === stage)!.cost;
     expect(cost("review")).toBe(1.5);
     expect(cost("build")).toBe(5.5);
+  });
+
+  /** The review row of `runs` on the day. */
+  const reviewRow = (runs: Entry[]) =>
+    stageRows({ runs, specChecks: [] }, Date.parse(at(DAY, 0)), Date.parse(at("2026-10-21", 0))).find((s) => s.stage === "review");
+
+  test("a build whose record holds the reviewer counts once, not once more for the review job that made it", () => {
+    const b = run({ role: "build", target: "issue.7", started: at(DAY, 9), ended: at(DAY, 9, 10), state: "passed", cost: 2, review: { call: "passed", seconds: 90, cost: 0.5 } });
+    const j = run({ role: "review", target: "issue.7", prev: b.id, started: at(DAY, 9, 5), ended: at(DAY, 9, 6), state: "done", cost: 0.5 });
+    expect(reviewRow([b, j])).toMatchObject({ runs: 1, items: 1, unusable: 0, cost: 0.5, p90: 90 });
+  });
+
+  test("a review that states no time adds none, and its review job is no second run", () => {
+    const b = run({ role: "build", target: "issue.8", started: at(DAY, 9), ended: at(DAY, 9, 10), state: "passed", review: { call: "passed" } });
+    const j = run({ role: "review", target: "issue.8", prev: b.id, started: at(DAY, 9, 5), ended: at(DAY, 9, 5), state: "done", cost: 0.5 });
+    expect(reviewRow([b, j])).toMatchObject({ runs: 1, minutes: null, p90: null });
+  });
+
+  test("a review job that starts and ends at the same instant is no 0 seconds in the median", () => {
+    const j = run({ role: "review", target: "issue.5", started: at(DAY, 9), ended: at(DAY, 9), state: "done", cost: 0.5 });
+    const k = run({ role: "review", target: "issue.5", started: at(DAY, 10), ended: at(DAY, 10, 2), state: "done", cost: 0.5 });
+    expect(reviewRow([j, k])).toMatchObject({ runs: 2, minutes: 2, p90: 120 });
   });
 
   test("the table puts the day's value first and the trailing mean per day in brackets", () => {

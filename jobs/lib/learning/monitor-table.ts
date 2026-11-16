@@ -121,16 +121,23 @@ export function unusable(e: Entry): boolean {
 /** One run of a stage in `from`..`to`: the issue it was on (or its job, for a run on no issue), whether it gave nothing usable, and its seconds. A build's reviewer is a run of `review`, with the seconds its record states, else none. */
 interface StageRun { stage: string; item: string; issue: boolean; unusable: boolean; secs: number | null; cost: number | null }
 
+/** The reviewer's call a build's own record holds, once the reviewer has given it. */
+const reviewOf = (r: Entry["run"]) => (r.role === "build" && r.review && r.review.call !== "running" ? r.review : undefined);
+
 function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun> {
+  // The reviewer is one call: the build whose record holds it, so the review job that made it is no second run.
+  const own = new Set(runs.filter((e) => reviewOf(e.run)).map((e) => e.id));
   for (const e of runs) {
     const r = e.run;
     if (r.role === "plain" || r.state === "running" || !inside(r.started, from, to)) continue;
+    if (r.role === "review" && r.prev && own.has(r.prev)) continue;
+    // A run that records no time kept none: a review job from before is a run with no time, not 0 seconds.
     const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
     // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
-    const review = r.role === "build" && r.review && r.review.call !== "running" ? r.review : undefined;
+    const review = reviewOf(r);
     // A run on no item (a firefighter sweep) is its own item. The reviewer's cost is its own, not the run's.
     const on = onOf(r);
-    yield { stage: r.role, item: on === undefined ? r.job : String(on), issue: on !== undefined, unusable: unusable(e), secs: took >= 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost : null };
+    yield { stage: r.role, item: on === undefined ? r.job : String(on), issue: on !== undefined, unusable: unusable(e), secs: took > 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost : null };
     if (review) yield { stage: "review", item: on === undefined ? r.name : String(on), issue: on !== undefined, unusable: review.call === "failed", secs: review.seconds ?? null, cost: review.cost ?? null };
   }
 }
