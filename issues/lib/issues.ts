@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
-import { key, parseKey, STATUSES } from "../../lib/naming.ts";
+import { key, parseKey, PRIORITIES, SOURCES, STATUSES } from "../../lib/naming.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";
 import { git } from "../../lib/git.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
@@ -42,7 +42,7 @@ export const brief = (i: issues.Issue) => ({ id: i.id, title: i.title, status: i
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
-  if (f.priority !== undefined && !(issues.PRIORITIES as readonly string[]).includes(f.priority)) refuse(`--priority takes ${issues.PRIORITIES.join(", ")}`);
+  if (f.priority !== undefined && !(PRIORITIES as readonly string[]).includes(f.priority)) refuse(`--priority takes ${PRIORITIES.join(", ")}`);
   if (f.kind !== undefined) { const bad = issues.kindProblem(f.kind); if (bad) refuse(`--kind: ${bad}`); }
   if (f.status !== undefined && !(STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${STATUSES.join(", ")}`);
 }
@@ -217,7 +217,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
   checkFields(fields);
   const title = fields.title?.trim();
   const { kind, request, spec, priority, labels, source, status, after, refs } = fields;
-  if (source !== undefined && !(issues.SOURCES as readonly string[]).includes(source)) refuse(`--source takes ${issues.SOURCES.join(", ")}`);
+  if (source !== undefined && !(SOURCES as readonly string[]).includes(source)) refuse(`--source takes ${SOURCES.join(", ")}`);
   if (title === undefined && kind === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined && refs === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after, --refs (or --status, --kind)");
   if (title === "") refuse("the title cannot be empty");
   const kept = after?.filter((r) => r !== "none"), named = refs?.filter((r) => r !== "none");

@@ -6,9 +6,8 @@
  * An issue is closed by its `closed_as` field. A child is an issue with a `from` field that names its parent.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
-import { today } from "../../lib/day.ts";
 import { next } from "../../lib/db.ts";
-import { ISSUE_KINDS, PRIORITIES, parseId, parseKey, shownKey, SOURCES, STATUSES } from "../../lib/naming.ts";
+import { ISSUE_KINDS, parseId, parseKey, shownKey, SOURCES, STATUSES } from "../../lib/naming.ts";
 
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["project", "created"] as const;
@@ -35,8 +34,6 @@ export interface Doc {
   /** The highest issue number in the store at the commit read: a new issue takes a number above it. */
   floor?: number;
 }
-
-export { today };
 
 /** A time as ISO 8601 UTC, the form every issue time and note stamp has. */
 export const minute = (now = new Date()): string => now.toISOString();
@@ -146,7 +143,6 @@ export const find = (doc: Doc, id: number | string): Issue | undefined => {
 };
 const nextId = (doc: Doc): number => next("issue", Math.max(doc.floor ?? 0, ...doc.items.map((i) => i.id)));
 
-export { PRIORITIES, SOURCES };
 export type Source = (typeof SOURCES)[number];
 
 /** Add an issue: `source` (chris unless the caller or a label says otherwise; this reads no environment) and `areas`, with its request and, when given, its spec. */

@@ -6,7 +6,7 @@ import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
 import { askCard } from "../ask-cards.js";
-import { costText, detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
+import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
 export const view = {
   path: "/issues",
@@ -587,7 +587,7 @@ function issueKpis(d, segments, now = Date.now()) {
       : { k: "Stage", v: esc(d.derived?.stage ?? d.status), text: true, sub: "" },
     { k: open ? "Open for" : "Elapsed", v: times.length ? esc(dur((hi - lo) / 1000)) : miss("No job or note gave a time"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
     { k: "Waiting", v: times.length ? esc(dur(waited / 1000)) : miss("No job or note gave a time"), sub: chris ? esc(`${dur(chris / 1000)} for the user's answer`) : "" },
-    { k: "Cost", v: esc(costText(cost)), sub: esc(plural(runs, "job")) },
+    { k: "Cost", v: esc(money(cost)), sub: esc(plural(runs, "job")) },
     { k: "Commits", v: commits.length ? commits.slice(0, 3).map((c) => shaLink(c.hash, c.commitUrl)).join(" ") : miss("No commit on main yet"), text: commits.length > 0, sub: commits.length > 3 ? esc(`${commits.length} on main`) : commits.length ? "on main" : "" },
   ]);
 }

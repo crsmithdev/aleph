@@ -14,7 +14,7 @@ import { allHolds, backendHold, stopsStart } from "../../jobs/lib/gates/holds.ts
 import { sandboxRepos } from "../../jobs/lib/gates/gpu.ts";
 import { baselines, redLine, tickMissed, tickRows } from "../../jobs/lib/gates/tables.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
-import { allJobs } from "../../jobs/lib/records/job.ts";
+import { allJobs } from "../../jobs/lib/records/ledger.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";

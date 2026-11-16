@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { dispatchIssues, setPaused } from "./factory.ts";
+import { dispatchIssues } from "./factory.ts";
+import { setPaused } from "../gates/pause.ts";
 import { type Run } from "../records/ledger.ts";
 import { getRun, patchRun } from "../records/record.ts";
 import { jobOfFolder } from "../records/run-files.ts";

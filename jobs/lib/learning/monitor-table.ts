@@ -18,6 +18,7 @@ import { causeOf } from "../records/outcome.ts";
 import { snapshots } from "../../../lib/usage.ts";
 import { flakeTracker, reader, storeLog, type Reader, type StoreChange } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
+import { today } from "../../../lib/day.ts";
 import { quantile } from "../../../lib/windows.ts";
 
 const DAY = 24 * 3600_000;
@@ -101,7 +102,7 @@ const dayStart = (day: string): number => new Date(`${day}T00:00:00`).getTime();
 export function addDays(day: string, n: number): string {
   const d = new Date(`${day}T12:00:00`);
   d.setDate(d.getDate() + n);
-  return issues.today(d);
+  return today(d);
 }
 
 

@@ -2,7 +2,7 @@
 import { roundsOf, stepOf, type Step as NextStep } from "../../jobs/lib/records/record.ts";
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { git } from "../../jobs/lib/infra/git.ts";
+import { git } from "../../lib/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
 import { allRuns, isBuild, isOpen, issueKeyOf, jobOfRun, loadRegistry, onOf, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { checkedBy, lookMinutes, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";

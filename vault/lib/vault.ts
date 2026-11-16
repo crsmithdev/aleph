@@ -7,7 +7,6 @@ import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import { daysAgo, today } from "../../lib/day.ts";
 import { readJsonOr, writeJson } from "../../lib/json.ts";
-import { vaultDir } from "../../lib/paths.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { probe } from "../../lib/git.ts";
 import { errText } from "../../lib/errtext.ts";
@@ -43,8 +42,6 @@ const DECAY_DAYS: Record<Kind, number> = { project: 30, gotcha: 60, decision: 18
  */
 const CONFIDENCE_FACTOR: Record<string, number> = { measured: 1.5, reported: 1, inferred: 0.5 };
 
-export { vaultDir };
-
 export interface Note {
   path: string;      // absolute
   rel: string;       // relative to the vault
@@ -59,8 +56,6 @@ export interface Note {
 
 /** `other` is the second note of an `overlap` pair. */
 export interface Finding { note: string; rule: string; detail: string; other?: string }
-
-export { today };
 
 export type Run = { at: string; result: "ok" | "failed"; detail?: string };
 const runFile = (root: string, name: string) => join(root, ".index", "runs", `${name}.json`);

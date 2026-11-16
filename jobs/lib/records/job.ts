@@ -12,8 +12,6 @@ import { isLost } from "../infra/process.ts";
 import { isSection, readSection, runFile, type RunFile, type Section } from "./run-files.ts";
 import * as record from "./record.ts";
 
-export { allJobs, isOpen };
-
 /** A job: its runs, oldest first. */
 export type Job = Entry[];
 

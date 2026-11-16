@@ -4,7 +4,7 @@
  */
 import { existsSync, lstatSync, readdirSync, readlinkSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { git } from "./git.ts";
+import { git } from "../../../lib/git.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { isLost } from "./process.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";

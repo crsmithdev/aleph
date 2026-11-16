@@ -8,7 +8,8 @@ import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
 import { loadRegistry, type Run } from "../records/ledger.ts";
 import { seed } from "../../job.testkit.ts";
-import { clock, today } from "../../../vault/lib/vault.ts";
+import { clock } from "../../../vault/lib/vault.ts";
+import { today } from "../../../lib/day.ts";
 import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
 import { writeRepos } from "../../../tests/projects.ts";
 

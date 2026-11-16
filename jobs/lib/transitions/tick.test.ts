@@ -13,7 +13,7 @@ import { readEvents } from "../../../lib/layout.ts";
 import { setPaused } from "../gates/pause.ts";
 import { setTick, tickRows, writeBaseline, writeStalls } from "../gates/tables.ts";
 import { conn, getJson } from "../../../lib/db.ts";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";

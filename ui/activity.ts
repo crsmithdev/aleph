@@ -6,8 +6,7 @@
  */
 import type { Observation } from "../lib/langfuse.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
-import { today } from "../issues/lib/todo.ts";
-import { daysAgo } from "../lib/day.ts";
+import { today, daysAgo } from "../lib/day.ts";
 import { once } from "../lib/sources.ts";
 import { traceIn } from "./api/scope.ts";
 import { langfuse, type Langfuse } from "../lib/langfuse.ts";

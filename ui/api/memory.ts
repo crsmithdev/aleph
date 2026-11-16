@@ -7,19 +7,19 @@
  * committed and pushed; a handoff or an episode is a file. A write clears nothing: the updater's watchers see it.
  */
 import { readStore } from "../../jobs/lib/learning/corrections.ts";
-import { daysAgo } from "../../lib/day.ts";
+import { daysAgo, today } from "../../lib/day.ts";
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { aleph, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
-import { handoffsDir } from "../../lib/paths.ts";
+import { handoffsDir, vaultDir } from "../../lib/paths.ts";
 import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from "../../jobs/lib/learning/episode.ts";
 import { tickRows, type TickRow } from "../../jobs/lib/gates/tables.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 

@@ -11,7 +11,8 @@ import { judgeChoice, nouls, type Noul } from "../lib/jev.ts";
 import { truncate } from "../lib/otlp.ts";
 import { postTurnSpan } from "./lib/trace.ts";
 import { claimLine, recall } from "../vault/lib/index.ts";
-import { appendRecallLog, coreNotes, loadWiki, recordRun, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
+import { appendRecallLog, coreNotes, loadWiki, recordRun, repoScope, type Note } from "../vault/lib/vault.ts";
+import { vaultDir } from "../lib/paths.ts";
 import { errText } from "../lib/errtext.ts";
 import { isAgent } from "../lib/env.ts";
 

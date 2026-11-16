@@ -2,7 +2,8 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendDaily, appendRecallLog, parseOp, today, lintVault, loadVault, loadWiki, readRecallLog, readRun, screenCandidates, trimRecallLog, wikiNotes, type Note } from "./vault.ts";
+import { appendDaily, appendRecallLog, parseOp, lintVault, loadVault, loadWiki, readRecallLog, readRun, screenCandidates, trimRecallLog, wikiNotes, type Note } from "./vault.ts";
+import { today } from "../../lib/day.ts";
 
 let root: string;
 const N = 300;

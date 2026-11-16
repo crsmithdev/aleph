@@ -7,12 +7,12 @@
 import { areasOf, parentIn, reader, type Reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
-import { isOpen, openJob, type Job } from "../records/job.ts";
+import { openJob, type Job } from "../records/job.ts";
+import { isOpen, allRuns, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { heldEvent, type Bound, type Gate } from "./issue-decision.ts";
 import { issueKey } from "../../../lib/naming.ts";
 import { eventsOf, readEvents } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
-import { allRuns, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { held } from "../infra/locks.ts";
 import { isLive } from "../infra/process.ts";
 import { causeOf, policyOf } from "../records/outcome.ts";

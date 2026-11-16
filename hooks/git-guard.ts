@@ -17,7 +17,7 @@ import { basename, dirname, join, resolve } from "node:path";
 
 try {
   const { itemsDir } = await import("../issues/lib/store.ts");
-  const { vaultDir } = await import("../vault/lib/vault.ts");
+  const { vaultDir } = await import("../lib/paths.ts");
   const { probe } = await import("../lib/git.ts");
 
   const input = JSON.parse(await Bun.stdin.text());

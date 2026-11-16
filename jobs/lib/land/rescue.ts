@@ -19,11 +19,11 @@ import { close, partsOf, reader, setPlan, writeList } from "../../../issues/lib/
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
 import { LAND_STUCK_MS } from "../gates/factory-status.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
-import { fetchOrigin, git } from "../infra/git.ts";
-import { allJobs, isOpen, jobById, issue as issueOf, tailOf, type Job } from "../records/job.ts";
+import { fetchOrigin, git } from "../../../lib/git.ts";
+import { jobById, issue as issueOf, tailOf, type Job } from "../records/job.ts";
+import { allJobs, isOpen, allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { askedQuestion, clearRerun, markRescued, rescued, writeRerun } from "../transitions/continuation.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { bootedAt, markEnded, runHealth, type Health } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";

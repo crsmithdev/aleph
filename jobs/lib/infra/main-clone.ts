@@ -6,7 +6,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fetchOrigin, git } from "./git.ts";
+import { fetchOrigin, git } from "../../../lib/git.ts";
 import type { Repo } from "../records/ledger.ts";
 
 /**

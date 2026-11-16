@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git-fixture.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
-import { readRun, today } from "../../../vault/lib/vault.ts";
+import { readRun } from "../../../vault/lib/vault.ts";
+import { today } from "../../../lib/day.ts";
 import { dedupe, PAIRS } from "./dedupe.ts";
 import { render } from "./maintainer.ts";
 

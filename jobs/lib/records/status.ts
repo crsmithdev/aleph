@@ -6,9 +6,9 @@ import { readFetched, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { parseId, parseKey, tail } from "../../../lib/naming.ts";
-import { fetchOrigin, git } from "../infra/git.ts";
-import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
-import { allJobs, isOpen, issue, stateOf } from "./job.ts";
+import { fetchOrigin, git } from "../../../lib/git.ts";
+import { allRuns, type Entry, type Repo, type State, allJobs, isOpen } from "./ledger.ts";
+import { issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
 import { errText } from "../../../lib/errtext.ts";
 

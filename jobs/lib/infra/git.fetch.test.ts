@@ -2,7 +2,8 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addWorktree, fetchOrigin, git, lockRetry } from "./git.ts";
+import { addWorktree } from "./git.ts";
+import { fetchOrigin, git, lockRetry } from "../../../lib/git.ts";
 
 const pause = lockRetry.pause;
 afterEach(() => { lockRetry.pause = pause; });

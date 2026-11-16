@@ -23,7 +23,7 @@ import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
 import { paused } from "./pause.ts";
 import { sandboxRepos } from "./gpu.ts";
 import { baselines, redLine } from "./tables.ts";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { readSection } from "../records/run-files.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { factoryDir, logEvent } from "../../../lib/layout.ts";

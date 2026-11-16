@@ -11,7 +11,7 @@ import { admit, realAdmission, type Admission, type Check, type CheckResult, typ
 import type { Stated } from "../records/outcome.ts";
 import { checkSeconds } from "../infra/settings.ts";
 import { lock } from "../infra/locks.ts";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";
 import type { Plan } from "./keep-earn.ts";
 import { isJsTestFile } from "./test-files.ts";

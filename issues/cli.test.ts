@@ -121,8 +121,10 @@ test("dates are local, not UTC", () => {
   // a real zone. At 18:06 in Los Angeles it is already tomorrow in UTC, and an
   // item filed that evening used to land on tomorrow's date.
   const lib = join(import.meta.dir, "lib", "todo.ts");
+  const dayLib = join(import.meta.dir, "..", "lib", "day.ts");
   const p = Bun.spawnSync(
-    ["bun", "-e", `import {today,minute} from ${JSON.stringify(lib)};
+    ["bun", "-e", `import {minute} from ${JSON.stringify(lib)};
+       import {today} from ${JSON.stringify(dayLib)};
        import {setSystemTime} from "bun:test";
        const e = new Date(2026, 8, 28, 18, 6);
        setSystemTime(e);

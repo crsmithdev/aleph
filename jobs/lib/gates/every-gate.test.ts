@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Runner } from "./checks.ts";
 import { setup, teardown } from "../transitions/factory.helpers.ts";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import type { Repo, Run } from "../records/ledger.ts";
 import { branchPorts } from "../roles/unit.ts";
 import { workerVerdict } from "./worker-verdict.ts";

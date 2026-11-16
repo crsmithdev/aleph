@@ -31,7 +31,7 @@ import { probeHold } from "../gates/holds.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { baselines, readStalls, setTick, tickMissed, tickRows, writeStalls } from "../gates/tables.ts";
 import { firefight } from "../gates/firefighter.ts";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { retain } from "../infra/retention.ts";
 import { allJobs, allRuns, loadRegistry, type Repo } from "../records/ledger.ts";

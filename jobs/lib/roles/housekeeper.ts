@@ -16,14 +16,14 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
 import { askOfItem, asking } from "../asks/ask.ts";
 import { paused } from "../gates/pause.ts";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { held, lock } from "../infra/locks.ts";
 import { readModels } from "../routing/models.ts";
 import { dispatchAfterIssue } from "../transitions/filing.ts";
 import { refusal } from "../transitions/transitions.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { errText } from "../../../lib/errtext.ts";
-import { issueKey } from "../../../lib/naming.ts";
+import { issueKey, PRIORITIES } from "../../../lib/naming.ts";
 
 /** Issues per run: a bad reply costs one batch. */
 export const BATCH = 10;
@@ -111,7 +111,7 @@ export const SCHEMA = {
           shape("close", { how: { enum: ["done", "obsolete"] }, evidence: nonEmpty }),
           shape("drop", { keep: id }),
           shape("retitle", { title: nonEmpty }),
-          shape("reprioritize", { priority: { enum: [...issues.PRIORITIES] } }),
+          shape("reprioritize", { priority: { enum: [...PRIORITIES] } }),
           shape("note"),
           shape("unpark"),
         ],
@@ -163,7 +163,7 @@ export function prompt(b: Batch, now: number): string {
     "- close: the work is on main (`how` done) or no longer applies (`how` obsolete). `evidence` is a commit in this repo or a file path that shows it.",
     "- drop: the issue repeats another issue of this list; `keep` is the id of the one to keep.",
     `- retitle: the title is wrong or stale. A title is one imperative of at most 60 characters that says what changes, with no final period and no "<words>: " prefix.`,
-    `- reprioritize: the priority is wrong now; one of ${issues.PRIORITIES.join(", ")}.`,
+    `- reprioritize: the priority is wrong now; one of ${PRIORITIES.join(", ")}.`,
     "- note: a fact the issue lacks: a moved or deleted file, a commit that did part of it, a question it raises. Nobody answers here: write what is unclear and move on.",
     "- unpark: the issue is ready to build now and waits for nothing. Intake takes it from there.",
     "",

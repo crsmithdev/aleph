@@ -16,7 +16,7 @@ import { addNote, issue as issueOf, lastRun, latestJob, openJob } from "../recor
 import { counting, getRun, makeJob, patchRun, setState, type NewJob } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { onMain } from "../records/status.ts";
 import { Refusal, refuse } from "../../../lib/refusal.ts";
 import { factoryGates } from "../gates/factory-status.ts";

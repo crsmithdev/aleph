@@ -4,8 +4,6 @@
  */
 import { git, lockRetry } from "../../../lib/git.ts";
 
-export { fetchOrigin, followMain, git, lockRetry } from "../../../lib/git.ts";
-
 /**
  * Clears what an ended job of that name left, then `git worktree add -q -b <branch> <wt> <base>`. Both write `.git/config`,
  * so when another process holds its lock the whole step is tried again (up to 5 times, the cleanup included). Returns the last result.

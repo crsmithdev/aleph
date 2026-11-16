@@ -4,7 +4,7 @@
  * that `join(import.meta.dir, ...)` writes in parts. Also the build run's choice of the test files to run.
  */
 import { dirname, join, normalize } from "node:path";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import type { Check, Repo } from "../records/ledger.ts";
 
 const MODULE = /\.(?:tsx?|m?js|cjs)$/;

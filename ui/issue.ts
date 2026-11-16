@@ -8,6 +8,7 @@ import type { Ask } from "../jobs/lib/asks/ask.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import { afterOf, areasOf, priorityOf, sourceOf } from "../issues/lib/store.ts";
 import * as todos from "../issues/lib/todo.ts";
+import { today } from "../lib/day.ts";
 import type { NewIssue } from "./state.ts";
 
 /** The stage the UI shows: parked when parked, else the stage its jobs give, else its status. */
@@ -25,7 +26,7 @@ export interface Row {
 /** The Issues page row of `item` in `repo`, with the stage `st` its jobs give. */
 export function row(repo: string, item: todos.Issue, st?: Pick<Stage, "stage" | "why">): Row {
   const createdTime = todos.created(item) ?? null, closedTime = todos.closed(item) ?? null, updatedTime = todos.updated(item) ?? null;
-  const day = (t: string | null) => (t ? todos.today(new Date(t)) : null);
+  const day = (t: string | null) => (t ? today(new Date(t)) : null);
   const parked = todos.status(item) === "parked";
   return {
     id: item.id, ref: todos.refOf(item), repo, title: item.title, href: issueHref(`${repo}-${todos.refOf(item)}`), kind: todos.kindOf(item), status: todos.status(item), priority: priorityOf(item), labels: areasOf(item),

@@ -9,23 +9,25 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { allRuns, loadRegistry, newsLine, type Entry, type Repo } from "./lib/records/ledger.ts";
+import { allRuns, loadRegistry, newsLine, type Entry, type Repo, allJobs, isOpen } from "./lib/records/ledger.ts";
 import { isLive } from "./lib/infra/process.ts";
-import { allJobs, findJob, isOpen, issue as issueOf, issueTitle, openJobOfIssue, readFile, view, type Job } from "./lib/records/job.ts";
+import { findJob, issue as issueOf, issueTitle, openJobOfIssue, readFile, view, type Job } from "./lib/records/job.ts";
 import { counting, patchRun, setState } from "./lib/records/record.ts";
 import { unit } from "./lib/roles/unit.ts";
 import { onMain } from "./lib/records/status.ts";
 import { settleOnMain } from "./lib/land/landing.ts";
-import { fetchOrigin, git } from "./lib/infra/git.ts";
+import { fetchOrigin, git } from "../lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
 import * as issues from "../issues/lib/todo.ts";
+import { today } from "../lib/day.ts";
 import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import * as notes from "../lib/annotations.ts";
 import * as ideas from "../ideas/ideas.ts";
 import { askOfItem, grant, readAlways, revoke } from "./lib/asks/ask.ts";
 import { readTimeouts, setTimeoutOf } from "./lib/asks/timeout.ts";
-import { behind, directorStep, hookLines, report, runDispatch, runNow, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
+import { behind, directorStep, hookLines, report, runDispatch, runNow, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
+import { setPaused } from "./lib/gates/pause.ts";
 import { dispatchAfterIssue, filing } from "./lib/transitions/filing.ts";
 import { maintainAll, runTick } from "./lib/transitions/tick.ts";
 import { vaultDir } from "../lib/paths.ts";
@@ -41,12 +43,11 @@ import { refuse, Refusal } from "../lib/refusal.ts";
 import * as doctor from "./lib/infra/doctor.ts";
 import { facts, repoStages, stages } from "./lib/records/status.ts";
 import type { Stage } from "./lib/records/stage.ts";
-import { jobId } from "./lib/infra/settings.ts";
 import { readModels, setModel } from "./lib/routing/models.ts";
 import { issueKey, key, parseId, parseKey, shortText, shownKey } from "../lib/naming.ts";
 import { projectName } from "../issues/lib/projects.ts";
 import { errText } from "../lib/errtext.ts";
-import { isAgent } from "../lib/env.ts";
+import { isAgent, jobId } from "../lib/env.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -650,7 +651,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "suite": ctx.out(await suiteStep()); break;
     case "monitor": {
       // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.
-      const day = ctx.flag("day") ?? addDays(issues.today(), -1);
+      const day = ctx.flag("day") ?? addDays(today(), -1);
       if (!/^\d{4}-\d\d-\d\d$/.test(day)) refuse(usage("monitor"));
       if (ctx.rest.includes("--dry")) { ctx.write(renderTable(tableOf(day))); break; }
       const r = await runMonitor(day) ?? refuse("another monitor job holds the lock");

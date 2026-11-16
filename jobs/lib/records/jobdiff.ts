@@ -6,7 +6,7 @@
 import { logEvent } from "../../../lib/layout.ts";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { loadRegistry, type Entry, type Repo } from "./ledger.ts";
 import { errText } from "../../../lib/errtext.ts";
 

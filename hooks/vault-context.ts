@@ -12,7 +12,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadVault, repoScope, startContext, vaultDir } from "../vault/lib/vault.ts";
+import { loadVault, repoScope, startContext } from "../vault/lib/vault.ts";
+import { vaultDir } from "../lib/paths.ts";
 import { isAgent } from "../lib/env.ts";
 
 const input = JSON.parse((await Bun.stdin.text()) || "{}");

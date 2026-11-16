@@ -176,7 +176,6 @@ export const detailPanel = (title, aside, body, id = "") => `<details${id ? ` id
 export const panel = (id, title, body, aside = "", cls = "") => `<section class="dp-panel dp-prose${cls ? ` ${cls}` : ""}" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;
 
 /** "$1.11", or "$0.00" for none. */
-export const costText = (n) => money(n);
 /** "10/28 08:11 to 10/28 08:39". */
 export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 
@@ -201,5 +200,5 @@ export function laneRow({ head, runs, from = NaN, to = NaN, marks = [], result, 
   const waits = gaps(runs, from, to), bars = barsOf(runs, { cost });
   const times = [from, to, ...runs.flatMap((x) => [x.start, x.end]), ...marks.map((m) => m.at)].filter(Number.isFinite);
   const took = times.length ? Math.max(...times) - Math.min(...times) : 0;
-  return { head, bars, waits, marks, result, time: took > 0 ? dur(took / 1000) : "–", cost: costText(runs.reduce((n, x) => n + (x.r.cost ?? 0), 0)), events: [...waits.map((w) => waitEvent(w, holds)), ...runEvents(bars), ...events] };
+  return { head, bars, waits, marks, result, time: took > 0 ? dur(took / 1000) : "–", cost: money(runs.reduce((n, x) => n + (x.r.cost ?? 0), 0)), events: [...waits.map((w) => waitEvent(w, holds)), ...runEvents(bars), ...events] };
 }

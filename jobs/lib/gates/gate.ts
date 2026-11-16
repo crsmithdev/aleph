@@ -2,7 +2,7 @@
  * The factory's gate: what a worker's transcript says, and whether a diff
  * needs Chris. See docs/workflow.md.
  */
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { inTestDir, isJsTestFile } from "./test-files.ts";
 
 /** The reason a parser gives when the reply has no structured output. */

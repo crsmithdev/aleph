@@ -11,7 +11,8 @@ import { langfuse } from "../../../lib/langfuse.ts";
 import { recall } from "../../../vault/lib/index.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
 import { recallQuery } from "../../../vault/lib/recall-query.ts";
-import { loadWiki, today, type Note } from "../../../vault/lib/vault.ts";
+import { loadWiki, type Note } from "../../../vault/lib/vault.ts";
+import { today } from "../../../lib/day.ts";
 import { pass, reason, scratch, TEXT } from "./maintainer.ts";
 import { outcome } from "./recheck.ts";
 

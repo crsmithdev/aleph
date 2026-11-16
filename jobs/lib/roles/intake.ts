@@ -21,7 +21,7 @@ import { gates } from "../gates/factory-status.ts";
 import { mainRed } from "../gates/tables.ts";
 import { factoryDir } from "../../../lib/layout.ts";
 import { redCi } from "../gates/ci.ts";
-import { fetchOrigin, git } from "../infra/git.ts";
+import { fetchOrigin, git } from "../../../lib/git.ts";
 import { withMainClone } from "../infra/main-clone.ts";
 import { itemOnMain } from "../records/status.ts";
 import { INTAKE_TRIES } from "../infra/settings.ts";

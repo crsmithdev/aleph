@@ -11,7 +11,7 @@ import { writeJson } from "../../../lib/json.ts";
 import { recordRan } from "../gates/tables.ts";
 import { addDays, measure, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
 import { monitorHour, monitorOn } from "../infra/settings.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { today } from "../../../lib/day.ts";
 import { readModels } from "../routing/models.ts";
 import { errText } from "../../../lib/errtext.ts";
 
@@ -23,7 +23,7 @@ const MONITOR_MODEL = () => readModels().monitor?.model ?? "deepseek-v4.1-flash"
 /** The day a report is due for: yesterday, from the monitor hour (local) on, when it has no report yet; else null. */
 export function monitorDue(now = new Date()): string | null {
   if (now.getHours() < monitorHour()) return null;
-  const day = addDays(issues.today(now), -1);
+  const day = addDays(today(now), -1);
   return existsSync(reportFile(day)) ? null : day;
 }
 

@@ -14,7 +14,7 @@ import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles
 import { layout, logEvent } from "../../lib/layout.ts";
 import { next } from "../../lib/db.ts";
 import { always, askIfPartDropped, logAlways } from "../../jobs/lib/asks/ask.ts";
-import { CLOSED, issueKey, key as keyOf } from "../../lib/naming.ts";
+import { CLOSED, issueKey, key as keyOf, PRIORITIES, SOURCES } from "../../lib/naming.ts";
 import * as issues from "./todo.ts";
 import { parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
 import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
@@ -380,7 +380,7 @@ const text = (v: unknown): string => (typeof v === "string" ? v : "");
 /** Who raised the item: its `source`, else agent for a child (a child is made by the planner, never by chris) and chris for an issue. */
 export function sourceOf(item: Issue): issues.Source {
   const s = text(item.fm.source);
-  return s !== "chris" && (issues.SOURCES as readonly string[]).includes(s) ? (s as issues.Source) : issues.parentRef(item) === undefined ? "chris" : "agent";
+  return s !== "chris" && (SOURCES as readonly string[]).includes(s) ? (s as issues.Source) : issues.parentRef(item) === undefined ? "chris" : "agent";
 }
 /** The children of an issue, in number order: the issues with a `from` that names it. */
 export const partsOf = (doc: Doc, item: Issue): Issue[] => doc.items.filter((i) => issues.parentRef(i) === issues.refOf(item));
@@ -460,11 +460,11 @@ export function reader(o: { fetch?: boolean; rev?: string } = {}): Reader {
 
 /** Rank of an item's priority: 3 for critical down to 0 for low. No priority, or an unknown one, ranks as medium. */
 function rank(item: Issue): number {
-  const i = (issues.PRIORITIES as readonly string[]).indexOf(String(item.fm.priority ?? ""));
-  return i < 0 ? (issues.PRIORITIES as readonly string[]).indexOf("medium") : i;
+  const i = (PRIORITIES as readonly string[]).indexOf(String(item.fm.priority ?? ""));
+  return i < 0 ? (PRIORITIES as readonly string[]).indexOf("medium") : i;
 }
 /** An item's priority; none, or an unknown one, reads medium. */
-export const priorityOf = (item: Issue): string => issues.PRIORITIES[rank(item)];
+export const priorityOf = (item: Issue): string => PRIORITIES[rank(item)];
 
 /** Sort entries by priority, highest first; stable, so equal priorities keep their order. */
 export function byPriority<T extends { item: Issue }>(entries: T[]): T[] {

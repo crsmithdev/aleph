@@ -10,7 +10,7 @@
 import { skillSection } from "../roles/role-skill.ts";
 import { reader, runMedia } from "../../../issues/lib/store.ts";
 import { needsOf } from "../asks/ask.ts";
-import { git } from "../infra/git.ts";
+import { git } from "../../../lib/git.ts";
 import { jobById, jobsNamed, notes, readFile, type Job } from "../records/job.ts";
 import { isAgentRun, isBuild, lastTagged, onOf, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf } from "../records/outcome.ts";

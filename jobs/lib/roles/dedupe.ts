@@ -8,7 +8,8 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
-import { lintVault, loadWiki, recordRun, today, type Note } from "../../../vault/lib/vault.ts";
+import { lintVault, loadWiki, recordRun, type Note } from "../../../vault/lib/vault.ts";
+import { today } from "../../../lib/day.ts";
 import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
 import { outcome } from "./recheck.ts";
 

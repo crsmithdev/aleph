@@ -7,9 +7,8 @@
  * item or run and a new-shape one alike.
  */
 import { askOfItem, waitOf } from "../asks/ask.ts";
-import { isWaiting, type Run, type State } from "./ledger.ts";
+import { isWaiting, type Run, type State, isOpen } from "./ledger.ts";
 import type { Job } from "./job.ts";
-import { isOpen } from "./job.ts";
 import { counting } from "./record.ts";
 import { eventsOf } from "../../../lib/layout.ts";
 import * as store from "../../../issues/lib/store.ts";

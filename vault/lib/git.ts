@@ -2,8 +2,6 @@ import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { git } from "../../lib/git.ts";
 
-export { git } from "../../lib/git.ts";
-
 const TRAILER = "Co-Authored-By: Claude <noreply@anthropic.com>";
 
 export function tracked(dir: string, path: string): boolean {

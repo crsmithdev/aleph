@@ -18,7 +18,7 @@ This page lists what aleph records about itself, where each record goes, who wri
 | `dispatch.log` | `~/.aleph/factory/dispatch.log` | Output of detached dispatch, intake, director and suite | `jobs/lib/transitions/launch.ts:113` | A person, `jobs/cli.helpers.ts:114` (test failure dump) |
 | Job folders | `~/.aleph/jobs/<n>/` | The files of one job; `log.txt` holds its command, setup, stderr, dispatch, checks and land sections | The unit, the checks and the land | The UI job page, `postTrace`. The `dispatch` section holds the output of the dispatch that the job ending starts (`jobs/lib/roles/unit.ts`) |
 
-The vault also logs its own writes in `daily/<date>.md` (`appendDaily` in `vault/lib/vault.ts:150`). [Vault](vault.md) describes it.
+The vault also logs its own writes in `daily/<date>.md` (`appendDaily` in `vault/lib/vault.ts:145`). [Vault](vault.md) describes it.
 
 ## Event log
 

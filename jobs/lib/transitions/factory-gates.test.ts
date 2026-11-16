@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, mock, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { dispatchIssues, runNow, setPaused } from "./factory.ts";
+import { dispatchIssues, runNow } from "./factory.ts";
+import { setPaused } from "../gates/pause.ts";
 import { gates } from "../gates/factory-status.ts";
 import { gpuSlot, liveEntries, liveRuns } from "../gates/gpu.ts";
 import { writeBaseline } from "../gates/tables.ts";

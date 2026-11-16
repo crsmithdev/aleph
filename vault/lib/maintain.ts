@@ -9,8 +9,8 @@ import { layout } from "../../lib/layout.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
 import { Exit, run } from "./ops.ts";
-import { daysAgo } from "../../lib/day.ts";
-import { compiledDays, fixFrontmatter, lintVault, loadVault, loadWiki, readRecallLog, readRun, recordRun, today, trimRecallLog, type Finding } from "./vault.ts";
+import { daysAgo, today } from "../../lib/day.ts";
+import { compiledDays, fixFrontmatter, lintVault, loadVault, loadWiki, readRecallLog, readRun, recordRun, trimRecallLog, type Finding } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
 const SHOWN_UNOPENED = 8;
