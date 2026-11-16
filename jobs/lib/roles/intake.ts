@@ -310,6 +310,8 @@ Never ask Chris how to build it: code structure, which module, naming, test shap
 
 When the source is \`worker\` and all the issue asks for is a new test of behaviour that works today, a rerun of a check elsewhere, or a screenshot or a measurement with no change behind it: "close", with the reason "test-only follow-up". A worker issue that names a defect still builds.
 
+A fresh request from Chris that goes against the current design or its tests is not stale: "build" it, or "ask" Chris, and do not "close" it.
+
 # The spec
 
 A builder builds it alone, and nobody answers questions during the run. The request is the ground truth: the Goal says what it asks, in its words where they fit. A tentative word in the request ("perhaps", "maybe", "could") leaves that choice to the worker: say so, or leave it out.
@@ -378,7 +380,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
     } else if (v.route === "done") {
       issues.setStatus(item, "done", undefined, v.reason);
     } else if (v.route === "close") {
-      issues.setStatus(item, "done", undefined, v.reason);
+      issues.setStatus(item, "dropped", undefined, v.reason);
     } else if (v.ask.recommended && always("question", repo.key)?.action === "resolve") {
       // The issue stays unsorted: the next intake reads this note and routes it.
       const o = v.ask.options.find((x) => x.label === v.ask.recommended) ?? v.ask.options[0]!;
@@ -499,6 +501,7 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
       if (v.route === "build" && testOnly(item, v)) v = { route: "close", reason: "test-only follow-up" };
       const red = stillRed(repo, item);
       if (red && (v.route === "close" || v.route === "done")) v = { route: "ask", reason: v.reason, ask: plainAsk("question", `Main is still red (${red}), and intake would close this issue: ${v.reason}`) };
+      else if (v.route === "close" && !item.request.trim() && !mediaOf(item).length) v = { route: "ask", reason: v.reason, ask: plainAsk("question", `This issue has no request, and intake would close it: ${v.reason}`) };
       const applied = apply(repo, id, v, effects);
       if (applied) {
         counts[applied] = (counts[applied] ?? 0) + 1;

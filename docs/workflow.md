@@ -67,7 +67,7 @@ Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 | Route | Result |
 |---|---|
 | `build` | A spec (Goal, Edit surface, Oracle), or 2 to 6 sub-issues, each with its own spec and `after` order |
-| `close` | Done, with the reason: a duplicate, stale or already fixed |
+| `close` | Dropped, with the reason: a duplicate, stale or not worth doing |
 | `done` | Done; the named commit must be on main |
 | `ask` | An Ask with a question, 2 to 4 options and a recommendation |
 
@@ -85,7 +85,8 @@ Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 - A failed spec check goes back to the same session once, with the problems. A second failure sets an `intake-failed` Ask.
 - A run with no reply retries at once. After `ALEPH_INTAKE_TRIES` (2), it sets an `intake-failed` Ask, or applies the Always rule (`continue` or `discontinue`).
 - A `close` or `done` route on a `red-main` issue while main is still red becomes a `question` Ask.
-- A worker follow-up whose Edit surface is only test files closes as a test-only follow-up.
+- A `close` route on an issue with no request and no media becomes a `question` Ask that names the reason.
+- A worker follow-up whose Edit surface is only test files is dropped as a test-only follow-up.
 
 ## 2. Dispatch and its gates
 

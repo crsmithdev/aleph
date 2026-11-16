@@ -120,7 +120,7 @@ beforeAll(() => {
   sh(repo.path, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "fake"), FAKE);
   chmodSync(join(base, "fake"), 0o755);
-  writeFileSync(join(base, "verdicts.json"), JSON.stringify(VERDICTS));
+  writeFileSync(join(base, "verdicts.json"), JSON.stringify({ ...VERDICTS, done: { route: "done", reason: "already built", commit: sh(repo.path, "git", "rev-parse", "HEAD") } }));
   Object.assign(process.env, gitEnv, {
     ALEPH_ITEMS: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_INTAKE_CMD: join(base, "fake"),
     FAKE_LOG: join(base, "calls"), FAKE_VERDICTS: join(base, "verdicts.json"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome, ALEPH_DB: dbHome, ALEPH_DISPATCH: "off",
@@ -135,15 +135,17 @@ const runOf = (id: number) => runs().find((r) => r.name === `intake-${repo.key}-
 const calls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 
 test("an intake run records its route, the issue it is on and its cost", async () => {
-  reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:chris" }, { title: "c", body: "VERDICT:close" }]);
+  reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:chris" }, { title: "c", body: "VERDICT:close" }, { title: "d", body: "VERDICT:done" }]);
   const t = await run();
-  expect(t.counts).toEqual({ build: 1, ask: 1, close: 1 });
+  expect(t.counts).toEqual({ build: 1, ask: 1, close: 1, done: 1 });
   expect(runOf(1)).toMatchObject({ role: "intake", route: "build", target: "issue.1", reason: "one run", cost: 0.25 });
   expect(runOf(2)!.route).toBe("ask");
   expect(runOf(3)!.route).toBe("close");
   expect(item(1).spec).toBe("## Goal\nDo it.\n\n## Edit surface\n- x.ts\n\n## Oracle\n- `bun test x.test.ts` passes");
   expect(item(1).fm.intake).toBe("build");
-  expect(issues.status(item(3))).toBe("done");
+  expect(issues.status(item(3))).toBe("dropped");
+  expect(item(3).fm.closed_why).toBe("duplicate of issue.1");
+  expect(issues.status(item(4))).toBe("done");
   expect(askOf("issue.2")).toMatchObject({ reason: "question" });
 });
 
@@ -209,7 +211,7 @@ test("an issue of kind flake is a note on the flake tracker with no run", async 
 test("a worker's follow-up whose Edit surface is only test files is closed as test-only", async () => {
   reset([{ title: "a", body: "VERDICT:testonly", source: "worker" }, { title: "b", body: "VERDICT:testonly" }]);
   await run();
-  expect(issues.status(item(1))).toBe("done");
+  expect(issues.status(item(1))).toBe("dropped");
   expect(item(1).fm.closed_why).toBe("test-only follow-up");
   expect(issues.status(item(2))).toBe("open");
   expect(item(2).spec).toContain("x.test.ts");
@@ -349,6 +351,7 @@ test("the prompt keeps the spec close to the request and how-to-build questions 
   expect(p).not.toContain("<repo>-<n>`)");
   expect(p).toContain("Check each Oracle clause against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec");
   expect(p).toContain("no two clauses that cannot both be true");
+  expect(p).toContain("A fresh request from Chris that goes against the current design or its tests is not stale");
 });
 
 test("parseRoute keeps an issue key in an ask option's after", () => {
@@ -470,7 +473,15 @@ test("intake does not close a red-main issue while its main is still red: it ask
   reset([{ title: "Fix the red main at abc1234", body: "VERDICT:close", redMain: true }]);
   putJson("state", "baseline", { [repo.key]: { repo: repo.key, commit: "abc1234", ok: true } });
   expect((await run()).counts).toEqual({ close: 1 });
-  expect(issues.status(item(1))).toBe("done");
+  expect(issues.status(item(1))).toBe("dropped");
+});
+
+test("intake does not close an issue with no request: it asks Chris with the close reason", async () => {
+  // The fake reads its verdict from the prompt, so the title names it.
+  reset([{ title: "VERDICT:close" }]);
+  expect((await run()).counts).toEqual({ ask: 1 });
+  expect(issues.status(item(1))).toBe("open");
+  expect(askOf("issue.1")!.question).toContain("duplicate of issue.1");
 });
 
 test("intake reads the media attached to the issue", async () => {
