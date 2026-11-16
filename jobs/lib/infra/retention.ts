@@ -1,7 +1,7 @@
 /**
  * The tick's retention step: it bounds the stores that grow without limit to `KEEP_DAYS`. It deletes the folder of a
  * job that ended over `KEEP_DAYS` ago (its row stays), a job folder that no row holds and that did not change
- * for `KEEP_DAYS`, the `usage` rows that old, and the dispatch.<day>.log files of a day that old. The
+ * for `KEEP_DAYS`, the `usage` rows that old, and the dispatch.<day>.log and housekeeper.<day>.log files of a day that old. The
  * event log and the job rows stay forever.
  */
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -37,12 +37,15 @@ export function retain(now = Date.now()): number {
 
   n += conn().query("DELETE FROM usage WHERE time < ?").run(new Date(cut).toISOString()).changes;
 
-  // dispatch.day holds the local day the current dispatch.log began, so the aside file takes the day of its oldest line.
-  const fdir = factoryDir(), log = join(fdir, "dispatch.log"), mark = join(fdir, "dispatch.day");
+  // <name>.day holds the local day the current <name>.log began, so the aside file takes the day of its oldest line.
+  const fdir = factoryDir();
   const day = today(new Date(now)), oldest = today(new Date(cut));
-  const start = existsSync(mark) ? readFileSync(mark, "utf8").trim() : existsSync(log) ? birthDay(statSync(log)) : day;
-  if (start < day && existsSync(log)) renameSync(log, join(fdir, `dispatch.${start}.log`));
-  if ((start !== day || !existsSync(mark)) && existsSync(fdir)) writeFileSync(mark, day);
-  if (existsSync(fdir)) for (const f of readdirSync(fdir)) if (/^dispatch\.\d{4}-\d\d-\d\d\.log$/.test(f) && f.slice(9, 19) < oldest) drop(join(fdir, f));
+  for (const name of ["dispatch", "housekeeper"]) {
+    const log = join(fdir, `${name}.log`), mark = join(fdir, `${name}.day`);
+    const start = existsSync(mark) ? readFileSync(mark, "utf8").trim() : existsSync(log) ? birthDay(statSync(log)) : day;
+    if (start < day && existsSync(log)) renameSync(log, join(fdir, `${name}.${start}.log`));
+    if ((start !== day || !existsSync(mark)) && existsSync(fdir)) writeFileSync(mark, day);
+    if (existsSync(fdir)) for (const f of readdirSync(fdir)) if (f.startsWith(`${name}.`) && /\.\d{4}-\d\d-\d\d\.log$/.test(f) && f.slice(name.length + 1, name.length + 11) < oldest) drop(join(fdir, f));
+  }
   return n;
 }

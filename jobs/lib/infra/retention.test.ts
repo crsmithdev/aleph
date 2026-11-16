@@ -59,7 +59,7 @@ test("retain deletes the folder of a job 90 days after it ended, and keeps its r
 });
 
 test("retain trims usage rows", () => {
-  const row = (d: number) => conn().query("INSERT INTO usage (time, five_hour, seven_day) VALUES (?, 1, 2)").run(ago(d).toISOString());
+  const row = (d: number) => conn().query("INSERT INTO usage (time, seven_day) VALUES (?, 2)").run(ago(d).toISOString());
   row(91);
   row(10);
 
@@ -101,6 +101,21 @@ test("retain marks a log with no mark at once by its birth day, then moves it as
   retain(t + 864e5);
   expect(existsSync(join(dir, "dispatch.log"))).toBe(false);
   expect(readFileSync(join(dir, `dispatch.${born}.log`), "utf8")).toBe("old lines");
+});
+
+test("retain rotates housekeeper.log like dispatch.log", () => {
+  const dir = join(base, "factory");
+  const day = (d: number) => today(ago(d));
+  writeFileSync(join(dir, `housekeeper.${day(91)}.log`), "x");
+  writeFileSync(join(dir, "housekeeper.day"), day(2));
+  writeFileSync(join(dir, "housekeeper.log"), "since 2 days");
+
+  retain(NOW);
+
+  expect(existsSync(join(dir, `housekeeper.${day(91)}.log`))).toBe(false);
+  expect(readFileSync(join(dir, `housekeeper.${day(2)}.log`), "utf8")).toBe("since 2 days");
+  expect(existsSync(join(dir, "housekeeper.log"))).toBe(false);
+  expect(readFileSync(join(dir, "housekeeper.day"), "utf8")).toBe(day(0));
 });
 
 test("birthDay takes the birth day, and the mtime day when the birth time is 0", () => {

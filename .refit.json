@@ -182,34 +182,6 @@
     },
     {
       "copies": [
-        "jobs/lib/migrate.ts:130-138",
-        "issues/lib/todo.ts:112-122"
-      ],
-      "reason": "parseOld reads the old Backlog.md issue format once, for the migration; its markers and escaping differ from the items format that parseItem reads."
-    },
-    {
-      "copies": [
-        "jobs/lib/migrate.ts:138-141",
-        "issues/lib/todo.ts:123-128"
-      ],
-      "reason": "parseOld reads the old Backlog.md issue format once, for the migration; its markers and escaping differ from the items format that parseItem reads."
-    },
-    {
-      "copies": [
-        "jobs/lib/migrate.ts:44-45",
-        "jobs/commands.ts:50-55"
-      ],
-      "reason": "Lists of different names: the old run fields the migration maps, and the CLI flags that take a value."
-    },
-    {
-      "copies": [
-        "jobs/lib/transitions/tick.ts:25-30",
-        "jobs/lib/migrate.ts:14-19"
-      ],
-      "reason": "Both are import lines, not logic."
-    },
-    {
-      "copies": [
         "jobs/lib/land/rescue.ts:67-76",
         "jobs/lib/land/rescue.ts:64-73"
       ],

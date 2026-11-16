@@ -245,8 +245,6 @@ export async function review(b: Batch, now: number): Promise<Outcome> {
   const tally = { reviewed: ids.length, ...Object.fromEntries(WORD.map(([k, w]) => [w, did.filter((a) => a.do === k).length])), refused: out.refused.length };
   run.end(`${out.applied.length} applied, ${out.refused.length} refused`, {
     tally: Object.fromEntries(Object.entries(tally).filter(([, n]) => n)),
-    touched: [...new Set(did.map((a) => `${b.repo.key}-${a.id}`))],
-    changes: did.map((a) => ({ id: `${b.repo.key}-${a.id}`, do: a.do })),
   });
   return out;
 }

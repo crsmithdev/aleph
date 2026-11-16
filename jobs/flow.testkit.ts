@@ -112,8 +112,5 @@ export const issueEdit = (key: string, ref: number | string, fields: verbs.Field
 /** `aleph issue done|drop <repo> <ref> [<text>]`. */
 export const issueClose = (key: string, ref: number | string, how: "done" | "drop", text = "") =>
   cli(["issue", how, "--", key, String(ref), ...(text ? [text] : [])]);
-/** The notes that `aleph issue show <repo> <id>` prints. */
-export const issueNotes = async (key: string, id: number | string): Promise<string> => (await issueShow(key, id)).json.notes.join("\n");
-
 /** `aleph status <repo>-<n>[.<k>] --json`. */
 export const status = (ref: string) => cli(["status", ref, "--json"]);

@@ -14,7 +14,7 @@ Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdo
 └── .env                keys: Langfuse, OpenRouter, UI password
 ```
 
-Retention: each tick (`jobs/lib/infra/retention.ts`) deletes data over 90 days old: the folder of a job that ended that long ago (its row stays), a job folder that no row holds and that did not change for 90 days, `usage` rows by `time`, and `dispatch.<day>.log` files (`dispatch.log` moves aside each UTC day under the day it began, which `dispatch.day` holds). The event log and the job rows stay forever.
+Retention: each tick (`jobs/lib/infra/retention.ts`) deletes data over 90 days old: the folder of a job that ended that long ago (its row stays), a job folder that no row holds and that did not change for 90 days, `usage` rows by `time`, and `dispatch.<day>.log` and `housekeeper.<day>.log` files (each log moves aside each UTC day under the day it began, which `dispatch.day` or `housekeeper.day` holds). The event log and the job rows stay forever.
 
 Locks are not on disk. Each is a directory with an `owner` pid under `$XDG_RUNTIME_DIR/aleph/<name>`, so a reboot clears them (`jobs/lib/infra/locks.ts`).
 
@@ -128,7 +128,7 @@ An issue's children are the issues whose `from` names it (`partsOf` in `issues/l
 
 ## Job rows and issue state: `aleph.db`
 
-`jobs/lib/records/record.ts` is the only module that reads or writes a job row or an issue state row. `makeJob` creates a row; `setState` and `endRun` write its state, and `endRun` writes the state, the end and `next` in one transaction; each logs the state as an event in the same transaction. The columns hold what every job has: `id` (`job.<n>`), `role`, `by`, `state`, `project`, `made`, `started`, `ended`, `model`, `size`, `cost`, `commit_sha`, `pid`, `exit_code`, `target`, `prev`, `retry_of`, `was`. `model` is the model that ran, and `size` is the size word of a build (`small`, `medium` or `large`), null for any other job. Every other field of a `Run` is the JSON `extra` column. The files of a job are in its folder, see below.
+`jobs/lib/records/record.ts` is the only module that reads or writes a job row or an issue state row. `makeJob` creates a row; `setState` and `endRun` write its state, and `endRun` writes the state, the end and `next` in one transaction; each logs the state as an event in the same transaction. The columns hold what every job has: `id` (`job.<n>`), `role`, `by`, `state`, `project`, `made`, `started`, `ended`, `model`, `size`, `cost`, `commit_sha`, `pid`, `exit_code`, `target`, `prev`, `retry_of`. `model` is the model that ran, and `size` is the size word of a build (`small`, `medium` or `large`), null for any other job. Every other field of a `Run` is the JSON `extra` column. The files of a job are in its folder, see below.
 
 A work is a `prev` chain of jobs. `rounds` and `cost` are queries over the jobs of one target, not stored.
 
@@ -208,7 +208,7 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 | `tick` | One row per step: `step`, `last` (the time it last ran) and `result` (`ok`, a short summary or `failed: <error>`). The periodic steps `ci`, `episodes` and `firefight` keep their due time in `last`. Each suite (`suite <repo>`) and the monitor have a row | Tick and every step |
 | `settings` | Rows `caps` (`{live?, run?, intakeTries?, jobSeconds?, fixRounds?, landBatch?, loadLimit?}`; an env var wins), `models` (`{<size or role model>: {enabled, model}}`), `always` (`{<reason>: {action, at}}`), `timeouts` (`{<reason>: {minutes, then}}`; `then` is `pick` or `drop`; a bare number is minutes with `pick`), `paused` (the time of the pause, `null` when resumed) and `judge` (`jev` or `haiku`). Value is JSON | Automation page, Gates page, `aleph pause`, `aleph models`, `aleph always`, `aleph judge` |
 | `state` | Rows `baseline` (`{<repo>: {commit, ok, failed?}}`), `ci` (GitHub CI state per repo), `stalls` (stall first-seen times), `smoke` (failures in a row), `backend-hold`, `reran` (CI runs rerun), `recheck-held`, `housekeeper`, `corrections` (signals and lessons), `tick.missed` and `tick.suite`. Value is JSON | Tick, suite, firefighter, housekeeper, corrections |
-| `usage` | `seq`, `time`, `five_hour`, `seven_day`, `seven_day_resets_at`: one row per 10 minutes; `pollOnce` writes `time`, `seven_day` and `seven_day_resets_at`, and `five_hour` stays `null` on new rows (only old rows have it) | `pollOnce` in `ui/usage.ts` |
+| `usage` | `seq`, `time`, `seven_day`, `seven_day_resets_at`: one row per 10 minutes; `pollOnce` writes all three | `pollOnce` in `ui/usage.ts` |
 | `openrouter` | `seq`, `time`, `usage`, `factor`: the key's lifetime USD and the rate per list dollar | `pollOpenRouter` in `ui/usage.ts` |
 | `jev` | `seq`, `time`, `cost`: one row per Jev call | `decide` in `lib/jev.ts` |
 | `suite_history` | `seq`, `time`, `repo`, `commit_sha`, `ran`, `passed`, `failed`, `skipped`, `rerun_passed`: one row per suite run | `aleph suite` |
@@ -229,21 +229,6 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 ### Corrections
 
 The `corrections` row of `state` holds `{minedAt, lessons[]}` (`jobs/lib/learning/corrections.ts`). A **signal** is a quote from the last 14 days: Chris in a trace, a verify-gate deny, or a drop reason. A **lesson** groups signals under one sentence, with state `open`, `proposed`, `approved` or `declined`. At 3 signals (`ALEPH_PROPOSE_AT`) a lesson becomes a `proposal-*` Ask; an approved one files an issue.
-
-## Migration: `aleph migrate`
-
-`aleph migrate storage` moves the old store (`issues/`, `ideas/`, `runs/`, the record files in `jobs/` and `jobs-archive/`, `repos.json`, the day files of the event log, the factory JSON files and the usage logs) to the layout above. It finds every path from `ALEPH_DB` (the root) and the `lib/layout.ts` variables, so it runs on a copy. Pause the factory first.
-
-| Step | What it does |
-|---|---|
-| `--dry-run` | Reads and writes nothing. It prints the counts for each kind, the rows it drops, and each key it has no rule for. |
-| Refuse | The real run stops while one key has no rule, or when `aleph.db` already holds jobs, or when an old checkout has changes. |
-| Back up | One `backups/storage-<date>.tgz` of the root without `vault/`, `prior-art/` and `backups/`. `gzip -t` reads it back. |
-| Convert | One transaction fills `aleph.db`. Job folders are hard links of the old run files, with `log.txt` built from the old logs. The old `issues/` folder becomes `items/` in three commits: the restructure, the merge of the ideas repo and the idea numbers. |
-| Check | The rows are compared with the old files that are still in place: the counts, the fields of each run, the event log line by line, and the state files. |
-| Push | The items repo goes to its origin. The run prints whether `origin/main` equals `HEAD`. |
-
-`aleph migrate cleanup` deletes what the migration replaced: the old record, run and log files, `*.bak` files, `tick.converted` and `words-migrated`. It refuses until a migration has passed its check.
 
 ## Vault: `vault/`
 

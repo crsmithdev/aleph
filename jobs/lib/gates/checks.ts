@@ -151,7 +151,7 @@ const CHECK_ENV = { TZ: "UTC", ALEPH_BROWSER_TESTS: "1" };
 
 /** The env a check runs with: `env` (the caller's, else this process's) with CHECK_ENV, and none of an agent's or a job's variables. */
 export const checkEnv = (env: Record<string, string | undefined> = process.env): Record<string, string | undefined> =>
-  ({ ...env, ...CHECK_ENV, ALEPH_JOB_ID: undefined, ALEPH_JOB_RUN: undefined, CLAUDECODE: undefined, ANTHROPIC_API_KEY: undefined });
+  ({ ...env, ...CHECK_ENV, ALEPH_JOB_ID: undefined, CLAUDECODE: undefined, ANTHROPIC_API_KEY: undefined });
 
 /**
  * Run `cmd` with bash in `cwd`, its output appended to `out`, under `timeout`, which puts it in a process group of its

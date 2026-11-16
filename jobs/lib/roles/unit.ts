@@ -176,7 +176,7 @@ export async function unit(folder: string): Promise<void> {
   const dispatcherPath = runPath();
   const env: Record<string, string | undefined> = {
     ...process.env, ...readEnvFile(repo?.env ?? runEnvFile()),
-    PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: id, ALEPH_JOB_RUN: id,
+    PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: id,
   };
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDECODE;
@@ -186,7 +186,7 @@ export async function unit(folder: string): Promise<void> {
 
   // The job variables are for the worker: a check that runs aleph's own tests must not see them.
   // A factory repo's checks also get TZ=UTC and the browser tests, as CI runs them.
-  const checkEnv = repo?.sandbox ? checksEnv(env) : { ...env, ALEPH_JOB_ID: undefined, ALEPH_JOB_RUN: undefined };
+  const checkEnv = repo?.sandbox ? checksEnv(env) : { ...env, ALEPH_JOB_ID: undefined };
 
   let outcome: Outcome;
   let code = 0;

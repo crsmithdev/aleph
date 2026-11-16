@@ -30,7 +30,7 @@ export type RunRecord = Run & { id: string };
 export interface Row {
   id: string; role: string; by: string; state: string; project: string | null; made: number; started: string; ended: string | null;
   model: string | null; size: string | null; cost: number | null; commit_sha: string | null; pid: number | null; exit_code: number | null;
-  target: string | null; prev: string | null; retry_of: string | null; was: string | null; extra: string | null;
+  target: string | null; prev: string | null; retry_of: string | null; extra: string | null;
 }
 
 /** What a run changes: any field but its state, which only `setState` and `endRun` write. */

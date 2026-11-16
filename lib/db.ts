@@ -75,6 +75,9 @@ DELETE FROM issue_state WHERE ask IS NULL AND ask_job IS NULL AND ci IS NULL;
 ALTER TABLE issue_state DROP COLUMN wait_kind;
 ALTER TABLE issue_state DROP COLUMN wait_reason;
 ALTER TABLE issue_state DROP COLUMN wait_since;
+`, `
+ALTER TABLE usage DROP COLUMN five_hour;
+ALTER TABLE jobs DROP COLUMN was;
 `];
 const VERSION = SCHEMAS.length;
 

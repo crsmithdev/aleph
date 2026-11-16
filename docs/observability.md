@@ -26,7 +26,7 @@ An event has the 6 fields of `Event` in `lib/naming.ts:131`: `seq`, `time`, `sub
 
 ### Who writes events
 
-The count is 53 direct `logEvent(` calls in code that is not a test, and one helper, `logAlways` in `jobs/lib/asks/ask.ts:244`, that eight call sites use.
+The count is 53 direct `logEvent(` calls in code that is not a test, and one helper, `logAlways` in `jobs/lib/asks/ask.ts:238`, that eight call sites use.
 
 | `subject` | Action (detail) | Logged at |
 |---|---|---|
@@ -40,7 +40,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `rule` | `missed` for a stalled key, `started` (`check`) for a suite on a moved main, `failed` (`error`) for a tick step | `jobs/lib/transitions/tick.ts:156`, `:165`, `:219` |
 | `rule` | `gpu`, when the GPU slot stays taken and the call falls back | `jobs/lib/roles/agent-call.ts:120` |
 | `rule` | `failed` for a filing, a detached start, a land start, a job diff, a correction, a UI read | `jobs/lib/transitions/filing.ts:29`, `jobs/lib/transitions/launch.ts:89`, `jobs/lib/roles/unit.ts:101`, `jobs/lib/records/jobdiff.ts:47`, `jobs/lib/learning/corrections.ts:17`, `ui/state.ts:36` |
-| `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:244`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:259`, `jobs/lib/asks/timeout.ts:100`, `jobs/lib/learning/corrections.ts`, `issues/lib/store.ts` |
+| `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:238`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:259`, `jobs/lib/asks/timeout.ts:100`, `jobs/lib/learning/corrections.ts`, `issues/lib/store.ts` |
 | `firefighter` | `reran`, `red`, `changed`, `failed` for red CI and slow lands | `jobs/lib/gates/firefighter.ts:217` to `:244` |
 | `firefighter` | `waiting`, `busy`, `failed` (`rescue`) for a rescue of a slow land | `jobs/lib/land/rescue.ts:111` to `:320` |
 | `director` | The action of each applied decision: `landed`, `dropped`, `done`, `changed`, `answered`, `escalated` (with `to: human`) | `jobs/lib/roles/director.ts:144` |
@@ -114,6 +114,6 @@ A failed factory post appends one line to the `dispatch` section of `log.txt` in
 | Event log, job records | Forever |
 | Run folders | Deleted 90 days after the run ended, when its record is archived. A folder that no record holds goes after 90 days with no change |
 | `usage` table | Rows older than 90 days are dropped |
-| `dispatch.log` | Moved to `dispatch.<day>.log` each day. A day file older than 90 days is deleted |
+| `dispatch.log`, `housekeeper.log` | Moved to `dispatch.<day>.log` and `housekeeper.<day>.log` each day. A day file older than 90 days is deleted |
 | `episode-use.jsonl` | Lines older than 90 days are dropped (`jobs/lib/learning/episode.ts:182`) |
 | `openrouter`, `jev` and `suite_history` tables | Forever |

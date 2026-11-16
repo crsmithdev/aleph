@@ -374,7 +374,7 @@ export function setup(): void {
   const gate = { name: "gate", run: `touch ${join(base, "gate-reached")}; ${waitCmd("gone", join(base, "gate-hold"))}`, when: ["gate/**"] };
   const checks = [
     { name: "tests", run: "test ! -f FAIL" },
-    { name: "no job variables", run: 'test -z "$ALEPH_JOB_ID$ALEPH_JOB_RUN"' },
+    { name: "no job variables", run: 'test -z "$ALEPH_JOB_ID"' },
     { name: "android build", run: `echo built >> ${join(base, "android.log")}`, when: ["android/**"] },
     { name: "slow", run: "tail --pid=$PPID -f /dev/null", when: ["slow/**"] },
     // Says it started, then waits while the hold file is there, so a test can kill the land at this check.

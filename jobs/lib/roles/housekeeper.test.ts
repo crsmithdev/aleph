@@ -83,7 +83,6 @@ test("code applies each action and refuses one with no evidence, a bad title, or
   const tally = { reviewed: 7, closed: 1, dropped: 1, retitled: 1, reprioritized: 1, noted: 1, unparked: 1, refused: 4 };
   const ran = runs().at(-1)!.run;
   expect(ran.tally).toEqual(tally);
-  expect(ran.touched).toEqual([1, 2, 4, 5, 6, 7].map((n) => `${key}-${n}`));
   expect(readEvents().findLast((e) => e.action === "done" && e.object_role === "housekeeper")).toMatchObject({ subject: "gate", object: expect.stringMatching(/^job\.\d+$/) });
   expect(o.refused.map((r) => r.split(": refused: ")[1])).toEqual([
     "no longer parked", expect.stringContaining("ends with a period"), `no commit or path deadbeef in ${key}`, "not an issue of this batch",

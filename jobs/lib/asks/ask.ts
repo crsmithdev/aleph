@@ -190,12 +190,6 @@ export const setAsk = (ref: string, ask: Ask): void => record.setIssueAsk(ref, a
 /** Take the issue's Ask off. */
 export const clearAsk = (ref: string): void => record.setIssueAsk(ref, null);
 
-/** The prose note of an ask, for the CLI and the history. */
-export const askNote = (a: Ask): string =>
-  `${a.question}${a.options.length ? ` Options: ${a.options.map((o) => `${o.label}: ${o.line}${o.after ? ` (waits on ${o.after})` : ""}`).join("; ")}.` : ""}` +
-  (a.recommended ? ` My recommendation is ${a.recommended}.` : "") +
-  (a.why.length ? ` Why: ${a.why.join("; ")}.` : "");
-
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.replace(/:[^:]*$/, "")];
 /** `user` sends the Ask to Chris with no director run; every reason takes it but the memory proposals. */
 const USER = "user";

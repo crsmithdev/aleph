@@ -61,8 +61,8 @@ export interface Run {
   /** A run from before `cause`: a drop set this when the run had ended with no commit. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;
-  /** A housekeeper run: counts of what it did by word (`reviewed`, `dropped`, ...), and the issues it changed as keys; `changes` lists each applied action as `{id, do}`; its `done` event carries all three. */
-  tally?: Record<string, number>; touched?: string[]; changes?: { id: string; do: string }[];
+  /** A housekeeper run: counts of what it did by word (`reviewed`, `dropped`, ...); its `done` event carries it. */
+  tally?: Record<string, number>;
   /** The size a build was routed to: small, medium or large. */
   size?: string;
   /** A land run of a job with a manual check: "open" until `aleph checked` makes it "done". */

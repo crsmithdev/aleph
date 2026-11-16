@@ -46,7 +46,6 @@ afterEach(() => { for (const [k, v] of Object.entries(vars)) process.env[k] ??= 
 // A factory worker's shell carries its job's variables. A test reads them as a worker, so they are cleared here;
 // a test that sets one of them itself still gets the value it sets.
 delete process.env.ALEPH_JOB_ID;
-delete process.env.ALEPH_JOB_RUN;
 // A shell with ALEPH_UI_PASSWORD turns on the UI's login gate, and every UI test would get a 401. A test of the
 // gate sets the password itself.
 delete process.env.ALEPH_UI_PASSWORD;

@@ -36,7 +36,7 @@ claude -p --strict-mcp-config --disable-slash-commands \
 - `askAgain` resumes the same session with `--resume` for a send-back, such as intake's second try.
 - `callAgent` reads `structured_output` and `session_id` from the stream's `result` event.
 
-The worker's environment (`agentEnv`) rewrites a push to `git@github.com:` to a dead remote, gives `gh` a private config with no token, and sets `ALEPH_JOB_ID` and `ALEPH_JOB_RUN`.
+The worker's environment (`agentEnv`) rewrites a push to `git@github.com:` to a dead remote, gives `gh` a private config with no token, and sets `ALEPH_JOB_ID`.
 
 `jobs/lib/transitions/launch.ts` starts `aleph intake`, `dispatch`, `director` and `suite` as transient systemd units (`systemd-run --user`). `ALEPH_JOB_FOREGROUND=1` runs them as child processes. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops all of them.
 

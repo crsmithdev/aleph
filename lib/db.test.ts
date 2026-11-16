@@ -7,10 +7,10 @@ import { conn, getJson, next, putJson, tx } from "./db.ts";
 
 const names = (type: string) => (conn().query("SELECT name FROM sqlite_master WHERE type = ? ORDER BY name").all(type) as { name: string }[]).map((r) => r.name);
 
-test("the schema is created under user_version 7, in WAL", () => {
+test("the schema is created under user_version 8, in WAL", () => {
   expect(names("table")).toEqual(expect.arrayContaining(["counters", "events", "issue_state", "jobs", "settings", "state", "tick", "usage", "openrouter", "jev", "suite_history", "flaky"]));
   expect(names("view")).toEqual(["event_rows"]);
-  expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(7);
+  expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(8);
   expect((conn().query("PRAGMA journal_mode").get() as any).journal_mode).toBe("wal");
 });
 
@@ -20,7 +20,7 @@ test("a file at user_version 1 gains only the new tables and the event size", ()
   old.run("CREATE TABLE counters (kind TEXT PRIMARY KEY, last INTEGER NOT NULL)");
   old.run("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT)");
-  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT)");
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT, was TEXT)");
   old.run("CREATE VIEW event_rows AS SELECT * FROM events");
   old.run("CREATE TABLE issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)");
   old.run("INSERT INTO settings VALUES ('keep', '1')");
@@ -29,7 +29,7 @@ test("a file at user_version 1 gains only the new tables and the event size", ()
   const was = process.env.ALEPH_DB;
   process.env.ALEPH_DB = file;
   try {
-    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(7);
+    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(8);
     expect(names("table")).toEqual(expect.arrayContaining(["state", "usage", "openrouter", "jev", "suite_history", "flaky"]));
     expect(getJson("settings", "keep", 0)).toBe(1);
     expect((conn().query("PRAGMA table_info(events)").all() as { name: string }[]).map((c) => c.name)).toContain("size");
@@ -41,7 +41,7 @@ test("a file at user_version 3 has the Ask reason review read as review-held", (
   const old = new Database(file, { create: true });
   old.run("CREATE TABLE issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)");
   old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT, tier TEXT)");
-  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT)");
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT, was TEXT)");
   old.run("CREATE VIEW event_rows AS SELECT * FROM events");
   old.run("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   old.run("CREATE TABLE usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, five_hour REAL, seven_day REAL NOT NULL, seven_day_resets_at TEXT)");
@@ -53,7 +53,7 @@ test("a file at user_version 3 has the Ask reason review read as review-held", (
   const was = process.env.ALEPH_DB;
   process.env.ALEPH_DB = file;
   try {
-    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(7);
+    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(8);
     expect(conn().query("SELECT issue, json_extract(ask, '$.reason') AS reason FROM issue_state ORDER BY issue").all()).toEqual([{ issue: "issue.1", reason: "review-held" }, { issue: "issue.2", reason: "question" }]);
     expect(conn().query("SELECT detail FROM events ORDER BY seq").all()).toEqual([{ detail: "review-held" }, { detail: "no commit" }]);
     expect(getJson("settings", "always", {})).toEqual({ "review-held": { action: "land", at: "t" }, question: { action: "user", at: "t" } });
@@ -64,6 +64,8 @@ test("a file at user_version 6 loses the wait columns and the rows that held onl
   const file = join(mkdtempSync(join(tmpdir(), "aleph-db-")), "v6.db");
   const old = new Database(file, { create: true });
   old.run("CREATE TABLE issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)");
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, was TEXT)");
+  old.run("CREATE TABLE usage (seq INTEGER PRIMARY KEY, five_hour REAL)");
   old.run("INSERT INTO issue_state (issue, ask, wait_kind) VALUES ('issue.1', '{}', 'red'), ('issue.2', NULL, 'red')");
   old.run("PRAGMA user_version = 6");
   old.close();
@@ -77,11 +79,11 @@ test("a file at user_version 6 loses the wait columns and the rows that held onl
 test("a file at user_version 3 has each build's tier or model read as its size, and no tier column", () => {
   const file = join(mkdtempSync(join(tmpdir(), "aleph-db-")), "v3-size.db");
   const old = new Database(file, { create: true });
-  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT)");
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT, was TEXT)");
   old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT, tier TEXT)");
   old.run(`CREATE VIEW event_rows AS SELECT e.seq, e.time, e.subject, e.action, e.object, e.detail, coalesce(e.tier, o.tier) AS tier,
     o.model FROM events e LEFT JOIN jobs o ON o.id = e.object`);
-  for (const t of ["issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)", "settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)", "usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL)"]) old.run(`CREATE TABLE ${t}`);
+  for (const t of ["issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)", "settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)", "usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, five_hour REAL)"]) old.run(`CREATE TABLE ${t}`);
   old.run("INSERT INTO jobs (id, role, model, tier) VALUES ('job.1', 'build', 'deepseek-v4.1-flash', 'haiku'), ('job.2', 'build', 'opus', NULL), ('job.3', 'review', 'sonnet', NULL)");
   old.run("INSERT INTO events (time, subject, action, object, detail, tier) VALUES ('t', 'rule', 'started', 'issue.1', 'model sonnet', 'worker-medium')");
   old.run("PRAGMA user_version = 3");
@@ -89,7 +91,7 @@ test("a file at user_version 3 has each build's tier or model read as its size, 
   const was = process.env.ALEPH_DB;
   process.env.ALEPH_DB = file;
   try {
-    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(7);
+    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(8);
     expect(conn().query("SELECT id, size FROM jobs ORDER BY id").all()).toEqual([{ id: "job.1", size: "small" }, { id: "job.2", size: "large" }, { id: "job.3", size: null }]);
     expect(conn().query("SELECT size FROM events").all()).toEqual([{ size: "medium" }]);
     for (const t of ["jobs", "events", "event_rows"]) expect((conn().query(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name)).not.toContain("tier");
@@ -100,7 +102,7 @@ test("a file at user_version 4 loses the leaked fixture events and usage rows", 
   const file = join(mkdtempSync(join(tmpdir(), "aleph-db-")), "v4.db");
   const old = new Database(file, { create: true });
   old.run("CREATE TABLE events (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL, detail TEXT, tier TEXT)");
-  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT)");
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, role TEXT NOT NULL, model TEXT, tier TEXT, project TEXT, target TEXT, cost REAL, commit_sha TEXT, started TEXT, ended TEXT, was TEXT)");
   old.run("CREATE VIEW event_rows AS SELECT * FROM events");
   old.run("CREATE TABLE issue_state (issue TEXT PRIMARY KEY, ask TEXT, ask_job TEXT, wait_kind TEXT, wait_reason TEXT, wait_since TEXT, ci TEXT)");
   old.run("CREATE TABLE usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, five_hour REAL, seven_day REAL NOT NULL, seven_day_resets_at TEXT)");
@@ -111,9 +113,25 @@ test("a file at user_version 4 loses the leaked fixture events and usage rows", 
   const was = process.env.ALEPH_DB;
   process.env.ALEPH_DB = file;
   try {
-    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(7);
+    expect((conn().query("PRAGMA user_version").get() as any).user_version).toBe(8);
     expect(conn().query("SELECT time, subject, action, object FROM events").all()).toEqual([{ time: "2026-11-14T00:00:00Z", subject: "job", action: "end", object: "issue.1" }]);
     expect(conn().query("SELECT time, seven_day, seven_day_resets_at FROM usage").all()).toEqual([{ time: "2026-11-14T00:00:00Z", seven_day: 3, seven_day_resets_at: "2026-11-21T00:00:00Z" }]);
+  } finally { process.env.ALEPH_DB = was; }
+});
+
+test("a file at user_version 7 loses usage.five_hour and jobs.was", () => {
+  const file = join(mkdtempSync(join(tmpdir(), "aleph-db-")), "v7.db");
+  const old = new Database(file, { create: true });
+  old.run("CREATE TABLE jobs (id TEXT PRIMARY KEY, was TEXT)");
+  old.run("CREATE TABLE usage (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, five_hour REAL, seven_day REAL NOT NULL)");
+  old.run("INSERT INTO usage (time, five_hour, seven_day) VALUES ('t', 1, 2)");
+  old.run("PRAGMA user_version = 7");
+  old.close();
+  const was = process.env.ALEPH_DB;
+  process.env.ALEPH_DB = file;
+  try {
+    expect(conn().query("SELECT * FROM usage").all()).toEqual([{ seq: 1, time: "t", seven_day: 2 }]);
+    expect((conn().query("PRAGMA table_info(jobs)").all() as { name: string }[]).map((c) => c.name)).toEqual(["id"]);
   } finally { process.env.ALEPH_DB = was; }
 });
 
