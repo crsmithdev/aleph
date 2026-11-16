@@ -22,6 +22,9 @@ test("the report hook prints one line for each thing to act on, and nothing when
   await cli(["pause"]);
   const id = seedItem("fac", "Needs Chris");
   setAsk(`issue.${id}`, { reason: "question", question: "Which?", options: [], why: [] });
+  // The hook fetches nothing: the checkout is behind only once the tick (here, this fetch) has fetched.
+  expect((await cli(["report", "--hook"])).json.hookSpecificOutput.additionalContext).not.toContain("behind");
+  sh(repo, "git", "fetch", "-q", "origin");
   const text = (await cli(["report", "--hook"])).json.hookSpecificOutput.additionalContext;
   const lines = text.split("\n").filter(Boolean);
   expect(lines).toHaveLength(3);

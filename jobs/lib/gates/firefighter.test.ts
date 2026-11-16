@@ -58,9 +58,9 @@ test("a red CI on main, read through ciStep, files exactly one issue; the same c
   ciCalls = 0;
   const repo = loadRegistry()[key];
   const failed: GhRun[] = [{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }];
-  ciStep([repo], listing(failed));
+  await ciStep([repo], listing(failed));
   await firefight(ports());
-  ciStep([repo], listing(failed));
+  await ciStep([repo], listing(failed));
   await firefight(ports());
   baselineRed(B);
   await firefight(ports());
@@ -171,7 +171,7 @@ test("a CI issue quotes the run URL, the failing tests, their failure lines and 
   fresh([]);
   const repo = loadRegistry()[key];
   const url = "https://github.com/x/y/actions/runs/41907198470";
-  ciStep([repo], listing([{ conclusion: "failure", status: "completed", headSha: B, url, createdAt: "2026-11-04T20:30:11Z" }]));
+  await ciStep([repo], listing([{ conclusion: "failure", status: "completed", headSha: B, url, createdAt: "2026-11-04T20:30:11Z" }]));
   const asked: string[][] = [];
   await firefight({ gh: (_, args) => { asked.push(args); return { ok: true, out: CI_LOG }; }, after: () => {} });
   expect(asked).toEqual([["run", "view", "41907198470", "--log-failed"]]);
@@ -198,17 +198,17 @@ test("a landed CI issue closes on a green CI at or after the land, waits on one 
   let runId = 100;
   const ci = (conclusion: string, sha: string) => ciStep([repo], listing([{ conclusion, status: "completed", headSha: sha, url: `https://github.com/x/y/actions/runs/${++runId}`, createdAt: "2026-11-04T21:00:00Z" }]));
   const gh: Ports = { gh: () => ({ ok: true, out: CI_LOG }), after: () => {} };
-  ci("failure", before);
+  await ci("failure", before);
   await firefight(gh);
   const [it] = reds();
   const ref = `issue.${it.id}`;
   record.editIssueState(ref, (r) => { r.ci = { ...r.ci!, landed }; });
   // Green, but on a commit before the land: the land is not tested yet.
-  ci("success", before);
+  await ci("success", before);
   await firefight(gh);
   expect(issues.status(reds()[0])).toBe("open");
   // Red after the land: back open, the land's trailer no longer counts, and the note and the record quote the failure.
-  ci("failure", after);
+  await ci("failure", after);
   await firefight(gh);
   expect(issues.status(reds()[0])).toBe("open");
   expect(reds()[0].fm.since).toBe(landed);
@@ -217,7 +217,7 @@ test("a landed CI issue closes on a green CI at or after the land, waits on one 
   expect(record.read(ref)!.ci).toEqual({ url: "https://github.com/x/y/actions/runs/103", commit: after, failure: ciFailure(CI_LOG) });
   // Landed again; green at the land itself: done.
   record.editIssueState(ref, (r) => { r.ci = { ...r.ci!, landed: after }; });
-  ci("success", after);
+  await ci("success", after);
   await firefight(gh);
   expect(issues.status(reds()[0])).toBe("done");
   expect(reds()[0].fm.closed_why).toContain(`green at ${after.slice(0, 7)}`);
@@ -229,7 +229,7 @@ test("a CI run that failed in setup is rerun once; failing again, it files an is
   fresh([]);
   const repo = loadRegistry()[key];
   const url = "https://github.com/x/y/actions/runs/777";
-  ciStep([repo], listing([{ conclusion: "failure", status: "completed", headSha: B, url, createdAt: "2026-11-08T09:00:00Z" }]));
+  await ciStep([repo], listing([{ conclusion: "failure", status: "completed", headSha: B, url, createdAt: "2026-11-08T09:00:00Z" }]));
   const asked: string[][] = [];
   const p: Ports = { gh: (_, args) => { asked.push(args); return { ok: true, out: args[1] === "rerun" ? "" : SETUP_LOG }; }, after: () => {} };
   await firefight(p);
@@ -250,33 +250,33 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
   const commit = (m: string) => { sh(repoPath(), "git", "commit", "-q", "--allow-empty", "-m", m); return sh(repoPath(), "git", "rev-parse", "HEAD"); };
   const before = commit("before"), failed = commit("the failure"), fixed = commit("another's fix");
   let runId = 200;
-  const ci = (conclusion: string, sha: string) => {
+  const ci = async (conclusion: string, sha: string) => {
     const url = `https://github.com/x/y/actions/runs/${++runId}`;
-    ciStep([repo], listing([{ conclusion, status: "completed", headSha: sha, url, createdAt: "2026-11-04T21:00:00Z" }]));
+    await ciStep([repo], listing([{ conclusion, status: "completed", headSha: sha, url, createdAt: "2026-11-04T21:00:00Z" }]));
     return url;
   };
   const gh: Ports = { gh: () => ({ ok: true, out: CI_LOG }), after: () => {} };
-  ci("failure", failed);
+  await ci("failure", failed);
   await firefight(gh);
   const [it] = reds();
   const ref = `issue.${it.id}`;
   expect(record.read(ref)!.ci!.landed).toBeUndefined();
   // Red at a later commit: an unlanded issue has no land to be sent back from, so it gets no note and no reopen.
-  ci("failure", fixed);
+  await ci("failure", fixed);
   expect(settleCi(gh)).toEqual([]);
   expect(issues.status(reds()[0])).toBe("open");
   expect(reds()[0].fm.since).toBeUndefined();
   expect(reds()[0].notes).toEqual([]);
   // Green at a commit before the failing one: it does not contain the failure.
-  ci("success", before);
+  await ci("success", before);
   expect(settleCi(gh)).toEqual([]);
   expect(issues.status(reds()[0])).toBe("open");
   // Green at a commit this clone does not have: it waits.
-  ci("success", "f".repeat(40));
+  await ci("success", "f".repeat(40));
   expect(settleCi(gh)).toEqual([]);
   expect(issues.status(reds()[0])).toBe("open");
   // Green at a commit past the failing one, from a fix the job never made: done, naming that commit and its run.
-  const url = ci("success", fixed);
+  const url = await ci("success", fixed);
   expect(settleCi(gh)).toEqual([`${key}-${it.id} done: CI green at ${fixed.slice(0, 7)}`]);
   expect(issues.status(reds()[0])).toBe("done");
   expect(reds()[0].fm.closed_why).toContain(`green at ${fixed.slice(0, 7)} (${url})`);
@@ -285,7 +285,7 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
 
 test("a step that fails is an event of the gate with the failure in its note", async () => {
   fresh([]);
-  ciStep([loadRegistry()[key]], listing([{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }]));
+  await ciStep([loadRegistry()[key]], listing([{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }]));
   await firefight({ gh: () => { throw new Error("gh broke"); }, after: () => {} });
   const events = readEvents().filter((e) => e.subject === "gate" && e.action === "failed");
   expect(events.length).toBeGreaterThan(0);

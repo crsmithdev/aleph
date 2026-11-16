@@ -10,7 +10,7 @@ import { writeFileSync } from "node:fs";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { readList } from "../../../issues/lib/store.ts";
+import { readFetched, readList } from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
@@ -54,8 +54,8 @@ const textOf = (i: issues.Issue): string => [i.title, i.request, i.spec, ...i.no
 const names = (text: string, file: string): boolean => (text.match(PATH) ?? []).some((t) => file === t || file.endsWith(`/${t}`));
 const chunks = <T>(xs: T[], n: number): T[][] => Array.from({ length: Math.ceil(xs.length / n) }, (_, k) => xs.slice(k * n, k * n + n));
 
-/** The registry repos with an issue list and a main the housekeeper can read. */
-const repos = (): Repo[] => Object.values(loadRegistry()).filter((r) => readList(r) && headOf(r));
+/** The registry repos with an issue list and a main the housekeeper can read. A repo has its list for good, so this reads the lists as last fetched: the tick does no fetch. */
+const repos = (): Repo[] => Object.values(loadRegistry()).filter((r) => readFetched(r) && headOf(r));
 
 /** The repos whose main moved since its last sweep. A repo seen for the first time has not moved. */
 function moved(s: State): { repo: Repo; from: string; to: string }[] {

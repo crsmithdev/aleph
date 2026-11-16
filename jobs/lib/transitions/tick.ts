@@ -19,9 +19,9 @@ import { alias } from "../roles/alias.ts";
 import { addDays } from "../learning/monitor-table.ts";
 import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { holdsWork } from "../infra/process.ts";
-import { reader, type Reader } from "../../../issues/lib/store.ts";
+import { fetchingOnce, reader, type Reader } from "../../../issues/lib/store.ts";
 import { refOf, status } from "../../../issues/lib/todo.ts";
-import { allIssueStates, clearIssueState, getRun } from "../records/record.ts";
+import { allIssueStates, clearIssueState, getRun, keepingRuns } from "../records/record.ts";
 import { ciRunning, ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
@@ -220,7 +220,9 @@ const tickPorts: TickPorts = { ...sweepPorts, intake: intakeDetached };
  * lock from before it reads the tick state until after its write, so two ticks cannot run the same steps twice: a tick
  * that finds the lock busy runs no step, writes nothing and says so.
  */
-export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promise<Record<string, unknown>> {
+export const runTick = (now = Date.now(), p: TickPorts = tickPorts): Promise<Record<string, unknown>> => keepingRuns(() => fetchingOnce(() => runLocked(now, p)));
+
+async function runLocked(now: number, p: TickPorts): Promise<Record<string, unknown>> {
   const release = await lock("tick", 0);
   if (!release) return { tick: "lock busy" };
   try {

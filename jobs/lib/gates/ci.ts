@@ -15,14 +15,24 @@ export interface GhRun { conclusion: string; status: string; headSha: string; ur
 /** A `gh` call in `repo`: its stdout when it exits 0, else its error. Every `gh` call of the CI watch goes through one; tests replace it. */
 export type Gh = (repo: Repo, args: string[]) => { ok: boolean; out: string };
 
+/** `Gh` that does not block, so the repos are read at once. */
+export type GhAsync = (repo: Repo, args: string[]) => Promise<{ ok: boolean; out: string }>;
+
 export const gh: Gh = (repo, args) => {
   const r = spawnSync("gh", args, { cwd: repo.path, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
   return r.status === 0 ? { ok: true, out: r.stdout } : { ok: false, out: (r.stderr || r.error?.message || `exit ${r.status}`).trim() };
 };
 
+/** The CI watch's `gh` call: `gh` in an async spawn, with the same 60 s limit. */
+const ghAsync: GhAsync = async (repo, args) => {
+  const p = Bun.spawn(["gh", ...args], { cwd: repo.path, stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 60_000 });
+  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+  return code === 0 ? { ok: true, out } : { ok: false, out: (err || `exit ${code}`).trim() };
+};
+
 /** The runs of `repo`'s main, the latest first, or null when `gh` cannot read them. */
-const ghRuns = (repo: Repo, call: Gh): GhRun[] | null => {
-  const r = call(repo, ["run", "list", "--branch", repo.main, "--limit", "100", "--json", "conclusion,status,headSha,url,createdAt"]);
+const ghRuns = async (repo: Repo, call: Gh | GhAsync): Promise<GhRun[] | null> => {
+  const r = await call(repo, ["run", "list", "--branch", repo.main, "--limit", "100", "--json", "conclusion,status,headSha,url,createdAt"]);
   if (!r.ok) return null;
   try { return JSON.parse(r.out); } catch { return null; }
 };
@@ -43,10 +53,11 @@ const saved = (): Record<string, Ci> => getJson("state", "ci", {});
 const savedRunning = (): Record<string, boolean> => getJson("state", "ci.running", {});
 
 /** Reads each repo's CI and saves it, and whether a run on its main is not completed (the `ci.running` row); a repo `gh` cannot read keeps what it had. Returns the red ones. */
-export function ciStep(repos: Repo[], call: Gh = gh): Ci[] {
+export async function ciStep(repos: Repo[], call: Gh | GhAsync = ghAsync): Promise<Ci[]> {
+  const lists = await Promise.all(repos.map((repo) => ghRuns(repo, call)));
   const all = saved(), running = savedRunning();
-  for (const repo of repos) {
-    const list = ghRuns(repo, call);
+  for (const [k, repo] of repos.entries()) {
+    const list = lists[k];
     const c = list && ciState(repo.key, list);
     if (c) all[repo.key] = c;
     if (list) running[repo.key] = list.some((r) => r.status !== "completed");

@@ -280,7 +280,7 @@ export const markAsked = (e: Entry, question: string, spec?: string): void =>
 
 /** A run that asked about its issue's spec and waits for a spec edit: the spec version it asked about and its question; else null. */
 export function waitsForSpecEdit(e: Entry): { version: string; question: string } | null {
-  const a = record.getRun(e.id)?.asked;
+  const a = e.run.asked;
   return a?.spec !== undefined ? { version: a.spec, question: a.question } : null;
 }
 

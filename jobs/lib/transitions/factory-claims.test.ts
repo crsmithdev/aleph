@@ -46,7 +46,7 @@ test("aleph-1206: the local checks pass but GitHub CI on main is red, so the cla
   const failure = "Failing tests:\n(fail) the docs on this tree match the code > every default\n\nRunner: 4 cores; this host: 24.";
   record.editIssueState(`issue.${id}`, (r) => { r.ci = { url: "https://github.com/x/y/actions/runs/7", commit: "c1", failure }; });
   const red = [{ conclusion: "failure", status: "completed", headSha: "c1", url: "https://github.com/x/y/actions/runs/7", createdAt: "2026-11-04T20:20:05Z" }];
-  ciStep([loadRegistry().fac], () => ({ ok: true, out: JSON.stringify(red) }));
+  await ciStep([loadRegistry().fac], () => ({ ok: true, out: JSON.stringify(red) }));
   claimed(`fac-${id}`, "Goal: Already met — jobs/lib/gates/doc-claims.test.ts passes 6 of 6 on main\n");
   const f = fakes();
   await withChecks(f, async () => null);

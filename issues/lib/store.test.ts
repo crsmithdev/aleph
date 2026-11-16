@@ -56,6 +56,20 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
+test("a read in a fetchingOnce scope fetches the store once; outside it, at each read", async () => {
+  const r = repo([{ title: "A" }]);
+  const lose = () => sh(join(base, "items"), "git", "remote", "set-url", "origin", join(base, "no-such-origin"));
+  const origin = sh(join(base, "items"), "git", "remote", "get-url", "origin");
+  try {
+    await store.fetchingOnce(async () => {
+      store.readList(r);
+      lose();
+      store.readList(r);
+    });
+    expect(() => store.readList(r)).toThrow("fetch failed");
+  } finally { sh(join(base, "items"), "git", "remote", "set-url", "origin", origin); }
+});
+
 describe("parked", () => {
 
   test("a child of a parked parent is not buildable; reopen keeps the parent parked", () => {

@@ -75,11 +75,36 @@ function toRow(id: string, run: Partial<Run>): Omit<Row, "pid" | "exit_code" | "
 const runAsks = (d: Database): Map<string, Ask> =>
   new Map((d.query("SELECT ask_job, ask FROM issue_state WHERE ask_job IS NOT NULL AND ask IS NOT NULL").all() as { ask_job: string; ask: string }[]).map((r) => [r.ask_job, JSON.parse(r.ask)]));
 
-/** Every job, oldest first. A UI build pass reads them once (sources.ts). */
+/**
+ * The writes to the `jobs` and `issue_state` tables by this process, counted where they happen: with SQLite's data_version, which moves
+ * when another connection commits, they tell whether the last load of every job is current. Only a `keepingRuns` scope keeps a load.
+ */
+let writes = 0;
+let loaded: { d: Database; version: string; runs: RunRecord[] } | undefined;
+let keeping = false;
+
+/** `fn()`, with `allRunRecords` keeping its last load until a write to `jobs` or `issue_state`. The tick reads every job in several steps. */
+export async function keepingRuns<T>(fn: () => Promise<T>): Promise<T> {
+  keeping = true;
+  try { return await fn(); } finally { keeping = false; loaded = undefined; }
+}
+/** How many times `allRunRecords` read the table: a test holds a ceiling on a tick's reads. */
+export let runLoads = 0;
+
+/** Every job, oldest first. A UI build pass reads them once (sources.ts); `keepingRuns` keeps a read. */
 export const allRunRecords = (): RunRecord[] => once("jobs", ["events", "records"], () => {
-  const d = conn(), rows = d.query(`SELECT * FROM jobs ${ORDER}`).all() as Row[], roots = rootsOf(rows), asks = runAsks(d);
-  return rows.map((r) => fromRow(r, roots.get(r.id)!, asks.get(r.id)));
+  const d = conn(), version = `${(d.query("PRAGMA data_version").get() as { data_version: number }).data_version}:${writes}`;
+  if (keeping && loaded?.d === d && loaded.version === version) return loaded.runs;
+  runLoads++;
+  const runs = loadRuns(d);
+  if (keeping) loaded = { d, version, runs };
+  return runs;
 });
+
+const loadRuns = (d: Database): RunRecord[] => {
+  const rows = d.query(`SELECT * FROM jobs ${ORDER}`).all() as Row[], roots = rootsOf(rows), asks = runAsks(d);
+  return rows.map((r) => fromRow(r, roots.get(r.id)!, asks.get(r.id)));
+};
 
 const rowOf = (d: Database, id: string): Row | null => d.query("SELECT * FROM jobs WHERE id = ?").get(id) as Row | null;
 
@@ -166,6 +191,7 @@ const decides = (role: Run["role"]): boolean => ["build", "land", "recheck"].inc
  */
 export function makeJob(job: NewJob, fill?: (folder: string, id: string) => void): { id: string; folder: string; run: RunRecord } {
   return tx((d) => {
+    writes++;
     const id = `job.${nextNumber("job")}`, folder = jobFolder(id);
     const run = { ...job, state: job.state ?? "running", made: job.made ?? Date.now(), started: job.started ?? new Date().toISOString(), by: job.by ?? "rule", told: job.told ?? false } as Run;
     const r = toRow(id, run);
@@ -201,6 +227,7 @@ function write(d: Database, id: string, state: State | undefined, change: Change
   const merged = JSON.parse(JSON.stringify({ ...was, ...rest, ...(state ? { state } : {}) })) as RunRecord;
   delete (merged as Partial<RunRecord>).ask;
   const row = toRow(id, merged);
+  writes++;
   d.query("UPDATE jobs SET role=$role, by=$by, state=$state, project=$project, made=$made, started=$started, ended=$ended, model=$model, size=$size, cost=$cost, commit_sha=$commit_sha, target=$target, prev=$prev, retry_of=$retry_of, extra=$extra WHERE id=$id")
     .run(Object.fromEntries(Object.entries(row).map(([k, v]) => [`$${k}`, v])) as never);
   if ("ask" in change) takeAsk(d, id, merged.target ?? id, ask ?? null);
@@ -212,6 +239,7 @@ function write(d: Database, id: string, state: State | undefined, change: Change
 /** Copy the `pid` and `exit` files of a job's folder to its row: the row keeps them after the folder goes. */
 export function copyEnd(id: string): void {
   const end = readEnd(jobFolder(id));
+  writes++;
   conn().query("UPDATE jobs SET pid = coalesce(?, pid), exit_code = coalesce(?, exit_code) WHERE id = ?").run(end.pid, end.exit, id);
 }
 
@@ -295,6 +323,7 @@ function editState(d: Database, key: string, fn: (s: IssueState) => void): void 
   const r = d.query("SELECT * FROM issue_state WHERE issue = ?").get(key) as StateRow | null;
   const s = r ? stateOfRow(r) : { ask: null } as IssueState, had = s.ask ? `${s.askJob ?? ""}:${s.ask.reason}` : null, was = s.ask;
   fn(s);
+  writes++;
   const has = s.ask ? `${s.askJob ?? ""}:${s.ask.reason}` : null;
   if (!s.ask && !s.ci) d.query("DELETE FROM issue_state WHERE issue = ?").run(key);
   else d.query("INSERT INTO issue_state (issue, ask, ask_job, ci) VALUES (?, ?, ?, ?) ON CONFLICT (issue) DO UPDATE SET ask = excluded.ask, ask_job = excluded.ask_job, ci = excluded.ci")

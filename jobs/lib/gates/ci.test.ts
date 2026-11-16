@@ -48,31 +48,38 @@ test("ciState: green when the latest finished run passed; red counts the failed 
 /** A fake `gh` whose `run list` gives `runs`, or fails when they are null. */
 const listing = (runs: GhRun[] | null): Gh => () => (runs ? { ok: true, out: JSON.stringify(runs) } : { ok: false, out: "gh failed" });
 
-test("a red CI is a health line and one firefighter red at its latest failed head; a repo gh cannot read keeps its last state", () => {
+test("a red CI is a health line and one firefighter red at its latest failed head; a repo gh cannot read keeps its last state", async () => {
   let runs: GhRun[] | null = [run("failure", "c4", "2026-10-29T04:00:00Z"), run("failure", "c3", "2026-10-29T03:00:00Z"), run("success", "c2", "2026-10-29T02:00:00Z")];
-  expect(ciStep([repo], listing(runs)).map((c) => c.sinceSha)).toEqual(["c3"]);
+  expect((await ciStep([repo], listing(runs))).map((c) => c.sinceSha)).toEqual(["c3"]);
   expect(health()).toContainEqual({ text: "health: fac CI on main has failed 2 runs in a row since 2026-10-29 03:00 UTC (c3): https://ci/c4", kind: "warn", key: "red-ci" });
   const ci = () => reds({ gh: () => ({ ok: true, out: "" }), after: () => {} }).filter((r) => r.source === "ci").map((r) => r.commit);
   expect(ci()).toEqual(["c4"]);
   // A third failed run is a new failing head.
   runs = [run("failure", "c5", "2026-10-29T05:00:00Z"), ...runs];
-  ciStep([repo], listing(runs));
+  await ciStep([repo], listing(runs));
   expect(ci()).toEqual(["c5"]);
-  ciStep([repo], listing(null));
+  await ciStep([repo], listing(null));
   expect(redCi().map((c) => c.runs)).toEqual([3]);
-  ciStep([repo], listing([run("failure", "c9", "2026-10-29T09:00:00Z")]));
+  await ciStep([repo], listing([run("failure", "c9", "2026-10-29T09:00:00Z")]));
   expect(health().map((l) => l.text)).toContain("health: fac CI on main has failed at least 1 run in a row since before 2026-10-29 09:00 UTC (c9): https://ci/c9");
-  ciStep([repo], listing([run("success", "c6", "2026-10-29T06:00:00Z")]));
+  await ciStep([repo], listing([run("success", "c6", "2026-10-29T06:00:00Z")]));
   expect(redCi()).toEqual([]);
   expect(health().some((l) => l.text.includes("CI on main"))).toBe(false);
 });
 
-test("the CI read keeps whether a run on main is not completed, and a later read of finished runs clears it", () => {
-  ciStep([repo], listing([run("", "c2", "2026-10-29T02:00:00Z", "in_progress"), run("success", "c1", "2026-10-29T01:00:00Z")]));
+test("the CI read asks gh for every repo at once", async () => {
+  let live = 0, most = 0;
+  const call = async () => { most = Math.max(most, ++live); await Promise.resolve(); live--; return { ok: true, out: "[]" }; };
+  await ciStep([repo, { ...repo, key: "other" }, { ...repo, key: "third" }], call);
+  expect(most).toBe(3);
+});
+
+test("the CI read keeps whether a run on main is not completed, and a later read of finished runs clears it", async () => {
+  await ciStep([repo], listing([run("", "c2", "2026-10-29T02:00:00Z", "in_progress"), run("success", "c1", "2026-10-29T01:00:00Z")]));
   expect(ciRunning("fac")).toBe(true);
   // A read that fails keeps the mark.
-  ciStep([repo], listing(null));
+  await ciStep([repo], listing(null));
   expect(ciRunning("fac")).toBe(true);
-  ciStep([repo], listing([run("success", "c2", "2026-10-29T02:00:00Z"), run("success", "c1", "2026-10-29T01:00:00Z")]));
+  await ciStep([repo], listing([run("success", "c2", "2026-10-29T02:00:00Z"), run("success", "c1", "2026-10-29T01:00:00Z")]));
   expect(ciRunning("fac")).toBe(false);
 });

@@ -146,8 +146,9 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
 /** The open jobs whose last run waits for a spec edit and whose issue's spec is no longer the one it asked about. */
 export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
   const last = counting(runs), r = last.run;
+  if (!r.repo || (r.state !== "returned" && r.state !== "failed") || !isOpen(runs)) return false;
   const waits = waitsForSpecEdit(last);
-  if (!waits || !r.repo || !isOpen(runs) || (r.state !== "returned" && r.state !== "failed")) return false;
+  if (!waits) return false;
   const issue = issueOf(runs);
   const item = issue === undefined ? undefined : reader().item(r.repo, issue);
   return !!loadRegistry()[r.repo] && !!item && issues.status(item) === "open" && !isVersion(item, waits.version);

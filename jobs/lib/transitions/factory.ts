@@ -414,22 +414,20 @@ export function behind(repo: Repo, short = false): string | null {
   return `${repo.path} is ${n} commit${n > 1 ? "s" : ""} behind origin/${repo.main}; git pull brings:\n${git(repo.path, "diff", "--stat", "HEAD", `origin/${repo.main}`).out}`;
 }
 
-/** The SessionStart hook's lines: a pause, the asks, the alarms and each sandbox checkout that is behind. It writes nothing. */
+/** The SessionStart hook's lines: a pause, the asks, the alarms and each sandbox checkout that is behind origin as last fetched (the tick fetches; the hook waits for no network). It writes nothing. */
 export function hookLines(now = Date.now()): string[] {
   const lines = paused() ? ["factory paused"] : [];
-  const refs = allJobs().filter((j) => isOpen(j) && isWaiting(counting(j).run.state) && counting(j).run.ask).map((j) => j[0].run.name);
-  for (const repo of Object.values(loadRegistry())) {
-    for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) {
+  const jobs = allJobs(), repos = Object.values(loadRegistry()), lists = reader({ fetch: false });
+  const refs = jobs.filter((j) => isOpen(j) && isWaiting(counting(j).run.state) && counting(j).run.ask).map((j) => j[0].run.name);
+  for (const repo of repos) {
+    for (const item of lists.list(repo.key)?.items ?? []) {
       if (issues.status(item) === "open" && askOf(refIn(repo.key, item))) refs.push(`${repo.key}-${issues.idOf(item)}`);
     }
   }
   refs.push(...proposals().map((l) => l.id));
   if (refs.length) lines.push(`${refs.length} asks wait for Chris: ${refs.slice(0, 5).join(", ")}`);
-  lines.push(...redMains().map((r) => r.line), ...stallLines(now).map((h) => h.text));
-  for (const repo of Object.values(loadRegistry()).filter((r) => r.sandbox)) {
-    fetchOrigin(repo.path);
-    lines.push(behind(repo, true) ?? "");
-  }
+  lines.push(...redMains().map((r) => r.line), ...stallLines(now, jobs).map((h) => h.text));
+  for (const repo of repos.filter((r) => r.sandbox)) lines.push(behind(repo, true) ?? "");
   return lines.filter(Boolean);
 }
 

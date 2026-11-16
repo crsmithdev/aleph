@@ -39,8 +39,19 @@ let fetches = true;
 /** Reads in this process never fetch: the UI's updater fetches the store itself (fetchStore). The CLI always fetches; a write always does. */
 export function skipFetches(skip = true): void { fetches = !skip; }
 
+/** The stores fetched in the open `fetchingOnce` scope, or null outside one. */
+let fetchedOnce: Set<string> | null = null;
+
+/** `fn()`, in which a read fetches each store once, not at each read: the tick reads the store in many steps, and a write still fetches. */
+export async function fetchingOnce<T>(fn: () => Promise<T>): Promise<T> {
+  fetchedOnce = new Set();
+  try { return await fn(); } finally { fetchedOnce = null; }
+}
+
 function fetch(dir: string): void {
-  if (fetches) fetchNow(dir);
+  if (!fetches || fetchedOnce?.has(dir)) return;
+  fetchNow(dir);
+  fetchedOnce?.add(dir);
 }
 
 /** An explicit, non-forced refspec: a write may move origin/main while a fetch runs, and the clone's forced `origin` refspec would then set it back to the remote's older value. */
@@ -118,8 +129,9 @@ export function projectOfIssue(n: number): string | undefined {
 function load(dir: string, rev: string, name: string): Doc | null {
   const project = projectKey(name);
   if (!project) return null;
-  const all = structuredClone(loadAll(dir, rev));
-  return { repo: name, project, items: all.filter((i) => i.fm.project === project), floor: all.at(-1)?.id ?? 0 };
+  const all = loadAll(dir, rev);
+  // A caller may change its items, and loadAll's are cached: copy only this project's.
+  return { repo: name, project, items: structuredClone(all.filter((i) => i.fm.project === project)), floor: all.at(-1)?.id ?? 0 };
 }
 
 /** The repo's list on the store's origin/main, or null when the store has none. */

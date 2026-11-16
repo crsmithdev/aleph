@@ -301,7 +301,8 @@ test("askFromRun marks the run asked, and with a spec the run waits for a spec e
     expect(waitsForSpecEdit(e)).toBeNull();
     const spec = item();
     askFromRun(e, { key: "fac" }, undefined, plain, "Which spec?", spec);
-    expect(waitsForSpecEdit(e)).toEqual({ version: specVersion(spec), question: "Which spec?" });
+    // The entry is a read of the record: read again after the write.
+    expect(waitsForSpecEdit({ ...e, run: record.getRun(e.id)! })).toEqual({ version: specVersion(spec), question: "Which spec?" });
   } finally {
     rmSync(e.folder, { recursive: true, force: true });
   }

@@ -228,12 +228,12 @@ test("a periodic step is due when it never ran or its period has passed", () => 
   expect(due(s, "ci", NOW + MIN)).toBe(false);
 });
 
-test("ci and firefight are due every minute while a CI run on main is in progress", () => {
+test("ci and firefight are due every minute while a CI run on main is in progress", async () => {
   const s = { last: { ci: new Date(NOW).toISOString(), firefight: new Date(NOW).toISOString() }, missed: [], suite: {} };
   const runs = (status: string) => [{ conclusion: "", status, headSha: "c1", url: "https://ci/c1", createdAt: "2026-11-04T11:59:00Z" }];
-  ciStep([repo()], () => ({ ok: true, out: JSON.stringify(runs("in_progress")) }));
+  await ciStep([repo()], () => ({ ok: true, out: JSON.stringify(runs("in_progress")) }));
   expect([due(s, "ci", NOW + MIN), due(s, "firefight", NOW + MIN)]).toEqual([true, true]);
-  ciStep([repo()], () => ({ ok: true, out: JSON.stringify(runs("completed")) }));
+  await ciStep([repo()], () => ({ ok: true, out: JSON.stringify(runs("completed")) }));
   expect([due(s, "ci", NOW + MIN), due(s, "firefight", NOW + MIN)]).toEqual([false, false]);
 });
 
@@ -356,6 +356,13 @@ test("guard: the maintain step runs once per local date: the same date again is 
   const first = await maintainStep(NOW);
   expect(await maintainStep(NOW + 3600_000)).toBeNull();
   expect((await maintainStep(NOW + 864e5))!.counts).toEqual(first!.counts);
+});
+
+test("a tick reads the table of jobs at most twice, whichever steps are due", async () => {
+  seed([]);
+  const before = record.runLoads;
+  await runTick(NOW, quiet());
+  expect(record.runLoads - before).toBeLessThanOrEqual(2);
 });
 
 test("guard: a tick with a vault present records the maintain step's dry result in ran", async () => {

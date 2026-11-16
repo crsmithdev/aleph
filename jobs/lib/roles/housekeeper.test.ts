@@ -4,7 +4,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { readList, writeList } from "../../../issues/lib/store.ts";
+import { itemsDir, readList, writeList } from "../../../issues/lib/store.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { lock } from "../infra/locks.ts";
@@ -130,6 +130,15 @@ test("lands within the hour of the last run wait for it, then one sweep covers t
   expect(prompt()).toContain("src/lex.ts");
   expect(prompt()).toContain("src/emit.ts");
   expect(housekeepDue(NOW + 7_200_000)).toBe(false);
+});
+
+test("the tick's due check does no fetch of the items repo", async () => {
+  seed([{ title: "Parked issue" }]);
+  act([]);
+  await housekeep(NOW);
+  // A fetch from a store with no origin throws.
+  sh(itemsDir(), "git", "remote", "set-url", "origin", join(base, "no-such-origin"));
+  expect(housekeepDue(NOW + 3_600_000)).toBe(false);
 });
 
 test("a held lock stops both triggers, and a reply with no actions list applies nothing", async () => {
