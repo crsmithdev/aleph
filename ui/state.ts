@@ -12,7 +12,7 @@ import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, waitsOf, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
-import { counting } from "../jobs/lib/records/record.ts";
+import { counting, isStuck } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, asking, refIn, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withProjects } from "./api/scope.ts";
@@ -364,7 +364,7 @@ export function state(now = new Date()): State {
       const real = counting(runs).run;
       if (isWaiting(real.state)) needs.push(toJob(runs));
       // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not stuck.
-      else if ((real.state === "returned" || real.state === "failed") && !real.next) stuck.push(toJob(runs));
+      else if (isStuck(real)) stuck.push(toJob(runs));
       else {
         const k = issueKeyOf(real), on = onOf(real);
         const item = real.repo === undefined || on === undefined ? undefined : lists.item(real.repo, on);

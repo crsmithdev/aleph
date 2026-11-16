@@ -19,10 +19,10 @@ export const view = {
   refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
-  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}</div>${renderHerald(s)}</div></div>`; },
   more: async (s, q) => ({ ...s, flow: await flowOf(scope(q).window, q, true) }),
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
-  outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
+  outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => {
     scope(q).wire(root); wireHeraldJump(root);
     root.onchange = (e) => {
@@ -34,14 +34,16 @@ export const view = {
   },
   // An event from the stream goes into the Herald at once; the reload that follows draws it from the state.
   event: (root, ev) => {
-    streamed.push(ev);
-    if (streamed.length > HERALD_KEEP) streamed.shift();
+    page.streamed.push(ev);
+    if (page.streamed.length > HERALD_KEEP) page.streamed.shift();
     redrawHerald(root);
   },
   swap: (root) => heraldMotion(root),
 };
 
-let lastState = null, outOfDateNow = false;
+let lastState = null;
+/** What the Herald keeps between draws: the shell's out-of-date verdict, the events the stream sent since the page loaded (oldest first), and the text and time of the first render of the page load, which no status row repeats or precedes. `renderHerald` takes it as a parameter. */
+const page = { stale: false, streamed: [], loaded: null };
 
 /** The Herald drawn again from the last state, with its folds and motion kept. */
 function redrawHerald(root) {
@@ -137,18 +139,13 @@ const shaped = (r) => ({ row: r, at: r.time, by: r.subject, subject: targetOf(r)
 /** An event's identity: the same event from the stream and from the state has the same key. */
 const eventKey = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
 
-/** The text and time of the first Herald render of the page load, which no status row repeats or precedes. */
-let loaded = null;
-
 /** The key of the Herald's Work and Factory toggles in keep(): whether each shows its events. */
 const SHOW = "herald.show", ALL = { work: true, factory: true };
 
-/** The events the stream sent since the page loaded, oldest first; the Herald merges them with the state's. */
-let streamed = [];
 const HERALD_KEEP = 50;
 
 /** The events of the state and of the stream, each once, newest first. */
-export function heraldEvents(s, more = streamed) {
+export function heraldEvents(s, more = page.streamed) {
   const all = new Map([...(s.herald?.events ?? []), ...more].map(shaped).map((e) => [eventKey(e), e]));
   return [...all.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, HERALD_KEEP);
 }
@@ -268,9 +265,9 @@ function runNow(s) {
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
 }
 
-/** The Herald panel: sticky alerts on top, rolling event history stream below. */
-export function renderHerald(s) {
-  const cur = verdict(s, outOfDateNow);
+/** The Herald panel: sticky alerts on top, rolling event history stream below. `st` is the state it keeps between draws. */
+export function renderHerald(s, st = page) {
+  const cur = verdict(s, st.stale);
   // An error is not pinned: the newest event already says it.
   const asks = undecided(s.asks).map((i) => askCard(i, s.now));
   const stuck = (s.stuck ?? []).map(stuckRow(s));
@@ -289,8 +286,8 @@ export function renderHerald(s) {
   if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
 
   // A status row is an event row with the new status text only, drawn where the text changes after the page loaded; the page's first render has none.
-  loaded ??= { at: s.now, text: history[0].text };
-  const after = [...history.filter((ev) => ev.at >= loaded.at), loaded];
+  st.loaded ??= { at: s.now, text: history[0].text };
+  const after = [...history.filter((ev) => ev.at >= st.loaded.at), st.loaded];
   const status = after.slice(0, -1).filter((ev, i) => statusText(ev.text) !== statusText(after[i + 1].text))
     .map((ev) => ({ at: ev.at, key: `status ${hash(`${ev.tone} ${ev.text}`)}`, html: feedRow({ tone: esc(ev.tone), at: ev.at, body: `<span class="event-say">${esc(statusText(ev.text))}</span>` }) }));
   // The status changes and the events in one feed, newest first.
@@ -299,7 +296,7 @@ export function renderHerald(s) {
   for (const r of [...status].reverse()) { const n = (seen.get(r.key) ?? 0) + 1; seen.set(r.key, n); r.key += ` ${n}`; }
   // The Work and Factory toggles: an event whose target is an issue is Work, any other is Factory.
   const show = kept(SHOW, ALL);
-  const events = heraldEvents(s).filter((e) => show[isIssue(e.subject) ? "work" : "factory"]);
+  const events = heraldEvents(s, st.streamed).filter((e) => show[isIssue(e.subject) ? "work" : "factory"]);
   // A chat conversation is one row, read from its session: its last turn's time, its latest prompt.
   const chats = (s.herald?.chats ?? []).map((c) => ({ at: c.last, key: `chat ${c.id}`, html: feedRow({ tone: "quiet", at: c.last, by: "claude",
     body: `<span class="event-line">${tag("chat", "quiet")}${idLink(c.id.slice(0, 8))}<span class="event-title" title="${esc(c.title)}">${esc(c.title)}</span><span></span></span>` }) }));

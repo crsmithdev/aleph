@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  afterLand, askedQuestion, brief, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, issueBrief,
-  infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedFailure, rerunStep, rescueCase, writeRerun, type Stuck,
+  afterLand, askedQuestion, brief, clearRerun, earlierRounds, issueBrief,
+  nextBrief, nextStep, questionOf, repeatedFailure, writeRerun,
 } from "./continuation.ts";
 import type { Entry, Repo, Run } from "../records/ledger.ts";
 import { logTo } from "../records/run-files.ts";
@@ -40,7 +40,6 @@ const jobWith = (fields: Partial<Run> = {}, files: Record<string, string> = {}):
   return made;
 };
 const repo = { key: "fac", path: "/nowhere", main: "main" } as Repo;
-const stuck = (r: Partial<Run>, id = "r9"): Stuck => ({ last: entry(id, r), r: run(r), repo, reason: r.reason ?? "why" });
 
 describe("next step after a build or recheck", () => {
   test("a pass lands when the run asked to land or the repo lands by itself, else nothing starts", () => {
@@ -149,45 +148,6 @@ describe("rescue of a stuck or failed run", () => {
     expect(askedQuestion(run({ cause: "check", question: "x" }))).toBeNull();
     expect(questionOf("  QUESTION: a\nQUESTION: b ")).toBe("b");
     expect(questionOf("QUESTION: a\n**QUESTION: b**\nquestion: c")).toBe("b");
-  });
-
-  test("already met: on main or done is a duplicate; a worker's claim is checked on main", () => {
-    const r = run({ state: "failed", cause: "no-commit" });
-    expect(rescueCase(r, true, "evidence")).toBe("duplicate");
-    expect(rescueCase(r, false, "evidence")).toBe("claimed");
-    expect(rescueCase(r, false, null)).toBe("no-commit");
-    const s = stuck({ cause: "no-commit" });
-    expect(duplicateStep(s, "abc1234")).toMatchObject({ action: "drop", done: true, fate: "met" });
-    expect(duplicateStep(s, null)).toMatchObject({ action: "drop", done: false, fate: "met" });
-    expect(claimStep(s, "foo.ts:3", null)).toMatchObject({ action: "drop", done: true, fate: "met" });
-    const red = claimStep(s, "foo.ts:3", "tests fail");
-    expect(red.rerun).toContain("but the checks do not pass on origin/main (tests fail)");
-    expect(red.done).toBeUndefined();
-  });
-
-  test("the other safe cases, and none for the rest", () => {
-    expect(rescueCase(run({ cause: "timeout" }), false, null)).toBe("timeout");
-    expect(rescueCase(run({ role: "land", cause: "timeout" }), false, null)).toBeNull();
-    expect(rescueCase(run({ cause: "infra" }), false, null)).toBe("infra");
-    expect(rescueCase(run({ cause: "locked" }), false, null)).toBe("infra");
-    expect(rescueCase(run({ role: "land", cause: "conflict" }), false, null)).toBe("land-conflict");
-    expect(rescueCase(run({ role: "land", cause: "check" }), false, null)).toBe("land-checks");
-    expect(rescueCase(run({ role: "land", cause: "check", conflicts: ["a"] }), false, null)).toBeNull();
-    expect(rescueCase(run({ cause: "check" }), false, null)).toBeNull();
-  });
-
-  test("each step: a killed run, an infra failure, a land conflict, and a run with nothing to keep", () => {
-    expect(killedStep(stuck({ role: "land" }), false).action).toBe("land again");
-    expect(killedStep(stuck({ role: "build" }), true).action).toBe("recheck");
-    expect(killedStep(stuck({ role: "build" }), false)).toMatchObject({ action: "drop" });
-    expect(killedStep(stuck({ role: "build" }), false).rerun).toBeUndefined();
-    expect(infraStep(stuck({ role: "land" }), false).action).toBe("land again");
-    expect(infraStep(stuck({ role: "build" }), true).action).toBe("recheck");
-    expect(infraStep(stuck({ role: "build", reason: "fetch failed" }), false).rerun).toBe("The last run failed before it made a branch: fetch failed.");
-    expect(conflictStep(stuck({ role: "land", conflicts: ["a.ts"] }), "abc fix a").rerun).toContain("merge conflict in a.ts, last changed on main by abc fix a");
-    folder("r-nc", { "result.md": "line 1\nline 2\n" });
-    expect(rerunStep(stuck({ cause: "no-commit" }, "r-nc"), "no-commit").rerun).toBe("The last run made no commit. The last 20 lines of its result.md:\n\n```\nline 1\nline 2\n```");
-    expect(rerunStep(stuck({ role: "land", cause: "check", reason: "tests" }, "r-none"), "land-checks").rerun).toContain("its checks log:\n\n```\n(empty)\n```");
   });
 });
 

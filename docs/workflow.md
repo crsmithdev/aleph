@@ -204,7 +204,7 @@ The land does not run the full suite. `aleph suite` runs it on `origin/main` eac
 
 ## 7. Rescue
 
-The rescue (`rescue.ts`, `continuation.ts` `rescueCase`) takes one safe action per case, once per issue. The second time on the same issue sets a `rescue` Ask.
+The rescue (`rescue.ts`, `rescueCase`) takes one safe action per case, once per issue. The second time on the same issue sets a `rescue` Ask.
 
 | Case | Action |
 |---|---|

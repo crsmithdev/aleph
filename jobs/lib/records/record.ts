@@ -13,7 +13,7 @@
 import { mkdirSync } from "node:fs";
 import type { Database } from "bun:sqlite";
 import type { Ask } from "../asks/ask.ts";
-import type { Entry, Run } from "./ledger.ts";
+import type { CheckResult, Entry, Run } from "./ledger.ts";
 import { causeOf, policyOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
 import { conn, next as nextNumber, tx } from "../../../lib/db.ts";
@@ -261,6 +261,9 @@ export function patchRun(id: string, change: Change | ((run: RunRecord, runs: Ru
   });
 }
 
+/** Adds one result to the run's `checks`, in the same write that reads them. */
+export const appendCheck = (id: string, c: CheckResult): RunRecord => patchRun(id, (run) => ({ checks: [...run.checks ?? [], c] }));
+
 /**
  * End job `id` in one write: `change` (its state, `ended` and the rest) and its `next`, which `decide` gives from the
  * ended run and the land runs of its work, this one included. No reader sees the run ended with no `next`, so no
@@ -379,6 +382,9 @@ const counts = (run: Run): boolean => run.role !== "director" && run.role !== "r
  */
 export const counting = (j: Entry[]): Entry => j.findLast((e) => counts(e.run)) ?? j.at(-1)!;
 
+/** A run that ended `returned` or `failed` with no `next` queued: it is stuck, not between steps. */
+export const isStuck = (r: Pick<Run, "state" | "next">): boolean => (r.state === "returned" || r.state === "failed") && !r.next;
+
 /** What `next` reads besides the runs: the issue's Ask. */
 export interface Live { ask: Ask | null }
 
@@ -400,7 +406,7 @@ export function next(runs: RunRecord[], live: Live = { ask: null }): Step {
   if (last?.next === "recheck") return { step: "recheck", action: "returned", ...subOf(last) };
   if (last?.next === "land") return { step: "land", action: last.state };
   if (last?.state === "passed") return { step: "wait", action: "passed", to: "human" };
-  if (last && (last.state === "returned" || last.state === "failed")) {
+  if (last && isStuck(last)) {
     // An Ask made while the run was live (a slow land) was about the live run, not about this end.
     if (last.asked && !(last.ended && last.asked.at < last.ended)) return { step: "wait", action: "waiting", to: "human" };
     if (!policyOf(causeOf(last)).rescuable) return { step: "wait", action: last.state, ...subOf(last) };

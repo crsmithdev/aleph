@@ -20,8 +20,8 @@ import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk,
 import { LAND_STUCK_MS } from "../gates/factory-status.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
-import { allJobs, isOpen, jobById, issue as issueOf, type Job } from "../records/job.ts";
-import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";
+import { allJobs, isOpen, jobById, issue as issueOf, tailOf, type Job } from "../records/job.ts";
+import { askedQuestion, clearRerun, markRescued, rescued, writeRerun } from "../transitions/continuation.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -180,8 +180,88 @@ async function releaseEdited(act: Rescue): Promise<void> {
   }
 }
 
-/** The run a rescue acts on, and what its issue is. */
-type Stuck = StuckRun & { name: string; issue: number | string | undefined };
+/** The run a rescue acts on: its entry, its repo, its job name, its issue, and why it stopped. */
+export type Stuck = { last: Entry; r: Run; repo: Repo; name: string; issue: number | string | undefined; reason: string };
+
+type RescueCase = "duplicate" | "no-commit" | "claimed" | "timeout" | "infra" | "land-checks" | "land-conflict";
+
+/** Which safe case a returned or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
+export function rescueCase(r: Run, onMainOrDone: boolean, claim: string | null): RescueCase | null {
+  const cause = causeOf(r);
+  if (cause === "no-commit") return onMainOrDone ? "duplicate" : claim !== null ? "claimed" : "no-commit";
+  if (cause === "timeout" && r.role !== "land") return "timeout";
+  if (cause === "infra" || cause === "locked") return "infra";
+  if (r.role === "land" && cause === "conflict") return "land-conflict";
+  if (r.role === "land" && !r.conflicts?.length && cause === "check") return "land-checks";
+  return null;
+}
+
+/** One action on a run. `rerun` is the rerun note; `dropReason` is the drop's text, when it is not `noted`; `told` is the news, when it is not `noted`. */
+type Step = { action: "drop" | "land again" | "recheck"; rerun?: string; dropReason?: string; noted: string; told?: string; done?: boolean; fate?: Fate };
+
+/** The step for a run that a host restart killed. `hasWork`: its branch has commits ahead of main. The issue did not cause this: no rescue mark, so the issue keeps its rerun. */
+export function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
+  const text = `a host restart killed ${r.role} run ${last.id}`;
+  // The branch passed, and the land may have pushed: a new land finds that, and a new issue run would do the work twice.
+  if (r.role === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
+  // A build or recheck with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
+  if (isAgentRun(r.role) && hasWork) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
+  return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
+}
+
+/** The step for a lost run: a host restart's step, as the issue did not cause it either. The rescue counts it once per issue. */
+export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
+  const text = `${r.role} run ${last.id} was lost: its process ended with no end written`;
+  if (r.role === "land") return { action: "land again", noted: `${text}: landed again, once`, told: `${text}: landing again` };
+  if (isAgentRun(r.role) && hasWork) return { action: "recheck", noted: `${text}: rechecked once, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
+  return { action: "drop", dropReason: `${text}. Run the goal again from the start.`, noted: `${text}: dropped, and the goal reruns once`, told: `${text}: the goal reruns` };
+}
+
+/** The step for a worker's claim that the issue is met, by `red`, the red line of main. `failure` is the red CI's failure, which the rerun quotes. */
+export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failure?: string): Step {
+  const said = `${r.role} run ${last.id} says the goal is already met (${claim})`;
+  if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "met" };
+  return {
+    action: "drop",
+    rerun: `The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.${failure ? ` The failure happens on GitHub CI: a pass on this host does not show the goal met. The CI failure:\n\n\`\`\`\n${failure}\n\`\`\`` : ""}`,
+    noted: `${said}, but ${red}; dropped, and the goal reruns once`,
+  };
+}
+
+/** The step for a run that ended with no commit while the item is already on main (`onMain`) or done. */
+export function duplicateStep({ last, r }: Stuck, onMain: string | null | undefined): Step {
+  return { action: "drop", noted: `${r.role} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain, fate: "met" };
+}
+
+/** The step for an infrastructure failure: a land lands again, a run with a branch (`hasBranch`) is rechecked, and any other run reruns. */
+export function infraStep({ last, r, reason }: Stuck, hasBranch: boolean): Step {
+  const text = `${r.role} run ${last.id} failed for infrastructure (${reason}): `;
+  if (r.role === "land") return { action: "land again", noted: `${text}landed again, once`, told: `${text}landing again` };
+  if (hasBranch) return { action: "recheck", noted: `${text}rechecked, once`, told: `${text}rechecking` };
+  return { action: "drop", rerun: `The last run failed before it made a branch: ${reason}.`, dropReason: `${text}dropped for one rerun`, noted: `${text}dropped; the goal reruns once`, told: `${text}the goal reruns` };
+}
+
+/** The step for a land that hit a merge conflict. `touched` is the last commit on main that changed the files. */
+export function conflictStep({ last, r, repo }: Stuck, touched: string): Step {
+  const files = r.conflicts ?? [];
+  const what = `${files.join(", ") || "unknown files"}${touched ? `, last changed on ${repo.main} by ${touched}` : ""}`;
+  return {
+    action: "drop",
+    rerun: `The last land failed with a merge conflict in ${what}. Another goal landed on the same lines first; this run starts from the current ${repo.main}.`,
+    noted: `${r.role} run ${last.id}: merge conflict in ${what}; dropped, and the goal reruns once from current ${repo.main}`,
+  };
+}
+
+/** The step for a run that stopped with nothing to keep. The note quotes the end of its log. */
+export function rerunStep({ last, r, reason }: Stuck, key: "no-commit" | "land-checks"): Step {
+  const why = key === "no-commit" ? "the last run made no commit" : `the checks failed after the land merged main (${reason})`;
+  const file = key === "land-checks" ? "checks" : "result.md";
+  return {
+    action: "drop",
+    rerun: `${why[0].toUpperCase()}${why.slice(1)}. The last 20 lines of its ${file === "checks" ? "checks log" : file}:\n\n\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``,
+    noted: `${r.role} run ${last.id}: ${why}; dropped, and the goal reruns once`,
+  };
+}
 
 /** The commit of this job or this item on main, or `{ onMain: null }` when the item is closed without one; null when neither. */
 function foundDone({ last, repo, issue }: Pick<Stuck, "last" | "repo" | "issue">): { onMain: string | null } | null {

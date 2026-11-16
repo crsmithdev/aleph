@@ -66,9 +66,8 @@ function resultText(log: string): string {
 
 /** A recorder that starts the run's `checks` over and adds each check that ran. */
 function recorder(folder: string): (c: CheckResult) => void {
-  let all: CheckResult[] = [];
-  jobRecord.patchRun(jobOfFolder(folder), { checks: all });
-  return (c) => { all = [...all, c]; jobRecord.patchRun(jobOfFolder(folder), { checks: all }); };
+  jobRecord.patchRun(jobOfFolder(folder), { checks: [] });
+  return (c) => { jobRecord.appendCheck(jobOfFolder(folder), c); };
 }
 
 /**
@@ -403,6 +402,15 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   return { outcome: { state: "passed", checkedBase: base, checkedTip: git(wt, "rev-parse", "HEAD").out, ...(manual ? { say: manual.say } : {}) }, code: 0 };
 }
 
+/** What the verdict of a branch needs from git: its merge base with `main`, the files it changes, and the base and tip it is checked at. Null when it adds no commit, or only `result.md`. */
+function branchFacts(repo: Repo, main: string, tip: string): { base: string; changed: string[]; checked: { checkedBase: string; checkedTip: string } } | null {
+  if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return null;
+  const base = git(repo.path, "merge-base", main, tip).out;
+  const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
+  if (changed.length > 0 && changed.every((f) => f === "result.md")) return null;
+  return { base, changed, checked: { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out } };
+}
+
 /**
  * A factory worker's run after its worker: the fields of its structured output, then the worker verdict on its branch.
  * A reply with no structured output fails. Only the branch's commits count: what the worker left uncommitted is not checked.
@@ -422,16 +430,14 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   if (w.cause) return stop(w.cause.kind, w.cause.reason, facts);
   if (typeof reply === "string") return stop("other", `worker: ${reply}`, facts);
   { const f = fetchOrigin(repo.path); if (!f.ok) return stop("infra", `fetch failed: ${f.out}`, facts); }
-  if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return stop("no-commit", "no commit", facts);
-  const base = git(repo.path, "merge-base", main, tip).out;
+  const bf = branchFacts(repo, main, tip);
+  if (!bf) return stop("no-commit", "no commit", facts);
+  const { base, changed, checked } = bf;
 
   // The fix rounds so far are those of jobs of this target; the runs sent back say what they failed.
   const done = jobRecord.roundsOf(run.target ?? id);
   if (done) facts.round = done;
   const earlier = earlierRounds(jobById(id) ?? [], id);
-  const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
-  if (changed.length > 0 && changed.every((f) => f === "result.md")) return stop("no-commit", "no commit", facts);
-  const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out };
   return workerVerdict({ earlier: earlier.map((e) => e.run), done, rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, result: reply.summary, env }));
 }
 
@@ -472,7 +478,7 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       logTo(folder, "checks", `## keep-gate: ${kept.noVerdict ? "no verdict" : "exit 1"}\n${kept.log}\n\n`);
       if (!kept.noVerdict) return kept.reason;
       // No verdict is a result on the run beside the checks, so the job page shows it.
-      jobRecord.patchRun(jobOfFolder(folder), { checks: [...jobRecord.getRun(jobOfFolder(folder))?.checks ?? [], { name: "keep-gate", ok: false, seconds: Math.round((performance.now() - start) / 1000), noVerdict: true }] });
+      jobRecord.appendCheck(jobOfFolder(folder), { name: "keep-gate", ok: false, seconds: Math.round((performance.now() - start) / 1000), noVerdict: true });
       return { noVerdict: kept.reason };
     },
     stat: () => git(repo.path, "diff", "--stat", base, tip).out,
@@ -506,8 +512,7 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   let tests: TestRecord | undefined;
   const result = (ok: boolean, none = false) => {
     if (!any && !none) return;
-    const checks = jobRecord.getRun(jobOfFolder(folder))?.checks ?? [];
-    jobRecord.patchRun(jobOfFolder(folder), { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(none ? { noVerdict: true as const } : {}), ...(tests ? { tests } : {}) }] });
+    jobRecord.appendCheck(jobOfFolder(folder), { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(none ? { noVerdict: true as const } : {}), ...(tests ? { tests } : {}) });
   };
   const noVerdict = (command: string, r: Ran): NoVerdict => {
     logTo(folder, "checks", `## oracle: no verdict\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`);
@@ -572,11 +577,9 @@ async function recheck(folder: string, run: Run, repo: Repo, env: Record<string,
     // The job's worktree has the branch checked out: its files follow the moved branch.
     if (run.worktree && existsSync(run.worktree)) git(run.worktree, "reset", "-q", "--hard");
   }
-  const base = git(repo.path, "merge-base", main, ref).out;
-  if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stop("no-commit", "no commit");
-  const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
-  if (changed.length > 0 && changed.every((f) => f === "result.md")) return stop("no-commit", "no commit");
-  const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out };
+  const bf = branchFacts(repo, main, ref);
+  if (!bf) return stop("no-commit", "no commit");
+  const { base, changed, checked } = bf;
   return workerVerdict({ rounds: fixRounds(), facts: {}, checked }, branchPorts(folder, run, repo, base, branch, { changed, env }));
 }
 
