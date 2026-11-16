@@ -19,7 +19,7 @@
 import { readJsonOr } from "../../lib/json.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readLines } from "./digest.ts";
+import { readLines } from "../../lib/jsonl.ts";
 
 const HEADROOM = 33_000;
 const DEFAULT_WINDOW = 1_000_000;

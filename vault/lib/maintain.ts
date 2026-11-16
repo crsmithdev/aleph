@@ -10,7 +10,7 @@ import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
 import { Exit, run } from "./ops.ts";
 import { daysAgo } from "../../lib/day.ts";
-import { compiledDays, fixFrontmatter, lintVault, loadVault, readRecallLog, readRun, recordRun, today, trimRecallLog, wikiNotes, type Finding } from "./vault.ts";
+import { compiledDays, fixFrontmatter, lintVault, loadVault, loadWiki, readRecallLog, readRun, recordRun, today, trimRecallLog, type Finding } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
 const SHOWN_UNOPENED = 8;
@@ -61,7 +61,7 @@ export async function maintain(root: string, dry: boolean, commit: Commit): Prom
   if (pushed && !pushed.pushed) failed.push("push");
   report.push = { retry, ...(pushed ? { pushed: pushed.pushed, detail: pushed.detail } : {}) };
 
-  const notes = wikiNotes(await loadVault(root));
+  const notes = await loadWiki(root);
   const fixes = notes.flatMap((n) => { const r = fixFrontmatter(n, addedDate(root, n.path)); return r ? [{ note: n.title, repairs: r.repairs }] : []; });
   const tracked = new Set(trackedFiles(root, "wiki"));
   const untracked = notes.filter((n) => !tracked.has(n.rel));

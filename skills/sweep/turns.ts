@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { jsonLines } from "../../lib/jsonl.ts";
 import { claudeProjects } from "../../lib/paths.ts";
 import { said as text } from "../automate/scan.ts";
 
@@ -33,9 +34,7 @@ export const turns = (jsonl: string, since: string): Turn[] | null => {
   const asks = new Set<string>();
   let reply: Turn | null = null;
   const flush = () => { if (reply) out.push({ ...reply, text: clip(reply.text) }); reply = null; };
-  for (const line of jsonl.split("\n")) {
-    let r: any;
-    try { r = JSON.parse(line); } catch { continue; } // the last line of a live session can be cut off
+  for (const r of jsonLines(jsonl)) {
     if (r?.entrypoint && r.entrypoint !== "cli") return null;
     if (r?.isSidechain || r?.isMeta || !r?.timestamp || r.timestamp <= since) continue;
     const c = r.message?.content;

@@ -10,6 +10,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "n
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
+import { jsonLines } from "../../lib/jsonl.ts";
 import { git } from "../../lib/git.ts";
 import { claudeProjects, vaultDir } from "../../lib/paths.ts";
 
@@ -61,9 +62,7 @@ export const signals = (text: string): Signal[] => {
   const notes = new Set<string>(); // vault notes read since the last typed prompt
   let denials = 0, listed = false, session = "", at = "", cli = false, cwd = "";
   const add = (kind: Kind, key: string, body = key) => out.push({ kind, key, session, at, cli, cwd, text: body.slice(0, 400) });
-  for (const line of text.split("\n")) {
-    let r: any;
-    try { r = JSON.parse(line); } catch { continue; } // the last line of a live session can be cut off
+  for (const r of jsonLines(text)) {
     if (!r?.sessionId || !r.timestamp) continue;
     session = r.sessionId;
     at = r.timestamp;

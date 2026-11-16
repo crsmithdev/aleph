@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../lib/jev.ts";
 import { truncate } from "../lib/otlp.ts";
 import { postTurnSpan } from "./lib/trace.ts";
-import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
+import { claimLine, recall } from "../vault/lib/index.ts";
 import { appendRecallLog, coreNotes, loadWiki, recordRun, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
 import { errText } from "../lib/errtext.ts";
 import { isAgent } from "../lib/env.ts";
@@ -71,7 +71,7 @@ async function main() {
   const scope = repoScope(input.cwd ?? process.cwd());
   // A core note's line is already in the start context.
   const skip = new Set([...seen, ...coreNotes(notes, scope).map((n) => n.rel)]);
-  const all = rankNotes(openIndex(root, notes), notes, prompt, scope).map((r) => r.note).filter((n) => !skip.has(n.rel));
+  const all = recall(root, notes, prompt, scope).map((r) => r.note).filter((n) => !skip.has(n.rel));
   const candidates = all.slice(0, MAX_ASKED);
   const meta: Parameters<typeof postSpan>[2] = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length > MAX_ASKED };
   if (!candidates.length) { await postSpan(input, start, meta, [], ""); return; }

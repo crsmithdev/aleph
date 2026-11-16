@@ -16,7 +16,8 @@ import { agent, prune, session, tool, turn } from "./lib/handshake.ts";
 import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from "../lib/otlp.ts";
 import { parseRating } from "./lib/rating.ts";
 import { traceAttrs } from "./lib/trace.ts";
-import { readEntries, readLines } from "./lib/digest.ts";
+import { readEntries } from "./lib/digest.ts";
+import { readLines } from "../lib/jsonl.ts";
 import { decide, judgeChoice, type Question } from "../lib/jev.ts";
 import { costDetails, type Usage } from "../lib/pricing.ts";
 

@@ -8,7 +8,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
-import { lintVault, loadVault, recordRun, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
+import { lintVault, loadWiki, recordRun, today, type Note } from "../../../vault/lib/vault.ts";
 import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
 import { outcome } from "./recheck.ts";
 
@@ -76,7 +76,7 @@ async function apply(root: string, pairs: Pair[], verdicts: Verdict[], day: stri
       const w: Resolved = { a: x.title, b: y.title, verdict: v.verdict, why: v.why };
       if (gone.has(x.title) || gone.has(y.title)) { out.push({ ...w, rule: "gone", refused: "a note of this pair was archived by an earlier verdict" }); continue; }
       // An earlier verdict may have rewritten a note of this pair, so read both again.
-      const live = new Map(wikiNotes(await loadVault(root)).map((n) => [n.title, n]));
+      const live = new Map((await loadWiki(root)).map((n) => [n.title, n]));
       const [a, b] = [live.get(x.title)!, live.get(y.title)!];
       const c = change(a, b, v, day);
       if ("bad" in c) { out.push({ ...w, rule: "reply", refused: c.bad }); continue; }
@@ -97,7 +97,7 @@ async function apply(root: string, pairs: Pair[], verdicts: Verdict[], day: stri
  */
 export async function dedupe(root: string, dry: boolean): Promise<DedupeReport> {
   const day = today(), report: DedupeReport = { day, dry, pairs: [] };
-  const all = wikiNotes(await loadVault(root));
+  const all = await loadWiki(root);
   const byTitle = new Map(all.map((n) => [n.title, n]));
   const queue = lintVault(all, { overlap: true }).warn.filter((f) => f.rule === "overlap")
     .map((f): Pair => [byTitle.get(f.note)!, byTitle.get(f.other!)!]).filter(([a, b]) => !a.fm.core && !b.fm.core).slice(0, PAIRS);

@@ -8,10 +8,10 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
-import { openIndex, rankNotes } from "../../../vault/lib/index.ts";
+import { recall } from "../../../vault/lib/index.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
 import { recallQuery } from "../../../vault/lib/recall-query.ts";
-import { loadVault, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
+import { loadWiki, today, type Note } from "../../../vault/lib/vault.ts";
 import { pass, reason, scratch, TEXT } from "./maintainer.ts";
 import { outcome } from "./recheck.ts";
 
@@ -90,18 +90,13 @@ export async function findMisses(root: string, notes: Note[], now: number): Prom
       for (const a of asked) if (!a.has(n)) found.push({ query: a.query, note: n, source: a.source, at: o.startTime ?? "" });
     }
   }
-  const db = openIndex(root, notes);
-  try {
-    const seen = new Set<string>();
-    return found.filter((m) => {
-      const key = `${m.query}\n${m.note.rel}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return !rankNotes(db, notes, m.query).slice(0, DEPTH[m.source]).some((r) => r.note.rel === m.note.rel);
-    });
-  } finally {
-    db.close();
-  }
+  const seen = new Set<string>();
+  return found.filter((m) => {
+    const key = `${m.query}\n${m.note.rel}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return !recall(root, notes, m.query).slice(0, DEPTH[m.source]).some((r) => r.note.rel === m.note.rel);
+  });
 }
 
 export function prompt(misses: Miss[], day: string): string {
@@ -129,7 +124,7 @@ async function apply(root: string, misses: Miss[], verdicts: Verdict[], day: str
       const w: Aliased = { query: m.query, note: m.note.title, verdict: v.verdict, why: v.why, ...(v.aliases ? { aliases: v.aliases } : {}) };
       if (v.verdict === "skip") { out.push(w); continue; }
       // An earlier verdict may have added aliases to this note, so read it again.
-      const n = wikiNotes(await loadVault(root)).find((x) => x.title === m.note.title);
+      const n = (await loadWiki(root)).find((x) => x.title === m.note.title);
       const have = new Set([n?.title ?? "", ...(n ? list(n, "aliases") : [])].map((a) => a.toLowerCase()));
       const add = [...new Set((v.aliases ?? []).map((a) => a.trim()).filter((a) => a && !have.has(a.toLowerCase())))];
       if (v.verdict !== "alias" || !n || !add.length) { out.push({ ...w, rule: "reply", refused: !n ? "the note is gone" : v.verdict !== "alias" ? `unknown verdict ${v.verdict}` : "alias verdict names no new alias" }); continue; }
@@ -148,7 +143,7 @@ async function apply(root: string, misses: Miss[], verdicts: Verdict[], day: str
  */
 export async function alias(root: string, dry: boolean, now = Date.now()): Promise<AliasReport> {
   const day = today(), report: AliasReport = { day, dry, misses: [] };
-  const notes = wikiNotes(await loadVault(root));
+  const notes = await loadWiki(root);
   const queue = (await findMisses(root, notes, now)).slice(0, MISSES);
   if (!queue.length) return { ...report, skipped: "no misses" };
   await pass(report, {

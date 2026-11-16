@@ -13,10 +13,10 @@ import { serializeFrontmatter } from "../../lib/frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./git.ts";
 import { compileDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
-import { claimLine, openIndex, rankNotes } from "./index.ts";
+import { claimLine, recall as recallNotes } from "./index.ts";
 import { maintain } from "./maintain.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, linkTargets, loadVault, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
+import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, linkTargets, loadVault, loadWiki, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
 import { layout } from "../../lib/layout.ts";
 import { logUse } from "../../lib/episode-use.ts";
 import { errText } from "../../lib/errtext.ts";
@@ -292,9 +292,7 @@ async function recall(): Promise<void> {
     const pages = (await loadVault(dir)).filter((n) => scope === undefined || String(n.fm.scope) === scope);
     const tmp = mkdtempSync(join(tmpdir(), "aleph-episodes-"));
     try {
-      const db = openIndex(tmp, pages);
-      const ranked = q ? rankNotes(db, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
-      db.close();
+      const ranked = q ? recallNotes(tmp, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
       const shown = q ? ranked.slice(0, TOP) : ranked;
       if (q) logUse("shown", shown.map(({ n }) => n.title));
       return out(shown.map(({ n, r }) => ({ title: n.title, path: join(dir, n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
@@ -303,10 +301,10 @@ async function recall(): Promise<void> {
   // `--scope` alone lists a project's notes: at 165 notes "what do we know
   // about cloudchamber" is a real question, and ranking every note by one word
   // could not answer it.
-  const notes = wikiNotes(await loadVault(root));
+  const notes = await loadWiki(root);
   const scoped = notes.filter((n) => scope === undefined || String(n.fm.scope) === scope);
   const hits = q
-    ? rankNotes(openIndex(root, notes), scoped, q, scope).slice(0, TOP).map(({ note, rank }) => ({ n: note, r: rank }))
+    ? recallNotes(root, notes, q, scope, scoped).slice(0, TOP).map(({ note, rank }) => ({ n: note, r: rank }))
     : scoped.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
   noteRead(hits.map(({ n }) => n.title), q);
   // A scope nobody uses is almost always a misspelling of one that exists, and
@@ -389,7 +387,7 @@ async function lint(): Promise<void> {
   requireVault();
   const fixed: { note: string; path: string; repairs: string[] }[] = [];
   if (has("fix")) {
-    for (const n of wikiNotes(await loadVault(root))) {
+    for (const n of await loadWiki(root)) {
       const r = fixFrontmatter(n, addedDate(root, n.path));
       if (!r) continue;
       writeFileSync(n.path, r.text);

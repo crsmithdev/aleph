@@ -15,7 +15,7 @@ import { fileIssue, writeList } from "../../../issues/lib/store.ts";
 import { find, note, parseIssueRef, setStatus } from "../../../issues/lib/todo.ts";
 import { clearAsk, setAsk } from "../asks/ask.ts";
 import { decayQueue, sub } from "../../../vault/lib/maintain.ts";
-import { lintVault, loadVault, recordRun, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
+import { lintVault, loadWiki, recordRun, today, type Note } from "../../../vault/lib/vault.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
@@ -124,7 +124,7 @@ async function apply(notes: Note[], verdicts: Verdict[], day: string, approved =
  */
 export async function recheck(root: string, dry: boolean): Promise<RecheckReport> {
   const day = today(), report: RecheckReport = { day, dry, notes: [] };
-  const all = wikiNotes(await loadVault(root));
+  const all = await loadWiki(root);
   const byTitle = new Map(all.map((n) => [n.title, n]));
   const stale = decayQueue(root, lintVault(all).warn.filter((f) => f.rule === "stale"));
   const held = getJson<Record<string, unknown>>("state", "recheck-held", {});
@@ -153,7 +153,7 @@ export async function answerHeld(ref: string, approved: boolean): Promise<string
   const held = getJson<Record<string, Held>>("state", "recheck-held", {});
   const title = Object.keys(held).find((t) => held[t].issue === ref);
   if (!title) return `no held verdict for ${ref}`;
-  const n = wikiNotes(await loadVault(vaultDir())).find((x) => x.title === title);
+  const n = (await loadWiki(vaultDir())).find((x) => x.title === title);
   if (!n) return `no note ${title} in the vault`;
   const [r] = await apply([n], [approved ? held[title] : { title, verdict: "refresh", why: "Chris kept the claim" }], today(), true);
   const at = parseIssueRef(ref)!;

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git-fixture.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
-import { loadVault, today, wikiNotes } from "../../../vault/lib/vault.ts";
+import { loadWiki, today } from "../../../vault/lib/vault.ts";
 import { alias, findMisses, MISSES } from "./alias.ts";
 import { render } from "./maintainer.ts";
 
@@ -21,7 +21,7 @@ cat "$FAKE_DIR/reply.json"
 const reply = (verdicts: unknown[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ type: "result", is_error: false, result: "", structured_output: { verdicts } }) + "\n");
 const rel = (t: string) => `wiki/decisions/${t}.md`;
 const read = (t: string) => readFileSync(join(root, rel(t)), "utf8");
-const notes = async () => wikiNotes(await loadVault(root));
+const notes = () => loadWiki(root);
 
 async function seed(title: string, core?: string) {
   const file = join(base, `${title}.md`);

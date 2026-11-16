@@ -182,11 +182,11 @@ function walk(dir: string, out: string[] = []): string[] {
 /** Parsed notes by root and path, valid while a file's mtime and size are unchanged. */
 const cache = new Map<string, { mtimeMs: number; size: number; note: Note }>();
 
-/** Every markdown file outside .obsidian/, archive included: archived notes are link targets. */
-export async function loadVault(root: string): Promise<Note[]> {
+/** The notes under `dir`, parsed in parallel; a file whose mtime and size match the cache is not parsed again. */
+async function load(root: string, dir: string): Promise<Note[]> {
   const seen = new Set<string>();
   const notes = await Promise.all(
-    walk(root).map(async (p) => {
+    walk(dir).map(async (p) => {
       const key = `${root}\0${p}`;
       seen.add(key);
       const st = await stat(p);
@@ -197,17 +197,18 @@ export async function loadVault(root: string): Promise<Note[]> {
       return { ...note };
     }),
   );
-  for (const key of cache.keys()) if (key.startsWith(`${root}\0`) && !seen.has(key)) cache.delete(key);
+  for (const key of cache.keys()) if (key.startsWith(`${root}\0${dir}`) && !seen.has(key)) cache.delete(key);
   return notes;
 }
+
+/** Every markdown file outside .obsidian/, archive included: archived notes are link targets. */
+export const loadVault = (root: string): Promise<Note[]> => load(root, root);
 
 /**
  * The notes under wiki/, read in parallel. Each read on a /mnt/c vault costs
  * about 4 ms over 9P, so a serial loadVault of 700 notes takes 3-5 s.
  */
-export async function loadWiki(root: string): Promise<Note[]> {
-  return Promise.all(walk(join(root, "wiki")).map(async (p) => parseNote(p, root, await readFile(p, "utf8"))));
-}
+export const loadWiki = (root: string): Promise<Note[]> => load(root, join(root, "wiki"));
 
 export function wikiNotes(notes: Note[]): Note[] {
   return notes.filter((n) => n.wiki);

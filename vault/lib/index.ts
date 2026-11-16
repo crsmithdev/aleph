@@ -31,7 +31,7 @@ function head(root: string): string {
 }
 
 /** The index for `notes`, rebuilt first when the vault HEAD moved. */
-export function openIndex(root: string, notes: Note[]): Database {
+function openIndex(root: string, notes: Note[]): Database {
   const dir = join(root, ".index");
   const file = join(dir, "vault.sqlite");
   const at = head(root);
@@ -89,13 +89,22 @@ function titleTier(n: Note, q: string, want: Set<string>): { tier: number; hits:
 export interface Ranked { note: Note; rank: number }
 
 /**
+ * The index for `notes`, searched for `query` among `among` (all of `notes` by default) and closed again.
+ * The ranking is `rankNotes`'s.
+ */
+export function recall(root: string, notes: Note[], query: string, scope?: string, among: Note[] = notes): Ranked[] {
+  const db = openIndex(root, notes);
+  try { return rankNotes(db, among, query, scope); } finally { db.close(); }
+}
+
+/**
  * The notes that match `query`, fused by reciprocal rank (k = 60) over three
  * lists: the title and alias matches, the bm25 hits, and, with `scope`, that
  * scope's notes by `updated`, newest first. Only a note on one of the first
  * two lists is returned; the third list orders them and adds none.
  * `rank` is the title tier (0, 1 or 2), or 3 for a body-only hit.
  */
-export function rankNotes(db: Database, notes: Note[], query: string, scope?: string): Ranked[] {
+function rankNotes(db: Database, notes: Note[], query: string, scope?: string): Ranked[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const want = new Set(words(q));
