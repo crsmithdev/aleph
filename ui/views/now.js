@@ -378,7 +378,7 @@ export function renderHerald(s) {
   // The Work and Factory toggles: an event whose target is an issue is Work, any other is Factory.
   const show = kept(SHOW, ALL);
   const events = heraldEvents(s).filter((e) => show[isIssue(e.subject) ? "work" : "factory"]);
-  // A chat conversation is one row, read from its session: its last turn's time, its first prompt.
+  // A chat conversation is one row, read from its session: its last turn's time, its latest prompt.
   const chats = (s.herald?.chats ?? []).map((c) => ({ at: c.last, key: `chat ${c.id}`, html: feedRow({ tone: "quiet", at: c.last, by: "claude",
     body: `<span class="event-line">${tag("chat", "quiet")}${idLink(c.id.slice(0, 8))}<span class="event-title" title="${esc(c.title)}">${esc(c.title)}</span><span></span></span>` }) }));
   const rows = [...status, ...chats, ...eventRows(events, s.herald?.titles, s.herald?.runs, s.herald?.attempts, s.herald?.reviewed)].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));

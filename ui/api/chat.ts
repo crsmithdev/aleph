@@ -49,7 +49,7 @@ function notesOn(page: string | undefined, ids: string[]): string {
 /** The folder of each conversation the server ran, named by its session ID: a turn makes it, so the conversations are known when the process is gone. */
 const sessions = () => alephPath("ALEPH_SESSIONS_DIR", "sessions");
 
-/** One conversation as the Herald lists it: the session, when it started and had its last turn, and its first prompt. */
+/** One conversation as the Herald lists it: the session, when it started and had its last turn, and its latest prompt. */
 export interface Chat { id: string; start: string; last: string; title: string }
 
 /** The conversations with a turn at or after `since` (ms), oldest first, each read from its Claude Code transcript; one with no transcript is left out. */
@@ -61,8 +61,8 @@ export function chats(since: number): Chat[] {
     const file = [...new Bun.Glob(`*/${id}.jsonl`).scanSync({ cwd: root })][0];
     if (!file) continue;
     const records = readFileSync(join(root, file), "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } }).filter((r) => r?.timestamp);
-    const first = records.find((r) => r.type === "user" && !r.isMeta && !r.isSidechain && typeof r.message?.content === "string");
-    if (records.length && records.at(-1).timestamp >= new Date(since).toISOString()) out.push({ id, start: records[0].timestamp, last: records.at(-1).timestamp, title: clip(String(first?.message.content ?? "").split("\n")[0], 80) });
+    const latest = records.findLast((r) => r.type === "user" && !r.isMeta && !r.isSidechain && typeof r.message?.content === "string");
+    if (records.length && records.at(-1).timestamp >= new Date(since).toISOString()) out.push({ id, start: records[0].timestamp, last: records.at(-1).timestamp, title: clip(String(latest?.message.content ?? "").split("\n")[0], 80) });
   }
   return out.sort((a, b) => a.start.localeCompare(b.start));
 }

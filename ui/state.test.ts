@@ -297,7 +297,7 @@ describe("the Herald's attempts and chats", () => {
     expect(h.titles).toMatchObject({ "issue.1": "needs item", "fac-2": "waiting goal" });
   });
 
-  test("two turns on one chat session are one conversation: its session, start, last turn and first prompt", () => {
+  test("two turns on one chat session are one conversation: its session, start, last turn and latest prompt", () => {
     const projects = join(base, "projects"), sessions = process.env.ALEPH_SESSIONS_DIR!;
     const turn = (type: string, timestamp: string, content: unknown) => JSON.stringify({ type, timestamp, message: { content } });
     mkdirSync(join(projects, "-repo"), { recursive: true });
@@ -310,7 +310,7 @@ describe("the Herald's attempts and chats", () => {
     writeFileSync(join(projects, "-repo", "old-1.jsonl"), turn("user", ago(30), "yesterday's"));
     for (const id of ["chat-1", "old-1"]) mkdirSync(join(sessions, id), { recursive: true });
     const end = withEnv({ ALEPH_CLAUDE_PROJECTS: projects });
-    try { expect(state(now).herald!.chats).toEqual([{ id: "chat-1", start: ago(3), last: ago(2), title: "fix the footer" }]); } finally { end(); rmSync(sessions, { recursive: true, force: true }); }
+    try { expect(state(now).herald!.chats).toEqual([{ id: "chat-1", start: ago(3), last: ago(2), title: "and the header" }]); } finally { end(); rmSync(sessions, { recursive: true, force: true }); }
   });
 });
 
