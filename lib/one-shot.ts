@@ -4,13 +4,13 @@
  * Each call is a run of its role in the job store, so the Agents page counts it; the Jobs list leaves it out, and `shown` keeps it out of the report.
  * Like every role's run it ends `done`; a call that gave no reply says why in `reason` and has the cause `unanswered`.
  */
-import { readModels } from "./models.ts";
+import { readModels } from "../jobs/lib/routing/models.ts";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { callAgent, type Reply } from "../roles/agent-call.ts";
-import { makeJob, setState } from "../records/record.ts";
-import type { Run } from "../records/ledger.ts";
+import { callAgent, type Reply } from "../jobs/lib/roles/agent-call.ts";
+import { makeJob, setState } from "../jobs/lib/records/record.ts";
+import type { Run } from "../jobs/lib/records/ledger.ts";
 
 const FALLBACK = "haiku";
 

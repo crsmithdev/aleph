@@ -59,7 +59,7 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 
 | Folder | Holds |
 |---|---|
-| `hooks/` | One script per hook; `hooks/lib/` has the judge, the secret rules and the snapshots |
+| `hooks/` | One script per hook; `hooks/lib/` has the secret rules and the snapshots |
 | `skills/` | One folder per skill with its `SKILL.md`; the licences of adapted skills |
 | `vault/` | `vault/lib/`, run by `aleph memory`: notes, the FTS index, git |
 | `issues/` | The work store client: `issues/lib/store.ts` (git I/O), `todo.ts` (file format), `issues.ts` (the `aleph issue` verbs) |

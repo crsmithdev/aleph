@@ -8,7 +8,7 @@
  *   A headless session (a factory worker, `claude -p`) has no Chris to warn or hand off to: pass silently.
  */
 import { once } from "./lib/handshake.ts";
-import { assess, read, threshold } from "./lib/context.ts";
+import { assess, read, threshold } from "../lib/session-context.ts";
 import { jobId } from "../lib/env.ts";
 
 const input = JSON.parse(await Bun.stdin.text());

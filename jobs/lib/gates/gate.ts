@@ -3,7 +3,7 @@
  * needs Chris. See docs/workflow.md.
  */
 import { git } from "../../../lib/git.ts";
-import { inTestDir, isJsTestFile } from "./test-files.ts";
+import { inTestDir, isJsTestFile } from "../../../lib/test-files.ts";
 
 /** The reason a parser gives when the reply has no structured output. */
 export const NO_OUTPUT = "no structured output";

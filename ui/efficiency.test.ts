@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { speed } from "./api/speed.ts";
+import { speed } from "./api/flow.ts";
 import { withEnv } from "./server.testkit.ts";
 // @ts-ignore plain JS shared with the page
 import { onTile } from "./lib.js";

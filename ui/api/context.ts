@@ -2,7 +2,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { claudeProjects } from "../../lib/paths.ts";
-import { window } from "../../hooks/lib/context.ts";
+import { window } from "../../lib/session-context.ts";
 import { call, parseExact } from "../context.ts";
 import type { Routes } from "../server.ts";
 

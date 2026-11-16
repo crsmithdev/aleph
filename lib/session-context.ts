@@ -16,10 +16,10 @@
  * ran past it untouched, one to 314k. The warn names the budget for that
  * reason.
  */
-import { readJsonOr } from "../../lib/json.ts";
+import { readJsonOr } from "./json.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readLines } from "../../lib/jsonl.ts";
+import { readLines } from "./jsonl.ts";
 
 const HEADROOM = 33_000;
 const DEFAULT_WINDOW = 1_000_000;

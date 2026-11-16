@@ -10,9 +10,9 @@
  * command output) and strong where it can be read off the text: see
  * docs/verify-gate.md "Jev screen".
  */
-import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
-import { oneShot } from "../../jobs/lib/routing/one-shot.ts";
-import { errText } from "../../lib/errtext.ts";
+import { judgeChoice, nouls, type Noul } from "./jev.ts";
+import { oneShot } from "./one-shot.ts";
+import { errText } from "./errtext.ts";
 
 interface Verdict { verdict: "pass" | "deny"; reason: string }
 

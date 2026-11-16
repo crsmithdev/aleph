@@ -105,7 +105,7 @@ A deny is `{decision: "block", reason: "Verify gate: …"}`. A judge that cannot
 
 ### context gate
 
-`hooks/context-gate.ts`, with its logic in `hooks/lib/context.ts`, measures fill against the window minus 33k tokens. The window is `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow` in `~/.claude/settings.json`, else 1M.
+`hooks/context-gate.ts`, with its logic in `lib/session-context.ts`, measures fill against the window minus 33k tokens. The window is `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow` in `~/.claude/settings.json`, else 1M.
 
 - At 0.75 of that threshold, it prints a `systemMessage` warning. `ALEPH_CONTEXT_WARN` (0.75) changes the fraction.
 - After the session's first compaction, it blocks once and asks for a handoff.

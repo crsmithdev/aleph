@@ -15,7 +15,7 @@ This page states which model or command does each piece of work, with which tool
 | Rule writer | `haiku`, or the `title` role model | None, 1 turn | | 30 s | One line |
 | Judge | Jev, then `haiku` or the `judge` role model | None, 1 turn | | 30 s | `{verdict, reason}` |
 
-The code: intake `jobs/lib/roles/intake.ts`, worker and reviewer `jobs/lib/roles/unit.ts`, director `jobs/lib/roles/director.ts`, monitor `jobs/lib/roles/monitor.ts`, maintainer `jobs/lib/roles/maintainer.ts`, titles `jobs/lib/roles/title.ts`, judge `hooks/lib/judge.ts`.
+The code: intake `jobs/lib/roles/intake.ts`, worker and reviewer `jobs/lib/roles/unit.ts`, director `jobs/lib/roles/director.ts`, monitor `jobs/lib/roles/monitor.ts`, maintainer `jobs/lib/roles/maintainer.ts`, titles `jobs/lib/roles/title.ts`, judge `lib/judge.ts`.
 
 The maintainer's daily compile starts one read-only `claude -p` run (role model `maintainer`, default `sonnet`) only on a day with something in it. Corrections, episodes and the firefighter start no agent. Corrections asks Jev typed questions; episodes read git, the ledger and Langfuse; the firefighter is code.
 

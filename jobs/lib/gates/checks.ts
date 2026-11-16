@@ -14,7 +14,7 @@ import { lock } from "../infra/locks.ts";
 import { git } from "../../../lib/git.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";
 import type { Plan } from "./keep-earn.ts";
-import { isJsTestFile } from "./test-files.ts";
+import { isJsTestFile } from "../../../lib/test-files.ts";
 import { errText } from "../../../lib/errtext.ts";
 
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;

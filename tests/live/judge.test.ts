@@ -1,6 +1,6 @@
 /** LIVE: real Haiku judge and Jev screen on synthetic digests. ALEPH_LIVE=1 bun test tests/live */
 import { describe, expect, test } from "bun:test";
-import { judge } from "../../hooks/lib/judge.ts";
+import { judge } from "../../lib/judge.ts";
 
 const describeLive = process.env.ALEPH_LIVE === "1" ? describe : describe.skip;
 

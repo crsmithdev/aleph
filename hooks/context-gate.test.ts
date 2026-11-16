@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assess, read, threshold } from "./lib/context.ts";
+import { assess, read, threshold } from "../lib/session-context.ts";
 
 const HOOKS = import.meta.dir;
 let root: string;

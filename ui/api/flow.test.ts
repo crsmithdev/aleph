@@ -1,25 +1,28 @@
 import { afterAll, afterEach, beforeAll, expect, setSystemTime, spyOn, test } from "bun:test";
-import { recordFlake } from "../jobs/lib/gates/tables.ts";
+import { recordFlake } from "../../jobs/lib/gates/tables.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { jobFolder } from "../jobs/lib/records/run-files.ts";
-import { closePass, openPass } from "../lib/sources.ts";
-import { withEnv } from "./server.testkit.ts";
-import { filed } from "../issues/lib/store.ts";
-import { activeIssues, agentStats, CLASSES, classify, phaseTimes, phases, routes, speed } from "./api/speed.ts";
-import { buckets } from "../lib/windows.ts";
-import { activeEnd } from "../jobs/lib/infra/process.ts";
+import { jobFolder } from "../../jobs/lib/records/run-files.ts";
+import { closePass, openPass } from "../../lib/sources.ts";
+import { withEnv } from "../server.testkit.ts";
+import { filed } from "../../issues/lib/store.ts";
+import { routes, speed } from "./flow.ts";
+import { activeIssues, phaseTimes, phases } from "../flow/phases.ts";
+import { agentStats } from "../flow/agents.ts";
+import { CLASSES, classify } from "../flow/classes.ts";
+import { buckets } from "../../lib/windows.ts";
+import { activeEnd } from "../../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { bar, statusCards, usageCard } from "./flow-parts.js";
+import { bar, statusCards, usageCard } from "../flow-parts.js";
 // @ts-ignore plain JS shared with the page
-import { pct, xLabel } from "./lib.js";
+import { pct, xLabel } from "../lib.js";
 // @ts-ignore plain JS shared with the page
-import { seed } from "../jobs/job.testkit.ts";
-import { conn } from "../lib/db.ts";
-import { averageFigures, figures } from "./api/speed.ts";
-import { writeRepos } from "../tests/projects.testkit.ts";
-import { readModels } from "../jobs/lib/routing/models.ts";
+import { seed } from "../../jobs/job.testkit.ts";
+import { conn } from "../../lib/db.ts";
+import { averageFigures, figures } from "../flow/baseline.ts";
+import { writeRepos } from "../../tests/projects.testkit.ts";
+import { readModels } from "../../jobs/lib/routing/models.ts";
 
 let base: string;
 let restore: () => void;
@@ -627,7 +630,8 @@ test("flakes count each test name; a row without tests counts under its check", 
 });
 
 test("the day baseline in one read equals the baseline of seven spans each read alone", async () => {
-  const { baseline, figures, averageFigures } = await import("./api/speed.ts");
+  const { baseline } = await import("./flow.ts");
+  const { figures, averageFigures } = await import("../flow/baseline.ts");
   const at = now;
   let seen = 0;
   for (const w of ["hour", "day", "week", "month"] as const) {
@@ -660,7 +664,7 @@ test("GET /api/flow?baseline=1 reads the job records once for the window, the ot
 
 test("cardTrend writes a sub-point change with pct() and keeps the flat marker for 0", async () => {
   // @ts-ignore plain JS shared with the page
-  const { cardTrend } = await import("./lib.js");
+  const { cardTrend } = await import("../lib.js");
   const o = { kind: "points", lowerIsGood: true, format: String, basis: "b" };
   expect(cardTrend(0.503, 0.5, null, o)).toContain("▲ 0.3%");
   expect(cardTrend(0.5, 0.5, null, o)).toContain("▬ 0%");

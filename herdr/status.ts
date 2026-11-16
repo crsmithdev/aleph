@@ -1,8 +1,9 @@
 // The Status page (ui/views/now.js) as plain terminal text for a herdr side panel, for the week window, or with
 // `--json` as data for the Herdr desktop app's mod.
-// It reads the data in-process, as the routes of ui/api/now.ts and ui/api/speed.ts do, and redraws every 10 s and on a resize.
+// It reads the data in-process, as the routes of ui/api/now.ts and ui/api/flow.ts do, and redraws every 10 s and on a resize.
 // `render` is the whole page as lines no wider than the pane; the rest of the file is the terminal loop.
-import { baseline, figures, speed } from "../ui/api/speed.ts";
+import { baseline, speed } from "../ui/api/flow.ts";
+import { figures } from "../ui/flow/baseline.ts";
 import { stateBody } from "../ui/api/now.ts";
 import { currentFit } from "../ui/usage.ts";
 import { verdict } from "../lib/status-words.ts";

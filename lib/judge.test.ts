@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { judge } from "./judge.ts";
-import { judgeChoice, setJudgeChoice } from "../../lib/jev.ts";
+import { judgeChoice, setJudgeChoice } from "./jev.ts";
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;

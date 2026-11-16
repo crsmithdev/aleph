@@ -4,7 +4,7 @@
  * all read a spec through this module.
  */
 import { createHash } from "node:crypto";
-import { isJsTestFile } from "../gates/test-files.ts";
+import { isJsTestFile } from "../../../lib/test-files.ts";
 import { section, type Issue } from "../../../issues/lib/todo.ts";
 
 /** The sections an issue's spec has. */

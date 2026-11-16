@@ -12,7 +12,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { isTestFile } from "../../jobs/lib/gates/test-files.ts";
+import { isTestFile } from "../../lib/test-files.ts";
 import { scan } from "./clones.ts";
 
 const WIDE = 30;

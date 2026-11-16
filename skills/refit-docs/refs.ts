@@ -15,7 +15,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 import { git } from "../../lib/git.ts";
-import { isTestFile } from "../../jobs/lib/gates/test-files.ts";
+import { isTestFile } from "../../lib/test-files.ts";
 
 export type Ref = { doc: string; line: number; kind: "link" | "anchor" | "path" | "env" | "flag"; ref: string };
 

@@ -26,7 +26,7 @@ Status: proposed 2026-11-10, not approved. Source: the Beads and Dolt survey of 
 |---|---|---|
 | 1 | Each store commit gets an `Actor:` trailer: `chris`, a factory role such as `triage` or `intake`, a job, or an interactive session. | aleph-1684 |
 | 2 | A SQLite table of field changes (issue, field, old value, new value, commit, time, actor), built from `git log -p` and updated from the last commit it read. | aleph-1683 |
-| 3 | The first readers of the table: Ask wait time, time in each state, triage reversals, and dropped against landed issues by source. Status Performance reads intake times from the table, not from its own `git log` parse in `ui/api/speed.ts`. | aleph-1683 |
+| 3 | The first readers of the table: Ask wait time, time in each state, triage reversals, and dropped against landed issues by source. Status Performance reads intake times from the table, not from its own `git log` parse in `ui/api/flow.ts`. | aleph-1683 |
 | 4 | Checks on each write: refuse an `after` that names no issue, and refuse a commit that changes many issues unless the caller says so. | not filed |
 | 5 | Graph fields: a link to the issue whose work found an issue, a date before which an issue does not start, and a Prospective count of all open issues. | aleph-1680, 1681, 1679 |
 

@@ -73,7 +73,7 @@ interface ProseDefault { phrase: RegExp; file: string; code: RegExp; name: strin
 /** Each prose phrase and the code constant it states. */
 const PROSE_DEFAULTS: ProseDefault[] = [
   { phrase: new RegExp(String.raw`\bno output for (\d[\d.]*\s+${UNIT})`, "g"), file: "jobs/lib/infra/settings.ts", code: /\bstallSeconds\b[^\n]*?,\s*([\d.]+)\)/, name: "stallSeconds" },
-  { phrase: /\babove (\d*\.\d+) of the threshold/g, file: "hooks/lib/context.ts", code: /\bDEFAULT_WARN\s*=\s*([\d.]+)/, name: "DEFAULT_WARN" },
+  { phrase: /\babove (\d*\.\d+) of the threshold/g, file: "lib/session-context.ts", code: /\bDEFAULT_WARN\s*=\s*([\d.]+)/, name: "DEFAULT_WARN" },
 ];
 
 /** The defaults the docs state in prose, one per mention. */

@@ -13,7 +13,7 @@ import { KEEP_DAYS, listEpisodes, readEpisode } from "../jobs/lib/learning/episo
 import { claimLine, recall } from "../vault/lib/index.ts";
 import { dailyNotes, readMemoryMd, type Note } from "../vault/lib/vault.ts";
 import { skillsDir } from "../jobs/lib/infra/settings.ts";
-import { claudeSettings } from "../hooks/lib/context.ts";
+import { claudeSettings } from "../lib/session-context.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { afterOf, priorityOf, readLists } from "../issues/lib/store.ts";
 import * as todos from "../issues/lib/todo.ts";

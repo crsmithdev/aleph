@@ -30,7 +30,7 @@ import { readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
 import { filing } from "../transitions/filing.ts";
-import { jsTestFilesInText, siblingTestFile, testFileInText } from "../gates/test-files.ts";
+import { jsTestFilesInText, siblingTestFile, testFileInText } from "../../../lib/test-files.ts";
 import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec } from "./issue-spec.ts";
 import { errText } from "../../../lib/errtext.ts";
 
