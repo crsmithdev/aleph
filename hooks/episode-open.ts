@@ -12,4 +12,4 @@ import { layout } from "../lib/layout.ts";
 const input = JSON.parse((await Bun.stdin.text()) || "{}");
 const text = String(input.tool_input?.file_path ?? input.tool_input?.command ?? "").replaceAll("~/", `${homedir()}/`);
 const titles = text.split(`${join(layout().factory, "episodes")}/`).slice(1).map((s) => /^(.+?)\.md/.exec(s)?.[1]).filter((t): t is string => !!t);
-logUse("opened", [...new Set(titles)], input.session_id ?? null);
+logUse("opened", [...new Set(titles)]);

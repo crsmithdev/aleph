@@ -218,7 +218,7 @@ const scores: Score[] = [];
 
 switch (event) {
   case "UserPromptSubmit": {
-    turnSlot!.set({ start: now, spanId: turnSpanId, input: input.prompt ?? "" });
+    turnSlot!.set({ start: now, input: input.prompt ?? "" });
     spans.push(turnSpan(now, undefined));
     // "N/10" in a prompt rates the previous reply; the session handshake remembers which trace that was
     const previous = known?.lastTraceId;

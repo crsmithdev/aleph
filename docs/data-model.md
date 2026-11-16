@@ -221,7 +221,7 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 | `baseline/<repo>/` | The suite's `checks.log` | `aleph suite` |
 | `monitor/<day>.json` | The day's table and findings | Monitor |
 | `episodes/` | One page per finished issue; kept 90 days | Episodes |
-| `episode-use.jsonl` | `{date, title, event, session, query?}` per line; `event` is `shown` or `opened`; kept 90 days | `aleph memory recall --episodes`, the `episode-open.ts` hook |
+| `episode-use.jsonl` | `{date, title, event}` per line; `event` is `shown` or `opened`; kept 90 days | `aleph memory recall --episodes`, the `episode-open.ts` hook |
 | `standing-retry/` | Runs an Always `continue` started | Intake |
 | `ui-sessions.json` | UI login tokens | `aleph-ui` |
 | `dispatch.log` | Output of detached dispatch, intake, director and suite | `launch.ts` |

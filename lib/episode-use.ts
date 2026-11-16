@@ -8,16 +8,16 @@ import { join } from "node:path";
 import { today } from "./day.ts";
 import { layout } from "./layout.ts";
 
-export interface Use { date: string; title: string; event: "shown" | "opened"; session: string | null; query?: string }
+export interface Use { date: string; title: string; event: "shown" | "opened" }
 
 export const useLog = () => join(layout().factory, "episode-use.jsonl");
 
 /** Append one line per title. Appends only, so the async hook and the CLI never overwrite each other. */
-export function logUse(event: Use["event"], titles: string[], session: string | null, query?: string): void {
+export function logUse(event: Use["event"], titles: string[]): void {
   if (!titles.length) return;
   try {
     mkdirSync(layout().factory, { recursive: true });
-    appendFileSync(useLog(), titles.map((title) => JSON.stringify({ date: today(), title, event, session, ...(query === undefined ? {} : { query }) }) + "\n").join(""));
+    appendFileSync(useLog(), titles.map((title) => JSON.stringify({ date: today(), title, event }) + "\n").join(""));
   } catch { /* a read must never fail on its own bookkeeping */ }
 }
 

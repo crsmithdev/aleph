@@ -96,7 +96,7 @@ async function main() {
   await postSpan(input, start, meta, picked.map(({ n }) => n.rel), additionalContext, candidates.map((n) => n.rel));
   if (!picked.length) return;
   writeSeen(root, input.session_id, seen, picked.map(({ n }) => n.rel));
-  try { appendRecallLog(root, picked.map(({ n }) => n.title), prompt, input.session_id ?? null, "hook"); } catch { /* the log must never block the injection */ }
+  try { appendRecallLog(root, picked.map(({ n }) => n.title), prompt); } catch { /* the log must never block the injection */ }
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } }));
 }
 

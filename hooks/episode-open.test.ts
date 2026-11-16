@@ -17,9 +17,9 @@ test("a Read or a Bash call that names an episode page logs it opened; other pat
   await hook({ session_id: "s2", tool_name: "Bash", tool_input: { command: `cat "${page}" | head; cat "${join(factory, "episodes", "aleph-8 Two.md")}"` } });
   await hook({ session_id: "s3", tool_name: "Read", tool_input: { file_path: "/tmp/notes.md" } });
   const lines = readFileSync(join(factory, "episode-use.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  expect(lines.map(({ title, event, session }) => ({ title, event, session }))).toEqual([
-    { title: "aleph-7 Show the push error", event: "opened", session: "s1" },
-    { title: "aleph-7 Show the push error", event: "opened", session: "s2" },
-    { title: "aleph-8 Two", event: "opened", session: "s2" },
+  expect(lines.map(({ title, event }) => ({ title, event }))).toEqual([
+    { title: "aleph-7 Show the push error", event: "opened" },
+    { title: "aleph-7 Show the push error", event: "opened" },
+    { title: "aleph-8 Two", event: "opened" },
   ]);
 });

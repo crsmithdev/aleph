@@ -12,7 +12,7 @@ import { langfuse } from "../../../lib/langfuse.ts";
 import { openIndex, rankNotes } from "../../../vault/lib/index.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
 import { recallQuery } from "../../../vault/lib/recall-query.ts";
-import { loadVault, recordRun, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
+import { loadVault, today, wikiNotes, type Note } from "../../../vault/lib/vault.ts";
 import { lock } from "../infra/locks.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { MODEL, outcome, SECONDS, TEXT } from "./recheck.ts";
@@ -170,13 +170,11 @@ export async function alias(root: string, dry: boolean, now = Date.now()): Promi
     } catch (e: any) {
       report.error = String(e?.message ?? e);
       run.end(`failed: ${report.error}`, { cause: "unanswered" });
-      recordRun(root, "alias", "failed", report.error);
       return report;
     }
     const done = report.misses.filter((m) => m.verdict === "alias" && !m.refused).length;
     const refused = report.misses.filter((m) => m.refused).length;
     run.end(`${dry ? "dry: " : ""}${done} aliased${refused ? `, ${refused} refused` : ""}`);
-    recordRun(root, "alias", "ok", `${dry ? "dry: " : ""}${done} aliased`);
     return report;
   } finally {
     release();

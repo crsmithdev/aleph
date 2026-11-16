@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git-fixture.ts";
 import { sub } from "../../../vault/lib/maintain.ts";
-import { loadVault, readRun, today, wikiNotes } from "../../../vault/lib/vault.ts";
+import { loadVault, today, wikiNotes } from "../../../vault/lib/vault.ts";
 import { alias, findMisses, MISSES } from "./alias.ts";
 import { render } from "./maintainer.ts";
 
@@ -105,7 +105,6 @@ test("an alias verdict adds the aliases through the write op, skip writes nothin
   ]);
   expect(read("Alpha Gate Rules")).toContain("aliases: [merge wait]");
   expect(read("Beta Cache Layer")).toBe(beta);
-  expect(readRun(root, "alias")?.detail).toBe("1 aliased");
 });
 
 test(`a dry run asks the model about at most ${MISSES} misses, lists the verdicts and writes nothing`, async () => {

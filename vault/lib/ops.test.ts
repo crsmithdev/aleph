@@ -686,7 +686,7 @@ describe("recall", () => {
     await run({ ALEPH_VAULT: vault, CLAUDE_CODE_SESSION_ID: "" }, "recall", "probe");
     const day = JSON.parse(readFileSync(join(vault, ".recall.json"), "utf8"))["Log Probe"];
     expect(day).toMatch(/^\d{4}-\d\d-\d\d$/);
-    expect(lines()).toEqual([{ date: day, title: "Log Probe", query: "log probe", session: "sess-1", source: "cli" }, { date: day, title: "Log Probe", query: "probe", session: null, source: "cli" }]);
+    expect(lines()).toEqual([{ date: day, title: "Log Probe", query: "log probe" }, { date: day, title: "Log Probe", query: "probe" }]);
     await run({ ALEPH_VAULT: vault, CLAUDE_CODE_SESSION_ID: "sess-1" }, "recall", "log probe", "--unlogged");
     expect(lines()).toHaveLength(2);
   });
@@ -722,7 +722,7 @@ describe("recall", () => {
     expect(hit[0]).toMatchObject({ title: "aleph-1 Zebra", scope: "aleph", rank: 3, path: join(factory, "episodes", "aleph-1 Zebra.md") });
     expect(hit[0].frontmatter.kind).toBe("episode");
     const use = readFileSync(join(factory, "episode-use.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-    expect(use.map(({ title, event, query }) => ({ title, event, query }))).toEqual([{ title: "aleph-1 Zebra", event: "shown", query: "zebraquill" }]);
+    expect(use.map(({ title, event }) => ({ title, event }))).toEqual([{ title: "aleph-1 Zebra", event: "shown" }]);
     expect((await run(env, "recall", "zebraquill")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "verify", "gate")).json).toEqual([]);
     expect((await run(env, "recall", "--episodes", "zebraquill", "--scope", "beamline")).json).toEqual([]);

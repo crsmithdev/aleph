@@ -40,8 +40,8 @@ function slot<T>(key: string) {
 export interface Session { start: number; name?: string; tags?: string[]; cwd?: string; lastTraceId?: string }
 export const session = (id: string) => slot<Session>(`session:${id}`);
 
-/** The turn's start, root span and prompt, from UserPromptSubmit to Stop. */
-export const turn = (promptId: string) => slot<{ start: number; spanId?: string; input: string }>(`turn:${promptId}`);
+/** The turn's start and prompt, from UserPromptSubmit to Stop. */
+export const turn = (promptId: string) => slot<{ start: number; input: string }>(`turn:${promptId}`);
 
 /** A tool call's start and input, from PreToolUse to PostToolUse. */
 export const tool = (toolUseId: string) => slot<{ start: number; input: unknown }>(`tool:${toolUseId}`);

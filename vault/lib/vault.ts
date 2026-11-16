@@ -101,13 +101,13 @@ export function markRetry(root: string, date: string, on: boolean): void {
   if (on !== marked) writeJson(retryFile(root), on ? [...days, date].sort() : days.filter((d) => d !== date));
 }
 
-/** Every logged return, one JSON line of date, title, query, session and source, for 30 days. Outside git; the CLI and the hook both append through here. */
-export function appendRecallLog(root: string, titles: string[], query: string, session: string | null, source: "cli" | "hook"): void {
+/** Every logged return, one JSON line of date, title and query, for 30 days. Outside git; the CLI and the hook both append through here. */
+export function appendRecallLog(root: string, titles: string[], query: string): void {
   const file = join(root, ".recall-log.jsonl");
   const cut = today(new Date(Date.now() - 30 * 86400_000));
   try {
     const old = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l && JSON.parse(l).date >= cut) : [];
-    writeFileSync(file, [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query, session, source }))].join("\n") + "\n");
+    writeFileSync(file, [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query }))].join("\n") + "\n");
   } catch (e: any) { recordRun(root, "recall trim", "failed", e?.message ?? String(e)); throw e; }
   recordRun(root, "recall trim", "ok");
 }

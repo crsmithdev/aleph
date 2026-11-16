@@ -106,7 +106,7 @@ function noteRead(titles: string[], query: string): void {
     const log = readLog();
     for (const t of titles) log[t] = today();
     writeFileSync(READ_LOG(), JSON.stringify(log, null, 0));
-    appendRecallLog(root, titles, query, process.env.CLAUDE_CODE_SESSION_ID || null, "cli");
+    appendRecallLog(root, titles, query);
   } catch { /* a read must never fail on its own bookkeeping */ }
 }
 
@@ -290,7 +290,7 @@ async function recall(): Promise<void> {
       const ranked = q ? rankNotes(db, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
       db.close();
       const shown = q ? ranked.slice(0, TOP) : ranked;
-      if (q) logUse("shown", shown.map(({ n }) => n.title), process.env.CLAUDE_CODE_SESSION_ID || null, q);
+      if (q) logUse("shown", shown.map(({ n }) => n.title));
       return out(shown.map(({ n, r }) => ({ title: n.title, path: join(dir, n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   }

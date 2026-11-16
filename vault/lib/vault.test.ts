@@ -49,7 +49,7 @@ test("appendRecallLog records a recall trim run and drops a line older than 30 d
   const line = (date: string, title: string) => JSON.stringify({ date, title, query: "q", session: null, source: "cli" });
   writeFileSync(join(r, ".recall-log.jsonl"), [line("2026-09-25", "Old"), line("2026-11-02", "Kept")].join("\n") + "\n");
   expect(readRun(r, "recall trim")).toBeNull();
-  appendRecallLog(r, ["New"], "q", null, "cli");
+  appendRecallLog(r, ["New"], "q");
   const titles = readFileSync(join(r, ".recall-log.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l).title);
   expect(titles).toEqual(["Kept", "New"]);
   expect(readRun(r, "recall trim")).toEqual({ at: "2026-11-04T12:00:00.000Z", result: "ok" });
