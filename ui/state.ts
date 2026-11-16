@@ -27,12 +27,13 @@ import { verdict } from "../lib/status-words.ts";
 import { timer } from "../jobs/lib/infra/systemd.ts";
 import { probe } from "../lib/git.ts";
 import { dueAt } from "../jobs/lib/asks/timeout.ts";
+import { errText } from "../lib/errtext.ts";
 
 const logged = new Set<string>();
 
 /** Logs a failed UI read once per process and message: the write touches the events source, so a build that logs each time would rebuild and log again. */
 export function logOnce(subject: string, e: any) {
-  const note = String(e?.message ?? e), key = `${subject} ${note}`;
+  const note = errText(e), key = `${subject} ${note}`;
   if (logged.has(key)) return;
   logged.add(key);
   logEvent({ subject: "rule", action: "failed", object: subject, detail: note });
@@ -308,7 +309,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
         try {
           const f = facts(repo, doc, jobs);
           for (const st of stages(f, Object.keys(f.items))) m.set(st.id.slice(repo.key.length + 1), st);
-        } catch (e: any) { logOnce("stages", e); }
+        } catch (e) { logOnce("stages", e); }
       }
       staged.set(repo.key, m);
     }

@@ -25,6 +25,7 @@ import { clip } from "../../lib/naming.ts";
 import { file as ideaFile } from "../../ideas/ideas.ts";
 import { sameSite } from "../http.ts";
 import type { Routes } from "../server.ts";
+import { errText } from "../../lib/errtext.ts";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const KEEP_MS = 20_000;
@@ -201,7 +202,7 @@ export const routes: Routes = {
       });
       return new Response(readable, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     } catch (e) {
-      return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+      return Response.json({ error: errText(e) }, { status: 500 });
     }
   },
 };

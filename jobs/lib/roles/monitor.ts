@@ -13,6 +13,7 @@ import { addDays, measure, readSources, renderTable, reportFile, type Report, ty
 import { monitorHour, monitorOn } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { readModels } from "../routing/models.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** The reader's time box, in seconds. */
 const SECONDS = 600;
@@ -62,8 +63,8 @@ async function read(day: string, table: Table): Promise<Report> {
     r.text = (await run.ask(readerPrompt(day, renderTable(table)))).trim();
     r.findings = findingsOf(r.text);
     run.end(r.findings.length ? `${r.findings.length} findings` : "nothing looks off");
-  } catch (e: any) {
-    r.error = String(e?.message ?? e);
+  } catch (e) {
+    r.error = errText(e);
     run.end(`failed: ${r.error}`, { cause: "unanswered" });
   }
   writeJson(reportFile(day), r);

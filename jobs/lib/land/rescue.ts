@@ -31,6 +31,7 @@ import { onMain } from "../records/status.ts";
 import { rescueWaitMs } from "../infra/settings.ts";
 import { ciLine, redCi } from "../gates/ci.ts";
 import { counting, read as readRecord, setState, stepOf } from "../records/record.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
 
@@ -134,8 +135,8 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
       // Read again under the lock: another dispatch may have acted on it.
       const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
       if (runs) await rescueJob(runs, act, land, checkMain);
-    } catch (e: any) {
-      logEvent({ subject: "gate", action: "failed", object: name, detail: String(e?.message ?? e) });
+    } catch (e) {
+      logEvent({ subject: "gate", action: "failed", object: name, detail: errText(e) });
     } finally {
       release();
     }
@@ -169,8 +170,8 @@ async function releaseEdited(act: Rescue): Promise<void> {
       if (why) { logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed (${why})` }); continue; }
       if (askOf(`issue.${issue}`)?.question === question) clearAsk(`issue.${issue}`);
       await tell(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
-    } catch (e: any) {
-      logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed: ${e?.message ?? e}` });
+    } catch (e) {
+      logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed: ${errText(e)}` });
     } finally {
       release();
     }
@@ -223,8 +224,8 @@ function sendToIntake(repo: Repo, issue: number): string | null {
       return true;
     });
     return w?.value ? null : "the issue is no longer open";
-  } catch (e: any) {
-    return e?.message ?? String(e);
+  } catch (e) {
+    return errText(e);
   }
 }
 

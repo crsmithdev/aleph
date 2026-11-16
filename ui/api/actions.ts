@@ -13,6 +13,10 @@ import { afterOf } from "../../issues/lib/store.ts";
 import { FULL, fullId } from "../../lib/naming.ts";
 import { aleph, fail, post } from "../action.ts";
 import type { Routes } from "../server.ts";
+import { errText } from "../../lib/errtext.ts";
+
+/** The HTTP status a failed `aleph` call carries, else 500. */
+const statusOf = (e: unknown): number => (e as { status?: number }).status ?? 500;
 
 /** The run of job `id`, while it is the run that counts of the newest job of its name; a 404 or a 409 otherwise. */
 function find(id: string): Entry {
@@ -71,12 +75,12 @@ const wait = post(async (body, { id }) => {
   const place = loadRegistry()[repo!] ?? fail(400, `no repo named ${repo}`);
   const was = afterOf(issues.show(place, issue!)).join(",") || "none";
   const edit = (after: string) => aleph(["issue", "edit", "--after", after, "--", repo!, String(issue)]);
-  await edit(on).catch((e) => fail(e.status ?? 500, `set the wait: ${e.message}`));
+  await edit(on).catch((e) => fail(statusOf(e), `set the wait: ${errText(e)}`));
   try {
     return await aleph(["drop", "--", name, `Chris chose to wait for ${on}: this job cannot succeed until it lands.`]);
-  } catch (e: any) {
+  } catch (e) {
     const back = await edit(was).then(() => "its wait was put back", () => `it still waits on ${on}`);
-    return fail(e.status ?? 500, `drop the job: ${e.message}; ${repo}-${issue} ${back}`);
+    return fail(statusOf(e), `drop the job: ${errText(e)}; ${repo}-${issue} ${back}`);
   }
 });
 

@@ -1,6 +1,5 @@
 /** The UI's use of the Langfuse port (lib/langfuse.ts): a list read once per build pass, and the rows kept between passes. */
-import { LangfuseError, type Langfuse, type Lists, type ObservationQuery, type Rows, type TraceQuery } from "../lib/langfuse.ts";
-import type { Observation } from "../lib/otlp.ts";
+import { LangfuseError, type Langfuse, type Lists, type Observation, type ObservationQuery, type Rows, type TraceQuery } from "../lib/langfuse.ts";
 import { once, passEnv } from "../lib/sources.ts";
 
 /** Every row of a list, read once per pass of the UI's builds (sources.ts); failures are not kept. */

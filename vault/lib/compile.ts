@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { langfuse, type Langfuse, type Observation, type Trace } from "../../lib/langfuse.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 import { citedTraces, loadVault } from "./vault.ts";
+import { errText } from "../../lib/errtext.ts";
 
 const TRACE_CAP = 12 * 1024;
 
@@ -59,7 +60,7 @@ export async function traceDigest(lf: Langfuse, date: string): Promise<{ text: s
       size += block.length;
     }
   } catch (e) {
-    return { text: parts.join("\n\n"), error: String(e instanceof Error ? e.message : e) };
+    return { text: parts.join("\n\n"), error: errText(e) };
   }
   return { text: parts.length ? parts.join("\n\n") : "no traces on this date" };
 }

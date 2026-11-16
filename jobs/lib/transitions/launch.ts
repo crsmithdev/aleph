@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { factoryDir } from "../gates/factory-status.ts";
 import { LOW, type Repo } from "../records/ledger.ts";
 import { dispatchOn, jobForeground } from "../infra/settings.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** jobs/cli.ts, the `aleph` command. */
 export const CLI = join(import.meta.dir, "..", "..", "cli.ts");
@@ -86,7 +87,7 @@ export function detached(args: string[], log: string): void {
     const unit = `aleph-${args.join("-")}-${Date.now()}-${process.pid}-${++detachedCount}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
     startUnit(args, { unit, cwd: dirname(log), output: { file: log },
       props: [`--property=StandardOutput=append:${log}`, `--property=StandardError=append:${log}`] });
-  } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "detached", detail: String(e?.message ?? e) }); }
+  } catch (e) { logEvent({ subject: "rule", action: "failed", object: "detached", detail: errText(e) }); }
 }
 
 /** Run `aleph <args>` and wait for it, its output appended to `log`. Returns its exit code. */

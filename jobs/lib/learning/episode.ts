@@ -21,6 +21,7 @@ import { trimUse } from "../../../lib/episode-use.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "../records/ledger.ts";
 import { landedCommits, repoStages } from "../records/status.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 export const KEEP_DAYS = 90; // Chris, 2026-11-12: an episode stays in recall 90 days
 export const episodesDir = () => { touch("episodes"); return join(factoryDir(), "episodes"); };
@@ -117,8 +118,8 @@ async function langfuseFor(runs: Entry[]): Promise<Langfuse> {
       traces.push({ id, tokens: tokensOf(await lf.trace(id)) });
     }
     return { traces };
-  } catch (e: any) {
-    return { error: String(e?.message ?? e) };
+  } catch (e) {
+    return { error: errText(e) };
   }
 }
 
@@ -165,8 +166,8 @@ async function writeEpisode(repo: Repo, item: issues.Issue): Promise<{ title: st
     mkdirSync(episodesDir(), { recursive: true });
     writeFileSync(join(episodesDir(), `${title}${MD}`), episodePage(repo, item, runs, commitsOf(repo, item), await langfuseFor(runs)));
     return { title };
-  } catch (e: any) {
-    return { error: String(e?.message ?? e) };
+  } catch (e) {
+    return { error: errText(e) };
   }
 }
 

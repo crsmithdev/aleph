@@ -4,13 +4,14 @@
  * observations through the port in lib/langfuse.ts. `?project=<key>` keeps one
  * project: a Langfuse trace by the scope rule in `ui/api/scope.ts`.
  */
-import type { Observation } from "../lib/otlp.ts";
+import type { Observation } from "../lib/langfuse.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { today } from "../issues/lib/todo.ts";
 import { once } from "../lib/sources.ts";
 import { traceIn } from "./api/scope.ts";
 import { langfuse, type Langfuse } from "../lib/langfuse.ts";
 import { recent } from "./langfuse.ts";
+import { errText } from "../lib/errtext.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
@@ -82,7 +83,7 @@ export async function activity(days: number, project: string | null, now = new D
     out.partial = got.partial;
   } catch (e) {
     out.langfuse = "error";
-    out.error = e instanceof Error ? e.message : String(e);
+    out.error = errText(e);
     return out;
   }
   out.langfuse = "ok";

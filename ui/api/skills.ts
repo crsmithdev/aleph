@@ -8,13 +8,12 @@
 import { readJsonOr } from "../../lib/json.ts";
 import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { parseScope, scopeOf, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
 import { once, touch } from "../../lib/sources.ts";
-import { langfuse, type Langfuse, type Lists, type Rows, type Observation as LfObservation, type ObservationQuery, type Trace, type TraceQuery } from "../../lib/langfuse.ts";
+import { langfuse, type Langfuse, type Lists, type Observation, type Rows, type ObservationQuery, type Trace, type TraceQuery } from "../../lib/langfuse.ts";
 import { skillsDir, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 86400_000;
@@ -64,7 +63,7 @@ async function allRows<K extends keyof Lists>(lf: Langfuse, kind: K, q: TraceQue
 }
 
 /** Only the fields `analyse` reads: the store holds 30 days of rows, in memory and on disk. */
-function compact(o: LfObservation): Observation {
+function compact(o: Observation): Observation {
   const isSkill = o.metadata?.tool === "Skill" || o.name === "Skill" || o.name?.startsWith("skill:");
   const failed = String(o.level ?? "").toUpperCase() === "ERROR" || o.statusMessage;
   const m = o.metadata ?? {};

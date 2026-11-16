@@ -30,14 +30,15 @@ import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "../infra/settings.ts";
 import { logTo, runFile } from "../records/run-files.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** The message of a transition that refused or threw, or null when it went through: the factory's ports answer this. */
 export async function refusal(f: () => Promise<unknown>): Promise<string | null> {
   try {
     await f();
     return null;
-  } catch (e: any) {
-    return String(e?.message ?? e).trim() || "refused";
+  } catch (e) {
+    return errText(e).trim() || "refused";
   }
 }
 
@@ -52,8 +53,8 @@ const hold = (gate: Gate, ev: Hold, why: string): never => { throw new Held(why,
 export interface Refused { why: string; gate: Gate; ev: Hold }
 
 /** The hold of a start that threw `e`. A refusal with no gate is a job that runs already. */
-const refusedBy = (e: any): Refused => {
-  const why = String(e?.message ?? e).trim() || "refused";
+const refusedBy = (e: unknown): Refused => {
+  const why = errText(e).trim() || "refused";
   return e instanceof Held ? { why, gate: e.gate, ev: { ...e.ev, detail: why } } : { why, gate: "job", ev: heldEvent("job", why) };
 };
 
@@ -108,9 +109,9 @@ async function dispatch(run: NewJob, cwd: string, command: string[], output: Out
     const max = factory ? [`--property=RuntimeMaxSec=${jobSeconds() + 3600}`] : [];
     try {
       child = startUnit(["unit", folder], { unit: unitOf(id), cwd, props: max, output, attach: true });
-    } catch (e: any) {
-      setState(id, "failed", { reason: e.message, ended: new Date().toISOString() });
-      refuse(e.message);
+    } catch (e) {
+      setState(id, "failed", { reason: errText(e), ended: new Date().toISOString() });
+      refuse(errText(e));
     }
     // Wait for `pid`, but not for a unit that cannot write it: one that has exited, or whose folder is gone.
     const wait = pidWaitMs();
@@ -159,7 +160,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     if (p?.repo !== repo.key || p.sub !== undefined) refuse("--on takes an issue number");
     on = p.n;
     let doc: issues.Doc | null = null;
-    try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
+    try { doc = store.readList(repo); } catch (e) { refuse(errText(e)); }
     if (!doc) refuse(`the work store has no list for ${repo.key}`);
     if (!issues.find(doc, on)) refuse(`${repo.key} has no issue ${on}`);
   }

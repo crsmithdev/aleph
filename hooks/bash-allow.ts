@@ -12,6 +12,8 @@
  */
 export {};
 
+import { errText } from "../lib/errtext.ts";
+
 try {
   const allow: string[] | undefined = process.env.ALEPH_BASH_ALLOW ? JSON.parse(process.env.ALEPH_BASH_ALLOW) : undefined;
   if (!allow) process.exit(0);
@@ -22,6 +24,6 @@ try {
   if (plain && allow.some((p) => command === p || command.startsWith(`${p} `))) process.exit(0);
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `This run may run only: ${allow.join(", ")}` } }));
 } catch (e) {
-  console.error(`bash-allow.ts: ${e instanceof Error ? e.message : e}`);
+  console.error(`bash-allow.ts: ${errText(e)}`);
   process.exit(2);
 }

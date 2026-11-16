@@ -34,7 +34,7 @@ export const usable = (d) => (d && !d.error ? d : null);
 /** The causes of all lost time: one row per name, largest first. */
 export function mergeCauses(d) {
   const by = new Map();
-  for (const c of d.classes.filter((x) => x.lost)) for (const x of c.causes ?? []) {
+  for (const c of d.classes.filter((x) => x.lost)) for (const x of c.causes) {
     const m = by.get(x.name) ?? { name: x.name, hours: 0, runs: 0 };
     m.hours += x.hours; m.runs += x.runs;
     by.set(x.name, m);

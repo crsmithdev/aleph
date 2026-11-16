@@ -5,6 +5,7 @@
 import { getJson, putJson } from "../../../lib/db.ts";
 import { uiPort } from "../infra/settings.ts";
 import { factoryCookie } from "../infra/ui-token.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 const PATHS = ["/", "/api/factory"];
 const TIMEOUT_MS = 15_000;
@@ -20,7 +21,7 @@ export async function smokeProblem(base = `http://127.0.0.1:${port()}`): Promise
       const r = await fetch(base + path, { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { cookie: factoryCookie() } });
       if (!r.ok) return `${path} answered ${r.status}`;
     } catch (e) {
-      return `${path}: ${e instanceof Error ? e.message : e}`;
+      return `${path}: ${errText(e)}`;
     }
   }
   return null;

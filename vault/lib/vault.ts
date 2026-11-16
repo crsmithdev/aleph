@@ -10,6 +10,7 @@ import { readJsonOr, writeJson } from "../../lib/json.ts";
 import { vaultDir } from "../../lib/paths.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { probe } from "../../lib/git.ts";
+import { errText } from "../../lib/errtext.ts";
 
 export const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
 type Kind = (typeof KINDS)[number];
@@ -108,7 +109,7 @@ export function appendRecallLog(root: string, titles: string[], query: string): 
   try {
     const old = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l && JSON.parse(l).date >= cut) : [];
     writeFileSync(file, [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query }))].join("\n") + "\n");
-  } catch (e: any) { recordRun(root, "recall trim", "failed", e?.message ?? String(e)); throw e; }
+  } catch (e) { recordRun(root, "recall trim", "failed", errText(e)); throw e; }
   recordRun(root, "recall trim", "ok");
 }
 

@@ -18,6 +18,7 @@ import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import { askIfPartDropped, askOf, awaitsChris, clearAsk, decideAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { triage } from "./triage.ts";
+import { errText } from "../../lib/errtext.ts";
 
 /** The fields `add` and `edit` take. `labels` are the issue's areas. `spec` makes an issue buildable, and `after` is what it waits for. */
 export interface Fields {
@@ -55,7 +56,7 @@ function setKeys(i: issues.Issue, field: "after" | "refs", refs: string[]): void
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
 function readIssues(repo: store.Place): issues.Doc {
   let doc: issues.Doc | null = null;
-  try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
+  try { doc = store.readList(repo); } catch (e) { refuse(errText(e)); }
   return doc ?? refuse(`the work store has no list for ${repo.key}`);
 }
 
@@ -73,9 +74,9 @@ function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) 
 function refusing<T>(f: () => T): T {
   try {
     return f();
-  } catch (e: any) {
+  } catch (e) {
     if (e instanceof Refusal) throw e;
-    return refuse(e?.message ?? String(e));
+    return refuse(errText(e));
   }
 }
 
@@ -299,7 +300,7 @@ export async function retitle(repo: store.Place, fit: (group: string, rest: stri
 /** The repos with a ledger run or an item update in the last 7 days, the latest first, each with its list (null when the store has none). */
 export function recentLists<R extends store.Place>(repos: R[]): { repo: R; doc: issues.Doc | null }[] {
   let docs: (issues.Doc | null)[] = [];
-  try { docs = store.readLists(repos); } catch (e: any) { refuse(e?.message ?? String(e)); }
+  try { docs = store.readLists(repos); } catch (e) { refuse(errText(e)); }
   return recentRepos(repos, docs).map((n) => ({ repo: repos[n], doc: docs[n] }));
 }
 

@@ -31,6 +31,7 @@ import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
 import { issueFacts, mainRed, readHolds, suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
 import { issueDecision } from "../../jobs/lib/gates/issue-decision.ts";
 import { projectOf, repoIn } from "./scope.ts";
+import { errText } from "../../lib/errtext.ts";
 
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
 
@@ -47,14 +48,14 @@ function issueOf(id: string): { repo: Repo; ref: string } | null {
 
 /** Each item's stage by ref, from the list already read and one pass over main's trailers; empty when the trailers cannot be read. */
 function stagesBy(repo: Repo, doc: todos.Doc, items?: string[]): Map<string, Stage> {
-  try { return new Map(repoStages(repo, { fetch: false, doc, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch (e: any) { logOnce("stages", e); return new Map(); }
+  try { return new Map(repoStages(repo, { fetch: false, doc, items }).map((st) => [st.id.slice(repo.key.length + 1), st])); } catch (e) { logOnce("stages", e); return new Map(); }
 }
 
 function list(url: URL): Response {
   const project = projectOf(url);
   const repos = Object.values(loadRegistry()).filter((r) => repoIn(r.key, project));
   let docs: (todos.Doc | null)[];
-  try { docs = readLists(repos); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+  try { docs = readLists(repos); } catch (e) { return Response.json({ error: errText(e) }, { status: 500 }); }
   const rows: Row[] = repos.flatMap((repo, n) => {
     const doc = docs[n];
     if (!doc) return [];
@@ -97,7 +98,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   if (!at || !repoIn(at.repo.key, project)) return Response.json({ error: "no such issue" }, { status: 404 });
   const { repo, ref } = at;
   let doc: todos.Doc | null;
-  try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+  try { doc = readList(repo); } catch (e) { return Response.json({ error: errText(e) }, { status: 500 }); }
   const item = doc && todos.find(doc, ref);
   if (!doc || !item) return Response.json({ error: "no such issue" }, { status: 404 });
   const n = item.id;

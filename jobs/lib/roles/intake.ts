@@ -30,6 +30,7 @@ import { decideIntake } from "../gates/intake-decision.ts";
 import { filing } from "../transitions/filing.ts";
 import { jsTestFilesInText, siblingTestFile, testFileInText } from "../gates/test-files.ts";
 import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec } from "./issue-spec.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** The model an intake run asks for. */
 const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;
@@ -510,10 +511,10 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
         run.end("the item changed during the run");
         skipped.push(`${name}: changed during the intake`);
       }
-    } catch (e: any) {
-      const reason = `failed: ${e?.message ?? e}`;
+    } catch (e) {
+      const reason = `failed: ${errText(e)}`;
       noAnswer(reason);
-      skipped.push(giveUp(repo, id, reason) ?? `${name}: intake failed: ${e?.message ?? e}`);
+      skipped.push(giveUp(repo, id, reason) ?? `${name}: intake failed: ${errText(e)}`);
     }
   } finally {
     release();

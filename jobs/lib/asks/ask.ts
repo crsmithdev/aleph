@@ -20,6 +20,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { afterOf, DROP_WAITER, isDropped, parentOf, partsOf, writeList, type Place } from "../../../issues/lib/store.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 export interface Ask {
   reason: string;
@@ -256,8 +257,8 @@ export function askChris(place: Place, id: number | string, ask: Ask, said: stri
     if (!found) return `no issue ${id}`;
     setAsk(key("issue", Number(id)), ask);
     return null;
-  } catch (e: any) {
-    return e?.message ?? String(e);
+  } catch (e) {
+    return errText(e);
   }
 }
 

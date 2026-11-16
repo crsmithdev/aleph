@@ -22,6 +22,7 @@ import { readModels } from "../routing/models.ts";
 import { dispatchAfterIssue } from "../transitions/filing.ts";
 import { refusal } from "../transitions/transitions.ts";
 import { endLost, openRun } from "./agent-run.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** Issues per run: a bad reply costs one batch. */
 export const BATCH = 10;
@@ -222,8 +223,8 @@ export async function review(b: Batch, now: number): Promise<Outcome> {
     name: `housekeeper-${b.repo.key}`, command: `housekeep ${b.repo.key}${b.land ? ` after ${b.land.to.slice(0, 7)}` : ""}: ${ids.join(", ")}`, shown: true,
   });
   let reply: any;
-  try { reply = await run.askData(prompt(b, now)); } catch (e: any) {
-    out.error = String(e?.message ?? e);
+  try { reply = await run.askData(prompt(b, now)); } catch (e) {
+    out.error = errText(e);
     run.end(`failed: ${out.error}`, { cause: "unanswered" });
     return out;
   }

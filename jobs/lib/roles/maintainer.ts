@@ -15,6 +15,7 @@ import { addDays } from "../learning/monitor-table.ts";
 import { lock } from "../infra/locks.ts";
 import { readModels } from "../routing/models.ts";
 import { endLost, openRun } from "./agent-run.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** The run's time box, in seconds. */
 const SECONDS = 900;
@@ -121,8 +122,8 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
       const reply = (await run.askData(prompt(day, digest.text))) as { notes?: Note[] } | undefined;
       if (!Array.isArray(reply?.notes)) throw new Error("malformed reply: no notes list");
       report.notes = dry ? reply.notes.map((n) => ({ title: String(n.title), kind: String(n.kind) })) : await put(reply.notes, day);
-    } catch (e: any) {
-      report.error = String(e?.message ?? e);
+    } catch (e) {
+      report.error = errText(e);
       run.end(`failed: ${report.error}`, { cause: "unanswered" });
       recordRun(root, "compile", "failed", `${day}: ${report.error}`);
       markRetry(root, day, true);

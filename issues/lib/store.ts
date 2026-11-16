@@ -20,6 +20,7 @@ import { labels, parseItem, renderItem, status, type Doc, type Issue } from "./t
 import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { errText } from "../../lib/errtext.ts";
 
 export { labels };
 
@@ -384,8 +385,6 @@ export function buildableIssue(repo: Place, id: number | string): Issue | null {
   return doc && item && isBuildable(doc, item, repo) ? item : null;
 }
 
-/** Why a write did not happen, from what it threw. */
-const reason = (e: any): string => e?.message ?? String(e);
 
 /** A note on item `id`, as one commit: what a person or an agent said. Returns why it could not, or null. */
 export function note(repo: Place, id: number | string, text: string): string | null {
@@ -396,7 +395,7 @@ export function note(repo: Place, id: number | string, text: string): string | n
     });
     return w ? null : `no issue ${id}`;
   } catch (e) {
-    return reason(e);
+    return errText(e);
   }
 }
 
@@ -411,7 +410,7 @@ export function close(repo: Place, id: number | string, text: string, how: "done
     }, false, {}, by);
     return w ? null : `no issue ${id}`;
   } catch (e) {
-    return reason(e);
+    return errText(e);
   }
 }
 
@@ -428,7 +427,7 @@ export function reopenReverted(repo: Place, id: number, text: string, since: str
     if (w) logEvent({ subject: by, action: "reopened", object: keyOf("issue", id), detail: text });
     return null;
   } catch (e) {
-    return reason(e);
+    return errText(e);
   }
 }
 
@@ -522,7 +521,7 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
       return true;
     });
   } catch (e) {
-    todo = reason(e);
+    todo = errText(e);
     ids = [];
   }
   return { todo, ids };
@@ -559,6 +558,6 @@ export function noteFlake(repo: Place, text: string): { id: number } | string {
     }, true);
     return w ? w.value : "no flake tracker written";
   } catch (e) {
-    return reason(e);
+    return errText(e);
   }
 }

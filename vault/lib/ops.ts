@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { langfuse } from "../../lib/langfuse.ts";
-import type { Observation } from "../../lib/otlp.ts";
+import type { Observation } from "../../lib/langfuse.ts";
 import { serializeFrontmatter } from "../../lib/frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./git.ts";
 import { compileDigest } from "./compile.ts";
@@ -19,6 +19,7 @@ import { recallQuery } from "./recall-query.ts";
 import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { layout } from "../../lib/layout.ts";
 import { logUse } from "../../lib/episode-use.ts";
+import { errText } from "../../lib/errtext.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
 export class Exit extends Error { constructor(readonly code: number) { super(`exit ${code}`); } }
@@ -335,7 +336,7 @@ async function misses(): Promise<void> {
   const from = new Date(to.getTime() - days * 86400_000);
   let obs: Observation[];
   try { obs = (await lf.observations({ from, to: new Date(to.getTime() + 60_000) })).rows; }
-  catch (e) { console.error(`Langfuse failed: ${e instanceof Error ? e.message : e}`); exit(1); }
+  catch (e) { console.error(`Langfuse failed: ${errText(e)}`); exit(1); }
   obs = obs.filter((o) => !o.startTime || new Date(o.startTime) >= from).sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
 
   const cmdOf = (o: Observation): string => { const i = asValue(o.input); return String(typeof i === "string" ? i : fieldOf(i, "command") ?? "").trim(); };

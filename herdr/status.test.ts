@@ -7,7 +7,7 @@ const LONG = "Make the status panel cut every line that is longer than the pane"
 const EVENTS = Array.from({ length: 50 }, (_, i) => ({ time: `2026-10-27T${String(Math.floor(i / 6) + 10).padStart(2, "0")}:${String((i % 6) * 10).padStart(2, "0")}:00Z`, subject: "rule", action: "landed", object: `aleph-${100 + i}`, object_target: null }));
 const state: any = {
   now: "2026-10-27T17:00:00Z",
-  factory: { paused: false, health: [{ text: "judge is down", kind: "alert" }] },
+  factory: { paused: false, liveCap: 1, liveRuns: 1, runCap: 1, runStarts: 0, health: [{ text: "judge is down", kind: "alert" }] },
   asks: [{ id: "aleph-27", repo: "aleph", label: "Decide", title: "Digest head and tail", headline: "Digest head and tail" }],
   stuck: [{ name: "aleph-30", repo: "aleph", state: "failed", item: { id: 30, title: "Route tiers" } }],
   running: [{ name: "aleph-36", repo: "aleph", started: "2026-10-27T16:00:00Z", item: { id: 36, title: "Run now" } }],

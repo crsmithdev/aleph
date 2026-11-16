@@ -11,6 +11,7 @@ import { isLost } from "./process.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
 import { doctorClockMs, homeUrl, unitDir } from "./settings.ts";
 import { systemctl, timer } from "./systemd.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 export interface Check { name: string; ok: boolean; detail: string }
 
@@ -120,8 +121,8 @@ export async function homeCheck(): Promise<Check> {
   try {
     status = (await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual", headers: { cookie: factoryCookie() } })).status;
     if (status >= 400) return bad("aleph.home", `${url} answered ${status}`);
-  } catch (e: any) {
-    return bad("aleph.home", `${url}: ${e?.message ?? e}`);
+  } catch (e) {
+    return bad("aleph.home", `${url}: ${errText(e)}`);
   }
   // A JSON route is gzipped by the server, so its body proves that home-proxy passes gzip through intact.
   const api = new URL("/api/factory", url).href;
@@ -131,8 +132,8 @@ export async function homeCheck(): Promise<Check> {
     const body = new Uint8Array(await r.arrayBuffer());
     JSON.parse(new TextDecoder().decode(r.headers.get("content-encoding") === "gzip" ? Bun.gunzipSync(body) : body));
     return ok("aleph.home", `${url} answered ${status}`);
-  } catch (e: any) {
-    return bad("aleph.home", `${api}: ${e?.message ?? e}`);
+  } catch (e) {
+    return bad("aleph.home", `${api}: ${errText(e)}`);
   }
 }
 

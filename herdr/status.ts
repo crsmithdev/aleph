@@ -10,6 +10,7 @@ import { clip, NAMES, sayText, shortText, shownId, targetOf } from "../lib/namin
 import { cardTrend, clock, count, dur, hours, mean, pct, when } from "../ui/lib.js";
 // @ts-ignore plain JS, shared with the page
 import { cardHours, cardPct, pace } from "../ui/views/speed.js";
+import { errText } from "../lib/errtext.ts";
 
 const REFRESH_MS = 10_000;
 /** The colour of each tone of the status sentence: red, yellow or green. */
@@ -27,7 +28,7 @@ export function render(s: any, d: any, { width, height }: { width: number; heigh
 
   const f = d.figures, base = d.baseline?.base, prev = d.baseline?.prev, basis = d.baseline?.basis ?? "";
   const t = (key: string, o: object) => trend(base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
-  const live = s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, p = pace(s);
+  const live = s.factory.liveRuns, p = pace(s);
   head("Scorecard");
   line(`Lost time ${cardPct(f.lost)} / ${cardHours(f.hours)} ${t("lost", { kind: "points", lowerIsGood: true, format: cardPct })} lost / hours`);
   line(`Completion ${dur(f.leadP50)} / ${dur(f.leadP90)} ${t("leadP50", { kind: "relative", lowerIsGood: true, format: dur })} p50 / p90`);
@@ -83,7 +84,7 @@ if (import.meta.main) {
     const lines = failed ? [clip(failed, size.width)] : data ? render(data[0], data[1], size) : [];
     stdout.write(`\x1b[H\x1b[2J${lines.join("\n")}`);
   };
-  const refresh = async () => { try { data = await load(); failed = ""; } catch (e: any) { failed = String(e?.message ?? e); } draw(); };
+  const refresh = async () => { try { data = await load(); failed = ""; } catch (e) { failed = errText(e); } draw(); };
   const quit = () => { stdout.write("\x1b[?25h\x1b[?1049l"); stdin.setRawMode?.(false); process.exit(0); };
   stdout.write("\x1b[?1049h\x1b[?25l");
   stdin.setRawMode?.(true);

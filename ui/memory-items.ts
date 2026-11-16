@@ -86,7 +86,7 @@ async function hooks() {
 function prospectiveIssues() {
   const registry = Object.values(loadRegistry());
   let docs: (todos.Doc | null)[] = [];
-  try { docs = readLists(registry); } catch (e: any) { logOnce("memory-items", e); }
+  try { docs = readLists(registry); } catch (e) { logOnce("memory-items", e); }
   const open: { repo: string; id: number; title: string; after: string[]; priority: string }[] = [];
   registry.forEach((r, n) => {
     for (const i of docs[n]?.items ?? []) {

@@ -15,6 +15,7 @@ import { git } from "../infra/git.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";
 import type { Plan } from "./keep-earn.ts";
 import { isJsTestFile } from "./test-files.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
@@ -221,7 +222,7 @@ export async function checksAt(t: CheckTask, sha: string, env: Record<string, st
       return runAll(t, chosen(t), exec);
     });
   } catch (e) {
-    return { cause: "infra", reason: e instanceof Error ? e.message : String(e) };
+    return { cause: "infra", reason: errText(e) };
   }
 }
 
@@ -264,7 +265,7 @@ export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
       return { code: r.code, output };
     });
   } catch (e) {
-    return { code: 1, output: e instanceof Error ? e.message : String(e), infra: true };
+    return { code: 1, output: errText(e), infra: true };
   } finally {
     rmSync(logs, { recursive: true, force: true });
   }

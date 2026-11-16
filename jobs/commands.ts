@@ -45,6 +45,7 @@ import { jobId } from "./lib/infra/settings.ts";
 import { readModels, setModel } from "./lib/routing/models.ts";
 import { key, parseId, parseKey, shortText, shownKey } from "../lib/naming.ts";
 import { projectName } from "../issues/lib/projects.ts";
+import { errText } from "../lib/errtext.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -451,7 +452,7 @@ function statusCmd(ctx: Ctx): void {
   const key = p.repo, itemRef = p.id, n = String(p.id);
   const repo = reg[key] ?? refuse(`no repo named ${key} in the registry`);
   let s: Stage | undefined;
-  try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
+  try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e) { refuse(errText(e)); }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (ctx.rest.includes("--json")) return ctx.out(s);
   ctx.log(issues.localRefs(key, stageLine(s), repo.code));
@@ -470,7 +471,7 @@ function statusRecent(ctx: Ctx): void {
       states.push(...rows);
       if (rows.length) ofRepo.push({ key: repo.key, code: repo.code, rows });
     }
-    catch (e: any) { ctx.err(`warn: ${repo.key}: ${e?.message ?? e}`); }
+    catch (e) { ctx.err(`warn: ${repo.key}: ${errText(e)}`); }
   }
   if (ctx.rest.includes("--json")) return ctx.out(states);
   if (!states.length) { ctx.log("no open items"); return; }

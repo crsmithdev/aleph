@@ -107,17 +107,3 @@ export async function postScore(cfg: LangfuseConfig, score: Score, timeoutMs = 3
     return { ok: false, error: (error as Error).message };
   }
 }
-
-export interface Observation {
-  id?: string;
-  traceId?: string;
-  type?: string;
-  name?: string;
-  input?: unknown;
-  output?: unknown;
-  metadata?: Record<string, any> | null;
-  startTime?: string;
-  level?: string;
-  statusMessage?: string;
-  sessionId?: string;
-}

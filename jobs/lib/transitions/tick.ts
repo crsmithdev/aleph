@@ -43,6 +43,7 @@ import * as verbs from "../../../issues/lib/issues.ts";
 import { parseKey } from "../../../lib/naming.ts";
 import { editedWaits, toRescue } from "../land/rescue.ts";
 import { smokeStep } from "../gates/smoke.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** How often each step with a fixed period runs. */
 const EVERY_MS = { ci: 5 * 60_000, firefight: 5 * 60_000, episodes: 30 * 60_000 } as const;
@@ -82,7 +83,7 @@ export interface Parts { mech: boolean; corr: boolean; compile: boolean; decay: 
 
 /** `run`'s result, or `{ error }` when it throws: one failed part does not stop the next. */
 const part = async <T>(run: () => Promise<T>): Promise<T | { error: string }> => {
-  try { return await run(); } catch (e: any) { return { error: String(e?.message ?? e) }; }
+  try { return await run(); } catch (e) { return { error: errText(e) }; }
 };
 
 /**
@@ -233,8 +234,8 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
         const v = await run(), result = say(v);
         if (result) ran[key] = { at, result };
         return v;
-      } catch (e: any) {
-        const note = String(e?.message ?? e);
+      } catch (e) {
+        const note = errText(e);
         logEvent({ subject: "rule", action: "failed", object: key, detail: note });
         ran[key] = { at, result: `failed: ${note}` };
       }

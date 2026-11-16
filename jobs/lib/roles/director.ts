@@ -44,6 +44,7 @@ import type { Fate } from "../records/outcome.ts";
 import { readSection } from "../records/run-files.ts";
 import { drop as dropJob, land as landJob, refusal } from "../transitions/transitions.ts";
 import { writeTitle } from "./title.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 const DIRECTOR_MODEL = () => readModels().director?.model ?? OPUS_MODEL;
 /** One run per Ask: its time box in seconds. */
@@ -627,7 +628,7 @@ export async function applyActions(c: Exclude<Case, { at: "lesson" }>, actions: 
     if (i >= MAX_ACTIONS) o = { refused: `${typeof a === "string" ? a : describe(a)}: more than ${MAX_ACTIONS} actions in one run` };
     else if (typeof a === "string") o = { refused: `a malformed action: ${a}` };
     else {
-      try { o = await applyOne(c, a, ports); } catch (e: any) { o = { refused: `${describe(a)}: ${e?.message ?? e}` }; }
+      try { o = await applyOne(c, a, ports); } catch (e) { o = { refused: `${describe(a)}: ${errText(e)}` }; }
     }
     if ("applied" in o) { out.applied.push(o.applied); out.decided ||= o.decides; out.events.push(o.ev); } else out.refused.push(o.refused);
   }
@@ -686,9 +687,9 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
     let reply: Reply | string;
     // An Ask listed for a held path is the sub `protected`, with the path.
     const held = listed?.file ? { sub: "protected", file: listed.file } : {};
-    try { reply = parseReply(await run.askData(prompt(c, listed?.why ?? null, rec)), actionsOf(c)); } catch (e: any) {
-      run.end(`failed: ${e?.message ?? e}`);
-      return escalate(c, at, undefined, `its run failed: ${e?.message ?? e}`, { sub: "error" });
+    try { reply = parseReply(await run.askData(prompt(c, listed?.why ?? null, rec)), actionsOf(c)); } catch (e) {
+      run.end(`failed: ${errText(e)}`);
+      return escalate(c, at, undefined, `its run failed: ${errText(e)}`, { sub: "error" });
     }
     if (typeof reply === "string") { run.end(`malformed reply: ${reply}`); return escalate(c, at, undefined, `its reply was malformed: ${reply}`, { sub: "error" }); }
     if ("escalate" in reply) {
@@ -726,10 +727,10 @@ export async function directAll(repos: Repo[] = sandboxRepos(), ports: Ports = d
   try {
     await endLost("director", lockOf, "its decision");
     const todo = pendingCases(repos).slice(0, Math.max(0, DIRECTOR_CAP()));
-    const out = await Promise.all(todo.map((c) => direct(c, ports).catch((e: any) => { logEvent({ subject: "director", action: "failed", object: refOf(c), detail: String(e?.message ?? e) }); return null; })));
+    const out = await Promise.all(todo.map((c) => direct(c, ports).catch((e) => { logEvent({ subject: "director", action: "failed", object: refOf(c), detail: errText(e) }); return null; })));
     return out.filter((d): d is Decision => !!d);
-  } catch (e: any) {
-    logEvent({ subject: "director", action: "failed", object: "director", detail: String(e?.message ?? e) });
+  } catch (e) {
+    logEvent({ subject: "director", action: "failed", object: "director", detail: errText(e) });
     return [];
   }
 }

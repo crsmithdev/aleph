@@ -16,6 +16,7 @@ import { loadVault, today, wikiNotes, type Note } from "../../../vault/lib/vault
 import { lock } from "../infra/locks.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { MODEL, outcome, SECONDS, TEXT } from "./recheck.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** Misses worked per run, oldest first. */
 export const MISSES = 8;
@@ -167,8 +168,8 @@ export async function alias(root: string, dry: boolean, now = Date.now()): Promi
       if (!Array.isArray(reply?.verdicts)) throw new Error("malformed reply: no verdicts list");
       const asked = (v: Verdict) => queue[v.miss - 1]?.note.title === v.note;
       report.misses = dry ? reply.verdicts.filter(asked).map(({ miss, note, verdict, why, aliases }) => ({ query: queue[miss - 1].query, note, verdict, why, ...(aliases ? { aliases } : {}) })) : await apply(root, queue, reply.verdicts, day);
-    } catch (e: any) {
-      report.error = String(e?.message ?? e);
+    } catch (e) {
+      report.error = errText(e);
       run.end(`failed: ${report.error}`, { cause: "unanswered" });
       return report;
     }

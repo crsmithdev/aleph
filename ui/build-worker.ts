@@ -10,6 +10,7 @@ import { skipFetches } from "../issues/lib/store.ts";
 import { closePass, openPass, setOnLater, touched } from "../lib/sources.ts";
 import { stateSlowMs } from "../jobs/lib/infra/settings.ts";
 import { loadRoutes, match } from "./server.ts";
+import { errText } from "../lib/errtext.ts";
 
 declare const self: Worker;
 
@@ -56,7 +57,7 @@ async function run({ id, env, clock, key, gens }: BuildRequest): Promise<void> {
     if (slow > 0) Bun.sleepSync(slow);
     self.postMessage({ id, answer: await answer(key), sources: [...touched] } satisfies BuildReply);
   } catch (err) {
-    self.postMessage({ id, error: err instanceof Error ? err.message : String(err), sources: [...touched] } satisfies BuildReply);
+    self.postMessage({ id, error: errText(err), sources: [...touched] } satisfies BuildReply);
   } finally {
     closePass();
   }

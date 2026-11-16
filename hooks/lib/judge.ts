@@ -12,6 +12,7 @@
  */
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { oneShot } from "../../jobs/lib/routing/one-shot.ts";
+import { errText } from "../../lib/errtext.ts";
 
 interface Verdict { verdict: "pass" | "deny"; reason: string }
 
@@ -54,8 +55,8 @@ async function jevScreen(finalMessage: string, timeoutMs: number): Promise<{ pCl
   try {
     const { p, cost } = await nouls({ final_message: finalMessage }, { claim: CLAIM }, timeoutMs);
     return { pClaim: p.claim, cost };
-  } catch (e: any) {
-    return { pClaim: null, error: e?.message ?? String(e), cost: 0 };
+  } catch (e) {
+    return { pClaim: null, error: errText(e), cost: 0 };
   }
 }
 

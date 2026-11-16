@@ -13,6 +13,7 @@ import { cliOverride } from "../jobs/lib/infra/settings.ts";
 import { Refusal } from "../lib/refusal.ts";
 import { sameSite } from "./http.ts";
 import type { Handler } from "./server.ts";
+import { errText } from "../lib/errtext.ts";
 
 /** A failed action: the status and the reason the page shows. */
 class Fail extends Error {
@@ -33,7 +34,7 @@ export const post = (f: (body: any, params: Record<string, string>, url: URL) =>
   } catch (e) {
     if (e instanceof Fail) return answer(e.status, e.message);
     if (e instanceof Refusal) return answer(422, e.message);
-    return answer(500, e instanceof Error ? e.message : String(e));
+    return answer(500, errText(e));
   }
 };
 

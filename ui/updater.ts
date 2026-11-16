@@ -34,6 +34,7 @@ import { annotationsFile, handoffsDir, vaultDir } from "../lib/paths.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
 import { fetchStore } from "../issues/lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
+import { errText } from "../lib/errtext.ts";
 
 const SETTLE_MS = 500;
 export const KEEP_MS = 10 * 60_000, DROP_MS = 60 * 60_000;
@@ -139,7 +140,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
             if (f && readsLangfuse(key)) writeJson(f, { answer, at: s.at });
           }
         } catch (e) {
-          fail(s, e instanceof Error ? e.message : String(e));
+          fail(s, errText(e));
         }
         s.built = marks;
       } while (s.again);

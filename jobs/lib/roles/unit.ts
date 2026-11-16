@@ -38,6 +38,7 @@ import { onMain } from "../records/status.ts";
 import { writeTitle } from "./title.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile } from "../infra/settings.ts";
 import { jobOfFolder, jobSpec, jobSpecFile, logStream, logTo, readSection, runFile } from "../records/run-files.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
@@ -99,7 +100,7 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
   // Their own units: a child of this land's unit would die with its cgroup when the leader exits.
   for (const n of names) {
     const unit = `aleph-pull-${repo.key}-${n}-${Date.now()}`.replace(/[^A-Za-z0-9:_.-]/g, "-");
-    try { startUnit(["land", n], { unit, cwd: repo.path }); } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "land", detail: String(e?.message ?? e) }); }
+    try { startUnit(["land", n], { unit, cwd: repo.path }); } catch (e) { logEvent({ subject: "rule", action: "failed", object: "land", detail: errText(e) }); }
   }
   const deadline = Date.now() + 10_000;
   // The land must be live, as queuedLands takes only a live land: one still starting would miss the batch.
@@ -208,8 +209,8 @@ export async function unit(folder: string): Promise<void> {
     } else {
       ({ outcome, code } = await agent(id, folder, run, repo!, env, checkEnv));
     }
-  } catch (e: any) {
-    outcome = { state: "failed", cause: "other", reason: `error: ${e?.message ?? e}` };
+  } catch (e) {
+    outcome = { state: "failed", cause: "other", reason: `error: ${errText(e)}` };
     code = 1;
   }
 
@@ -297,8 +298,8 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
       : await startJob({ repo: run.repo!, name: run.name, spec: back.note, land: true, ...(merge ? { merge: true, model: MERGE_MODEL } : size ? { model: size } : {}) }, { output: { file: log } });
     appendFileSync(log, JSON.stringify(s.started, null, 2) + "\n");
     await s.child?.exited;
-  } catch (e: any) {
-    appendFileSync(log, `${String(e?.message ?? e)}\n`);
+  } catch (e) {
+    appendFileSync(log, `${errText(e)}\n`);
     jobRecord.patchRun(jobOfFolder(folder), { next: undefined });
   }
 }
@@ -695,7 +696,7 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
       return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost, model, session: w.session };
     });
   } catch (e) {
-    const why = e instanceof Error ? e.message : String(e);
+    const why = errText(e);
     end("failed", { reason: why });
     return { reason: `reviewer: no verdict (${why})`, none: true, model };
   }

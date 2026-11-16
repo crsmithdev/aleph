@@ -8,6 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../infra/git.ts";
 import { loadRegistry, type Entry, type Repo } from "./ledger.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 const DIFF_FILE = "diff.patch";
 const STAT_FILE = "diff.stat";
@@ -44,7 +45,7 @@ export function keepDiff(repo: Repo, branch: string | undefined, folder: string)
     if (!j) return;
     writeFileSync(join(folder, DIFF_FILE), j.diff);
     writeFileSync(join(folder, STAT_FILE), j.stat);
-  } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "jobdiff", detail: String(e?.message ?? e) }); }
+  } catch (e) { logEvent({ subject: "rule", action: "failed", object: "jobdiff", detail: errText(e) }); }
 }
 
 function kept(runs: Entry[]): JobDiff | null {

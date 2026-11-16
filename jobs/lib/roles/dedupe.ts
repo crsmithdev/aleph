@@ -14,6 +14,7 @@ import { lock } from "../infra/locks.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { body } from "./maintainer.ts";
 import { MODEL, outcome, SECONDS, TEXT } from "./recheck.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** Pairs worked per run, most similar first. */
 export const PAIRS = 5;
@@ -119,8 +120,8 @@ export async function dedupe(root: string, dry: boolean): Promise<DedupeReport> 
       if (!Array.isArray(reply?.verdicts)) throw new Error("malformed reply: no verdicts list");
       const asked = (v: Verdict) => queue.some(([a, b]) => (v.a === a.title && v.b === b.title) || (v.a === b.title && v.b === a.title));
       report.pairs = dry ? reply.verdicts.filter(asked).map(({ a, b, verdict, why }) => ({ a, b, verdict, why })) : await apply(root, queue, reply.verdicts, day);
-    } catch (e: any) {
-      report.error = String(e?.message ?? e);
+    } catch (e) {
+      report.error = errText(e);
       run.end(`failed: ${report.error}`, { cause: "unanswered" });
       recordRun(root, "dedupe", "failed", report.error);
       return report;

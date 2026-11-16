@@ -10,6 +10,7 @@ import { fetchOrigin, git, jobCommit } from "../infra/git.ts";
 import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** What the store and the ledger say about a repo's items: what stage() needs of each. */
 export interface Facts {
@@ -66,7 +67,7 @@ const revertedOn = (cwd: string, main: string): Set<string> =>
 /** Each item's `since` as the store last fetched it. */
 function storedSince(key: string): (n: string) => string | undefined {
   let doc: issues.Doc | null = null;
-  try { doc = readFetched({ key }); } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "status", detail: `store read of ${key}: ${String(e?.message ?? e)}` }); }
+  try { doc = readFetched({ key }); } catch (e) { logEvent({ subject: "rule", action: "failed", object: "status", detail: `store read of ${key}: ${errText(e)}` }); }
   return (n) => {
     const hit = doc && issues.find(doc, n);
     return hit ? issues.sinceOf(hit) : undefined;

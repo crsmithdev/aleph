@@ -9,6 +9,7 @@ import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from 
 import { allRuns, onOf, type Run } from "../records/ledger.ts";
 import { logTo, runFile } from "../records/run-files.ts";
 import { resultOf } from "../roles/agent-call.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 export interface TraceInput {
   runId: string; run: Run; repoKey: string;
@@ -128,7 +129,7 @@ export async function postTrace(folder: string, runId: string, run: Run, repoKey
     });
     const r = await postSpans(cfg, spans);
     if (!r.ok) logTo(folder, "dispatch", `${new Date().toISOString()} langfuse post failed: ${r.status ?? ""} ${r.error ?? ""}\n`.replace(/\s+\n/, "\n"));
-  } catch (e: any) {
-    try { logTo(folder, "dispatch", `${new Date().toISOString()} trace failed: ${e?.message ?? e}\n`); } catch {}
+  } catch (e) {
+    try { logTo(folder, "dispatch", `${new Date().toISOString()} trace failed: ${errText(e)}\n`); } catch {}
   }
 }

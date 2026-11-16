@@ -12,6 +12,7 @@ import { truncate } from "../lib/otlp.ts";
 import { postTurnSpan } from "./lib/trace.ts";
 import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
 import { appendRecallLog, coreNotes, loadWiki, recordRun, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
+import { errText } from "../lib/errtext.ts";
 
 const MIN_PROMPT = 20;
 // Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout,
@@ -37,7 +38,7 @@ function writeSeen(root: string, session: string | undefined, seen: Set<string>,
   mkdirSync(dir, { recursive: true });
   try {
     for (const f of readdirSync(dir)) if (statSync(join(dir, f)).mtimeMs < Date.now() - SEEN_DAYS * 86400_000) rmSync(join(dir, f), { force: true });
-  } catch (e: any) { recordRun(root, "seen prune", "failed", e?.message ?? String(e)); throw e; }
+  } catch (e) { recordRun(root, "seen prune", "failed", errText(e)); throw e; }
   recordRun(root, "seen prune", "ok");
   if (session) writeFileSync(seenFile(root, session), JSON.stringify([...seen, ...rels]));
 }
@@ -85,7 +86,7 @@ async function main() {
   const errors: string[] = [];
   const scored: { n: Note; p: number }[] = [];
   settled.forEach((s, b) => {
-    if (s.status === "rejected") { errors.push(s.reason?.message ?? String(s.reason)); return; }
+    if (s.status === "rejected") { errors.push(errText(s.reason)); return; }
     batches[b].forEach((n, i) => scored.push({ n, p: s.value.p[`n${i}`] }));
   });
   if (errors.length) meta.error = errors.join("; ");

@@ -98,8 +98,8 @@ export function conn(): Database {
   db.run("PRAGMA busy_timeout = 5000");
   // Changing the journal mode of a new file fails with SQLITE_BUSY at once when another process holds it: busy_timeout does not apply.
   for (const stop = Date.now() + 5000; ;) {
-    try { db.run("PRAGMA journal_mode = WAL"); break; } catch (e: any) {
-      if (e?.code !== "SQLITE_BUSY" || Date.now() > stop) throw e;
+    try { db.run("PRAGMA journal_mode = WAL"); break; } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "SQLITE_BUSY" || Date.now() > stop) throw e;
       Bun.sleepSync(5);
     }
   }

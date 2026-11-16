@@ -7,9 +7,8 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { langfuse, type Langfuse } from "../../../lib/langfuse.ts";
+import { langfuse, type Langfuse, type Observation } from "../../../lib/langfuse.ts";
 import { decide, nouls } from "../../../lib/jev.ts";
-import type { Observation } from "../../../lib/otlp.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 

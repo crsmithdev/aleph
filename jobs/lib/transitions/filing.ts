@@ -11,6 +11,7 @@ import { mainRed } from "../gates/factory-status.ts";
 import { refDone } from "../gates/issue-decision.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
 import { dispatchDetached, intakeDetached } from "./launch.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** After a write that leaves an open issue of a factory repo buildable: a dispatch, so the issue starts at once. */
 export function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
@@ -26,7 +27,7 @@ export function afterFiling(place: Place, item: issues.Issue): void {
     dispatchAfterIssue(repo, item);
     const doc = reader().list(repo.key);
     if (doc && decideIntake(repo, item, { doc, done: doneChecker(false), red: mainRed()(repo) }).kind !== "none") intakeDetached(repo, item.id);
-  } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "filing", detail: String(e?.message ?? e) }); }
+  } catch (e) { logEvent({ subject: "rule", action: "failed", object: "filing", detail: errText(e) }); }
 }
 
 /** The production effects of a filing (store.ts `writeFiling`). */
@@ -52,7 +53,7 @@ export function doneChecker(fetch = true, later?: (repo: string, id: number | st
         k.doc = fetch ? readList(repo) : readFetched(repo);
         for (const s of repoStages(repo, { fetch, doc: k.doc })) k.stages.set(s.id, s.stage);
         k.read = !!k.doc;
-      } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "filing", detail: `store read of ${r.repo}: ${String(e?.message ?? e)}` }); }
+      } catch (e) { logEvent({ subject: "rule", action: "failed", object: "filing", detail: `store read of ${r.repo}: ${errText(e)}` }); }
       known.set(r.repo, k);
     }
     const { doc, stages, read } = known.get(r.repo)!;

@@ -14,12 +14,12 @@ export function selection(d, key) {
   }
   if (key === USAGE) return { title: "Usage per issue", causes: [], top: d.issues?.usage ?? [] };
   const c = key !== ALL && d.classes.find((x) => x.key === key);
-  if (c) return { title: c.key[0].toUpperCase() + c.key.slice(1), causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
+  if (c) return { title: c.key[0].toUpperCase() + c.key.slice(1), causes: [...c.causes].sort((a, b) => b.hours - a.hours), top: c.top.slice(0, TOP_ISSUES) };
   const causes = mergeCauses(d), lost = d.classes.filter((x) => x.lost);
   return {
     title: "Lost Time",
     causes,
-    top: lost.flatMap((x) => x.top ?? []).sort((a, b) => b.hours - a.hours).slice(0, TOP_ISSUES),
+    top: lost.flatMap((x) => x.top).sort((a, b) => b.hours - a.hours).slice(0, TOP_ISSUES),
   };
 }
 

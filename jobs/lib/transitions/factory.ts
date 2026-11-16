@@ -40,6 +40,7 @@ import { heldEvent, issueDecision, NO_COMMIT_LIMIT, pendingWaits, type Gate, typ
 import { decideStart, unrouted, type StartDecision } from "../gates/start-decision.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
 import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 
 /** The facts of a hold's event: its detail after the hold word (`full: 5 / 5 jobs` gives `5 / 5 jobs`). */
@@ -519,7 +520,7 @@ function cameDue(): string[] {
   const ids: string[] = [];
   const repos = Object.values(loadRegistry());
   let docs: (issues.Doc | null)[] = [];
-  try { docs = readLists(repos); } catch (e: any) { logEvent({ subject: "rule", action: "failed", object: "came-due", detail: String(e?.message ?? e) }); }
+  try { docs = readLists(repos); } catch (e) { logEvent({ subject: "rule", action: "failed", object: "came-due", detail: errText(e) }); }
   for (const [n, repo] of docs.map((_, n) => [n, repos[n]] as const)) {
     for (const item of docs[n]?.items ?? []) {
       const id = `${repo.key}-${item.id}`;

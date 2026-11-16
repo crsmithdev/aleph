@@ -1,13 +1,14 @@
 /** The user systemd: every `systemctl --user` call and a timer's next run. The unit folder is unitDir() in settings.ts. */
 import { systemctlBin } from "./settings.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** `systemctl --user <args>`: ok when it exits 0, and its stdout and stderr. */
 export function systemctl(...args: string[]): { ok: boolean; out: string } {
   try {
     const p = Bun.spawnSync([systemctlBin(), "--user", ...args], { stdout: "pipe", stderr: "pipe", stdin: "ignore", timeout: 15_000 });
     return { ok: p.exitCode === 0, out: (p.stdout.toString() + p.stderr.toString()).trim() };
-  } catch (e: any) {
-    return { ok: false, out: e?.message ?? String(e) };
+  } catch (e) {
+    return { ok: false, out: errText(e) };
   }
 }
 

@@ -28,6 +28,7 @@ import { logEvent } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
 import { askSlowLands } from "../land/rescue.ts";
 import { afterFiling } from "../transitions/filing.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 /** The most of a log that goes into an issue's request: its last LOG_LINES lines, cut to LOG_CHARS. */
 const LOG_LINES = 200;
@@ -224,7 +225,7 @@ export interface Fired { filed: Filed[]; asked: string[] }
 export async function firefight(ports: Ports = defaultPorts, now = Date.now()): Promise<Fired | null> {
   if (gates({ only: ["paused"] })) return null;
   const filed: Filed[] = [];
-  for (const r of (() => { try { return reds(ports); } catch (e: any) { logEvent({ subject: "gate", action: "failed", object: "reds", detail: `failed: ${e?.message ?? e}` }); return []; } })()) {
+  for (const r of (() => { try { return reds(ports); } catch (e) { logEvent({ subject: "gate", action: "failed", object: "reds", detail: `failed: ${errText(e)}` }); return []; } })()) {
     try {
       if (rerun(r, ports)) continue;
       const f = fileRed(r, ports);
@@ -232,12 +233,12 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
       filed.push(f);
       // A new issue's `filed` event is the filing's own.
       if ("noted" in f) logEvent({ subject: "gate", action: "changed", object: `${f.repo}-${f.noted}`, detail: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
-    } catch (e: any) {
-      logEvent({ subject: "gate", action: "failed", object: r.repo, detail: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}` });
+    } catch (e) {
+      logEvent({ subject: "gate", action: "failed", object: r.repo, detail: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${errText(e)}` });
     }
   }
-  try { for (const l of settleCi(ports)) logEvent({ subject: "gate", action: "changed", object: "ci", detail: l }); } catch (e: any) { logEvent({ subject: "gate", action: "failed", object: "ci", detail: `CI watch: failed: ${e?.message ?? e}` }); }
+  try { for (const l of settleCi(ports)) logEvent({ subject: "gate", action: "changed", object: "ci", detail: l }); } catch (e) { logEvent({ subject: "gate", action: "failed", object: "ci", detail: `CI watch: failed: ${errText(e)}` }); }
   let asked: string[] = [];
-  try { asked = await askSlowLands(now); } catch (e: any) { logEvent({ subject: "gate", action: "failed", object: "lands", detail: `slow lands: failed: ${e?.message ?? e}` }); }
+  try { asked = await askSlowLands(now); } catch (e) { logEvent({ subject: "gate", action: "failed", object: "lands", detail: `slow lands: failed: ${errText(e)}` }); }
   return { filed, asked };
 }

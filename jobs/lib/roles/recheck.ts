@@ -23,6 +23,7 @@ import { readModels } from "../routing/models.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { body } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
+import { errText } from "../../../lib/errtext.ts";
 
 export const SECONDS = 900;
 /** Notes re-checked per run, most recalled first. */
@@ -149,8 +150,8 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
       const reply = (await run.askData(prompt(queue, day))) as { verdicts?: Verdict[] } | undefined;
       if (!Array.isArray(reply?.verdicts)) throw new Error("malformed reply: no verdicts list");
       report.notes = dry ? queue.flatMap((n) => reply.verdicts!.filter((v) => v.title === n.title).map(({ title, verdict, why }) => ({ title, verdict, why }))) : await apply(queue, reply.verdicts, day);
-    } catch (e: any) {
-      report.error = String(e?.message ?? e);
+    } catch (e) {
+      report.error = errText(e);
       run.end(`failed: ${report.error}`, { cause: "unanswered" });
       recordRun(root, "recheck", "failed", report.error);
       return report;

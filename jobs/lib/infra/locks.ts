@@ -15,7 +15,7 @@ const GUARD_MS = 10_000;
 const root = () => join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "aleph");
 
 function pidAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true; } catch (e: any) { return e.code === "EPERM"; }
+  try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === "EPERM"; }
 }
 
 /** The one way to remove a lock: another process's rename cannot land on a half-removed directory. */
@@ -65,8 +65,9 @@ function* tries(name: string, waitMs: number): Generator<number, (() => void) | 
       try {
         renameSync(made, dir); // A non-empty directory at `dir` refuses it.
         return () => remove(dir);
-      } catch (e: any) {
-        if (e.code !== "EEXIST" && e.code !== "ENOTEMPTY") throw e;
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code;
+        if (code !== "EEXIST" && code !== "ENOTEMPTY") throw e;
       }
       if (isStale(dir) && reclaim(dir)) continue;
       if (Date.now() >= deadline) return null;
