@@ -1,5 +1,5 @@
 /**
- * `POST /api/chat`: one turn of the chat agent that ui/vendor/kit/chat.js talks to. The body is
+ * `POST /api/chat`: one turn of the chat agent that aleph-tools chat.js talks to. The body is
  * `{ text, session?, page?, annotations?, idea?, images? }`. `images` are `{ name, data }`, `data` in base64: the server saves
  * each in `~/.aleph/sessions/<session>/images/` and the prompt names its path, so the agent reads it.
  * A conversation is a Claude Code session, not a job: the server keeps one `claude -p --input-format stream-json` process

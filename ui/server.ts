@@ -5,7 +5,9 @@
  * `KEYED` come from the updater (ui/updater.ts), which builds them in its Worker; every other route runs here.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { announce, shelf } from "aleph-tools/shelf.ts";
 import { skipFetches } from "../issues/lib/store.ts";
 import { loadDotenv } from "../lib/env.ts";
 import { gateOn, gate, routes as authRoutes } from "./auth.ts";
@@ -21,6 +23,8 @@ export interface Route { method: string; path: string; pattern: RegExp; names: s
 
 /** The page and its modules are revalidated on every load, so a reload after a land gets the new code. */
 const JS = { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" };
+/** The kit widgets, served at /vendor/kit/. */
+const KIT = dirname(fileURLToPath(import.meta.resolve("aleph-tools/package.json")));
 /** This process's start time: part of the version, so a restart changes it. */
 const START = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
@@ -114,6 +118,8 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
     async fetch(req) {
       const refused = gate(req);
       if (refused) return refused;
+      const shelved = await shelf(req);
+      if (shelved) return shelved;
       const url = new URL(req.url);
       const path = url.pathname;
       let allowed = false;
@@ -147,7 +153,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
       if (path === "/vendor/echarts.min.js") return new Response(Bun.file(join(dir, "vendor", "echarts.min.js")), { headers: JS });
       if (path === "/vendor/idiomorph.js") return new Response(Bun.file(join(dir, "vendor", "idiomorph.js")), { headers: JS });
       const kit = path.match(/^\/vendor\/kit\/([a-z-]+\.js)$/);
-      if (kit && existsSync(join(dir, "vendor", "kit", kit[1]))) return new Response(Bun.file(join(dir, "vendor", "kit", kit[1])), { headers: JS });
+      if (kit && existsSync(join(KIT, kit[1]))) return new Response(Bun.file(join(KIT, kit[1])), { headers: JS });
       if (SHARED.has(path)) {
         const file = join(dir, SHARED.get(path)!);
         return new Response(file.endsWith(".ts") ? TS.transformSync(readFileSync(file, "utf8")) : Bun.file(file), { headers: JS });
@@ -173,5 +179,6 @@ if (import.meta.main) {
     process.exit(2);
   }
   const server = await serve(port);
+  announce(`http://127.0.0.1:${server.port}`);
   console.log(`http://127.0.0.1:${server.port}/`);
 }

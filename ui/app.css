@@ -104,7 +104,7 @@
   --wa-font-family-heading: var(--sans);
   --wa-font-family-code: var(--mono);
 }
-/* The kit widgets (ui/vendor/kit) read these; one block serves both themes, as above. */
+/* The kit widgets (aleph-tools) read these; one block serves both themes, as above. */
 :root {
   --kit-bg: var(--surface);
   --kit-field: var(--bg);
@@ -1205,5 +1205,5 @@ html { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
 
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 
-/* The kit dock (inline style in vendor/kit/dock.js) sits in a row at the bottom on a phone, so it covers no column of text. */
+/* The kit dock (inline style in aleph-tools dock.js) sits in a row at the bottom on a phone, so it covers no column of text. */
 @media (max-width: 720px) { #kit-dock { flex-direction: row-reverse !important; right: var(--sp-8) !important; bottom: var(--sp-8) !important; } table.tbl td.wide { min-width: 10ch; } }

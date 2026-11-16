@@ -1,5 +1,5 @@
 /**
- * The annotations of the kit's note tool (ui/vendor/kit/annotate.js, lib/annotations.ts). `GET /api/annotations`
+ * The annotations of the kit's note tool (aleph-tools annotate.js, lib/annotations.ts). `GET /api/annotations`
  * answers every note; the updater keeps it and sends `change` when the file changes, so a page shows an agent's
  * note or reply. `POST /api/annotations` puts one note and `POST /api/annotations/:id/drop` deletes one, each through
  * `aleph annotation`, as every UI action runs the CLI.

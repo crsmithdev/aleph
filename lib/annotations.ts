@@ -1,5 +1,5 @@
 /**
- * The annotations: notes pinned on elements of UI pages with ui/vendor/kit/annotate.js, and the replies to them.
+ * The annotations: notes pinned on elements of UI pages with aleph-tools annotate.js, and the replies to them.
  * One JSON file holds them all (`annotationsFile()`), outside git: a note lives until someone drops it. The page writes
  * through `aleph annotation put` and `drop`; an agent reads, replies, resolves and adds through the other verbs.
  *
@@ -11,12 +11,12 @@ import { annotationsFile } from "./paths.ts";
 import { refuse } from "./refusal.ts";
 
 export type By = "you" | "agent";
-export type Status = "open" | "resolved";
+export type Status = "open" | "resolved" | "sent";
 interface Reply { by: By; text: string; at: string }
 export interface Note { v: 2; id: string; url: string; selector: string; text: string; html: string; note: string; status: Status; by: By; replies: Reply[]; at: string }
 
 const BY: By[] = ["you", "agent"];
-const STATUS: Status[] = ["open", "resolved"];
+const STATUS: Status[] = ["open", "resolved", "sent"];
 
 /** Every note, oldest first; a v 1 note reads as open, by you, with no replies. */
 export function read(): Note[] {
@@ -76,7 +76,7 @@ export function markdown(notes: Note[]): string {
   if (!notes.length) return "No annotations.";
   const pages = [...new Set(notes.map((n) => n.url))];
   return pages.map((url) => [`Annotations on ${url || "any page with the element"}:`, "", ...notes.filter((n) => n.url === url).map((n, i) => [
-    `${i + 1}. ${n.note.replace(/\n/g, "\n   ")}${n.by === "agent" ? " (by the agent)" : ""}${n.status === "resolved" ? " (resolved)" : ""}`,
+    `${i + 1}. ${n.note.replace(/\n/g, "\n   ")}${n.by === "agent" ? " (by the agent)" : ""}${n.status === "open" ? "" : ` (${n.status})`}`,
     `   - id: ${n.id}`,
     `   - element: \`${n.selector}\``,
     ...(n.text ? [`   - text: "${n.text}"`] : []),

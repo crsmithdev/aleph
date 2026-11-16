@@ -218,7 +218,7 @@ A current item (the sidebar link, the contents entry) has an inset 2px `--ink` b
 
 ### The kit bridge
 
-The kit widgets in `ui/vendor/kit` read these. Each points at a base token, so one block serves both themes.
+The kit widgets in `aleph-tools` read these. Each points at a base token, so one block serves both themes.
 
 | Token | Value | Role |
 |---|---|---|

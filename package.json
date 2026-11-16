@@ -12,5 +12,8 @@
     "@types/bun": "^1.4.4",
     "jscpd": "5.4.2",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "aleph-tools": "git+ssh://git@github.com/crsmithdev/aleph-tools.git#7b403e6a5bf6da281c381a4c5e7abd44eb23bd79"
   }
 }

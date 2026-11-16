@@ -907,7 +907,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   test("the font picker, the annotations and the chat mount in the dock and work", async () => {
     await page.width(1200);
     await page.go("#/");
-    expect(await page.ev('[...document.querySelectorAll("#kit-dock > div")].map((d) => d.id)')).toEqual(["kit-fonts", "kit-annotate", "kit-chat"]);
+    expect(await page.ev('[...document.querySelectorAll("#kit-dock > div")].map((d) => d.id)')).toEqual(["kit-fonts", "kit-annotate", "kit-shelf", "kit-chat"]);
     const pick = (role: string, v: string) => page.ev(`(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector('select[data-role="${role}"]:not([data-prop])'); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
     await pick("sans", "Inter");
     expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("'Inter', system-ui, sans-serif");

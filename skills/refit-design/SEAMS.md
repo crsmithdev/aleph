@@ -11,7 +11,7 @@ that view. It is the [refit-code](../refit-code/SEAMS.md) lens applied to the UI
 - a rule in a view's own style block, or an inline `style`, that sets a property of a class a kit helper builds;
 - an element written with a kit class name (`class="card"`, `.chip`, `.tscroll`) when the helper exists;
 - a selector in `ui/app.css` that is scoped to one view and overrides the base rule of a kit class;
-- an import from `ui/vendor/kit` internals instead of the helper that wraps the widget;
+- an import from `aleph-tools` internals instead of the helper that wraps the widget;
 - a sibling class that copies the declarations of a kit class.
 
 `docs/design.md` names the helper of each component in its section. A part that has no helper is a row of the
