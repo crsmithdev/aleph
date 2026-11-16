@@ -20,8 +20,20 @@ export const WORKER_SCHEMA = {
       items: { type: "object", additionalProperties: false, required: ["choice", "chose"], properties: { choice: text, chose: text } },
     },
     followups: {
-      type: "array", description: "Work you found but did not do. Not a flake, and nothing the Oracle names.",
-      items: { type: "object", additionalProperties: false, required: ["title"], properties: { title: { ...text, maxLength: 60 } } },
+      type: "array", maxItems: 3,
+      description: "Work you found but did not do, at most 3 per run: only a bug, a doc that misleads, or a check that misses, never taste or a cosmetic item. Each is real and proved by evidence, as skills/code-review asks. Not a flake, and nothing the Oracle names.",
+      items: {
+        type: "object", additionalProperties: false, required: ["title", "location", "saw", "why", "impact", "risk", "effort"],
+        properties: {
+          title: { ...text, maxLength: 60 },
+          location: { ...text, description: "The `path:line` of the defect." },
+          saw: { ...text, description: "What you saw there: the run or the code that proves it." },
+          why: { ...text, description: "Why it matters." },
+          impact: { type: "integer", minimum: 1, maximum: 5 },
+          risk: { type: "integer", minimum: 1, maximum: 5 },
+          effort: { type: "integer", minimum: 1, maximum: 5 },
+        },
+      },
     },
     flakes: {
       type: "array", description: "Tests that are not the goal's own, failed or timed out, and passed alone or on a rerun.",
@@ -42,7 +54,18 @@ export const WORKER_SCHEMA = {
 };
 
 /** The factory worker's reply: result.md's text, the defaults as `<choice> -> <chose>`, follow-up titles, flake notes, the already-met evidence, and the question. */
-export interface WorkerReply { summary: string; defaults: string[]; followups: string[]; flakes: string[]; alreadyMet: string | null; question: string | null }
+/** A follow-up the worker found: `location` is a `path:line`, and impact, risk and effort are integers from 1 to 5. */
+export interface Followup { title: string; location: string; saw: string; why: string; impact: number; risk: number; effort: number }
+
+export interface WorkerReply { summary: string; defaults: string[]; followups: Followup[]; flakes: string[]; alreadyMet: string | null; question: string | null }
+
+/** A follow-up, or null when it has no title, no `path:line` location, or a score that is not an integer from 1 to 5. */
+function followup(f: any): Followup | null {
+  const [title, location, saw, why] = [f?.title, f?.location, f?.saw, f?.why].map(line);
+  const [impact, risk, effort] = [f?.impact, f?.risk, f?.effort];
+  if (!title || !/[\w.-]+:\d+/.test(location) || ![impact, risk, effort].every((n) => Number.isInteger(n) && n >= 1 && n <= 5)) return null;
+  return { title, location, saw, why, impact, risk, effort };
+}
 
 /** The worker's structured output, or why it does not do. */
 export function parseWorker(raw: any): WorkerReply | string {
@@ -53,7 +76,7 @@ export function parseWorker(raw: any): WorkerReply | string {
   return {
     summary: raw.summary,
     defaults: list(raw.defaults).map((d) => `${line(d?.choice)} -> ${line(d?.chose)}`),
-    followups: list(raw.followups).map((f) => line(f?.title)).filter(Boolean),
+    followups: list(raw.followups).map(followup).filter((f): f is Followup => f !== null).slice(0, 3),
     flakes: list(raw.flakes).map((f) => `${line(f?.file)} > ${line(f?.name)}: ${line(f?.what)}`),
     alreadyMet: raw.already_met ? line(raw.already_met.evidence) || "no reason given" : null,
     question: line(raw.question) || null,

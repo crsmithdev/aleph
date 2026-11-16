@@ -96,10 +96,17 @@ test("parseReview names the failed clauses as the reason, and gives review.json 
 
 test("parseWorker turns the worker's fields into the run's facts, and a reply with none into a reason", () => {
   expect(parseWorker({
-    summary: "Done.", defaults: [{ choice: "which colour?", chose: "blue" }], followups: [{ title: "paint the fence" }],
+    summary: "Done.", defaults: [{ choice: "which colour?", chose: "blue" }], followups: [{ title: "paint the fence", location: "a.ts:3", saw: "it  fails", why: "it breaks a run", impact: 3, risk: 2, effort: 1 }],
     flakes: [{ file: "a.test.ts", name: "slow one", what: "timed out" }], already_met: { evidence: "abc123 has it" }, question: "which clause wins?",
-  })).toEqual({ summary: "Done.", defaults: ["which colour? -> blue"], followups: ["paint the fence"], flakes: ["a.test.ts > slow one: timed out"], alreadyMet: "abc123 has it", question: "which clause wins?" });
+  })).toEqual({ summary: "Done.", defaults: ["which colour? -> blue"], followups: [{ title: "paint the fence", location: "a.ts:3", saw: "it fails", why: "it breaks a run", impact: 3, risk: 2, effort: 1 }], flakes: ["a.test.ts > slow one: timed out"], alreadyMet: "abc123 has it", question: "which clause wins?" });
   expect(parseWorker({ summary: "x", defaults: [], followups: [], flakes: [], already_met: null, question: null })).toMatchObject({ alreadyMet: null, question: null });
   expect(parseWorker(undefined)).toBe("no structured output");
   expect(parseWorker({ defaults: [] })).toBe("no summary");
+});
+
+test("parseWorker drops a follow-up with no path:line or a bad score, and keeps at most 3", () => {
+  const ok = (n: number) => ({ title: `fix ${n}`, location: `a.ts:${n}`, saw: "s", why: "w", impact: 3, risk: 2, effort: 1 });
+  const reply = (followups: object[]) => parseWorker({ summary: "x", defaults: [], followups, flakes: [], already_met: null, question: null }) as { followups: { title: string }[] };
+  expect(reply([ok(1), { ...ok(2), location: "a.ts" }, { ...ok(3), location: "see a.ts" }, { ...ok(4), effort: 6 }, { ...ok(5), impact: 2.5 }]).followups.map((f) => f.title)).toEqual(["fix 1"]);
+  expect(reply([1, 2, 3, 4, 5].map(ok)).followups.map((f) => f.title)).toEqual(["fix 1", "fix 2", "fix 3"]);
 });

@@ -261,4 +261,11 @@ describe("the worker brief", () => {
     expect(b).not.toContain("sandbox");
   });
 
+  test("a factory brief asks for each follow-up's evidence and score, and limits what it may be", () => {
+    const jf = jobWith({}, { "spec.md": "# Spec\n\n## Edit surface\n\n- ui/views/issues.js\n" });
+    const b = brief(jf.id, run({ job: jf.id }), { ...repo, sandbox: true } as Repo).replace(/\s+/g, " ");
+    expect(b).toContain("Add at most 3 per run, and only a bug, a doc that misleads, or a check that misses: never taste or a cosmetic item.");
+    expect(b).toContain("evidence bar of skills/code-review");
+    expect(b).toContain("Give its title, its `path:line`, what you saw, why it matters, and its impact, risk and effort, each an integer from 1 to 5.");
+  });
 });

@@ -10,11 +10,11 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSyn
 import { homedir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { file as fileIssues, note, noteFlake, priorityOf, reader } from "../../../issues/lib/store.ts";
+import { file as fileIssues, note, noteFlake, reader } from "../../../issues/lib/store.ts";
 import { filing } from "../transitions/filing.ts";
 import { callAgent, resultOf, stallReason, type Reply } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
-import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
+import { heldRule, parseReview, type Followup, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, issueKeyOf, loadRegistry, newsLine, readEnvFile, tell, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -432,7 +432,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? w.text : reply.summary);
   const facts: Partial<Outcome> = w.cost !== undefined ? { cost: w.cost } : {};
   if (typeof reply !== "string") {
-    Object.assign(facts, { defaults: reply.defaults, followups: reply.followups }, reply.alreadyMet !== null ? { alreadyMet: reply.alreadyMet } : {}, reply.question !== null ? { question: reply.question } : {});
+    Object.assign(facts, { defaults: reply.defaults, followups: reply.followups.map((f) => f.title) }, reply.alreadyMet !== null ? { alreadyMet: reply.alreadyMet } : {}, reply.question !== null ? { question: reply.question } : {});
     await fileFollowups(repo, run, reply.followups);
     noteFlakes(repo, run, reply.flakes);
   }
@@ -702,27 +702,32 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
 }
 
 /**
- * A worker's `followups` each become a `task` with `source: worker`: the title writer's title, and the run and the whole line in its request,
- * filed parked in one store commit, so Chris picks which to open. An empty line such as "none" files nothing, and a line on the topic of an open or parked issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
+ * A worker's `followups` (at most 3) each become a `task` with `source: worker`: the title writer's title, and the run, the location, what the worker saw, why it matters and the score in its request,
+ * filed parked in one store commit, so Chris picks which to open. The priority comes from the score, (impact + risk) x (6 - effort): high at 30 or more, medium from 15, else low. An empty title such as "none" files nothing, and a title on the topic of an open or parked issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
  */
-export async function fileFollowups(repo: Repo, run: Run, lines: string[]): Promise<void> {
+export async function fileFollowups(repo: Repo, run: Run, followups: Followup[]): Promise<void> {
   const lists = reader();
   const open = (lists.list(repo.key)?.items ?? []).filter((i) => ["open", "parked"].includes(issues.status(i)));
-  const fresh: string[] = [];
-  for (const title of lines) {
-    if (/^(none|n\/a|nothing)\.?$/i.test(title.trim())) continue;
-    // Chris paused flake follow-ups on 1 Nov 2026: a line about a flake is a tracker note, and files no issue.
-    if (/\bflak/i.test(title)) { noteFlakes(repo, run, [title]); continue; }
-    if (fresh.some((t) => sameTopic(t, title))) continue;
-    const same = open.find((i) => sameTopic(i.title, title));
-    if (same) note(repo, issues.refOf(same), `also met in run ${run.name}: ${title}`);
-    else fresh.push(title);
+  const fresh: Followup[] = [];
+  for (const f of followups) {
+    if (/^(none|n\/a|nothing)\.?$/i.test(f.title.trim())) continue;
+    // Chris paused flake follow-ups on 1 Nov 2026: a title about a flake is a tracker note, and files no issue.
+    if (/\bflak/i.test(f.title)) { noteFlakes(repo, run, [f.title]); continue; }
+    if (fresh.some((g) => sameTopic(g.title, f.title))) continue;
+    const same = open.find((i) => sameTopic(i.title, f.title));
+    if (same) note(repo, issues.refOf(same), `also met in run ${run.name}: ${f.title}`);
+    else fresh.push(f);
   }
-  if (!fresh.length) return;
-  const on = onOf(run);
-  const hit = on === undefined ? undefined : lists.item(repo.key, on), priority = hit ? priorityOf(hit) : "medium";
-  const titles = await Promise.all(fresh.map(writeTitle));
-  fileIssues(repo, `followups from ${run.name}`, fresh.map((line, n) => ({ title: titles[n], kind: "task", priority, source: "worker" as const, parked: true, request: `A follow-up the worker met in run ${run.name}:\n\nFOLLOWUP: ${line}` })), "worker", filing);
+  const files = fresh.slice(0, 3);
+  if (!files.length) return;
+  const titles = await Promise.all(files.map((f) => writeTitle(f.title)));
+  fileIssues(repo, `followups from ${run.name}`, files.map((f, n) => {
+    const score = (f.impact + f.risk) * (6 - f.effort);
+    return {
+      title: titles[n], kind: "task", priority: score >= 30 ? "high" : score >= 15 ? "medium" : "low", source: "worker" as const, parked: true,
+      request: `A follow-up the worker met in run ${run.name}:\n\nFOLLOWUP: ${f.title}\nLocation: ${f.location}\nSeen: ${f.saw}\nWhy it matters: ${f.why}\nScore: ${score} (impact ${f.impact}, risk ${f.risk}, effort ${f.effort})`,
+    };
+  }), "worker", filing);
 }
 
 const PATH = /[\w.-]+(?:\/[\w.-]+)+|[\w-]+\.(?:ts|js|md|json)\b/g;

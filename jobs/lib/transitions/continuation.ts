@@ -52,8 +52,10 @@ Nobody answers questions during the run. Your reply ends with structured output;
 fact you report is one of its fields. For a choice the Oracle does not settle, take the
 answer you would recommend and add it to \`defaults\`. If you cannot meet a clause of the
 Oracle, stop and set \`question\` to a question that names the clause; else \`question\` is
-null. Never defer that clause with \`defaults\` or \`followups\`. For work you find but do not do, add a title to \`followups\`; it must not
-cover anything the Oracle names.
+null. Never defer that clause with \`defaults\` or \`followups\`. For work you find but do not do, add a follow-up to \`followups\`; it must not
+cover anything the Oracle names. Add at most 3 per run, and only a bug, a doc that misleads, or a check that misses: never taste or a cosmetic item.
+Hold each to the evidence bar of skills/code-review: it is real, and you proved it by a run or by the code you read. Give its title, its \`path:line\`,
+what you saw, why it matters, and its impact, risk and effort, each an integer from 1 to 5.
 A test that is not the goal's own, fails or times out, and passes alone or on a rerun is
 a flake: add it to \`flakes\` and not to \`followups\`.
 Check such a failure once, by running its file alone, then go on: do not run the full
