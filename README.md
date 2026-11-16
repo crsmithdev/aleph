@@ -55,6 +55,13 @@ aleph-ui --port 3020                                                  # prints t
 
 Tracing is off until you add Langfuse keys; everything else works without them. To let the factory build a repo, set `sandbox: true` in its project file, `~/.aleph/items/projects/<n>/project.md` and start the timers in [Factory](docs/factory.md).
 
+The Status page also runs as text in a [herdr](https://herdr.dev) side panel. It redraws every 10 s and on a resize; `q` or Ctrl-C quits.
+
+```bash
+herdr plugin link ~/aleph/herdr
+herdr plugin pane open --plugin aleph.status --entrypoint status --placement split --direction right --width 30% --no-focus
+```
+
 A change to a `SKILL.md` applies at once. After you change a hook, run `/reload-plugins`. To try a checkout in one session only, run `claude --plugin-dir <path>`.
 
 ## Docs

@@ -1,0 +1,12 @@
+# The Status page as text, for a side panel.
+id = "aleph.status"
+name = "Aleph Status"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "The factory's Status page as plain terminal text"
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "status"
+title = "Status"
+command = ["bun", "status.ts"]
