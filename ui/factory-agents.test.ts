@@ -62,18 +62,34 @@ test("the tiles are usage, OpenRouter spend for the window's UTC period, worker 
   const keys = (h: string) => [...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1]);
   const m = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
-  expect(keys(h)).toEqual(["Usage", "Spend", "Worker slots", "Backends"]);
+  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Worker slots", "Backends"]);
   for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", '<span class="event-dot fine" aria-hidden="true"></span>Local server: up', '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>$1.50</b>");
   const loading = renderFactoryAgents(S, D);
-  expect(loading).toContain('<span class="sr">Loading</span></b><span class="q m" title="OpenRouter">');
   expect(loading).toContain('<span class="sr">Loading</span></b><span class="lights">');
   expect(loading).toContain("Loading the models…");
   // A failed models fetch is null, not a spinner.
   const failed = renderFactoryAgents(S, D, "live", "week", null);
-  expect(failed).toContain('<b>–</b><span class="q m" title="OpenRouter">');
   expect(failed).toContain("Local server: –");
   expect(failed).not.toContain("Loading the models");
+});
+
+/** The HTML of one scorecard tile alone: from its key to the next tile. */
+const tile = (h: string, k: string) => {
+  const at = h.indexOf(`<span class="k">${k}</span>`), end = h.indexOf('<div class="tile sc"', at);
+  return h.slice(at, end < 0 ? undefined : end);
+};
+
+test("the OpenRouter tile alone holds the window's cost and OpenRouter's light", () => {
+  const m = (down: string[]) => ({ models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down, spend: { day: 1.5, week: 17.54, month: 18 } });
+  const down = tile(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"])), "OpenRouter");
+  expect(down).toContain("<b>$17.54</b>");
+  expect(down).toContain('<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down');
+  expect(tile(renderFactoryAgents(S, D, "live", "week", m([])), "OpenRouter")).toContain('<span class="event-dot fine" aria-hidden="true"></span>OpenRouter: up');
+  const failed = tile(renderFactoryAgents(S, D, "live", "week", null), "OpenRouter");
+  expect(failed).toContain("<b>–</b>");
+  expect(failed).toContain("OpenRouter: –");
+  expect(tile(renderFactoryAgents(S, D), "OpenRouter")).toContain('<span class="sr">Loading</span>');
 });
 
 test("no usage data shows a dash; while the speed data loads the page says so", () => {

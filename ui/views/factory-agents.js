@@ -9,11 +9,12 @@ const share = (v) => pct(v == null ? v : v * 100);
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
 const SPEND = { hour: "day", day: "day", week: "week", month: "month" };
 
-/** The Spend tile: what OpenRouter charged, read from OpenRouter, for the window's UTC period. */
-function spendCard(m, win) {
-  if (m === undefined) return statCard({ k: "Spend", v: "–", note: "OpenRouter", loading: true });
+/** The OpenRouter tile: what OpenRouter charged for the window's UTC period, and its up or down light. */
+function openRouterCard(m, win) {
+  const up = m ? !m.down.includes("deepseek-v4.1-flash") : null;
   const v = m?.spend?.[SPEND[win] ?? SPEND.week];
-  return statCard({ k: "Spend", v: v == null ? "–" : money(v), note: "OpenRouter" });
+  const extra = `<span class="lights">${statusLight(up == null ? "" : up ? "fine" : "alert", `OpenRouter: ${up == null ? "–" : up ? "up" : "down"}`)}</span>`;
+  return statCard({ k: "OpenRouter", v: v == null ? "–" : money(v), note: "Spend", extra, loading: m === undefined });
 }
 
 /** The Backends tile: how many backends are up, with a light for the local server and one for OpenRouter. */
@@ -27,7 +28,7 @@ function backendsCard(m) {
 
 function scorecard(s, m, win) {
   const f = s.factory;
-  return usageCard(s) + spendCard(m, win) +
+  return usageCard(s) + openRouterCard(m, win) +
     statCard({ k: "Worker slots", v: count(f.liveRuns ?? 0), v2: count(f.liveCap), q: ["in use", "cap"] }) +
     backendsCard(m);
 }
