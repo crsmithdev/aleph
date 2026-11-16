@@ -106,7 +106,7 @@ test("no other file defines a state list", () => {
 });
 
 test("the name table gives one display name for each step and role", () => {
-  expect([n.NAMES.build, n.NAMES["spec-check"], n.NAMES.planner]).toEqual(["Implement", "Spec Check", "Planner"]);
+  expect([n.NAMES.build, n.NAMES.planner]).toEqual(["Implement", "Planner"]);
   for (const k of Object.keys(n.NAMES)) expect(k).toMatch(/^[a-z][a-z-]*$/);
 });
 

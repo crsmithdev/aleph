@@ -283,9 +283,9 @@ const addNote = post((b, params) => {
 
 /**
  * An asking issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the Ask leaves; intake runs again at once),
- * `rerun` is `aleph issue decide`, `checked` is `aleph issue done`.
+ * `rerun` is `aleph issue decide`.
  */
-const answer = (verb: "note" | "decide" | "done", text: string) => post((_b, params) => {
+const answer = (verb: "note" | "decide", text: string) => post((_b, params) => {
   const { repo, n, item } = target(params);
   if (todos.status(item) !== "open" || !awaitsChris(refIn(repo.key, item))) fail(409, "this issue is not waiting for the user");
   return aleph(["issue", verb, "--", repo.key, String(n), text]);
@@ -304,7 +304,6 @@ const core = (approved: boolean) => post(async (b, params) => {
 export const routes: Routes = {
   "POST /api/issues/:id/retriage": answer("note", "Chris: run intake again"),
   "POST /api/issues/:id/rerun": answer("decide", "Chris: run it again"),
-  "POST /api/issues/:id/checked": answer("done", "Chris: checked on the host"),
   "POST /api/issues/:id/run": runNow,
   "POST /api/issues/:id/unblock": unblock,
   "POST /api/issues/:id/edit": edit,

@@ -30,7 +30,7 @@ export type Role = (typeof ROLES)[number];
 export type AgentRole = Exclude<Role, "build" | "plain" | "land" | "review" | "recheck">;
 /** One display name for each pipeline step and agent role. */
 export const NAMES: Record<string, string> = {
-  lead: "Lead Time", intake: "Intake", queue: "Queue", triage: "Triage", plan: "Plan", "spec-check": "Spec Check", build: "Implement",
+  lead: "Lead Time", intake: "Intake", queue: "Queue", triage: "Triage", plan: "Plan", build: "Implement",
   review: "Review", recheck: "Recheck", land: "Land", worker: "Worker", planner: "Planner", merge: "Merge", reviewer: "Reviewer",
   director: "Director", monitor: "Monitor", lens: "Lens", housekeeper: "Housekeeper", maintainer: "Maintainer", title: "Title", judge: "Judge",
 };

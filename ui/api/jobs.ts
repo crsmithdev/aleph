@@ -1,10 +1,10 @@
-/** `GET /api/jobs`, `/api/jobs/:id`, its diff and logs, and `/api/issues/:id/jobs`: the Jobs and Job views' data. `:id` is a job key, `job.6802`. */
+/** `GET /api/jobs`, `/api/jobs/:id`, and its diff and logs: the Jobs and Job views' data. `:id` is a job key, `job.6802`. */
 import { roundsOf, stepOf, type Step as NextStep } from "../../jobs/lib/records/record.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { allRuns, isBuild, isOpen, issueKeyOf, loadRegistry, onOf, runOfJob, runsByIssue, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, isBuild, isOpen, issueKeyOf, loadRegistry, onOf, runOfJob, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
@@ -12,7 +12,7 @@ import type { Routes } from "../server.ts";
 import { currentFit, runShare, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
 import { resultContent } from "../../lib/toolresult.ts";
-import { issueHref, parseId, shownId } from "../../lib/naming.ts";
+import { issueHref, shownId } from "../../lib/naming.ts";
 import { isSection, readSection } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
@@ -231,16 +231,6 @@ export const routes: Routes = {
       .sort((a, b) => Date.parse(b.run.started) - Date.parse(a.run.started));
     const page = hit.slice(0, limit);
     return Response.json({ jobs: rowsOf(page), next: hit.length > limit ? page.at(-1)!.run.started : null });
-  },
-
-  // The jobs of one issue and its sub-issues, newest first.
-  "GET /api/issues/:id/jobs": (_req, params, url) => {
-    loadRegistry();
-    const p = parseId(params.id);
-    if (!p || !repoIn(p.repo, projectOf(url))) return Response.json({ error: "no such issue" }, { status: 404 });
-    const all = allRuns();
-    const mine = [...(runsByIssue(all.filter((e) => e.run.repo === p.repo)).get(`issue.${p.n}`) ?? [])].reverse();
-    return Response.json({ jobs: rowsOf(mine) });
   },
 
   "GET /api/jobs/:id": async (_req, params, url) => {

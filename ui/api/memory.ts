@@ -19,7 +19,7 @@ import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
 import { tickRows, type TickRow } from "../../jobs/lib/gates/factory-status.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { backlinks, coreNotes, KINDS, linkTargets, links, lintVault, loadVault, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { backlinks, coreNotes, linkTargets, links, lintVault, loadVault, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 
@@ -28,24 +28,6 @@ const scopeOf = (n: Note) => String(n.fm.scope ?? "");
 const inScope = (project: string | null) => (n: Note) => memoryIn(scopeOf(n), project);
 const count = (xs: string[]) => Object.fromEntries([...new Set(xs)].sort().map((x) => [x, xs.filter((y) => y === x).length]));
 const json = (body: unknown, status = 200) => Response.json(body, { status });
-
-/** Home's `## Section` headings, each with its `- [[Title]] — hook` lines. Entries outside the project's scope are dropped. */
-function homeSections(notes: Note[], keep: (n: Note) => boolean, project: string | null) {
-  const home = notes.find((n) => n.rel === "Home.md");
-  if (!home) return [];
-  const targets = linkTargets(notes);
-  const sections: { heading: string; entries: { title: string; hook: string }[] }[] = [];
-  for (const line of home.body.split("\n")) {
-    const h = /^##\s+(.*?)\s*$/.exec(line);
-    if (h) { sections.push({ heading: h[1], entries: [] }); continue; }
-    const m = /^\s*-\s*\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]\s*(?:[—–-]+\s*)?(.*)$/.exec(line);
-    if (!m || !sections.length) continue;
-    const hit = targets.get(m[1].trim().toLowerCase());
-    if (project && !(hit && keep(hit))) continue;
-    sections.at(-1)!.entries.push({ title: hit?.title ?? m[1].trim(), hook: m[2].trim() });
-  }
-  return project ? sections.filter((s) => s.entries.length) : sections;
-}
 
 /** Every line the vault's CLI appended to its daily notes, newest first; `at` is the line's local time as ISO UTC. */
 function opLines(root: string) {
@@ -135,10 +117,7 @@ async function overview(url: URL): Promise<Response> {
     project,
     exists: all.length > 0,
     total: wiki.length,
-    byKind: { ...Object.fromEntries(KINDS.map((k) => [k, 0])), ...count(wiki.map((n) => String(n.fm.kind ?? "none"))) },
-    byScope: count(wiki.map(scopeOf)),
     scopes: [...new Set(wikiNotes(all).map(scopeOf).filter(Boolean))].sort(),
-    home: homeSections(all, keep, project),
     lint: { refuse: lint.refuse.filter(mine), warn: lint.warn.filter(mine) },
     writes: recentWrites(root, all, keep, project),
   };

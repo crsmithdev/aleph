@@ -97,8 +97,6 @@ test("the search lists the pages in the factory's episodes folder", async () => 
 test("?project= keeps only that project's data", async () => {
   const m: any = await (await at("/api/memory?project=other")).json();
   expect(m.total).toBe(1);
-  expect(m.byScope).toEqual({ other: 1 });
-  expect(m.home.map((s: any) => s.heading)).toEqual(["Gotchas"]);
   expect(m.writes.map((w: any) => w.text)).toEqual(["write [[Other trap]] — why"]);
   const s: any = await (await at("/api/memory/search?q=bun&project=other")).json();
   expect(s.results.filter((r: any) => r.source === "note").map((r: any) => r.title)).toEqual(["Other trap"]);
@@ -328,7 +326,7 @@ test("/api/memory lists each scope's core lines and the start-context bytes agai
 
 
 const it = (over: object) => ({ type: "semantic", source: "note", key: "N", title: "N", text: "claim", scope: "aleph", at: "2026-10-01", read: null, effect: "Reaches a session when vault recall returns it.", ...over });
-const page = { exists: true, total: 1, byKind: {}, byScope: {}, scopes: ["aleph", "other"], home: [], lint: { refuse: [], warn: [] }, writes: [], notes: [row({ title: "N", read: "2026-11-03" }), row({ title: "Never" })],
+const page = { exists: true, total: 1, scopes: ["aleph", "other"], lint: { refuse: [], warn: [] }, writes: [], notes: [row({ title: "N", read: "2026-11-03" }), row({ title: "Never" })],
   start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c" }] } } };
 
 test("the page is the search, the freshness filter, six type tiles, the results and the inspector, then health", () => {

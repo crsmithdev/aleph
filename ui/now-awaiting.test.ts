@@ -58,7 +58,7 @@ test("the deny and answer inputs render hidden", () => {
 /** The one stuck card of a state whose only stuck job is `j`. */
 const stuckCard = (j: object): string => {
   const s = { ...state, asks: [], stuck: [job(j)], factory: { ...state.factory, health: [] } };
-  return view.renderNeeds(s).match(/<article[^>]*data-kind="stuck"[^]*?<\/article>/)![0];
+  return withAttn(s).match(/<article[^>]*data-kind="stuck"[^]*?<\/article>/)![0];
 };
 /** The card's HTML outside its one Details fold, and that fold. */
 const outsideDetails = (card: string): [string, string] => {
@@ -109,43 +109,9 @@ test("a stuck job with a blocker shows the hold action and the blocker id, and t
 
 test("an ask and a stuck run are one Alerts section, and the stuck card has the Ask card structure in the red tone", () => {
   const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "s" } }], []), stuck: [job({ name: "aleph-30", state: "failed", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
-  const h = view.renderNeeds(s);
-  expect(h).toContain('<h2 id="h-needs">Alerts</h2><span class="count">2</span>');
+  const h = withAttn(s);
   expect(h).not.toContain("Stuck or failed");
   const stuck = h.match(/<article[^>]*data-kind="stuck"[^]*?<\/article>/)![0];
   expect(stuck).toContain('data-card="unstick"');
   expect(stuck).toMatch(/<div class="ask-box"><div class="ih">[^]*<details class="ask-fold"/);
-});
-
-/** The one error card of a state whose only trouble is in `factory`. */
-const errorCard = (o: object): string => {
-  const s = { ...state, asks: [], stuck: [], factory: { ...state.factory, health: [], ...o } };
-  return view.renderNeeds(s).match(/<article[^>]*data-kind="error"[^]*?<\/article>/)![0];
-};
-
-test("an error card for a red main says fix and the line, in place of the Fix prefix", () => {
-  const card = errorCard({ health: [{ text: "health: aleph main is red at abc1234: tsc", kind: "alert", key: "red-main" }] });
-  expect(card).toContain("fix");
-  expect(card).toContain("aleph main is red at abc1234: tsc");
-  expect(card).not.toContain("Fix: ");
-  expect(card).not.toContain("Check: ");
-});
-
-test("an error card for a stopped tick says check and the line, in place of the Check prefix", () => {
-  const card = errorCard({ nextTick: null });
-  expect(card).toContain("check");
-  expect(card).toContain("the factory tick has stopped");
-  expect(card).not.toContain("Check: ");
-});
-
-test("an error card has no situation line, because the line it would hold is empty", () => {
-  for (const o of [{ health: [{ text: "health: aleph main is red at abc1234: tsc", kind: "alert", key: "red-main" }] }, { nextTick: null }]) {
-    expect(errorCard(o)).not.toContain('class="situation"');
-  }
-});
-
-test("an alert health line makes an error card and a warn line makes none", () => {
-  const cards = (kind: string) => view.renderNeeds({ ...state, asks: [], stuck: [], factory: { ...state.factory, health: [{ text: "health: x is wrong", kind }] } }).match(/data-kind="error"/g)?.length ?? 0;
-  expect(cards("alert")).toBe(1);
-  expect(cards("warn")).toBe(0);
 });

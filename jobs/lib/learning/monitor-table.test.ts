@@ -16,7 +16,7 @@ function run(o: Partial<Run> & { role: Run["role"]; started: string }): Entry {
   const id = `r${++n}`;
   return { id, folder: `/x/${id}`, run: { n, job: id, name: o.target ?? id, state: "done", told: true, ...o } as Run };
 }
-const empty: Sources = { runs: [], holds: [], specChecks: [], items: [], storeLog: [], flakes: [], trackers: [], usage: [] };
+const empty: Sources = { runs: [], holds: [], items: [], storeLog: [], flakes: [], trackers: [], usage: [] };
 
 describe("stages", () => {
   const runs = [
@@ -33,7 +33,7 @@ describe("stages", () => {
     // Out of both windows.
     run({ role: "build", target: "issue.0", started: at("2026-10-01", 9), state: "passed", cost: 100 }),
   ];
-  const t = measure({ ...empty, runs, specChecks: [{ at: at(DAY, 7), name: "p-1", cost: 0.5 }, { at: at(DAY, 7, 5), name: "p-1", cost: 0.5 }] }, DAY, Date.parse(at(DAY, 23)));
+  const t = measure({ ...empty, runs }, DAY, Date.parse(at(DAY, 23)));
   const row = (stage: string, w = t.today) => w.stages.find((s) => s.stage === stage);
 
   test("runs per item, runs with no usable result, cost, the median time and the p90; a live run is left out", () => {
@@ -52,9 +52,8 @@ describe("stages", () => {
     expect(row("director")).toMatchObject({ runs: 2, items: 2, unusable: 0 });
   });
 
-  test("the reviewer is a stage of its own, and its error is no usable result; a spec check has only its cost", () => {
+  test("the reviewer is a stage of its own, and its error is no usable result", () => {
     expect(row("review")).toMatchObject({ runs: 2, items: 1, unusable: 1, cost: 1 });
-    expect(row("spec-check")).toEqual({ stage: "spec-check", runs: 2, items: 1, unusable: null, cost: 1, minutes: null, p90: null });
   });
 
   test("a review that records no cost adds none to the review row, and its build keeps the whole run cost", () => {
@@ -70,7 +69,7 @@ describe("stages", () => {
 
   /** The review row of `runs` on the day. */
   const reviewRow = (runs: Entry[]) =>
-    stageRows({ runs, specChecks: [] }, Date.parse(at(DAY, 0)), Date.parse(at("2026-10-21", 0))).find((s) => s.stage === "review");
+    stageRows({ runs }, Date.parse(at(DAY, 0)), Date.parse(at("2026-10-21", 0))).find((s) => s.stage === "review");
 
   test("a build whose record holds the reviewer counts once, not once more for the review job that made it", () => {
     const b = run({ role: "build", target: "issue.7", started: at(DAY, 9), ended: at(DAY, 9, 10), state: "passed", cost: 2, review: { call: "passed", seconds: 90, cost: 0.5 } });
@@ -93,7 +92,6 @@ describe("stages", () => {
   test("the table puts the day's value first and the trailing mean per day in brackets", () => {
     const text = renderTable(t);
     expect(text).toContain("| build | 3 (0.3) | 1.5 (2) | 1, 33% (50%) | $5.00 ($2.00) | $2.50 ($14.00) | 20 (40) |");
-    expect(text).toContain("| spec-check | 2 (0) | 2 (-) | - |");
   });
 
   test("the Not measured list keeps its other lines and no longer names the cost of the reviewer", () => {

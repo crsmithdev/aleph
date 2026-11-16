@@ -79,7 +79,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(await securityFacts
 
 test("the body of /api/automation has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "capEnv", "gated", "held", "log", "metrics", "monitor", "now", "repoHeld", "rules", "schedules", "settings"]);
+  expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "capEnv", "held", "log", "metrics", "monitor", "now", "repoHeld", "rules", "schedules", "settings"]);
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) { expect(r.mode).not.toBe(""); expect(r.mode).toBe(ASK_REASONS[r.reason].always); }
@@ -90,18 +90,16 @@ test("the body of /api/automation has every section, one rule per Ask reason wit
   expect(d.repoHeld).toEqual([{ repo: "held", held: ["src/auth/**"] }]);
 });
 
-test("the body names the held backend and the line it holds with, and the backend gate row binds while the hold is up", async () => {
+test("the body names the held backend and the line it holds with", async () => {
   const why = "API Error: 402 This request would exceed your available credits";
   try {
     putJson("state", "backend-hold", { via: "openrouter", why, since: ago(10) });
     const d: any = await body();
     expect(d.backend).toEqual({ via: "OpenRouter", why });
-    expect(d.gated).toEqual({ gate: "waiting", why: `waits for OpenRouter: ${why}`, text: `Waiting for OpenRouter: ${why}` });
   } finally { putJson("state", "backend-hold", null); }
-  // No hold: the body names no backend, and no factory gate binds.
+  // No hold: the body names no backend.
   const d: any = await body();
   expect(d.backend).toBeNull();
-  expect(d.gated).toBeNull();
 });
 
 /** An entry as one line: subject, object, action and detail. */
@@ -200,14 +198,13 @@ test("rules() gives each reason row its timeout minutes and no-answer action, an
 });
 
 const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, card: "decide", label: "Decide", headline: `t ${id}`, tag: "", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
-  actions: [{ act: "checked", label: "Mark it checked", hint: "Records it.", primary: true, path: `/api/issues/${id}/checked`, body: {}, recommended: false }], details: {}, repo: "r" });
+  actions: [], details: {}, repo: "r" });
 
 const data = () => ({
   now: new Date(NOW).toISOString(),
   schedules: [{ name: "tick", last: null, result: null }],
   factory: { paused: false, liveRuns: 5, liveCap: 5, runCap: 3, runStarts: 2, capEnv: { live: false, run: false } },
   metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { goals: 2, hours: 3 } },
-  gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
@@ -509,7 +506,7 @@ test("the view is Automation at #/automation in the Factory group; #/gates redir
 
 test("the Automation page has no explaining aside; the controls panel holds the cap forms and no Pause button, before Held paths, each full width", () => {
   for (const paused of [false, true]) {
-    const h = gates.renderGates({ ...data(), gated: null, factory: { ...data().factory, paused } });
+    const h = gates.renderGates({ ...data(), factory: { ...data().factory, paused } });
     const head = h.slice(h.indexOf('<header class="ph">'), h.indexOf("</header>"));
     expect(head).not.toContain("data-act");
     expect(head.indexOf('<select name="project"')).toBeGreaterThan(-1);

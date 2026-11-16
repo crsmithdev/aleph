@@ -256,7 +256,6 @@ test("classify: one run of each class, with its cause", () => {
   const d = speed("day", now);
   expect(d.classes.map((c) => c.key)).toEqual([...CLASSES]);
   expect(d.issues.week).toBeNull();
-  expect(d.hasWeek).toBe(false);
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
 

@@ -55,8 +55,8 @@ A URL names the data it returns in the terms of `docs/naming.md`. An action is a
 | `POST /api/automation/caps`, `/schedules`, `/rules/:reason/grant`, `/rules/:reason/revoke` | Changes a cap, a schedule or a standing rule |
 | `POST /api/proposals/:id/approve`, `/decline` | Decides a proposal |
 | `GET /api/issues` | The Issues page rows, with stage, job count and cost |
-| `GET /api/issues/:id`, `/api/issues/:id/jobs` | One issue by its short ID (`a1430`), and its jobs |
-| `POST /api/issues/:id/{edit,note,media,decide,unblock,drop,retriage,rerun,checked}` | Acts on one issue |
+| `GET /api/issues/:id` | One issue by its short ID (`a1430`) |
+| `POST /api/issues/:id/{edit,note,media,decide,unblock,drop,retriage,rerun}` | Acts on one issue |
 | `GET /api/jobs` | One row per job, newest first; `?window=`, `?state=`, `?limit=` and `?before=` (the `next` of the last page) |
 | `GET /api/jobs/:id`, `/diff`, `/logs/:file` | One job by its ID (`a1430#2`, sent as `a1430%232`) |
 | `POST /api/jobs/:id/{land,recheck,drop,wait,answer}` | Acts on that job only |

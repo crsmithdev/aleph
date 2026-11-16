@@ -11,7 +11,7 @@ import { askCard } from "./views/cards.js";
 import { decided, denyReasons, endDraw, startDraw, when } from "./lib.js";
 import { shortId } from "../lib/naming.ts";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
-import { asksOf, prop, withFactory } from "./test-now.ts";
+import { asksOf, prop, withAttn, withFactory } from "./test-now.ts";
 import { job } from "./fixtures/status-state.ts";
 
 const CASE = (actions: string[], rec: string) => ({
@@ -135,7 +135,7 @@ test("an Ask still with the director shows its title and fixed text, and no butt
 });
 
 test("the id, priority, date and runtime sit inside the coloured box of an Ask card and of a stuck card", () => {
-  const stuck = view.renderNeeds({ asks: [], stuck: [job({ name: "aleph-30", state: "failed", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
+  const stuck = withAttn({ asks: [], stuck: [job({ name: "aleph-30", state: "failed", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
   for (const row of [askCard({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z"), stuck]) {
     const [before, box] = row.split('<div class="ask-box">');
     expect(before).not.toContain('class="ih"');

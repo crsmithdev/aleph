@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { renderHerald } from "./views/now.js";
 import { row, withFactory } from "./test-now.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, repoOf, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, fold, linkButton, actButton, postJson, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, wkText, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -181,8 +181,6 @@ test("chips gives labels as chips, nothing for none", () => {
 
 test("repoIdLink shows the short id", () => {
   setCodes({ aleph: "a" });
-  expect(repoOf("my-repo-5.1")).toBe("my-repo");
-  expect(repoOf("wt")).toBe("");
   expect(repoIdLink("aleph-5", "#/x")).toBe('<a class="idl" href="#/x">a5</a>');
   expect(repoIdLink("wt", "#/x")).toBe('<a class="idl" href="#/x">wt</a>');
   setCodes({});

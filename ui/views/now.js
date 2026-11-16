@@ -495,15 +495,6 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 const holdLine = (ev) => (ev ? [ev.action, contentText(ev)].filter(Boolean).join(" ") : "");
 
 
-/** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */
-export function renderNeeds(s) {
-  const asks = undecided(s.asks ?? []).map((i) => askCard(i, s.now)).concat(verdict(s).errors.map(errorRow));
-  if (!asks.length && !s.stuck.length) return "";
-  const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
-  return `<section id="needs" class="needs" aria-labelledby="h-needs">${sectionHead("Alerts", { id: "needs", count: asks.length + s.stuck.length })}` +
-    group("awaiting", asks.length, asks.join(""), list) + group("jobs-stuck", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), list) + `</section>`;
-}
-
 /** The agent line of a held or stuck job: a live run exists for it. */
 const agentLine = (j) => (j?.agent ? `<span class="agent">Agent working</span>` : "");
 /** One Jobs card in the compact size: the id, the title, one sentence of why, the buttons; `jobDetails` is the one Technical details behind it. */
@@ -546,9 +537,6 @@ const stuckRow = (s) => (j) => {
     agentLine(j) + jobDetails(s, j));
 };
 
-
-/** An error line as a card: the action word and the line, because the page has no action that fixes it. */
-const errorRow = (l) => alertCard("error", l.text, "", `${l.key === "red-main" ? "fix" : "check"} ${l.text}`, "");
 
 /** "10/28 14:05": the time of the state. */
 const renderAsOf = (s) => when(s.now);

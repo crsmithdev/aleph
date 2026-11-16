@@ -859,23 +859,10 @@ describe("POST /api/issues/:id/decide and deny", () => {
       expect((await at(`/api/issues/fac-${a}/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
       expect(askOf(`issue.${a}`)).toBeNull();
       expect(find(a).notes.at(-1)).toContain("run it again");
-      const b = capped();
-      expect((await at(`/api/issues/fac-${b}/checked`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
-      expect(todos.status(find(b))).toBe("done");
       const c = dotted();
       expect((await at(`/api/issues/fac-${c}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "no" }) })).status).toBe(200);
       expect(todos.status(find(c))).toBe("dropped");
       expect((await at(`/api/issues/fac-x.y/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(404);
-    });
-  });
-
-  test("marking a migrated host check as checked closes it as done", async () => {
-    const n = migrated("host-check", "input");
-    await withRealCli(async () => {
-      const r = await at(`/api/issues/fac-${n}/checked`, { method: "POST", headers: h, body: "{}" });
-      expect(r.status).toBe(200);
-      expect(todos.status(item(n))).toBe("done");
-      expect(item(n).notes.at(-1)).toContain("checked on the host");
     });
   });
 });

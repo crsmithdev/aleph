@@ -96,7 +96,6 @@ export interface Speed {
   classes: ClassStat[];
   notCounted: { runs: number; issues: number; hours: number };
   lost: { hours: number; share: number };
-  hasWeek: boolean;
   agents: Agents;
 }
 
@@ -660,7 +659,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     return repo && lists.list(repo) ? GONE : undefined;
   };
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
-  const stages = { rows: stageRows({ runs: entries, specChecks: [] }, since.getTime(), now.getTime()) };
+  const stages = { rows: stageRows({ runs: entries }, since.getTime(), now.getTime()) };
   for (const t of [...cls.classes.flatMap((c) => c.top), ...issues.usage]) {
     const [repo, n] = splitId(t.goal);
     const item = lists.item(repo, n);
@@ -711,7 +710,6 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     classes: cls.classes,
     notCounted: cls.notCounted,
     lost: cls.lost,
-    hasWeek: fit !== null,
     agents: agentStats(entries, since.getTime(), now.getTime(), BUCKETS[window].fine, LIVE_CAP(), undefined, Array.from({ length: BASELINE[window].n }, (_, i): [number, number] => [since.getTime() - (i + 1) * WINDOWS[window], now.getTime() - (i + 1) * WINDOWS[window]])),
     filed: { followups: filings.filter(followup).length, all: filings.length },
     flaky: recent.length,

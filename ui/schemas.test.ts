@@ -43,5 +43,5 @@ test("every route answers in its schema, or with { error } when it fails, and se
   // systemctl does not answer here, so the two timer schedules have no interval; the schema allows null for it.
   expect((await (await at("/api/automation")).json() as any).schedules.slice(0, 2).map((s: any) => s.every)).toEqual([null, null]);
   // The fixture serves these in full; the Langfuse routes fail there, and their tests check them with a fake Langfuse.
-  for (const p of ["/api/factory", "/api/automation", "/api/flow", "/api/issues", "/api/issues/:id", "/api/issues/:id/jobs", "/api/jobs", "/api/jobs/:id", "/api/projects", "/api/models", "/api/memory", "/api/memory/search"]) expect(fits).toContain(p);
+  for (const p of ["/api/factory", "/api/automation", "/api/flow", "/api/issues", "/api/issues/:id", "/api/jobs", "/api/jobs/:id", "/api/projects", "/api/models", "/api/memory", "/api/memory/search"]) expect(fits).toContain(p);
 });

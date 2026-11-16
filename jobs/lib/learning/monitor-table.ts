@@ -1,6 +1,6 @@
 /**
  * The monitor's table: what the factory did on one day, against the trailing 7 days, from the data that exists
- * (the ledger, the holds and spec-check files, the flake list, the work store's items and git history, and the
+ * (the ledger, the holds, the flake list, the work store's items and git history, and the
  * usage file). It reads and never writes. monitor.ts runs the reader agent on it and keeps the report; aleph-ui
  * loads this module for the Status panel, so it imports no transition and no agent call.
  *
@@ -32,7 +32,6 @@ export interface StoreChange { at: string; item: string; added: string[]; remove
 export interface Sources {
   runs: Entry[];
   holds: HoldRecord[];
-  specChecks: { at: string; name: string; cost: number }[];
   /** The items of the factory repos, each with its `<repo>-<ref>` name. */
   items: { name: string; item: issues.Issue }[];
   storeLog: StoreChange[];
@@ -94,7 +93,7 @@ const LEFT_OUT = [
 ];
 
 /** The table's stage order; a stage with no run is left out. */
-const STAGES = ["intake", "spec-check", "build", "review", "recheck", "land", "director", "monitor"];
+const STAGES = ["intake", "build", "review", "recheck", "land", "director", "monitor"];
 
 /** Local midnight of `day` (YYYY-MM-DD), in ms. */
 const dayStart = (day: string): number => new Date(`${day}T00:00:00`).getTime();
@@ -143,7 +142,7 @@ function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun
 }
 
 /** The stage table of `from`..`to`, in STAGES order. */
-export function stageRows(src: Pick<Sources, "runs" | "specChecks">, from: number, to: number): StageRow[] {
+export function stageRows(src: Pick<Sources, "runs">, from: number, to: number): StageRow[] {
   const by = new Map<string, { runs: number; items: Set<string>; unusable: number | null; cost: number | null; secs: number[] }>();
   const row = (stage: string, known: boolean) => {
     if (!by.has(stage)) by.set(stage, { runs: 0, items: new Set(), unusable: known ? 0 : null, cost: null, secs: [] });
@@ -156,13 +155,6 @@ export function stageRows(src: Pick<Sources, "runs" | "specChecks">, from: numbe
     if (x.unusable) s.unusable!++;
     if (x.cost !== null) s.cost = (s.cost ?? 0) + x.cost;
     if (x.secs !== null) s.secs.push(x.secs);
-  }
-  for (const c of src.specChecks) {
-    if (!inside(c.at, from, to)) continue;
-    const s = row("spec-check", false);
-    s.runs++;
-    s.items.add(c.name);
-    s.cost = (s.cost ?? 0) + c.cost;
   }
   return STAGES.filter((k) => by.has(k)).map((stage) => {
     const s = by.get(stage)!, med = quantile(s.secs, 0.5);
@@ -307,10 +299,6 @@ export function storeLog(dir = itemsDir()): StoreChange[] {
   return out.filter((c) => c.added.length || c.removed.length);
 }
 
-/** The spec checks of `records`: they ran before intake, and their cost is a `spec-check` event in the job record. */
-export const specChecksOf = (records: { issue: string; events: { kind: string; at: string; data?: unknown }[] }[]): Sources["specChecks"] =>
-  records.flatMap((r) => r.events.filter((e) => e.kind === "spec-check").map((e) => ({ at: e.at, name: r.issue, cost: (e.data as { cost: number }).cost })));
-
 /** The sources from disk. It fetches nothing and writes nothing. */
 export function readSources(): Sources {
   const keys = factoryKeys(), set = new Set(keys);
@@ -320,8 +308,6 @@ export function readSources(): Sources {
     // Runs of other repos are not the factory's; a run with no repo (explain, firefighter, director, monitor) is.
     runs: allRuns().filter((e) => !e.run.repo || set.has(e.run.repo)),
     holds: allHolds(),
-    // Nothing writes a spec-check event now.
-    specChecks: [],
     items,
     storeLog: storeLog(),
     flakes: flakes(),

@@ -4,7 +4,7 @@ import { setCodes } from "../lib/naming.ts";
 import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
 import { held, job, state } from "./fixtures/status-state.ts";
-import { asksOf, issue, withFactory } from "./test-now.ts";
+import { asksOf, issue, withAttn, withFactory } from "./test-now.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { pageHead } from "./lib.js";
 import { labelOf, verdict } from "../lib/status-words.ts";
@@ -187,8 +187,7 @@ test("a dead factory tick says the alert, in red", () => {
 test("the status-line links point at anchors in the rendered Alerts section", () => {
   const stuck = [job({ name: "aleph-1", state: "failed" })];
   const lede = view.renderLede({ ...calmState, stuck, asks: [{}] });
-  const needs = view.renderNeeds({ ...calmState, stuck, asks: [{ id: "a1", at: "2026-11-01T00:00:00Z", text: "x" }] });
-  const alerts = needs.split('<h2 id="h-needs">Alerts</h2>')[1] ?? "";
+  const alerts = withAttn({ ...calmState, stuck, asks: [{ id: "a1", at: "2026-11-01T00:00:00Z", text: "x" }] });
   const ids = [...lede.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
   expect(ids).toContain("jobs-stuck");
   for (const id of ids) expect(alerts).toContain(`id="${id}"`);

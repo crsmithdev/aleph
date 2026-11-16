@@ -9,7 +9,7 @@ The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with i
 1. **One token set, two themes.** Colours are custom properties on `:root` in `ui/app.css`, set again for dark by `@media (prefers-color-scheme: dark)` and by `:root[data-theme="dark"]`. A view that uses only tokens gets dark mode free. Light is lavender; dark is Palenight.
 2. **Shared helpers build the parts.** Views call `ui/lib.js`; the CSS is in `ui/app.css`. A fix in one helper fixes every page.
 3. **Meaning is a tone.** `run`, `done`, `need`, `stuck`, `quiet` or `parked`, from `tone()` in `ui/lib.js`. One state has one colour on a badge, a series and a card, so a reader learns it once. A tone comes only from `tone(state)`. A name that is not a state, such as an actor, is a `chip()`. A chart series for a state takes the colour of `tone(state)`.
-4. **Numbers are tabular.** Tabular figures, at the right, so digits line up in a column. The class is `.num` or `.tnum`; no other rule sets `font-variant-numeric`.
+4. **Numbers are tabular.** Tabular figures, at the right, so digits line up in a column. The class is `.num`; no other rule sets `font-variant-numeric`.
 5. **Plain text states.** An empty state is `No data` from `empty()`, the same on every page. A missing value is `–` from `miss(reason)`, with the reason as its title (Content, Values), never `N/A` or `0`. A zero stays `0`.
 6. **Be terse.** A note, a qualifier or a caption is one or two words. Do not fill a space because it is there. Do not explain what the title, the axis or a tooltip already says. A definition goes in a `title` tooltip or nowhere.
 
@@ -141,7 +141,7 @@ Weight 700 stays a literal on `.mark`.
 | Token | Value | Role | Where |
 |---|---|---|---|
 | `--ls-display` | `-0.02em` | tracking of display and brand type | `.mark`, `.shead .say`, `.shead .asof`, `.sh h2`, `.ph h1`, `.tile b` |
-| `--ls-caps` | `.06em` | tracking of uppercase keys | `#nav li.head`, `.tile .k`, `.herald-sticky-head`, `.ins h4` |
+| `--ls-caps` | `.06em` | tracking of uppercase keys | `#nav li.head`, `.tile .k`, `.ins h4` |
 
 | Do | Don't |
 |---|---|
@@ -206,7 +206,7 @@ Weight 700 stays a literal on `.mark`.
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
 | `--z-overlay` | 50 | kit widgets: font picker, annotations |
 
-A current item (the sidebar link, the contents entry) has an inset 2px `--ink` bar at the left. A selected row (`aria-selected="true"`: `.mrow`, `tr.nrow`) is `--sunk` with an inset 2px `--run` bar at the left. A parked item has a `box-shadow: inset` ring. A pipeline stage on the Status page is a 5px inset ring; its colour is the stage's failed share.
+A current item (the sidebar link, the contents entry) has an inset 2px `--ink` bar at the left. A selected row (`aria-selected="true"`: `.mrow`) is `--sunk` with an inset 2px `--run` bar at the left. A parked item has a `box-shadow: inset` ring. A pipeline stage on the Status page is a 5px inset ring; its colour is the stage's failed share.
 
 #### Breakpoints and motion
 
@@ -964,7 +964,6 @@ A status light shows whether one thing is up: a dot and a word.
 
 - Give the state in words too. A colour alone is not enough.
 - When the state is not known, pass `unknown` and write `–` in the label: `OpenRouter: –`. Do not show it as `down`.
-- Put several lights in `.lights`, one under the other.
 
 | Do | Don't |
 |---|---|

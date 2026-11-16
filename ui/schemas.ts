@@ -29,13 +29,13 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/status": { tone: "string" },
   "/api/automation": {
     now: "time", capEnv: { "*": "boolean" }, settings: { "*": "number?" }, metrics: { days: "number", rate: "object?", catches: "object", held: "object" },
-    schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", gated: "object?", baseline: "array", rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
+    schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", baseline: "array", rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
     held: ["string"], repoHeld: "array", log: { days: "number", max: "number", entries: "array" },
   },
   "/api/flow": {
     window: "string", done: "number", kinds: "object", phases: "object", asks: { count: "number", manual: "number" }, filed: { followups: "number", all: "number" }, checks: "array",
     buckets: [{ at: "time", runs: "number" }], active: [{ at: "time", intake: "number", queue: "number", running: "number", landed: "number" }], times: [{ id: "string", href: "string", outcome: "string", filed: "time?" }], slowest: "array",
-    stages: "object", models: "array", issues: "object", classes: [{ key: "string", lost: "boolean", hours: "number" }], notCounted: "any", lost: "any", hasWeek: "boolean", agents: "any",
+    stages: "object", models: "array", issues: "object", classes: [{ key: "string", lost: "boolean", hours: "number" }], notCounted: "any", lost: "any", agents: "any",
     flaky: "number", flakes: "any", "baseline?": "any",
     figures: { lost: "number?", hours: "number?", leadP50: "number?", leadP90: "number?", asks: "number?", landed: "number?", firstPass: "number?", followups: "number?", filed: "number?" },
   },
@@ -46,7 +46,6 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     media: "array", frontmatter: "object", derived: "object", jobs: [{ id: "string", name: "string", state: "string" }],
     timeline: { filed: "time?", runs: [{ kind: "string", started: "time", ended: "time?" }] }, holds: "array", commits: "array", specs: ["string"],
   },
-  "/api/issues/:id/jobs": { jobs: [row] },
   "/api/issues/:id/media/:name": "text",
   "/api/jobs": { jobs: [row], next: "time?" },
   "/api/jobs/:id": {
@@ -84,8 +83,8 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/ideas/:slug": { slug: "string", title: "string", "target?": "string", status: "string", built: "array", writeup: "string", log: ["string"], lenses: [{ lens: "string", at: "string", file: "string" }], running: ["string"] },
   "/api/ideas/:slug/lenses/:file": "text",
   "/api/memory": {
-    project: "string?", exists: "boolean", total: "number", byKind: { "*": "number" }, byScope: { "*": "number" }, scopes: ["string"], home: "array",
-    lint: "object", writes: "array", notes: "array", start: "object", "misses?": "any", "cachedAt?": "time",
+    project: "string?", exists: "boolean", total: "number", scopes: ["string"],
+    lint: "object", writes: "array", notes: "array", start: "object", "misses?": "any",
   },
   "/api/memory/log": { project: "string?", rows: [{ at: "string", kind: "string", op: "string", note: "string", why: "string", titles: ["string"] }] },
   "/api/memory/processes": {

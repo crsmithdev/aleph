@@ -416,8 +416,6 @@ export const group = (id, html) => `<div class="grp" id="${esc(id)}">${html}</di
 /** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */
 export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb"><a href="${esc(safeHref(back))}" aria-label="Back">«</a> ${parts.map(([t, h]) => (h ? `<a href="${esc(safeHref(h))}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join(" / ")}</nav>`;
 
-/** The repo of an id `<repo>-<n>[.<k>]`, or "" for any other name. */
-export const repoOf = (id) => parseId(id)?.repo ?? "";
 /** An id as a link with its short id. */
 export const repoIdLink = (id, href) => idLink(shortId(id), href);
 
@@ -950,7 +948,7 @@ export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^
 export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` : "");
 /** The facts list of `[label, html]` pairs. */
 export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
-import { parseId, shortId, shortText } from "../lib/naming.ts";
+import { shortId, shortText } from "../lib/naming.ts";
 import { FACTORY } from "../lib/windows.ts";
 
 /** The API path of issue `<repo>-<ref>`: `/api/issues/a1430`. */

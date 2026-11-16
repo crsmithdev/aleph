@@ -5,7 +5,7 @@ import * as view from "./views/now.js";
 import { error } from "./lib.js";
 import { setCodes } from "../lib/naming.ts";
 import { job, state } from "./fixtures/status-state.ts";
-import { full, row, section } from "./test-now.ts";
+import { full, row, section, withAttn } from "./test-now.ts";
 // @ts-ignore plain JS, shared with the page
 import { kept } from "./lib.js";
 
@@ -123,8 +123,7 @@ test("the outcome bar sits between the scorecard and the panels and fills once m
   expect(bar.indexOf("seg-failed")).toBeGreaterThan(gap);
   expect(h).toContain('<div class="oledger num"><div><span><i class="seg-landed"></i>landed</span><span>8.0h</span><span class="m">50%</span>');
   expect(h).not.toContain("seg-idle");
-  const needs = view.renderNeeds({ ...state, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
-  expect(needs).toContain('<h2 id="h-needs">Alerts</h2>');
+  const needs = withAttn({ ...state, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
   expect(needs).not.toContain("<h3>");
   expect(needs).not.toContain("Awaiting the user");
   expect(h.match(/<i class="seg-[a-z]+" style=/g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);

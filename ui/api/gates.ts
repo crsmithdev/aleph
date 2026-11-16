@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/asks/ask.ts";
 import { readTimeouts, TIMED } from "../../jobs/lib/asks/timeout.ts";
-import { allHolds, askReason, backendHold, baselines, sandboxRepos, gates, redLine, stopsStart, tickRows } from "../../jobs/lib/gates/factory-status.ts";
+import { allHolds, askReason, backendHold, baselines, sandboxRepos, redLine, stopsStart, tickRows } from "../../jobs/lib/gates/factory-status.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
@@ -259,8 +259,6 @@ export function gatesBody(security: { held: string[] }, ms = LOG_DAYS * DAY, pro
     schedules: schedules(),
     monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
     backend: hold ? { via: BACKENDS[hold.via], why: hold.why } : null,
-    // The backend gate of FACTORY_GATES: the dispatch binds it for a run on the held backend, and the page binds it while the hold is up.
-    gated: gates({ jobs }) ?? (hold ? { gate: "waiting", why: `waits for ${BACKENDS[hold.via]}: ${hold.why}`, text: `Waiting for ${BACKENDS[hold.via]}: ${hold.why}` } : null),
     baseline: baselineGate(),
     rules: rules(all, asks, Date.now(), ms),
     ...security,
