@@ -66,7 +66,7 @@ test("picking an option on each page asks for that window and the page marks it"
     click({ target: { closest: () => btn } });
     expect(query().get("window"), name).toBe(w);
     const url = request(p, query());
-    expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" || name === "status" ? "&baseline=1" : ""}`);
+    expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" || name === "status" || name === "agents" ? "&baseline=1" : ""}`);
     const shown = p.render(w);
     expect(shown, `${name} ${w}`).toContain(`data-value="${w}" aria-pressed="true"`);
     expect(html).toBeTruthy();
@@ -75,7 +75,7 @@ test("picking an option on each page asks for that window and the page marks it"
 
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
   remember("window", "month");
-  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency || p === PAGES.status ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
+  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency || p === PAGES.status || p === PAGES.agents ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
   expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/flow?window=hour");
   expect(scope(new URLSearchParams("window=nope")).window).toBe("month");
 });

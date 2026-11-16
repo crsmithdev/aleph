@@ -1,9 +1,9 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, redraw } from "../router.js";
-import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, pageHead, pct, row, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, scope } from "../lib.js";
+import { postJson, card, cardTrend, cell, count, dataTable, dur, empty, error, esc, heads, loadingLine, miss, money, notice, pageHead, pct, row, say, selectBox, setting, settings, shortModel, statCard, statusLight, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
-import { flowOf, lastPeriod, usageCard } from "./speed.js";
+import { flowOf, lastPeriod, usageCard, windowTrend } from "./speed.js";
 
 const share = (v) => pct(v == null ? v : v * 100);
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
@@ -17,20 +17,18 @@ function openRouterCard(m, win) {
   return statCard({ k: "OpenRouter", v: v == null ? "–" : money(v), note: "Spend", extra, loading: m === undefined });
 }
 
-/** The Backends tile: how many backends are up, with a light for the local server and one for OpenRouter. */
-function backendsCard(m) {
-  const light = (name, up) => statusLight(up == null ? "" : up ? "fine" : "alert", `${name}: ${up == null ? "–" : up ? "up" : "down"}`);
-  const local = m ? m.local === "up" : null, router = m ? !m.down.includes("deepseek-v4.1-flash") : null;
-  const extra = `<span class="lights">${light("Local server", local)}${light("OpenRouter", router)}</span>`;
-  if (!m) return statCard({ k: "Backends", v: "–", extra, loading: m === undefined });
-  return statCard({ k: "Backends", v: count(Number(local) + Number(router)), v2: count(2), q: ["up", "backends"], extra });
+/** The Cost per land card: agent spend per issue landed in the window, with its trend against the baseline. `d` is /api/flow for the window with `baseline`, or null while it loads. */
+function costPerLandCard(d) {
+  const v = d?.figures?.costPerLand;
+  return statCard({ k: "Cost per land", v: v == null ? "–" : money(v), trend: windowTrend(d, "costPerLand", v, { kind: "relative", lowerIsGood: true, format: money }), loading: !d });
 }
 
-function scorecard(s, m, win) {
+function scorecard(s, d, m, win) {
   const f = s.factory;
   return usageCard(s) + openRouterCard(m, win) +
     statCard({ k: "Worker slots", v: count(f.liveRuns ?? 0), v2: count(f.liveCap), q: ["in use", "cap"] }) +
-    backendsCard(m);
+    costPerLandCard(d) +
+    statCard({ k: "Queue", v: count((s.queued ?? []).length), v2: dur(d?.phases?.queue?.p90), q: ["waiting", "p90"] });
 }
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */
@@ -125,7 +123,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
   const head = scope().bar({ value: win });
-  return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${tiles("Scorecard", scorecard(s, m, win))}` +
+  return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${m?.local === "down" ? notice("Local server down", true) : ""}${tiles("Scorecard", scorecard(s, d, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
     card("Roles", a ? roles(a, m) : wait, { id: "roles", aside: a?.rates?.firstPass == null ? "" : `First pass ${share1(a.rates.firstPass)}` }) + (m === undefined ? card("Models", loadingLine("the models"), { id: "models" }) : m ? card("Models", models(m), { id: "models" }) : "") + `</div>`;
 }
@@ -145,7 +143,7 @@ export const view = {
   // `s.flow` is /api/flow for the window and `s.models` is /api/models, which `more` adds; the page draws without them first.
   render: (s, _params, q) => renderFactoryAgents(s, s.flow ?? null, "live", scope(q).window, s.models),
   more: async (s, q) => {
-    const [flow, models] = await Promise.all([flowOf(scope(q).window, q), get("/api/models").then((r) => r.json()).catch(() => null)]);
+    const [flow, models] = await Promise.all([flowOf(scope(q).window, q, true), get("/api/models").then((r) => r.json()).catch(() => null)]);
     return { ...s, flow, models };
   },
   mount: (root, s) => {

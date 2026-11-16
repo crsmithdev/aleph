@@ -678,7 +678,7 @@ function asksOf(inp: Inputs, project: string | undefined, since: number, now: nu
 }
 
 /** What a Status card shows for one span; a field is null when the span has no data for it. */
-export interface Figures { lost: number | null; hours: number | null; leadP50: number | null; leadP90: number | null; asks: number | null; landed: number | null; firstPass: number | null }
+export interface Figures { lost: number | null; hours: number | null; leadP50: number | null; leadP90: number | null; asks: number | null; landed: number | null; firstPass: number | null; costPerLand: number | null }
 /** The trend baseline of a window: `prev` is the span just before, `base` the average the trend compares with, `basis` says how it is taken. */
 export interface Baseline { prev: Figures; base: Figures; basis: string }
 
@@ -692,6 +692,7 @@ export function figures(s: Speed): Figures {
     asks: s.asks.count,
     landed: any ? s.done : null,
     firstPass: s.issues.firstPass,
+    costPerLand: s.done ? round(s.buckets.reduce((a, b) => a + Object.values(b.cost).reduce((x, y) => x + y, 0), 0) / s.done, 2) : null,
   };
 }
 
@@ -704,7 +705,7 @@ export function averageFigures(xs: Figures[]): Figures {
   }
   return out;
 }
-const figures0 = (): Figures => ({ lost: null, hours: null, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: null });
+const figures0 = (): Figures => ({ lost: null, hours: null, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: null, costPerLand: null });
 
 // Hour: the average of the last 12 hours; day: of the last 7 days; week and month: the span before.
 const BASELINE: Record<Window, { n: number; avg: boolean; basis: string; prev: string }> = {

@@ -89,6 +89,7 @@ test("GET /api/flow takes a window (default week) and answers JSON", async () =>
   const { baseline: _b, figures: f, ...d } = b;
   expect(f).toEqual(figures(d));
   expect(Object.keys(f).sort()).toEqual(Object.keys(b.baseline.prev).sort());
+  expect(Object.keys(f)).toContain("costPerLand");
 });
 
 test("the Status cards show the answer's figures and trend them against its baseline", () => {
@@ -98,6 +99,12 @@ test("the Status cards show the answer's figures and trend them against its base
   expect(h).toContain("<b>20%<em> / 2.0h</em></b>");
   expect(h).toContain("baseline 40%, the previous 7 days");
   });
+
+test("figures: the cost per land is the window's agent cost over its landed issues, null with none landed", () => {
+  const d = (done: number) => ({ classes: [], done, lost: { share: 0, hours: 0 }, phases: { lead: { count: 0 } }, asks: { count: 0 }, issues: { firstPass: null }, buckets: [{ cost: { a: 1, b: 2 } }, { cost: { a: 3.25 } }] }) as any;
+  expect(figures(d(4)).costPerLand).toBe(1.56);
+  expect(figures(d(0)).costPerLand).toBeNull();
+});
 
 test("the Usage card note is the pace word, and the bar title holds the percent off this machine", () => {
   const u = { now: { seven_day: 40, seven_day_resets_at: "2026-11-07T08:00:00Z" } };

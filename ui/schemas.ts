@@ -37,7 +37,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     buckets: [{ at: "time", runs: "number" }], active: [{ at: "time", intake: "number", queue: "number", running: "number", landed: "number" }], times: [{ id: "string", href: "string", outcome: "string", filed: "time?" }], slowest: "array",
     stages: "object", models: "array", issues: "object", classes: [{ key: "string", lost: "boolean", hours: "number" }], notCounted: "any", lost: "any", hasWeek: "boolean", agents: "any",
     flaky: "number", flakes: "any", "baseline?": "any",
-    figures: { lost: "number?", hours: "number?", leadP50: "number?", leadP90: "number?", asks: "number?", landed: "number?", firstPass: "number?" },
+    figures: { lost: "number?", hours: "number?", leadP50: "number?", leadP90: "number?", asks: "number?", landed: "number?", firstPass: "number?", costPerLand: "number?" },
   },
   "/api/issues": { issues: [{ ...issue, runs: "number", cost: "number" }], projects: ["string"], tests: { "*": "array" } },
   "/api/issues/:id": {

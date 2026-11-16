@@ -58,19 +58,20 @@ test("an outcome on a full model id joins the row of its short model; an unset m
   expect(h).not.toContain("not recorded");
 });
 
-test("the tiles are usage, OpenRouter spend for the window's UTC period, worker slots and the backend lights", () => {
+test("the tiles are usage, OpenRouter spend for the window's UTC period, worker slots, cost per land and the queue", () => {
   const keys = (h: string) => [...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1]);
   const m = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: ["deepseek-v4.1-flash"], spend: { day: 1.5, week: 17.54, month: 18 } };
   const h = renderFactoryAgents(S, D, "live", "week", m);
-  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Worker slots", "Backends"]);
-  for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", '<span class="event-dot fine" aria-hidden="true"></span>Local server: up', '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
+  expect(keys(h)).toEqual(["Usage", "OpenRouter", "Worker slots", "Cost per land", "Queue"]);
+  for (const t of ["<b>1<em> / 5</em></b>", "<b>$17.54</b>", '<span class="event-dot alert" aria-hidden="true"></span>OpenRouter: down']) expect(h).toContain(t);
   expect(renderFactoryAgents(S, { ...D, window: "hour" }, "live", "hour", m)).toContain("<b>$1.50</b>");
   const loading = renderFactoryAgents(S, D);
   expect(loading).toContain('<span class="sr">Loading</span></b><span class="lights">');
+  expect(h).not.toContain("Backends");
   expect(loading).toContain("Loading the models…");
   // A failed models fetch is null, not a spinner.
   const failed = renderFactoryAgents(S, D, "live", "week", null);
-  expect(failed).toContain("Local server: –");
+  expect(failed).not.toContain("Local server");
   expect(failed).not.toContain("Loading the models");
 });
 
@@ -194,26 +195,32 @@ test("the Roles table is read-only; the Models settings list holds a select per 
   expect(html).not.toContain(">Failed<");
 });
 
-test("the Backends tile says the local server is up or down and the Roles table disables gpt-oss-20b to match", () => {
+test("a down local server shows one alert, an up one shows nothing, and the Roles table disables gpt-oss-20b to match", () => {
   const down = renderFactoryAgents(S, D, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] });
-  expect(down).toContain("Local server: down");
+  expect(down).toMatch(/role="alert"[^>]*>Local server down</);
   expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(9);
   const up = renderFactoryAgents(S, D, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(up).toContain("Local server: up");
+  expect(up).not.toContain("Local server");
+  expect(up).not.toContain("role=\"alert\"");
   expect(up).not.toContain("disabled");
-  expect(renderFactoryAgents(S, null, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server: down");
+  expect(renderFactoryAgents(S, null, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server down");
 });
 
-test("the Backends tile counts the backends up out of 2", () => {
-  const m = (down: string[], local = "up") => ({ models: entries("haiku", "sonnet"), local, offers: OFFERS, down });
-  const up = renderFactoryAgents(S, D, "live", "week", m(["gpt-oss-20b"]));
-  expect(up).toContain("<b>2<em> / 2</em></b>");
-  expect(up).toContain('<span class="q"><span>up</span><span class="m"> / backends</span></span>');
-  expect(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"]))).toContain("<b>1<em> / 2</em></b>");
-  expect(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"], "down"))).toContain("<b>0<em> / 2</em></b>");
+test("the Queue card counts the queued issues with the queue p90, and Cost per land shows its money, trend and a dash with none landed", () => {
+  const queued = [{ repo: "a", id: 1 }, { repo: "a", id: 2 }, { repo: "a", id: 3 }];
+  const phases = { queue: { count: 4, p50: 60, p90: 200 } };
+  const f = { costPerLand: 2.5 };
+  const d = { ...D, phases, figures: f, baseline: { base: { costPerLand: 2 }, prev: { costPerLand: 3 }, basis: "the previous 7 days" } };
+  const h = renderFactoryAgents({ ...S, queued }, d);
+  expect(tile(h, "Queue")).toContain(`<b>3<em> / ${dur(200)}</em></b>`);
+  expect(tile(h, "Cost per land")).toContain("<b>$2.50</b>");
+  expect(tile(h, "Cost per land")).toContain('<span class="tr warn"');
+  expect(tile(renderFactoryAgents(S, { ...d, baseline: undefined }), "Cost per land")).not.toContain('class="tr');
+  const none = tile(renderFactoryAgents(S, { ...d, figures: { costPerLand: null } }), "Cost per land");
+  expect(none).toContain("<b>–</b>");
 });
 
-test("the Backends tile says OpenRouter is down when the flash model is down, and the Roles card has no status line", () => {
+test("the OpenRouter light says it is down when the flash model is down, and the Roles card has no status line", () => {
   const m = (down: string[]) => ({ models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down });
   expect(renderFactoryAgents(S, D, "live", "week", m([]))).toContain("OpenRouter: up");
   expect(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"]))).toContain("OpenRouter: down");
