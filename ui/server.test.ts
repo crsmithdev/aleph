@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { seed } from "../jobs/job.testkit.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
@@ -89,6 +90,19 @@ test("/vendor/echarts.min.js is the vendored ECharts, served as JavaScript", asy
   expect(res.headers.get("content-type")).toContain("javascript");
   const want = readFileSync(join(import.meta.dir, "vendor", "echarts.min.js"));
   expect(Buffer.from(await res.arrayBuffer()).equals(want)).toBe(true);
+});
+
+test("guard: /vendor/kit/<name>.js is the aleph-tools file, not a vendored copy", async () => {
+  const kit = dirname(fileURLToPath(import.meta.resolve("aleph-tools/package.json")));
+  const annotate = await at("/vendor/kit/annotate.js");
+  expect(annotate.status).toBe(200);
+  expect(Buffer.from(await annotate.arrayBuffer()).equals(readFileSync(join(kit, "annotate.js")))).toBe(true);
+  for (const name of ["chat.js", "shelf.js"]) {
+    const res = await at(`/vendor/kit/${name}`);
+    expect(res.status, name).toBe(200);
+    expect(res.headers.get("content-type"), name).toContain("text/javascript");
+  }
+  expect((await at("/vendor/kit/nope.js")).status).toBe(404);
 });
 
 test("every module a view imports from ui/ is served", async () => {
