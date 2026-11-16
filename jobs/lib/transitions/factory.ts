@@ -19,7 +19,7 @@ import { lock } from "../infra/locks.ts";
 import { holdsWork, isLive, isRunning } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
 import { issueBrief } from "./continuation.ts";
-import { doneChecker, filing } from "./filing.ts";
+import { filing } from "./filing.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import { checkedBy, lookMinutes, openJob } from "../records/job.ts";
 import { counting, patchRun } from "../records/record.ts";
@@ -32,15 +32,15 @@ import { drop, land, recheck, refusal, startIssue, type Refused } from "./transi
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, type Size } from "../routing/route.ts";
-import { issueFacts, issueJob, changedLinesOf, gates, stallLines } from "../gates/factory-status.ts";
+import { issueJob, changedLinesOf, gates, stallLines } from "../gates/factory-status.ts";
 import { holdGoal, recordHold } from "../gates/holds.ts";
 import { paused } from "../gates/pause.ts";
 import { sandboxRepos, liveRuns, logCap, runsToday, spentToday } from "../gates/gpu.ts";
-import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, baselines, redLine, redMains } from "../gates/tables.ts";
+import { appendSuiteHistory, recordRan, type MainState, writeBaseline, baselines, redLine, redMains } from "../gates/tables.ts";
 
-import { heldEvent, issueDecision, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
-import { decideStart, unrouted, type StartDecision } from "../gates/start-decision.ts";
-import { decideIntake } from "../gates/intake-decision.ts";
+import { heldEvent, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
+import { unrouted, type StartDecision } from "../gates/start-decision.ts";
+import { decider, type Decider } from "../gates/decider.ts";
 import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
 import { errText } from "../../../lib/errtext.ts";
 
@@ -87,11 +87,10 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   }
   const started: string[] = [];
   const skipped: string[] = [];
-  const redOf = mainRed();
-  const done = doneChecker(true, (key, id) => reader({ fetch: false }).item(key, id));
+  const at = decider({ fresh: true });
   // A parent whose parts all landed closes without a green main, after the sweep closes the parts.
   const lists = reader();
-  for (const repo of now ? [] : sandboxRepos()) { sweepMain(repo, lists); for (const l of await closeIssues(repo, done)) skipped.push(l); }
+  for (const repo of now ? [] : sandboxRepos()) { sweepMain(repo, lists); for (const l of await closeIssues(repo, at.done)) skipped.push(l); }
   const ready = openIssues().filter(({ repo, item }) => !now || issueJob(repo, issues.idOf(item)) === now);
   /** The text that stopped a Run now. */
   let refused: string | undefined;
@@ -121,10 +120,9 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   for (const { repo, item: listed } of ready) {
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
-    const red = redOf(repo);
-    if (done(`${repo.key}-${ref}`)) continue;
+    if (at.done(`${repo.key}-${ref}`)) continue;
     // The cheap facts first: the pause was asked above.
-    const first = issueDecision({ name, ref: `${repo.key}-${ref}`, item: listed, done, red });
+    const first = at.decide(repo, listed, { cheap: true });
     if (first.kind !== "ready") { held(name, repo, first); continue; }
     // Wait for a dispatch that holds the issue: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the issue until the next tick. Under the lock all is read again.
@@ -139,7 +137,8 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       if (!item) { if (closed(name, repo, ref)) continue; skip(name, "parent", "not a goal", { action: "parent" }); continue; }
       // A pass that began before a pause must not start a run after it.
       // Run now asks the issue's gates only; the start holds the backend and the GPU slot of a local model.
-      const d: StartDecision = now ? issueDecision({ ...issueFacts(repo, item, jobs), done, red }) : await decideStart(repo, { ...issueFacts(repo, item, jobs), done, red }, jobs, () => route(issueBrief(item, name, jobs).spec, name));
+      const parents = reader();
+      const d: StartDecision = now ? at.decide(repo, item, { jobs, lists: parents }) : await at.decide(repo, item, { jobs, lists: parents, route: () => route(issueBrief(item, name, jobs).spec, name) });
       if (d.kind !== "ready" && d.kind !== "ask") { held(name, repo, d); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       if (closed(name, repo, ref)) continue;
@@ -258,13 +257,12 @@ const starts: Starts = { intake: intakeDetached, director: directorDetached };
  * each detached. While the live cap binds it starts none: the dispatch at the end of the next run calls it again.
  * Returns the issues it started an intake for.
  */
-export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false }), done = doneChecker(false)): string[] {
+export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false }), at = decider({ fresh: false, lists })): string[] {
   if (gates({ only: ["paused", "full"], jobs: [runs] })) return [];
   const queue: { repo: Repo; item: issues.Issue }[] = [];
-  const redOf = mainRed();
   for (const repo of sandboxRepos()) {
     const doc = lists.list(repo.key);
-    for (const item of doc?.items ?? []) if (decideIntake(repo, item, { doc: doc!, done, red: redOf(repo) }).kind !== "none") queue.push({ repo, item });
+    for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") queue.push({ repo, item });
   }
   queue.sort((a, b) => (issues.created(a.item) ?? "").localeCompare(issues.created(b.item) ?? "") || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
   const started: string[] = [];
@@ -386,23 +384,21 @@ export async function suiteStep(checks: Checks = baselineChecks): Promise<Record
  * What the factory could move now and does not, as `land:<job>`, `goal:<job>` and `ingest:<id>`: a passed run with no
  * land live; an issue that can start with no agent run live; an issue to take in or plan with no intake run live. The gates that stop each step leave its work out, because each gate has its own line.
  */
-export async function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()): Promise<string[]> {
+export async function stalled(jobs = allJobs(), lists = reader(), at: Decider = decider({ fresh: true, jobs, lists })): Promise<string[]> {
   if (paused()) return [];
   const runs = jobs.flat();
   const live = (kind: string) => runs.some((e) => e.run.role === kind && isLive(e.folder));
-  const redOf = mainRed();
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
   if (!liveRuns(runs)) {
     for (const { repo, item } of openIssues(lists)) {
       // No model call: the stall check agrees with the dispatch on all but the router's size.
-      const facts = issueFacts(repo, item, jobs);
-      if ((await decideStart(repo, { ...facts, done, red: redOf(repo) }, jobs, unrouted)).kind === "ready") out.push(`goal:${facts.name}`);
+      if ((await at.decide(repo, item, { jobs, route: unrouted })).kind === "ready") out.push(`goal:${issueJob(repo, item.id)}`);
     }
   }
   if (!live("intake") && !gates({ only: ["full"], jobs })) {
     for (const repo of sandboxRepos()) {
       const doc = lists.list(repo.key);
-      for (const item of doc?.items ?? []) if (decideIntake(repo, item, { doc: doc!, done, red: redOf(repo) }).kind !== "none") out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
+      for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
     }
   }
   return out;
@@ -515,7 +511,7 @@ const seenFile = () => join(factoryDir(), "seen");
  */
 function cameDue(): string[] {
   const seen = new Set(existsSync(seenFile()) ? readFileSync(seenFile(), "utf8").split("\n").filter(Boolean) : []);
-  const done = doneChecker();
+  const { done } = decider({ fresh: true });
   const lines: string[] = [];
   const ids: string[] = [];
   const repos = Object.values(loadRegistry());
@@ -572,15 +568,15 @@ export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Pro
   const name = issueJob(repo, id);
   const mine = () => allRuns().filter((e) => e.run.role === "intake" && e.run.target === name);
   const before = new Set(mine().map((e) => e.id));
-  const done = doneChecker();
-  const t = await intakeIssue(repo, id, done);
+  const at = decider({ fresh: true });
+  const t = await intakeIssue(repo, id, at);
   for (const l of t.skipped) logEvent({ subject: "intake", action: "skipped", object: name, detail: l });
   if (t.counts.build) dispatchDetached();
   const failed = mine().some((e) => !before.has(e.id) && causeOf(e.run) === "unanswered");
   const doc = reader({ fetch: false }).list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
   // Only an intake of this call that ended with no reply starts the retry.
-  if (failed && item && decideIntake(repo, item, { doc: doc!, done, red: mainRed()(repo) }).kind !== "none") {
+  if (failed && item && at.intake(repo, item, doc!).kind !== "none") {
     logEvent({ subject: "rule", action: "started", object: name, detail: "no reply; intake again now" });
     p.intake(repo, id);
   }

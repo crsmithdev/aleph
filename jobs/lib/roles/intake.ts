@@ -28,7 +28,7 @@ import { INTAKE_TRIES } from "../infra/settings.ts";
 import { OPUS_MODEL } from "../../../lib/models.ts";
 import { readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
-import { decideIntake } from "../gates/intake-decision.ts";
+import type { Decider } from "../gates/decider.ts";
 import { filing } from "../transitions/filing.ts";
 import { jsTestFilesInText, siblingTestFile, testFileInText } from "../../../lib/test-files.ts";
 import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec } from "./issue-spec.ts";
@@ -458,7 +458,7 @@ function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line
 }
 
 /** One intake of one item and its route applied; counts and skipped lines are added to. */
-async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean, counts: Counts, skipped: string[], effects: Effects): Promise<void> {
+async function intakeItem(repo: Repo, id: number, at: Decider, counts: Counts, skipped: string[], effects: Effects): Promise<void> {
   const name = `${repo.key}-${id}`;
   // One intake of an item at a time: an issue write's run and the tick may meet.
   const release = await lock(`intake-${name}`, 0);
@@ -467,7 +467,7 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
     // Read again under the lock: an intake that just ended may have sorted it.
     const doc = reader().list(repo.key);
     const item = doc ? issues.find(doc, id) : undefined;
-    if (!doc || !item || decideIntake(repo, item, { doc, done, red: mainRed()(repo) }).kind === "none") return;
+    if (!doc || !item || at.intake(repo, item, doc).kind === "none") return;
     const coded = byCode(repo, item);
     if (coded) {
       if (coded.applied) counts[coded.applied] = (counts[coded.applied] ?? 0) + 1;
@@ -524,14 +524,14 @@ async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean
 const lockOf = (run: Run): string | null => (run.repo && onOf(run) !== undefined ? `intake-${run.repo}-${onOf(run)}` : null);
 const endLostIntakes = () => endLost("intake", lockOf, "a verdict");
 
-/** Take in one open issue now, if it is one the tick would take in; `done` says whether an `after` ref is done, and `effects` is what a part starts. */
-export async function intakeIssue(repo: Repo, id: number, done: (ref: string) => boolean, effects: Effects = filing): Promise<{ counts: Counts; skipped: string[] }> {
+/** Take in one open issue now, if it is one the tick would take in; `at` decides it, and `effects` is what a part starts. */
+export async function intakeIssue(repo: Repo, id: number, at: Decider, effects: Effects = filing): Promise<{ counts: Counts; skipped: string[] }> {
   const counts: Counts = {};
   const skipped: string[] = [];
   await endLostIntakes();
   const blocked = gates({ only: ["full"] });
   if (blocked) { skipped.push(`intake: ${blocked.why}`); return { counts, skipped }; }
-  await intakeItem(repo, id, done, counts, skipped, effects);
+  await intakeItem(repo, id, at, counts, skipped, effects);
   return { counts, skipped };
 }
 

@@ -96,7 +96,7 @@ interface JobDetail extends Job {
   open: boolean;
   /** The job's issue is parked. */
   parked?: boolean;
-  /** Run now for the job's issue (see `runNowOf`): null when it starts the issue, else why not. Absent when the issue is closed or has an open job. */
+  /** Run now for the job's issue (see `runNowOf`): null when it starts the issue, else why not. Absent when the issue is closed. */
   runNow?: string | null;
 }
 

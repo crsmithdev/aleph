@@ -19,7 +19,10 @@ import { startJob } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { change, ctx, dispatch, fakes, newIssue, mk, setup, teardown } from "./factory.testkit.ts";
-import { writeList } from "../../../issues/lib/store.ts";
+import { readList, writeList } from "../../../issues/lib/store.ts";
+import { addPart } from "../../../issues/lib/parts.testkit.ts";
+import { runNowOf } from "../../../ui/api/issues.ts";
+import { loadRegistry } from "../records/ledger.ts";
 
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */
 let afterHeld: ((name: string) => void) | undefined;
@@ -310,4 +313,23 @@ test("Run now starts nothing and returns the text of the gate that binds: an unf
   writeBaseline("fac", () => ({ repo: "fac", commit: "abc1234def", ok: false, failed: "tests" }));
   expect((await runNow(`issue.${second}`, f.start)).refused).toBe("main is red at abc1234: tests");
   expect(f.calls).toEqual([]);
+});
+
+test("the Issue page's Run now says what the dispatch of that issue does, for the same store and jobs", async () => {
+  const f = fakes();
+  const says = async (id: number) => {
+    const doc = readList({ key: "fac" })!;
+    const page = runNowOf(loadRegistry().fac, doc, issues.find(doc, id)!).runNow;
+    return { page, dispatch: (await runNow(`issue.${id}`, f.start)).refused ?? null };
+  };
+  const [ready, blocker, waits, running, gone] = [newIssue(), newIssue(), newIssue(), newIssue(), newIssue()];
+  await change(waits, (item) => { item.fm.after = [`issue.${blocker}`]; });
+  await change(gone, (item) => { item.fm.after = ["fac-99999"]; });
+  mk(`fac-${running}`, "build", "running");
+  const parent = newIssue();
+  await change(parent, (item) => { item.fm.after = [`issue.${blocker}`]; });
+  const part = writeList({ key: "fac" }, "part", (doc) => addPart(doc, issues.find(doc, parent)!, { title: "part", spec: "Do it." }).id, true)!.value;
+  const waited = `Waits on issue.${blocker}`;
+  const cases: [string, number, string | null][] = [["ready", ready, null], ["an unfinished after", waits, waited], ["an open job", running, "Its job is running"], ["a waiting parent", part, waited], ["an after that was closed and not copied", gone, null]];
+  for (const [name, id, text] of cases) expect({ name, ...(await says(id)) }).toEqual({ name, page: text, dispatch: text });
 });

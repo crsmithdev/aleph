@@ -4,15 +4,11 @@
  */
 import { logEvent } from "../../../lib/layout.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssue, projectOfIssue, readFetched, readList, reader, type Effects, type Place } from "../../../issues/lib/store.ts";
-import { repoStages } from "../records/status.ts";
+import { buildableIssue, reader, type Effects, type Place } from "../../../issues/lib/store.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
-import { mainRed } from "../gates/tables.ts";
-import { refDone } from "../gates/issue-decision.ts";
-import { decideIntake } from "../gates/intake-decision.ts";
+import { decider } from "../gates/decider.ts";
 import { dispatchDetached, intakeDetached } from "./launch.ts";
 import { errText } from "../../../lib/errtext.ts";
-import { parseKey } from "../../../lib/naming.ts";
 
 /** After a write that leaves an open issue of a factory repo buildable: a dispatch, so the issue starts at once. */
 export function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
@@ -20,45 +16,16 @@ export function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
   dispatchDetached();
 }
 
-/** What a new issue starts, detached: a dispatch when it is buildable, and intake when `decideIntake` says so. It never fails the filing. */
+/** What a new issue starts, detached: a dispatch when it is buildable, and intake when the intake decision says so. It never fails the filing. */
 export function afterFiling(place: Place, item: issues.Issue): void {
   const repo = loadRegistry()[place.key];
   if (!repo) return;
   try {
     dispatchAfterIssue(repo, item);
     const doc = reader().list(repo.key);
-    if (doc && decideIntake(repo, item, { doc, done: doneChecker(false), red: mainRed()(repo) }).kind !== "none") intakeDetached(repo, item.id);
+    if (doc && decider({ fresh: false }).intake(repo, item, doc).kind !== "none") intakeDetached(repo, item.id);
   } catch (e) { logEvent({ subject: "rule", action: "failed", object: "filing", detail: errText(e) }); }
 }
 
 /** The production effects of a filing (store.ts `writeFiling`). */
 export const filing: Effects = { after: afterFiling };
-
-/**
- * Whether `issue.<n>` (or `<repo>-<n>`) is done, by `refDone`. It fetches each repo once; with `fetch` false it reads what was last fetched.
- * An item that its one read lacks is looked up in `later`, a newer read: an item that read has is not absent.
- */
-export function doneChecker(fetch = true, later?: (repo: string, id: number | string) => issues.Issue | undefined): (ref: string) => boolean {
-  const reg = loadRegistry();
-  const known = new Map<string, { doc: issues.Doc | null; stages: Map<string, string>; read: boolean }>();
-  return (key) => {
-    // An `issue.<n>` key names its project through the items repo; the rest of the check reads `<repo>-<n>`.
-    const k = parseKey(key);
-    const ref = k?.kind === "issue" ? `${projectOfIssue(k.n)}-${k.n}` : key;
-    const r = issues.parseIssueRef(ref);
-    const repo = r && reg[r.repo];
-    if (!r || !repo) return false;
-    if (!known.has(r.repo)) {
-      const k = { doc: null as issues.Doc | null, stages: new Map<string, string>(), read: false };
-      try {
-        k.doc = fetch ? readList(repo) : readFetched(repo);
-        for (const s of repoStages(repo, { fetch, doc: k.doc })) k.stages.set(s.id, s.stage);
-        k.read = !!k.doc;
-      } catch (e) { logEvent({ subject: "rule", action: "failed", object: "filing", detail: `store read of ${r.repo}: ${errText(e)}` }); }
-      known.set(r.repo, k);
-    }
-    const { doc, stages, read } = known.get(r.repo)!;
-    const item = (doc ? issues.find(doc, r.id) : undefined) ?? (read ? later?.(r.repo, r.id) : undefined);
-    return refDone(item, read, stages.get(`${r.repo}-${r.id}`));
-  };
-}

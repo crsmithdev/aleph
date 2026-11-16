@@ -130,7 +130,7 @@ afterAll(() => {
 });
 
 describe("Run now on the Job page", () => {
-  test("a closed job whose issue is open has the Run now button, and an open running job has none", async () => {
+  test("a closed job whose issue is open has the Run now button, and an open running job has none, as the dispatch refuses it for its job", async () => {
     const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "to run", { spec: "Do it." }).id)!.value;
     const closed = run("", { job: `fac-${n}`, name: `issue.${n}`, repo: "fac", state: "dropped", started: ago(2), ended: ago(1), on: `fac-${n}` });
     const j = await (await get(jp(closed))).json();
@@ -138,7 +138,7 @@ describe("Run now on the Job page", () => {
     expect(v.renderJob(j)).toContain(`data-path="/api/issues/fac-${n}/run" data-label="Run now">Run now</button>`);
     const open = run("", { job: `fac-${n}`, name: `issue.${n}`, repo: "fac", state: "running", started: ago(0.5), on: `fac-${n}` });
     const o = await (await get(jp(open))).json();
-    expect(o.runNow).toBeUndefined();
+    expect(o.runNow).toBe("Its job is running");
     expect(v.renderJob(o)).not.toContain("Run now");
   });
 });

@@ -6,10 +6,10 @@
 import { logEvent, readEvents } from "../lib/layout.ts";
 import { type EventRow, issueHref, issueKey, parseId, parseKey, targetOf } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
-import { factorySnapshot, issueFacts } from "../jobs/lib/gates/factory-status.ts";
-import { mainRed } from "../jobs/lib/gates/tables.ts";
+import { factorySnapshot } from "../jobs/lib/gates/factory-status.ts";
+import { decider } from "../jobs/lib/gates/decider.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
-import { issueDecision, pendingWaits, waitsOf, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
+import { pendingWaits, waitsOf, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
 import { view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting, isStuck } from "../jobs/lib/records/record.ts";
@@ -20,8 +20,6 @@ import { chats, type Chat } from "./api/chat.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../issues/lib/store.ts";
 import { created, idOf, parentRef, parseIssueRef, refOf, status, updated } from "../issues/lib/todo.ts";
-import { facts, stages } from "../jobs/lib/records/status.ts";
-import type { Stage } from "../jobs/lib/records/stage.ts";
 import { summary, type Wk } from "./usage.ts";
 import { card, stageOf } from "./issue.ts";
 import { verdict } from "../lib/status-words.ts";
@@ -299,34 +297,13 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     if (trailers.length) job.trailers = trailers;
     return job;
   };
-  // One stages read per repo per request: the stage of each item of a repo, by number.
-  const staged = new Map<string, Map<string, Stage>>();
-  const stagesOf = (repo: Repo): Map<string, Stage> => {
-    let m = staged.get(repo.key);
-    if (!m) {
-      m = new Map();
-      const doc = lists.list(repo.key);
-      if (doc) {
-        try {
-          const f = facts(repo, doc, jobs);
-          for (const st of stages(f, Object.keys(f.items))) m.set(st.id.slice(repo.key.length + 1), st);
-        } catch (e) { logOnce("stages", e); }
-      }
-      staged.set(repo.key, m);
-    }
-    return m;
-  };
-  // The dispatch's test, from this build's lists and stages: it fetches no project repo, as the stages above do not.
-  const isDone = (ref: string): boolean => {
-    const r = parseIssueRef(ref), repo = r ? registry[r.repo] : undefined;
-    if (!r || !repo) return false;
-    return refDone(lists.item(r.repo, r.id), !!lists.list(r.repo), stagesOf(repo).get(String(r.id))?.stage);
-  };
+  // The dispatch's decider, on this build's lists: it fetches no repo.
+  const at = decider({ fresh: false, jobs, lists, registry });
   const blocker = (id: string): Wait => {
     const r = parseIssueRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
     return {
       id, href: issueHref(id), title: found?.title ?? "",
-      state: r && found && registry[r.repo] ? stagesOf(registry[r.repo]).get(String(r.id))?.stage ?? status(found) : null,
+      state: r && found && registry[r.repo] ? at.stagesOf(registry[r.repo]).get(String(r.id))?.stage ?? status(found) : null,
       // The dispatcher counts neither as done, so the wait does not end by itself.
       dead: !found ? null : status(found) === "dropped" ? "dropped" : isTracker(found) ? "tracker" : null,
     };
@@ -334,16 +311,16 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
   /** What an open issue waits on now: nothing once it is closed. */
   const blockers = (key: string, ref: number | string): Wait[] => {
     const item = lists.item(key, ref);
-    return item && status(item) === "open" ? pendingWaits(waitsOf(item, parentIn(key, item, lists)), isDone).map(blocker) : [];
+    return item && status(item) === "open" ? pendingWaits(waitsOf(item, parentIn(key, item, lists)), at.done).map(blocker) : [];
   };
-  return { lists, toJob, stagesOf, isDone, blocker, blockers };
+  return { lists, toJob, stagesOf: at.stagesOf, decide: at.decide, blocker, blockers };
 }
 
 export function state(now = new Date()): State {
   const registry = loadRegistry();
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
   const jobs = allJobs();
-  const { lists, toJob, stagesOf, isDone, blocker } = jobProjector(registry, jobs);
+  const { lists, toJob, stagesOf, decide, blocker } = jobProjector(registry, jobs);
 
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
   const issueStatus = (j: Job) => { const it = j.item !== null ? lists.item(j.repo, j.item.id) : undefined; return it && status(it); };
@@ -482,7 +459,6 @@ export function state(now = new Date()): State {
   const timers = tickTimer();
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, stuck, asks: att.items, usage: summary(now.getTime()) });
   recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
-  const redOf = mainRed();
   const events = withProjects(readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS)), titles: Record<string, string> = {};
   for (const e of events) {
     const issue = targetOf(e), k = parseKey(issue), p = parseId(issue) ?? (k?.kind === "issue" && e.project ? { repo: e.project, n: k.n, sub: undefined } : null);
@@ -496,9 +472,8 @@ export function state(now = new Date()): State {
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
-      const red = redOf(repo);
       // The stage already says when an issue is to plan.
-      const w = issueDecision({ ...issueFacts(repo, item, jobs, now.getTime(), lists), done: isDone, red, ...gated });
+      const w = decide(repo, item, { jobs, now: now.getTime(), gates: gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), kind: w.kind,
         ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "after" && w.ids ? { waits: w.ids.map(blocker) } : {}),
       };

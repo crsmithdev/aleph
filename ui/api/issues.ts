@@ -14,7 +14,7 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOfItem, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, filed, isBuildable, reader, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
+import { afterOf, filed, isBuildable, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -26,10 +26,10 @@ import { card, row, stageOf, type Row } from "../issue.ts";
 import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
-import { issueFacts } from "../../jobs/lib/gates/factory-status.ts";
+import { issueJob } from "../../jobs/lib/gates/factory-status.ts";
+import { decider } from "../../jobs/lib/gates/decider.ts";
 import { readHolds } from "../../jobs/lib/gates/holds.ts";
-import { mainRed, suiteHistory } from "../../jobs/lib/gates/tables.ts";
-import { issueDecision } from "../../jobs/lib/gates/issue-decision.ts";
+import { suiteHistory } from "../../jobs/lib/gates/tables.ts";
 import { projectOf, repoIn } from "./scope.ts";
 import { errText } from "../../lib/errtext.ts";
 
@@ -80,15 +80,13 @@ function jobRow(runs: ReturnType<typeof allJobs>[number]) {
 }
 
 /**
- * What `aleph dispatch <key>` (Run now) would do with an open issue that has no open job: `runNow` is null when it starts the issue, else the text of
- * the gate that binds. Nothing for a closed issue or one with an open job, which have no Run now.
+ * What `aleph dispatch <key>` (Run now) would do with an open issue: `runNow` is null when it starts the issue, else the text of
+ * the gate that binds, as the dispatch reads the same facts. Nothing for a closed issue.
  */
 export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue, jobs = allJobs()): { runNow?: string | null } {
   if (todos.status(item) !== "open") return {};
-  const f = issueFacts(repo, item, jobs, Date.now(), reader({ fetch: false }));
-  if (f.open) return {};
-  if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${f.name} is not a queued issue` };
-  const d = issueDecision({ ...f, done: jobProjector().isDone, red: mainRed()(repo) });
+  if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${issueJob(repo, item.id)} is not a queued issue` };
+  const d = decider({ fresh: false, jobs }).decide(repo, item, { jobs });
   return { runNow: d.kind === "ready" ? null : d.text };
 }
 

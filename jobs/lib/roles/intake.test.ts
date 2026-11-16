@@ -15,6 +15,7 @@ import { askOf, setAsk } from "../asks/ask.ts";
 import { newItems } from "../../../tests/projects.testkit.ts";
 import { factoryRepos } from "../../../tests/git.testkit.ts";
 import { readEvents } from "../../../lib/layout.ts";
+import { decider } from "../gates/decider.ts";
 
 // The test's clock: the counts and the fixtures read it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -99,7 +100,7 @@ async function run(): Promise<{ counts: Counts; skipped: string[] }> {
   const doc = readList(repo)!;
   for (const i of doc.items) {
     if (issues.status(i) !== "open" || isSorted(doc, i, repo)) continue;
-    const t = await intakeIssue(repo, i.id, () => true, { after: (r, x) => { started.push(`${r.key}-${x.id}`); } });
+    const t = await intakeIssue(repo, i.id, decider({ fresh: false }), { after: (r, x) => { started.push(`${r.key}-${x.id}`); } });
     for (const [k, v] of Object.entries(t.counts)) counts[k as keyof Counts] = (counts[k as keyof Counts] ?? 0) + (v ?? 0);
     skipped.push(...t.skipped);
   }
@@ -441,7 +442,7 @@ describe("a run with no reply", () => {
 test("an intake run whose process ended before a verdict is ended as failed by the next intake", async () => {
   reset([]);
   const { id } = seed({ role: "intake", name: `intake-${repo.key}-1`, repo: repo.key, target: "issue.1", state: "running", phase: "intake", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
-  await intakeIssue(repo, 1, () => true);
+  await intakeIssue(repo, 1, decider({ fresh: false }));
   expect(getRun(id)).toMatchObject({ state: "done", reason: "failed: its process ended before a verdict" });
 });
 

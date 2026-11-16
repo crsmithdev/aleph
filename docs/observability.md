@@ -87,7 +87,7 @@ A failed factory post appends one line to the `dispatch` section of `log.txt` in
 
 | Reader | Reads | Where |
 |---|---|---|
-| Herald | The last 24 hours of the event log, newest 50 | `ui/state.ts:487` |
+| Herald | The last 24 hours of the event log, newest 50 | `ui/state.ts:471` |
 | Gates page | The event log, minus `by: gate` events (the run's state changes), and the job records | `ui/api/gates.ts:85` |
 | Status page | The firefighter's events of the last 24 hours | `jobs/lib/gates/factory-status.ts:134` |
 | `/api/events` | A server-sent stream. Each row added to `events` goes out as an `ev` event, read by `eventsAfter` and not by `readEvents` | `ui/api/events.ts:42` |

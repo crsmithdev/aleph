@@ -25,7 +25,7 @@ import { allIssueStates, clearIssueState, getRun, keepingRuns } from "../records
 import { ciRunning, ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
-import { doneChecker } from "./filing.ts";
+import { decider } from "../gates/decider.ts";
 import { paused } from "../gates/pause.ts";
 import { probeHold } from "../gates/holds.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
@@ -167,7 +167,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   if (paused()) { writeStalls({}); s.missed = []; return []; }
   const jobs = allJobs(), runs = jobs.flat(), lists = reader({ fetch: false });
   clearDeadAsks(lists);
-  const keys = await stalled(jobs, lists, doneChecker(false));
+  const keys = await stalled(jobs, lists, decider({ fresh: false, jobs, lists }));
   for (const c of pendingCases(sandboxRepos(), runs, lists)) if (!holdsWork(runs, "director", subjectOfCase(c))) keys.push(`ask:${c.on}`);
   for (const j of toRescue(jobs)) keys.push(`rescue:${j[0].run.name}`);
   for (const j of editedWaits(jobs)) keys.push(`edited:${j[0].run.name}`);
