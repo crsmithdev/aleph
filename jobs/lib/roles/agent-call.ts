@@ -8,7 +8,8 @@
 import { closeSync, openSync, readFileSync, statSync } from "node:fs";
 import { OPUS_MODEL } from "../../../lib/models.ts";
 import { BACKENDS, modelArgv, modelEnv, onGpu, openRouterFactor, viaOf } from "../routing/models.ts";
-import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
+import { holdBackend } from "../gates/holds.ts";
+import { gpuSlot } from "../gates/gpu.ts";
 import { policyOf } from "../records/outcome.ts";
 import { killGroup } from "../infra/process.ts";
 import { roleCmd, stallSeconds } from "../infra/settings.ts";

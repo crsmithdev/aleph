@@ -6,7 +6,8 @@
 import { logEvent, readEvents } from "../lib/layout.ts";
 import { type EventRow, issueHref, issueKey, parseId, parseKey, targetOf } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
-import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
+import { factorySnapshot, issueFacts } from "../jobs/lib/gates/factory-status.ts";
+import { mainRed } from "../jobs/lib/gates/tables.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, waitsOf, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo } from "../jobs/lib/records/ledger.ts";

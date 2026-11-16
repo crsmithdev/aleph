@@ -6,7 +6,7 @@
 import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { recordFlake } from "./factory-status.ts";
+import { recordFlake } from "./tables.ts";
 import { admit, realAdmission, type Admission, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "../records/ledger.ts";
 import type { Stated } from "../records/outcome.ts";
 import { checkSeconds } from "../infra/settings.ts";

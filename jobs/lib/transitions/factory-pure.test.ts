@@ -5,7 +5,9 @@ import { readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
-import { spentToday, runsToday, health, writeBaseline, baselines, suiteHistory, factorySnapshot, issueFacts } from "../gates/factory-status.ts";
+import { health, factorySnapshot, issueFacts } from "../gates/factory-status.ts";
+import { spentToday, runsToday } from "../gates/gpu.ts";
+import { writeBaseline, baselines, suiteHistory } from "../gates/tables.ts";
 import { plainAsk, setAsk } from "../asks/ask.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { reseed, seed } from "../../job.testkit.ts";
@@ -193,7 +195,7 @@ test("stalled counts a red baseline until a later suite run is green, also after
 });
 
 test("writeBaseline from 2 processes at once keeps both entries", async () => {
-  const code = (k: string) => `import { writeBaseline } from ${JSON.stringify(join(import.meta.dir, "..", "gates", "factory-status.ts"))};
+  const code = (k: string) => `import { writeBaseline } from ${JSON.stringify(join(import.meta.dir, "..", "gates", "tables.ts"))};
 for (let i = 0; i < 50; i++) writeBaseline("${k}" + i, () => ({ repo: "${k}", commit: "1", ok: true }));`;
   const run = (k: string) => Bun.spawn(["bun", "-e", code(k)], { env: { ...process.env }, stdout: "ignore", stderr: "pipe" });
   const procs = [run("a"), run("b")];

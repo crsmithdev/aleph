@@ -23,7 +23,7 @@ import { isLive, killGroup, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
 import { allJobs, isOpen, jobById, openJob } from "../records/job.ts";
 import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, shell, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "../gates/checks.ts";
-import { gates } from "../gates/factory-status.ts";
+import { paused } from "../gates/pause.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
@@ -77,7 +77,7 @@ function recorder(folder: string): (c: CheckResult) => void {
  * while the factory is paused, as the dispatch would not land them.
  */
 async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
-  if (gates({ only: ["paused"] })) return;
+  if (paused()) return;
   const jobs = allJobs();
   const names = waitingToLand(jobs).filter((n) => {
     const last = openJob(n, null, jobs)?.at(-1)!.run;
@@ -244,7 +244,7 @@ export async function startKept(go: typeof start = start): Promise<string[]> {
 
 /** Start the next run as `aleph land` or `aleph job` would, in-process. What it prints and its refusal go to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
-  if (gates({ only: ["paused"] })) {
+  if (paused()) {
     logTo(folder, "dispatch", `paused: no ${next} started; the first dispatch after the resume starts it\n`);
     writeFileSync(runFile(folder, PAUSED_NEXT), `${next}\n`);
     return;

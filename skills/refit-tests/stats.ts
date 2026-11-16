@@ -13,7 +13,7 @@ import { join, resolve } from "node:path";
 import { isTestFile } from "../../jobs/lib/gates/test-files.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { git as run } from "../../lib/git.ts";
-import { flakes as allFlakes, suiteHistory as suiteRecords } from "../../jobs/lib/gates/factory-status.ts";
+import { flakes as allFlakes, suiteHistory as suiteRecords } from "../../jobs/lib/gates/tables.ts";
 
 export type Case = { name: string; file: string; line: number; s: number; asserts?: number };
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { conn } from "../../lib/db.ts";
-import { recordFlake } from "../../jobs/lib/gates/factory-status.ts";
+import { recordFlake } from "../../jobs/lib/gates/tables.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

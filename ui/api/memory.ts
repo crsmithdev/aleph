@@ -16,7 +16,7 @@ import { aleph, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from "../../jobs/lib/learning/episode.ts";
-import { tickRows, type TickRow } from "../../jobs/lib/gates/factory-status.ts";
+import { tickRows, type TickRow } from "../../jobs/lib/gates/tables.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";

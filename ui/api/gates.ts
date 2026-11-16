@@ -9,7 +9,10 @@
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/asks/ask.ts";
 import { readTimeouts, TIMED } from "../../jobs/lib/asks/timeout.ts";
-import { allHolds, askReason, backendHold, baselines, sandboxRepos, redLine, stopsStart, tickMissed, tickRows } from "../../jobs/lib/gates/factory-status.ts";
+import { askReason } from "../../jobs/lib/gates/factory-status.ts";
+import { allHolds, backendHold, stopsStart } from "../../jobs/lib/gates/holds.ts";
+import { sandboxRepos } from "../../jobs/lib/gates/gpu.ts";
+import { baselines, redLine, tickMissed, tickRows } from "../../jobs/lib/gates/tables.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";

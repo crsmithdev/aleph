@@ -3,7 +3,8 @@ import { putJson } from "../../../lib/db.ts";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { health, mainRed, redMains, writeBaseline } from "./factory-status.ts";
+import { health } from "./factory-status.ts";
+import { mainRed, redMains, writeBaseline } from "./tables.ts";
 import type { Repo } from "../records/ledger.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR"];

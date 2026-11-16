@@ -77,7 +77,7 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
 - **Hold**
   - Identity: the issue key. A Hold has no key and no row of its own: it is an event of the issue.
   - Lifecycle: a gate that binds writes one `held` event on the issue, and only when its detail changes; a start ends it. The factory gates write none: each logs one `changed` event on `settings` when it starts and one when it ends.
-  - Owner: `aleph.db`, through `recordHold` in `jobs/lib/gates/factory-status.ts`.
+  - Owner: `aleph.db`, through `recordHold` in `jobs/lib/gates/holds.ts`.
   - Invariants: the subject is `gate`, the object the issue key, and the detail the hold word and then its facts (`after: issue.2985 issue.2993`). A done or dropped issue gets no hold, and the loop guard writes only its Ask. A hold reads `issue.2994 held: after issue.2985 issue.2993`.
   - Relations: one issue. One event. The hold a reader takes is the issue's latest `held` event, unless a later `started` event ended it.
 - **Issue state**

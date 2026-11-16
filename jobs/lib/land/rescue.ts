@@ -17,7 +17,8 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { isVersion } from "../roles/issue-spec.ts";
 import { close, partsOf, reader, setPlan, writeList } from "../../../issues/lib/store.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
-import { LAND_STUCK_MS, sandboxRepos } from "../gates/factory-status.ts";
+import { LAND_STUCK_MS } from "../gates/factory-status.ts";
+import { sandboxRepos } from "../gates/gpu.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allJobs, isOpen, jobById, issue as issueOf, type Job } from "../records/job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";
@@ -26,7 +27,7 @@ import { allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Ru
 import { lock } from "../infra/locks.ts";
 import { bootedAt, markEnded, runHealth, type Health } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
-import type { MainState } from "../gates/factory-status.ts";
+import type { MainState } from "../gates/tables.ts";
 import { onMain } from "../records/status.ts";
 import { rescueWaitMs } from "../infra/settings.ts";
 import { ciLine, redCi } from "../gates/ci.ts";

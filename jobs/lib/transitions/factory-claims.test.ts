@@ -6,7 +6,7 @@ import { readList, writeList } from "../../../issues/lib/store.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
-import { setPaused } from "../gates/factory-status.ts";
+import { setPaused } from "../gates/pause.ts";
 import { allJobs, allRuns } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { ctx, newIssue, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";

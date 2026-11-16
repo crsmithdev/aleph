@@ -11,7 +11,7 @@ import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "../transitions/factory.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
-import { setPaused } from "../gates/factory-status.ts";
+import { setPaused } from "../gates/pause.ts";
 import { readStore } from "../learning/corrections.ts";
 import { getRun } from "../records/record.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";

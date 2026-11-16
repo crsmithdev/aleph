@@ -15,7 +15,7 @@ import * as verbs from "../../../issues/lib/issues.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
 import { askOf, asking, refIn } from "../asks/ask.ts";
-import { gates } from "../gates/factory-status.ts";
+import { paused } from "../gates/pause.ts";
 import { git } from "../infra/git.ts";
 import { held, lock } from "../infra/locks.ts";
 import { readModels } from "../routing/models.ts";
@@ -69,7 +69,7 @@ const dailyDue = (s: State, now: number): boolean => !s.daily || now - Date.pars
 
 /** Whether the tick should start `aleph housekeep`: not paused, not running, and the daily review is due, or a main moved and the last run started an hour ago. */
 export function housekeepDue(now: number): boolean {
-  if (gates({ only: ["paused"] }) || held(LOCK)) return false;
+  if (paused() || held(LOCK)) return false;
   const s = readState();
   return dailyDue(s, now) || ((!s.last || now - Date.parse(s.last) >= HOUR) && moved(s).length > 0);
 }

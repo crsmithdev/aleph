@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentCause, callAgent, resultOf } from "./agent-call.ts";
-import { backendHold } from "../gates/factory-status.ts";
+import { backendHold } from "../gates/holds.ts";
 
 let base: string;
 const saved = { ...process.env };

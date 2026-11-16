@@ -5,7 +5,7 @@
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
  * The phases also read when each issue file first came into the work store's git history.
  */
-import { flakeNames, flakes } from "../../jobs/lib/gates/factory-status.ts";
+import { flakeNames, flakes } from "../../jobs/lib/gates/tables.ts";
 import { decisions, roundsByJob, roundsIn } from "../../jobs/lib/records/record.ts";
 import { askHistory, type AskSpan } from "./gates.ts";
 import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setPaused } from "../jobs/lib/gates/factory-status.ts";
+import { setPaused } from "../jobs/lib/gates/pause.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { verdict } from "../lib/status-words.ts";
 import { writeRepos } from "../tests/projects.ts";

@@ -5,7 +5,8 @@
  * the local backend has room. The caller reads the issue's own facts, and holds the locks and does the writes.
  */
 import { issueDecision, type IssueDecision, type IssueFacts } from "./issue-decision.ts";
-import { backendHold, factoryGates, heldGoal, nextRun } from "./factory-status.ts";
+import { factoryGates, nextRun } from "./factory-status.ts";
+import { backendHold, heldGoal } from "./holds.ts";
 import { SIZES, type Size } from "../routing/route.ts";
 import { areasOf, labels } from "../../../issues/lib/store.ts";
 import type { Job } from "../records/job.ts";

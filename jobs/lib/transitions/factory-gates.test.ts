@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, mock, setSystemTime, test } from "bun:te
 import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, runNow, setPaused } from "./factory.ts";
-import { gates, gpuSlot, liveEntries, liveRuns, writeBaseline } from "../gates/factory-status.ts";
+import { gates } from "../gates/factory-status.ts";
+import { gpuSlot, liveEntries, liveRuns } from "../gates/gpu.ts";
+import { writeBaseline } from "../gates/tables.ts";
 import { setModel } from "../routing/models.ts";
 import { waitingToLand } from "../land/landing.ts";
 import { allJobs, allRuns, type Run } from "../records/ledger.ts";

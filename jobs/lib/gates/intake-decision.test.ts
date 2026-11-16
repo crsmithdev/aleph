@@ -4,7 +4,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { plainAsk, setAsk } from "../asks/ask.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { loadRegistry } from "../records/ledger.ts";
-import { writeBaseline } from "./factory-status.ts";
+import { writeBaseline } from "./tables.ts";
 import { decideIntake } from "./intake-decision.ts";
 import { dispatchIssues, intakeQueued, runDispatch, stalled } from "../transitions/factory.ts";
 import { change, newIssue, setup, teardown } from "../transitions/factory.helpers.ts";

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { liveRuns } from "./factory-status.ts";
+import { liveRuns } from "./gpu.ts";
 import { type Run } from "../records/ledger.ts";
 import { seed } from "../../job.testkit.ts";
 

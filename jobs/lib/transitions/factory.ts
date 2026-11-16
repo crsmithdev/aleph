@@ -32,7 +32,11 @@ import { drop, land, recheck, refusal, startIssue, type Refused } from "./transi
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, type Size } from "../routing/route.ts";
-import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, issueFacts, issueJob, setPaused, baselines, changedLinesOf, sandboxRepos, gates, holdGoal, liveRuns, logCap, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
+import { issueFacts, issueJob, changedLinesOf, gates, stallLines } from "../gates/factory-status.ts";
+import { holdGoal, recordHold } from "../gates/holds.ts";
+import { setPaused, paused } from "../gates/pause.ts";
+import { sandboxRepos, liveRuns, logCap, runsToday, spentToday } from "../gates/gpu.ts";
+import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, baselines, redLine, redMains } from "../gates/tables.ts";
 export { setPaused };
 
 import { heldEvent, issueDecision, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
@@ -71,7 +75,7 @@ type Land = (name: string) => Promise<string | null>;
  * and `refused` is the text of what held it.
  */
 export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, now?: string): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; refused?: string }> {
-  if (!now && gates({ only: ["paused"] })) return { started: [], skipped: [], paused: true };
+  if (!now && paused()) return { started: [], skipped: [], paused: true };
   const kept = now ? [] : await startKept();
   for (const name of kept) logEvent({ subject: "rule", action: "started", object: name, detail: "the pause kept this step" });
   if (rescue) await rescueStuck(rescue, land, async (repo) => mainState(repo));
@@ -280,7 +284,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
  * Returns whether it started the director.
  */
 export function directIfNew(start: () => void = directorDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false })): boolean {
-  if (gates({ only: ["paused"] })) return false;
+  if (paused()) return false;
   if (!pendingCases(sandboxRepos(), runs, lists).some((c) => !holdsWork(runs, "director", subjectOfCase(c)))) return false;
   start();
   return true;
@@ -291,7 +295,7 @@ export function directIfNew(start: () => void = directorDetached, runs: Entry[] 
  * pause alone: a decision can let an issue start. An error is logged, never thrown.
  */
 export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
-  if (gates({ only: ["paused"] })) return [];
+  if (paused()) return [];
   const d = await directAll(sandboxRepos(), ports);
   if (d.some((x) => x.outcome === "decided")) dispatchDetached();
   return d;
@@ -299,7 +303,7 @@ export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
 
 /** The tick's episode pages for issues that finished (episode.ts), written and failed. The tick catches and records an error. */
 export async function episodeStep(): Promise<{ written: string[]; failed: string[] }> {
-  if (gates({ only: ["paused"] })) return { written: [], failed: [] };
+  if (paused()) return { written: [], failed: [] };
   const r = await writeEpisodes(sandboxRepos());
   for (const f of r.failed) logEvent({ subject: "rule", action: "failed", object: "episodes", detail: f });
   return r;
@@ -367,7 +371,7 @@ export async function baseline(repo: Repo, checks: Checks): Promise<MainState> {
  * dispatch, so the issues its red or unchecked main held start at once.
  */
 export async function suiteStep(checks: Checks = baselineChecks): Promise<Record<string, string>> {
-  if (gates({ only: ["paused"] })) return {};
+  if (paused()) return {};
   const out: Record<string, string> = {};
   for (const repo of sandboxRepos()) {
     const was = mainState(repo).state;
@@ -384,7 +388,7 @@ export async function suiteStep(checks: Checks = baselineChecks): Promise<Record
  * land live; an issue that can start with no agent run live; an issue to take in or plan with no intake run live. The gates that stop each step leave its work out, because each gate has its own line.
  */
 export async function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()): Promise<string[]> {
-  if (gates({ only: ["paused"], jobs })) return [];
+  if (paused()) return [];
   const runs = jobs.flat();
   const live = (kind: string) => runs.some((e) => e.run.role === kind && isLive(e.folder));
   const redOf = mainRed();
@@ -565,7 +569,7 @@ function runLines(now: number, peek: boolean): string[] {
  * such runs, intake sets the Ask). An Ask that intake set goes to the director at once.
  */
 export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Promise<{ counts: Counts; skipped: string[] }> {
-  if (gates({ only: ["paused"] })) return { counts: {}, skipped: [] };
+  if (paused()) return { counts: {}, skipped: [] };
   const name = issueJob(repo, id);
   const mine = () => allRuns().filter((e) => e.run.role === "intake" && e.run.target === name);
   const before = new Set(mine().map((e) => e.id));

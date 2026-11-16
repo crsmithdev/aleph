@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
-import { appendSuiteHistory, setPaused } from "../jobs/lib/gates/factory-status.ts";
+import { setPaused } from "../jobs/lib/gates/pause.ts";
+import { appendSuiteHistory } from "../jobs/lib/gates/tables.ts";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

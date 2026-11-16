@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { findingsOf, monitorDue, monitorStep, readerPrompt } from "./monitor.ts";
 import { monitorPanel, reportFile, reportLine, type Report } from "../learning/monitor-table.ts";
 import { allRuns } from "../records/ledger.ts";
-import { setPaused, setTick, tickRows } from "../gates/factory-status.ts";
+import { setPaused } from "../gates/pause.ts";
+import { setTick, tickRows } from "../gates/tables.ts";
 import { writeMonitorHour } from "../infra/settings.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_ITEMS", "ALEPH_VAULT", "ALEPH_MONITOR_CMD", "ALEPH_MONITOR", "FAKE_DIR"] as const;

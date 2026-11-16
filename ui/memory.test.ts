@@ -1,5 +1,5 @@
 import { conn, putJson } from "../lib/db.ts";
-import { setTick } from "../jobs/lib/gates/factory-status.ts";
+import { setTick } from "../jobs/lib/gates/tables.ts";
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, mkdirSync, utimesSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";

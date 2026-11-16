@@ -26,7 +26,10 @@ import { ciRunning, ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsDue, directIfNew, episodeStep, mineCorrections, runDispatch, stalled } from "./factory.ts";
 import { doneChecker } from "./filing.ts";
-import { baselines, sandboxRepos, gates, probeHold, readStalls, setTick, tickMissed, tickRows, writeStalls } from "../gates/factory-status.ts";
+import { paused } from "../gates/pause.ts";
+import { probeHold } from "../gates/holds.ts";
+import { sandboxRepos } from "../gates/gpu.ts";
+import { baselines, readStalls, setTick, tickMissed, tickRows, writeStalls } from "../gates/tables.ts";
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
@@ -131,7 +134,7 @@ const summary = (r: Json): string => {
  */
 export async function maintainStep(now = Date.now()): Promise<Json | null> {
   const root = resolve(vaultDir()), at = readRun(root, "maintain")?.at;
-  if (new Date(now).getHours() < 3 || gates({ only: ["paused"] })) return null;
+  if (new Date(now).getHours() < 3 || paused()) return null;
   const mech = existsSync(join(root, "Home.md")) && !(at && today(new Date(at)) === today(new Date(now)));
   const corr = correctionsDue(now);
   if (!mech && !corr) return null;
@@ -161,7 +164,7 @@ function clearDeadAsks(lists: Reader): void {
  * by hand) starts the suite once per commit. It reads the store and the repos as last fetched. Returns the missed keys.
  */
 export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPorts): Promise<string[]> {
-  if (gates({ only: ["paused"] })) { writeStalls({}); s.missed = []; return []; }
+  if (paused()) { writeStalls({}); s.missed = []; return []; }
   const jobs = allJobs(), runs = jobs.flat(), lists = reader({ fetch: false });
   clearDeadAsks(lists);
   const keys = await stalled(jobs, lists, doneChecker(false));

@@ -14,7 +14,7 @@ This page lists what aleph records about itself, where each record goes, who wri
 | `openrouter` table | `aleph.db` | What OpenRouter bills per list dollar | `ui/usage.ts:218` | `ui/usage.ts` |
 | `jev` table | `aleph.db` | The `time` and `cost` of each Jev call | `lib/jev.ts:56` | `ui/usage.ts` |
 | `episode-use.jsonl` | `~/.aleph/factory/episode-use.jsonl` | Each time recall shows or opens an episode page | `logUse` in `lib/episode-use.ts` | Episode eviction (`jobs/lib/learning/episode.ts:182`) |
-| `suite_history` table | `aleph.db` | One row per suite run | `appendSuiteHistory` in `jobs/lib/gates/factory-status.ts` | `suiteHistory`, the monitor |
+| `suite_history` table | `aleph.db` | One row per suite run | `appendSuiteHistory` in `jobs/lib/gates/tables.ts` | `suiteHistory`, the monitor |
 | `dispatch.log` | `~/.aleph/factory/dispatch.log` | Output of detached dispatch, intake, director and suite | `jobs/lib/transitions/launch.ts:113` | A person, `jobs/cli.helpers.ts:114` (test failure dump) |
 | Job folders | `~/.aleph/jobs/<n>/` | The files of one job; `log.txt` holds its command, setup, stderr, dispatch, checks and land sections | The unit, the checks and the land | The UI job page, `postTrace`. The `dispatch` section holds the output of the dispatch that the job ending starts (`jobs/lib/roles/unit.ts`) |
 
@@ -32,8 +32,8 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 |---|---|---|
 | `gate` | A run's state: `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` | `jobs/lib/records/record.ts:182` |
 | `gate` | `question` when an Ask is set (its detail the reason, and its facts when the factory counted some), `answered` when it is cleared | `jobs/lib/records/record.ts:168` |
-| `gate` | `held`, one for an issue hold when its detail changes: the detail is the hold word and then its facts (`after: issue.2985 issue.2993`, `job: job.8910`, `file: docs/design.md: job.8890`, `red: at 298a44e: tests`, `credit: job.8870 hit the API credit error`). A done or dropped issue gets none. The pause, the backend and the live cap write none: each logs its own `changed` event on `settings`; the loop guard writes only its Ask as a `question` event whose detail adds its facts (`no-commit: 3 / 3 jobs with no commit`) | `jobs/lib/gates/factory-status.ts:63`, from `jobs/lib/transitions/factory.ts:96` |
-| `gate` | `changed` on the object `settings`, when the live cap (`cap: on: 5 / 5 jobs`, `cap: on: 1 / 1 local jobs`, `cap: off`) or the held backend (`credit: on: claude: <the call's line>`, `credit: off`) starts or ends; a gate that stays on logs nothing more | `jobs/lib/gates/factory-status.ts:95`, `:133`, `:143` |
+| `gate` | `held`, one for an issue hold when its detail changes: the detail is the hold word and then its facts (`after: issue.2985 issue.2993`, `job: job.8910`, `file: docs/design.md: job.8890`, `red: at 298a44e: tests`, `credit: job.8870 hit the API credit error`). A done or dropped issue gets none. The pause, the backend and the live cap write none: each logs its own `changed` event on `settings`; the loop guard writes only its Ask as a `question` event whose detail adds its facts (`no-commit: 3 / 3 jobs with no commit`) | `jobs/lib/gates/holds.ts:52`, from `jobs/lib/transitions/factory.ts:96` |
+| `gate` | `changed` on the object `settings`, when the live cap (`cap: on: 5 / 5 jobs`, `cap: on: 1 / 1 local jobs`, `cap: off`) or the held backend (`credit: on: claude: <the call's line>`, `credit: off`) starts or ends; a gate that stays on logs nothing more | `jobs/lib/gates/gpu.ts:16`, `jobs/lib/gates/holds.ts:92`, `:102` |
 | `rule` | `routed`, its `detail` the Size and the classifier model (`medium by classifier <model>`), on the issue key | `jobs/lib/routing/route.ts:28` |
 | `rule` | `started`, `busy`, `done`, `failed` (`error`) for the dispatch steps | `jobs/lib/transitions/factory.ts:74`, `:112`, `:142`, `:146`, `:182`, `:190`, `:275`, `:484`, `:538` |
 | `rule` | `started` for a run, with the model | `jobs/lib/transitions/transitions.ts:363` |
@@ -49,7 +49,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | the filer: `intake`, `firefighter`, `human`, `claude`, `worker` | `filed`, one event per new issue | `issues/lib/store.ts:411` |
 | the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `issues/lib/store.ts:174` |
 | `human` | `changed`, when an Always rule is set back to Ask me | `jobs/lib/asks/ask.ts:237` |
-| `human` | `changed` on the object `settings`: `pause: on` and `pause: off`, from the pause and resume commands | `jobs/lib/gates/factory-status.ts:88`, through `logSetting` in `lib/layout.ts:38` |
+| `human` | `changed` on the object `settings`: `pause: on` and `pause: off`, from the pause and resume commands | `jobs/lib/gates/pause.ts:11`, through `logSetting` in `lib/layout.ts:38` |
 
 The set `ACTORS` in `lib/naming.ts:22` also holds `worker`, `reviewer`, `check` and `monitor`. No `logEvent` call uses `reviewer`, `check` or `monitor`. `worker` and `claude` appear only as the filer or closer of an issue. An issue's events have the object `issue.<n>`.
 
@@ -59,11 +59,11 @@ The events of one job or issue are the rows of `events` with that key as `object
 
 | `kind` | Written when | Writer |
 |---|---|---|
-| `hold` | A new hold is written. `data.gate` is the gate, and `data.event` is the log event | `jobs/lib/gates/factory-status.ts:72` |
-| `started` | A hold ends because the job starts | `jobs/lib/gates/factory-status.ts:72` |
+| `hold` | A new hold is written. `data.gate` is the gate, and `data.event` is the log event | `jobs/lib/gates/holds.ts:45` |
+| `started` | A hold ends because the job starts | `jobs/lib/gates/holds.ts:45` |
 | `asked` | A worker or reviewer asks. `data.spec` holds the spec version | `jobs/lib/asks/ask.ts:287` |
-| `streak` | The no-commit streak sets an Ask | `jobs/lib/gates/factory-status.ts:462` |
-| `cap`, `cap-cleared` | The run cap sets an Ask, and a later start clears it | `jobs/lib/gates/factory-status.ts:483`, `:488` |
+| `streak` | The no-commit streak sets an Ask | `jobs/lib/gates/factory-status.ts:225` |
+| `cap`, `cap-cleared` | The run cap sets an Ask, and a later start clears it | `jobs/lib/gates/factory-status.ts:239` |
 | `rerun`, `rerun-cleared` | A rerun note is set, and the run that takes it starts | `jobs/lib/transitions/continuation.ts:131`, `:139` |
 | `rescued` | A slow land was rescued | `jobs/lib/transitions/continuation.ts:279` |
 | `director` | A director decision. `data` is the `Decision` | `jobs/lib/roles/director.ts:139` |
@@ -89,7 +89,7 @@ A failed factory post appends one line to the `dispatch` section of `log.txt` in
 |---|---|---|
 | Herald | The last 24 hours of the event log, newest 50 | `ui/state.ts:487` |
 | Gates page | The event log, minus `by: gate` events (the run's state changes), and the job records | `ui/api/gates.ts:85` |
-| Status page | The firefighter's events of the last 24 hours | `jobs/lib/gates/factory-status.ts:380` |
+| Status page | The firefighter's events of the last 24 hours | `jobs/lib/gates/factory-status.ts:134` |
 | `/api/events` | A server-sent stream. Each row added to `events` goes out as an `ev` event, read by `eventsAfter` and not by `readEvents` | `ui/api/events.ts:42` |
 | The updater | Polls `PRAGMA data_version` of `aleph.db` every 100 ms on its own connection. A new event row changes the source `events`, and the updater rebuilds the keys that read it. The UI's own writes move `data_version` too, because the poll has its own connection. A write with no event (usage, tick, a job row) waits for the quiet refresh timer. `change` names only the keys whose rebuilt answer differs | `ui/updater.ts:275` |
 | Director | The `director` events of the job records, for its decision list | `readRecord` in `jobs/lib/roles/director.ts` |

@@ -23,7 +23,7 @@ import { always, ASK_REASONS, askSub, logAlways, asking, LIMITS, keepsOpen, acti
 import { allRuns, isAgentRun, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
-import { sandboxRepos } from "../gates/factory-status.ts";
+import { sandboxRepos } from "../gates/gpu.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, jobById, issue as issueOf, openJob, openJobOfIssue, readFile } from "../records/job.ts";
 import { isRunning } from "../infra/process.ts";

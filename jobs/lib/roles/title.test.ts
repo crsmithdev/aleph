@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEvents } from "../../../lib/layout.ts";
-import { gpuSlot } from "../gates/factory-status.ts";
+import { gpuSlot } from "../gates/gpu.ts";
 import { setModel } from "../routing/models.ts";
 import { cutTitle, fit, writeLine, writeTitle } from "./title.ts";
 

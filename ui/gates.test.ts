@@ -12,7 +12,8 @@ import { withEnv, withServer } from "./test-server.ts";
 import { day, pct, when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
-import { allHolds, recordHold, setTick, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
+import { allHolds, recordHold, type HoldRecord } from "../jobs/lib/gates/holds.ts";
+import { setTick } from "../jobs/lib/gates/tables.ts";
 import { issueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { conn, getJson, putJson } from "../lib/db.ts";
 import { seed } from "../jobs/job.testkit.ts";

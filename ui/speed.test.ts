@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, setSystemTime, spyOn, test } from "bun:test";
-import { recordFlake } from "../jobs/lib/gates/factory-status.ts";
+import { recordFlake } from "../jobs/lib/gates/tables.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

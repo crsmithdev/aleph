@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { conn } from "../../../lib/db.ts";
-import { flakes } from "./factory-status.ts";
+import { flakes } from "./tables.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, section, state, setup, teardown } from "../../cli.helpers";

@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GATES, issueDecision, refDone, type IssueFacts } from "./issue-decision.ts";
-import { factoryGates, holdBackend } from "./factory-status.ts";
+import { factoryGates } from "./factory-status.ts";
+import { holdBackend } from "./holds.ts";
 
 const item = (fm: Record<string, unknown> = {}) => ({ fm, notes: [] }) as unknown as IssueFacts["item"];
 const facts = (f: Partial<IssueFacts> = {}): IssueFacts => ({ name: "fac-9", item: item(), done: () => false, ...f });

@@ -7,7 +7,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { buildableIssue, projectOfIssue, readFetched, readList, reader, type Effects, type Place } from "../../../issues/lib/store.ts";
 import { repoStages } from "../records/status.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
-import { mainRed } from "../gates/factory-status.ts";
+import { mainRed } from "../gates/tables.ts";
 import { refDone } from "../gates/issue-decision.ts";
 import { decideIntake } from "../gates/intake-decision.ts";
 import { dispatchDetached, intakeDetached } from "./launch.ts";

@@ -20,7 +20,9 @@ import * as store from "../../../issues/lib/store.ts";
 import { failedTests } from "./checks.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
-import { baselines, sandboxRepos, gates, redLine } from "./factory-status.ts";
+import { paused } from "./pause.ts";
+import { sandboxRepos } from "./gpu.ts";
+import { baselines, redLine } from "./tables.ts";
 import { git } from "../infra/git.ts";
 import { readSection } from "../records/run-files.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
@@ -224,7 +226,7 @@ export interface Fired { filed: Filed[]; asked: string[] }
  * line, never thrown.
  */
 export async function firefight(ports: Ports = defaultPorts, now = Date.now()): Promise<Fired | null> {
-  if (gates({ only: ["paused"] })) return null;
+  if (paused()) return null;
   const filed: Filed[] = [];
   for (const r of (() => { try { return reds(ports); } catch (e) { logEvent({ subject: "gate", action: "failed", object: "reds", detail: `failed: ${errText(e)}` }); return []; } })()) {
     try {

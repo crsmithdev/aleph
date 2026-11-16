@@ -6,7 +6,7 @@ import * as store from "../../../issues/lib/store.ts";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, suiteStep } from "./factory.ts";
-import { holdBackend, readHolds } from "../gates/factory-status.ts";
+import { holdBackend, readHolds } from "../gates/holds.ts";
 import * as record from "../records/record.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { lock } from "../infra/locks.ts";
