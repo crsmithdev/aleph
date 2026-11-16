@@ -11,7 +11,7 @@ import { chips, count, empty, error, filterBar, loadingLine, repoIdLink, searchB
 import { renderKpis } from "./timeline.js";
 // @ts-ignore
 import { ideaView, renderIdea, renderIdeas } from "./views/ideas.js";
-import { writeRepos } from "../tests/projects.ts";
+import { newItems, writeRepos } from "../tests/projects.ts";
 
 // The fake lens agent: it writes result.md and ends as stream-json does, with the cost $FAKE_COST.
 const FAKE = `#!/usr/bin/env bash
@@ -30,6 +30,7 @@ beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-ideas-"));
   writeFileSync(join(base, "claude"), FAKE);
   chmodSync(join(base, "claude"), 0o755);
+  newItems(base, "issues");
   writeRepos({ aleph: { path: base, code: "a" } }, join(base, "issues"));
   restore = withEnv({ ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "issues"), ALEPH_LENS_CMD: join(base, "claude"), FAKE_COST: "0.5", ...gitEnv, GIT_COMMITTER_DATE: pinned.toISOString() });
   add("Alpha", "sketch", "aleph");
@@ -45,6 +46,8 @@ beforeAll(async () => {
   for (const f of readdirSync(dir).filter((f) => f !== "idea.md")) rmSync(join(dir, f));
   writeFileSync(join(dir, "prior-art-2026-11-01-0900.html"), "<p>old</p>");
   writeFileSync(join(dir, "prior-art-2026-11-02-0900.md"), "newer");
+  // The store follows origin/main only on a clean checkout, so the edited files go in as a commit.
+  for (const args of [["add", "-A"], ["commit", "-q", "-m", "pin lens files"], ["push", "-q", "origin", "main"]]) Bun.spawnSync(["git", ...args], { cwd: join(base, "issues") });
   ({ at, stop } = await withServer({ warm: false }));
 });
 afterAll(() => { stop(); restore(); rmSync(base, { recursive: true, force: true }); });
@@ -79,7 +82,7 @@ test("POST refuses an unknown lens or idea, else starts the lens and answers at 
   try {
     process.env.FAKE_COST = "0.1";
     expect((await post("/api/ideas/4/lenses/prior-art")).status).toBe(200);
-    for (let i = 0; i < 5000 && (await json("/api/ideas/4")).lenses.length === 0; i++);
+    for (let i = 0; i < 5000 && !((await json("/api/ideas/4")).lenses?.length > 0); i++); // the checkout follow rewrites idea.md, so a read can miss it for a moment
     expect((await json("/api/ideas/4")).lenses).toHaveLength(1);
   } finally { rmSync(join(base, "issues", "ideas", "4"), { recursive: true, force: true }); }
 }, 30000);

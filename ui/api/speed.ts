@@ -5,9 +5,7 @@
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
  * The phases also read when each issue file first came into the work store's git history.
  */
-import { existsSync } from "node:fs";
 import { flakeNames, flakes } from "../../jobs/lib/gates/factory-status.ts";
-import { git } from "../../jobs/lib/infra/git.ts";
 import { decisions, roundsByJob, roundsIn } from "../../jobs/lib/records/record.ts";
 import { askHistory, type AskSpan } from "./gates.ts";
 import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
@@ -17,7 +15,7 @@ import { OFFERS, readModels } from "../../jobs/lib/routing/models.ts";
 import { bare, isLocal } from "../../lib/models.ts";
 import { stageRows, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
-import { createdAt, everyFetched, itemsDir, projectsAt, reader, sourceOf } from "../../issues/lib/store.ts";
+import { everyFetched, filed, headOnMain, reader, sourceOf, type Filed } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP, RUN_CAP } from "../../jobs/lib/infra/settings.ts";
@@ -272,49 +270,6 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
   };
 }
 
-// Bulk commits add files whose work is older: they do not say when an issue was created.
-const BULK = /^(migrate:|todo: move every )/;
-const FILED = /^issues\/(\d+)\/issue\.md$/;
-export interface Filed { issue: Map<string, number | null> }
-let filedAt: Filed & { head: string } = { head: "", issue: new Map() };
-
-/** The commit of the store's origin/main, or "" when the store has none. */
-const originMain = (dir: string): string => {
-  const rev = existsSync(dir) ? git(dir, "rev-parse", "origin/main") : null;
-  return rev?.ok ? rev.out : "";
-};
-
-/** When each issue was filed, in ms: its created field, else when a commit added it. Null for one with no created field that a bulk commit added. Each read adds only the commits since the last. */
-export function filed(dir = itemsDir(), head = originMain(dir)): Filed {
-  if (!head) return { issue: new Map() };
-  if (head === filedAt.head) return filedAt;
-  const known = filedAt.head && git(dir, "merge-base", "--is-ancestor", filedAt.head, head).ok;
-  const next = known ? filedAt : { head, issue: new Map() };
-  const log = git(dir, "log", "--reverse", "--diff-filter=A", "--no-renames", "--name-only", "--format=@%ct %s", known ? `${filedAt.head}..${head}` : head).out;
-  let at: number | null = null;
-  const added: [number, number | null][] = [];
-  for (const line of log.split("\n")) {
-    if (line.startsWith("@")) {
-      const space = line.indexOf(" ");
-      at = BULK.test(line.slice(space + 1)) ? null : Number(line.slice(1, space)) * 1000;
-      continue;
-    }
-    const m = line.match(FILED);
-    if (m) added.push([Number(m[1]), at]);
-  }
-  const projects = added.length ? projectsAt(dir, head) : new Map<number, string>();
-  const created = added.length ? createdAt(dir, head) : new Map<number, number>();
-  for (const [n, when] of added) {
-    const name = projects.get(n);
-    if (!name) continue;
-    const key = `${name}-${n}`;
-    // A file added again keeps the first time.
-    if (!next.issue.has(key)) next.issue.set(key, created.get(n) ?? when);
-  }
-  filedAt = { ...next, head };
-  return filedAt;
-}
-
 /** The phases of the work over `runs` and the store's history, for what ended in `since`..`now`: each one's end time and seconds. */
 export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: number): Record<Phase, { at: number; secs: number }[]> & { issues: IssueTimes[] } {
   const per = new Map<string, IssueTimes>();
@@ -565,8 +520,8 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
 /** What `speed` reads: the Asks and the director's decisions, the store's lists and history at origin/main, and the flakes. A baseline reads them once for all its spans. */
 export interface Inputs { asks: AskSpan[]; decisions: { at: string; ref: string; outcome?: string }[]; head: string; lists: ReturnType<typeof reader>; filed: Filed; flakes: ReturnType<typeof flakes> }
 export function inputs(): Inputs {
-  const head = originMain(itemsDir());
-  return { asks: askHistory(), decisions: decisions<{ at: string; ref: string; outcome?: string }>(), head, lists: reader({ fetch: false, rev: head || undefined }), filed: filed(itemsDir(), head), flakes: flakes() };
+  const head = headOnMain();
+  return { asks: askHistory(), decisions: decisions<{ at: string; ref: string; outcome?: string }>(), head, lists: reader({ fetch: false, rev: head || undefined }), filed: filed(undefined, head), flakes: flakes() };
 }
 
 export function speed(window: Window, now = new Date(), fit: Fit | null = null, project?: string, inp = inputs()): Speed {

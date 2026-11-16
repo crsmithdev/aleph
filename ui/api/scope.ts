@@ -5,7 +5,7 @@
  */
 import { once } from "../../lib/sources.ts";
 import { parseId, parseKey, type EventRow } from "../../lib/naming.ts";
-import { itemsDir, projectsAt } from "../../issues/lib/store.ts";
+import { projectsOnMain } from "../../issues/lib/store.ts";
 import { DAY, FACTORY, WINDOWS } from "../../lib/windows.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { allRunRecords } from "../../jobs/lib/records/record.ts";
@@ -63,7 +63,7 @@ export const withProjects = <T extends EventRow>(rows: T[]): T[] => {
   let projects: Map<number, string> | undefined;
   return rows.map((row) => {
     const key = row.project ? null : parseKey(row.object);
-    const project = key?.kind === "issue" ? (projects ??= projectsAt(itemsDir(), "origin/main")).get(key.n) : undefined;
+    const project = key?.kind === "issue" ? (projects ??= projectsOnMain()).get(key.n) : undefined;
     return project ? { ...row, project } : row;
   });
 };

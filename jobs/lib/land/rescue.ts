@@ -15,7 +15,7 @@
 import { issueKey, key as keyOf, parseId, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { isVersion } from "../roles/issue-spec.ts";
-import { close, partsOf, reader, writeList } from "../../../issues/lib/store.ts";
+import { close, partsOf, reader, setPlan, writeList } from "../../../issues/lib/store.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
 import { LAND_STUCK_MS, sandboxRepos } from "../gates/factory-status.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
@@ -221,7 +221,7 @@ function sendToIntake(repo: Repo, issue: number): string | null {
     const w = writeList(repo, `time box: plan ${repo.key}-${issue}`, (doc) => {
       const item = issues.find(doc, issue);
       if (!item || issues.status(item) !== "open") return null;
-      item.fm.plan = "true";
+      setPlan(item, true);
       return true;
     });
     return w?.value ? null : "the issue is no longer open";

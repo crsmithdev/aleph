@@ -1,19 +1,19 @@
+/**
+ * Only jobs/lib/infra/settings.ts reads or writes a row of the `settings` table: each setting has one name, one
+ * default and one parser there. lib/db.ts defines the table and lib/jev.ts keeps the judge row (it sits below jobs/).
+ */
 import { expect, test } from "bun:test";
 import { Glob } from "bun";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const root = join(import.meta.dir, "..");
+const ROOT = join(import.meta.dir, "..");
+const ALLOWED = ["jobs/lib/infra/settings.ts", "lib/db.ts", "lib/jev.ts"];
+const SKIPPED = /\.test\.ts$|\.fixture\.ts$|\.testkit\.ts$|\.helpers\.ts$/;
 
-test("only settings.ts reads a number from process.env", () => {
-  const found: string[] = [];
-  for (const dir of ["jobs", "lib", "issues", "ui", "vault"]) {
-    for (const f of new Glob("**/*.ts").scanSync({ cwd: join(root, dir) })) {
-      if (f.includes("node_modules") || /\.test\.ts$/.test(f)) continue;
-      const rel = `${dir}/${f}`;
-      if (rel === "jobs/lib/infra/settings.ts") continue;
-      if (readFileSync(join(root, rel), "utf8").includes("Number(process.env.")) found.push(rel);
-    }
-  }
+test("no source file but settings.ts reads or writes the settings table", () => {
+  const found = [...new Glob("{jobs,ui,vault,hooks,lib}/**/*.ts").scanSync(ROOT)]
+    .filter((f) => !ALLOWED.includes(f) && !SKIPPED.test(f) && /\b(get|put)Json(<[^>]*>)?\(\s*"settings"/.test(readFileSync(join(ROOT, f), "utf8")))
+    .sort();
   expect(found).toEqual([]);
 });

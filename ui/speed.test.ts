@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { jobFolder } from "../jobs/lib/records/run-files.ts";
 import { closePass, openPass } from "../lib/sources.ts";
 import { withEnv } from "./test-server.ts";
-import { activeIssues, agentStats, CLASSES, classify, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
+import { filed } from "../issues/lib/store.ts";
+import { activeIssues, agentStats, CLASSES, classify, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { buckets } from "../lib/windows.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page

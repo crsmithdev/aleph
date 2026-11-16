@@ -8,12 +8,14 @@
  */
 import { readJsonOr } from "../lib/json.ts";
 import { conn } from "../lib/db.ts";
+import { addKeyRow, addSnapshot, keyRows, snapshots, type Snapshot } from "../lib/usage.ts";
+
+export type { Snapshot };
 import { need, type Hourly } from "../lib/langfuse.ts";
 import { openRouterSpend, viaOf } from "../jobs/lib/routing/models.ts";
 import { once, touch } from "../lib/sources.ts";
 import { credentialsFile, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
 
-export interface Snapshot { at: string; seven_day: number; seven_day_resets_at: string | null }
 /** A job's or session's estimated share of the week: percent of the weekly limit, and whether the pooled rate priced it. */
 export interface Wk { pct: number; pooled: boolean }
 /** Percent of the week per Claude dollar, on Fable and on the other models; `pooled`: one rate for both. `hours`: the rows of the fit. */
@@ -86,7 +88,7 @@ export async function pollOnce(): Promise<Snapshot | null> {
   lastFailed = snap === null;
   if (!snap) return null;
   try {
-    conn().query("INSERT INTO usage (time, seven_day, seven_day_resets_at) VALUES (?, ?, ?)").run(snap.at, snap.seven_day, snap.seven_day_resets_at);
+    addSnapshot(snap);
   } catch (e) {
     console.error(`ui/usage: cannot write the usage row: ${e instanceof Error ? e.message : "error"}`);
   }
@@ -105,8 +107,7 @@ export function startPoller(ms = POLL_MS, polled = () => {}): () => void {
 /** The snapshots dated at or before `clock`; a row dated after it cannot be a poll that has happened. */
 export function readSnapshots(clock = Date.now()): Snapshot[] {
   touch("usage");
-  const out = conn().query("SELECT time AS at, seven_day, seven_day_resets_at FROM usage").all() as Snapshot[];
-  return out.filter((s) => Date.parse(s.at) <= clock).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  return snapshots().filter((s) => Date.parse(s.at) <= clock).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
 /** The snapshots since the last reset: a new reset time or a fall of the 7-day percent starts the window. */
@@ -198,7 +199,7 @@ export async function pollOpenRouter(now = Date.now()): Promise<void> {
   const spent = await openRouterSpend();
   if (!spent || typeof spent.total !== "number") return;
   const key: { at: string; usage: number }[] = [];
-  for (const r of rows("openrouter")) {
+  for (const r of keyRows()) {
     if (typeof r?.usage !== "number") continue;
     if (key.length && r.usage < key.at(-1)!.usage) key.length = 0;
     key.push(r);
@@ -210,19 +211,19 @@ export async function pollOpenRouter(now = Date.now()): Promise<void> {
     const from = Date.parse(base.at);
     const list = (await need().hourly({ from: new Date(from), to: new Date(now) }, "usage").catch(() => []))
       .filter((h) => viaOf(h.model) === "openrouter").reduce((a, h) => a + h.cost, 0);
-    const jev = rows("jev").filter((j) => Date.parse(j?.at) > from && Date.parse(j.at) <= now).reduce((a, j) => a + (j.cost ?? 0), 0);
+    const jev = jevRows().filter((j) => Date.parse(j?.at) > from && Date.parse(j.at) <= now).reduce((a, j) => a + (j.cost ?? 0), 0);
     const factor = (spent.total - base.usage - jev) / list;
     if (list >= MIN_LIST && factor > 0) row.factor = factor;
   }
   try {
-    conn().query("INSERT INTO openrouter (time, usage, factor) VALUES (?, ?, ?)").run(row.at, row.usage, row.factor ?? null);
+    addKeyRow(row);
   } catch (e) {
     console.error(`ui/usage: cannot write the openrouter row: ${e instanceof Error ? e.message : "error"}`);
   }
 }
 
-/** The rows of a log table in order, with `time` also as `at`. */
-const rows = (table: "openrouter" | "jev"): any[] => conn().query(`SELECT time AS at, * FROM ${table} ORDER BY seq`).all();
+/** The rows of the jev table in order, with `time` also as `at`. */
+const jevRows = (): any[] => conn().query("SELECT time AS at, * FROM jev ORDER BY seq").all();
 
 interface UsageSummary {
   /** The last snapshot of the reset window, or null with none or when its week has ended. */

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../../../issues/lib/store.ts";
+import { closedWhy, readList, writeList } from "../../../issues/lib/store.ts";
 import { askOf } from "../asks/ask.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues, suiteStep } from "./factory.ts";
@@ -77,7 +77,7 @@ export const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${
 /** What was said of issue `id`: its notes, why it closed, and the `changed` events code logged for it, as code writes no note. */
 export const notes = (id: number) => {
   const item = readList({ key: "fac" })!.items.find((i) => i.id === id)!;
-  return [...item.notes, item.fm.closed_why ?? "", ...readEvents().filter((e) => e.action === "changed" && e.object === issueKey(id)).map((e) => e.detail)].join("\n");
+  return [...item.notes, closedWhy(item) ?? "", ...readEvents().filter((e) => e.action === "changed" && e.object === issueKey(id)).map((e) => e.detail)].join("\n");
 };
 export const ask = (id: number) => askOf(issueKey(id));
 

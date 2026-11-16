@@ -10,7 +10,7 @@
  * reason with no entry waits for Chris.
  */
 import { eventsOf } from "../../../lib/layout.ts";
-import { getJson, putJson } from "../../../lib/db.ts";
+import { setTimeoutsRow, timeoutsRow } from "../infra/settings.ts";
 import { allRuns, type Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 import { actionsOn, ASK_REASONS, logAlways, type Ask } from "./ask.ts";
@@ -24,7 +24,7 @@ export const TIMED = Object.keys(ASK_REASONS).filter((r) => !r.startsWith("propo
 
 /** The `timeouts` setting. A missing row is empty; an entry for a reason not in TIMED is ignored. */
 export const readTimeouts = (): Record<string, Timeout> =>
-  Object.fromEntries(Object.entries(getJson<Record<string, number | Timeout>>("settings", "timeouts", {}))
+  Object.fromEntries(Object.entries(timeoutsRow<number | Timeout>())
     .map(([r, t]) => [r, typeof t === "number" ? { minutes: t, then: "pick" } : t] as [string, Timeout])
     .filter(([r, t]) => TIMED.includes(r) && Number.isInteger(t?.minutes) && t.minutes > 0 && THEN.includes(t.then)));
 
@@ -34,7 +34,7 @@ export function setTimeoutOf(reason: string, minutes: number, then: string = rea
   if (!Number.isInteger(minutes) || minutes < 0) return `minutes must be a whole number of at least 0, not ${minutes}`;
   if (!THEN.includes(then as NoAnswer)) return `the no-answer action is pick or drop, not ${then}`;
   const { [reason]: _, ...rest } = readTimeouts();
-  putJson("settings", "timeouts", minutes ? { ...rest, [reason]: { minutes, then } } : rest);
+  setTimeoutsRow(minutes ? { ...rest, [reason]: { minutes, then } } : rest);
   return null;
 }
 

@@ -481,7 +481,7 @@ function statusRecent(ctx: Ctx): void {
 
 /** An issue key as the terminal shows it, with the code of the project that holds that issue. */
 const shownRef = (r: string): string => {
-  const name = store.projectsAt(store.itemsDir(), "origin/main").get(parseKey(r)?.n ?? 0);
+  const name = store.projectsOnMain().get(parseKey(r)?.n ?? 0);
   return shownKey(r, name && loadRegistry()[name]?.code);
 };
 const ready = (i: issues.Issue) => (store.afterOf(i).length ? `after ${store.afterOf(i).map(shownRef).join(",")}` : "");

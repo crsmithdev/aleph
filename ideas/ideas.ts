@@ -1,19 +1,19 @@
 /**
  * The ideas: one folder per idea in the items repo, `ideas/<n>/` (the path is its key, `idea.<n>`; `slug` below is
  * that number as text). `idea.md` is frontmatter (`title`, `project`, `status`, `built`), the write-up, then `## Log`;
- * `<lens>-<YYYY-MM-DD-HHMM>.html|md` beside it are the lens results. Every write is one commit, pushed when the repo
- * has an origin. See docs/specs/2026-11-10-ideas.md.
+ * `<lens>-<YYYY-MM-DD-HHMM>.html|md` beside it are the lens results. Every write is one commit on origin/main,
+ * made by the store without a working tree; the checkout follows. See docs/specs/2026-11-10-ideas.md.
  */
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../lib/frontmatter.ts";
 import { today } from "../lib/day.ts";
 import { next } from "../lib/db.ts";
 import { key, parseKey } from "../lib/naming.ts";
-import { itemsDir } from "../issues/lib/store.ts";
+import { itemsDir, writeFiles } from "../issues/lib/store.ts";
 import { projectKey } from "../issues/lib/projects.ts";
 import { refuse } from "../lib/refusal.ts";
-import { commitPaths, git, pushOrigin } from "../vault/lib/git.ts";
+import { git } from "../lib/git.ts";
 import { openRun } from "../jobs/lib/roles/agent-run.ts";
 import { skillSection } from "../jobs/lib/roles/role-skill.ts";
 import { runFile } from "../jobs/lib/records/run-files.ts";
@@ -47,15 +47,11 @@ export function read(slug: string): Idea {
 
 const render = (i: Idea): string => `${serializeFrontmatter(i.fm)}\n${i.writeup}\n\n## Log\n${i.log.length ? `\n${i.log.join("\n")}\n` : ""}`;
 
-/** Write the idea and the extra paths, commit them as `<verb> idea.<n>` in the items repo, and push; a warning when the push failed, else null. */
-function write(i: Idea, verb: string, extra: string[] = []): string | null {
-  const dir = itemsDir();
-  if (!existsSync(join(dir, ".git"))) { mkdirSync(dir, { recursive: true }); git(dir, "init", "-q"); }
-  mkdirSync(join(ideasDir(), i.slug), { recursive: true });
-  writeFileSync(file(i.slug), render(i));
-  commitPaths(dir, `${verb} ${key("idea", Number(i.slug))}`, [file(i.slug), ...extra]);
-  const p = pushOrigin(dir);
-  return p.pushed || p.detail === "no origin" ? null : `warn: push of ${verb} ${key("idea", Number(i.slug))} failed: ${p.detail}; the commit stands`;
+/** Commit the idea and the `extra` files (by name in the idea's folder) as `<verb> idea.<n>` on the items repo's origin/main; a warning when the checkout did not follow, else null. */
+function write(i: Idea, verb: string, extra: Record<string, Uint8Array> = {}): string | null {
+  const folder = join("ideas", i.slug);
+  const follow = writeFiles(`${verb} ${key("idea", Number(i.slug))}`, { [join(folder, "idea.md")]: render(i), ...Object.fromEntries(Object.entries(extra).map(([name, bytes]) => [join(folder, name), bytes])) });
+  return follow && `warn: ${follow}`;
 }
 
 /** The highest idea number on disk. */
@@ -97,8 +93,7 @@ export function save(slug: string, lens: string, from: string): { file: string; 
   if (ext !== "html" && ext !== "md") refuse(`a lens result is .html or .md, not ${from}`);
   const now = new Date();
   const rel = `${lens}-${stamp(now).replace(" ", "-").replace(":", "")}.${ext}`;
-  copyFileSync(from, join(ideasDir(), slug, rel));
-  return { file: rel, warn: write({ ...i, log: [...i.log, `- ${stamp(now)} ${lens} saved: ${rel}`] }, "save", [join(ideasDir(), slug, rel)]) };
+  return { file: rel, warn: write({ ...i, log: [...i.log, `- ${stamp(now)} ${lens} saved: ${rel}`] }, "save", { [rel]: readFileSync(from) }) };
 }
 
 /** Replace the write-up; the push warning. */

@@ -14,6 +14,20 @@ import { getJson, putJson } from "../../../lib/db.ts";
 /** A numeric setting: an empty or missing variable is unset and gives the default. */
 const num = (name: string, dflt: number): number => Number(process.env[name] || dflt);
 
+/**
+ * The raw rows of the settings that other modules parse: `paused`, `always`, `timeouts` and `models`. The row's reader
+ * and writer are here; the caller keeps the meaning of the value (ask.ts, timeout.ts, models.ts, factory-status.ts).
+ */
+/** The time the factory paused, or null when it runs. */
+export const pausedAt = (): string | null => getJson<string | null>("settings", "paused", null);
+export const setPausedAt = (at: string | null): void => putJson("settings", "paused", at);
+export const alwaysRow = <T>(): Record<string, T> => getJson("settings", "always", {});
+export const setAlwaysRow = (row: unknown): void => putJson("settings", "always", row);
+export const timeoutsRow = <T>(): Record<string, T> => getJson("settings", "timeouts", {});
+export const setTimeoutsRow = (row: unknown): void => putJson("settings", "timeouts", row);
+export const modelsRow = (): any => getJson("settings", "models", {});
+export const setModelsRow = (row: unknown): void => putJson("settings", "models", row);
+
 /** The `caps` setting: the caps and settings of CAP_KEYS. A missing row is empty; other keys are left alone. */
 const capsRow = (): Record<string, unknown> => getJson("settings", "caps", {});
 

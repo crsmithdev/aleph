@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { flakeHealth, flakeSection, measure, renderTable, stageRows, storeLog, type Sources } from "./monitor-table.ts";
+import { flakeHealth, flakeSection, measure, renderTable, stageRows, type Sources } from "./monitor-table.ts";
+import { storeLog } from "../../../issues/lib/store.ts";
 import type { Entry, Run } from "../records/ledger.ts";
 
 const DAY = "2026-10-20";

@@ -6,8 +6,8 @@
  * product repo's main moves when an item changes, and no branch of a product repo can edit its own item.
  *
  * It is the Issues module: the predicates (`isBuildable`, `isSorted`, `awaitsChris`), one read of a project's list
- * (`reader`), and the named writes (`note`, `close`, `closeAndFile`, `file`). Every new issue but the flake tracker
- * comes from `writeFiling`, and every close is logged by `logClosed`. Callers do not read `fm.labels` or name a path.
+ * (`reader`), and the named writes (`note`, `close`, `closeAndFile`, `file`, `writeFiles` for the idea files). Every new issue but the flake tracker
+ * comes from `writeFiling`, and every close is logged by `logClosed`. Callers do not read or write `fm` fields (tests/store-lint.test.ts) or name a path.
  */
 import * as record from "../../jobs/lib/records/record.ts";
 import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
@@ -31,6 +31,11 @@ const MAIN = "main";
 const ATTEMPTS = 5;
 
 export const itemsDir = (): string => layout().items;
+/** The directory that moves when a write lands origin/main in the checkout, and the one that holds the registry: the UI's updater watches them. */
+export const storeRefDir = (): string => join(itemsDir(), ".git", "refs", "remotes", "origin");
+export const registryDir = (): string => join(itemsDir(), "projects");
+/** The name of the project of each issue on origin/main as last fetched, by issue number. */
+export const projectsOnMain = (): Map<number, string> => projectsAt(itemsDir(), `origin/${MAIN}`);
 const issueDir = (id: number): string => `issues/${id}`;
 const itemPath = (item: Issue): string => `${issueDir(item.id)}/issue.md`;
 
@@ -167,12 +172,76 @@ export function readLists(repos: Place[]): (Doc | null)[] {
 
 /** Log the close of `item`: `done` or `dropped` by its `closed_as`, with its `closed_why` as the detail. */
 function logClosed(item: Issue, by: string): void {
-  const why = item.fm.closed_why ? String(item.fm.closed_why) : undefined;
+  const why = closedWhy(item);
   logEvent({ subject: by, action: status(item), object: keyOf("issue", item.id), ...(why ? { detail: why } : {}) });
 }
 
 /** The `created` time of each issue at `rev` that has a parsable one, in ms by issue number, with no fetch. */
 export const createdAt = (dir: string, rev: string): Map<number, number> => new Map(loadAll(dir, rev).flatMap((i) => { const at = Date.parse(String(i.fm.created)); return Number.isNaN(at) ? [] : [[i.id, at] as [number, number]]; }));
+
+// Bulk commits add files whose work is older: they do not say when an issue was created.
+const BULK = /^(migrate:|todo: move every )/;
+const FILED = /^issues\/(\d+)\/issue\.md$/;
+export interface Filed { issue: Map<string, number | null> }
+let filedCache: Filed & { head: string } = { head: "", issue: new Map() };
+
+/** The commit of the store's origin/main, or "" when the store has none. */
+export const headOnMain = (dir = itemsDir()): string => {
+  const rev = existsSync(dir) ? git(dir, "rev-parse", "origin/main") : null;
+  return rev?.ok ? rev.out : "";
+};
+
+/** When each issue was filed, in ms: its created field, else when a commit added it. Null for one with no created field that a bulk commit added. Each read adds only the commits since the last. */
+export function filed(dir = itemsDir(), head = headOnMain(dir)): Filed {
+  if (!head) return { issue: new Map() };
+  if (head === filedCache.head) return filedCache;
+  const known = filedCache.head && git(dir, "merge-base", "--is-ancestor", filedCache.head, head).ok;
+  const next = known ? filedCache : { head, issue: new Map() };
+  const log = git(dir, "log", "--reverse", "--diff-filter=A", "--no-renames", "--name-only", "--format=@%ct %s", known ? `${filedCache.head}..${head}` : head).out;
+  let at: number | null = null;
+  const added: [number, number | null][] = [];
+  for (const line of log.split("\n")) {
+    if (line.startsWith("@")) {
+      const space = line.indexOf(" ");
+      at = BULK.test(line.slice(space + 1)) ? null : Number(line.slice(1, space)) * 1000;
+      continue;
+    }
+    const m = line.match(FILED);
+    if (m) added.push([Number(m[1]), at]);
+  }
+  const projects = added.length ? projectsAt(dir, head) : new Map<number, string>();
+  const created = added.length ? createdAt(dir, head) : new Map<number, number>();
+  for (const [n, when] of added) {
+    const name = projects.get(n);
+    if (!name) continue;
+    const key = `${name}-${n}`;
+    // A file added again keeps the first time.
+    if (!next.issue.has(key)) next.issue.set(key, created.get(n) ?? when);
+  }
+  filedCache = { ...next, head };
+  return filedCache;
+}
+
+export interface StoreChange { at: string; item: string; added: string[]; removed: string[] }
+
+/** The changes of the store's item files, from its git history. */
+export function storeLog(dir = itemsDir()): StoreChange[] {
+  if (!existsSync(dir)) return [];
+  const rev = git(dir, "rev-parse", "--verify", "-q", "origin/main").ok ? "origin/main" : "HEAD";
+  const r = git(dir, "log", rev, "--format=%x01%cI", "-p", "--unified=0", "--no-color", "--no-renames", "--", "issues/*/issue.md");
+  if (!r.ok) return [];
+  const out: StoreChange[] = [];
+  let at = "", cur: StoreChange | null = null;
+  for (const line of r.out.split("\n")) {
+    if (line.startsWith("\x01")) { at = new Date(line.slice(1)).toISOString(); cur = null; continue; }
+    const f = /^diff --git a\/\S+ b\/(\S+)$/.exec(line);
+    if (f) { cur = { at, item: f[1].replace(/^issues\/(\d+)\/issue\.md$/, (_, n) => issueKey(n)), added: [], removed: [] }; out.push(cur); continue; }
+    if (!cur || line.startsWith("+++") || line.startsWith("---")) continue;
+    const m = /^([+-])((?:reason|closed_as): .*)$/.exec(line);
+    if (m) (m[1] === "+" ? cur.added : cur.removed).push(m[2]);
+  }
+  return out.filter((c) => c.added.length || c.removed.length);
+}
 
 export const REMOVE_LINK = "Remove the link", DROP_WAITER = "Drop the waiter";
 
@@ -187,7 +256,7 @@ function parkWaiter(repo: Place, waiter: Issue, blocker: string): void {
   const w = writeList(repo, `todo: item ${waiter.id}: blocker ${blocker} dropped`, (doc) => {
     const item = issues.find(doc, waiter.id);
     if (!item || status(item) !== "open" || !afterOf(item).includes(blocker)) return null;
-    if (standing) item.fm.after = afterOf(item).filter((r) => r !== blocker);
+    if (standing) setAfter(item, afterOf(item).filter((r) => r !== blocker));
     else issues.setStatus(item, "parked");
     return true;
   });
@@ -256,6 +325,24 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
   }
 }
 
+/**
+ * Commit `files` (paths in the items repo, with their contents) as one commit on origin/main, made as writeList makes it
+ * and retried when the push is refused. Returns why the checkout did not follow, or null. A file lands on the checkout
+ * only through that follow, so a caller must not write the same path to disk first.
+ */
+export function writeFiles(message: string, files: Record<string, string | Uint8Array>): string | null {
+  const dir = itemsDir();
+  for (let attempt = 1; ; attempt++) {
+    fetchNow(dir);
+    const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
+    const commit = git(dir, "commit-tree", treeWithFiles(dir, `${base}^{tree}`, files), "-p", base, "-m", message);
+    if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
+    const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
+    if (push.ok) return followMain(dir, MAIN);
+    if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
+  }
+}
+
 // The media: images and PDFs attached to an item, stored flat beside its file and named in the item's `media` field.
 
 export const MEDIA_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf" };
@@ -304,6 +391,12 @@ export const parentOf = (doc: Doc, item: Issue): Issue | undefined => { const up
 export const parentIn = (key: string, item: Issue, lists: Reader = reader()): Issue | undefined => { const up = issues.parentRef(item); return up === undefined ? undefined : lists.item(key, up); };
 /** Whether the issue needs a plan run, or "plan the rest" on a parent. */
 export const planSet = (item: Issue): boolean => item.fm.plan === "true";
+/** Set or clear `plan`, so the next dispatch starts (or stops) intake splitting the issue. */
+export function setPlan(item: Issue, on: boolean): void { if (on) item.fm.plan = "true"; else delete item.fm.plan; }
+/** Record that intake took the issue in as buildable. */
+export const setIntake = (item: Issue): void => { item.fm.intake = "build"; };
+/** The reason an issue was closed with, if it has one. */
+export const closedWhy = (item: Issue): string | undefined => (item.fm.closed_why ? String(item.fm.closed_why) : undefined);
 /** The flake tracker: a note log, never built. */
 export const isTracker = (item: Issue): boolean => item.fm.tracker === "true";
 /** Whether intake took the item in: its `intake` field, or a triage `build` or `plan` note from before intake. */
@@ -317,6 +410,8 @@ export const isBuildable = (doc: Doc, item: Issue, repo: Place = { key: "" }): b
   && (issues.parentRef(item) !== undefined || !repo.author || takenIn(item));
 /** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
+/** Replace the issue's `after` links. */
+export const setAfter = (item: Issue, refs: string[]): void => { item.fm.after = refs; };
 /** Whether issue `ref` (`issue.<n>`) is dropped on the store's origin/main as last fetched. */
 export const isDropped = (ref: string): boolean => loadAll(itemsDir(), `origin/${MAIN}`).some((i) => keyOf("issue", i.id) === ref && status(i) === "dropped");
 /** The issues an issue names as plain references: its `refs`. They hold nothing. */

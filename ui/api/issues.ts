@@ -15,7 +15,7 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, isBuildable, reader, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
+import { afterOf, filed, isBuildable, reader, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -26,7 +26,6 @@ import { githubBase, jobProjector, logOnce } from "../state.ts";
 import { card, row, stageOf, type Row } from "../issue.ts";
 import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
-import { filed } from "./speed.ts";
 import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
 import { issueFacts, mainRed, readHolds, suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
 import { issueDecision } from "../../jobs/lib/gates/issue-decision.ts";

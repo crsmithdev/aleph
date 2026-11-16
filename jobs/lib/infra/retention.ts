@@ -10,7 +10,7 @@ import { factoryDir } from "../../../lib/layout.ts";
 import { today } from "../../../lib/day.ts";
 import { jobsDir } from "../records/ledger.ts";
 import { allRunRecords } from "../records/record.ts";
-import { conn } from "../../../lib/db.ts";
+import { pruneSnapshots } from "../../../lib/usage.ts";
 import { parseKey } from "../../../lib/naming.ts";
 
 const KEEP_DAYS = 90;
@@ -37,7 +37,7 @@ export function retain(now = Date.now()): number {
   }
   if (existsSync(dir)) for (const f of readdirSync(dir)) if (!f.startsWith(".") && !held.has(f) && changed(join(dir, f)) < cut) drop(join(dir, f));
 
-  n += conn().query("DELETE FROM usage WHERE time < ?").run(new Date(cut).toISOString()).changes;
+  n += pruneSnapshots(new Date(cut).toISOString());
 
   // <name>.day holds the local day the current <name>.log began, so the aside file takes the day of its oldest line.
   const fdir = factoryDir();

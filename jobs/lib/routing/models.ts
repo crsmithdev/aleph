@@ -6,7 +6,8 @@
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { conn, getJson, putJson } from "../../../lib/db.ts";
+import { lastFactor } from "../../../lib/usage.ts";
+import { modelsRow, setModelsRow } from "../infra/settings.ts";
 import { logSetting } from "../../../lib/layout.ts";
 import { openRouterKey } from "../../../lib/env.ts";
 import { MODELS, type Via } from "../../../lib/models.ts";
@@ -90,8 +91,7 @@ export async function openRouterSpend(): Promise<{ day: number; week: number; mo
  * The bill ran 1.26x to 1.42x the list price of the transcripts (2026-11-11): providers add fees the list leaves out.
  */
 export function openRouterFactor(): number {
-  const row = conn().query("SELECT factor FROM openrouter WHERE factor > 0 ORDER BY seq DESC LIMIT 1").get() as { factor: number } | null;
-  return row?.factor ?? 1;
+  return lastFactor() ?? 1;
 }
 
 /**
@@ -145,11 +145,11 @@ export const SIZE_OF: Record<string, Name | undefined> = { small: "small", mediu
 /** The name each entry had in a models setting stored before the sizes. */
 const OLD_NAMES: Partial<Record<Name, string>> = { small: "worker-low", medium: "worker-medium", review: "reviewer" };
 
-const write = (m: Record<Name, Setting>): void => putJson("settings", "models", m);
+const write = (m: Record<Name, Setting>): void => setModelsRow(m);
 
 /** Every size and role model with its setting. */
 export function readModels(): Record<Name, Setting> {
-  const stored: any = getJson("settings", "models", {});
+  const stored = modelsRow();
   const all = Object.fromEntries((Object.keys(OFFERS) as Name[]).map((t) => {
     const m = stored[t] ?? stored[OLD_NAMES[t] ?? ""];
     return [t, {

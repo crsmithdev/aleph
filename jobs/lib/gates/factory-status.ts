@@ -19,7 +19,7 @@ import { held, lock } from "../infra/locks.ts";
 import { isLive, isRunning } from "../infra/process.ts";
 import { causeOf, policyOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
-import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "../infra/settings.ts";
+import { LIVE_CAP, LOCAL_CAP, pausedAt, RUN_CAP, setPausedAt, suiteBudgetSeconds } from "../infra/settings.ts";
 import type { Via } from "../../../lib/models.ts";
 import { BACKENDS, probeBackend, readModels, viaOfRun, type Name, type Setting } from "../routing/models.ts";
 
@@ -72,12 +72,12 @@ export function recordHold(name: string, kind: Gate | "started", ev?: Hold): voi
 
 const DAY = 24 * 3600_000;
 
-export const paused = () => getJson("settings", "paused", null) !== null;
+export const paused = () => pausedAt() !== null;
 
 /** Pauses the factory (the `paused` setting holds the time) or, with `on` false, resumes it; a pause that stays logs nothing. */
 export function setPaused(on: boolean): void {
   const was = paused();
-  putJson("settings", "paused", on ? new Date().toISOString() : null);
+  setPausedAt(on ? new Date().toISOString() : null);
   if (was !== on) logSetting(`pause: ${on ? "on" : "off"}`);
 }
 

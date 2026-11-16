@@ -10,7 +10,7 @@ import { writeFileSync } from "node:fs";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { readFetched, readList } from "../../../issues/lib/store.ts";
+import { priorityOf, readFetched, readList } from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
@@ -138,7 +138,7 @@ function section(repo: Repo, i: issues.Issue, tracked: string[], now: number): s
   const log = history(repo, i, tracked);
   return [
     `### ${repo.key}-${issues.refOf(i)}: ${i.title}`,
-    `id ${issues.refOf(i)}, ${issues.kindOf(i)}, priority ${i.fm.priority ?? "medium"}, ${age}, updated ${(issues.updated(i) ?? "-").slice(0, 10)}`,
+    `id ${issues.refOf(i)}, ${issues.kindOf(i)}, priority ${priorityOf(i)}, ${age}, updated ${(issues.updated(i) ?? "-").slice(0, 10)}`,
     i.request.trim() && `#### Request\n${i.request.trim()}`,
     i.spec.trim() && `#### Spec\n${i.spec.trim()}`,
     i.notes.length && `#### Notes\n${i.notes.join("\n")}`,

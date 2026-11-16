@@ -11,7 +11,7 @@ import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { ISSUE_KEY, issueKey, parseKey } from "../../../lib/naming.ts";
 import { pastWork } from "../transitions/continuation.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { areasOf, labels, itemsDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, hasIssue, reader, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
+import { areasOf, labels, itemsDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, hasIssue, reader, setAfter, setIntake, setPlan, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
 import { always, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -343,7 +343,7 @@ export function addParts(file: File, issue: issues.Issue, parts: Part[], after: 
     const part = file({ title: c.title, kind: issues.kindProblem(kind) ? "task" : kind, priority: priorityOf(issue), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
     refs.push(issueKey(part.id));
   }
-  delete issue.fm.plan;
+  setPlan(issue, false);
   issue.spec = "";
   return refs;
 }
@@ -372,8 +372,8 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
         return o !== undefined && issues.status(o) === "open" && awaitsChris(refIn(repo.key, o));
       });
       const after = v.after.filter((r) => !waits.includes(r));
-      if (after.length) item.fm.after = after;
-      item.fm.intake = "build";
+      if (after.length) setAfter(item, after);
+      setIntake(item);
       if (v.parts) addParts(file, item, v.parts, after);
       else item.spec = specText(v.spec!);
       if (v.left_out) issues.note(item, `intake left out of the request: ${v.left_out}`);

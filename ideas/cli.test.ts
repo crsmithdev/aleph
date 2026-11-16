@@ -41,27 +41,29 @@ beforeEach(() => {
   };
   const saved = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
   Object.assign(process.env, vars);
+  withOrigin();
   restore = () => { for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v; };
 });
 afterEach(() => { restore(); rmSync(base, { recursive: true, force: true }); });
 
-/** The items repo as a clone of a bare `origin`. */
+/** The items repo as a clone of a bare `origin`, with one empty commit as the store needs. */
 function withOrigin(): void {
   git(base, "init", "-q", "--bare", "-b", "main", remote);
   rmSync(items, { recursive: true, force: true });
   git(base, "clone", "-q", remote, items);
+  git(items, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "start");
+  git(items, "push", "-q", "origin", "main");
   writeRepos({ aleph: { path: base, code: "a" } }, items);
 }
 
 const idea = (n: number | string) => readFileSync(join(store, String(n), "idea.md"), "utf8");
 
-test("add writes ideas/<n>/idea.md, prints its shown key, and makes one commit that it pushes", async () => {
-  withOrigin();
+test("add writes ideas/<n>/idea.md, prints its shown key, and makes one commit on origin/main", async () => {
   const a = await aleph(["idea", "add", "Issue history", "--target", "aleph", "--sketch", "-"], "Keep each issue's history.\n");
   expect(a).toMatchObject({ code: 0, out: "d-00001\n", err: "" });
   expect(idea(1)).toBe("---\ntitle: Issue history\nproject: project.1\nstatus: exploring\nbuilt: []\n---\n\nKeep each issue's history.\n\n## Log\n");
   expect(git(items, "status", "--porcelain", "--untracked-files=no")).toBe("");
-  expect(git(base, "--git-dir", remote, "log", "--format=%s", "main")).toBe("add idea.1");
+  expect(git(base, "--git-dir", remote, "log", "--format=%s", "main")).toBe("add idea.1\nstart");
 });
 
 test("add numbers each idea from the counter, takes a title that repeats, and refuses a target outside the registry", async () => {
@@ -71,20 +73,17 @@ test("add numbers each idea from the counter, takes a title that repeats, and re
   expect(existsSync(join(store, "3"))).toBe(false);
 });
 
-test("add with no target writes no project, and the first write makes the items folder a git repo with no origin", async () => {
+test("add with no target writes no project", async () => {
   const a = await aleph(["idea", "add", "A new tool"]);
   expect(a).toMatchObject({ code: 0, err: "" });
   expect(idea(1)).not.toContain("project");
-  expect(git(items, "log", "--format=%s")).toBe("add idea.1");
+  expect(git(items, "log", "--format=%s")).toBe("add idea.1\nstart");
 });
 
-test("a failed push keeps the commit, warns and exits 0", async () => {
-  withOrigin();
+test("a write with no reachable origin throws and commits nothing", async () => {
   git(items, "remote", "set-url", "origin", join(base, "nowhere.git"));
-  const a = await aleph(["idea", "add", "Issue history"]);
-  expect(a.code).toBe(0);
-  expect(a.err).toContain("warn");
-  expect(git(items, "log", "--format=%s")).toBe("add idea.1");
+  await expect(aleph(["idea", "add", "Issue history"])).rejects.toThrow("fetch failed");
+  expect(git(items, "log", "--format=%s")).toBe("start");
 });
 
 test("note appends a dated line under the log in local time, and edit replaces the write-up and keeps the rest", async () => {
@@ -100,7 +99,7 @@ test("note appends a dated line under the log in local time, and edit replaces t
   const text = idea(1);
   expect(text).toStartWith("---\ntitle: Issue history\nproject: project.1\nstatus: exploring\nbuilt: []\n---\n\nSecond.\n\nWith two paragraphs.\n\n## Log\n\n- ");
   expect(text).toContain("? who reads it");
-  expect(git(items, "log", "--format=%s")).toBe("edit idea.1\nnote idea.1\nadd idea.1");
+  expect(git(items, "log", "--format=%s")).toBe("edit idea.1\nnote idea.1\nadd idea.1\nstart");
 });
 
 test("list prints the exploring ideas with their project, and --status the built or dropped ones", async () => {

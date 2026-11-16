@@ -11,13 +11,12 @@
  * The `always` setting maps a key to `{ action, at }`. A key is a reason (all projects) or a reason, a colon and a project key (one project).
  */
 import { logEvent, logSetting } from "../../../lib/layout.ts";
-import { getJson, putJson } from "../../../lib/db.ts";
 import { BECAUSE, because, key, parseKey, word, type AskAction, type Event } from "../../../lib/naming.ts";
-import { INTAKE_TRIES, RUN_CAP } from "../infra/settings.ts";
+import { alwaysRow, INTAKE_TRIES, RUN_CAP, setAlwaysRow } from "../infra/settings.ts";
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, DROP_WAITER, isDropped, parentOf, partsOf, writeList, type Place } from "../../../issues/lib/store.ts";
+import { afterOf, DROP_WAITER, isDropped, parentOf, partsOf, setAfter, setPlan, writeList, type Place } from "../../../issues/lib/store.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -205,11 +204,11 @@ const RENAMED: Record<string, string> = { recommended: "resolve", retry: "contin
 
 /** The `always` setting. A missing row is empty; a grant of an old word reads as its verb; an entry that grant() would refuse is ignored. */
 export const readAlways = (): Record<string, Granted> =>
-  Object.fromEntries(Object.entries(getJson<Record<string, Granted>>("settings", "always", {}))
+  Object.fromEntries(Object.entries(alwaysRow<Granted>())
     .map(([reason, g]) => [reason, { ...g, action: RENAMED[g?.action] ?? g?.action }] as [string, Granted])
     .filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(reason, r, g.action); }));
 
-const write = (s: Record<string, Granted>): void => putJson("settings", "always", s);
+const write = (s: Record<string, Granted>): void => setAlwaysRow(s);
 
 /** The Always rule for `reason`, or null: with a `project`, that project's rule, else the rule for all projects. */
 export const always = (reason: string, project?: string): Granted | null => { const s = readAlways(); return (project && s[`${reason}:${project}`]) || s[reason] || null; };
@@ -349,10 +348,10 @@ export function decideAsk(ask: Ask | null, item: issues.Issue, said: string): vo
   if (ask?.reason === "blocker-dropped") {
     const drop = ask.options.find((o) => o.label === DROP_WAITER);
     if (drop && (said.includes(drop.label) || said.includes(drop.line))) issues.setStatus(item, "dropped", undefined, said);
-    else { item.fm.after = afterOf(item).filter((r) => !isDropped(r)); issues.setStatus(item, "open"); }
+    else { setAfter(item, afterOf(item).filter((r) => !isDropped(r))); issues.setStatus(item, "open"); }
     return;
   }
   if (ask?.reason !== "part-dropped") return;
-  if (keepsOpen(said)) item.fm.plan = "true";
+  if (keepsOpen(said)) setPlan(item, true);
   else issues.setStatus(item, "done");
 }

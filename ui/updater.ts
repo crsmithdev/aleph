@@ -31,7 +31,7 @@ import { factoryDir, layout, lastSeq } from "../lib/layout.ts";
 import { skillsDir } from "../jobs/lib/infra/settings.ts";
 import { annotationsFile, handoffsDir, vaultDir } from "../lib/paths.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
-import { fetchStore } from "../issues/lib/store.ts";
+import { fetchStore, registryDir, storeRefDir } from "../issues/lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
 import { errText } from "../lib/errtext.ts";
 
@@ -324,8 +324,8 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
   mkdirSync(dirname(dbFile()), { recursive: true });
   follow(factoryDir(), countsInFactory, "factory");
   // Each issue write moves this ref; the builds read the issues from it.
-  follow(join(layout().items, ".git", "refs", "remotes", "origin"), (f) => f === "main", "store");
-  follow(join(layout().items, "projects"), (f) => f.endsWith("project.md"), "registry", true);
+  follow(storeRefDir(), (f) => f === "main", "store");
+  follow(registryDir(), (f) => f.endsWith("project.md"), "registry", true);
   follow(skillsDir(), countsInSkills, "skills", true);
   followEvents();
   follow(vaultDir(), countsInVault, "vault", true);

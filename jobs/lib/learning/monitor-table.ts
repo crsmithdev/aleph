@@ -7,19 +7,17 @@
  * Each value is measured over local days. A count in the trailing column is the mean per day; a ratio, a rate and
  * a median are pooled over the 7 days.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonOr } from "../../../lib/json.ts";
 import { allRuns, loadRegistry, onOf, type Entry } from "../records/ledger.ts";
 import { allHolds, flakeNames, flakes, stopsStart, type Flake, type HoldRecord } from "../gates/factory-status.ts";
 import { layout } from "../../../lib/layout.ts";
-import { git } from "../infra/git.ts";
 import { causeOf } from "../records/outcome.ts";
-import { conn } from "../../../lib/db.ts";
-import { flakeTracker, reader, itemsDir, type Reader } from "../../../issues/lib/store.ts";
+import { snapshots } from "../../../lib/usage.ts";
+import { flakeTracker, reader, storeLog, type Reader, type StoreChange } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { quantile } from "../../../lib/windows.ts";
-import { issueKey } from "../../../lib/naming.ts";
 
 const DAY = 24 * 3600_000;
 
@@ -27,7 +25,6 @@ const DAY = 24 * 3600_000;
  * One change of one item file in one store commit. Only the lines the table reads are kept: the `reason:` and
  * `closed_as:` front matter.
  */
-export interface StoreChange { at: string; item: string; added: string[]; removed: string[] }
 
 /** Everything the table reads. readSources fills it from disk; a test gives its own. */
 export interface Sources {
@@ -281,25 +278,6 @@ function trackersOf(lists: Reader, keys = factoryKeys()): Sources["trackers"] {
 /** The flake lines of `aleph report`, read now. */
 export const flakeLines = (now = Date.now(), lists: Reader = reader()): string[] => flakeHealth(flakeSection(flakes(), trackersOf(lists), now));
 
-/** The changes of the store's item files, from its git history. */
-export function storeLog(dir = itemsDir()): StoreChange[] {
-  if (!existsSync(dir)) return [];
-  const rev = git(dir, "rev-parse", "--verify", "-q", "origin/main").ok ? "origin/main" : "HEAD";
-  const r = git(dir, "log", rev, "--format=%x01%cI", "-p", "--unified=0", "--no-color", "--no-renames", "--", "issues/*/issue.md");
-  if (!r.ok) return [];
-  const out: StoreChange[] = [];
-  let at = "", cur: StoreChange | null = null;
-  for (const line of r.out.split("\n")) {
-    if (line.startsWith("\x01")) { at = new Date(line.slice(1)).toISOString(); cur = null; continue; }
-    const f = /^diff --git a\/\S+ b\/(\S+)$/.exec(line);
-    if (f) { cur = { at, item: f[1].replace(/^issues\/(\d+)\/issue\.md$/, (_, n) => issueKey(n)), added: [], removed: [] }; out.push(cur); continue; }
-    if (!cur || line.startsWith("+++") || line.startsWith("---")) continue;
-    const m = /^([+-])((?:reason|closed_as): .*)$/.exec(line);
-    if (m) (m[1] === "+" ? cur.added : cur.removed).push(m[2]);
-  }
-  return out.filter((c) => c.added.length || c.removed.length);
-}
-
 /** The sources from disk. It fetches nothing and writes nothing. */
 export function readSources(): Sources {
   const keys = factoryKeys(), set = new Set(keys);
@@ -313,7 +291,7 @@ export function readSources(): Sources {
     storeLog: storeLog(),
     flakes: flakes(),
     trackers: trackersOf(lists, keys),
-    usage: conn().query("SELECT time AS at, seven_day FROM usage ORDER BY seq").all() as Sources["usage"],
+    usage: snapshots(),
   };
 }
 
