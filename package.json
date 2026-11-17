@@ -14,6 +14,6 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "aleph-tools": "git+ssh://git@github.com/crsmithdev/aleph-tools.git#88a0829c6e85f5419fb11adb50ff330f34d0990d"
+    "aleph-tools": "git+ssh://git@github.com/crsmithdev/aleph-tools.git#508cdd4f4221474799f6207b6fff1ff651789037"
   }
 }
