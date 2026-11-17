@@ -29,6 +29,25 @@ test("an agent adds a note on an anchor for every page, replies to a note, resol
   expect(read().map((x) => x.id)).toEqual(["p1"]);
 });
 
+/** Runs one worker in its own bun process, against this test's annotations file, and waits for it. */
+async function worker(body: string): Promise<void> {
+  const p = Bun.spawn([process.execPath, "-e", `import * as a from ${JSON.stringify(join(import.meta.dir, "annotations.ts"))}; ${body}`], { env: process.env, stdout: "pipe", stderr: "pipe" });
+  const code = await p.exited;
+  if (code !== 0) throw new Error(`a worker failed: ${await new Response(p.stderr).text()}`);
+}
+
+test("eight processes that add ten notes each at once keep all eighty", async () => {
+  await Promise.all([...Array(8).keys()].map((w) => worker(`for (let i = 0; i < 10; i++) a.add(".w${w}-" + i, "note");`)));
+  const ids = read().map((n) => n.id);
+  expect([ids.length, new Set(ids).size]).toEqual([80, 80]);
+});
+
+test("eight processes that reply five times each to one note keep all forty replies", async () => {
+  put(page);
+  await Promise.all([...Array(8)].map(() => worker(`for (let i = 0; i < 5; i++) a.reply("p1", "r" + i);`)));
+  expect(read()[0].replies.length).toBe(40);
+});
+
 test("a note without a selector or text, or an unknown id, is refused", () => {
   expect(() => put({ ...page, selector: "" })).toThrow(Refusal);
   expect(() => put({ ...page, note: "  " })).toThrow(Refusal);

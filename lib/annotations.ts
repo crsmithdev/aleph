@@ -6,6 +6,7 @@
  * A note is v 2 of the kit's shape. `url` "" puts a note on every page where its selector finds an element, which is
  * how an agent pins a note on an item by its `data-annotate` id without knowing which page shows it.
  */
+import { lockSync } from "../jobs/lib/infra/locks.ts";
 import { readJsonOr, writeJson } from "./json.ts";
 import { annotationsFile } from "./paths.ts";
 import { refuse } from "./refusal.ts";
@@ -28,13 +29,21 @@ function write(all: Note[]): void {
   writeJson(annotationsFile(), all);
 }
 
+/** The lock a writing verb holds from its read of the file to the rename of the new one, so two processes cannot
+ *  each write a version of the file that lacks the other's change. A waiter that never gets it refuses and writes nothing. */
+function holding<T>(fn: () => T): T {
+  const release = lockSync("annotations");
+  if (!release) refuse("another process is writing the annotations");
+  try { return fn(); } finally { release(); }
+}
+
 const now = () => new Date().toISOString();
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const one = (id: string): Note => read().find((n) => n.id === id) ?? refuse(`no annotation ${id}`);
 const str = (v: unknown, name: string): string => (typeof v === "string" ? v : refuse(`${name} must be a string`));
 
-/** Saves a note the page sends, in its place or at the end; it refuses a note without id, selector or text. */
-export function put(raw: unknown): Note {
+/** The write itself, under no lock: every caller holds the file's lock. */
+function save(raw: unknown): Note {
   const n = (raw ?? {}) as Record<string, unknown>;
   const note: Note = {
     v: 2, id: str(n.id, "id"), url: str(n.url ?? "", "url"), selector: str(n.selector, "selector"), text: str(n.text ?? "", "text"),
@@ -48,25 +57,30 @@ export function put(raw: unknown): Note {
   return note;
 }
 
+/** Saves a note the page sends, in its place or at the end; it refuses a note without id, selector or text. */
+export const put = (raw: unknown): Note => holding(() => save(raw));
+
 /** A new note by `by` on `selector`; `url` "" shows it on every page that has the element. */
 export const add = (selector: string, note: string, { url = "", by = "agent" as By } = {}): Note =>
   put({ id: uid(), url, selector, note, by, status: "open", replies: [], at: now() });
 
-/** Adds a reply to a note. */
-export function reply(id: string, text: string, by: By = "agent"): Note {
-  const n = one(id);
-  return put({ ...n, replies: [...n.replies, { by, text: text.trim() || refuse("a reply needs text"), at: now() }] });
-}
+/** Adds a reply to a note, reading the note under the lock that its write holds. */
+export const reply = (id: string, text: string, by: By = "agent"): Note =>
+  holding(() => {
+    const n = one(id);
+    return save({ ...n, replies: [...n.replies, { by, text: text.trim() || refuse("a reply needs text"), at: now() }] });
+  });
 
 /** Marks a note resolved or open again. */
-export const mark = (id: string, status: Status): Note => put({ ...one(id), status });
+export const mark = (id: string, status: Status): Note => holding(() => save({ ...one(id), status }));
 
 /** Deletes a note. */
-export function drop(id: string): { dropped: string } {
-  one(id);
-  write(read().filter((n) => n.id !== id));
-  return { dropped: id };
-}
+export const drop = (id: string): { dropped: string } =>
+  holding(() => {
+    one(id);
+    write(read().filter((n) => n.id !== id));
+    return { dropped: id };
+  });
 
 /** The selector of a `data-annotate` id, the anchor aleph puts on each issue and job row. */
 export const anchor = (id: string): string => `[data-annotate="${id.replace(/["\\]/g, "\\$&")}"]`;
