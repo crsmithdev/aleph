@@ -2,9 +2,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, setSystemTime, spyOn,
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as store from "../issues/lib/store.ts";
-import { writeList } from "../issues/lib/store.ts";
-import { add, setStatus } from "../issues/lib/todo.ts";
+import * as store from "../lib/store.ts";
+import { writeList } from "../lib/store.ts";
+import { add, setStatus } from "../lib/todo.ts";
 import { jobProjector, state } from "./state.ts";
 import { withEnv } from "./server.testkit.ts";
 import { loadRegistry, allJobs } from "../jobs/lib/records/ledger.ts";

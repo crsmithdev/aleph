@@ -10,8 +10,8 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 const OWNER = "lib/naming.ts";
-/** Sites to move: issues/lib/todo.ts builds `issue.${` at one place and parses `^issue\.\d+$` at another. */
-const LATER = ["issues/lib/todo.ts"];
+/** Sites to move: lib/todo.ts builds `issue.${` at one place and parses `^issue\.\d+$` at another. */
+const LATER = ["lib/todo.ts"];
 const SKIPPED = /\.test\.ts$/;
 
 test("no source file builds an issue key by hand but the owner", () => {

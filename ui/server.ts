@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { announce, shelf } from "aleph-tools/shelf.ts";
-import { skipFetches } from "../issues/lib/store.ts";
+import { skipFetches } from "../lib/store.ts";
 import { loadDotenv } from "../lib/env.ts";
 import { startPoller } from "./usage.ts";
 import { KEYED, respond, startUpdater, stopUpdater, updater } from "./updater.ts";

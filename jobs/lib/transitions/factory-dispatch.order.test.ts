@@ -2,10 +2,10 @@
 import { putJson } from "../../../lib/db.ts";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { join } from "node:path";
-import { writeList } from "../../../issues/lib/store.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { writeList } from "../../../lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
-import { readList } from "../../../issues/lib/store.ts";
+import { readList } from "../../../lib/store.ts";
 import { ctx, fakes, withChecks, setup, teardown } from "./factory.testkit.ts";
 import { baselineConfig } from "./baseline.ts";
 import { loadRegistry } from "../records/ledger.ts";

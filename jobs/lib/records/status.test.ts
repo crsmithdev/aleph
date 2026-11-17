@@ -6,7 +6,7 @@ import { facts, onMain, repoStages } from "./status.ts";
 import type { Repo } from "./ledger.ts";
 import { seed } from "../../job.testkit.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import type { Doc, Issue } from "../../../issues/lib/todo.ts";
+import type { Doc, Issue } from "../../../lib/todo.ts";
 
 // The test's clock: the recent-runs window reads it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

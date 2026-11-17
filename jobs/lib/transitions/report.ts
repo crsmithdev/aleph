@@ -3,8 +3,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { join } from "node:path";
 import { money } from "../../../lib/money.ts";
 import { LANES, lane, shownId } from "../../../lib/naming.ts";
-import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, fetchingOnceSync, priorityOf, readLists, reader } from "../../../issues/lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
+import { afterOf, fetchingOnceSync, priorityOf, readLists, reader } from "../../../lib/store.ts";
 import { git } from "../../../lib/git.ts";
 import { askOfItem, needsOf, refIn } from "../asks/ask.ts";
 import { factoryDir, logEvent } from "../../../lib/layout.ts";

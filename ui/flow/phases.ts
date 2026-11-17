@@ -1,7 +1,7 @@
 import { isAgentRun, onOf, type Run } from "../../jobs/lib/records/ledger.ts";
 import { issueHref, parseId, tail } from "../../lib/naming.ts";
 import { quantile, type buckets } from "../../lib/windows.ts";
-import type { Filed } from "../../issues/lib/store.ts";
+import type { Filed } from "../../lib/store.ts";
 import type { Speed } from "../api/flow.ts";
 
 /** The goal a run works on, as the issue store names it (`<repo>-<n>`), or undefined for a run on no issue. */

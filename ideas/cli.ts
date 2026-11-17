@@ -4,7 +4,7 @@ import type { Ctx } from "../cli/commands.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { refuse } from "../lib/refusal.ts";
 import { key, parseId, parseKey, shownKey } from "../lib/naming.ts";
-import { projectName } from "../issues/lib/projects.ts";
+import { projectName } from "../lib/projects.ts";
 import * as ideas from "./ideas.ts";
 
 /** An issue named in `idea built`, as its key: `issue.5`, a shown form such as `a1234`, or an old `aleph-5`. */

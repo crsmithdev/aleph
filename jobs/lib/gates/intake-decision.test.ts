@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readList, writeList } from "../../../issues/lib/store.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { readList, writeList } from "../../../lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
 import { plainAsk, setAsk } from "../asks/ask.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { loadRegistry } from "../records/ledger.ts";

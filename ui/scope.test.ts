@@ -6,8 +6,8 @@ import { eventIn, inProject, memoryIn, repoIn, scopeOf, traceIn, withProjects } 
 import { log } from "./api/gates.ts";
 import { logEvent, readEvents } from "../lib/layout.ts";
 import type { EventRow } from "../lib/naming.ts";
-import { writeList } from "../issues/lib/store.ts";
-import { add } from "../issues/lib/todo.ts";
+import { writeList } from "../lib/store.ts";
+import { add } from "../lib/todo.ts";
 import { SESSIONS } from "../lib/windows.ts";
 import { withEnv } from "./server.testkit.ts";
 import { forProject } from "./api/now.ts";

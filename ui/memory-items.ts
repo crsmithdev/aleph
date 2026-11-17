@@ -15,8 +15,8 @@ import { dailyNotes, readMemoryMd, scopeOf, type Note } from "../vault/lib/vault
 import { skillsDir } from "../jobs/lib/infra/settings.ts";
 import { claudeSettings } from "../lib/session-context.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
-import { afterOf, priorityOf, readLists } from "../issues/lib/store.ts";
-import * as todos from "../issues/lib/todo.ts";
+import { afterOf, priorityOf, readLists } from "../lib/store.ts";
+import * as todos from "../lib/todo.ts";
 import { activity } from "./activity.ts";
 import { langfuse } from "../lib/langfuse.ts";
 import { sessionRows, windowTraces } from "./api/sessions.ts";

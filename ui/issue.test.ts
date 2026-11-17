@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { card, row, stageOf } from "./issue.ts";
 import type { Ask } from "../jobs/lib/asks/ask.ts";
-import type { Issue } from "../issues/lib/todo.ts";
+import type { Issue } from "../lib/todo.ts";
 
 const item = (fm: Record<string, unknown> = {}): Issue => ({ id: 7, title: "Fix it", fm: { priority: "high", created: "2026-11-01T10:00:00Z", ...fm }, request: "", spec: "", notes: ["- what now?"] } as any);
 

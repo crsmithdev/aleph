@@ -3,7 +3,7 @@
     {
       "concept": "issue store reads an issue's Ask from jobs/",
       "copies": [
-        "issues/lib/store.ts:15",
+        "lib/store.ts:12",
         "jobs/lib/records/record.ts:73"
       ],
       "reason": "An issue's Ask lives in its job record, and record.ts is its one writer. The buildable and sorted predicates read it with record.issueAsk; the edge is one read with no runtime cycle (improve S1, 2026-11-10)."
@@ -98,8 +98,8 @@
     },
     {
       "copies": [
-        "issues/lib/todo.ts:73-78",
-        "issues/lib/todo.ts:75-80"
+        "lib/todo.ts:73-78",
+        "lib/todo.ts:75-80"
       ],
       "reason": "The two ranges overlap: they are the one-line field readers kindOf, sinceOf, created and closed, each reading a different frontmatter field."
     },

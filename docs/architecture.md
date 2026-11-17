@@ -63,10 +63,10 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 | `skills/` | One folder per skill with its `SKILL.md`; the licences of adapted skills |
 | `vault/` | `vault/lib/`, run by `aleph memory`: notes, the FTS index, git |
 | `cli/` | `cli/cli.ts` (the `aleph` entry) and `cli/commands.ts` (the command table) |
-| `issues/` | The work store client: `issues/lib/store.ts` (git I/O), `todo.ts` (file format), `issues.ts` (the `aleph issue` verbs); `issues/cli.ts` parses and prints `aleph issue` |
+| `issues/` | `issues/lib/issues.ts` (the `aleph issue` verbs) over the work store; `issues/cli.ts` parses and prints `aleph issue` |
 | `jobs/` | `jobs/lib/`: the factory; `jobs/systemd/` and `jobs/windows/` start it |
 | `ui/` | `ui/server.ts`; `ui/api/*.ts` routes, loaded by file name; `ui/views/*.js` pages; `ui/state.ts` builds the Status state in a worker thread |
-| `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts` |
+| `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts`; the work store: `store.ts` (git I/O), `todo.ts` (file format), `projects.ts` (the registry's files) |
 | `identity/` | The global `CLAUDE.md` and `VOICE.md` |
 | `compose/` | Langfuse in Docker |
 | `tests/` | Repo-wide tests, `tests/live/` against real services |

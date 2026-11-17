@@ -5,9 +5,9 @@
  *
  * An issue is closed by its `closed_as` field. A child is an issue with a `from` field that names its parent.
  */
-import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
-import { next } from "../../lib/db.ts";
-import { ISSUE_KINDS, issueKey, parseId, parseKey, shownKey, SOURCES, STATUSES } from "../../lib/naming.ts";
+import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
+import { next } from "./db.ts";
+import { ISSUE_KINDS, issueKey, parseId, parseKey, shownKey, SOURCES, STATUSES } from "./naming.ts";
 
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["project", "created"] as const;

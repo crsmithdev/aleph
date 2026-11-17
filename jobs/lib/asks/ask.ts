@@ -15,8 +15,8 @@ import { BECAUSE, because, detailOf, key, parseKey, word, type AskAction, type E
 import { alwaysRow, INTAKE_TRIES, RUN_CAP, setAlwaysRow } from "../infra/settings.ts";
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
-import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, isDropped, parentOf, partsOf, reopen, setAfter, setPlan, writeList, type Place } from "../../../issues/lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
+import { afterOf, isDropped, parentOf, partsOf, reopen, setAfter, setPlan, writeList, type Place } from "../../../lib/store.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 import { errText } from "../../../lib/errtext.ts";

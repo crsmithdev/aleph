@@ -12,7 +12,7 @@ import { isLive } from "../infra/process.ts";
 import { jobFolder } from "./run-files.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit } from "../infra/settings.ts";
-import { readProjects } from "../../../issues/lib/projects.ts";
+import { readProjects } from "../../../lib/projects.ts";
 import { touch } from "../../../lib/sources.ts";
 import { refuse } from "../../../lib/refusal.ts";
 import { expand } from "../../../lib/paths.ts";

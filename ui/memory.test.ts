@@ -9,8 +9,8 @@ import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { updater } from "./updater.ts";
 import { onLater } from "./build.ts";
 import { items } from "./memory-items.ts";
-import { writeList } from "../issues/lib/store.ts";
-import { add } from "../issues/lib/todo.ts";
+import { writeList } from "../lib/store.ts";
+import { add } from "../lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
 import { scope } from "./views/lib/address.js";
 // @ts-ignore plain JS, shared with the page

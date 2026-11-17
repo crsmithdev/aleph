@@ -5,7 +5,7 @@
  */
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { parseProject, renderProject } from "../issues/lib/projects.ts";
+import { parseProject, renderProject } from "../lib/projects.ts";
 import { git } from "../lib/git.ts";
 import { alephPath } from "../lib/paths.ts";
 

@@ -46,7 +46,7 @@ erDiagram
 
 ## Registry: `items/projects/`
 
-One file per project: `projects/<n>/project.md`. The path is the key, `project.<n>`. The frontmatter holds the fields below and the body is the project's description. `loadRegistry` in `jobs/lib/records/ledger.ts` reads the files from the items checkout; a project with no `path` is not a repo and is left out. A write of an issue for an unknown project makes its file (`writeList` in `issues/lib/store.ts`).
+One file per project: `projects/<n>/project.md`. The path is the key, `project.<n>`. The frontmatter holds the fields below and the body is the project's description. `loadRegistry` in `jobs/lib/records/ledger.ts` reads the files from the items checkout; a project with no `path` is not a repo and is left out. A write of an issue for an unknown project makes its file (`writeList` in `lib/store.ts`).
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -67,7 +67,7 @@ One file per project: `projects/<n>/project.md`. The path is the key, `project.<
 
 ## Items repo: `items/`
 
-A private git repo. Its `origin/main` is the record. A read fetches and reads through `git cat-file`. A write is one commit made with `commit-tree`, pushed to `origin/main` with up to 5 retries, then the checkout fast-forwards (`issues/lib/store.ts`). `aleph issue` and `aleph idea` are the only writers, and `git-guard` denies an Edit or Write in the repo.
+A private git repo. Its `origin/main` is the record. A read fetches and reads through `git cat-file`. A write is one commit made with `commit-tree`, pushed to `origin/main` with up to 5 retries, then the checkout fast-forwards (`lib/store.ts`). `aleph issue` and `aleph idea` are the only writers, and `git-guard` denies an Edit or Write in the repo.
 
 The numbers of issues, projects and ideas come from one counter for each kind in `aleph.db` (`next` in `lib/db.ts`). A write takes its number before the push, so a refused push leaves a gap. The floor of the issue counter is the highest `items/issues/<n>/`.
 
@@ -100,7 +100,7 @@ The Status page shows the wrong weekly usage.
 - 2026-11-04T10:12:00.000Z: Reproduced on main at c26c10f
 ```
 
-`issues/lib/todo.ts` (`parseItem`, `renderItem`) owns the format. Notes are append-only: two writers each add a line, and neither erases the other's.
+`lib/todo.ts` (`parseItem`, `renderItem`) owns the format. Notes are append-only: two writers each add a line, and neither erases the other's.
 
 | Field | Values | Meaning |
 |---|---|---|
@@ -124,7 +124,7 @@ The Status page shows the wrong weekly usage.
 
 The status comes from the fields: `closed_as`, else `parked`, else `open`. `aleph issue lint` flags retired fields.
 
-An issue's children are the issues whose `from` names it (`partsOf` in `issues/lib/store.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
+An issue's children are the issues whose `from` names it (`partsOf` in `lib/store.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
 
 ## Job rows and issue state: `aleph.db`
 

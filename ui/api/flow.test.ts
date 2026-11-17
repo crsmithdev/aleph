@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { jobFolder } from "../../jobs/lib/records/run-files.ts";
 import { closePass, openPass } from "../../lib/sources.ts";
 import { withEnv } from "../server.testkit.ts";
-import { filed } from "../../issues/lib/store.ts";
+import { filed } from "../../lib/store.ts";
 import { inputs, routes, speed } from "./flow.ts";
 import { activeIssues, phaseTimes, phases } from "../flow/phases.ts";
 import { agentStats } from "../flow/agents.ts";

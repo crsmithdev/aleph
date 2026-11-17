@@ -4,7 +4,7 @@ import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import { eventIn, factoryWide, inProject, known, repoIn, scopeOf } from "./scope.ts";
 import { heraldContext, heraldEvents, state, type State } from "../state.ts";
 import { heraldRows } from "../herald.ts";
-import { reader } from "../../issues/lib/store.ts";
+import { reader } from "../../lib/store.ts";
 import { allRuns } from "../../jobs/lib/records/ledger.ts";
 import type { EventRow } from "../../lib/naming.ts";
 import { once } from "../../lib/sources.ts";

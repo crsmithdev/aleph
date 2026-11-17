@@ -1,7 +1,7 @@
 /** The stall check: the work the factory could move now and does not, which the tick's sweep starts. See docs/factory.md. */
 import { issueKey } from "../../../lib/naming.ts";
-import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssues, reader } from "../../../issues/lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
+import { buildableIssues, reader } from "../../../lib/store.ts";
 import { allJobs } from "../records/ledger.ts";
 import { isLive } from "../infra/process.ts";
 import { waitingToLand } from "../land/landing.ts";

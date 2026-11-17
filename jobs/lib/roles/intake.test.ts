@@ -3,8 +3,8 @@ import { putJson } from "../../../lib/db.ts";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssues, isBuildable, isSorted, itemsDir, mediaPath, partsOf, readList, writeList, type File } from "../../../issues/lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
+import { buildableIssues, isBuildable, isSorted, itemsDir, mediaPath, partsOf, readList, writeList, type File } from "../../../lib/store.ts";
 
 import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts } from "./intake.ts";
 import type { Spec } from "./issue-spec.ts";

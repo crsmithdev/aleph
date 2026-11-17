@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { readProjects } from "../issues/lib/projects.ts";
+import { readProjects } from "./projects.ts";
 import { probe } from "./git.ts";
 import { touch } from "./sources.ts";
 

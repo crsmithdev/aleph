@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, section, state, setup, teardown } from "../../cli.testkit";
 import { call, job, reportText } from "../../flow.testkit.ts";
-import { noteFlake } from "../../../issues/lib/store.ts";
+import { noteFlake } from "../../../lib/store.ts";
 import { readRepos, writeRepos } from "../../../tests/projects.testkit.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.

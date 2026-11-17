@@ -9,8 +9,8 @@
 import { writeFileSync } from "node:fs";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import * as issues from "../../../issues/lib/todo.ts";
-import { priorityOf, readFetched, readList } from "../../../issues/lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
+import { priorityOf, readFetched, readList } from "../../../lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";

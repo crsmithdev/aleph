@@ -6,7 +6,7 @@
  * It carries the server's clock too: a test that fakes the server's clock gets builds on that clock.
  */
 import { join } from "node:path";
-import { skipFetches } from "../issues/lib/store.ts";
+import { skipFetches } from "../lib/store.ts";
 import { closePass, openPass, setOnLater, touched } from "../lib/sources.ts";
 import { stateSlowMs } from "../jobs/lib/infra/settings.ts";
 import { loadRoutes, match } from "./server.ts";

@@ -29,8 +29,9 @@ test("lib/, vault/, jobs/ and issues/ do not import ui/", () => {
   expect(offenders(/from "(?:\.\.\/)+ui\//, [], ["lib/**", "vault/**", "jobs/**", "issues/**"])).toEqual([]);
 });
 
-test("lib/ does not import jobs/", () => {
-  expect(offenders(/from "(?:\.\.\/)+jobs\//, [], ["lib/**"])).toEqual([]);
+test("lib/ does not import jobs/, but the issue store reads an issue's Ask from its job record", () => {
+  expect(offenders(/from "(?:\.\.\/)+jobs\//, ["lib/store.ts"], ["lib/**"])).toEqual([]);
+  expect(offenders(/from "(?:\.\.\/)+jobs\/(?!lib\/records\/record\.ts")/, [], ["lib/**"])).toEqual([]);
 });
 
 test("only lib/langfuse.ts builds Langfuse's authorization", () => {
@@ -41,8 +42,8 @@ test("roles, land and gates do not import the orchestrator", () => {
   expect(offenders(/from "\.\.\/transitions\/factory\.ts"/, [], ["jobs/lib/roles/**", "jobs/lib/land/**", "jobs/lib/gates/**"])).toEqual([]);
 });
 
-test("the issue store reads from jobs/ only an issue's Ask: its job record and the Ask module; issues/cli.ts, the `aleph issue` handler, reads the rest", () => {
-  expect(offenders(/from "(?:\.\.\/)+jobs\/(?!lib\/records\/record\.ts"|lib\/asks\/ask\.ts")/, ["issues/lib/issues.ts", "issues/cli.ts"], ["issues/**"])).toEqual([]);
+test("issues/ imports jobs/ only in the issue verbs and issues/cli.ts, the `aleph issue` handler", () => {
+  expect(offenders(/from "(?:\.\.\/)+jobs\//, ["issues/lib/issues.ts", "issues/cli.ts"], ["issues/**"])).toEqual([]);
 });
 
 test("only lib/day.ts writes a date as toISOString().slice(0, 10)", () => {

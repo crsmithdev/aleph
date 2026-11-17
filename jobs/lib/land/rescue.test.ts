@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { close, readList, writeList } from "../../../issues/lib/store.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { close, readList, writeList } from "../../../lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
 import { dispatchIssues } from "../transitions/dispatch.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
 import { readEvents } from "../../../lib/layout.ts";

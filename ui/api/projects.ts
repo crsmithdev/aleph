@@ -3,8 +3,8 @@
  * issues and whether it is onboarded: its agent runs are factory runs (`sandbox` in the registry).
  */
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { readLists } from "../../issues/lib/store.ts";
-import { status } from "../../issues/lib/todo.ts";
+import { readLists } from "../../lib/store.ts";
+import { status } from "../../lib/todo.ts";
 import type { Routes } from "../server.ts";
 
 export const routes: Routes = {

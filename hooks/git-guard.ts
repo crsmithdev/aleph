@@ -15,7 +15,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 
 try {
-  const { itemsDir } = await import("../issues/lib/store.ts");
+  const { itemsDir } = await import("../lib/store.ts");
   const { home, vaultDir } = await import("../lib/paths.ts");
   const { probe } = await import("../lib/git.ts");
 

@@ -10,8 +10,8 @@ import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmat
 import { clock, today } from "../lib/day.ts";
 import { next } from "../lib/db.ts";
 import { key, parseKey } from "../lib/naming.ts";
-import { itemsDir, writeFiles } from "../issues/lib/store.ts";
-import { projectKey } from "../issues/lib/projects.ts";
+import { itemsDir, writeFiles } from "../lib/store.ts";
+import { projectKey } from "../lib/projects.ts";
 import { refuse } from "../lib/refusal.ts";
 import { git } from "../lib/git.ts";
 import { openRun } from "../jobs/lib/roles/agent-run.ts";

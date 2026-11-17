@@ -8,7 +8,7 @@
  * the issue. The Ask markers (`asked`, `asked-spec`) stay in ask.ts.
  */
 import { skillSection } from "../roles/role-skill.ts";
-import { reader, runMedia } from "../../../issues/lib/store.ts";
+import { reader, runMedia } from "../../../lib/store.ts";
 import { needsOf } from "../asks/ask.ts";
 import { git } from "../../../lib/git.ts";
 import { jobById, jobsNamed, notes, readFile, type Job } from "../records/job.ts";

@@ -5,8 +5,8 @@
  * The repo's checks and the start of more land runs reach this module through
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
-import { closeAndFile, note, reader } from "../../../issues/lib/store.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { closeAndFile, note, reader } from "../../../lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
 import { filing } from "../transitions/filing.ts";
 import { fetchOrigin, followMain, git } from "../../../lib/git.ts";
 import { needsOf } from "../asks/ask.ts";

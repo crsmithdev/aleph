@@ -8,7 +8,7 @@ import { issueDecision, type IssueDecision, type IssueFacts } from "./issue-deci
 import { factoryGates, nextRun } from "./factory-status.ts";
 import { backendHold, heldGoal } from "./holds.ts";
 import { SIZES, type Size } from "../routing/route.ts";
-import { isRedMain } from "../../../issues/lib/store.ts";
+import { isRedMain } from "../../../lib/store.ts";
 import type { Job } from "../records/job.ts";
 import type { Repo } from "../records/ledger.ts";
 

@@ -6,8 +6,8 @@ import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { countsInFactory, countsInSkills } from "./updater.ts";
 import { seed, reseed, type Seed } from "../jobs/job.testkit.ts";
 import { newItems, writeRepos } from "../tests/projects.testkit.ts";
-import { writeList } from "../issues/lib/store.ts";
-import { add } from "../issues/lib/todo.ts";
+import { writeList } from "../lib/store.ts";
+import { add } from "../lib/todo.ts";
 import { git } from "../lib/git.ts";
 import { logEvent } from "../lib/layout.ts";
 

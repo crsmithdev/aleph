@@ -7,8 +7,8 @@
 import { today } from "../../../lib/day.ts";
 import { DAILY_HOUR } from "../../../lib/schedule.ts";
 import { issueKey } from "../../../lib/naming.ts";
-import * as issues from "../../../issues/lib/todo.ts";
-import { reader, type Reader } from "../../../issues/lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
+import { reader, type Reader } from "../../../lib/store.ts";
 import { git } from "../../../lib/git.ts";
 import { askOfItem } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";

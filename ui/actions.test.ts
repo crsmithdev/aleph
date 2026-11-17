@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeList } from "../issues/lib/store.ts";
-import { add } from "../issues/lib/todo.ts";
+import { writeList } from "../lib/store.ts";
+import { add } from "../lib/todo.ts";
 import { addPart } from "../issues/lib/parts.testkit.ts";
 import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { seed } from "../jobs/job.testkit.ts";

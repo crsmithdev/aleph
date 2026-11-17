@@ -14,11 +14,11 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOfItem, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, filed, isBuildable, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../issues/lib/store.ts";
+import { afterOf, filed, isBuildable, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../lib/store.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import * as todos from "../../issues/lib/todo.ts";
+import * as todos from "../../lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, logOnce } from "../state.ts";

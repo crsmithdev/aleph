@@ -18,12 +18,12 @@ import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { always, logAlways, type Ask } from "../asks/ask.ts";
 import { causeOf } from "../records/outcome.ts";
-import { fileIssue, reopen, writeList, type Effects, type Place } from "../../../issues/lib/store.ts";
+import { fileIssue, reopen, writeList, type Effects, type Place } from "../../../lib/store.ts";
 import { PROPOSE_AT } from "../infra/settings.ts";
 import { cutTitle, writeLine, writeTitle } from "../roles/title.ts";
 import { specText } from "../roles/issue-spec.ts";
 import { mainHead } from "../../../issues/lib/issues.ts";
-import { edit, find, parseIssueRef, setStatus, titleProblem } from "../../../issues/lib/todo.ts";
+import { edit, find, parseIssueRef, setStatus, titleProblem } from "../../../lib/todo.ts";
 
 const CORRECTION_AT = 0.7;
 const WINDOW = 14 * 24 * 3600_000;

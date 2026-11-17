@@ -3,15 +3,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "./todo.ts";
-import { addPart } from "./parts.testkit.ts";
+import { addPart } from "../issues/lib/parts.testkit.ts";
 import * as store from "./store.ts";
-import * as verbs from "./issues.ts";
-import { askChris, askOf, setAsk, refIn, clearAsk } from "../../jobs/lib/asks/ask.ts";
-import * as record from "../../jobs/lib/records/record.ts";
-import { seed as seedJob } from "../../jobs/job.testkit.ts";
-import { storeRepos } from "../../tests/git.testkit.ts";
-import { readEvents } from "../../lib/layout.ts";
-import { lockRetry } from "../../lib/git.ts";
+import * as verbs from "../issues/lib/issues.ts";
+import { askChris, askOf, setAsk, refIn, clearAsk } from "../jobs/lib/asks/ask.ts";
+import * as record from "../jobs/lib/records/record.ts";
+import { seed as seedJob } from "../jobs/job.testkit.ts";
+import { storeRepos } from "../tests/git.testkit.ts";
+import { readEvents } from "./layout.ts";
+import { lockRetry } from "./git.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;

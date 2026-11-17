@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import * as issues from "../../../issues/lib/todo.ts";
+import * as issues from "../../../lib/todo.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { change, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 import { decider } from "./decider.ts";

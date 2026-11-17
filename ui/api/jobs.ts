@@ -21,8 +21,8 @@ import { isSection, readSections } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { runNowOf } from "./issues.ts";
-import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
-import * as todos from "../../issues/lib/todo.ts";
+import { parentOf, partsOf, readList } from "../../lib/store.ts";
+import * as todos from "../../lib/todo.ts";
 
 /** `id` is the job key, the key of its logs; `job` is the key the page shows. */
 interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "lens" | "housekeeper" | "maintainer"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }

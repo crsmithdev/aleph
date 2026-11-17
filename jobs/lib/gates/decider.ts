@@ -5,8 +5,8 @@
  * (what a start needs); false reads what was last fetched (a page or the tick, which wait for no network).
  * A decider reads one list and one stage table for each repo, once.
  */
-import { projectOfIssue, readList, reader, type Reader } from "../../../issues/lib/store.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { projectOfIssue, readList, reader, type Reader } from "../../../lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
 import { errText } from "../../../lib/errtext.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { issueKey, parseKey } from "../../../lib/naming.ts";

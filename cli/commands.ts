@@ -18,7 +18,7 @@ import { onMain } from "../jobs/lib/records/status.ts";
 import { settleOnMain } from "../jobs/lib/land/landing.ts";
 import { fetchOrigin, git } from "../lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
-import * as issues from "../issues/lib/todo.ts";
+import * as issues from "../lib/todo.ts";
 import { yesterday } from "../lib/day.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import { todoCmd } from "../issues/cli.ts";

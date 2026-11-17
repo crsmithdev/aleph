@@ -4,8 +4,8 @@
  * `aleph judge haiku`, gives an empty triage.
  */
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
-import { areasOf } from "./store.ts";
-import { status, type Doc } from "./todo.ts";
+import { areasOf } from "../../lib/store.ts";
+import { status, type Doc } from "../../lib/todo.ts";
 
 const CUT = 0.7;
 const MAX_QUESTIONS = 50;

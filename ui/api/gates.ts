@@ -21,8 +21,8 @@ import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { parseKey, type EventRow } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
-import { reader } from "../../issues/lib/store.ts";
-import { noteOf } from "../../issues/lib/todo.ts";
+import { reader } from "../../lib/store.ts";
+import { noteOf } from "../../lib/todo.ts";
 import { NOTE } from "../../jobs/lib/roles/recheck.ts";
 import { intervalOf, setTimerInterval, TIMERS } from "../../jobs/lib/infra/systemd.ts";
 

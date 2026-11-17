@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { flakeHealth, flakeSection, measure, renderTable, stageRows, type Sources } from "./monitor-table.ts";
-import { storeLog } from "../../../issues/lib/store.ts";
+import { storeLog } from "../../../lib/store.ts";
 import type { Entry, Run } from "../records/ledger.ts";
 
 const DAY = "2026-10-20";

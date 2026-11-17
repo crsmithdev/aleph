@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { readList } from "../../../issues/lib/store.ts";
+import { readList } from "../../../lib/store.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { read } from "../records/record.ts";
 import { setModel } from "../routing/models.ts";

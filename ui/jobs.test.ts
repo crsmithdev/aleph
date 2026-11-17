@@ -2,9 +2,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, setSystemTime, 
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../issues/lib/store.ts";
+import { readList, writeList } from "../lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
-import { add, setStatus } from "../issues/lib/todo.ts";
+import { add, setStatus } from "../lib/todo.ts";
 import { routes, transcript } from "./api/jobs.ts";
 import { withEnv } from "./server.testkit.ts";
 // @ts-ignore the module is plain JS, shared with the page

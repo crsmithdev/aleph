@@ -15,7 +15,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { MEDIA_BYTES, MEDIA_TYPES } from "../../issues/lib/store.ts";
+import { MEDIA_BYTES, MEDIA_TYPES } from "../../lib/store.ts";
 import { startChat } from "../../jobs/lib/roles/agent-call.ts";
 import { chatIdleMs } from "../../jobs/lib/infra/settings.ts";
 import { read, type Note } from "../../lib/annotations.ts";

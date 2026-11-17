@@ -9,17 +9,17 @@
  * (`reader`), and the named writes (`note`, `close`, `closeAndFile`, `file`, `writeFiles` for the idea files). Every new issue but the flake tracker
  * comes from `writeFiling`, and every close is logged by `logClosed`. Callers do not read or write `fm` fields (tests/store-lint.test.ts) or name a path.
  */
-import * as record from "../../jobs/lib/records/record.ts";
-import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
-import { layout, logEvent } from "../../lib/layout.ts";
-import { next } from "../../lib/db.ts";
-import { CLOSED, issueKey, key as keyOf, PRIORITIES, SOURCES } from "../../lib/naming.ts";
+import * as record from "../jobs/lib/records/record.ts";
+import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "./git.ts";
+import { layout, logEvent } from "./layout.ts";
+import { next } from "./db.ts";
+import { CLOSED, issueKey, key as keyOf, PRIORITIES, SOURCES } from "./naming.ts";
 import * as issues from "./todo.ts";
 import { parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
 import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { errText } from "../../lib/errtext.ts";
+import { errText } from "./errtext.ts";
 
 /** A repo of the store. With `author`, intake also takes in an issue filed with a spec before it builds. */
 export interface Place { key: string; author?: boolean }

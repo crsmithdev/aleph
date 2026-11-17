@@ -1,4 +1,4 @@
-import { add, type Doc, type Issue, type Source } from "./todo.ts";
+import { add, type Doc, type Issue, type Source } from "../../lib/todo.ts";
 import { issueKey } from "../../lib/naming.ts";
 
 /** Add a child of `issue`: an issue with `from: issue.<n>`, `after`, the issue's kind and priority, and a `source`: the issue's when it is not chris, else agent. Only tests call it. */

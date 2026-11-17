@@ -6,7 +6,7 @@
 import { scopeOfCwd } from "../../lib/paths.ts";
 import { once } from "../../lib/sources.ts";
 import { parseId, parseKey, type EventRow } from "../../lib/naming.ts";
-import { projectsOnMain } from "../../issues/lib/store.ts";
+import { projectsOnMain } from "../../lib/store.ts";
 import { DAY, FACTORY, WINDOWS } from "../../lib/windows.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { allRunRecords } from "../../jobs/lib/records/record.ts";

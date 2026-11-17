@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import * as issues from "./todo.ts";
-import { addPart } from "./parts.testkit.ts";
+import { addPart } from "../issues/lib/parts.testkit.ts";
 
 test("titleProblem passes a part title with its group and refuses length, a final period and a prefix", () => {
   expect(issues.titleProblem("[Status layout] Put the metrics on the left", { part: true })).toBeNull();

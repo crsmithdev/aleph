@@ -2,8 +2,8 @@
  * The dispatch: `aleph dispatch` starts every ready issue up to the live cap, or one issue now. See docs/factory.md.
  */
 import { issueKey } from "../../../lib/naming.ts";
-import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssue, buildableIssues, reader } from "../../../issues/lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
+import { buildableIssue, buildableIssues, reader } from "../../../lib/store.ts";
 import { askChris, plainAsk } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { allJobs, type Repo } from "../records/ledger.ts";

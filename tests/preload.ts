@@ -7,7 +7,7 @@ import { afterEach } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { skipFetches } from "../issues/lib/store.ts";
+import { skipFetches } from "../lib/store.ts";
 import { procId } from "./git.testkit.ts";
 
 // bun --parallel never fires process.on("exit"), so each folder carries the id of its process, and a test

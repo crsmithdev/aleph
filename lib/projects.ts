@@ -6,9 +6,9 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { splitFrontmatter } from "../../lib/frontmatter.ts";
-import { layout } from "../../lib/layout.ts";
-import { key } from "../../lib/naming.ts";
+import { splitFrontmatter } from "./frontmatter.ts";
+import { layout } from "./layout.ts";
+import { key } from "./naming.ts";
 
 export interface Project {
   /** The number in its path. */

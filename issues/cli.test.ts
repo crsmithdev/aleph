@@ -2,7 +2,7 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { env, fx, issueFile, remoteItem, seed, sh, useFixture } from "./issues.testkit.ts";
-import { clock, renderItem, titleProblem } from "./lib/todo.ts";
+import { clock, renderItem, titleProblem } from "../lib/todo.ts";
 import { seed as seedJob } from "../jobs/job.testkit.ts";
 import { askOf, clearAsk, setAsk } from "../jobs/lib/asks/ask.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
@@ -120,7 +120,7 @@ test("dates are local, not UTC", () => {
   // `bun test` pins TZ=UTC, so the stamp has to be read from a process that has
   // a real zone. At 18:06 in Los Angeles it is already tomorrow in UTC, and an
   // item filed that evening used to land on tomorrow's date.
-  const lib = join(import.meta.dir, "lib", "todo.ts");
+  const lib = join(import.meta.dir, "..", "lib", "todo.ts");
   const dayLib = join(import.meta.dir, "..", "lib", "day.ts");
   const p = Bun.spawnSync(
     ["bun", "-e", `import {minute} from ${JSON.stringify(lib)};

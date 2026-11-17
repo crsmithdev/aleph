@@ -31,7 +31,7 @@ import { factoryDir, layout, lastSeq } from "../lib/layout.ts";
 import { skillsDir } from "../jobs/lib/infra/settings.ts";
 import { annotationsFile, handoffsDir, vaultDir } from "../lib/paths.ts";
 import { episodesDir } from "../jobs/lib/learning/episode.ts";
-import { fetchStore, registryDir, storeRefDir } from "../issues/lib/store.ts";
+import { fetchStore, registryDir, storeRefDir } from "../lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
 import { errText } from "../lib/errtext.ts";
 

@@ -3,13 +3,13 @@ import { getJson, putJson } from "../../../lib/db.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../../issues/lib/todo.ts";
+import * as issues from "../../../lib/todo.ts";
 import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, askOfItem, grant, needsOf, may, normalizeAsk, CLOSE_DONE, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { ASK_ACTIONS } from "../../../lib/naming.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as record from "../records/record.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { readList } from "../../../issues/lib/store.ts";
+import { readList } from "../../../lib/store.ts";
 import { seed } from "../../job.testkit.ts";
 import { newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 

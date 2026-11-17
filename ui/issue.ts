@@ -6,8 +6,8 @@
 import { issueHref } from "../lib/naming.ts";
 import { askOfItem, asking, type Ask } from "../jobs/lib/asks/ask.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
-import { afterOf, areasOf, priorityOf, sourceOf } from "../issues/lib/store.ts";
-import * as todos from "../issues/lib/todo.ts";
+import { afterOf, areasOf, priorityOf, sourceOf } from "../lib/store.ts";
+import * as todos from "../lib/todo.ts";
 import { today } from "../lib/day.ts";
 import type { NewIssue } from "./state.ts";
 

@@ -4,8 +4,8 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { areasOf, parentIn, reader, type Reader } from "../../../issues/lib/store.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { areasOf, parentIn, reader, type Reader } from "../../../lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
 import { openJob, stateOf, type Job } from "../records/job.ts";
 import { isOpen, allRuns, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";

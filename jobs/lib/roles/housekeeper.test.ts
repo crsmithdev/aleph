@@ -3,8 +3,8 @@
 import { beforeAll, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as issues from "../../../issues/lib/todo.ts";
-import { itemsDir, readList, writeList } from "../../../issues/lib/store.ts";
+import * as issues from "../../../lib/todo.ts";
+import { itemsDir, readList, writeList } from "../../../lib/store.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { lock } from "../../../lib/locks.ts";
