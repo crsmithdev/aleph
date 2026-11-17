@@ -6,7 +6,9 @@ import { readEvents } from "../../../lib/layout.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { writeBaseline } from "./tables.ts";
 import { decideIntake } from "./intake-decision.ts";
-import { dispatchIssues, intakeQueued, runDispatch, stalled } from "../transitions/factory.ts";
+import { intakeQueued } from "../transitions/factory.ts";
+import { dispatchIssues, runDispatch } from "../transitions/dispatch.ts";
+import { stalled } from "../transitions/stall.ts";
 import { change, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 
 beforeEach(setup);

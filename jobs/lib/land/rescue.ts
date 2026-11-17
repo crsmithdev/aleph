@@ -47,7 +47,7 @@ export interface Rescue {
 
 /** Land the job again: returns the refusal, or null. */
 type Land = (name: string) => Promise<string | null>;
-/** The state of the repo's main (factory.ts `baseline`). */
+/** The state of the repo's main (baseline.ts `mainState`). */
 type CheckMain = (repo: Repo) => Promise<MainState>;
 
 const RERUN_OPTIONS = [
@@ -184,12 +184,12 @@ async function releaseEdited(act: Rescue): Promise<void> {
 }
 
 /** The run a rescue acts on: its entry, its repo, its job name, its issue, and why it stopped. */
-export type Stuck = { last: Entry; r: Run; repo: Repo; name: string; issue: number | string | undefined; reason: string };
+type Stuck = { last: Entry; r: Run; repo: Repo; name: string; issue: number | string | undefined; reason: string };
 
 type RescueCase = "duplicate" | "no-commit" | "claimed" | "timeout" | "infra" | "land-checks" | "land-conflict";
 
 /** Which safe case a returned or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
-export function rescueCase(r: Run, onMainOrDone: boolean, claim: string | null): RescueCase | null {
+function rescueCase(r: Run, onMainOrDone: boolean, claim: string | null): RescueCase | null {
   const cause = causeOf(r);
   if (cause === "no-commit") return onMainOrDone ? "duplicate" : claim !== null ? "claimed" : "no-commit";
   if (cause === "timeout" && r.role !== "land") return "timeout";
@@ -203,7 +203,7 @@ export function rescueCase(r: Run, onMainOrDone: boolean, claim: string | null):
 type Step = { action: "drop" | "land again" | "recheck"; rerun?: string; dropReason?: string; noted: string; told?: string; done?: boolean; fate?: Fate };
 
 /** The step for a run that a host restart killed. `hasWork`: its branch has commits ahead of main. The issue did not cause this: no rescue mark, so the issue keeps its rerun. */
-export function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
+function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
   const text = `a host restart killed ${r.role} run ${last.id}`;
   // The branch passed, and the land may have pushed: a new land finds that, and a new issue run would do the work twice.
   if (r.role === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
@@ -221,7 +221,7 @@ function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
 }
 
 /** The step for a worker's claim that the issue is met, by `red`, the red line of main. `failure` is the red CI's failure, which the rerun quotes. */
-export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failure?: string): Step {
+function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failure?: string): Step {
   const said = `${r.role} run ${last.id} says the goal is already met (${claim})`;
   if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "met" };
   return {
@@ -232,12 +232,12 @@ export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: s
 }
 
 /** The step for a run that ended with no commit while the item is already on main (`onMain`) or done. */
-export function duplicateStep({ last, r }: Stuck, onMain: string | null | undefined): Step {
+function duplicateStep({ last, r }: Stuck, onMain: string | null | undefined): Step {
   return { action: "drop", noted: `${r.role} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain, fate: "met" };
 }
 
 /** The step for an infrastructure failure: a land lands again, a run with a branch (`hasBranch`) is rechecked, and any other run reruns. */
-export function infraStep({ last, r, reason }: Stuck, hasBranch: boolean): Step {
+function infraStep({ last, r, reason }: Stuck, hasBranch: boolean): Step {
   const text = `${r.role} run ${last.id} failed for infrastructure (${reason}): `;
   if (r.role === "land") return { action: "land again", noted: `${text}landed again, once`, told: `${text}landing again` };
   if (hasBranch) return { action: "recheck", noted: `${text}rechecked, once`, told: `${text}rechecking` };
@@ -245,7 +245,7 @@ export function infraStep({ last, r, reason }: Stuck, hasBranch: boolean): Step 
 }
 
 /** The step for a land that hit a merge conflict. `touched` is the last commit on main that changed the files. */
-export function conflictStep({ last, r, repo }: Stuck, touched: string): Step {
+function conflictStep({ last, r, repo }: Stuck, touched: string): Step {
   const files = r.conflicts ?? [];
   const what = `${files.join(", ") || "unknown files"}${touched ? `, last changed on ${repo.main} by ${touched}` : ""}`;
   return {
@@ -256,7 +256,7 @@ export function conflictStep({ last, r, repo }: Stuck, touched: string): Step {
 }
 
 /** The step for a run that stopped with nothing to keep. The note quotes the end of its log. */
-export function rerunStep({ last, r, reason }: Stuck, key: "no-commit" | "land-checks"): Step {
+function rerunStep({ last, r, reason }: Stuck, key: "no-commit" | "land-checks"): Step {
   const why = key === "no-commit" ? "the last run made no commit" : `the checks failed after the land merged main (${reason})`;
   const file = key === "land-checks" ? "checks" : "result.md";
   return {
@@ -285,7 +285,7 @@ function touched({ r, repo }: Pick<Stuck, "r" | "repo">): string {
 }
 
 /** Whether a branch carries the worker's finished work, as `branchFacts` decides: commits reach the branch only after the worker ended. */
-export function hasWork({ r, repo }: Pick<Stuck, "r" | "repo">): boolean {
+function hasWork({ r, repo }: Pick<Stuck, "r" | "repo">): boolean {
   if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) return false;
   return !!branchFacts(repo, mainRef(repo.path, repo.main), `refs/heads/${r.branch}`);
 }
@@ -368,24 +368,19 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     await say(step.told ?? step.noted);
   };
 
-  if (isKilled) {
-    const step = killedStep(stuck, isAgentRun(r.role) && hasWork(stuck));
-    // The real recheck takes only a returned or failed run, so the killed run ends failed first, as a killed land does.
-    if (r.role === "land" || step.action === "recheck") {
+  if (isKilled || isLostRun) {
+    const step = (isKilled ? killedStep : lostStep)(stuck, isAgentRun(r.role) && hasWork(stuck));
+    // The real recheck takes only a returned or failed run, so a killed land or recheck ends failed first. A lost run always
+    // does, so it is no longer lost, whatever comes next: the recheck and the Ask both want an ended run.
+    if (isLostRun || r.role === "land" || step.action === "recheck") {
       markEnded(last.folder, 143);
       setState(last.id, "failed", { reason, cause: "other", phase: undefined, told: true });
     }
-    return take(step);
-  }
-
-  if (isLostRun) {
-    // Marked failed first, so the run is no longer lost, whatever comes next: the recheck and the Ask both want an ended run.
-    markEnded(last.folder, 143);
-    setState(last.id, "failed", { reason, cause: "other", phase: undefined, told: true });
+    if (isKilled) return take(step);
     const again = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "lost");
     if (again) return chris(`${name}: a second run of this goal was lost (its process ended with no end written). Drop it, or change the goal?`, choice(`${name}: a second run was lost: how should the factory go on?`, ["An earlier run of this goal was lost too, and its rerun did not clear it"]));
     markRescued(last, "lost");
-    return take(lostStep(stuck, isAgentRun(r.role) && hasWork(stuck)));
+    return take(step);
   }
 
   const noCommit = causeOf(r) === "no-commit";

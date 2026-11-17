@@ -25,7 +25,7 @@ flowchart LR
 | Step | Code | Starts on |
 |---|---|---|
 | Intake | `intake.ts` `intakeIssue`, `factory.ts` `intakeNow` | An issue write (`add`, an answering `note`, `decide`), a dispatch, an issue with `plan` |
-| Dispatch | `factory.ts` `runDispatch` → `dispatchIssues` | The end of each run, an issue write, `resume`, a director decision, the sweep |
+| Dispatch | `dispatch.ts` `runDispatch` → `dispatchIssues` | The end of each run, an issue write, `resume`, a director decision, the sweep |
 | Unit (worker, verify, review) | `unit.ts` `unit`, `worker-verdict.ts` | A dispatch that starts an issue (`transitions.ts` `startJob`) |
 | Next step | `continuation.ts` `nextStep` | The end of each unit: a fix round, a land or a wait |
 | Land | `landing.ts` `land` | A passed run, a dispatch, `aleph land` |

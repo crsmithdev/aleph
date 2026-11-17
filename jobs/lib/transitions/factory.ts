@@ -1,232 +1,35 @@
 /**
- * The factory around the runs: the timer's tick, the dispatch and the report.
- * What it reads of its state is in factory-status.ts. Its state lives in
- * ~/.aleph/factory. See docs/factory.md.
+ * The factory's small steps around the runs: intake, the director, the corrections, the episodes and the hook's lines.
+ * Each job of its own has its module: the dispatch (dispatch.ts), the sweep of a list (sweep.ts), main's baseline
+ * (baseline.ts), the stall check (stall.ts) and the report (report.ts). What it reads of its state is in
+ * factory-status.ts. Its state lives in ~/.aleph/factory. See docs/factory.md.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { today } from "../../../lib/day.ts";
-import { money } from "../../../lib/money.ts";
 import { DAILY_HOUR } from "../../../lib/schedule.ts";
-import { issueKey, LANES, lane, shownId } from "../../../lib/naming.ts";
+import { issueKey } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, buildableIssue, buildableIssues, close, fetchingOnceSync, partsOf, planSet, priorityOf, readLists, reader, reopenReverted, type Reader } from "../../../issues/lib/store.ts";
-import { fetchOrigin, git } from "../../../lib/git.ts";
-import { askChris, askOfItem, needsOf, plainAsk, refIn } from "../asks/ask.ts";
-import { factoryDir, logEvent } from "../../../lib/layout.ts";
-import { itemOnMain, landedIndex, revertedIn } from "../records/status.ts";
+import { reader, type Reader } from "../../../issues/lib/store.ts";
+import { git } from "../../../lib/git.ts";
+import { askOfItem } from "../asks/ask.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
-import { allRuns, isWaiting, loadRegistry, onOf, type Entry, type Repo, allJobs, isOpen } from "../records/ledger.ts";
-import { lock } from "../../../lib/locks.ts";
-import { holdsWork, isLive, isRunning } from "../infra/process.ts";
-import { rescueStuck, type Rescue } from "../land/rescue.ts";
-import { issueBrief } from "./continuation.ts";
+import { allRuns, isWaiting, loadRegistry, type Entry, type Repo, allJobs, isOpen } from "../records/ledger.ts";
+import { holdsWork } from "../infra/process.ts";
 import { filing } from "./filing.ts";
-import { causeOf, type Fate } from "../records/outcome.ts";
-import { checkedBy, lookMinutes, openJob, stateOf } from "../records/job.ts";
-import { counting, patchRun } from "../records/record.ts";
+import { causeOf } from "../records/outcome.ts";
+import { stateOf } from "../records/job.ts";
+import { counting } from "../records/record.ts";
 import { mine, proposals, readStore } from "../learning/corrections.ts";
 import { directAll, pendingCases, subjectOfCase, type Decision, type Ports as DirectorPorts } from "../roles/director.ts";
-import { listEpisodes, writeEpisodes } from "../learning/episode.ts";
-import { waitingToLand } from "../land/landing.ts";
-import { baselineChecks, type CheckTask, type ChecksStop } from "../gates/checks.ts";
-import { drop, land, recheck, refusal, startIssue, type Refused } from "./transitions.ts";
-import { startKept } from "./kept.ts";
+import { writeEpisodes } from "../learning/episode.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
-import { route, type Size } from "../routing/route.ts";
-import { changedLinesOf, gates, stallLines } from "../gates/factory-status.ts";
-import { holdGoal, recordHold } from "../gates/holds.ts";
+import { gates, stallLines } from "../gates/factory-status.ts";
 import { paused } from "../gates/pause.ts";
-import { sandboxRepos, liveRuns, logCap, runsToday, spentToday } from "../gates/gpu.ts";
-import { appendSuiteHistory, recordRan, type MainState, writeBaseline, baselines, redLine, redMains } from "../gates/tables.ts";
+import { sandboxRepos } from "../gates/gpu.ts";
+import { redMains } from "../gates/tables.ts";
 
-import { heldEvent, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
-import { unrouted, type StartDecision } from "../gates/start-decision.ts";
-import { decider, type Decider } from "../gates/decider.ts";
-import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
-import { errText } from "../../../lib/errtext.ts";
-
-
-/** The facts of a hold's event: its detail after the hold word (`full: 5 / 5 jobs` gives `5 / 5 jobs`). */
-const facts = (ev?: Hold): string | undefined => ev?.detail?.replace(/^\w+: /, "");
-
-/** The buildable issues of each factory repo. */
-const openIssues = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => buildableIssues(sandboxRepos(), lists);
-
-/** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick's sweep still does. */
-
-/** `size` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
-type Start = (repo: Repo, name: string, id: number | string, spec: string, size?: Size | null, now?: boolean) => Promise<Refused | null>;
-export type Checks = (repo: Repo, commit: string, logs: string, record?: CheckTask["record"]) => Promise<ChecksStop | null>;
-type Land = (name: string) => Promise<string | null>;
-/**
- * Start every ready issue, in order, until the live cap. It runs when a run ends, when an issue is added or edited,
- * and from the tick's sweep when the sweep finds work it missed. While the factory is paused it does nothing. Else its steps run first: the next
- * steps a pause kept (`startKept`), the rescue of returned, failed, killed and lost runs, the lands and the close of parents whose parts are done.
- * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each issue meets the gates of issueDecision in
- * order; the first that binds skips it, and its `held` event names the hold word and its facts. Between the busy file and the loop guard an issue whose last build run ended with the
- * API credit error (`API Error: 402`) less than 10 minutes ago (`waitMs` of `POLICY`) waits out its credit wait with a `credit` hold. The loop guard sets an Ask in place of a start,
- * and its `question` event is its only event. The run a gate reads is the issue's newest build run (`nextRun`),
- * whose model names the backend the issue runs on. An issue no gate holds starts. Each start
- * holds a lock on its issue and re-reads the jobs under it, so two dispatches at once start an issue once. `start`
- * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts issues
- * only: an issue is closed as done once its parts are all done (`closeIssues`). Intake (intake.ts) took each issue in
- * before: an issue to plan (`plan` set) goes to an intake run too, but `intakeQueued` starts it, once for each pass.
- * `now` is the key of one issue to Run now (`runNow`): the pause, the live cap, the order and the steps above do not apply, only that issue is read,
- * and `refused` is the text of what held it.
- */
-export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, now?: string): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; refused?: string }> {
-  if (!now && paused()) return { started: [], skipped: [], paused: true };
-  const kept = now ? [] : await startKept();
-  for (const name of kept) logEvent({ subject: "rule", action: "started", object: name, detail: "the pause kept this step" });
-  if (rescue) await rescueStuck(rescue, land, async (repo) => mainState(repo));
-  const landed: string[] = [];
-  if (land) {
-    // All at once: the lands queue on the repo's lock, and the first takes the rest into one batch.
-    const names = waitingToLand();
-    const whys = await Promise.all(names.map((name) => land(name)));
-    names.forEach((name, i) => { if (!whys[i]) landed.push(name); });
-  }
-  const started: string[] = [];
-  const skipped: string[] = [];
-  const at = decider({ fresh: true });
-  // A parent whose parts all landed closes without a green main, after the sweep closes the parts.
-  const lists = reader();
-  for (const repo of now ? [] : sandboxRepos()) { sweepMain(repo, lists); for (const l of await closeIssues(repo, at.done)) skipped.push(l); }
-  const ready = openIssues().filter(({ item }) => !now || issueKey(issues.idOf(item)) === now);
-  /** The text that stopped a Run now. */
-  let refused: string | undefined;
-  /** The full bound's `N / M jobs`, when a decision skipped an issue for the cap. */
-  let capText: string | undefined;
-  /** Records the hold and the skip line of an issue no start reached. The pause, the backend and the live cap each log their own change, so a skip for one records no hold. */
-  const skip = (name: string, kind: Gate, why: string, ev: Hold) => {
-    if (kind === "waiting") holdGoal(name);
-    if (kind !== "paused" && kind !== "waiting" && kind !== "full" && kind !== "done") recordHold(name, kind, ev);
-    skipped.push(`${name}: ${why}`);
-    refused = why;
-  };
-  /** Skips an issue the store no longer has open, with its status; true when it did, so the caller stops. */
-  const closed = (name: string, repo: Repo, ref: number | string): boolean => {
-    const latest = reader().item(repo.key, ref);
-    const status = latest ? issues.status(latest) : "dropped";
-    if (status === "open") return false;
-    skip(name, status === "parked" ? "parked" : "done", `the item is ${latest ? status : "gone"}`, { action: status });
-    return true;
-  };
-  /** Skips an issue that a gate holds; a red main's event names its commit, and the note its failed checks. */
-  const held = (name: string, repo: Repo, d: IssueDecision) => {
-    const b = d.kind === "red" ? baselines()[repo.key] : undefined;
-    if (d.kind === "full") capText = facts(d.ev);
-    skip(name, d.kind as Gate, now ? d.text : d.why, b ? heldEvent("red", `at ${b.commit.slice(0, 7)}: ${b.failed}`) : d.ev!);
-  };
-  for (const { repo, item: listed } of ready) {
-    const ref = issues.idOf(listed);
-    const name = issueKey(ref);
-    if (at.done(`${repo.key}-${ref}`)) continue;
-    // The cheap facts first: the pause was asked above.
-    const first = at.decide(repo, listed, { cheap: true });
-    if (first.kind !== "ready") { held(name, repo, first); continue; }
-    // Wait for a dispatch that holds the issue: it may skip it (an open job a drop is closing right now), and a
-    // dispatch that skipped here too would leave the issue until the next tick. Under the lock all is read again.
-    const release = await lock(`goal-${name}`, issueLockWaitMs());
-    if (!release) { skip(name, "starting", "another dispatch is starting it", { action: "starting" }); continue; }
-    try {
-      const jobs = allJobs();
-      const open = openJob(name, null, jobs);
-      // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
-      const item = open ? listed : buildableIssue(repo, ref);
-      // An item closed, dropped or parked since the pass listed it is skipped with that status; one still open is a plain issue.
-      if (!item) { if (closed(name, repo, ref)) continue; skip(name, "parent", "not a goal", { action: "parent" }); continue; }
-      // A pass that began before a pause must not start a run after it.
-      // Run now asks the issue's gates only; the start holds the backend and the GPU slot of a local model.
-      const parents = reader();
-      const d: StartDecision = now ? at.decide(repo, item, { jobs, lists: parents }) : await at.decide(repo, item, { jobs, lists: parents, route: () => route(issueBrief(item, name, jobs).spec, name) });
-      if (d.kind !== "ready" && d.kind !== "ask") { held(name, repo, d); continue; }
-      // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
-      if (closed(name, repo, ref)) continue;
-      if (d.kind === "ask") {
-        // The Ask goes to the director, as every Ask does; its `question` event is the only event of the guard.
-        skipped.push(`${name}: ${d.why}`);
-        if (now) refused = d.text;
-        if (d.ask === "no-commit") {
-          const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
-          const bad = askChris(repo, ref, { ...plainAsk("no-commit", text), facts: d.facts }, text);
-          if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `no issue note: ${bad}` });
-        } else {
-          const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
-          const bad = askChris(repo, ref, { ...plainAsk("run-cap", text), facts: d.facts }, text);
-          if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `no issue note: ${bad}` });
-        }
-        continue;
-      }
-      const { spec } = issueBrief(item, name, jobs);
-      const no = await start(repo, name, ref, spec, d.size, now !== undefined);
-      // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
-      if (no) skip(name, no.gate, no.why, no.ev);
-      else { recordHold(name, "started"); started.push(name); }
-    } finally {
-      release();
-    }
-  }
-  if (now) return { started, skipped, ...(started.length ? {} : { refused: refused ?? `${now} is not a queued issue` }) };
-  logCap(capText ?? facts(gates({ only: ["full"] })?.ev) ?? null);
-  return { started, skipped, ...(landed.length ? { landed } : {}) };
-}
-
-/**
- * The sweep of a repo's list against origin/<main>: an open issue with no Ask whose work is on main closes as done, so no dispatch
- * lists it again, and a done issue whose `Issue:` trailer commits are all reverted reopens. Nothing else reads a trailer for done.
- */
-function sweepMain(repo: Repo, lists: Reader): void {
-  fetchOrigin(repo.path);
-  const doc = lists.list(repo.key);
-  if (!doc) return;
-  const main = `origin/${repo.main}`;
-  const index = landedIndex(repo.path, main, repo.key, (n) => { const i = issues.find(doc, n); return i ? issues.sinceOf(i) : undefined; });
-  const reverted = revertedIn(index);
-  for (const item of doc.items) {
-    const n = String(item.id), status = issues.status(item), hit = index.get(n)?.[0];
-    let bad: string | null = null;
-    if (status === "open" && hit && !askOfItem(item)) bad = close(repo, item.id, `its work is on origin/${repo.main}: ${hit.slice(0, 7)}`);
-    else if (status === "done" && reverted.has(n)) bad = reopenReverted(repo, item.id, `its commits on origin/${repo.main} are all reverted: the goal runs again`, git(repo.path, "rev-parse", main).out);
-    if (bad) logEvent({ subject: "rule", action: "failed", object: issueKey(item.id), detail: `not swept: ${bad}` });
-  }
-}
-
-/** Whether every part is done or dropped, at least one is done, and the parent is neither asking nor to plan: then it closes. */
-const finished = (doc: issues.Doc, item: issues.Issue, repo: Repo, done: (ref: string) => boolean): boolean => {
-  const parts = partsOf(doc, item);
-  if (issues.status(item) !== "open" || !parts.length || askOfItem(item) || planSet(item)) return false;
-  const isDone = (p: issues.Issue) => issues.status(p) !== "dropped" && done(`${repo.key}-${issues.refOf(p)}`);
-  return parts.some(isDone) && parts.every((p) => issues.status(p) === "dropped" || isDone(p));
-};
-
-/**
- * An open parent whose parts are all done or dropped, with at least one done and no Ask, is closed as done, with a note naming the
- * parts' commits. The write that drops the last open part sets the Ask, so Chris decides first. Returns the lines for the dispatch's skipped list.
- */
-async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<string[]> {
-  const lines: string[] = [];
-  const doc = reader({ fetch: false }).list(repo.key);
-  for (const listed of doc?.items ?? []) {
-    if (!doc || !finished(doc, listed, repo, done)) continue;
-    const name = issueKey(listed.id);
-    const release = await lock(`issue-${name}`, 0);
-    if (!release) { lines.push(`${name}: another dispatch holds it`); logEvent({ subject: "rule", action: "skipped", object: name, detail: "another dispatch holds it" }); continue; }
-    try {
-      const now = reader().list(repo.key);
-      const item = now ? issues.find(now, listed.id) : undefined;
-      if (!now || !item || !finished(now, item, repo, done)) continue;
-      const commits = partsOf(now, item).filter((p) => issues.status(p) !== "dropped").map((p) => `${repo.key}-${issues.refOf(p)} (${itemOnMain(repo, issues.idOf(p)) ?? "no commit"})`);
-      const bad = close(repo, item.id, `its sub-issues are done: ${commits.join(", ")}`);
-      lines.push(bad ? `${name}: not closed: ${bad}` : `${name}: closed as done`);
-      logEvent(bad ? { subject: "rule", action: "failed", object: name, detail: `not closed: ${bad}` } : { subject: "rule", action: "done", object: name, detail: "its sub-issues are done" });
-    } finally {
-      release();
-    }
-  }
-  return lines;
-}
+import { decider } from "../gates/decider.ts";
+import { INTAKE_CAP } from "../infra/settings.ts";
 
 /** True from 03:00 local, when the store has not been mined on this local date. */
 export function correctionsDue(now = Date.now()): boolean {
@@ -251,7 +54,7 @@ export async function mineCorrections(now = Date.now()): Promise<{ signals: numb
 
 /** The detached starts that follow a write: an intake of one issue, and the director. Tests replace them. */
 export interface Starts { intake(repo: Repo, id: number): void; director(): void }
-const starts: Starts = { intake: intakeDetached, director: directorDetached };
+export const starts: Starts = { intake: intakeDetached, director: directorDetached };
 
 
 /**
@@ -308,104 +111,6 @@ export async function episodeStep(): Promise<{ written: string[]; failed: string
   return r;
 }
 
-/** Main's baseline as a closed state: `line` is the sentence for logs and skip lines. */
-
-/**
- * Main's state as the last suite run recorded it in the `baseline` row of `state`. A red record stays red until a later suite run
- * is green, also when main has moved since; a repo with no record is unchecked.
- */
-function mainState(repo: Repo): MainState {
-  const b = baselines()[repo.key];
-  if (!b) return { state: "unchecked", line: "main is unchecked: no suite run yet" };
-  return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
-}
-
-/** What a suite record holds for besides its commit: the setup and checks it ran. A change of either runs the suite again. */
-export const baselineConfig = (repo: Repo): string => JSON.stringify([repo.setup ?? [], repo.checks ?? []]);
-
-/**
- * Whether the repo's checks pass on its current origin/<main>: run once per
- * commit, kept in the `baseline` row of `state`. Returns the closed state with its line.
- * One baseline runs per repo at a time, under a lock; a suite run that finds it
- * taken leaves it. A pass and a failed check are recorded: an error that kept
- * the checks from running (no verdict) is reported, and the next suite run tries again.
- */
-export async function baseline(repo: Repo, checks: Checks): Promise<MainState> {
-  const unchecked = (line: string): MainState => ({ state: "unchecked", line });
-  if (!fetchOrigin(repo.path).ok) return unchecked("main is unchecked: fetch failed");
-  const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
-  if (!commit) return unchecked(`main is unchecked: no origin/${repo.main}`);
-  const config = baselineConfig(repo);
-  const known = () => { const b = baselines()[repo.key]; return b && b.commit === commit && b.config === config ? b : undefined; };
-  let b = known();
-  if (!b) {
-    const release = await lock(`baseline-${repo.key}`, 0);
-    if (!release) return { state: "running", line: "main baseline running" };
-    try {
-      // Another dispatch may have recorded this commit between the read and the lock.
-      b = known();
-      if (!b) {
-        const sum = { ran: 0, passed: 0, failed: 0, skipped: 0, rerunPassed: 0 };
-        const why = await checks(repo, commit, join(factoryDir(), "baseline", repo.key), (c) => {
-          if (!c.tests) return;
-          sum.ran += c.tests.ran; sum.passed += c.tests.passed; sum.failed += c.tests.failed; sum.skipped += c.tests.skipped;
-          sum.rerunPassed += c.rerunPassed ?? 0;
-        });
-        if (why && why.cause !== "check") return unchecked(`main is unchecked: ${why.reason}`);
-        b = { repo: repo.key, commit, config, ok: !why, ...(why ? { failed: why.checkName ?? "" } : {}) };
-        const entry = b;
-        writeBaseline(repo.key, () => entry);
-        appendSuiteHistory({ repo: repo.key, commit, at: new Date().toISOString(), ...sum });
-      }
-    } finally {
-      release();
-    }
-  }
-  return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
-}
-
-/**
- * `aleph suite`, from its own timer: the full checks on origin/<main> of each factory repo whose main moved since
- * the last record (`baseline`). While the factory is paused it does nothing. A repo that turns green starts a
- * dispatch, so the issues its red or unchecked main held start at once.
- */
-export async function suiteStep(checks: Checks = baselineChecks): Promise<Record<string, string>> {
-  if (paused()) return {};
-  const out: Record<string, string> = {};
-  for (const repo of sandboxRepos()) {
-    const was = mainState(repo).state;
-    const b = await baseline(repo, checks);
-    out[repo.key] = b.state === "green" ? "green" : b.line;
-    recordRan(`suite ${repo.key}`, out[repo.key]);
-    if (b.state === "green" && was !== "green") dispatchDetached();
-  }
-  return out;
-}
-
-/**
- * What the factory could move now and does not, as `land:<job>`, `goal:<job>` and `ingest:<id>`: a passed run with no
- * land live; an issue that can start with no agent run live; an issue to take in or plan with no intake run live. The gates that stop each step leave its work out, because each gate has its own line.
- */
-export async function stalled(jobs = allJobs(), lists = reader(), at: Decider = decider({ fresh: true, jobs, lists })): Promise<string[]> {
-  if (paused()) return [];
-  const runs = jobs.flat();
-  const live = (kind: string) => runs.some((e) => e.run.role === kind && isLive(e.folder));
-  const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
-  if (!liveRuns(runs)) {
-    for (const { repo, item } of openIssues(lists)) {
-      // No model call: the stall check agrees with the dispatch on all but the router's size.
-      if ((await at.decide(repo, item, { jobs, route: unrouted })).kind === "ready") out.push(`goal:${issueKey(item.id)}`);
-    }
-  }
-  if (!live("intake") && !gates({ only: ["full"], jobs })) {
-    for (const repo of sandboxRepos()) {
-      const doc = lists.list(repo.key);
-      for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") out.push(`ingest:${issueKey(issues.idOf(item))}`);
-    }
-  }
-  return out;
-}
-
 /** How far a checkout is behind origin/<main>, with the diff a pull would bring; with `short`, the key and the count alone. */
 export function behind(repo: Repo, short = false): string | null {
   const n = Number(git(repo.path, "rev-list", "--count", `HEAD..origin/${repo.main}`).out || 0);
@@ -429,134 +134,6 @@ export function hookLines(now = Date.now()): string[] {
   lines.push(...redMains().map((r) => r.line), ...stallLines(now, jobs).map((h) => h.text));
   for (const repo of repos.filter((r) => r.sandbox)) lines.push(behind(repo, true) ?? "");
   return lines.filter(Boolean);
-}
-
-/** The heading a run's report entry goes under: the report lane of its state. */
-const laneOf = (e: Entry): string => lane(e.run.state);
-
-/** One run as the report gives it; in an issue's block (`current` says which run is the newest) it leaves out the key the block head shows. */
-function entry(e: Entry, current?: boolean): string {
-  const r = e.run;
-  const needs = isWaiting(r.state) ? needsOf(r.ask) : undefined;
-  const lane = laneOf(e);
-  const hit = (lane === "landed" || lane === "waiting") && r.repo && onOf(r) !== undefined ? reader().item(r.repo, onOf(r)!) : undefined, prio = hit && priorityOf(hit);
-  const head = `${current === undefined ? `${shownId(r.name, r.repo)} ` : ""}${r.state}${current ? " (current)" : ""}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.state !== "returned" && r.state !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
-  const lines = [r.reason ? `${head}: ${r.reason}` : head];
-  if (r.state === "landed" && r.commit) {
-    lines.push(`  commit ${r.commit.slice(0, 7)}`);
-    const j = allJobs().find((x) => x[0].run.job === r.job);
-    if (j) lines.push(`  checked by: ${checkedBy(j).join(", ") || "nothing recorded"}`);
-    const repo = r.repo ? loadRegistry()[r.repo] : undefined;
-    const stat = repo ? git(repo.path, "show", "--shortstat", "--format=", r.commit).out : "";
-    if (stat) lines.push(`  look: about ${lookMinutes(changedLinesOf(stat))} min (estimate)`);
-  }
-  if (needs === "protected" || needs === "review") {
-    if (r.stat) lines.push(...r.stat.split("\n").map((l) => `  ${l}`));
-    lines.push(`  aleph land ${r.name}   (lands it, with Held-by: Chris)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
-  }
-  for (const d of r.defaults ?? []) lines.push(`  DEFAULT: ${d}`);
-  for (const c of r.checks ?? []) if (c.rerun) lines.push(`  ${c.name} passed on rerun`);
-  if (r.cost !== undefined) lines.push(`  cost ${money(r.cost)} at the API price`);
-  return lines.join("\n");
-}
-
-/**
- * The runs the report has not shown, oldest first; each is then marked
- * shown, unless `peek`. `told` is Sidetone's flag and the report leaves it alone.
- */
-export function report(now = Date.now(), peek = false): string {
-  return fetchingOnceSync(() => reportOnce(now, peek));
-}
-
-function reportOnce(now: number, peek: boolean): string {
-  loadRegistry();
-  const lines = runLines(now, peek);
-  const due = cameDue();
-  if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));
-  const eps = newEpisodes();
-  if (eps.length) lines.push(["episodes:", ...eps.map((t) => `  ${t}`)].join("\n"));
-  const asks = askLines();
-  if (asks.length) lines.push(["asks:", ...asks.map((a) => `  ${a}`)].join("\n"));
-  const lessons = proposals();
-  if (lessons.length) lines.push(["proposed lessons (Yes or No on Status):", ...lessons.map((l) => `  ${l.id} ${l.kind}: ${l.sentence} (${l.count} signals)`)].join("\n"));
-  return lines.join("\n");
-}
-
-/** Each open issue that has an Ask, by its shown key and title. */
-function askLines(): string[] {
-  return Object.values(loadRegistry()).flatMap((repo) => (reader({ fetch: false }).list(repo.key)?.items ?? [])
-    .filter((item) => issues.status(item) === "open" && askOfItem(item))
-    .map((item) => `${shownId(refIn(item), repo.key)} ${item.title}`));
-}
-
-const episodesSeenFile = () => join(factoryDir(), "episodes-seen");
-
-/**
- * The episode page titles under `<factoryDir()>/episodes/` that no report has listed. The seen file is then
- * rewritten as the titles on disk, so a page deleted after KEEP_DAYS (episode.ts) leaves it too.
- */
-function newEpisodes(): string[] {
-  const titles = listEpisodes().map((e) => e.file.slice(0, -3));
-  const seen = new Set(existsSync(episodesSeenFile()) ? readFileSync(episodesSeenFile(), "utf8").split("\n").filter(Boolean) : []);
-  const fresh = titles.filter((t) => !seen.has(t));
-  if (fresh.length || seen.size !== titles.length - fresh.length) {
-    mkdirSync(factoryDir(), { recursive: true });
-    writeFileSync(episodesSeenFile(), titles.map((t) => t + "\n").join(""));
-  }
-  return fresh;
-}
-
-const seenFile = () => join(factoryDir(), "seen");
-
-/**
- * The open items whose waited-on item is done, that no report has listed;
- * each is then written to the seen file.
- */
-function cameDue(): string[] {
-  const seen = new Set(existsSync(seenFile()) ? readFileSync(seenFile(), "utf8").split("\n").filter(Boolean) : []);
-  const { done } = decider({ fresh: true });
-  const lines: string[] = [];
-  const ids: string[] = [];
-  const repos = Object.values(loadRegistry());
-  let docs: (issues.Doc | null)[] = [];
-  try { docs = readLists(repos); } catch (e) { logEvent({ subject: "rule", action: "failed", object: "came-due", detail: errText(e) }); }
-  for (const [n, repo] of docs.map((_, n) => [n, repos[n]] as const)) {
-    for (const item of docs[n]?.items ?? []) {
-      const id = `${repo.key}-${item.id}`;
-      if (issues.status(item) !== "open" || seen.has(id)) continue;
-      const waits = afterOf(item);
-      if (waits.length > 0 && !pendingWaits(waits, done).length) {
-        ids.push(id);
-        lines.push(`${id} ${item.title}`);
-      }
-    }
-  }
-  if (ids.length) {
-    mkdirSync(factoryDir(), { recursive: true });
-    appendFileSync(seenFile(), ids.join("\n") + "\n");
-  }
-  return lines;
-}
-
-/** The runs the report has not shown, oldest first; each is then marked shown unless `peek`, and the last line counts the day's runs. */
-function runLines(now: number, peek: boolean): string[] {
-  const fresh = allRuns().filter((e) => e.run.shown === false && e.run.role !== "plain" && e.run.state !== "running" && !isRunning(e));
-  const lines: string[] = [];
-  // The runs of one issue are one block, listed oldest first under the lane of the newest; a run with no issue target is its own.
-  const blocks = new Map<string, Entry[]>();
-  for (const e of fresh) {
-    const k = onOf(e.run) === undefined ? e.id : `${e.run.repo}/${e.run.target}`;
-    blocks.set(k, [...blocks.get(k) ?? [], e]);
-  }
-  const block = (runs: Entry[]) => runs.length === 1 ? entry(runs[0]) : [shownId(runs[0].run.target, runs[0].run.repo), ...runs.map((e, i) => entry(e, i === runs.length - 1).replace(/^/gm, "  "))].join("\n");
-  for (const l of LANES) {
-    const here = [...blocks.values()].filter((b) => laneOf(b.at(-1)!) === l);
-    if (here.length) lines.push(`${l}:`, ...here.map(block));
-  }
-  if (!peek) for (const e of fresh) patchRun(e.id, { shown: true });
-  const today = runsToday(now);
-  if (lines.length) lines.push(`runs in the last 24 hours: ${today.length}, ${money(spentToday(now))} at the API price${paused() ? "; the factory is paused" : ""}`);
-  return lines;
 }
 
 /**
@@ -585,26 +162,4 @@ export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Pro
   }
   directIfNew(p.director);
   return t;
-}
-
-/** The factory's ports onto the transitions, each in-process; each returns the refusal, or null. */
-const landPart = (name: string) => refusal(async () => { await (await land(name, {}, { output: "ignore" })).child?.exited; });
-/** A safe default drop: quiet, as the factory writes the issue note and the news. */
-const dropIssue = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
-const recheckIssue = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
-
-/** `aleph dispatch <key>`: start that one issue now, whatever the pause, the live cap and the order; the other gates of issueDecision still bind. */
-export const runNow = (key: string, start: Start = startIssue) => dispatchIssues(start, undefined, undefined, key);
-
-/**
- * `aleph dispatch`: one dispatch of the ready issues, then the intake queue and the director for an Ask that the
- * dispatch or the run before it set. A run's end calls it, so an intake the live cap held starts when a slot frees.
- */
-export async function runDispatch(p: Starts = starts): Promise<Awaited<ReturnType<typeof dispatchIssues>> & { intaking?: string[] }> {
-  // `ALEPH_RESCUE=off` leaves a returned or failed run as it is: its open job keeps its issue not ready.
-  const d = await dispatchIssues(startIssue, landPart, !rescueOn() ? undefined : { drop: dropIssue, recheck: recheckIssue });
-  if (d.paused) return d;
-  const intaking = intakeQueued(p.intake);
-  directIfNew(p.director);
-  return { ...d, ...(intaking.length ? { intaking } : {}) };
 }

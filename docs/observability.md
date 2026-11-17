@@ -32,10 +32,10 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 |---|---|---|
 | `gate` | A run's state: `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` | `jobs/lib/records/record.ts:181` |
 | `gate` | `question` when an Ask is set (its detail the reason, and its facts when the factory counted some), `answered` when it is cleared | `jobs/lib/records/record.ts:335`, `:336` |
-| `gate` | `held`, one for an issue hold when its detail changes: the detail is the hold word and then its facts (`after: issue.2985 issue.2993`, `job: job.8910`, `file: docs/design.md: job.8890`, `red: at 298a44e: tests`, `credit: job.8870 hit the API credit error`). A done or dropped issue gets none. The pause, the backend and the live cap write none: each logs its own `changed` event on `settings`; the loop guard writes only its Ask as a `question` event whose detail adds its facts (`no-commit: 3 / 3 jobs with no commit`) | `jobs/lib/gates/holds.ts:52`, from `jobs/lib/transitions/factory.ts:102` |
+| `gate` | `held`, one for an issue hold when its detail changes: the detail is the hold word and then its facts (`after: issue.2985 issue.2993`, `job: job.8910`, `file: docs/design.md: job.8890`, `red: at 298a44e: tests`, `credit: job.8870 hit the API credit error`). A done or dropped issue gets none. The pause, the backend and the live cap write none: each logs its own `changed` event on `settings`; the loop guard writes only its Ask as a `question` event whose detail adds its facts (`no-commit: 3 / 3 jobs with no commit`) | `jobs/lib/gates/holds.ts:52`, from `jobs/lib/transitions/dispatch.ts:82` |
 | `gate` | `changed` on the object `settings`, when the live cap (`cap: on: 5 / 5 jobs`, `cap: on: 1 / 1 local jobs`, `cap: off`) or the held backend (`credit: on: claude: <the call's line>`, `credit: off`) starts or ends; a gate that stays on logs nothing more | `jobs/lib/gates/gpu.ts:17`, `jobs/lib/gates/holds.ts:92`, `:102` |
 | `rule` | `routed`, its `detail` the Size and the classifier model (`medium by classifier <model>`), on the issue key | `jobs/lib/routing/route.ts:28` |
-| `rule` | `started`, `busy`, `done`, `failed` (`error`) for the dispatch steps | `jobs/lib/transitions/factory.ts:79`, `:152`, `:156`, `:190`, `:213`, `:221`, `:305`, `:519`, `:580` |
+| `rule` | `started`, `busy`, `done`, `failed` (`error`) for the dispatch steps | `jobs/lib/transitions/dispatch.ts:59`, `:132`, `:136`, `jobs/lib/transitions/sweep.ts:37`, `:60`, `:68`, `jobs/lib/transitions/factory.ts:110`, `:160`, `jobs/lib/transitions/report.ts:112` |
 | `rule` | `started` for a run, with the model | `jobs/lib/transitions/transitions.ts:369` |
 | `rule` | `missed` for a stalled key, `started` (`check`) for a suite on a moved main, `failed` (`error`) for a tick step | `jobs/lib/transitions/tick.ts:179`, `:188`, `:244` |
 | `rule` | `gpu`, when the GPU slot stays taken and the call falls back | `jobs/lib/roles/agent-call.ts:137` |
@@ -45,7 +45,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `firefighter` | `waiting`, `busy`, `failed` (`rescue`) for a rescue of a slow land | `jobs/lib/land/rescue.ts:113` to `:405` |
 | `director` | The action of each applied decision: `landed`, `dropped`, `done`, `changed`, `answered`, `escalated` (with `to: human`) | `jobs/lib/roles/director.ts:151` |
 | `director` | `failed`, when a case text or a decision fails | `jobs/lib/roles/director.ts:648`, `:730`, `:733` |
-| `intake` | `skipped` (`intake`) for an issue that intake skips | `jobs/lib/transitions/factory.ts:573` |
+| `intake` | `skipped` (`intake`) for an issue that intake skips | `jobs/lib/transitions/factory.ts:153` |
 | the filer: `intake`, `firefighter`, `human`, `claude`, `worker` | `filed`, one event per new issue | `issues/lib/store.ts:598` |
 | the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `issues/lib/store.ts:174` |
 | `human` | `changed`, when an Always rule is set back to Ask me | `jobs/lib/asks/ask.ts:234` |

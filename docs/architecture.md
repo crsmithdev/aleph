@@ -47,7 +47,7 @@ Chris works in Claude Code sessions and on the UI. Both write through the `aleph
 | Hooks | Claude Code, per event | One event | `hooks/*.ts` |
 | `aleph` CLI | Chris, a session, the UI | One command | `jobs/cli.ts` |
 | `aleph tick` | `aleph-tick.timer`, each minute | Seconds | `jobs/lib/transitions/tick.ts` |
-| `aleph suite` | `aleph-suite.timer`, hourly | Minutes | `jobs/lib/transitions/factory.ts` `suiteStep` |
+| `aleph suite` | `aleph-suite.timer`, hourly | Minutes | `jobs/lib/transitions/baseline.ts` `suiteStep` |
 | Dispatch, intake, director | A transition, as a transient systemd unit | Until done | `jobs/lib/transitions/launch.ts` |
 | Unit: worker, verify, review, land | A dispatch | Up to the time boxes | `jobs/lib/roles/unit.ts` |
 | `aleph-ui` | `aleph-ui.service` | Always | `ui/server.ts` |
@@ -75,7 +75,7 @@ The modules of `jobs/lib/`, one folder per concern:
 | Concern | Folder | Modules |
 |---|---|---|
 | Records and runs | `records/` | `record.ts`, `ledger.ts`, `job.ts`, `run-files.ts`, `outcome.ts`, `stage.ts`, `status.ts`, `jobdiff.ts` |
-| Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `tick.ts`, `launch.ts` |
+| Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `dispatch.ts`, `sweep.ts`, `baseline.ts`, `stall.ts`, `report.ts`, `tick.ts`, `launch.ts` |
 | Agent roles | `roles/` | `agent-call.ts`, `agent-run.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `issue-spec.ts`, `role-skill.ts` |
 | Gates and checks | `gates/` | `issue-decision.ts`, `factory-status.ts`, `holds.ts`, `pause.ts`, `gpu.ts`, `tables.ts`, `checks.ts`, `keep-earn.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `firefighter.ts`, `smoke.ts`, `doc-claims.ts`, `doc-claims-repo.ts`, `related.ts` |
 | Land and recovery | `land/` | `landing.ts`, `rescue.ts` |

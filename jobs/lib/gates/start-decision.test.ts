@@ -7,7 +7,8 @@ import type { Size } from "../routing/route.ts";
 import { issueFacts } from "./factory-status.ts";
 import { holdBackend } from "./holds.ts";
 import { decideStart } from "./start-decision.ts";
-import { dispatchIssues, stalled } from "../transitions/factory.ts";
+import { dispatchIssues } from "../transitions/dispatch.ts";
+import { stalled } from "../transitions/stall.ts";
 import { mk, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 
 const NOW = Date.parse("2026-11-04T00:00:00Z");

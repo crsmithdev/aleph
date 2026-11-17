@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { dispatchIssues } from "./factory.ts";
+import { dispatchIssues } from "./dispatch.ts";
 import { setPaused } from "../gates/pause.ts";
 import { allJobs, allRuns } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";

@@ -1,28 +1,45 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readList, writeList } from "../../../issues/lib/store.ts";
+import { close, readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { dispatchIssues } from "../transitions/factory.ts";
+import { dispatchIssues } from "../transitions/dispatch.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { git } from "../../../lib/git.ts";
-import { loadRegistry, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { loadRegistry, type Run } from "../records/ledger.ts";
 import { askOf } from "../asks/ask.ts";
-import { claimStep, conflictStep, duplicateStep, hasWork, infraStep, killedStep, rerunStep, rescueCase, type Stuck } from "./rescue.ts";
-import { newIssue, mk, ask, fakes, setup, teardown } from "../transitions/factory.testkit.ts";
+import type { MainState } from "../gates/tables.ts";
+import type { Fate } from "../records/outcome.ts";
+import { rescueStuck } from "./rescue.ts";
+import { ctx, newIssue, mk, ask, fakes, setup, sh, teardown } from "../transitions/factory.testkit.ts";
 
 beforeEach(setup);
 afterEach(teardown);
 
-const run = (r: Partial<Run>): Run => ({ role: "build", job: "job.1", name: "issue.1", state: "failed", started: "2026-11-01T00:00:00Z", ...r } as Run);
-const repo = { key: "fac", path: "/nowhere", main: "main" } as Repo;
-/** A stuck run whose folder holds `files`. */
-const stuck = (r: Partial<Run>, id = "r9", files: Record<string, string> = {}): Stuck => {
-  const folder = mkdtempSync(join(tmpdir(), "rescue-"));
-  for (const [name, text] of Object.entries(files)) writeFileSync(join(folder, name), text);
-  return { last: { id, folder, run: run(r) } as Entry, r: run(r), repo, name: "issue.1", issue: 1, reason: r.reason ?? "why" };
+/** One rescue of the stuck runs in the ledger, with fake actions and main in `main`: the calls, and each drop's reason and fate by issue key. */
+async function rescue(main: MainState = { state: "green" }) {
+  const f = fakes();
+  const drops: Record<string, { reason: string; fate?: Fate }> = {};
+  await rescueStuck({ ...f.rescue, drop: (name, reason, fate) => { drops[name] = { reason, fate }; return f.rescue.drop(name, reason, fate); } }, f.land, async () => main);
+  return { calls: f.calls, drops };
+}
+/** The rerun note the rescue left for issue `id`. */
+const rerun = (id: number) => readEvents().findLast((e) => e.action === "reran" && e.object === `issue.${id}`)?.detail;
+/** Issue `id`'s status in the store. */
+const statusOf = (id: number) => issues.status(issues.find(readList(loadRegistry().fac)!, id)!);
+/** A failed land of a new job of issue `id`, after its passed build. */
+const land = (id: number, r: Partial<Run>) => mk(`fac-${id}`, "land", "failed", { ...r, job: mk(`fac-${id}`, "build", "passed", { land: true }).job });
+// A run that a host restart killed: `running`, started before this boot, its process gone.
+const BEFORE_BOOT = "2020-01-01T00:00:00.000Z";
+const killed = (id: number, role: Run["role"], r: Partial<Run> = {}) => mk(`fac-${id}`, role, "running", { started: BEFORE_BOOT, made: Date.parse(BEFORE_BOOT), ...r }, { pid: "999999999" });
+/** Commits `file` on a new branch `branch` of the factory repo, off main. */
+const branch = (name: string, file: string) => {
+  const path = join(ctx.base, "repo");
+  sh(path, "git", "checkout", "-q", "-b", name, "main");
+  writeFileSync(join(path, file), "x\n");
+  sh(path, "git", "add", file);
+  sh(path, "git", "commit", "-q", "-m", file);
+  sh(path, "git", "checkout", "-q", "main");
 };
 
 test("a run with a question waits for a spec edit: the Ask says so, and an edit drops the run, clears the Ask and starts the issue", async () => {
@@ -119,57 +136,73 @@ test("a time box that runs out on a child filed with from: asks Chris and sets n
   expect(issues.find(readList(loadRegistry().fac)!, id)!.fm.plan).toBeUndefined();
 });
 
-test("rescue: already met: on main or done is a duplicate; a worker's claim is checked on main", () => {
-  const r = run({ state: "failed", cause: "no-commit" });
-  expect(rescueCase(r, true, "evidence")).toBe("duplicate");
-  expect(rescueCase(r, false, "evidence")).toBe("claimed");
-  expect(rescueCase(r, false, null)).toBe("no-commit");
-  const s = stuck({ cause: "no-commit" });
-  expect(duplicateStep(s, "abc1234")).toMatchObject({ action: "drop", done: true, fate: "met" });
-  expect(duplicateStep(s, null)).toMatchObject({ action: "drop", done: false, fate: "met" });
-  expect(claimStep(s, "foo.ts:3", null)).toMatchObject({ action: "drop", done: true, fate: "met" });
-  const red = claimStep(s, "foo.ts:3", "tests fail");
-  expect(red.rerun).toContain("but the checks do not pass on origin/main (tests fail)");
-  expect(red.done).toBeUndefined();
+test("rescue: already met: on main or done is a duplicate; a worker's claim is checked on main", async () => {
+  const done = newIssue(), green = newIssue();
+  close(loadRegistry().fac, done, "done by hand");
+  mk(`fac-${done}`, "build", "failed", { cause: "no-commit", reason: "no commit" });
+  mk(`fac-${green}`, "build", "failed", { cause: "no-commit", reason: "no commit", alreadyMet: "foo.ts:3" });
+  const ok = await rescue();
+  expect(ok.drops[`issue.${done}`]).toMatchObject({ fate: "met", reason: expect.stringContaining("the item is already done: dropped as a duplicate") });
+  expect(ok.drops[`issue.${green}`]).toMatchObject({ fate: "met", reason: expect.stringContaining("the checks pass on origin/main: dropped, and the item is done") });
+  expect(statusOf(green)).toBe("done");
+  const red = newIssue();
+  mk(`fac-${red}`, "build", "failed", { cause: "no-commit", reason: "no commit", alreadyMet: "foo.ts:3" });
+  const no = await rescue({ state: "red", line: "tests fail" });
+  expect(no.drops[`issue.${red}`].fate).toBeUndefined();
+  expect(rerun(red)).toContain("but the checks do not pass on origin/main (tests fail)");
+  expect(statusOf(red)).toBe("open");
 });
 
-test("rescue: the other safe cases, and none for the rest", () => {
-  expect(rescueCase(run({ cause: "timeout" }), false, null)).toBe("timeout");
-  expect(rescueCase(run({ role: "land", cause: "timeout" }), false, null)).toBeNull();
-  expect(rescueCase(run({ cause: "infra" }), false, null)).toBe("infra");
-  expect(rescueCase(run({ cause: "locked" }), false, null)).toBe("infra");
-  expect(rescueCase(run({ role: "land", cause: "conflict" }), false, null)).toBe("land-conflict");
-  expect(rescueCase(run({ role: "land", cause: "check" }), false, null)).toBe("land-checks");
-  expect(rescueCase(run({ role: "land", cause: "check", conflicts: ["a"] }), false, null)).toBeNull();
-  expect(rescueCase(run({ cause: "check" }), false, null)).toBeNull();
+test("rescue: the other safe cases, and none for the rest", async () => {
+  const timeout = newIssue(), landTimeout = newIssue(), locked = newIssue(), check = newIssue(), bounced = newIssue();
+  mk(`fac-${timeout}`, "build", "failed", { cause: "timeout", reason: "time box" });
+  land(landTimeout, { cause: "timeout", reason: "time box" });
+  mk(`fac-${locked}`, "build", "failed", { cause: "locked", reason: "job lock busy" });
+  mk(`fac-${check}`, "build", "failed", { cause: "check", reason: "tests" });
+  land(bounced, { cause: "check", reason: "tests", conflicts: ["a"] });
+  const r = await rescue();
+  expect(r.drops[`issue.${timeout}`].reason).toContain("the issue goes to intake to split");
+  expect(r.drops[`issue.${locked}`].reason).toContain("failed for infrastructure (job lock busy)");
+  for (const id of [landTimeout, check, bounced]) expect(ask(id)!.why).toContain("No safe default covers this case");
+  expect(Object.keys(r.drops).sort()).toEqual([`issue.${locked}`, `issue.${timeout}`].sort());
 });
 
-test("rescue: each step: a killed run, an infra failure, a land conflict, and a run with nothing to keep", () => {
-  expect(killedStep(stuck({ role: "land" }), false).action).toBe("land again");
-  expect(killedStep(stuck({ role: "build" }), true).action).toBe("recheck");
-  expect(killedStep(stuck({ role: "build" }), false)).toMatchObject({ action: "drop" });
-  expect(killedStep(stuck({ role: "build" }), false).rerun).toBeUndefined();
-  expect(infraStep(stuck({ role: "land" }), false).action).toBe("land again");
-  expect(infraStep(stuck({ role: "build" }), true).action).toBe("recheck");
-  expect(infraStep(stuck({ role: "build", reason: "fetch failed" }), false).rerun).toBe("The last run failed before it made a branch: fetch failed.");
-  expect(conflictStep(stuck({ role: "land", conflicts: ["a.ts"] }), "abc fix a").rerun).toContain("merge conflict in a.ts, last changed on main by abc fix a");
-  expect(rerunStep(stuck({ cause: "no-commit" }, "r-nc", { "result.md": "line 1\nline 2\n" }), "no-commit").rerun).toBe("The last run made no commit. The last 20 lines of its result.md:\n\n```\nline 1\nline 2\n```");
-  expect(rerunStep(stuck({ role: "land", cause: "check", reason: "tests" }, "r-none"), "land-checks").rerun).toContain("its checks log:\n\n```\n(empty)\n```");
+test("rescue: each step: a killed run, an infra failure, a land conflict, and a run with nothing to keep", async () => {
+  const [killedLand, killedBuild, infraLand, infraBranch, infraNone, conflict, noCommit, landChecks] = Array.from({ length: 8 }, () => newIssue());
+  killed(killedLand, "land", { job: mk(`fac-${killedLand}`, "build", "passed", { started: BEFORE_BOOT }).job });
+  killed(killedBuild, "build");
+  land(infraLand, { cause: "infra", reason: "fetch failed" });
+  branch("infra", "b.ts");
+  mk(`fac-${infraBranch}`, "build", "failed", { cause: "infra", reason: "fetch failed", branch: "infra" });
+  mk(`fac-${infraNone}`, "build", "failed", { cause: "infra", reason: "fetch failed" });
+  const path = join(ctx.base, "repo");
+  writeFileSync(join(path, "a.ts"), "a\n");
+  sh(path, "git", "add", "a.ts");
+  sh(path, "git", "commit", "-q", "-m", "fix a");
+  sh(path, "git", "push", "-q", "origin", "main");
+  const sha = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], { cwd: path }).stdout.toString().trim();
+  land(conflict, { cause: "conflict", reason: "merge conflict", conflicts: ["a.ts"] });
+  mk(`fac-${noCommit}`, "build", "failed", { cause: "no-commit", reason: "no commit" }, { "result.md": "line 1\nline 2\n" });
+  land(landChecks, { cause: "check", reason: "tests" });
+  const r = await rescue();
+  expect(r.calls).toContain(`land issue.${killedLand}`);
+  expect(r.drops[`issue.${killedBuild}`].reason).toContain("a host restart killed build run");
+  expect(rerun(killedBuild)).toBeUndefined();
+  expect(r.calls).toContain(`land issue.${infraLand}`);
+  expect(r.calls).toContain(`recheck issue.${infraBranch}`);
+  expect(rerun(infraNone)).toBe("The last run failed before it made a branch: fetch failed.");
+  expect(rerun(conflict)).toContain(`merge conflict in a.ts, last changed on main by ${sha} fix a`);
+  expect(rerun(noCommit)).toBe("The last run made no commit. The last 20 lines of its result.md:\n\n```\nline 1\nline 2\n```");
+  expect(rerun(landChecks)).toContain("its checks log:\n\n```\n(empty)\n```");
 });
 
-test("hasWork: a branch whose only change is result.md is not work to rescue, as unit's branchFacts decides; one that changes code is", () => {
-  const path = mkdtempSync(join(tmpdir(), "rescue-git-"));
-  const g = (...a: string[]) => git(path, "-c", "user.name=t", "-c", "user.email=t@t", ...a);
-  g("init", "-q", "-b", "main");
-  g("commit", "-q", "--allow-empty", "-m", "base");
-  const commit = (branch: string, file: string) => {
-    g("checkout", "-q", "-b", branch, "main");
-    writeFileSync(join(path, file), "x\n");
-    g("add", file);
-    g("commit", "-q", "-m", file);
-  };
-  commit("notes", "result.md");
-  commit("code", "a.ts");
-  const at = (branch: string) => hasWork({ r: run({ branch }), repo: { ...repo, path } });
-  expect([at("notes"), at("code"), at("gone")]).toEqual([false, true, false]);
+test("hasWork: a branch whose only change is result.md is not work to rescue, as unit's branchFacts decides; one that changes code is", async () => {
+  const [notes, code, gone] = [newIssue(), newIssue(), newIssue()];
+  branch("notes", "result.md");
+  branch("code", "a.ts");
+  killed(notes, "build", { branch: "notes" });
+  killed(code, "build", { branch: "code" });
+  killed(gone, "build", { branch: "gone" });
+  const r = await rescue();
+  expect([notes, code, gone].map((id) => r.calls.find((c) => c.endsWith(`issue.${id}`)))).toEqual([`drop issue.${notes}`, `recheck issue.${code}`, `drop issue.${gone}`]);
 });

@@ -48,7 +48,7 @@ describe("a doc that does not match fails, quoting the claim", () => {
   });
 
   test("a function named in a file that does not have it", () => {
-    expect(one("`dispatchIssues` in `jobs/lib/transitions/factory.ts` and `noSuchFunction()` in `jobs/lib/transitions/factory.ts`; `jobs/lib/infra/settings.ts`'s `nothingHere`")).toEqual([
+    expect(one("`dispatchIssues` in `jobs/lib/transitions/dispatch.ts` and `noSuchFunction()` in `jobs/lib/transitions/factory.ts`; `jobs/lib/infra/settings.ts`'s `nothingHere`")).toEqual([
       'docs/x.md:1: "`noSuchFunction()` in `jobs/lib/transitions/factory.ts`": jobs/lib/transitions/factory.ts has no noSuchFunction',
       'docs/x.md:1: "`jobs/lib/infra/settings.ts`\'s `nothingHere`": jobs/lib/infra/settings.ts has no nothingHere',
     ]);

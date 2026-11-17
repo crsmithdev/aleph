@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { dispatchIssues } from "./factory.ts";
+import { dispatchIssues } from "./dispatch.ts";
 import * as record from "../records/record.ts";
 import { readHolds } from "../gates/holds.ts";
 import { readEvents } from "../../../lib/layout.ts";
