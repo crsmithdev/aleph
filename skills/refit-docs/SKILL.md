@@ -6,8 +6,8 @@ description: >
   tasks, docs a reader cannot reach, topics said twice, and docs that no
   longer earn their place. Use when asked to improve, review, audit, lint or
   clean up docs, a README or a docs site, find stale or broken docs or links,
-  or before you add a doc page or section (check). NOT for: CLAUDE.md, AGENTS.md
-  or skills (use refit-agents); writing a new page (use write-docs).
+  or before you add a doc page or section (check). NOT for: CLAUDE.md,
+  AGENTS.md or skills (use refit-agents); a new page (use write-docs).
 ---
 
 # Refit docs
@@ -17,10 +17,10 @@ changelog, and doc blocks in code. Agent files belong to [refit-agents](../refit
 each ask one question. Read `.refit.json` at the repo root when it exists: its `accepted` list, shared with
 refit-code, holds what the repo keeps on purpose.
 
-The order of the lenses is the order of harm. In a survey of 323 developers, incorrectness, obsoleteness,
-incompleteness and ambiguity were blockers, and bloat, fragmentation and tangled pages were not (Uddin and
-Robillard, IEEE Software 2015); in 878 doc issues, completeness (268) and up-to-dateness (190) were the most
-frequent (Aghajani et al., ICSE 2019).
+The lenses run in the order of harm. In a survey of 323 developers, incorrectness, obsoleteness, incompleteness
+and ambiguity were blockers. Bloat, fragmentation and tangled pages were not (Uddin and Robillard, IEEE Software
+2015). In 878 doc issues, completeness (268) and up-to-dateness (190) were the most frequent (Aghajani et al.,
+ICSE 2019).
 
 ## Lenses
 
@@ -34,10 +34,10 @@ frequent (Aghajani et al., ICSE 2019).
 | **copies** | Is each topic said in one place? | [COPIES.md](COPIES.md) |
 | **rot** | Does each doc still earn its place? | [ROT.md](ROT.md) |
 
-Where they meet: a wrong line is **true**, a missing one is **gaps**; a line with two readings is **clear**, a page
-with two jobs is **shape**; a broken link is **find**, a link to a page that says the same thing again is
-**copies**; a dated line is **rot** until the date makes it wrong, then **true**; a whole doc for a removed feature
-is **rot**. Report a candidate under one lens only.
+Where they meet: a wrong line is **true**, a missing one is **gaps**. A line with two readings is **clear**, a page
+with two jobs is **shape**. A broken link is **find**, a link to a page that repeats the same thing is **copies**.
+A dated line is **rot** until the date makes it wrong, then **true**. A whole doc for a removed feature is **rot**.
+Report a candidate under one lens only.
 
 ## Modes
 
@@ -51,7 +51,7 @@ is **rot**. Report a candidate under one lens only.
 
 ## Retro
 
-1. **Baseline.** Run the repo's own build and test commands from its manifest; a red baseline ends the run.
+1. **Baseline.** Run the repo's own build and test commands from its manifest. A red baseline ends the run.
    Record the commit. Done when the baseline is green and recorded.
 2. **Inventory.** Run `bun <skill dir>/refs.ts <repo>` (broken references, undocumented env vars, orphan docs).
    Run each installed tool of [TOOLS.md](TOOLS.md) and list the ones missing with their install line. Classify
@@ -61,17 +61,17 @@ is **rot**. Report a candidate under one lens only.
    part you read from the inventory yourself. Give each its lens file's Signals section verbatim, the inventory,
    and the docs in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done when
    each subagent has returned.
-4. **Prove, fix and guard, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with
-   this skill's lens files. The report goes to `<tmpdir>/refit-docs-retro-<timestamp>/`, and its unit is a doc page; its Overview adds the
-   doc count, the `refs.ts` counts and the tools that ran, and a card shows the text before and after. Done when
+4. **Prove, fix and guard, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lens
+   files. The report goes to `<tmpdir>/refit-docs-retro-<timestamp>/`. Its unit is a doc page. Its Overview adds the
+   doc count, the `refs.ts` counts and the tools that ran. A card shows the text before and after. Done when
    PROVE.md's step 3 is done.
 
 ## Act
 
-refit-code's [Act](../refit-code/SKILL.md#act), in this order: true, rot, copies, gaps, find, shape, then clear,
-so that a doc is right before it moves and placed before it is reworded. A new page or a rewrite follows
-[write-docs](../write-docs/SKILL.md)'s writing workflow. After each finding, run `refs.ts` and the tools
-again; a new broken reference is red.
+refit-code's [Act](../refit-code/SKILL.md#act), in this order: true, rot, copies, gaps, find, shape, clear. A doc
+is then right before it moves and placed before it is reworded. A new page or a rewrite follows
+[write-docs](../write-docs/SKILL.md)'s writing workflow. After each finding, run `refs.ts` and the tools again. A
+new broken reference is red.
 
 ## Lint
 
@@ -102,6 +102,6 @@ again; a new broken reference is red.
 ## Red flags
 
 - **You reworded a page whose facts you did not check.** True first: a clear sentence that is wrong does more harm.
-- **You copied a command's usage into a doc.** Point at the CLI's own usage; give it one if it has none.
-- **You gated on a readability score.** Flesch-Kincaid counts word and sentence length; it flags hard text less
+- **You copied a command's usage into a doc.** Point at the CLI's own usage. Give the CLI one if it has none.
+- **You gated on a readability score.** Flesch-Kincaid counts word and sentence length. It flags hard text less
   than half the time. It is a signal, never a finding.

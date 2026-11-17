@@ -1,9 +1,7 @@
 # Shape lens
 
-Does each page serve one reader task? Tangled pages, bloat and excess structure are presentation problems (Uddin
-and Robillard 2015): less severe than wrong or missing content, but they hide it. Diátaxis is the test:
-[write-docs](../write-docs/SKILL.md) rule `structure-diataxis` holds the compass, and its `structure-` rules the
-rest.
+Does each page serve one reader task? Diátaxis is the test. [write-docs](../write-docs/SKILL.md) rule
+`structure-diataxis` holds the compass, and its `structure-` rules hold the rest.
 
 ## Signals
 
@@ -17,8 +15,8 @@ rest.
 
 ## Proof
 
-Name the page's type, the section of another type, and the reader whose task it interrupts. Misclassifying a page's type
-is the main false positive: `write-docs`'s Gotchas list it and the others.
+Name the page's type, the section of another type, and the reader whose task it interrupts. A wrong page type is the main
+false positive. `write-docs`'s Gotchas list it and the others.
 
 ## Fix
 

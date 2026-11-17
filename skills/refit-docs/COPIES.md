@@ -1,7 +1,7 @@
 # Copies lens
 
-Is each topic said in one place? Two copies of one fact drift apart, and then one of them is a **true** finding.
-This lens owns doc copies; refit-code's one-way lens points here.
+Is each topic said in one place? Two copies of one fact drift apart, and then one is a **true** finding. This lens
+owns doc copies. refit-code's one-way lens points here.
 
 ## Signals
 

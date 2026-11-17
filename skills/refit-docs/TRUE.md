@@ -1,8 +1,6 @@
 # True lens
 
-Does each doc agree with the code? Incorrectness and obsoleteness are what developers rate as blockers (Uddin and
-Robillard 2015), and up-to-dateness is the second most frequent doc issue (Aghajani et al. 2019). The code is the
-truth; the doc is the copy.
+Does each doc agree with the code? The code is the truth. The doc is the copy.
 
 ## Signals
 
@@ -19,12 +17,12 @@ truth; the doc is the copy.
 ## Proof
 
 The lookup fails, the example fails, or you can quote the doc and the line of code that disagree. Resolve the
-reference rather than reading around it: a command that runs is current even where the prose around it reads dated.
+reference. A command that runs is current even where the prose around it reads dated.
 
 ## Fix
 
-Correct the doc to the code, or delete the line. When the code is wrong and the doc is the intent, report it to the
-user: that is a bug, not a doc fix.
+Correct the doc to the code, or delete the line. When the code is wrong and the doc is the intent, report a bug to
+the user, not a doc fix.
 
 ## Guard
 

@@ -1,7 +1,6 @@
 # Doc tools
 
-Each tool is optional. Run the ones installed; list the others with their install line. Versions as checked on
-2026-11-11.
+Each tool is optional. Run the ones installed; list the others with their install line. Versions checked on 2026-11-11.
 
 | Tool | Lens | Checks | Install | Run |
 |---|---|---|---|---|

@@ -1,14 +1,13 @@
 # Find lens
 
-Can a reader reach each doc and find the answer? Fragmentation is a presentation problem (Uddin and Robillard
-2015); a doc nobody reaches costs its upkeep and helps no one. `write-docs`'s `nav-` and `format-` rules hold
-the page-level rules.
+Can a reader reach each doc and find the answer? A doc nobody reaches costs upkeep and helps no one.
+`write-docs`'s `nav-` and `format-` rules hold the page-level rules.
 
 ## Signals
 
 - **`refs.ts` orphans:** each doc that no markdown file links to.
-- **`refs.ts` broken links and anchors.** (A broken link is fixed under **true** when the target moved; here when
-  the reader has no path.)
+- **`refs.ts` broken links and anchors.** A broken link is **true** when the target moved. It is **find** when the
+  reader has no path.
 - **Headings** that do not say what the section answers, or repeat on a page (markdownlint MD024).
 - **Link text** that means nothing out of context ("here", "this page").
 - **Accessibility.** An image with no alt text (MD045), an image of code or terminal output, skipped heading

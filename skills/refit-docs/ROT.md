@@ -1,7 +1,7 @@
 # Rot lens
 
-Does each doc still earn its place? A doc for a feature that is gone, a plan presented as current, or a dated line
-reads as true until a reader trips on it.
+Does each doc still earn its place? A doc for a gone feature, a plan shown as current, or a dated line reads as
+true until a reader trips on it.
 
 ## Signals
 
