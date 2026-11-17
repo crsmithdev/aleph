@@ -3,9 +3,10 @@ import { conn, getJson, putJson } from "../../../lib/db.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList } from "../../../issues/lib/store.ts";
-import { section, status, titleProblem } from "../../../issues/lib/todo.ts";
+import { readList, writeList } from "../../../issues/lib/store.ts";
+import { add, parseIssueRef, section, status, titleProblem } from "../../../issues/lib/todo.ts";
 import { approve, decline, explainLesson, mine, proposals, readStore } from "./corrections.ts";
+import { askOf } from "../asks/ask.ts";
 import { missingSections } from "../roles/issue-spec.ts";
 import { storeRepos } from "../../../tests/git.testkit.ts";
 import { reseed, seed } from "../../job.testkit.ts";
@@ -161,6 +162,15 @@ test("decline drops the proposal's issue", async () => {
   expect(decline(proposals()[0].id)).toBe("");
   expect(stored().lessons[0].state).toBe("declined");
   expect(status(readList(repo)!.items[0])).toBe("dropped");
+});
+
+test("guard: decline parks the open issue waiting on the dropped one, with the blocker-dropped Ask", async () => {
+  pickFirst = true;
+  await mine(NOW, quiet);
+  const waiter = writeList(repo, "waiter", (doc) => add(doc, "waiter", { after: [`issue.${parseIssueRef(proposals()[0].issue!)!.id}`] }).id)!.value;
+  expect(decline(proposals()[0].id)).toBe("");
+  expect(status(readList(repo)!.items.find((i) => i.id === waiter)!)).toBe("parked");
+  expect(askOf(`issue.${waiter}`)?.reason).toBe("blocker-dropped");
 });
 
 test("decline with a reason drops the proposal's issue with that reason", async () => {

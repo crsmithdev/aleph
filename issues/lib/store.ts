@@ -13,7 +13,6 @@ import * as record from "../../jobs/lib/records/record.ts";
 import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
 import { layout, logEvent } from "../../lib/layout.ts";
 import { next } from "../../lib/db.ts";
-import { always, askIfPartDropped, logAlways } from "../../jobs/lib/asks/ask.ts";
 import { CLOSED, issueKey, key as keyOf, PRIORITIES, SOURCES } from "../../lib/naming.ts";
 import * as issues from "./todo.ts";
 import { parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
@@ -114,8 +113,11 @@ function loadAll(dir: string, rev: string): Issue[] {
   return hit.items;
 }
 
+/** The key of the project that holds the issue. */
+const projectOf = (item: Issue): string => String(item.fm.project);
+
 /** The name of the project of each issue at `rev`, by issue number, with no fetch. */
-const projectsAt = (dir: string, rev: string): Map<number, string> => new Map(loadAll(dir, rev).flatMap((i) => { const name = projectName(String(i.fm.project)); return name ? [[i.id, name] as [number, string]] : []; }));
+const projectsAt = (dir: string, rev: string): Map<number, string> => new Map(loadAll(dir, rev).flatMap((i) => { const name = projectName(projectOf(i)); return name ? [[i.id, name] as [number, string]] : []; }));
 
 /** Whether the items repo has issue `n` on its origin/main as last fetched. */
 export const hasIssue = (n: number): boolean => loadAll(itemsDir(), `origin/${MAIN}`).some((i) => i.id === n);
@@ -125,7 +127,7 @@ export function projectOfIssue(n: number): string | undefined {
   const dir = itemsDir();
   fetch(dir);
   const found = loadAll(dir, `origin/${MAIN}`).find((i) => i.id === n);
-  return found ? projectName(String(found.fm.project)) : undefined;
+  return found ? projectName(projectOf(found)) : undefined;
 }
 
 /** A project's issues at `rev`, in number order, or null when the items repo has no project of that name. */
@@ -134,7 +136,7 @@ function load(dir: string, rev: string, name: string): Doc | null {
   if (!project) return null;
   const all = loadAll(dir, rev);
   // A caller may change its items, and loadAll's are cached: copy only this project's.
-  return { repo: name, project, items: structuredClone(all.filter((i) => i.fm.project === project)), floor: all.at(-1)?.id ?? 0 };
+  return { repo: name, project, items: structuredClone(all.filter((i) => projectOf(i) === project)), floor: all.at(-1)?.id ?? 0 };
 }
 
 /** The repo's list on the store's origin/main, or null when the store has none. */
@@ -158,7 +160,7 @@ export function everyFetched(): { repo: string; item: Issue }[] {
   // projectName reads the registry on each call, so name each project once.
   const names = new Map<string, string | undefined>();
   const nameOf = (k: string) => { if (!names.has(k)) names.set(k, projectName(k)); return names.get(k); };
-  return loadAll(itemsDir(), `origin/${MAIN}`).flatMap((item) => { const repo = nameOf(String(item.fm.project)); return repo ? [{ repo, item }] : []; });
+  return loadAll(itemsDir(), `origin/${MAIN}`).flatMap((item) => { const repo = nameOf(projectOf(item)); return repo ? [{ repo, item }] : []; });
 }
 
 /** Each repo's list on the store's origin/main, after one fetch; null when the store has none. */
@@ -247,41 +249,14 @@ export function storeLog(dir = itemsDir()): StoreChange[] {
   return out.filter((c) => c.added.length || c.removed.length);
 }
 
-const REMOVE_LINK = "Remove the link";
-export const DROP_WAITER = "Drop the waiter";
-
-/**
- * Called after the write that dropped issue `blocker`, for each open issue whose `after` names it: with the Always rule
- * `resolve` for blocker-dropped the link is removed and the issue stays open; else the issue is parked with the
- * blocker-dropped Ask (ask.ts decides it).
- */
-function parkWaiter(repo: Place, waiter: Issue, blocker: string): void {
-  const ref = keyOf("issue", waiter.id);
-  const standing = always("blocker-dropped", repo.key)?.action === "resolve";
-  const w = writeList(repo, `todo: item ${waiter.id}: blocker ${blocker} dropped`, (doc) => {
-    const item = issues.find(doc, waiter.id);
-    if (!item || status(item) !== "open" || !afterOf(item).includes(blocker)) return null;
-    if (standing) setAfter(item, afterOf(item).filter((r) => r !== blocker));
-    else issues.setStatus(item, "parked");
-    return true;
-  });
-  if (!w) return;
-  if (standing) { logAlways("blocker-dropped", ref, "answered", { detail: "the recommended answer" }); return; }
-  record.setIssueAsk(ref, {
-    reason: "blocker-dropped", question: `${blocker} was dropped, so this issue is parked. What now?`, recommended: REMOVE_LINK, why: [],
-    options: [{ label: REMOVE_LINK, line: "Takes the dropped issue out of after and opens this issue." }, { label: DROP_WAITER, line: "Drops this issue too." }],
-  });
-  logEvent({ subject: "rule", action: "parked", object: ref, detail: `blocker ${blocker} dropped` });
-}
-
 /**
  * Apply `change` to the project's list on the store's origin/main and push it as one commit. When the push is refused
  * because main moved, fetch and apply `change` again. `change` returns null to write nothing. A project the items repo
  * has none for gets one in the same commit only when `create` is set. A new issue takes its number from the counter in
  * `change`, before the push, so a refused push leaves a gap. Each issue the write closes logs `done` or `dropped` as `by`
- * once the push succeeds (git first, then the event): this is the one door for a close, so no caller logs its own. A dropped part then asks about its parent (`askIfPartDropped`).
+ * once the push succeeds (git first, then the event): this is the one door for a close, so no caller logs its own. `dropped` lists the issues the write dropped, in `doc`: the verb layer asks about them (issues.ts `askAfterDrops`).
  */
-export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false, blobs: Record<string, Uint8Array> = {}, by = "rule"): { value: T; commit: string; follow: string | null } | null {
+export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false, blobs: Record<string, Uint8Array> = {}, by = "rule"): { value: T; commit: string; follow: string | null; doc: Doc; dropped: Issue[] } | null {
   const dir = itemsDir();
   for (let attempt = 1; ; attempt++) {
     // `change` fills `blobs` again on each attempt: a retry can give the item another number.
@@ -307,25 +282,20 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
       if (before.get(item.id) !== text) files[itemPath(item)] = text;
     }
     // Nothing changed: no commit, so the history holds only real writes.
-    if (Object.keys(files).length === 0) return { value, commit: base, follow: null };
+    if (Object.keys(files).length === 0) return { value, commit: base, follow: null, doc, dropped: [] };
     const tree = treeWithFiles(dir, `${base}^{tree}`, files);
     const commit = git(dir, "commit-tree", tree, "-p", base, "-m", `${repo.key}: ${message}`);
     if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
     const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
     if (push.ok) {
+      const dropped: Issue[] = [];
       for (const item of doc.items) {
         if (!CLOSED.includes(status(item)) || !(open.has(item.id) || !before.has(item.id))) continue;
         logClosed(item, by);
         record.clearIssueState(issueKey(issues.refOf(item)));
-        if (status(item) !== "dropped") continue;
-        askIfPartDropped(doc, item, closedWhy(item) ?? "no reason given");
-        const blocker = keyOf("issue", item.id);
-        for (const w of loadAll(dir, commit.out)) {
-          const name = projectName(String(w.fm.project));
-          if (name && status(w) === "open" && afterOf(w).includes(blocker)) parkWaiter({ key: name }, w, blocker);
-        }
+        if (status(item) === "dropped") dropped.push(item);
       }
-      return { value, commit: commit.out, follow: followMain(dir, MAIN) };
+      return { value, commit: commit.out, follow: followMain(dir, MAIN), doc, dropped };
     }
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
   }
@@ -546,17 +516,16 @@ export function reopenReverted(repo: Place, id: number, text: string, since: str
 
 /**
  * Change item `id` with `change` as one commit, while it is still open and not
- * sorted: intake's write. False when the item is gone, closed or sorted. A
- * change that files parts with `file` passes the `effects` they start.
+ * sorted: intake's write. Null when the item is gone, closed or sorted, else the write (its `doc` and `dropped`, for
+ * `askAfterDrops`). A change that files parts with `file` passes the `effects` they start.
  */
-export function sort(repo: Place, id: number | string, message: string, change: (item: Issue, doc: Doc, file: File) => void, effects: Effects = { after: () => {} }): boolean {
-  const w = writeFiling(repo, message, "intake", effects, (doc, file) => {
+export function sort(repo: Place, id: number | string, message: string, change: (item: Issue, doc: Doc, file: File) => void, effects: Effects = { after: () => {} }): { doc: Doc; dropped: Issue[] } | null {
+  return writeFiling(repo, message, "intake", effects, (doc, file) => {
     const item = issues.find(doc, id);
     if (!item || status(item) !== "open" || isSorted(doc, item, repo)) return null;
     change(item, doc, file);
     return true;
   }, false);
-  return w?.value === true;
 }
 
 /**

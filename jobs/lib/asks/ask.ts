@@ -16,7 +16,7 @@ import { alwaysRow, INTAKE_TRIES, RUN_CAP, setAlwaysRow } from "../infra/setting
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, DROP_WAITER, isDropped, parentOf, partsOf, setAfter, setPlan, writeList, type Place } from "../../../issues/lib/store.ts";
+import { afterOf, isDropped, parentOf, partsOf, setAfter, setPlan, writeList, type Place } from "../../../issues/lib/store.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -343,6 +343,9 @@ export function may(actor: Actor, action: string, ask: Ask | null | undefined, o
   return null;
 }
 
+
+/** The label of the blocker-dropped Ask's option that drops the waiter. */
+export const DROP_WAITER = "Drop the waiter";
 
 /**
  * What a decision on `ask` does to the item, in the write that notes the decision `said`: on the part-dropped Ask, the

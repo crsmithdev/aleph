@@ -13,6 +13,7 @@ import { getJson, putJson } from "../../../lib/db.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { fileIssue, writeList } from "../../../issues/lib/store.ts";
 import { find, note, parseIssueRef, setStatus } from "../../../issues/lib/todo.ts";
+import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { clearAsk, setAsk } from "../asks/ask.ts";
 import { decayQueue } from "../../../vault/lib/maintain.ts";
 import { archive, outcome, write } from "../../../vault/lib/ops.ts";
@@ -156,13 +157,14 @@ export async function answerHeld(ref: string, approved: boolean): Promise<string
   if (!n) return `no note ${title} in the vault`;
   const [r] = await apply(root, [n], [approved ? held[title] : { title, verdict: "refresh", why: "Chris kept the claim" }], today(), true);
   const at = parseIssueRef(ref)!;
-  writeList({ key: at.repo }, `recheck: ${approved ? "approved" : "declined"} ${ref}`, (doc) => {
+  const w = writeList({ key: at.repo }, `recheck: ${approved ? "approved" : "declined"} ${ref}`, (doc) => {
     const item = find(doc, at.id);
     if (!item) return null;
     note(item, r.refused ? `the vault refused: ${r.refused}` : approved ? `${NOTE.approved}: the ${held[title].verdict} is applied` : `${NOTE.declined}: the claim stays`);
     if (!r.refused) setStatus(item, approved ? "done" : "dropped");
     return true;
   });
+  if (w) askAfterDrops(w.doc, w.dropped);
   // Read again: a recheck may have held another verdict while the op ran.
   const { [title]: _, ...rest } = getJson<Record<string, Held>>("state", "recheck-held", {});
   putJson("state", "recheck-held", rest);

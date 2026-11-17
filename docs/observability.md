@@ -47,7 +47,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `director` | `failed`, when a case text or a decision fails | `jobs/lib/roles/director.ts:648`, `:730`, `:733` |
 | `intake` | `skipped` (`intake`) for an issue that intake skips | `jobs/lib/transitions/factory.ts:573` |
 | the filer: `intake`, `firefighter`, `human`, `claude`, `worker` | `filed`, one event per new issue | `issues/lib/store.ts:598` |
-| the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `issues/lib/store.ts:172` |
+| the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `issues/lib/store.ts:174` |
 | `human` | `changed`, when an Always rule is set back to Ask me | `jobs/lib/asks/ask.ts:234` |
 | `human` | `changed` on the object `settings`: `pause: on` and `pause: off`, from the pause and resume commands | `jobs/lib/gates/pause.ts:12`, through `logSetting` in `lib/layout.ts:38` |
 

@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { storeRepos, vault } from "../../../tests/git.testkit.ts";
-import { readList } from "../../../issues/lib/store.ts";
-import { status } from "../../../issues/lib/todo.ts";
+import { readList, writeList } from "../../../issues/lib/store.ts";
+import { add, status } from "../../../issues/lib/todo.ts";
 import { askOf } from "../asks/ask.ts";
 import { decayQueue } from "../../../vault/lib/maintain.ts";
 import { write } from "../../../vault/lib/ops.ts";
@@ -197,6 +197,14 @@ test("approve of a verdict the op refuses is a note on the issue, which stays pa
   expect(status(issueOf(fix))).toBe("parked");
   expect(issueOf(fix).notes.at(-1)).toContain(`the vault refused: ${refusal}`);
   expect(askOf(fix)).toBeNull();
+});
+
+test("guard: decline parks the open issue waiting on the dropped one, with the blocker-dropped Ask", async () => {
+  const fix = await held("CoreA", { why: "moved", claim: "A now holds.", details: "d", evidence: "e" });
+  const waiter = writeList({ key: "aleph" }, "waiter", (doc) => add(doc, "waiter", { after: [`issue.${fix.split("-")[1]}`] }).id)!.value;
+  expect(await answerHeld(fix, false)).toBeNull();
+  expect(status(readList({ key: "aleph" })!.items.find((i) => i.id === waiter)!)).toBe("parked");
+  expect(askOf(`issue.${waiter}`)?.reason).toBe("blocker-dropped");
 });
 
 test("decline keeps the claim, sets updated to today and drops the issue; the note is then in no prompt", async () => {

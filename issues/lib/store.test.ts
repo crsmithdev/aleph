@@ -233,11 +233,11 @@ describe("the writes", () => {
     store.writeList(r, "ask", (doc) => { setAsk(refIn(issues.find(doc, live)!), { reason: "question", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, shut, "x");
     const before = commits();
-    expect(store.sort(r, live, "intake", () => { })).toBe(false);
-    expect(store.sort(r, shut, "intake", () => { })).toBe(false);
-    expect(store.sort(r, 999999, "intake", () => { })).toBe(false);
+    expect(store.sort(r, live, "intake", () => { })).toBeNull();
+    expect(store.sort(r, shut, "intake", () => { })).toBeNull();
+    expect(store.sort(r, 999999, "intake", () => { })).toBeNull();
     expect(commits()).toBe(before);
-    expect(store.sort(r, fresh, "intake", (i) => { i.spec = "Do it."; })).toBe(true);
+    expect(store.sort(r, fresh, "intake", (i) => { i.spec = "Do it."; })).not.toBeNull();
     expect(item(r, fresh).spec).toBe("Do it.");
     clearAsk(`issue.${live}`);
   });
@@ -260,13 +260,13 @@ describe("an issue's ask", () => {
     expect(record.read(`issue.${b}`)).toBeNull();
   });
 
-  test("dropping the last open part through close asks on its parent", () => {
+  test("a write lists the issues it dropped and asks nothing itself: the verb layer asks", () => {
     const r = repo([{ title: "parent" }]);
     let part = 0;
     store.writeList(r, "part", (doc) => { part = issues.add(doc, "part", { from: `issue.${r.ids[0]}` }).id; return true; });
-    expect(store.close(r, part, "too big", "dropped")).toBeNull();
-    expect(askOf(`issue.${r.ids[0]}`)?.reason).toBe("part-dropped");
-    clearAsk(`issue.${r.ids[0]}`);
+    const w = store.writeList(r, "drop", (doc) => { issues.setStatus(issues.find(doc, part)!, "dropped", undefined, "too big"); return true; })!;
+    expect(w.dropped.map((i) => i.id)).toEqual([part]);
+    expect(askOf(`issue.${r.ids[0]}`)).toBeNull();
   });
 
   test("a parked issue keeps its Ask; one write that parks one and drops another clears only the dropped one's", () => {

@@ -12,6 +12,7 @@ import { ISSUE_KEY, issueKey, parseKey } from "../../../lib/naming.ts";
 import { pastWork } from "../transitions/continuation.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { isRedMain, itemsDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, hasIssue, reader, setAfter, setIntake, setPlan, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
+import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { always, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";
@@ -381,6 +382,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
     } else {
     }
   }, effects);
+  if (ok) askAfterDrops(ok.doc, ok.dropped);
   if (ok && v.route === "ask" && !standing) setAsk(issueKey(id), v.ask);
   if (ok && standing) logAlways("question", ref, "answered", { detail: "the recommended answer" });
   return ok ? v.route : null;
@@ -419,6 +421,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
     const dropped = sort(repo, id, `intake ${ref}: no verdict`, (item) => {
       issues.setStatus(item, "dropped", undefined, `no verdict in ${n} runs; standing: dropped`);
     });
+    if (dropped) askAfterDrops(dropped.doc, dropped.dropped);
     if (dropped) logAlways("intake-failed", ref, "dropped");
     return dropped ? `${ref}: no verdict in ${n} intake runs; standing: dropped` : null;
   }

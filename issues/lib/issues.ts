@@ -16,7 +16,9 @@ import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { recentRepos } from "../../jobs/lib/records/status.ts";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
-import { askOfItem, awaitsChris, clearAsk, decideAsk, refIn } from "../../jobs/lib/asks/ask.ts";
+import { always, askIfPartDropped, askOfItem, awaitsChris, clearAsk, decideAsk, DROP_WAITER, logAlways, refIn } from "../../jobs/lib/asks/ask.ts";
+import * as record from "../../jobs/lib/records/record.ts";
+import { logEvent } from "../../lib/layout.ts";
 import { triage } from "./triage.ts";
 import { errText } from "../../lib/errtext.ts";
 import { isAgent } from "../../lib/env.ts";
@@ -38,7 +40,7 @@ export interface Fields {
   media?: string[];
 }
 
-export const brief = (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: issues.updated(i) ?? null, source: store.sourceOf(i), after: store.afterOf(i), refs: store.refsOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOfItem(i), notes: i.notes.length });
+export const brief = (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: store.priorityOf(i), updated: issues.updated(i) ?? null, source: store.sourceOf(i), after: store.afterOf(i), refs: store.refsOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: issues.sinceOf(i), ask: askOfItem(i), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
@@ -68,7 +70,46 @@ function pick(repo: store.Place, doc: issues.Doc, id: number | string): issues.I
 
 // Every verb but `add` needs a list on main; `add` starts one.
 function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) => T | null, create = false, blobs?: Record<string, Uint8Array>) {
-  return refusing(() => store.writeList(repo, message, change, create, blobs, actor()));
+  return refusing(() => {
+    const w = store.writeList(repo, message, change, create, blobs, actor());
+    if (w) askAfterDrops(w.doc, w.dropped);
+    return w;
+  });
+}
+
+/** After a write that dropped `dropped` (of `doc`): ask about the parent of each dropped part, and park the open waiters of each dropped blocker. */
+export function askAfterDrops(doc: issues.Doc, dropped: issues.Issue[]): void {
+  for (const item of dropped) {
+    askIfPartDropped(doc, item, store.closedWhy(item) ?? "no reason given");
+    const blocker = key("issue", item.id);
+    for (const w of store.everyFetched()) if (issues.status(w.item) === "open" && store.afterOf(w.item).includes(blocker)) parkWaiter({ key: w.repo }, w.item, blocker);
+  }
+}
+
+const REMOVE_LINK = "Remove the link";
+
+/**
+ * Called after the write that dropped issue `blocker`, for each open issue whose `after` names it: with the Always rule
+ * `resolve` for blocker-dropped the link is removed and the issue stays open; else the issue is parked with the
+ * blocker-dropped Ask (ask.ts decides it).
+ */
+function parkWaiter(repo: store.Place, waiter: issues.Issue, blocker: string): void {
+  const ref = key("issue", waiter.id);
+  const standing = always("blocker-dropped", repo.key)?.action === "resolve";
+  const w = store.writeList(repo, `todo: item ${waiter.id}: blocker ${blocker} dropped`, (doc) => {
+    const item = issues.find(doc, waiter.id);
+    if (!item || issues.status(item) !== "open" || !store.afterOf(item).includes(blocker)) return null;
+    if (standing) store.setAfter(item, store.afterOf(item).filter((r) => r !== blocker));
+    else issues.setStatus(item, "parked");
+    return true;
+  });
+  if (!w) return;
+  if (standing) { logAlways("blocker-dropped", ref, "answered", { detail: "the recommended answer" }); return; }
+  record.setIssueAsk(ref, {
+    reason: "blocker-dropped", question: `${blocker} was dropped, so this issue is parked. What now?`, recommended: REMOVE_LINK, why: [],
+    options: [{ label: REMOVE_LINK, line: "Takes the dropped issue out of after and opens this issue." }, { label: DROP_WAITER, line: "Drops this issue too." }],
+  });
+  logEvent({ subject: "rule", action: "parked", object: ref, detail: `blocker ${blocker} dropped` });
 }
 
 /** What `f` returns; an error of the store is thrown as a refusal. */
@@ -171,7 +212,7 @@ function filterRows(doc: issues.Doc, o: { status?: string; label?: string; kind?
   if (o.status && !STATUSES.includes(o.status as issues.Status)) refuse(`status must be one of ${STATUSES.join(", ")}`);
   return doc.items
     .filter((i) => (o.status ? issues.status(i) === o.status : ["open", "parked"].includes(issues.status(i))))
-    .filter((i) => (o.kind ? (i.fm.kind ?? "task") === o.kind : true))
+    .filter((i) => (o.kind ? issues.kindOf(i) === o.kind : true))
     .filter((i) => (o.label ? store.areasOf(i).includes(o.label) : true));
 }
 

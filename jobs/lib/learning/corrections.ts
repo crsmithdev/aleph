@@ -15,6 +15,7 @@ import { logEvent } from "../../../lib/layout.ts";
 
 const fail = (object: string, detail: string) => logEvent({ subject: "rule", action: "failed", object, detail });
 import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
+import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { always, logAlways, type Ask } from "../asks/ask.ts";
 import { causeOf } from "../records/outcome.ts";
 import { fileIssue, writeList, type Effects, type Place } from "../../../issues/lib/store.ts";
@@ -370,6 +371,7 @@ export function decline(id: string, reason = "", now = Date.now()): string {
         return true;
       });
       if (!w) return `no issue ${l.issue} to drop`;
+      askAfterDrops(w.doc, w.dropped);
     } catch (e) {
       return `the work store refused: ${(e as Error).message}`;
     }

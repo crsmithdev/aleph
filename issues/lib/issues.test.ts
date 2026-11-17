@@ -84,6 +84,12 @@ describe("issue verbs without argv", () => {
     expect(ids("dropped")).toEqual([gone]);
   });
 
+  test("a list filtered by kind task includes an item whose kind field is empty", () => {
+    const r = repo([{ title: "plain" }, { title: "typed" }]);
+    store.writeList(r, "empty kind", (doc) => { issues.find(doc, r.ids[0])!.fm.kind = ""; issues.find(doc, r.ids[1])!.fm.kind = "bug"; return true; });
+    expect(issueOps.list(r, { kind: "task" }).map((i) => i.id)).toEqual([r.ids[0]]);
+  });
+
   test("edit parks with the reason as a note and no closed_as, unparks, and add can file parked", async () => {
     const r = repo([{ title: "a" }]);
     const [id] = r.ids;

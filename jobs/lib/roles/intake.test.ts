@@ -428,6 +428,15 @@ describe("a run with no reply", () => {
     expect(item(1).fm.closed_why).toBe("no verdict in 2 runs; standing: dropped");
   });
 
+  test("guard: discontinue: the open issue waiting on the dropped one is parked with the blocker-dropped Ask", async () => {
+    reset([{ title: "waiter", spec: "## Goal\ng", after: ["issue.2"] }, { title: "a", body: "nothing" }]);
+    grant("intake-failed", "discontinue");
+    await run();
+    await run();
+    expect(issues.status(item(1))).toBe("parked");
+    expect(askOf("issue.1")?.reason).toBe("blocker-dropped");
+  });
+
   test("recommended: an ask with options leaves no Ask and a note naming the recommendation", async () => {
     reset([{ title: "a", body: "VERDICT:structured" }]);
     grant("question", "recommended");
@@ -460,6 +469,13 @@ test("intakeNow takes in one issue with no tick, and leaves a sorted one alone",
   expect((await intakeNow(repo, 1)).counts).toEqual({ close: 1 });
   expect((await intakeNow(repo, 2)).counts).toEqual({});
   expect(calls()).toHaveLength(1);
+});
+
+test("guard: a close route parks the open issue waiting on the dropped one, with the blocker-dropped Ask", async () => {
+  reset([{ title: "waiter", spec: "## Goal\ng", after: ["issue.2"] }, { title: "dup", body: "VERDICT:close" }]);
+  await run();
+  expect(issues.status(item(1))).toBe("parked");
+  expect(askOf("issue.1")?.reason).toBe("blocker-dropped");
 });
 
 test("intake does not close a red-main issue while its main is still red: it asks Chris; once main is green it closes", async () => {
