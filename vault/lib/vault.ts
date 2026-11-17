@@ -211,9 +211,15 @@ export function links(text: string): string[] {
   return [...prose.matchAll(LINK)].map((m) => m[1].trim());
 }
 
-function list(fm: Frontmatter, key: string): string[] {
-  const v = fm[key];
+/** A note's frontmatter key as a list: a lone value is a list of one, a missing key is empty. */
+export function listOf(n: Note, key: string): string[] {
+  const v = n.fm[key];
   return Array.isArray(v) ? v : v === undefined ? [] : [v];
+}
+
+/** A note's scope, empty when it has none. */
+export function scopeOf(n: Pick<Note, "fm">): string {
+  return String(n.fm.scope ?? "");
 }
 
 /** Titles and aliases that a [[link]] may resolve to. Every file stem counts, so daily notes and Home resolve too. */
@@ -221,7 +227,7 @@ export function linkTargets(notes: Note[]): Map<string, Note> {
   const m = new Map<string, Note>();
   for (const n of notes) {
     m.set(n.title.toLowerCase(), n);
-    for (const a of list(n.fm, "aliases")) m.set(a.toLowerCase(), n);
+    for (const a of listOf(n, "aliases")) m.set(a.toLowerCase(), n);
   }
   return m;
 }
@@ -235,7 +241,7 @@ export function backlinks(notes: Note[], hit: Note): Note[] {
 /** Every note a name resolves to, in note order: `linkTargets` keeps only the last of them. */
 function nameIndex(notes: Note[]): Map<string, Note[]> {
   const m = new Map<string, Note[]>();
-  for (const n of notes) for (const name of [n.title, ...list(n.fm, "aliases")]) {
+  for (const n of notes) for (const name of [n.title, ...listOf(n, "aliases")]) {
     const k = name.toLowerCase();
     m.set(k, [...(m.get(k) ?? []), n]);
   }
@@ -268,7 +274,7 @@ export function validateNote(note: Note, others: Note[], index: Map<string, Note
   const folder = folderFor(kind);
   if (folder && dirname(note.rel) !== folder) add("folder", `kind ${kind} belongs in ${folder}/, note is in ${dirname(note.rel)}/`);
 
-  const mine = [note.title, ...list(note.fm, "aliases")].map((s) => s.toLowerCase());
+  const mine = [note.title, ...listOf(note, "aliases")].map((s) => s.toLowerCase());
   for (const name of mine) {
     const hit = index.get(name)?.filter((o) => o.path !== note.path).at(-1);
     if (hit) add("duplicate", `"${name}" is already the title or an alias of ${hit.rel}`);
@@ -301,11 +307,11 @@ const MAX_CANDIDATES = 20;
 
 /** Live wiki notes in the draft's scope that share a title or alias word with it, minus those it supersedes or says it is consistent with, at most `MAX_CANDIDATES`. */
 export function screenCandidates(draft: Note, notes: Note[]): Note[] {
-  const want = new Set(screenWords([draft.title, ...list(draft.fm, "aliases")].join(" ")));
-  const sup = new Set([...list(draft.fm, "supersedes"), ...list(draft.fm, "consistent_with"), ...list(draft.fm, "distinct")].map((t) => t.toLowerCase()));
+  const want = new Set(screenWords([draft.title, ...listOf(draft, "aliases")].join(" ")));
+  const sup = new Set([...listOf(draft, "supersedes"), ...listOf(draft, "consistent_with"), ...listOf(draft, "distinct")].map((t) => t.toLowerCase()));
   return wikiNotes(notes)
     .filter((n) => n.fm.scope === draft.fm.scope && !sup.has(n.title.toLowerCase()))
-    .filter((n) => screenWords([n.title, ...list(n.fm, "aliases")].join(" ")).some((w) => want.has(w)))
+    .filter((n) => screenWords([n.title, ...listOf(n, "aliases")].join(" ")).some((w) => want.has(w)))
     .slice(0, MAX_CANDIDATES);
 }
 
@@ -409,12 +415,12 @@ export function lintVault(notes: Note[], { overlap = false, now = new Date(), tr
     // By title, so which note of a pair is `note` does not depend on the order readdir gave them.
     const [a, b] = wiki[i].title < wiki[j].title ? [wiki[i], wiki[j]] : [wiki[j], wiki[i]];
     if (a.fm.scope !== b.fm.scope) continue;
-    const sup = (x: Note, y: Note) => list(x.fm, "supersedes").some((t) => t.toLowerCase() === y.title.toLowerCase());
-    const agree = (x: Note, y: Note) => list(x.fm, "consistent_with").some((t) => t.toLowerCase() === y.title.toLowerCase());
-    const dist = (x: Note, y: Note) => list(x.fm, "distinct").some((t) => t.toLowerCase() === y.title.toLowerCase());
+    const sup = (x: Note, y: Note) => listOf(x, "supersedes").some((t) => t.toLowerCase() === y.title.toLowerCase());
+    const agree = (x: Note, y: Note) => listOf(x, "consistent_with").some((t) => t.toLowerCase() === y.title.toLowerCase());
+    const dist = (x: Note, y: Note) => listOf(x, "distinct").some((t) => t.toLowerCase() === y.title.toLowerCase());
     if (sup(a, b) || sup(b, a) || agree(a, b) || agree(b, a) || dist(a, b) || dist(b, a)) continue;
-    const wa = words([a.title, ...list(a.fm, "aliases")].join(" "));
-    const wb = words([b.title, ...list(b.fm, "aliases")].join(" "));
+    const wa = words([a.title, ...listOf(a, "aliases")].join(" "));
+    const wb = words([b.title, ...listOf(b, "aliases")].join(" "));
     const shared = [...wa].filter((w) => wb.has(w));
     if (shared.length >= 2) pairs.push({ note: a.title, rule: "overlap", other: b.title, detail: `shares "${shared.join('", "')}" with ${b.title} in scope ${a.fm.scope}; neither supersedes the other`, score: shared.length / new Set([...wa, ...wb]).size });
   }
@@ -444,7 +450,7 @@ export function healthLine(h: Health): string {
 
 export function citedTraces(notes: Note[]): string[] {
   const ids = new Set<string>();
-  for (const n of notes) for (const s of list(n.fm, "sources")) if (s.startsWith("trace:")) ids.add(s.slice(6));
+  for (const n of notes) for (const s of listOf(n, "sources")) if (s.startsWith("trace:")) ids.add(s.slice(6));
   return [...ids].sort();
 }
 

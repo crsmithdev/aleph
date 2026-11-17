@@ -9,9 +9,9 @@ import { join } from "node:path";
 import { clip, issueHref } from "../lib/naming.ts";
 import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
 import { readStore } from "../jobs/lib/learning/corrections.ts";
-import { KEEP_DAYS, listEpisodes, readEpisode } from "../jobs/lib/learning/episode.ts";
+import { episodeFields, KEEP_DAYS, listEpisodes, readEpisode } from "../jobs/lib/learning/episode.ts";
 import { claimLine, recall } from "../vault/lib/index.ts";
-import { dailyNotes, readMemoryMd, type Note } from "../vault/lib/vault.ts";
+import { dailyNotes, readMemoryMd, scopeOf, type Note } from "../vault/lib/vault.ts";
 import { skillsDir } from "../jobs/lib/infra/settings.ts";
 import { claudeSettings } from "../lib/session-context.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
@@ -92,7 +92,7 @@ function prospectiveIssues() {
 
 function semantic(root: string, wiki: Note[], log: Record<string, string>): Item[] {
   const out: Item[] = wiki.map((n) => {
-    const scope = String(n.fm.scope ?? ""), core = typeof n.fm.core === "string" ? n.fm.core : undefined;
+    const scope = scopeOf(n), core = typeof n.fm.core === "string" ? n.fm.core : undefined;
     return {
       type: "semantic", source: "note", key: n.title, title: n.title, text: clip(claimLine(n).replace(/^\*\*Claim\.\*\*\s*/, ""), 240), scope,
       at: String(n.fm.updated ?? ""), read: log[n.title] ?? null, core, kind: String(n.fm.kind ?? ""), body: n.body, href: `#/memory/${encodeURIComponent(n.title)}`,
@@ -160,8 +160,8 @@ function working(): Item[] {
 
 async function episodic(root: string): Promise<Item[]> {
   const out: Item[] = listEpisodes().map(({ file: f }) => {
-    const body = readEpisode(f) ?? "", fm = parseFrontmatter(splitFrontmatter(body).frontmatter ?? "");
-    return { type: "episodic", source: "episode", key: f, title: f.slice(0, -3), text: intent(splitFrontmatter(body).body), scope: String(fm.scope ?? ""), at: String(fm.updated ?? ""),
+    const body = readEpisode(f) ?? "", { scope, updated } = episodeFields(body);
+    return { type: "episodic", source: "episode", key: f, title: f.slice(0, -3), text: intent(splitFrontmatter(body).body), scope, at: updated,
       read: null, body, effect: `The factory report lists it once; it is deleted after ${KEEP_DAYS} days.` };
   });
   for (const { day, text: body } of dailyNotes(root)) {

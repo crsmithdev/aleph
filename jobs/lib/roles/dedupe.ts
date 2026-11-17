@@ -8,7 +8,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { archive, outcome, write } from "../../../vault/lib/ops.ts";
-import { lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
+import { listOf, lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
 
@@ -51,18 +51,16 @@ export function prompt(pairs: Pair[], day: string): string {
   ].join("\n");
 }
 
-const list = (n: Note, key: string): string[] => (Array.isArray(n.fm[key]) ? n.fm[key] : []);
-
 /** The note title and file text to write, or the `archive` op's target, for a verdict, or a reason it is malformed. */
 function change(a: Note, b: Note, v: Verdict, day: string): { title: string; text: string } | { drop: string } | { bad: string } {
   const pair = [a.title, b.title];
-  if (v.verdict === "distinct") return { title: a.title, text: serializeFrontmatter({ ...a.fm, distinct: [...list(a, "distinct"), b.title] }) + a.body };
+  if (v.verdict === "distinct") return { title: a.title, text: serializeFrontmatter({ ...a.fm, distinct: [...listOf(a, "distinct"), b.title] }) + a.body };
   if (v.verdict === "archive") return v.drop && pair.includes(v.drop) ? { drop: v.drop } : { bad: "archive verdict names no drop of the pair" };
   if (v.verdict !== "merge") return { bad: `unknown verdict ${v.verdict}` };
   if (!v.keep || !pair.includes(v.keep) || !v.claim || !v.details || !v.evidence) return { bad: "merge verdict has no keep of the pair, claim, details and evidence" };
   const [k, o] = v.keep === a.title ? [a, b] : [b, a];
   const related = /^## Related\n\n([\s\S]*)$/m.exec(k.body)?.[1].trim() || "- [[Home]]";
-  return { title: k.title, text: serializeFrontmatter({ ...k.fm, updated: day, supersedes: [...list(k, "supersedes"), o.title] }) + body(v as any, day, related) };
+  return { title: k.title, text: serializeFrontmatter({ ...k.fm, updated: day, supersedes: [...listOf(k, "supersedes"), o.title] }) + body(v as any, day, related) };
 }
 
 /** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. */

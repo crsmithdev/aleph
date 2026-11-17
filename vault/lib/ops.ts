@@ -16,7 +16,7 @@ import { compileDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, recall as recallNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, linkTargets, loadVault, loadWiki, readNote, recordCompiled, recordRun, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
+import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, linkTargets, loadVault, loadWiki, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
 import { today } from "../../lib/day.ts";
 import { layout } from "../../lib/layout.ts";
 import { logUse } from "../../lib/episode-use.ts";
@@ -128,8 +128,8 @@ async function writeHome(root: string): Promise<void> {
  * core lines.
  */
 function coreFindings(root: string, notes: Note[], draft: Note): { findings: Finding[]; hint: string } {
-  const scope = String(draft.fm.scope);
-  const scopes = scope === "global" ? [...new Set(["global", ...wikiNotes(notes).filter((n) => typeof n.fm.core === "string").map((n) => String(n.fm.scope))])] : [scope];
+  const scope = scopeOf(draft);
+  const scopes = scope === "global" ? [...new Set(["global", ...wikiNotes(notes).filter((n) => typeof n.fm.core === "string").map(scopeOf)])] : [scope];
   for (const s of scopes) {
     if (!startContext(root, notes, s).cut) continue;
     const ranked = coreNotes(notes, s).reverse();

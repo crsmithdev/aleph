@@ -11,7 +11,7 @@ import { langfuse } from "../../../lib/langfuse.ts";
 import { recallAll } from "../../../vault/lib/index.ts";
 import { outcome, write } from "../../../vault/lib/ops.ts";
 import { recallQuery } from "../../../vault/lib/recall-query.ts";
-import { loadWiki, type Note } from "../../../vault/lib/vault.ts";
+import { listOf, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { pass, reason, scratch, TEXT } from "./maintainer.ts";
 
@@ -114,8 +114,6 @@ export function prompt(misses: Miss[], day: string): string {
   ].join("\n");
 }
 
-const list = (n: Note, key: string): string[] => (Array.isArray(n.fm[key]) ? n.fm[key] : []);
-
 /** Add each `alias` verdict's aliases through the `write` op; a refusal is kept with its rule and the rest go on. */
 async function apply(root: string, misses: Miss[], verdicts: Verdict[], day: string): Promise<Aliased[]> {
   return scratch("alias", async (dir) => {
@@ -127,11 +125,11 @@ async function apply(root: string, misses: Miss[], verdicts: Verdict[], day: str
       if (v.verdict === "skip") { out.push(w); continue; }
       // An earlier verdict may have added aliases to this note, so read it again.
       const n = (await loadWiki(root)).find((x) => x.title === m.note.title);
-      const have = new Set([n?.title ?? "", ...(n ? list(n, "aliases") : [])].map((a) => a.toLowerCase()));
+      const have = new Set([n?.title ?? "", ...(n ? listOf(n, "aliases") : [])].map((a) => a.toLowerCase()));
       const add = [...new Set((v.aliases ?? []).map((a) => a.trim()).filter((a) => a && !have.has(a.toLowerCase())))];
       if (v.verdict !== "alias" || !n || !add.length) { out.push({ ...w, rule: "reply", refused: !n ? "the note is gone" : v.verdict !== "alias" ? `unknown verdict ${v.verdict}` : "alias verdict names no new alias" }); continue; }
       const file = join(dir, `${n.title}.md`);
-      writeFileSync(file, serializeFrontmatter({ ...n.fm, aliases: [...list(n, "aliases"), ...add] }) + n.body);
+      writeFileSync(file, serializeFrontmatter({ ...n.fm, aliases: [...listOf(n, "aliases"), ...add] }) + n.body);
       const r = await write(root, file, reason("alias", day, v.why));
       out.push({ ...w, aliases: add, ...outcome(r) });
     }

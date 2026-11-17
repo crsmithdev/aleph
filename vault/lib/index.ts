@@ -9,7 +9,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { coreNotes, loadWiki, screenWords as words, type Note } from "./vault.ts";
+import { coreNotes, loadWiki, scopeOf, screenWords as words, type Note } from "./vault.ts";
 import { probe } from "../../lib/git.ts";
 import { tmpName } from "../../lib/json.ts";
 
@@ -65,7 +65,7 @@ function build(root: string, at: string, notes: Note[]): Database {
   db.run(`create virtual table notes using fts5(title, aliases, claim, body, rel unindexed, scope unindexed, kind unindexed, updated unindexed, fm unindexed, tokenize = "porter unicode61")`);
   const add = db.prepare("insert into notes values (?, ?, ?, ?, ?, ?, ?, ?, ?)");
   db.transaction(() => {
-    for (const n of notes) add.run(n.title, aliasesOf(n).join(" "), claimLine(n), n.body, n.rel, String(n.fm.scope ?? ""), String(n.fm.kind ?? ""), String(n.fm.updated ?? ""), JSON.stringify(n.fm));
+    for (const n of notes) add.run(n.title, aliasesOf(n).join(" "), claimLine(n), n.body, n.rel, scopeOf(n), String(n.fm.kind ?? ""), String(n.fm.updated ?? ""), JSON.stringify(n.fm));
     db.run("insert into meta values ('head', ?)", [at]);
   })();
   db.close();
@@ -137,7 +137,7 @@ function rankNotes<T extends Hit>(db: Database, notes: T[], query: string, scope
   for (const { n, tier } of titled) tiers.set(n.rel, tier);
   const lists: string[][] = [titled.map(({ n }) => n.rel), search(db, q).filter((rel) => byRel.has(rel))];
   if (scope !== undefined) {
-    lists.push(notes.filter((n) => String(n.fm.scope ?? "") === scope)
+    lists.push(notes.filter((n) => scopeOf(n) === scope)
       .sort((a, b) => String(b.fm.updated ?? "").localeCompare(String(a.fm.updated ?? "")) || a.title.localeCompare(b.title)).map((n) => n.rel));
   }
   const matched = new Set([...lists[0], ...lists[1]]);

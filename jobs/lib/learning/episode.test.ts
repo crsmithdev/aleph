@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { close, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
-import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
+import { episodeFields, episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
 import { loadRegistry, type Run } from "../records/ledger.ts";
 import { seed } from "../../job.testkit.ts";
 import { clock, today } from "../../../lib/day.ts";
@@ -117,6 +117,14 @@ test("a done issue gets a page in the factory's episodes folder and no vault com
   expect(pages()).toEqual([`fac-${id} ship it.md`]);
   expect(sh(join(base, "vault"), "git", "rev-parse", "HEAD")).toBe(head);
   expect(existsSync(join(base, "vault", "wiki", "episodes"))).toBe(false);
+});
+
+test("episodeFields returns the scope and updated date of a written page", async () => {
+  const id = add("ship it");
+  land(id);
+  run({ target: `issue.${id}` });
+  await writeEpisodes([loadRegistry().fac]);
+  expect(episodeFields(readFileSync(join(episodes(), pages()[0]), "utf8"))).toEqual({ scope: "fac", updated: today() });
 });
 
 test(`a page older than ${KEEP_DAYS} days is deleted, and an issue whose last run ended before then gets no page`, async () => {

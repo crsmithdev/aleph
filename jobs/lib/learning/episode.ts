@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { daysAgo, today } from "../../../lib/day.ts";
+import { parseFrontmatter, splitFrontmatter } from "../../../lib/frontmatter.ts";
 import { money } from "../../../lib/money.ts";
 import { commitPaths } from "../../../vault/lib/git.ts";
 import { appendDaily } from "../../../vault/lib/vault.ts";
@@ -44,6 +45,12 @@ function pageFile(file: string): string | null {
 export function readEpisode(file: string): string | null {
   const path = pageFile(file);
   return path ? readFileSync(path, "utf8") : null;
+}
+
+/** The scope and updated date a page's frontmatter gives, each empty when absent. */
+export function episodeFields(text: string): { scope: string; updated: string } {
+  const fm = parseFrontmatter(splitFrontmatter(text).frontmatter ?? "");
+  return { scope: String(fm.scope ?? ""), updated: String(fm.updated ?? "") };
 }
 
 /** Replaces a page's text; false when there is no such page. */

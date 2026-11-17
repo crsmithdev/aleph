@@ -20,13 +20,12 @@ import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from
 import { tickRows, type TickRow } from "../../jobs/lib/gates/tables.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, scopeOf, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 import { errText } from "../../lib/errtext.ts";
 import { DAILY_HOUR, DAILY_TEXT, EPISODES_MS, EPISODES_TEXT } from "../../lib/schedule.ts";
 
-const scopeOf = (n: Note) => String(n.fm.scope ?? "");
 const inScope = (project: string | null) => (n: Note) => memoryIn(scopeOf(n), project);
 const count = (xs: string[]) => Object.fromEntries([...new Set(xs)].sort().map((x) => [x, xs.filter((y) => y === x).length]));
 const json = (body: unknown, status = 200) => Response.json(body, { status });

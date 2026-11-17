@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendDaily, appendRecallLog, parseOp, lintVault, loadVault, loadWiki, readRecallLog, readRun, screenCandidates, trimRecallLog, wikiNotes, type Note } from "./vault.ts";
+import { appendDaily, appendRecallLog, listOf, parseOp, lintVault, loadVault, loadWiki, readRecallLog, readRun, scopeOf, screenCandidates, trimRecallLog, wikiNotes, type Note } from "./vault.ts";
 import { today } from "../../lib/day.ts";
 
 let root: string;
@@ -24,6 +24,16 @@ test("loadWiki returns the wiki notes loadVault gives", async () => {
   const byPath = (a: { path: string }, b: { path: string }) => a.path.localeCompare(b.path);
   expect((await loadWiki(root)).sort(byPath)).toEqual(wikiNotes(await loadVault(root)).sort(byPath));
   rmSync(join(root, "Outside.md"));
+});
+
+test("scopeOf reads a note with no scope as an empty string, and listOf reads a lone value as a list of one", async () => {
+  const r = mkdtempSync(join(tmpdir(), "vault-fm-"));
+  writeFileSync(join(r, "Bare.md"), "---\nkind: concept\naliases: solo\n---\n# Bare\n");
+  const [bare] = await loadVault(r);
+  expect(scopeOf(bare)).toBe("");
+  expect(listOf(bare, "aliases")).toEqual(["solo"]);
+  expect(listOf(bare, "supersedes")).toEqual([]);
+  rmSync(r, { recursive: true, force: true });
 });
 
 test("consistent_with leaves a note out of screenCandidates and out of the overlap warning", async () => {
