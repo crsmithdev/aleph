@@ -54,7 +54,7 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and hold, report | Find what to improve |
+| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and guard, report | Find what to improve |
 | `act` | The fix of each finding the user picks | After a retro |
 | `lint` | agnix, `load.ts`, `content.ts` and `install.ts` only, no model judgment, report in the terminal | A quick pass, or before a commit that touches agent files |
 | `check` | Each new agent file, line, skill, hook or CLI command in a plan, spec or diff, under every lens | Before or during a build |
@@ -73,7 +73,7 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
    JSON yourself. Give each its lens file's Signals section verbatim, the inventory, and the agent files or CLIs
    in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done when each
    subagent has returned.
-4. **Prove, fix and hold, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with
+4. **Prove, fix and guard, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with
    this skill's lens files and `.refit.json`. The report goes to `<tmpdir>/refit-agents-retro-<timestamp>/`, and its unit is a loaded file (CLAUDE.md, skill or
    hook); its Overview adds the always-loaded token total and the agnix counts, and a card with no diagram shows the text
    before and after. Done when PROVE.md's step 3 is done.
@@ -108,12 +108,12 @@ the always-loaded total before and after.
    file that already says it), **cut** (no branch needs it), or **fix** (name the lens and the change). Done
    when every item has a verdict.
 
-## Holds
+## Guards
 
-A hold keeps a fixed finding fixed. Each one has a kind: **tool** (a hook or test runs it), **model** (`check`
+A guard keeps a fixed finding fixed. Each one has a kind: **tool** (a hook or test runs it), **model** (`check`
 asks it) or **unchecked** (only a retro finds it). A finding that comes back moves up a kind.
 
-| Lens | Hold | Kind | Tool |
+| Lens | Guard | Kind | Tool |
 |---|---|---|---|
 | valid | An agent file that breaks its spec | tool | `agnix` with `tools = ["claude-code"]` in `.githooks/pre-commit` |
 | load | Always-loaded tokens grow past the last total | tool | `load.test.ts`: "the always-loaded tokens inside the repo stay at or under the recorded total" |

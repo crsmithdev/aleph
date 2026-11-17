@@ -26,7 +26,7 @@ that is a bug or a regression goes to `/aleph:diagnosing-bugs`.
 Hoist the work out of the loop, batch the calls, cache with a key that changes with the inputs, await the event,
 bound the growth. Keep the change only when the measurement moves.
 
-## Hold
+## Guard
 
 A timing test or benchmark with a ceiling on the path; unchecked until one exists.
 

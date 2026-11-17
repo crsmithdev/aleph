@@ -46,7 +46,7 @@ convention is right is **layout**. Report a candidate under one lens only.
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, sweep, scope, hunt, prove, owner, hold, report | Find what to improve |
+| `retro [lens ...]` (default: all) | Baseline, sweep, scope, hunt, prove, owner, guard, report | Find what to improve |
 | `act` | The fix of each finding the user picks | After a retro |
 | `check` | Each new thing in a plan, spec or diff, under every lens | Before or during a build |
 
@@ -65,7 +65,7 @@ convention is right is **layout**. Report a candidate under one lens only.
 one subagent over the whole repo, with the full seed. Each returns
    candidates as: lens, concept or module, every location with `file:line`, the signal that found it. Done when
    each subagent has returned.
-5. **Prove, hold and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files. The report goes to
+5. **Prove, guard and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files. The report goes to
    `<tmpdir>/refit-code-retro-<timestamp>/`, and its unit is a module. Done when its report
    is written and the question asked.
 
@@ -76,7 +76,7 @@ their contents are final.
 
 1. Make the lens's fix. Delete or change whole: the code, its tests, fixtures, exports, docs entry and
    dependency line. Edit only lines the branch owns or the user named; report the rest.
-2. Add the finding's hold when its tool exists in the repo.
+2. Add the finding's guard when its tool exists in the repo.
 3. Run the baseline commands. Green: commit, naming the lens and the finding. Red: revert that finding and
    record which proof step missed; never carry a red build into the next finding.
 
@@ -92,16 +92,16 @@ with the user, then hands the design back here.
 3. **Judge.** Each item gets one verdict: **new**, **reuse** (name the path), **extend** (name the path),
    **cut** (no case reaches it), or **second way** (on purpose: add it to `.refit.json` `accepted` with the
    reason). Done when every item has a verdict with `file:line` or its search record.
-4. **Holds.** When the change makes one copy the owner of a concept or a module the owner of a seam, add its
-   hold in the same change.
+4. **Guards.** When the change makes one copy the owner of a concept or a module the owner of a seam, add its
+   guard in the same change.
 
-## Holds
+## Guards
 
-A hold keeps a fixed finding fixed. Each one has a kind: **tool** (the hook runs it), **model** (`check` asks
+A guard keeps a fixed finding fixed. Each one has a kind: **tool** (the hook runs it), **model** (`check` asks
 it) or **unchecked** (only a retro finds it). A finding that comes back moves up: unchecked, then model, then
 tool.
 
-| Lens | Hold | Kind | Repo config |
+| Lens | Guard | Kind | Repo config |
 |---|---|---|---|
 | one-way | A copy of code an owner keeps, outside the owner | tool | `.jscpd.json` `boundaries` |
 | one-way | A new copy of code, renamed copies too, that the base did not have | tool | `.jscpd.json` |
@@ -121,7 +121,7 @@ tool.
 ## The hook
 
 `hook.ts` runs at each Stop on the change since the branch left the default branch, plus the working tree. It
-runs every **tool** hold of the table. The same set of findings blocks only once, and a session blocks at most 3
+runs every **tool** guard of the table. The same set of findings blocks only once, and a session blocks at most 3
 times in all, across all finding sets; past that it stays silent even when it finds something new. It blocks on a
 stop another hook already continued (`stop_hook_active`) too; a retry after its own block passes. When it blocks,
 for each finding: change the companion, call the owner, or add the pair to `.refit.json` `accepted` with its

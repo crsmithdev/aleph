@@ -41,7 +41,7 @@ Warnings and infos are candidates: rate them 1-5 like any judgment.
 
 Fix by hand. agnix's `--fix` only on one file, after `--dry-run --show-fixes` on that file.
 
-## Hold
+## Guard
 
 `agnix` (with `--strict` once the repo is clean) in `.githooks/pre-commit`, which runs it on the
 staged agent files and refuses the commit when agnix fails or is missing. A `.agnix.toml`

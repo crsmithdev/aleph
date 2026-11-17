@@ -67,10 +67,10 @@ you missed: that is a finding about the proof, not a reason to loosen it.
 The survivors matter most: each candidate you did not delete and the escape hatch that saved it. They map the
 entry points, dynamic dispatch and string lookups the codebase relies on, which the next reader cannot see.
 
-## Hold
+## Guard
 
 knip with the repo's real entry points, as a shrink-only ratchet on unused files and exports. Not wired yet:
-the holds table lists it as unchecked.
+the guards table lists it as unchecked.
 
 ## Check
 

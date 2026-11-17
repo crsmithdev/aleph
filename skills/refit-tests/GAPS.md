@@ -24,7 +24,7 @@ wrong result. Generated code, a type, and a log line drop with that reason.
 Write the test through the public interface, red first ([write-tests](../write-tests/SKILL.md)). One test per behaviour, not one
 per line.
 
-## Hold
+## Guard
 
 `stats.ts lcov` on the base and the branch: a branch that drops a covered line names why.
 

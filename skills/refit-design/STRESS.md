@@ -34,10 +34,10 @@ shows on the ordinary fixture is a local defect of the apply lens.
 Add the guard the doc names: a clamp with the full text in `title`, `miss(reason)` for the missing value, a
 `.tscroll` around a wide table, `min-width: 0` on a child that must shrink.
 
-## Hold
+## Guard
 
-A model hold in `check`: a new list, table or text field in a plan names its limit for long text and many rows.
-No tool hold yet: a Kit specimen with extreme fixtures waits for a retro finding.
+A model guard in `check`: a new list, table or text field in a plan names its limit for long text and many rows.
+No tool guard yet: a Kit specimen with extreme fixtures waits for a retro finding.
 
 ## Check
 

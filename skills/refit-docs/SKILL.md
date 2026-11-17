@@ -43,7 +43,7 @@ is **rot**. Report a candidate under one lens only.
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and hold, report | Find what to improve |
+| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and guard, report | Find what to improve |
 | `act` | The fix of each finding the user picks | After a retro |
 | `lint` | `refs.ts` and the installed tools only, no model judgment, report in the terminal | A quick pass, or before a commit that touches docs |
 | `check` | Each new page, section, flag, env var or config key in a plan, spec or diff | Before or during a build |
@@ -60,7 +60,7 @@ is **rot**. Report a candidate under one lens only.
    part you read from the inventory yourself. Give each its lens file's Signals section verbatim, the inventory,
    and the docs in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done when
    each subagent has returned.
-4. **Prove, fix and hold, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with
+4. **Prove, fix and guard, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with
    this skill's lens files. The report goes to `<tmpdir>/refit-docs-retro-<timestamp>/`, and its unit is a doc page; its Overview adds the
    doc count, the `refs.ts` counts and the tools that ran, and a card shows the text before and after. Done when
    PROVE.md's step 3 is done.
@@ -86,9 +86,9 @@ again; a new broken reference is red.
 3. **Judge.** Each item gets one verdict: **keep**, **document** (name the page), **link** (name the page that
    already says it), **cut**, or **fix** (name the lens and the change). Done when every item has a verdict.
 
-## Holds
+## Guards
 
-| Lens | Hold | Kind | Tool |
+| Lens | Guard | Kind | Tool |
 |---|---|---|---|
 | true | A link, anchor, path, env var or own-CLI flag a doc names that does not resolve | tool | `refs.ts` broken list empty, held by `refs.test.ts` on aleph; `aleph doc-claims` in aleph |
 | true | An example that does not run | unchecked | the doc-test runner of [TOOLS.md](TOOLS.md) in CI |

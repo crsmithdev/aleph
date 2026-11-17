@@ -24,7 +24,7 @@ Growth with the code is not a finding; growth with no matching code, or with cop
 
 Growth has no fix of its own: name the lens the growth comes from (merge, hollow, runtime) and report it there.
 
-## Hold
+## Guard
 
 Model: `check`.
 

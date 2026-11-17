@@ -36,10 +36,10 @@ a file, the network, another process). Trace the callers and the types; cite the
 
 Delete or shrink the line, on lines the branch owns. Lines outside the branch are reported, not edited.
 
-## Hold
+## Guard
 
 typescript-eslint `no-unnecessary-condition` and `no-unnecessary-type-assertion` for impossible fallbacks and
-needless casts; a shrink-only ratchet for empty or swallowing `catch` and `any`. Not wired yet: the holds table
+needless casts; a shrink-only ratchet for empty or swallowing `catch` and `any`. Not wired yet: the guards table
 lists them as unchecked.
 
 ## Check

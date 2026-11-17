@@ -41,7 +41,7 @@ Name the owner by layer: domain code over application code over UI over infrastr
 the client. Within one layer, the copy with the most callers or the module whose name already says the concept.
 Each other copy becomes a call to the owner, or goes.
 
-## Hold
+## Guard
 
 - Code: a `.jscpd.json` boundary rule for the owner, `{"name", "code": [owner files], "notIn": ["**"], "allow":
   [owner files, "**/*.test.ts"], "disable": ["semantic"]}`. jscpd fails a copy of the owner's code anywhere

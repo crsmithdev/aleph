@@ -27,7 +27,7 @@ the candidate, not a mutation-testing run. For a test-only seam, the grep with z
 Assert the result the user sees, or delete the test. Test through the public interface and remove the seam; where
 the seam injects a dependency (a clock, a spawner), keep it and record why in `.refit.json`.
 
-## Hold
+## Guard
 
 Model: `check`.
 

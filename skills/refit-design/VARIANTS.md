@@ -32,10 +32,10 @@ component. A candidate that is one build plus a value that breaks a rule belongs
 Move the odd build to the common one: call the helper with the common arguments. Where the doc names neither
 build, report a proposal to amend the doc and change no code.
 
-## Hold
+## Guard
 
-A model hold in `check`: a plan that draws a component a second way from its specimen is stopped before the build.
-No tool hold yet: it comes when a retro finds a variant that a script could list.
+A model guard in `check`: a plan that draws a component a second way from its specimen is stopped before the build.
+No tool guard yet: it comes when a retro finds a variant that a script could list.
 
 ## Check
 

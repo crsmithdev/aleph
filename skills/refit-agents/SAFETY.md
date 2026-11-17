@@ -27,7 +27,7 @@ Quote the line and name what an agent or an attacker gets from it. A scanner hit
 Move secrets to the environment and rotate them. Narrow the grant to the commands the skill runs. Pin the
 package version. Wrap a guard so it blocks when it fails. Fence untrusted text and say it is data.
 
-## Hold
+## Guard
 
 A secret scan on agent files in the pre-commit hook; agnix `MCP-` and hook rules in CI.
 

@@ -28,7 +28,7 @@ Make the code the source of truth and point at it. A wrong line is corrected or 
 pointer to the CLI's usage, after the CLI has one (an **interface** finding when it does not). A contradiction
 keeps the rule the user decided and deletes the other.
 
-## Hold
+## Guard
 
 A test or gate that resolves each command, flag and path an agent file names (`aleph doc-claims` in aleph).
 

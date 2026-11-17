@@ -25,10 +25,10 @@ finding when the owner exists or one module is the clear home; with no owner yet
 Route the access through the owner's interface; add the accessor the callers need there. Delete a one-adapter
 seam, or give it its second adapter when a test needs one.
 
-## Hold
+## Guard
 
 A dependency-cruiser rule: only the owner reads the field or imports the internal file, or imports go only
-through entry points. Not wired yet: the holds table lists it as unchecked.
+through entry points. Not wired yet: the guards table lists it as unchecked.
 
 ## Check
 

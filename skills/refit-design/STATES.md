@@ -38,9 +38,9 @@ to the stress lens.
 Add the branch with the helper the doc names: `empty()`, `loadingLine()`, `error()`. Add the rule for a control
 state in `ui/app.css` from tokens.
 
-## Hold
+## Guard
 
-A model hold in `check`: a new component in a plan names its empty, loading and error state. A tool hold: the Kit
+A model guard in `check`: a new component in a plan names its empty, loading and error state. A tool guard: the Kit
 test in `ui/browser.test.ts` fails when `#kit-states`, `#kit-table-empty` or `#kit-chart-empty` stops drawing its
 empty or loading line.
 

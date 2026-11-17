@@ -24,7 +24,7 @@ older than the change that made the line wrong.
 Delete the doc, or move a record into the records directory (`docs/specs/`, `docs/adr/`). Remove a stale label.
 Rewrite a dated line without the date, or delete it.
 
-## Hold
+## Guard
 
 Model: `check`.
 

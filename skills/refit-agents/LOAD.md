@@ -38,7 +38,7 @@ Keep it when the agent cannot find it by looking (a convention, a reason, a gotc
 Move it down the ladder: to a linked file, to the skill body, to the environment (a usage line, a config), or set
 `disable-model-invocation: true`. Delete it only when no branch needs it. Record the always total before and after.
 
-## Hold
+## Guard
 
 The `load.ts` always total as a shrink-only ratchet in a test: a change that raises it records the new total and
 why.

@@ -37,10 +37,10 @@ the variants lens.
 Call the helper. Where the view needs a difference, add an option to the helper and use it from the view.
 Delete the override rule.
 
-## Hold
+## Guard
 
-A model hold in `check`: a plan that styles a kit class in a view, or writes kit markup by hand, is stopped before
-the build. No tool hold yet.
+A model guard in `check`: a plan that styles a kit class in a view, or writes kit markup by hand, is stopped before
+the build. No tool guard yet.
 
 ## Check
 

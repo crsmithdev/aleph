@@ -41,7 +41,7 @@ production code is **hollow**. Report a candidate under one lens only.
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, measure, hunt, prove, fix and hold, report | Find what to improve |
+| `retro [lens ...]` (default: all) | Baseline, measure, hunt, prove, fix and guard, report | Find what to improve |
 | `act` | The fix of each finding the user picks | After a retro |
 | `check` | Each new test, helper, fixture, skip and wait in a plan, spec or diff | Before or during a build |
 
@@ -63,7 +63,7 @@ the tree or git, and never runs the suite.
    from the measures yourself. Give each its lens file's Signals section verbatim, the measures for its lens, and
    the test files in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done
    when each subagent has returned.
-4. **Prove, fix and hold, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lens
+4. **Prove, fix and guard, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lens
    files. A `stats.ts` hit is a candidate, never a finding: a pattern inside a fixture string, or random data for
    a unique temp name, drops with that reason. The report goes to `<tmpdir>/refit-tests-retro-<timestamp>/`, and its unit is a test file;
    its Overview adds the test count, wall time, p95, the flake count, and the growth rows as a small chart; a card
@@ -92,9 +92,9 @@ comes.
 3. **Judge.** Each item gets one verdict: **keep**, **reuse** (name the helper or test), **fix** (name the lens and
    the change), or **cut**. Done when every item has a verdict.
 
-## Holds
+## Guards
 
-| Lens | Hold | Kind | Tool |
+| Lens | Guard | Kind | Tool |
 |---|---|---|---|
 | smells | A sleep, timer wait or wall clock read in a test file | tool | a shrink-only lint test like `tests/clock-lint.test.ts` |
 | smells | A focused test (`.only`) | unchecked | the same lint test, or the runner's CI mode |

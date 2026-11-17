@@ -1,4 +1,4 @@
-# Prove, hold and report
+# Prove, guard and report
 
 The last steps of a refit `retro`, shared by refit-code, refit-agents, refit-data, refit-design, refit-docs and refit-tests. The skill that runs them
 supplies its lens files, its `.refit.json` and its report path.
@@ -8,7 +8,7 @@ supplies its lens files, its `.refit.json` and its report path.
    is dropped with the reason; one `.refit.json` accepts is marked accepted. Where a lens has no hard proof,
    rate 1-5: 4-5 is a finding, 3 is a finding with the doubt stated, 1-2 is dropped. Done when each candidate
    has a verdict.
-2. **Owner and hold.** For each finding, its lens's Fix section names what changes, and its Hold section names
+2. **Owner and guard.** For each finding, its lens's Fix section names what changes, and its Guard section names
    what keeps it from coming back. Done when every finding has both.
 3. **Report.** Write the HTML report of [REPORT.md](REPORT.md), a directory with `index.html`.
    Give the user its absolute path. Then let the user pick the findings to act on:

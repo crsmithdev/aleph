@@ -26,7 +26,7 @@ Remove the cause: wait for the event the test needs, inject the clock (aleph: `j
 `setSystemTime`), give each test its own temp dir and port 0, reset shared state in the test that sets it.
 Quarantine (a skip that names its `tests/flaky.md` entry) only while the cause is not known, and never as the fix.
 
-## Hold
+## Guard
 
 The clock lint for waits and wall clock; an age limit on each `tests/flaky.md` entry.
 

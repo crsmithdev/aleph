@@ -51,7 +51,7 @@ into one file one link from `SKILL.md`. Link an orphan or delete it. Replace han
 the skill, and name its output in the body. Keep one copy of a repeated text and link the other. Delete bloat.
 Split a skill with two jobs. Record the body tokens before and after.
 
-## Hold
+## Guard
 
 agnix `AS-012` and `AS-013` in `.githooks/pre-commit` hold the line limit and the link depth. The `load.test.ts`
 test "no skill body inside the repo is over 5,000 tokens" holds the body size. Orphans and chains are unchecked: only

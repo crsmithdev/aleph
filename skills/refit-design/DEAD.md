@@ -39,10 +39,10 @@ element carries but no rule styles is a seams candidate if the element is hand-b
 Delete the rule, the token or the specimen, one commit per kind, rules first. A section of `docs/design.md` that
 names a deleted part is reported as a proposal: the doc changes only through design-language.
 
-## Hold
+## Guard
 
 Unchecked: a script that lists each CSS rule with no match in the markup and each token with no use. Its finding
-has not come back from a retro, and a hold moves up to tool only when its finding comes back.
+has not come back from a retro, and a guard moves up to tool only when its finding comes back.
 
 ## Check
 

@@ -24,7 +24,7 @@ cite the body's line. For a dead pointer, the lookup fails.
 Sharpen the wording first: front-load the leading word, one trigger per branch, `NOT for: <case> (use <other>)`
 on both sides of an overlap. Merge two skills only when no prompt picks one over the other.
 
-## Hold
+## Guard
 
 Model: `check`. A routing eval (`claude plugin eval` with a tool-called grader on the skill) holds a trigger that
 came back.

@@ -54,7 +54,7 @@ restyles a kit class is seams. A class that no element uses is dead.
    candidates as: rule of `docs/design.md`, `file:line` or screenshot, the kind. It also returns, per component, the
    rules it breaks and the rules it follows (each by `docs/design.md` section and rule text) and the Kit specimen id.
    Done when each route has returned and each component has an entry.
-4. **Prove, hold and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files, but write
+4. **Prove, guard and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files, but write
    the report of this skill's [REPORT.md](REPORT.md) to `<tmpdir>/refit-design-retro-<timestamp>/`, with a component
    kind as its unit. Done when PROVE.md's step 3 is done.
 
@@ -77,9 +77,9 @@ refit-code's [Act](../refit-code/SKILL.md#act) with these changes:
 3. **Judge.** Each item gets one verdict: **keep**, **reuse** (name the token, helper or component), **fix** (name
    the rule), or **amend** (the doc does not cover it: report a proposal). Done when every item has a verdict.
 
-## Holds
+## Guards
 
-| Lens | Hold | Kind |
+| Lens | Guard | Kind |
 |---|---|---|
 | apply | A literal colour, size or font that has a token | tool: the `guard:` test in `skills/refit-design/refit-design.test.ts` fails when the `inventory.ts` rows of kind `literal` rise |
 | apply | A value formatted by hand that has a helper | unchecked: `inventory.ts` rows of kind `helper-bypass`, not yet wired as a test |

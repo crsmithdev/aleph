@@ -33,7 +33,7 @@ needs a step no file names. Cite the line or the output.
 Put the knowledge in the code: a usage table the CLI prints and a help path that runs nothing, usage in each
 refusal, a non-interactive flag, a manifest script. Then point the memory file at it and delete the prose copy.
 
-## Hold
+## Guard
 
 A test that runs `<cli> <cmd> --help` for each command and asserts it prints usage and changes nothing; a CI job
 from a fresh clone.

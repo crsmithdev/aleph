@@ -53,10 +53,10 @@ component for it, else dropped.
 One change per finding, in the view or style file. Use the token, helper or component that the doc names. Leave
 `docs/design.md` and each proposal to amend it unchanged, because design-language owns the doc.
 
-## Hold
+## Guard
 
-A tool hold: the `guard:` test in `skills/refit-design/refit-design.test.ts` fails when the inventory count of kind
-`literal` over `ui` rises, so the count only shrinks. The count of kind `helper-bypass` stays unchecked. A model hold
+A tool guard: the `guard:` test in `skills/refit-design/refit-design.test.ts` fails when the inventory count of kind
+`literal` over `ui` rises, so the count only shrinks. The count of kind `helper-bypass` stays unchecked. A model guard
 in `check`: a new component has a section in the doc and a specimen on `#/kit`.
 
 ## Check

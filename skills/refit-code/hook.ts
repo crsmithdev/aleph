@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * The refit-code Stop hook: the tool holds of the skill. It asks three questions of the current change, with no model:
+ * The refit-code Stop hook: the tool guards of the skill. It asks three questions of the current change, with no model:
  *
  *   co-change   a file that history says changes with a changed file (confidence ≥ 0.7) is left out
  *   boundaries  a changed file holds a copy of code that `.jscpd.json` keeps inside its owner

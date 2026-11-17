@@ -54,7 +54,7 @@ its label is **scope**. Report a candidate under one lens only.
 4. **Reconcile.** Count the same events in two sources: commits on main against land records, runs against
    traces, item files against the issue list. Join on a stable key such as a commit SHA. Done when each pair
    matches, or the difference is listed by row.
-5. **Prove, hold and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lenses.
+5. **Prove, guard and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lenses.
    A mismatch is a finding only with both values, the query and the moment of the read. The report goes to
    `<tmpdir>/refit-data-retro-<timestamp>/`, and its unit is a shown number. Its Overview opens with a table of each number: the shown value, the
    recomputed value and the verdict.
@@ -82,9 +82,9 @@ Rules:
 3. **Judge.** Each item gets one verdict: **keep**, **fix** (name the lens and the change), or **cut**. Done when
    every item has a verdict.
 
-## Holds
+## Guards
 
-| Lens | Hold | Kind |
+| Lens | Guard | Kind |
 |---|---|---|
 | recompute | A test that runs the recompute query and the route on one fixture store and compares them | tool |
 | join | A test that a route gives a nonzero value for a fixture entity that has records | tool |

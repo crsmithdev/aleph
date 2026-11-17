@@ -67,10 +67,10 @@ Before you act, list the open branches and worktrees that touch the files you mo
 A reshape of more than one top-level directory is reported as a proposed tree, and the user decides. `act`
 does not do it.
 
-## Hold
+## Guard
 
-`check` asks where each new file goes. The tool holds are a dependency-cruiser rule on which directories may
-import which, and a shrink-only ratchet on file size. Neither is wired yet, so the holds table lists them as
+`check` asks where each new file goes. The tool guards are a dependency-cruiser rule on which directories may
+import which, and a shrink-only ratchet on file size. Neither is wired yet, so the guards table lists them as
 unchecked.
 
 ## Check

@@ -21,7 +21,7 @@ turns the kept test red. Name the assertion that moves, if any.
 Keep the test nearest the user's view, move any assertion only the other has into it, then delete the other. Fold
 input-only variants into one table test.
 
-## Hold
+## Guard
 
 Model: `check`.
 

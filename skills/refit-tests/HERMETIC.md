@@ -29,7 +29,7 @@ only parses, drops with that reason.
 Inject it: a clock, a port 0 server, `mkdtemp` under the OS temp dir, a fake fetch, an env object the test builds.
 Restore each env var the test sets, in `afterEach`.
 
-## Hold
+## Guard
 
 The clock lint for the clock; a shrink-only lint test of the same shape for network, fixed ports and shared paths.
 

@@ -1,7 +1,7 @@
 # Design retro report
 
 The report of a refit-design `retro`. It has the shape of refit-code's [REPORT.md](../refit-code/REPORT.md): Overview
-(repo line, themes, raw listing), Units, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
+(repo line, themes, findings table), Units, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
 class names are in refit-code's [HTML.md](../refit-code/HTML.md). This file holds only what is specific to design.
 A design report uses the design language of the UI it scans: aleph classes and tokens from `ui/app.css`, no Tailwind.
 It cites only rules of `docs/design.md`.
@@ -17,51 +17,69 @@ anchor `kit-<id>`. A report opened from a host that has no Kit says so in the Ov
 
 ## Differences from the shared shape
 
-1. **Themes** (in the Overview). The kinds are missing token, one-off, mismatch and local defect. One line for each finding with its
-   component and rule.
-2. **Raw** (in the Overview). The fields of a row are the rule, `file:line` or screenshot, kind, lens and the proof
-   text.
-3. **Units.** The unit is a component kind of the page, in the page's order. Inside it, one subsection per variant of
-   the kind. List every component on the page, with or without an issue, one entry each. A metric card is one entry
-   for all its variants unless a variant differs. A table gets its own entry when its columns or rows differ from
-   the specimen. Put `data-annotate="<kind>[/<variant>]"` on each entry, with the kind and the variant as the Kit
-   names them in lower case, such as `metric-card/status` or `table/roles`. A component entry takes the place of
-   the unit section and of its finding cards: its broken rules are the findings.
-4. **Proposals.** Each change to `docs/design.md` that the scan asks for: where, the evidence (3 or more uses, with
+1. **Findings** (in the Overview). The kinds are missing token, one-off, mismatch, local defect, state, stress, hand
+   markup and slop.
+2. **Units.** The unit is a component kind of the page, in the page's order, as an `h3.sub-head`. Under it, list
+   the findings in the page's order. List only the components with a broken rule: a component that passes gets
+   no line, badge or list (Chris, 2026-11-16). A metric card is one component for all its variants unless a
+   variant differs. A table is its own component when its columns or rows differ from the specimen.
+3. **Proposals.** Each change to `docs/design.md` that the scan asks for: where, the evidence (3 or more uses, with
    `file:line`) and the sentence the doc needs.
 
-## Component entry
+## Finding
 
-An entry is a `<div data-annotate="...">`. A broken rule and a kept rule differ:
+The finding comes first, and the components it breaks come under its title (Chris, 2026-11-17). A finding is a
+`<div class="finding" id="f<n>">`, in this order:
 
-**Rules broken.** One block per finding, with:
-
-- the rule: its `docs/design.md` section and the rule text, quoted;
-- a screenshot of the component as drawn, cropped from the shots, and a link to its specimen on the live Kit
-  (`/#/kit`, text `Kit: <id>`);
-- the location, `file:line`, one each;
-- the proof, the fix and the hold, one sentence each as PROVE.md's step 2 gives them.
-
-**Rules followed.** One list item per rule the component keeps: the `docs/design.md` section, then the rule text,
-quoted. Name the most specific rules. "Follows the design" is not an item. Cite the rule, such as "Table: Put each
-number in `td.num`".
+1. the title: its number, the change as an imperative, and the chips of its lens and kind;
+2. one `p.on` line per component the finding breaks: the component in bold, its variant in `span.quiet` if it
+   has one, then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the line, with the kind and the
+   variant as the Kit names them in lower case, such as `metric-card/status` or `table/roles`. A finding that
+   breaks a rule in two components shows two lines and sits under the kind of the first;
+3. the fix, one sentence as PROVE.md's step 2 gives it;
+4. a screenshot of the part the finding names, as drawn, cropped from the shots, with no caption: its `alt` names
+   it. A finding that compares two parts shows both. Show each picture once;
+5. one closed `<details>`, summary "Details", that holds the rest: the rule (its `docs/design.md` section and the
+   rule text, quoted), the locations (`file:line`, one each), a "Shot: see" line with a link to the finding that
+   shows a repeated picture, and the guard, one sentence.
 
 **No rule.** A component that no rule of `docs/design.md` covers says "No rule covers this." It is a proposal in
 Proposals when 3 or more places use it.
-
-An entry with no issue has the followed list only. An entry with issues has both lists.
 
 ```html
 <section class="card" id="components" aria-label="Components">
   <div class="sh"><h2>Components</h2></div>
   <h3 class="sub-head">{{kind}}</h3>
-  <div data-annotate="{{kind}}/{{variant}}">
-    <p><span class="badge error">broken</span> {{component}} <a href="/#/kit">kit {{id}}</a></p>
-    <img src="shots/{{file}}.png" alt="{{component}}">
-    <ul><li>{{rule}}</li></ul>
+  <div class="finding" id="f{{n}}">
+    <p class="ft"><b>{{n}}. {{title}}</b> <span class="chip">{{lens}}</span><span class="chip">{{kind}}</span></p>
+    <p class="on" data-annotate="{{kind}}/{{variant}}"><b>{{component}}</b> <span class="quiet">{{variant}}</span> <a href="/#/kit">Kit: {{id}}</a></p>
+    <p class="fix"><b>Fix</b>: ...</p>
+    <figure><img src="shots/{{file}}.png" alt="{{part}}"></figure>
+    <details><summary>Details</summary>
+      <p class="aux"><b>Rule</b>: {{rule}}</p>
+      <ul class="locs"><li><code>{{file:line}}</code></li></ul>
+      <p class="aux"><b>Guard</b>: ...</p>
+    </details>
   </div>
 </section>
 ```
 
-Use `badge` tones for a status: `error` for a broken entry, `done` for a passing one. Give an image a
+Size shows rank, and no part outranks its parent (Chris, 2026-11-16). The page title, the card head and the kind
+head step down from `--fs-metric` to `--fs-2xl`. A finding's title is below them at `--fs-lg`, then the fix at
+`--fs-md`. The component lines, the rule, the locations and the guard recede at `--fs-sm` in `--muted`. Set it in
+the report's `<style>`, from tokens:
+
+```css
+.ph h1 { font-size: var(--fs-metric); }
+.sh h2 { font-size: var(--fs-xl); }
+#components h3.sub-head { font-size: var(--fs-2xl); }
+.finding .ft { font-size: var(--fs-lg); color: var(--ink); margin: 0 0 var(--sp-4); }
+.finding .on { font-size: var(--fs-sm); color: var(--muted); margin: 0; }
+.finding .on b { font-weight: var(--fw-mid); }
+.finding .fix { font-size: var(--fs-md); color: var(--ink); margin: var(--sp-8) 0; }
+.finding .fix b { color: var(--done); }
+.finding .aux, .finding ul.locs { font-size: var(--fs-sm); color: var(--muted); }
+```
+
+Give an image a
 `max-width: 100%` through a `style` attribute only when `app.css` has no class for it. Add no `<script>`.

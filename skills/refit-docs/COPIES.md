@@ -20,7 +20,7 @@ Quote both copies and say which one is the owner. When they already disagree, it
 Keep the owner, which is the code when the code says it. Replace each other copy with a link or one line and a
 link. Generate a copied block from its source (`cog`, `embedme`) when the reader must see it in place.
 
-## Hold
+## Guard
 
 jscpd over the docs in a test; model: `check`.
 

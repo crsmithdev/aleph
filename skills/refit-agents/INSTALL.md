@@ -50,7 +50,7 @@ out of the way to a dated directory, such as `~/.claude/skills-removed-<date>/`,
 merge into the repo any change the home copy has first, then replace the copy with a link into the repo. Delete a
 dangling link. Move an item to the scope that needs it. Uninstall a plugin that no settings file enables.
 
-## Hold
+## Guard
 
 Unchecked: `install.ts` in `lint` finds a copy, a shadow or a dangling link, but no hook runs it, because the
 state lives outside the repo.

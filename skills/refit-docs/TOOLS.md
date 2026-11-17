@@ -16,4 +16,4 @@ Each tool is optional. Run the ones installed; list the others with their instal
 | interrogate 1.7 / TypeDoc 0.28 | gaps | Public symbols with no doc block | `pip install interrogate` / `npm i -D typedoc` | `interrogate -vv src`; `typedoc --validation.notDocumented --treatWarningsAsErrors` |
 
 A tool needs the repo's consent to be added: install it in the repo (a dev dependency, a CI step) only when the
-user picks the finding whose hold it is.
+user picks the finding whose guard it is.

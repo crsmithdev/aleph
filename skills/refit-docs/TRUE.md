@@ -26,7 +26,7 @@ reference rather than reading around it: a command that runs is current even whe
 Correct the doc to the code, or delete the line. When the code is wrong and the doc is the intent, report it to the
 user: that is a bug, not a doc fix.
 
-## Hold
+## Guard
 
 `refs.ts` broken list empty in a test; the doc-test runner in CI; `aleph doc-claims` in aleph.
 

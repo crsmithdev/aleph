@@ -619,7 +619,7 @@ A table shows items that have the same columns.
 | 6 | Row | One item | | `--sunk` on hover |
 | 7 | Row action | One small button in the last column, `td.acts` | yes | right-aligned, one line |
 
-- Put the columns in this order: id or name, title, state, priority, project, labels, numbers, then time.
+- Put the columns in this order: the row's fold button, id or name, title, state, priority, project, labels, numbers, then time.
 - In an event log, put the time first. An event log is a table where each row is an event, read in time order.
 - Put each number at the right of the row. Align a number to the right.
 - Name the time column for the time it shows. Format it with `when()`.

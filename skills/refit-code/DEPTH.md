@@ -28,10 +28,10 @@ Inline a pass-through into its caller. Deepen a shallow cluster: one module with
 what the callers assembled by hand. A fix that needs a new interface follows [DEEPEN.md](DEEPEN.md), which designs it with
 the user before code.
 
-## Hold
+## Guard
 
 Mostly judgment. `check` asks the deletion test of every new module. A lint for one-line pass-through functions
-is the only tool hold, and it is not wired.
+is the only tool guard, and it is not wired.
 
 ## Check
 

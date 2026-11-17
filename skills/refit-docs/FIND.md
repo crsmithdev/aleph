@@ -25,7 +25,7 @@ and the line breaks it.
 Link the orphan from the page whose reader needs it, or cut it under **rot**. Rewrite the heading or link text to
 name its target. Add the alt text.
 
-## Hold
+## Guard
 
 `refs.ts` orphans empty in a test; `markdownlint-cli2` in CI.
 

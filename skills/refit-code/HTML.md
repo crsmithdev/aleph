@@ -37,14 +37,13 @@ The report is a directory in the OS temp directory: `index.html` and `app.css`. 
   <section class="card" id="overview" aria-label="Overview">
     <div class="sh"><h2>Overview</h2><span class="count">{{n}} findings</span></div>
     <dl class="facts"><div><dt>Repo</dt><dd>{{repo}}</dd></div><div><dt>Date</dt><dd>{{date}}</dd></div><div><dt>Commit</dt><dd>{{sha}}</dd></div></dl>
-    <div class="tscroll"><table class="tbl"><thead><tr><th>Lens</th><th>Candidates</th><th>Findings</th><th>Dropped</th></tr></thead><tbody>...</tbody></table></div>
-    <h3 class="sub-head">{{kind}}: {{theme}}</h3>
-    <ul>...</ul>
-    <h3 class="sub-head">Actions</h3>
-    <ol>...</ol>
-    <details><summary>Raw listing ({{candidates}})</summary>
-      <div class="tscroll"><table class="tbl"><thead><tr><th>Lens</th>...<th>Verdict</th><th>Reason</th></tr></thead><tbody>...</tbody></table></div>
-    </details>
+    <h3 class="sub-head">Themes</h3>
+    <ul><li><b>{{theme}}</b>: <a href="#f{{n}}">{{n}}</a>, ...</li></ul>
+    <details><summary>Findings: {{n}}, and {{dropped}} dropped</summary>
+    <div class="tscroll"><table class="tbl"><thead><tr><th class="num">#</th><th>Finding</th><th>Kind</th><th>Lens</th></tr></thead><tbody>
+      <tr><td class="num">{{n}}</td><td><a href="#f{{n}}">{{title}}</a></td><td>{{kind}}</td><td>{{lens}}</td></tr>
+      <tr class="quiet"><td class="num">d{{n}}</td><td>{{title}}<br><small>{{reason}}</small></td><td>{{verdict}}</td><td>{{lens}}</td></tr>
+    </tbody></table></div></details>
   </section>
 
   <section class="card" id="units" aria-label="Units">
@@ -53,9 +52,12 @@ The report is a directory in the OS temp directory: `index.html` and `app.css`. 
       <h3 class="sub-head">{{unit}}</h3>
       <div data-annotate="f{{n}}">
         <p><strong>{{title}}</strong> <span class="badge error">{{lens}}</span> <span class="badge need">{{strength}}</span></p>
-        <ul><li><code>{{file:line}}</code></li></ul>
+        <p>Fix: ...</p>
         <div class="tscroll">{{diagram}}</div>
-        <p>Proof: ...</p><p>Fix: ...</p><p>Hold: <code>...</code></p>
+        <details><summary>Details</summary>
+          <ul><li><code>{{file:line}}</code></li></ul>
+          <p>Guard: <code>...</code></p>
+        </details>
       </div>
     </div>
     <div data-annotate="{{other unit id}}"><h3 class="sub-head">{{unit}}</h3><p>No issues.</p></div>

@@ -23,7 +23,7 @@ A readability score is never proof.
 
 Rewrite the sentence with one reading, per the rule it breaks. Define the term once and use it every time.
 
-## Hold
+## Guard
 
 Model: `check`. Vale with the repo's style in CI, when the user picks it.
 

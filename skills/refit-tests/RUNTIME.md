@@ -29,7 +29,7 @@ Remove the wait; share an expensive setup that no test changes; replace a real p
 where the test does not test the process; move a test that needs a real browser or service to a slower tier that
 runs before land, not on each save.
 
-## Hold
+## Guard
 
 A ceiling on the wall time and on one test's time, read from the JUnit report.
 

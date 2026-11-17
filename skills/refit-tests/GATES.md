@@ -23,7 +23,7 @@ through. For a test the runner does not pick up, list the runner's file set and 
 Make the failure stop the merge: remove the swallow, add the file to the glob, put the skipped test back or delete
 it. A rerun on failure keeps the record of the first failure (aleph: the `flaky` table of `aleph.db`).
 
-## Hold
+## Guard
 
 A lint test that each skip names its reason (an anchor in `tests/flaky.md` or an issue); a shrink-only ratchet on
 the skip count.

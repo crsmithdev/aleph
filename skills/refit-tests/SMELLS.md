@@ -1,7 +1,7 @@
 # Smells lens
 
 Which tests wait, focus, print or guess where they should assert? Each smell is a line pattern from the tsDetect
-catalog (Peruma et al., 2020) and its kin; most are cheap to fix and cheap to hold.
+catalog (Peruma et al., 2020) and its kin; most are cheap to fix and cheap to guard.
 
 ## Signals
 
@@ -34,7 +34,7 @@ string, drop with that reason.
 Await the event. Remove `.only` and debug prints. Seed random data or use fixed data. Split an eager test by
 behaviour.
 
-## Hold
+## Guard
 
 A shrink-only lint test over test files with an exceptions list, the shape of `tests/clock-lint.test.ts`, for
 each rule that the repo fixes.

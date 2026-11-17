@@ -56,7 +56,7 @@ command, path or number. Add the reason in a clause. State a rule's scope. Move 
 rule or CI, then delete the line. For a contradiction, quote both lines to the user and ask which wins, or whether
 each holds under a condition; then delete the loser, or state both conditions.
 
-## Hold
+## Guard
 
 `content.ts` counts as a shrink-only ratchet beside the `load.ts` total; model: `check`.
 

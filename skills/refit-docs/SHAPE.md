@@ -24,7 +24,7 @@ is the main false positive: `write-docs`'s Gotchas list it and the others.
 
 Split the section out to a page of its type and link to it, or cut it. Add the missing part of the type.
 
-## Hold
+## Guard
 
 Model: `check`.
 

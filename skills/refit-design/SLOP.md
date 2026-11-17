@@ -37,9 +37,9 @@ dead lens.
 Delete the part. Put a definition the reader needs in a `title` tooltip. Cut a label to one or two words.
 Leave a part that the doc names.
 
-## Hold
+## Guard
 
-A model hold in `check`: a new note, label or caption in a plan is at most two words. No tool hold yet: a count
+A model guard in `check`: a new note, label or caption in a plan is at most two words. No tool guard yet: a count
 of words in UI text waits for a retro finding.
 
 ## Check
