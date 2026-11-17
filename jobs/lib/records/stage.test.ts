@@ -52,7 +52,7 @@ const ISSUES_NEW: Row[] = [
 ];
 
 const PARTS_NEW: Row[] = [
-  { name: "new issue: working", stage: "working", action: "running", on: /^job\.\d+$/, why: /^j-\d+ started$/, build: async () => newRun(newIssue(), { role: "build", state: "running" }) },
+  { name: "new issue: working", stage: "working", action: "running", on: /^job\.\d+$/, why: /^j\d+ started$/, build: async () => newRun(newIssue(), { role: "build", state: "running" }) },
   // PARTS_NEW[1] is the held issue that the `aleph status` test below reads.
   { name: "new issue: held", stage: "held", action: "held", why: /^issue\.\d+ held: after issue\.\d+$/, build: async () => held(newIssue()) },
   { name: "new issue: a started event after the held event ends the hold", stage: "queued", action: "starting", build: async () => {
@@ -94,7 +94,7 @@ test("aleph status prints the same stage as JSON and as one line, with the short
   expect(r.json).toEqual(JSON.parse(JSON.stringify(await statusOf(PARTS_NEW[1]))));
   expect(r.json.why).toMatch(/^issue\.\d+ held: after issue\.\d+$/);
   const text = await aleph(["status", ref(id)]);
-  const shown = (t: string) => t.replace(/fac-(\d+)/g, (_m, n) => `i-${n.padStart(5, "0")}`);
+  const shown = (t: string) => t.replace(/fac-(\d+)/g, (_m, n) => `i${n}`);
   expect(text.stdout.trim()).toBe(`${shown(r.json.id)} ${r.json.stage}: ${shown(r.json.why)}`);
   expect((await aleph(["status", "fac-999"])).stderr).toContain("fac has no issue 999");
 }, 90_000);

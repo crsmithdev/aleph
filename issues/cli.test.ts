@@ -111,7 +111,7 @@ test("the duplicate warning names the item with the repo's key", async () => {
     });
     const [code, , err] = await Promise.all([p.exited, new Response(p.stdout).text(), new Response(p.stderr).text()]);
     expect(code).toBe(0);
-    expect(err).toContain("x-00003 may be the same task: An old item");
+    expect(err).toContain("x3 may be the same task: An old item");
     expect(err).not.toContain("aleph-3");
   } finally { server.stop(true); }
 });
@@ -157,10 +157,10 @@ test("list and show print each issue's shown key, with the project's code", () =
   sh(fx.items, "git", "add", "-A");
   sh(fx.items, "git", "commit", "-qm", "seed part");
   sh(fx.items, "git", "push", "-q", "origin", "main");
-  expect(aleph("issue", "list", "proj").out).toBe("x-00005  open    medium   Parent\nx-00006  open    medium   A part\n");
-  expect(aleph("issue", "show", "proj", "6").out.split("\n")[0]).toBe("## x-00006. A part");
-  expect(aleph("issue", "show", "x-00006").out.split("\n")[0]).toBe("## x-00006. A part");
-  expect(aleph("issue", "show", "issue.6").out.split("\n")[0]).toBe("## x-00006. A part");
+  expect(aleph("issue", "list", "proj").out).toBe("x5  open    medium   Parent\nx6  open    medium   A part\n");
+  expect(aleph("issue", "show", "proj", "6").out.split("\n")[0]).toBe("## x6. A part");
+  expect(aleph("issue", "show", "x6").out.split("\n")[0]).toBe("## x6. A part");
+  expect(aleph("issue", "show", "issue.6").out.split("\n")[0]).toBe("## x6. A part");
 });
 
 test("list and lint with no repo cover the repos with a run or an item update in the last 7 days, the latest first", () => {
@@ -169,14 +169,14 @@ test("list and lint with no repo cover the repos with a run or an item update in
   mkdirSync(jobs);
   const e = { ALEPH_JOBS_DIR: jobs };
   expect(alephWith(e, "issue", "add", "fresh", "A new item").code).toBe(0);
-  expect(alephWith(e, "issue", "list").out).toBe("fresh\n  i-00004  open    medium   A new item\n");
+  expect(alephWith(e, "issue", "list").out).toBe("fresh\n  i4  open    medium   A new item\n");
   // proj's only item is from September; a run today makes proj recent, and the latest.
   const saved = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobs;
   seedJob({ role: "build", name: "x", repo: "proj", state: "landed", started: clock().toISOString() });
   // Assigning undefined would set the string "undefined", and a later test's records would land in ./undefined/.
   if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
-  expect(alephWith(e, "issue", "list").out).toBe("proj\n  x-00003  open    medium   An old item\nfresh\n  i-00004  open    medium   A new item\n");
+  expect(alephWith(e, "issue", "list").out).toBe("proj\n  x3  open    medium   An old item\nfresh\n  i4  open    medium   A new item\n");
   expect(JSON.parse(alephWith(e, "issue", "list", "--status", "done", "--json").out)).toEqual([]);
   const lint = alephWith(e, "issue", "lint");
   expect(lint.code).toBe(1);
@@ -196,13 +196,13 @@ test("aleph issue is the only command: aleph todo is gone", () => {
 
 
 test("a shown ID names the issue in the repo slot of show and note", () => {
-  const short = aleph("issue", "show", "x-00003", "--json");
+  const short = aleph("issue", "show", "x3", "--json");
   const long = aleph("issue", "show", "proj", "3", "--json");
   expect([short.code, long.code]).toEqual([0, 0]);
   const [a, b] = [JSON.parse(short.out), JSON.parse(long.out)];
   expect(a.id).toBe(b.id);
   expect(a.title).toBe(b.title);
-  expect(aleph("issue", "note", "x-00003", "short-form-note").code).toBe(0);
+  expect(aleph("issue", "note", "x3", "short-form-note").code).toBe(0);
   expect(remoteItem(3)).toContain("short-form-note");
 });
 
@@ -213,7 +213,7 @@ test("retitle prints the ids it retitled", () => {
   const item = remoteItem(9);
   const title = /^title: (.*)$/m.exec(item)![1];
   expect(titleProblem(title)).toBeNull();
-  expect(r.out).toBe(`x-00009: ${title}\n`);
+  expect(r.out).toBe(`x9: ${title}\n`);
   expect(item).toContain("retitled from: Check foo: bar");
 });
 

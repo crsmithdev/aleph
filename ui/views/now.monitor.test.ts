@@ -81,7 +81,7 @@ test("the Herald lists each running job as a row on the feed grid between the al
   const h = view.renderHerald({ ...calm, asks: [ask], running, runningIssues: [{ id: "aleph-9", stage: "intake", title: "Sort it", at: "2026-11-09T11:30:00Z" }] });
   expect(h.match(/class="event-row run run-now"/g)).toHaveLength(2);
   // The start time, the action word in the run tone, the job's ID, its title, then the size after the breathing dot; the model is in the size's title.
-  expect(h).toContain('<div class="event-row run run-now" data-job="job.0" id="h-job-job.0"><span class="event-time">' + clock("2026-11-09T11:00:00Z") + '</span><span class="event-body"><span class="event-line"><span class="badge run">implement</span><a class="idl" href="#/jobs/job.0">j-00000</a><span class="event-title run-title" title="Fix the thing">Fix the thing</span><span class="run-size" title="deepseek-v4.1-flash"><span class="run-dot"></span>small</span></span></span></div>');
+  expect(h).toContain('<div class="event-row run run-now" data-job="job.0" id="h-job-job.0"><span class="event-time">' + clock("2026-11-09T11:00:00Z") + '</span><span class="event-body"><span class="event-line"><span class="badge run">implement</span><a class="idl" href="#/jobs/job.0">j0</a><span class="event-title run-title" title="Fix the thing">Fix the thing</span><span class="run-size" title="deepseek-v4.1-flash"><span class="run-dot"></span>small</span></span></span></div>');
   expect(h).not.toContain("intake-aleph-7");
   expect(h).toContain('data-job="aleph-9"');
   expect(h).toContain('<span class="badge run">intake</span>');
@@ -187,7 +187,7 @@ test("a Herald group keeps its open or closed state when a newer event arrives a
 test("the Herald's older rows under an issue are labelled by their run's kind with the linked job and a mark, by the chip for an event with no run, and the top row keeps the issue's title", () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-herald-runs-")), restore = withEnv({ ALEPH_JOBS_DIR: base, ALEPH_DB: join(base, "aleph.db") });
   try {
-    const shown = (k: string) => `j-${k.slice(4).padStart(5, "0")}`;
+    const shown = (k: string) => `j${k.slice(4)}`;
     const [j1, j2] = (["intake", "build"] as const).map((role) => seed({ role, name: "issue.9", target: "issue.9", state: "done", started: "2026-11-09T10:00:00Z" }).id);
     const events = [
       row({ at: "2026-11-09T10:30:00Z", by: "gate", subject: "aleph-9", action: "started" }),
@@ -375,15 +375,15 @@ test("a housekeeper run with 2 changes is one row reading 2 changes, with a line
     hk("2026-11-15T12:10:00Z", "done", ["job.56"]), hk("2026-11-15T12:00:00Z", "running", ["job.56"]),
   ]);
   expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
-  expect(h).toContain('<span class="badge quiet">ended</span><a class="idl" href="#/jobs/job.57">j-00057</a><span class="event-title" title="2 changes">2 changes</span><span class="event-more">+2</span>');
+  expect(h).toContain('<span class="badge quiet">ended</span><a class="idl" href="#/jobs/job.57">j57</a><span class="event-title" title="2 changes">2 changes</span><span class="event-more">+2</span>');
   const lines = h.split('<div class="herald-older">')[1].split('<div class="event-brief').slice(1);
   expect(lines).toHaveLength(2);
   expect(lines[0]).toContain("aleph-5");
   expect(lines[0]).toContain("the land did it");
   expect(lines[1]).toContain("aleph-8");
-  expect(h).not.toContain("j-00056");
+  expect(h).not.toContain("j56");
   // A reviewed count alone does not draw a row for a run that changed nothing.
-  expect(feed([hk("2026-11-15T12:10:00Z", "done", ["job.56"]), hk("2026-11-15T12:00:00Z", "running", ["job.56"])], { reviewed: { "job.56": 4 } })).not.toContain("j-00056");
+  expect(feed([hk("2026-11-15T12:10:00Z", "done", ["job.56"]), hk("2026-11-15T12:00:00Z", "running", ["job.56"])], { reviewed: { "job.56": 4 } })).not.toContain("j56");
 });
 
 test("the Herald state's reviewed count of a housekeeper job is its tally's reviewed", () => {
@@ -423,7 +423,7 @@ test("a housekeeper run whose changes all have a verb counts each verb, and each
 test("a housekeeper job whose only event is running draws one row that links its job", () => {
   const h = feed([hk("2026-11-15T13:00:00Z", "running")]);
   expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
-  expect(h).toContain('<span class="badge run">started</span><a class="idl" href="#/jobs/job.57">j-00057</a>');
+  expect(h).toContain('<span class="badge run">started</span><a class="idl" href="#/jobs/job.57">j57</a>');
   expect(h).not.toContain("<details");
 });
 
@@ -438,8 +438,8 @@ test("a stalled event on an intake job of an issue folds into the issue's row as
     const h = feed(events, { runs: { "job.9": "intake" }, titles: { "issue.2072": "Fix ingest" } });
     expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
     // The head is the start; the stall is in the fold.
-    expect(h).toContain('<span class="badge run">started</span><a class="idl" href="#/issues/aleph/2072">a-02072</a>');
-    expect(h.split('<div class="herald-older">')[1]).toContain('>stalled a-02072 · intake</span>');
+    expect(h).toContain('<span class="badge run">started</span><a class="idl" href="#/issues/aleph/2072">a2072</a>');
+    expect(h.split('<div class="herald-older">')[1]).toContain('>stalled a2072 · intake</span>');
   } finally { setCodes({}); }
 });
 

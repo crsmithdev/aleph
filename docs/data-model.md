@@ -51,7 +51,7 @@ One file per project: `projects/<n>/project.md`. The path is the key, `project.<
 | Key | Default | Meaning |
 |---|---|---|
 | `name` | | The project's name, such as `aleph` |
-| `code` | | The short code of the shown ID (`a-01057`) |
+| `code` | | The short code of the shown ID (`a1057`) |
 | `path` | | The repo's main checkout |
 | `env` | | An EnvironmentFile for checks |
 | `main` | `"main"` | The main branch |

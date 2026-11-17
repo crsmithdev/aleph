@@ -129,7 +129,7 @@ export const blank = (repo?: string, project?: string): Doc => ({ items: [], ...
 
 /** The number of the issue as text: `"5"`. */
 export const refOf = (item: Issue): string => String(item.id);
-/** The text with each full or short id of the repo `key` as its shown key, `a-01234` with the project's code, `i-01234` with none. `code` is that code. */
+/** The text with each full or short id of the repo `key` as its shown key, `a1234` with the project's code, `i1234` with none. `code` is that code. */
 export const localRefs = (key: string, text: string, code?: string): string =>
   text.replace(/(?<![\w.-])[a-z][a-z0-9-]*\d+(?:\.\d+)?(?![\w-])/g, (r) => { const p = parseId(r); return p?.repo === key && p.sub === undefined ? shownKey(issueKey(p.n), code) : r; });
 /** The number of the parent, as text, from `from: issue.<n>`. Undefined for an issue with no parent. */

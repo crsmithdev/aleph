@@ -122,7 +122,7 @@ export function attach(repo: store.Place, id: number | string, paths: string[]) 
   return { result: { repo: repo.key, id: w.value.id, media: w.value.media, commit: w.commit }, follow: w.follow };
 }
 
-/** The refs of `--after` or `--refs`: each the key `issue.<n>`, or a shown ID such as `a-01234`. */
+/** The refs of `--after` or `--refs`: each the key `issue.<n>`, or a shown ID such as `a1234`. */
 function checkKeys(field: "after" | "refs", refs: string[]): string[] {
   return refs.map((r) => parseKey(r)?.kind === "issue" ? key("issue", parseKey(r)!.n) : refuse(`--${field} takes issue keys like issue.5: ${r}`));
 }

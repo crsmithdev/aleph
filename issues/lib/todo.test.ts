@@ -103,8 +103,8 @@ test("edit leaves labels unset and lint reports no retired labels finding", () =
 });
 
 test("localRefs shows each id of the repo as its shown key, with the code or I, and leaves other text", () => {
-  expect(issues.localRefs("aleph", "after aleph-12, koans-3", "a")).toBe("after a-00012, koans-3");
-  expect(issues.localRefs("koans", "koans-3 waits for koans-12")).toBe("i-00003 waits for i-00012");
+  expect(issues.localRefs("aleph", "after aleph-12, koans-3", "a")).toBe("after a12, koans-3");
+  expect(issues.localRefs("koans", "koans-3 waits for koans-12")).toBe("i3 waits for i12");
 });
 
 test("edit takes the title it already has, even a bad one, and still refuses another bad title", () => {

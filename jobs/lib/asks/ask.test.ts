@@ -63,7 +63,7 @@ test("a run's Ask is the run's: the issue has none, and clearing the issue's Ask
 });
 
 test("normalizeAsk takes after, 2 to 4 options and a recommended label that is one of them", () => {
-  const raw = { question: "Q?", options: [{ label: "A", line: "a", after: "issue.4" }, { label: "B", line: "b", after: "i-00005" }], recommended: "A", why: ["w"] };
+  const raw = { question: "Q?", options: [{ label: "A", line: "a", after: "issue.4" }, { label: "B", line: "b", after: "i5" }], recommended: "A", why: ["w"] };
   expect(normalizeAsk(raw)).toEqual({ reason: "question", question: "Q?", options: [{ label: "A", line: "a", after: "issue.4" }, { label: "B", line: "b", after: "issue.5" }], recommended: "A", why: ["w"] });
   expect(normalizeAsk({ ...raw, recommended: "C" })).toBeNull();
   expect(normalizeAsk({ ...raw, options: raw.options.slice(0, 1) })).toBeNull();

@@ -486,7 +486,7 @@ const shownRef = (r: string): string => {
   return shownKey(r, name && loadRegistry()[name]?.code);
 };
 const ready = (i: issues.Issue) => (store.afterOf(i).length ? `after ${store.afterOf(i).map(shownRef).join(",")}` : "");
-/** The issue's key as the terminal shows it: `a-01234`, with its project's code. */
+/** The issue's key as the terminal shows it: `a1234`, with its project's code. */
 const shown = (key: string, i: issues.Issue): string => shownKey(issueKey(i.id), loadRegistry()[key]?.code);
 
 function printRows(ctx: Ctx, rows: issues.Issue[], key: string, indent = ""): void {
@@ -498,7 +498,7 @@ function printRows(ctx: Ctx, rows: issues.Issue[], key: string, indent = ""): vo
 const IDEA_USAGE = usage("idea");
 /** The idea number as text from the first argument, or a usage refusal. */
 const ideaArg = (arg: string | undefined): string => ideas.slugOf(arg ?? refuse(IDEA_USAGE));
-/** An issue named in `idea built`, as its key: `issue.5`, a shown form such as `a-01234`, or an old `aleph-5`. */
+/** An issue named in `idea built`, as its key: `issue.5`, a shown form such as `a1234`, or an old `aleph-5`. */
 const builtRef = (ref: string): string => { const k = parseKey(ref) ?? (parseId(ref) && { kind: "issue", n: parseId(ref)!.n }); return k && k.kind === "issue" ? key("issue", k.n) : refuse(`not an issue: ${ref}`); };
 
 /** `aleph idea ...`: the ideas store (ideas/ideas.ts). `-` as a text flag reads stdin. */

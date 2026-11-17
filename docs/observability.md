@@ -22,7 +22,7 @@ The vault also logs its own writes in `daily/<date>.md` (`appendDaily` in `vault
 
 ## Event log
 
-An event has the 6 fields of `Event` in `lib/naming.ts:135`: `seq`, `time`, `subject`, `action`, `object` and `detail`; a start's event also has a `tier`, the Size the factory routed it to. [Naming](naming.md#events) defines the words. `event()` in `lib/naming.ts:143` checks `subject` and `action` against their sets, so a bad word throws. `logEvent` inserts one row into the `events` table of `aleph.db`. A row never changes. `readEvents` in `lib/layout.ts:41` reads the view `event_rows` from `since` on, in `seq` order. No code writes the event log by any other means.
+An event has the 6 fields of `Event` in `lib/naming.ts:138`: `seq`, `time`, `subject`, `action`, `object` and `detail`; a start's event also has a `tier`, the Size the factory routed it to. [Naming](naming.md#events) defines the words. `event()` in `lib/naming.ts:146` checks `subject` and `action` against their sets, so a bad word throws. `logEvent` inserts one row into the `events` table of `aleph.db`. A row never changes. `readEvents` in `lib/layout.ts:41` reads the view `event_rows` from `since` on, in `seq` order. No code writes the event log by any other means.
 
 ### Who writes events
 

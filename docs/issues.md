@@ -19,7 +19,7 @@ aleph issue note aleph 1057 "Reproduced on main at c26c10f"
 aleph issue done aleph 1057 "Landed in 84966d1"
 ```
 
-`<id>` is the number (`1057`), the key (`issue.1057`) or the shown ID (`a-01057`). `aleph` prints an ID in the shown form, with the project `code`.
+`<id>` is the number (`1057`), the key (`issue.1057`) or the shown ID (`a1057`). `aleph` prints an ID in the shown form, with the project `code`.
 
 An issue added with `--spec -` is ready to build in a repo without `"author": true`. In a repo with it, intake takes the issue in first and keeps or fixes the spec.
 

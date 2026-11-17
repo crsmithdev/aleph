@@ -48,24 +48,24 @@ describe("milestone 2", () => {
     expect(r.json.find((s: any) => s.id === `fac-${id}`)).toMatchObject({ stage: "new" });
     const text = (await cli(["status"])).stdout;
     expect(text.split("\n")).toContain("fac");
-    expect(text).toContain(`\n  i-${String(id).padStart(5, "0")} new: intake`);
+    expect(text).toContain(`\n  i${id} new: intake`);
     await issueClose("fac", id, "done");
     expect((await cli(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
   }, 30_000);
 
-  test("aleph status shows each issue ID as its project's code and five digits", async () => {
+  test("aleph status shows each issue ID as its project's code and number", async () => {
     const id = (await issueAdd("fac", "shown with its code")).json.added;
     const held = (await issueAdd("fac", "held by the one shown", { after: [`issue.${id}`] })).json.added;
     logEvent({ subject: "gate", action: "held", object: `issue.${held}`, detail: `after: issue.${id}` });
     const repos = readRepos(join(base, "items"));
     writeRepos({ ...repos, fac: { ...repos.fac, code: "f" } }, join(base, "items"));
     try {
-      const shown = (n: number) => `f-${String(n).padStart(5, "0")}`;
+      const shown = (n: number) => `f${n}`;
       const recent = (await cli(["status"])).stdout, one = (await cli(["status", `fac-${id}`])).stdout;
       expect(recent).toContain(`\n  ${shown(id)} new: intake`);
       expect(recent).toContain(`\n  ${shown(held)} held: issue.${held} held: after issue.${id}`);
       expect(one.startsWith(`${shown(id)} new`)).toBe(true);
-      for (const t of [recent, one]) for (const n of [id, held]) { expect(t).not.toContain(`fac-${n}`); expect(t).not.toMatch(new RegExp(`\\bf${n}\\b`)); }
+      for (const t of [recent, one]) for (const n of [id, held]) { expect(t).not.toContain(`fac-${n}`); }
       expect((await cli(["status", `fac-${id}`, "--json"])).json.id).toBe(`fac-${id}`);
     } finally { writeRepos(repos, join(base, "items")); await issueClose("fac", held, "done"); await issueClose("fac", id, "done"); }
   }, 30_000);

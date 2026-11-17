@@ -145,21 +145,21 @@ test("no file outside lib/naming.ts reads an issue ID with its own regex", () =>
 
 test("sayText says an event in the active voice, its object first, the detail after a colon or in place", () => {
   const cases: [Record<string, unknown>, string][] = [
-    [{ subject: "gate", action: "landed", object: "job.6802" }, "j-06802 landed"],
-    [{ subject: "gate", action: "landed", object: "job.6802", detail: "over review" }, "j-06802 landed: over review"],
-    [{ subject: "gate", action: "failed", object: "job.6802", detail: "merge conflict" }, "j-06802 failed: merge conflict"],
-    [{ subject: "job.6803", subject_role: "review", action: "returned", object: "job.6802" }, "j-06802 returned by review"],
-    [{ subject: "gate", action: "returned", object: "job.6802" }, "j-06802 returned"],
-    [{ subject: "gate", action: "waiting", object: "issue.3" }, "i-00003 waits for you"],
-    [{ subject: "gate", action: "after", object: "issue.3", detail: "issue.2" }, "i-00003 waits for i-00002"],
-    [{ subject: "gate", action: "held", object: "issue.2994", detail: "after: issue.2985 issue.2993" }, "i-02994 held: after i-02985 i-02993"],
-    [{ subject: "gate", action: "waiting", object: "issue.3", project: "aleph" }, "a-00003 waits for you"],
-    [{ subject: "gate", action: "busy", object: "issue.3", detail: "job.6802 holds src/x.ts" }, "i-00003 waits: j-06802 holds src/x.ts"],
-    [{ subject: "gate", action: "red", object: "issue.3", detail: "at abc1234" }, "i-00003 waits: main is red: at abc1234"],
-    [{ subject: "human", action: "filed", object: "issue.3" }, "i-00003 filed by you"],
-    [{ subject: "claude", action: "filed", object: "issue.3" }, "i-00003 filed by Claude Code"],
-    [{ subject: "job.6801", subject_role: "intake", action: "filed", object: "issue.3" }, "i-00003 filed by intake"],
-    [{ subject: "rule", action: "stalled", object: "job.6802" }, "j-06802 stalled"],
+    [{ subject: "gate", action: "landed", object: "job.6802" }, "j6802 landed"],
+    [{ subject: "gate", action: "landed", object: "job.6802", detail: "over review" }, "j6802 landed: over review"],
+    [{ subject: "gate", action: "failed", object: "job.6802", detail: "merge conflict" }, "j6802 failed: merge conflict"],
+    [{ subject: "job.6803", subject_role: "review", action: "returned", object: "job.6802" }, "j6802 returned by review"],
+    [{ subject: "gate", action: "returned", object: "job.6802" }, "j6802 returned"],
+    [{ subject: "gate", action: "waiting", object: "issue.3" }, "i3 waits for you"],
+    [{ subject: "gate", action: "after", object: "issue.3", detail: "issue.2" }, "i3 waits for i2"],
+    [{ subject: "gate", action: "held", object: "issue.2994", detail: "after: issue.2985 issue.2993" }, "i2994 held: after i2985 i2993"],
+    [{ subject: "gate", action: "waiting", object: "issue.3", project: "aleph" }, "a3 waits for you"],
+    [{ subject: "gate", action: "busy", object: "issue.3", detail: "job.6802 holds src/x.ts" }, "i3 waits: j6802 holds src/x.ts"],
+    [{ subject: "gate", action: "red", object: "issue.3", detail: "at abc1234" }, "i3 waits: main is red: at abc1234"],
+    [{ subject: "human", action: "filed", object: "issue.3" }, "i3 filed by you"],
+    [{ subject: "claude", action: "filed", object: "issue.3" }, "i3 filed by Claude Code"],
+    [{ subject: "job.6801", subject_role: "intake", action: "filed", object: "issue.3" }, "i3 filed by intake"],
+    [{ subject: "rule", action: "stalled", object: "job.6802" }, "j6802 stalled"],
     [{ subject: "human", action: "changed", object: "settings", detail: "the factory is paused" }, "settings changed: the factory is paused"],
   ];
   for (const [ev, text] of cases) expect(n.sayText(ev)).toBe(text);
@@ -177,23 +177,24 @@ describe("keys", () => {
     expect(n.parseKey("aleph-2072")).toBeNull();
     expect(n.parseKey("issue.x")).toBeNull();
   });
-  test("a shown key pads to 5 digits and parses back, leading zeros included", () => {
-    expect(n.shownKey("job.6802")).toBe("j-06802");
-    expect(n.shownKey("issue.2")).toBe("i-00002");
-    expect(n.shownKey("idea.7")).toBe("d-00007");
-    expect(n.shownKey("project.3")).toBe("p-00003");
-    expect(n.shownKey("issue.1234", "a")).toBe("a-01234");
+  test("a shown key is its letter and number, and parses back, the old dashed form included", () => {
+    expect(n.shownKey("job.6802")).toBe("j6802");
+    expect(n.shownKey("issue.2")).toBe("i2");
+    expect(n.shownKey("idea.7")).toBe("d7");
+    expect(n.shownKey("project.3")).toBe("p3");
+    expect(n.shownKey("issue.1234", "a")).toBe("a1234");
     expect(n.shownKey("settings")).toBe("settings");
     for (const k of ["job.6802", "issue.2", "idea.7", "project.3", "job.123456"]) expect(n.parseKey(n.shownKey(k))).toEqual(n.parseKey(k));
+    expect(n.parseKey("j-06802")).toEqual({ kind: "job", n: 6802 });
   });
   test("a project code reads as an issue", () => {
-    expect(n.parseKey("a-01234")).toEqual({ kind: "issue", n: 1234 });
-    expect(n.parseKey("z-01234")).toBeNull();
+    expect(n.parseKey("a1234")).toEqual({ kind: "issue", n: 1234 });
+    expect(n.parseKey("z1234")).toBeNull();
   });
   test("a project code i is the issue letter, and a code p, d or j is refused", () => {
     n.setCodes({ interview: "i" });
-    expect(n.shownKey("issue.5", "i")).toBe("i-00005");
-    expect(n.parseKey("i-00005")).toEqual({ kind: "issue", n: 5 });
+    expect(n.shownKey("issue.5", "i")).toBe("i5");
+    expect(n.parseKey("i5")).toEqual({ kind: "issue", n: 5 });
     for (const c of ["p", "d", "j"]) expect(() => n.setCodes({ jam: c })).toThrow(/another kind/);
   });
 });

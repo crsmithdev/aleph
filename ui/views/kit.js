@@ -109,8 +109,8 @@ const ASK = {
   actions: [{ label: "Oct 28", act: "kit", path: "/api/kit", primary: true }, { label: "10/28", act: "kit", path: "/api/kit" }, { label: "Deny", act: "kit", path: "/api/kit", input: { name: "reason" } }],
 };
 const FEED = [
-  { key: "kit 1", at: "2026-11-10T16:58:00Z", by: "job.1", kind: "work", word: "landed", id: [{ id: "i-01700", to: "#/kit" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
-  { key: "kit 2", at: "2026-11-10T16:40:00Z", by: "job.2", kind: "work", word: "returned", id: [{ id: "i-01701", to: "#/kit" }], text: ["checks failed"], more: 0, lines: [] },
+  { key: "kit 1", at: "2026-11-10T16:58:00Z", by: "job.1", kind: "work", word: "landed", id: [{ id: "i1700", to: "#/kit" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
+  { key: "kit 2", at: "2026-11-10T16:40:00Z", by: "job.2", kind: "work", word: "returned", id: [{ id: "i1701", to: "#/kit" }], text: ["checks failed"], more: 0, lines: [] },
 ];
 const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }] };
 
@@ -182,7 +182,7 @@ function renderKit(d, query) {
       statCard({ k: "Link", v: "12", note: "link", href: "#/kit" }) +
       statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }) +
       statCard({ k: "Selector", v: "3", note: "not pressed", key: "b" }))) +
-    spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: id, title, state, project, labels, numbers, then time.") +
+    spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: fold button, id, title, state, priority, project, labels, numbers, then time.") +
     spec("row-cell", "Row and cell", dataTable(heads(["Role", "Title", "Runs"], ["Runs"]), trow([cell("Worker"), cell("A title that takes the spare width, with its text as its title", { wide: true }), cell("1,234", { num: true })]) +
       trow([cell("Triage"), cell("A short title", { wide: true, title: "Another title" }), cell("12", { num: true })]))) +
     spec("table-fit", "Table, fit", dataTable(heads(["Role", "Runs", "p50"], ["Runs", "p50"]), `<tr><td>Worker</td><td class="num">31</td><td class="num">6m 40s</td></tr><tr><td>Triage</td><td class="num">12</td><td class="num">38s</td></tr>`, { fit: true }), "", "") +

@@ -1,10 +1,10 @@
-// The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
-// table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
+// The Issues view: a browser for the issues of every repo: tiles, four charts, filters, fuzzy search, a sortable
+// table and a form that files an issue. `data` is /api/issues: { issues, projects }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
 import { issueApi, postJson, projectKeysOnce, setQuery as setHash, hashQuery, scope, remember, keep, kept } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { count, days, plural, dur, money, when } from "./lib/format.js";
-import { actButton, editable, fold, runNowButton, say, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
+import { count, days, plural, dur, money, pct, when } from "./lib/format.js";
+import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
 import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, issueKey, jobHref } from "../../lib/naming.ts";
@@ -59,7 +59,7 @@ const isoMs = (s) => Date.parse(s ?? "") || 0;
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, own: r.own ?? { runs: 0, cost: 0 }, createdTime: r.createdTime ?? null, closedTime: r.closedTime ?? null, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: !!r.parent, parent: r.parent ? `${r.repo}-${r.parent}` : null }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, own: r.own ?? { runs: 0, cost: 0 }, createdTime: r.createdTime ?? null, closedTime: r.closedTime ?? null, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", source: r.source ?? "chris", everParked: !!r.everParked, part: !!r.parent, parent: r.parent ? `${r.repo}-${r.parent}` : null }));
 }
 
 /** The edit distance of two strings; a number over `max` when their lengths alone must pass it. */
@@ -140,7 +140,7 @@ function markHits(title, hits = []) {
 export function filterRows(rows, o = {}, skip = []) {
   const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
   const q = (o.q ?? "").trim(), at = within(buckets(winOf(o.window), Date.now()));
-  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? at(r.createdTime) : o.tile === "closed" ? CLOSED.includes(r.status) && at(r.closedTime) : true);
+  const inTile = (r) => skip.includes("tile") || o.tile !== "flow" || at(r.createdTime) || (CLOSED.includes(r.status) && at(r.closedTime));
   return rows.flatMap((r) => {
     if (!inTile(r)) return [];
     if (!want("status", r.status) || !want("project", r.project) || !want("stage", r.stage) || !want("priority", r.priority)) return [];
@@ -183,13 +183,13 @@ export function ageText(r, now = Date.now()) {
   return days(Math.max(0, Math.floor(((r.status === "open" ? now : isoMs(r.closedTime) || now) - from) / DAY)));
 }
 
-/** One issue row. `fold` is "open" or "closed" for a parent with parts, which gets a chevron; `sub` indents a part shown under its parent. */
+/** One issue row. `fold` is "open" or "closed" for a parent with parts, which gets a chevron, and "none" for a row without parts in a grouped table; `sub` indents a part shown under its parent. */
 export function renderRow(r, { fold, sub } = {}) {
-  const chevron = fold ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button> ` : "";
-  const [, code, num] = /^(\D*)(.*)$/.exec(shortText(`${r.repo}-${r.n}`));
-  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(shortId(`${r.repo}-${r.n}`))}"><td><a class="idl" href="${esc(r.href)}"><span class="idc">${esc(code)}</span>${esc(num)}</a></td>` +
-    `<td class="wide" title="${esc(r.title)}">${chevron}<a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
-    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td>${cell(r.project)}<td>${chips(r.labels)}</td>` +
+  const chevron = fold === "open" || fold === "closed" ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button>` : "";
+  const id = shortId(`${r.repo}-${r.n}`);
+  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(id)}">${fold ? `<td>${chevron}</td>` : ""}<td>${idLink(id, r.href)}</td>` +
+    `<td class="wide" title="${esc(r.title)}"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
+    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td>${cell(r.project)}<td class="labels" title="${esc(r.labels.join(", "))}">${chips(r.labels)}</td>` +
     `${cell(count(r.notes), { num: true })}${cell(count(r.runs), { num: true })}${cell(money(r.cost), { num: true })}${cell(ageText(r), { num: true })}<td class="time">${esc(updatedText(r))}</td></tr>`;
 }
 
@@ -201,45 +201,46 @@ export function renderTable(rows, o = {}) {
   if (!all.length) return empty();
   const shown = pageRows(all, o.page ?? 1, PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
-  const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
-  return `${dataTable(head, shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) && (open.has(r.id) ? "open" : "closed"), sub: under(r) } : {})).join(""))}${pager(o.page ?? 1, all.length, PAGE)}`;
+  // The fold column has no name (design.md, Table).
+  const head = (group ? "<th></th>" : "") + COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
+  return `${dataTable(head, shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) ? (open.has(r.id) ? "open" : "closed") : "none", sub: under(r) } : {})).join(""))}${pager(o.page ?? 1, all.length, PAGE)}`;
 }
 
 /** Whether a stored time is inside the span of `b`, the buckets of a window. */
 const within = (b) => (time) => { const t = isoMs(time); return t >= b.since && t < b.until; };
 
+/** The seconds from filed to closed of each row closed inside `inside`, leaving out a row that was ever parked: its wait was not work. */
+const closeSpans = (rows, inside) => rows.filter((r) => CLOSED.includes(r.status) && !r.everParked && inside(r.closedTime) && isoMs(r.createdTime))
+  .map((r) => (isoMs(r.closedTime) - isoMs(r.createdTime)) / 1000).filter((s) => s >= 0);
+
 /** The numbers over `rows`: what the status and stage filters leave out still counts here, so the tiles do not empty when the table narrows. */
 export function stats(rows, now = new Date(), window = "week") {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), b = buckets(window, now.getTime());
+  const b = buckets(window, now.getTime());
   // `at` is the window; `prior` is the window before it.
   const at = within(b), prior = within(buckets(window, b.since - 1));
-  const open = rows.filter((r) => r.status === "open");
-  const ages = open.map((r) => isoMs(r.createdTime)).filter(Boolean).map((t) => (today - t) / DAY);
-  const closedIn = (inside) => rows.filter((r) => CLOSED.includes(r.status) && inside(r.closedTime));
-  const closed = closedIn(at);
-  const stages = {};
-  for (const r of open) stages[r.stage] = (stages[r.stage] ?? 0) + 1;
+  const closedIn = (inside) => rows.filter((r) => CLOSED.includes(r.status) && inside(r.closedTime)).length;
+  const spans = closeSpans(rows, at), before = closeSpans(rows, prior);
   return {
-    total: rows.length, open: open.length, stages,
+    open: rows.filter((r) => r.status === "open").length, parked: rows.filter((r) => r.status === "parked").length,
     filed: rows.filter((r) => at(r.createdTime)).length, filedBefore: rows.filter((r) => prior(r.createdTime)).length,
-    closed: closed.length, done: closed.filter((r) => r.status === "done").length, dropped: closed.filter((r) => r.status === "dropped").length, closedBefore: closedIn(prior).length,
-    medianAge: quantile(ages, 0.5), oldest: ages.length ? Math.max(...ages) : null,
-    runs: rows.reduce((n, r) => n + r.own.runs, 0), cost: rows.reduce((n, r) => n + r.own.cost, 0),
+    closed: closedIn(at), closedBefore: closedIn(prior),
+    p50: quantile(spans, 0.5), p90: quantile(spans, 0.9), p50Before: quantile(before, 0.5),
   };
 }
 
-/** The change from the period before: more closed is good, more filed is warn. */
-const change = (now, before, w, lowerIsGood) => cardTrend(now, before, before, { kind: "relative", lowerIsGood, tip: `${count(before)} the ${w} before` });
+/** Closed per filed in a window, as a share; null with nothing filed. */
+const rateOf = (closed, filed) => (filed ? closed / filed : null);
 
 export function renderTiles(s, key = "open", win = "week") {
   const w = winOf(win);
   const on = (k) => ({ key: k, on: key === k });
+  const rate = rateOf(s.closed, s.filed), before = rateOf(s.closedBefore, s.filedBefore);
   return tiles("Issue numbers",
-    statCard({ k: "Open", v: count(s.open), v2: count(s.total), q: ["open", "in store"], ...on("open") }) +
-    statCard({ k: "Filed", v: count(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${count(s.filedBefore)} prior`, ...on("filed") }) +
-    statCard({ k: "Closed", v: count(s.closed), v2: count(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w, false), ...on("closed") }) +
-    statCard({ k: "Open Age", v: days(s.medianAge), ...(s.oldest == null ? {} : { v2: days(s.oldest), q: ["open age", "oldest"] }), ...on("age") }) +
-    statCard({ k: "Jobs", v: count(s.runs), v2: money(s.cost), q: ["jobs", "recorded cost"], ...on("runs") }));
+    statCard({ k: "Open", v: count(s.open), ...on("open") }) +
+    statCard({ k: "Backlog", v: count(s.parked), ...on("parked") }) +
+    statCard({ k: "Filed / Closed", v: count(s.filed), v2: count(s.closed), q: ["filed", "closed"], ...on("flow") }) +
+    statCard({ k: "Time to Close", v: s.p50 == null ? "–" : dur(s.p50), ...(s.p90 == null ? {} : { v2: dur(s.p90), q: ["p50", "p90"] }), trend: cardTrend(s.p50, s.p50Before, s.p50Before, { kind: "relative", lowerIsGood: true, tip: `${dur(s.p50Before)} the ${w} before` }) }) +
+    statCard({ k: "Close Rate", v: rate == null ? "–" : pct(rate * 100), trend: cardTrend(rate, before, before, { kind: "points", lowerIsGood: false, tip: `${before == null ? "–" : pct(before * 100)} the ${w} before` }) }));
 }
 
 /** The window's buckets (60 minutes, 24 hours, 7 or 30 days): the time of each and how many rows were filed and closed in it. A stored time counts to its minute. */
@@ -253,22 +254,27 @@ export function flow(rows, window = "month", now = new Date()) {
   return out;
 }
 
-/** The window's buckets: how many rows were open at the start of each, per priority. A row is open from its created time to its closed time. */
-export function backlog(rows, win = "month", now = new Date()) {
-  const ats = buckets(win, now.getTime()).starts;
-  const open = (p, t) => rows.filter((r) => {
-    if (r.priority !== p) return false;
-    const from = isoMs(r.createdTime), to = isoMs(r.closedTime);
-    return from && from <= t && (!to || t < to);
-  }).length;
-  return { ats, counts: Object.fromEntries(PRIORITIES.map((p) => [p, ats.map((t) => open(p, t))])) };
+/** The window's buckets: at the start of each, how many rows were filed and not yet closed (the backlog), and how many were filed at all (the total). */
+export function levels(rows, win = "month", now = new Date()) {
+  const ats = buckets(win, now.getTime()).starts, made = rows.map((r) => [isoMs(r.createdTime), isoMs(r.closedTime)]).filter(([from]) => from);
+  return { ats, backlog: ats.map((t) => made.filter(([from, to]) => from <= t && (!to || t < to)).length), total: ats.map((t) => made.filter(([from]) => from <= t).length) };
 }
 
-/** For each kind, the p50 and p90 from created to closed over the rows closed inside the window; null for a kind with none. `unit` is "hours" when a row counts and every value is under 2 days; else "days". */
+/** The window's buckets: how many rows each source filed in each. */
+export function sources(rows, win = "month", now = new Date()) {
+  const b = buckets(win, now.getTime()), out = { ats: b.starts, counts: Object.fromEntries(SOURCES.map((k) => [k, b.starts.map(() => 0)])) };
+  for (const r of rows) {
+    const i = b.slotOf(isoMs(r.createdTime));
+    if (i >= 0 && out.counts[r.source]) out.counts[r.source][i]++;
+  }
+  return out;
+}
+
+/** For each kind, the p50 and p90 from created to closed over the rows closed inside the window and never parked; null for a kind with none. `unit` is "hours" when a row counts and every value is under 2 days; else "days". */
 export function closeTimes(rows, win = "month", now = new Date()) {
   const out = { kinds: KINDS, unit: "days", p50: [], p90: [] };
   const at = within(buckets(win, now.getTime()));
-  const spans = KINDS.map((k) => rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && isoMs(r.createdTime) && isoMs(r.closedTime) && at(r.closedTime)).map((r) => isoMs(r.closedTime) - isoMs(r.createdTime)));
+  const spans = KINDS.map((k) => closeSpans(rows.filter((r) => r.kind === k), at).map((s) => s * 1000));
   const hours = spans.flat().length > 0 && spans.flat().every((ms) => ms < 2 * DAY);
   if (hours) out.unit = "hours";
   for (const xs of spans) {
@@ -279,41 +285,38 @@ export function closeTimes(rows, win = "month", now = new Date()) {
   return out;
 }
 
-/** The open backlog per bucket, by priority, with the filed and closed counts of the same buckets. */
-export const backlogFrame = (b, f, win) => ({
-  measure: { name: "Open Backlog, Filed and Closed", unit: "count", agg: "max" },
+/** Filed and closed per bucket: a flow, drawn as two lines so neither hides the other. */
+export const flowFrame = (f, win) => ({
+  measure: { name: "Issues Filed and Closed", unit: "count", agg: "sum" },
   over: { kind: "time", window: win },
-  by: { keys: [...PRIORITIES.map((p) => ({ key: p, name: p })), { key: "filed", name: "filed" }, { key: "closed", name: "closed" }] },
-  rows: b.ats.map((at, i) => ({ at, ...Object.fromEntries(PRIORITIES.map((p) => [p, b.counts[p][i]])), filed: f.filed[i], closed: f.closed[i] })),
-  form: "area",
+  by: { keys: [{ key: "filed", name: "filed", color: "series-1" }, { key: "closed", name: "closed", color: "done" }] },
+  rows: f.ats.map((at, i) => ({ at, filed: f.filed[i], closed: f.closed[i] })),
+  form: "lines",
 });
 
-/** The suite records of `tests` ({ project: records }) of `project` (all when empty) within the window: one row per run time, the test count of each project and the tests that passed only on rerun. */
-export function testsFrame(tests, project = "", win = "month", now = new Date()) {
-  const at = within(buckets(winOf(win), now.getTime())), keys = [], rows = new Map();
-  for (const [k, records] of Object.entries(tests ?? {})) {
-    if (project && k !== project) continue;
-    keys.push({ key: `${k} tests`, name: `${k} tests` }, { key: `${k} passed on rerun`, name: `${k} passed on rerun` });
-    for (const r of records) {
-      const t = Date.parse(r.at);
-      if (!at(r.at)) continue;
-      const row = rows.get(t) ?? { at: t };
-      row[`${k} tests`] = r.ran;
-      row[`${k} passed on rerun`] = r.rerunPassed;
-      rows.set(t, row);
-    }
-  }
-  // A run time of one project is no run of the others: null, so their lines pass over it and do not drop to 0.
-  for (const row of rows.values()) for (const k of keys) row[k.key] ??= null;
-  return { measure: { name: "Tests", unit: "count", agg: "sum" }, over: { kind: "time", window: win }, by: { keys }, rows: [...rows.values()].sort((a, b) => a.at - b.at), form: "lines" };
-}
+/** Filed per bucket, by source. Each source keeps its colour in every window. */
+export const sourceFrame = (s, win) => ({
+  measure: { name: "Issues Filed", unit: "count", agg: "sum" },
+  over: { kind: "time", window: win },
+  by: { name: "Source", keys: SOURCES.map((k, i) => ({ key: k, name: k, color: `series-${i + 1}` })) },
+  rows: s.ats.map((at, i) => ({ at, ...Object.fromEntries(SOURCES.map((k) => [k, s.counts[k][i]])) })),
+});
+
+/** The backlog and the total per bucket: two levels on one count axis. */
+export const levelFrame = (l, win) => ({
+  measure: { name: "Backlog and Total", unit: "count", agg: "max" },
+  over: { kind: "time", window: win },
+  by: { keys: [{ key: "backlog", name: "backlog", color: "series-1" }, { key: "total", name: "total", color: "muted" }] },
+  rows: l.ats.map((at, i) => ({ at, backlog: l.backlog[i], total: l.total[i] })),
+  form: "lines",
+});
 
 /** The p50 and the p90 from filed to closed, per kind, in the unit `closeTimes` chose. */
 export const closeFrame = (c) => {
   const scale = c.unit === "hours" ? 3600 : 86400;
   return {
     measure: { name: "Time to Close", unit: "seconds", agg: "max" },
-    over: { kind: "category" },
+    over: { kind: "category", name: "Kind" },
     by: { keys: [{ key: "p50", name: "p50" }, { key: "p90", name: "p90", color: "muted" }] },
     rows: c.kinds.map((k, i) => ({ name: k, p50: c.p50[i] == null ? null : c.p50[i] * scale, p90: c.p90[i] == null ? null : c.p90[i] * scale })),
     form: "grouped",
@@ -321,36 +324,25 @@ export const closeFrame = (c) => {
 };
 
 /** Each Issues chart panel: its key and its frame. */
-export const FRAMES = { backlog: backlogFrame, close: closeFrame, tests: testsFrame };
+export const FRAMES = { flow: flowFrame, source: sourceFrame, close: closeFrame, levels: levelFrame };
 /** The key of an Issues chart panel: its frame, its kept form and its kept hidden series are its own. */
 export const chartKey = (k) => `issues/${k}`;
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
 export const TILE_FILTER = {
   open: { tile: "open", status: "open", sort: "", dir: "", page: "" },
-  filed: { tile: "filed", status: "any", sort: "", dir: "", page: "" },
-  closed: { tile: "closed", status: "any", sort: "", dir: "", page: "" },
-  age: { tile: "age", status: "open", sort: "age", dir: "desc", page: "" },
-  runs: { tile: "runs", status: "any", sort: "runs", dir: "desc", page: "" },
+  parked: { tile: "parked", status: "parked", sort: "", dir: "", page: "" },
+  flow: { tile: "flow", status: "any", sort: "", dir: "", page: "" },
 };
 
-const TOP_RUNS = 10;
-/** The card under the charts for the Runs tile; none for the other tiles. */
-function renderDetail(rows, o) {
-  if (o.tile === "runs") {
-    const top = [...rows].filter((r) => !r.part && r.runs > 0).sort((a, b) => b.runs - a.runs).slice(0, TOP_RUNS), max = top[0]?.runs ?? 1;
-    return card("Issues by Jobs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${esc(count(r.runs))} · ${esc(money(r.cost))}`)).join("")) : empty(), { label: "Issues by jobs" });
-  }
-  return "";
-}
+/** Each chart's frame over `rows` in the window. */
+const framesOf = (rows, win, now) => ({
+  flow: flowFrame(flow(rows, win, now), win), source: sourceFrame(sources(rows, win, now), win),
+  close: closeFrame(closeTimes(rows, win, now)), levels: levelFrame(levels(rows, win, now), win),
+});
 
-/** The three chart panels under the tiles, on every tile. The backlog and the Tests charts take two columns. */
-const renderCharts = (o, rows, tests) => {
-  const win = winOf(o.window), now = new Date();
-  return `<div class="trio">${panelOf(chartKey("backlog"), backlogFrame(backlog(rows, win, now), flow(rows, win, now), win), "wide")}` +
-    panelOf(chartKey("close"), closeFrame(closeTimes(rows, win, now))) +
-    panelOf(chartKey("tests"), testsFrame(tests, o.project, win, now), "wide") + `</div>`;
-};
+/** The four chart panels under the tiles, in one row of equal panels. */
+const renderCharts = (o, rows) => `<div class="quad">${Object.entries(framesOf(rows, winOf(o.window), new Date())).map(([k, f]) => panelOf(chartKey(k), f)).join("")}</div>`;
 
 const HIGH_FIRST = [...PRIORITIES].reverse();
 const PRIORITY_OPTIONS = [{ value: "", label: "All" }, ...HIGH_FIRST];
@@ -368,12 +360,12 @@ export function renderFilters(rows, o = {}) {
     { label: "Stage", name: "stage", data: true, value: o.stage ?? "", options: [{ value: "", label: "All" }, ...stages] },
     { label: "Priority", name: "priority", value: o.priority ?? "", options: PRIORITY_OPTIONS },
     { label: "Label", name: "label", data: true, value: o.label ?? "", options: [{ value: "", label: "All" }, ...labels.map((l) => ({ value: l, label: l }))] },
-    { html: `<label><input type="checkbox" name="group"${kept("issues.group", false) ? " checked" : ""}> Group sub-issues</label>` },
+    { html: `<label><input type="checkbox" name="group"${kept("issues.group", false) ? " checked" : ""}> Group</label>` },
   ]);
 }
 
 /** The parts that change with the filters. The search box stays out of them, so it keeps the focus while the reader types. */
-function renderLive(projects, rows, o, tests) {
+function renderLive(projects, rows, o) {
   const shown = filterRows(rows, o).length;
   // The tiles and charts follow project, label, priority and search, not status, stage or the selected tile.
   const scoped = filterRows(rows, o, ["status", "stage", "tile"]);
@@ -381,7 +373,7 @@ function renderLive(projects, rows, o, tests) {
     scope: renderProjects(projects, rows, o),
     filters: renderFilters(rows, o),
     numbers: renderTiles(stats(scoped, new Date(), winOf(o.window)), o.tile, o.window),
-    detail: renderCharts(o, scoped, tests) + renderDetail(scoped, o),
+    detail: renderCharts(o, scoped),
     count: shown,
     table: renderTable(rows, o),
   };
@@ -402,9 +394,8 @@ const setQuery = (changes) => { setHash(changes); refill(); };
 
 function draw(root) {
   const rows = filterRows(live.rows, live.o(), ["status", "stage", "tile"]);
-  const win = live.o().window, now = new Date();
   // Each panel draws the frame of the window shown; its form and hidden series are its own.
-  for (const [k, f] of Object.entries({ backlog: backlogFrame(backlog(rows, win, now), flow(rows, win, now), win), close: closeFrame(closeTimes(rows, win, now)), tests: testsFrame(live.tests, live.o().project, win, now) })) {
+  for (const [k, f] of Object.entries(framesOf(rows, winOf(live.o().window), new Date()))) {
     const el = root.querySelector(`aleph-chart[key="${chartKey(k)}"]`);
     if (el) el.frame = f;
   }
@@ -414,7 +405,7 @@ function draw(root) {
 function refill() {
   const root = live?.root;
   if (!root?.isConnected) return;
-  const parts = renderLive(live.projects, live.rows, live.o(), live.tests);
+  const parts = renderLive(live.projects, live.rows, live.o());
   for (const [id, html] of [["inv-scope", parts.scope], ["inv-filters", parts.filters], ["inv-numbers", parts.numbers], ["inv-detail", parts.detail], ["issues-table", parts.table]]) root.querySelector(`#${id}`).innerHTML = html;
   root.querySelector('section[aria-label="Issues"] .sh .count').textContent = parts.count;
   draw(root);
@@ -422,7 +413,7 @@ function refill() {
 
 /** Draws the charts, keeps the data for the filters, and fills the form's Project select from the registry's keys. */
 export async function mount(root, d) {
-  live = { root, tests: d?.tests, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(hashQuery()) };
+  live = { root, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(hashQuery()) };
   if (root.querySelector?.(".chartbox")) draw(root);
   const table = root.querySelector?.('section[aria-label="Issues"]');
   if (table) wireTable(table, { redraw: refill, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, search: "inv-search" });
@@ -445,13 +436,13 @@ function renderForm(rows, o = {}) {
     field("Text", area),
     field("Media", mediaInput),
     field("Labels", inputBox("labels", "", { attrs: ' placeholder="comma separated"' })),
-    field("The text is a spec: build it in the factory", `<input type="checkbox" name="spec">`, { check: true }),
-    field("After", inputBox("after", "", { attrs: ' placeholder="repo-n, repo-n.k"' })),
+    field("Spec", `<input type="checkbox" name="spec" title="The text is a spec: build it in the factory">`, { check: true }),
+    field("After", inputBox("after", "", { attrs: ' placeholder="a3202, a3203"' })),
   ], "File issue"), { cls: "new" }), { label: "File an issue" });
 }
 
 export function renderIssues(d, o = {}) {
-  const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o, d?.tests);
+  const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
   return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
     `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
     renderForm(d?.issues ?? [], o) +

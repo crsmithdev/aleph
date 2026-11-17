@@ -339,15 +339,14 @@ test("sortRows sorts a copy, numbers by value, text in numeric mode, ties by tie
   expect(JSON.stringify(rows)).toBe(snap);
 });
 
-test("the legend of the Tests and the Live chart ends above the grid at 390 and 1440px", async () => {
+test("the legend of the Sources and the Live chart ends above the grid at 390 and 1440px", async () => {
   // @ts-ignore the vendored ECharts bundle has no types
   const echarts = (await import("./vendor/echarts.min.js")).default;
   // @ts-ignore issues.js is plain JS, shared with the page
-  const { testsFrame } = await import("./views/issues.js");
+  const { sourceFrame } = await import("./views/issues.js");
   // @ts-ignore chart.js is plain JS, shared with the page
   const { option } = await import("./views/lib/chart.js");
-  const now = new Date("2026-11-04T12:00:00Z");
-  const tests = Object.fromEntries(["aleph", "sidetone", "voiceover"].map((p) => [p, [{ at: "2026-11-04T10:00:00Z", ran: 100, rerunPassed: 1 }]]));
+  const filed = { ats: [Date.parse("2026-11-04T10:00:00Z")], counts: Object.fromEntries(["chris", "worker", "deps", "memory", "agent"].map((k) => [k, [1]])) };
   const roles = ["Worker", "Judge", "Planner", "Reviewer", "Intake"];
   const live = {
     measure: { name: "Agents Live", unit: "count", agg: "max" }, over: { kind: "time", window: "week" }, by: { name: "Role", keys: roles.map((n) => ({ key: n, name: n })) },
@@ -358,7 +357,7 @@ test("the legend of the Tests and the Live chart ends above the grid at 390 and 
     measure: { name: "Cost", unit: "usd", agg: "sum" }, over: { kind: "time", window: "week" }, by: { name: "Model", keys: models.map((n) => ({ key: n, name: n })) },
     rows: [{ at: Date.parse("2026-11-04T10:00:00Z"), ...Object.fromEntries(models.map((n, i) => [n, i + 1])) }],
   };
-  const charts = { tests: option(testsFrame(tests, "", "week", now), "lines", {}), live: option(live, "area", {}), cost: option(cost, "columns", {}) };
+  const charts = { sources: option(sourceFrame(filed, "week"), "columns", {}), live: option(live, "area", {}), cost: option(cost, "columns", {}) };
   for (const [name, chartOption] of Object.entries(charts)) for (const width of [390, 1440]) {
     const ec = echarts.init(null, chartTheme({ ink: "#000", rule: "#ccc", sans: "sans" }), { renderer: "svg", ssr: true, width, height: 240 });
     ec.setOption(chartOption);

@@ -60,15 +60,15 @@ const idea = (n: number | string) => readFileSync(join(store, String(n), "idea.m
 
 test("add writes ideas/<n>/idea.md, prints its shown key, and makes one commit on origin/main", async () => {
   const a = await aleph(["idea", "add", "Issue history", "--target", "aleph", "--sketch", "-"], "Keep each issue's history.\n");
-  expect(a).toMatchObject({ code: 0, out: "d-00001\n", err: "" });
+  expect(a).toMatchObject({ code: 0, out: "d1\n", err: "" });
   expect(idea(1)).toBe("---\ntitle: Issue history\nproject: project.1\nstatus: exploring\nbuilt: []\n---\n\nKeep each issue's history.\n\n## Log\n");
   expect(git(items, "status", "--porcelain", "--untracked-files=no")).toBe("");
   expect(git(base, "--git-dir", remote, "log", "--format=%s", "main")).toBe("add idea.1\nstart");
 });
 
 test("add numbers each idea from the counter, takes a title that repeats, and refuses a target outside the registry", async () => {
-  expect((await aleph(["idea", "add", "Issue history"])).out).toBe("d-00001\n");
-  expect((await aleph(["idea", "add", "Issue  History!"])).out).toBe("d-00002\n");
+  expect((await aleph(["idea", "add", "Issue history"])).out).toBe("d1\n");
+  expect((await aleph(["idea", "add", "Issue  History!"])).out).toBe("d2\n");
   expect((await aleph(["idea", "add", "Other", "--target", "nope"])).code).toBe(1);
   expect(existsSync(join(store, "3"))).toBe(false);
 });
@@ -106,12 +106,12 @@ test("list prints the exploring ideas with their project, and --status the built
   await aleph(["idea", "add", "Issue history", "--target", "aleph"]);
   await aleph(["idea", "add", "A new tool"]);
   await aleph(["idea", "add", "Old idea"]);
-  expect((await aleph(["idea", "built", "1", "issue.1", "a-00002"])).code).toBe(0);
-  expect((await aleph(["idea", "drop", "d-00003"])).code).toBe(0);
+  expect((await aleph(["idea", "built", "1", "issue.1", "a2"])).code).toBe(0);
+  expect((await aleph(["idea", "drop", "d3"])).code).toBe(0);
   const day = "2026-11-10 12:00";
-  expect((await aleph(["idea", "list"])).out).toBe(`d-00002  new project  -  ${day}\n`);
-  expect((await aleph(["idea", "list", "--status", "built"])).out).toBe(`d-00001  aleph  -  ${day}\n`);
-  expect((await aleph(["idea", "list", "--status", "dropped"])).out).toBe(`d-00003  new project  -  ${day}\n`);
+  expect((await aleph(["idea", "list"])).out).toBe(`d2  new project  -  ${day}\n`);
+  expect((await aleph(["idea", "list", "--status", "built"])).out).toBe(`d1  aleph  -  ${day}\n`);
+  expect((await aleph(["idea", "list", "--status", "dropped"])).out).toBe(`d3  new project  -  ${day}\n`);
   expect(idea(1)).toContain("status: built\nbuilt: [issue.1, issue.2]\n");
   expect(idea(3)).toContain("status: dropped\n");
 });
@@ -143,7 +143,7 @@ test("save copies a result under its lens and local time, logs it, keeps each da
   expect(git(items, "status", "--porcelain", "--untracked-files=no")).toBe("");
   expect(git(items, "log", "-1", "--format=%s")).toBe("save idea.1");
   expect((await aleph(["idea", "save", "1", "prior-art", join(base, "out.txt")])).code).toBe(1);
-  expect((await aleph(["idea", "list"])).out).toStartWith("d-00001  new project  prior-art  ");
+  expect((await aleph(["idea", "list"])).out).toStartWith("d1  new project  prior-art  ");
   expect((await aleph(["idea", "show", "1"])).out).toEndWith("## Lens results\n\n- prior-art 2026-11-09 08:05 prior-art-2026-11-09-0805.html\n- prior-art 2026-11-10 14:30 prior-art-2026-11-10-1430.md\n");
 });
 

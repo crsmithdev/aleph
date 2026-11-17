@@ -492,7 +492,7 @@ A fact list shows the keys and values of one item.
 
 A pair puts two cards side by side.
 
-**Use:** for two cards that a reader compares or reads together. **Not for:** three charts; use `.trio`. Metric cards go in `.tiles`.
+**Use:** for two cards that a reader compares or reads together. **Not for:** three or four charts; use `.trio` or `.quad`. Metric cards go in `.tiles`.
 
 | Helper | Reference |
 |---|---|
@@ -620,6 +620,7 @@ A table shows items that have the same columns.
 | 7 | Row action | One small button in the last column, `td.acts` | yes | right-aligned, one line |
 
 - Put the columns in this order: the row's fold button, id or name, title, state, priority, project, labels, numbers, then time.
+- Give the fold column no name: its header cell is empty. A row with no parts keeps an empty cell there, so the ids line up.
 - In an event log, put the time first. An event log is a table where each row is an event, read in time order.
 - Put each number at the right of the row. Align a number to the right.
 - Name the time column for the time it shows. Format it with `when()`.
@@ -700,6 +701,7 @@ A chart panel is a card that draws a chart from a frame (`ui/views/lib/chart.js`
 - A linked row is also a link in a list under the chart, for the keyboard. The list shows when a link has focus.
 - When the data did not rebuild, give `error` and `since`. The panel tells how old the data is.
 - Put two or three panels side by side in `.trio`, which has three columns. With two panels, give one the class `wide`: `panelOf(key, frame, "wide")`. Under 1100px, they stack.
+- Put four panels of equal width in one row in `.quad`. In `.quad`, each panel's form control sits under its title. Under 1100px, they stack.
 
 | Do | Don't |
 |---|---|
@@ -862,13 +864,13 @@ A feed row shows one event in a feed on one line. The newest event is first.
 |---|---|---|---|---|
 | 1 | Time | The time of the event, from `clock()`, else `when()` | | `--mono` `--fs-xs` tabular, `--muted`; 44px |
 | 2 | Chip | What happened, in lower case: `started`, `landed`, `closed`, `ended`, `filed` | | the tag of its tone |
-| 3 | Id | The issue, else the run's job, in its shown form (`a-01234`, `j-06802`), linked | | `--mono` tabular; one line |
+| 3 | Id | The issue, else the run's job, in its shown form (`a1234`, `j6802`), linked | | `--mono` tabular; one line |
 | 4 | Title | The issue's title; for a routine run, "N changes"; else what the sentence adds | yes | `--ink`, one line, cut with an ellipsis |
 | 5 | Count | `+N`, the lines in the row's fold | yes | `--fs-2xs` `--muted` on `--sunk`, `--r-tag` |
 | 6 | Fold | The older events of the row, one line each | yes | `--rule` guide line on the left; opens from the row |
 
 - One row per attempt of an issue: the first job of a job's `prev` chain. Its older events are in the fold, newest first: the time, a label (the run's kind, or the chip word) and a text (the job's link, its mark `✓` or `✗`, then its size, model, commit, time and cost).
-- A routine's run is one row, a job like any other: its Id is the run's job (`j-06802`), its title says "3 changes", and each change is a line in the fold with the issue's link. A run that ended and changed nothing has no row; one still running, or one that failed, has.
+- A routine's run is one row, a job like any other: its Id is the run's job (`j6802`), its title says "3 changes", and each change is a line in the fold with the issue's link. A run that ended and changed nothing has no row; one still running, or one that failed, has.
 - A status row has the time and the new status text only. It is drawn where the text changes after the page loaded, as the old text gives way to the new; the first render has none.
 - A chat is one row: the chip `chat`, the first 8 characters of its id, its latest prompt.
 - A routing event is a quiet system row: the size, the model and the cost in muted text. A routed start's choice is in the fold, not the head.
@@ -878,8 +880,8 @@ A feed row shows one event in a feed on one line. The newest event is first.
 
 | Do | Don't |
 |---|---|
-| `14:05 landed a-01700` | `2026-11-10T14:05:00Z Landed` |
-| `12:59 started j-06802 aleph` | a routine's run by its name and a count, `housekeeper#57` |
+| `14:05 landed a1700` | `2026-11-10T14:05:00Z Landed` |
+| `12:59 started j6802 aleph` | a routine's run by its name and a count, `housekeeper#57` |
 
 #### Findings list
 
@@ -1492,7 +1494,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 | Status entry | Its label and icon take the tone of the status sentence from `/api/status`: `alert` is `--error`, `warning` and `ask` are `--need`, `fine` is `--ink`, white on the dark theme |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
 | Browser | `::selection` is `--sel`; scrollbars are thin, `--rule` on transparent |
-| Grid | `.tiles` holds metric cards; `.pair` holds two cards side by side, stacked under two cards of width; `.trio` holds chart panels; `.browse` is a list with its detail beside it, one column under 1100px |
+| Grid | `.tiles` holds metric cards; `.pair` holds two cards side by side, stacked under two cards of width; `.trio` holds two or three chart panels; `.quad` holds four in one row; `.browse` is a list with its detail beside it, one column under 1100px |
 
 - **List page:** page head, metric cards, then cards.
 - **Detail page:** crumb, page head, status row, KPI strip, then detail panels.

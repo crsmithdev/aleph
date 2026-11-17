@@ -145,9 +145,9 @@ test("a hold writes its held event, and the log shows it with the file and the j
     expect(contentText(e)).toBe("file: ui/views/issues.js: job.1372");
     const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
     // An issue key names no repo, so the log shows its shown form and links nothing.
-    expect(h).toContain("<td>i-01420</td><td class=\"wide\" title=");
+    expect(h).toContain("<td>i1420</td><td class=\"wide\" title=");
     expect(h).toContain('<tr><td class="time lead">');
-    expect(h).toContain('title="file: ui/views/issues.js: job.1372">file: ui/views/issues.js: j-01372</td><td>held</td><td><span class="chip">gate</span></td>');
+    expect(h).toContain('title="file: ui/views/issues.js: job.1372">file: ui/views/issues.js: j1372</td><td>held</td><td><span class="chip">gate</span></td>');
   } finally { setHolds(was); }
 });
 

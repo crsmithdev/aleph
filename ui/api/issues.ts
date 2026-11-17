@@ -1,7 +1,7 @@
 /**
  * `GET /api/issues`, `GET /api/issues/:id` and `POST /api/issues`: the Issues and Issue views' data. `GET /api/issues` is
- * `{ issues, projects, tests }`: every issue row with the count and recorded cost of the jobs on it and its parts, its own alone in `own`, the
- * registry's keys and each project's suite history records. `:id` is an issue ID, short (`a1430`) or full. Every route
+ * `{ issues, projects }`: every issue row with the count and recorded cost of the jobs on it and its parts, its own alone in `own`,
+ * and `everParked` when an event ever parked it, and the registry's keys. `:id` is an issue ID, short (`a1430`) or full. Every route
  * takes `?project=<key>` and shows only that project. A read is the work store's origin/main; a write runs
  * `aleph issue <verb>` through ui/action.ts, so the CLI stays the one writer.
  */
@@ -24,12 +24,12 @@ import { attend } from "../asks.ts";
 import { githubBase, jobProjector, logOnce } from "../state.ts";
 import { card, row, stageOf, type Row } from "../issue.ts";
 import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
+import { objectsWith } from "../../lib/layout.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
 import { issueJob } from "../../jobs/lib/gates/factory-status.ts";
 import { decider } from "../../jobs/lib/gates/decider.ts";
 import { readHolds } from "../../jobs/lib/gates/holds.ts";
-import { suiteHistory } from "../../jobs/lib/gates/tables.ts";
 import { projectOf, repoIn } from "./scope.ts";
 import { errText } from "../../lib/errtext.ts";
 
@@ -69,7 +69,8 @@ function list(url: URL): Response {
   const kids = Map.groupBy(rows.filter((r) => r.parent !== null), (r) => `${r.repo}-${r.parent}`);
   const totals = (r: Row) => [own(r), ...(kids.get(key(r)) ?? []).map(own)].reduce((a, t) => ({ runs: a.runs + t.runs, cost: a.cost + t.cost }));
   const projects = repos.map((r) => r.key);
-  return Response.json({ issues: rows.map((r) => ({ ...r, ...totals(r), own: own(r) })), projects, tests: Object.fromEntries(projects.map((k) => [k, suiteHistory(k)])) });
+  const parked = objectsWith("parked");
+  return Response.json({ issues: rows.map((r) => ({ ...r, ...totals(r), own: own(r), everParked: parked.has(issueKey(r.ref)) })), projects });
 }
 
 /** A job as the Issue page lists it: the job ID of its run that counts, its name, state, times, cost and how many runs it holds. */

@@ -21,7 +21,7 @@ test("an event round-trips through event_rows with the fields of the jobs it nam
   const e = logEvent({ subject: "job.2", action: "returned", object: "job.1", detail: "a check failed" });
   const [row] = readEvents(0).filter((r) => r.seq === eventsAfter(0).at(-1)!.seq);
   expect(row).toMatchObject({ time: e.time, subject: "job.2", action: "returned", object: "job.1", detail: "a check failed", subject_role: "review", object_role: "build", object_target: "issue.9", project: "project.1", model: "sonnet", size: "medium", cost: 1.5, commit_sha: "abc1234" });
-  expect(sayText(row)).toBe("j-00001 returned by review: a check failed");
+  expect(sayText(row)).toBe("j1 returned by review: a check failed");
 });
 
 test("an event's own size reads back from event_rows, ahead of the size of a job it names", () => {

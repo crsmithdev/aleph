@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { setPaused } from "../jobs/lib/gates/pause.ts";
-import { appendSuiteHistory } from "../jobs/lib/gates/tables.ts";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -334,27 +333,16 @@ describe("views", () => {
     expect([parent.runs, parent.own.runs]).toEqual([2, 1]);
   });
 
-  test("the tests card charts the suite history of the selected project in the window", async () => {
-    const rec = (repo: string, at: string, ran: number, rerunPassed: number) => ({ repo, commit: "c", at, ran, passed: ran, failed: 0, skipped: 0, rerunPassed });
-    const now = new Date("2026-11-04T12:00:00Z"), recs = [rec("fac", "2026-11-04T10:00:00Z", 120, 2), rec("fac", "2026-10-01T10:00:00Z", 90, 1), rec("oth", "2026-11-04T11:00:00Z", 40, 0)];
-    for (const r of recs) appendSuiteHistory(r);
-    const d = await getJson("/api/issues");
-    expect(Object.keys(d.tests).sort()).toEqual(["fac", "oth"]);
-    expect(d.tests.fac.map((r: any) => r.ran)).toEqual([120, 90]);
-    expect(Object.keys((await getJson("/api/issues?project=oth")).tests)).toEqual(["oth"]);
-    const page = v.view.render(d, {}, new URLSearchParams());
-    expect(page).toContain('<aleph-chart key="issues/tests"');
-    const all = v.testsFrame(d.tests, "", "week", now);
-    expect(all.by.keys.map((k: any) => k.name)).toEqual(["fac tests", "fac passed on rerun", "oth tests", "oth passed on rerun"]);
-    // A run of one project is a gap in the other's line, not a drop to 0.
-    expect(all.rows.map((r: any) => [r.at, r["fac tests"], r["fac passed on rerun"], r["oth tests"]]))
-      .toEqual([[Date.parse("2026-11-04T10:00:00Z"), 120, 2, null], [Date.parse("2026-11-04T11:00:00Z"), null, null, 40]]);
-    const fac = v.testsFrame(d.tests, "fac", "month", now);
-    expect(fac.by.keys.map((k: any) => k.name)).toEqual(["fac tests", "fac passed on rerun"]);
-    expect(fac.rows.map((r: any) => r["fac tests"])).toEqual([120]);
-    expect(v.testsFrame(d.tests, "fac", "month", new Date("2026-10-02T00:00:00Z")).rows).toHaveLength(1);
-    // The frame counts tests, so its axis and tooltip read as whole numbers.
-    expect(option(all, "lines", {}).yAxis.axisLabel.formatter(120)).toBe("120");
+  test("the API marks an issue an event ever parked, and sends no suite history", async () => {
+    logEvent({ subject: "human", action: "parked", object: "issue.1" });
+    try {
+      const rows = await rowsAfterSeed();
+      expect(rows.some((r: any) => r.tests)).toBe(false);
+      const marked = rows.filter((r: any) => r.everParked);
+      expect(marked.length).toBeGreaterThan(0);
+      expect(marked.every((r: any) => r.ref === "1")).toBe(true);
+    } finally { conn().run("DELETE FROM events WHERE action = 'parked'"); }
+    expect((await getJson("/api/issues")).tests).toBeUndefined();
   });
 
   test("the view is Issues at #/issues; #/inventory and #/projects redirect, the detail routes do not", () => {
@@ -378,14 +366,15 @@ describe("views", () => {
     expect(h).not.toContain("<h2>Projects");
     expect(h).not.toContain("<h2>Specs");
     expect(h).toContain('class="tiles"');
-    for (const q of ["status=any", "tile=filed&status=any", "tile=age"]) {
+    for (const q of ["status=any", "tile=flow&status=any", "tile=parked"]) {
       const page = v.view.render(d, {}, new URLSearchParams(q));
-      for (const c of ["backlog", "close"]) expect(page).toContain(`<aleph-chart key="issues/${c}"`);
+      for (const c of ["flow", "source", "close", "levels"]) expect(page).toContain(`<aleph-chart key="issues/${c}"`);
       expect(page).not.toContain('key="issues/age"');
       expect(page).not.toContain("Open issues by age");
     }
-    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('key="issues/backlog"'));
-    expect(h.indexOf('key="issues/backlog"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
+    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('key="issues/flow"'));
+    expect(h.indexOf('key="issues/levels"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
+    expect(h).toContain('<div class="quad">');
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "priority", "project", "labels", "notes", "runs", "cost", "age", "updated"]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
@@ -400,7 +389,7 @@ describe("views", () => {
     const closed = rows.filter((r: string) => r.includes("plain task"));
     expect(closed).toHaveLength(1);
     expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(false);
-    expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>(<span class="idc">[^<]*<\/span>)?[^<]*<\/a><\/td><td class="wide"[^>]*>.*?<\/td><td class="time">/.test(r))).toBe(true);
+    expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide"[^>]*>.*?<\/td><td class="time">/.test(r))).toBe(true);
     expect(closed[0]).toContain(">done</span>");
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
@@ -482,6 +471,10 @@ describe("views", () => {
       expect(titles(html)).toEqual(["other", "lone child", "parent"]);
       expect(html.match(/data-fold="fac-1"[^>]*aria-expanded="false"/g)).toHaveLength(1);
       expect(html.match(/data-fold/g)).toHaveLength(1);
+      // The fold button has its own first column; a row with no parts keeps an empty one, so the ids line up.
+      expect(html).toMatch(/<tr class="rowlink"[^>]*><td><button class="fold" data-fold="fac-1"/);
+      expect(html).toMatch(/<tr class="rowlink"[^>]*><td><\/td><td><a class="idl"/);
+      expect(html).toMatch(/<thead><tr><th><\/th>/);
       expect(titles(v.renderTable(rows(), { status: "open", q: "child" })).map((t) => t.replace(/<\/?mark>/g, ""))).toContain("child");
       expect(v.renderTable(rows(), { status: "open", q: "child" })).not.toContain("sub-row");
     });
@@ -494,15 +487,15 @@ describe("views", () => {
       expect(titles(v.renderTable(rows(), { status: "open", sort: { key: "id", dir: 1 } }))).toEqual(["parent", "old part", "child", "other", "lone child"]);
     });
 
-    test("the controls hold a Group sub-issues checkbox that follows the kept state", () => {
+    test("the controls hold a Group checkbox that follows the kept state", () => {
       store(true);
-      expect(v.renderFilters(rows(), {})).toMatch(/<input type="checkbox" name="group" checked> Group sub-issues/);
+      expect(v.renderFilters(rows(), {})).toMatch(/<input type="checkbox" name="group" checked> Group<\/label>/);
       store(false);
-      expect(v.renderFilters(rows(), {})).toMatch(/<input type="checkbox" name="group"> Group sub-issues/);
+      expect(v.renderFilters(rows(), {})).toMatch(/<input type="checkbox" name="group"> Group<\/label>/);
     });
   });
 
-  test("the numbers: open, filed and closed in 7 days, the week before, age and runs; a part's run counts once, by its own total", () => {
+  test("the numbers: open, parked, filed and closed in 7 days, the week before, and the time to close", () => {
     const now = new Date("2026-11-01T12:00");
     const rows = v.issueRows({ issues: [
       { id: 1, ref: "1", repo: "f", title: "a", status: "open", stage: "new", labels: [], createdTime: iso("2026-11-01"), runs: 2, cost: 1, own: { runs: 0, cost: 0 } },
@@ -510,20 +503,19 @@ describe("views", () => {
       { id: 2, ref: "2", repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-21"), closedTime: iso("2026-10-30T12:00"), runs: 3, cost: 0.5, own: { runs: 3, cost: 0.5 } },
       { id: 3, ref: "3", repo: "f", title: "c", status: "dropped", labels: [], createdTime: iso("2026-10-26"), closedTime: iso("2026-10-25"), runs: 0, cost: 0 },
     ] });
-    expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, working: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 0, oldest: 12, runs: 5, cost: 1.5 });
+    // Row 2 took 9.5 days; row 3 closed before it was created, so it gives no time.
+    expect(v.stats(rows, now)).toEqual({ open: 2, parked: 0, filed: 2, filedBefore: 2, closed: 1, closedBefore: 1, p50: 820800, p90: 820800, p50Before: null });
+    expect(v.stats(rows.map((r: any) => ({ ...r, everParked: r.id === "f-2" })), now)).toMatchObject({ closed: 1, p50: null });
     const f = v.flow(rows, "month", now);
     expect(f.ats).toHaveLength(30);
     expect(day(f.ats.at(-1), now)).toBe("Nov 01");
     expect(f.filed.at(-1)).toBe(1);
     expect(f.closed.at(-3)).toBe(1);
-    const b = v.backlog(rows, "month", now);
+    const b = v.levels(rows, "month", now);
     expect(b.ats).toHaveLength(30);
     // Row 1 is open from Nov 01; the part from Oct 20; row 2 from Oct 21 to Oct 30; row 3 closed before it was created.
-    expect(b.counts.medium.at(-1)).toBe(2);
-    expect(b.counts.medium.at(-3)).toBe(2);
-    expect(b.counts.medium.at(-2)).toBe(1);
-    expect(b.counts.medium[0]).toBe(0);
-    expect(b.counts.high.at(-1)).toBe(0);
+    expect([b.backlog.at(-1), b.backlog.at(-2), b.backlog.at(-3), b.backlog[0]]).toEqual([2, 1, 2, 0]);
+    expect([b.total.at(-1), b.total[0]]).toEqual([4, 0]);
     const c = v.closeTimes([
       ...[1, 2, 3, 4, 5].map((n) => ({ status: "done", kind: "bug", createdTime: iso("2026-10-01"), closedTime: iso(`2026-10-0${n + 1}`) })),
       { status: "done", kind: "task", createdTime: iso("2026-10-01"), closedTime: iso("2026-10-05") },
@@ -534,19 +526,19 @@ describe("views", () => {
     expect(c.p90[1]).toBe(5);
     expect(v.flow(rows, "week", now).ats).toHaveLength(7);
     expect(day(v.flow(rows, "week", now).ats.at(-1), now)).toBe("Nov 01");
-    // The frame carries every bucket: the four priorities, then the filed and closed counts of the same buckets.
-    const fr = v.backlogFrame(b, f, "month");
+    // Each frame carries every bucket of one measure: filed and closed are a flow, the backlog and the total a level.
+    const fr = v.flowFrame(f, "month");
     expect(fr.over).toEqual({ kind: "time", window: "month" });
-    expect(fr.by.keys.map((k: any) => k.name)).toEqual(["low", "medium", "high", "critical", "filed", "closed"]);
-    expect(fr.rows.map((r: any) => [r.at, r.medium, r.filed, r.closed])).toEqual(b.ats.map((at: number, i: number) => [at, b.counts.medium[i], f.filed[i], f.closed[i]]));
-    // The option draws the keys with a value: the priorities with none are left out.
-    const o = option(fr, "area", {});
-    expect(o.series.map((s: any) => s.name)).toEqual(["medium", "filed", "closed"]);
+    expect(fr.by.keys.map((k: any) => k.name)).toEqual(["filed", "closed"]);
+    expect(fr.rows.map((r: any) => [r.at, r.filed, r.closed])).toEqual(f.ats.map((at: number, i: number) => [at, f.filed[i], f.closed[i]]));
+    expect(v.levelFrame(b, "month").rows.at(-1)).toMatchObject({ backlog: 2, total: 4 });
+    const o = option(fr, "lines", {});
+    expect(o.series.map((s: any) => s.name)).toEqual(["filed", "closed"]);
     expect([o.yAxis.minInterval, o.yAxis.axisLabel.formatter(3)]).toEqual([1, "3"]);
-    expect(v.renderTiles(v.stats(rows, now))).toContain('<b>1<em> / 0</em></b><span class="q"><span>closed</span><span class="m"> / dropped</span></span>');
+    expect(v.renderTiles(v.stats(rows, now))).toContain('<b>2<em> / 1</em></b><span class="q"><span>filed</span><span class="m"> / closed</span></span>');
   });
 
-  test("the window sets the Open backlog buckets, the Time to close rows and the backlog card title", async () => {
+  test("the window sets the backlog buckets, the Time to close rows and the chart titles", async () => {
     const now = new Date("2026-11-04T16:00");
     const rows = v.issueRows({ issues: [
       { id: 1, ref: "1", repo: "f", title: "a", status: "open", labels: [], createdTime: iso("2026-11-04T15:30") },
@@ -554,16 +546,16 @@ describe("views", () => {
       { id: 3, ref: "3", repo: "f", title: "c", status: "done", kind: "bug", labels: [], createdTime: iso("2026-11-01"), closedTime: iso("2026-11-02") },
     ] });
     const one = rows.filter((r: any) => r.id === "f-1");
-    const hour = v.backlog(one, "hour", now), dayB = v.backlog(one, "day", now);
+    const hour = v.levels(one, "hour", now), dayB = v.levels(one, "day", now);
     expect(hour.ats).toHaveLength(60);
     expect(dayB.ats).toHaveLength(24);
     for (const b of [hour, dayB]) {
-      const i = b.counts.medium.findIndex((n: number) => n > 0);
-      expect(b.counts.medium.slice(i).every((n: number) => n === 1)).toBe(true);
+      const i = b.backlog.findIndex((n: number) => n > 0);
+      expect(b.backlog.slice(i).every((n: number) => n === 1)).toBe(true);
     }
-    expect(hour.counts.medium.indexOf(1)).toBe(29);
-    expect(dayB.counts.medium.indexOf(1)).toBe(23);
-    const w = v.backlog(rows, "week", now), m = v.backlog(rows, "month", now);
+    expect(hour.backlog.indexOf(1)).toBe(29);
+    expect(dayB.backlog.indexOf(1)).toBe(23);
+    const w = v.levels(rows, "week", now), m = v.levels(rows, "month", now);
     expect(w.ats).toHaveLength(7);
     expect(day(w.ats.at(-1), now)).toBe("Nov 04");
     expect(m.ats).toHaveLength(30);
@@ -572,25 +564,23 @@ describe("views", () => {
     expect(v.closeTimes(rows, "month", now).p50[1]).toBe(1);
     const d = await getJson("/api/issues");
     const page = v.view.render(d, {}, new URLSearchParams("window=week"));
-    expect(page).toContain("<h2>Open Backlog, Filed and Closed</h2>");
+    for (const t of ["Issues Filed and Closed", "Issues Filed by Source", "Time to Close by Kind", "Backlog and Total"]) expect(page).toContain(`<h2>${t}</h2>`);
     expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><div class="aside">/);
-    expect(page).toContain("<h2>Time to Close</h2>");
     // Each panel's title, aria label and empty line come from its frame.
-    expect(label(v.backlogFrame(w, v.flow(rows, "week", now), "week"))).toBe("Open Backlog, Filed and Closed: medium peak 1, filed peak 1, closed peak 1");
-    expect(page).toContain('aria-label="Open Backlog, Filed and Closed"');
-    expect(page).toContain('aria-label="Time to Close"');
-    for (const k of ["backlog", "close", "tests"]) expect(page).toMatch(new RegExp(`<aleph-chart key="issues/${k}"[^>]*><section class="card" aria-label="[^"]+">`));
-    expect(page).toMatch(/<div class="chartbox" role="img" aria-label="Open Backlog, Filed and Closed: [^"]+">/);
+    expect(label(v.flowFrame(v.flow(rows, "week", now), "week"))).toBe("Issues Filed and Closed: filed 2, closed 1");
+    expect(page).toContain('aria-label="Issues Filed and Closed"');
+    expect(page).toContain('aria-label="Time to Close by Kind"');
+    for (const k of ["flow", "source", "close", "levels"]) expect(page).toMatch(new RegExp(`<aleph-chart key="issues/${k}"[^>]*><section class="card" aria-label="[^"]+">`));
+    expect(page).toMatch(/<div class="chartbox" role="img" aria-label="Issues Filed and Closed: [^"]+">/);
     expect(page).not.toContain("30 days");
   });
 
   test("a chart panel with nothing to plot shows the frame's empty line and no chart box", () => {
-    const page = v.renderIssues({ issues: [], tests: { f: [{ at: "2020-01-01T00:00:00Z", ran: 5, rerunPassed: 0 }] } }, { window: "week" });
-    expect(page).toContain("<h2>Tests</h2>");
-    for (const k of ["backlog", "close", "tests"]) expect(page).toContain(`<aleph-chart key="issues/${k}"`);
+    const page = v.renderIssues({ issues: [] }, { window: "week" });
+    for (const k of ["flow", "source", "close", "levels"]) expect(page).toContain(`<aleph-chart key="issues/${k}"`);
     expect(page).not.toContain("chartbox");
-    expect(page.match(/class="empty"/g)!.length).toBeGreaterThanOrEqual(3);
-    expect(page.match(/<p>No data<\/p>/g)!.length).toBeGreaterThanOrEqual(3);
+    expect(page.match(/class="empty"/g)!.length).toBeGreaterThanOrEqual(4);
+    expect(page.match(/<p>No data<\/p>/g)!.length).toBeGreaterThanOrEqual(4);
   });
 
   test("Time to close counts from the stored times and shows hours when every value is under 2 days", () => {
@@ -620,33 +610,30 @@ describe("views", () => {
     expect(v.stats(rows, now, "week")).toMatchObject({ filed: 2, closed: 2 });
     // The table under a Filed or Closed tile follows the window too; the test's clock is NOW, 2026-11-04.
     const recent = v.issueRows({ issues: ["2026-11-04", "2026-11-01"].map((d, i) => ({ id: i, repo: "f", title: "t", status: "done", labels: [], createdTime: iso(d), closedTime: iso(d), runs: 0, cost: 0 })) });
-    for (const tile of ["filed", "closed"]) {
-      expect(v.filterRows(recent, { tile, window: "hour" })).toHaveLength(0);
-      expect(v.filterRows(recent, { tile, window: "day" })).toHaveLength(1);
-      expect(v.filterRows(recent, { tile, window: "week" })).toHaveLength(2);
-    }
+    expect(v.filterRows(recent, { tile: "flow", window: "hour" })).toHaveLength(0);
+    expect(v.filterRows(recent, { tile: "flow", window: "day" })).toHaveLength(1);
+    expect(v.filterRows(recent, { tile: "flow", window: "week" })).toHaveLength(2);
   });
 
-  test("the tiles name Filed, Closed and Open Age, show a dash for a missing value, and tone a change", () => {
+  test("the tiles name Open, Backlog, Filed / Closed, Time to Close and Close Rate, show a dash for a missing value, and tone a change", () => {
     const rows = twoDone();
     const html = v.renderTiles(v.stats(rows, now, "day"), "open", "day");
-    for (const k of ["Filed", "Closed", "Open Age"]) expect(html).toContain(`>${k}<`);
-    for (const k of ["Filed, last", "Closed, last", "Median open age"]) expect(html).not.toContain(k);
-    expect(html).toContain("<span>open</span><span class=\"m\"> / in store</span>");
-    expect(html).not.toContain("7 days");
-    const bare = v.renderTiles({ ...v.stats(rows, now, "day"), medianAge: null, oldest: null, runs: undefined, cost: undefined } as any, "open", "day");
+    for (const k of ["Open", "Backlog", "Filed / Closed", "Time to Close", "Close Rate"]) expect(html).toContain(`>${k}<`);
+    for (const k of ["Open Age", "Jobs", "in store"]) expect(html).not.toContain(k);
+    expect(html).toContain('<span>filed</span><span class="m"> / closed</span>');
+    const bare = v.renderTiles({ open: 0, parked: 0, filed: 0, closed: 0, filedBefore: 0, closedBefore: 0, p50: null, p90: null, p50Before: null }, "open", "day");
     expect(bare).not.toMatch(/undefined|NaN/);
-    expect(bare).toContain("<b>–</b>");
-    const up = v.renderTiles({ ...v.stats(rows, now, "day"), filed: 3, filedBefore: 1, closed: 3, closedBefore: 1, medianAge: 2, oldest: 5 }, "open", "day");
-    expect(up).toContain("<span>open age</span><span class=\"m\"> / oldest</span>");
-    expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Closed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bgood\b/);
-    expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Filed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bwarn\b/);
+    expect(bare.match(/<b>–<\/b>/g)).toHaveLength(2);
+    const up = v.renderTiles({ open: 1, parked: 0, filed: 4, closed: 4, filedBefore: 4, closedBefore: 2, p50: 60, p90: 120, p50Before: 120 }, "open", "day");
+    expect(up).toMatch(/Time to Close<\/span><span class="tr good"/);
+    expect(up).toMatch(/Close Rate<\/span><span class="tr good"/);
   });
 
   test("the Open tile is a Status card", () => {
     const html = v.renderTiles(v.stats(twoDone(), now, "day"), "open", "day");
     const open = html.match(/<button[^>]*class="tile sc"[\s\S]*?<\/button>/)![0];
-    expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(3);
+    // The key row and the value: the Open card has no second value, so no qualifier.
+    expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(2);
   });
 
   test("the flow chart counts each issue in the bucket of its minute or hour", () => {
@@ -703,18 +690,16 @@ describe("views", () => {
     expect(t).toEqual([...t].sort((x, y) => y - x));
   });
 
-  test("the Open and Open Age tiles set a filter that leaves only open rows", async () => {
-    const rows = v.issueRows(await getJson("/api/issues"));
-    for (const tile of ["open", "age"]) {
-      const kept = v.filterRows(rows, v.TILE_FILTER[tile]);
-      expect(kept.length).toBeGreaterThan(0);
-      expect(kept.every((r: any) => r.status === "open")).toBe(true);
-    }
+  test("the Open tile leaves only open rows, and the Backlog tile only parked rows", async () => {
+    const kept = v.filterRows(v.issueRows(await getJson("/api/issues")), v.TILE_FILTER.open);
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.every((r: any) => r.status === "open")).toBe(true);
+    expect(v.TILE_FILTER.parked.status).toBe("parked");
   });
 
   test("the header sorts: a query key and direction order the rows", async () => {
     const d = await getJson("/api/issues");
-    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">(?:<span class="idc">[^<]*<\/span>)?([^<]+)</g)].map((m) => m[1].replace(/^\D+/, ""));
+    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">([^<]+)</g)].map((m) => m[1].replace(/^\D+/, ""));
     expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
     expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
@@ -922,7 +907,7 @@ describe("a parked issue", () => {
     expect(only).not.toContain(">o<");
     expect(only).toContain('<span class="badge parked">parked</span>');
     expect(v.renderTable(all, { status: "open" })).not.toContain("shelved thing");
-    expect(v.stats(all, new Date("2026-11-02T12:00"))).toMatchObject({ total: 3, open: 1, closed: 1 });
+    expect(v.stats(all, new Date("2026-11-02T12:00"))).toMatchObject({ open: 1, parked: 1, closed: 1 });
   });
 });
 
@@ -1094,11 +1079,11 @@ describe("the Updated time", () => {
 test("the Issues row, the issue's id and its Work head show the short id, and the links keep the full id", () => {
   setCodes({ fac: "f" });
   try {
-    expect(v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [] })).toContain('<a class="idl" href="#/issues/fac/1"><span class="idc">f</span>1</a>');
+    expect(v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [] })).toContain('<a class="idl" href="#/issues/fac/1">f1</a>');
     setCodes({ fac: "f", lb: "lb" });
     const row = (repo: string) => v.renderRow({ repo, n: 12, id: `${repo}-12`, href: `#/issues/${repo}/12`, title: "t", stage: "new", project: repo, priority: "medium", labels: [] });
-    expect(row("fac")).toContain('data-annotate="f12"><td><a class="idl" href="#/issues/fac/12"><span class="idc">f</span>12</a></td>');
-    expect(row("lb")).toContain('data-annotate="lb12"><td><a class="idl" href="#/issues/lb/12"><span class="idc">lb</span>12</a></td>');
+    expect(row("fac")).toContain('data-annotate="f12"><td><a class="idl" href="#/issues/fac/12">f12</a></td>');
+    expect(row("lb")).toContain('data-annotate="lb12"><td><a class="idl" href="#/issues/lb/12">lb12</a></td>');
     const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { runs: [] } };
     expect(v.renderIssue(d)).toContain('<span class="idp">f1</span></div>');
     expect(v.issueSegments(d)[0].rows[0].head).toContain('<span class="idp">f1</span>');
@@ -1148,9 +1133,8 @@ describe("the labels say sub-issue and job", () => {
 
   test("the Issues page heads its job count Jobs, and no label keeps the old words", async () => {
     const rows = await rowsOf("fac");
-    const h = v.renderIssues({ issues: rows, projects: ["fac"] }, { tile: "runs" });
+    const h = v.renderIssues({ issues: rows, projects: ["fac"] }, {});
     expect(h).toContain('<button type="button" data-sort="runs">Jobs');
-    expect(h).toContain("<h2>Issues by Jobs</h2>");
     expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
   });
 

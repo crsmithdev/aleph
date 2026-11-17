@@ -132,7 +132,7 @@ export interface Run {
 /** `tests`: globs of the test files that `run` takes as arguments, so a land can run only the related ones. */
 export interface Check { name: string; run: string; when?: string[]; tests?: string[] }
 export interface Repo {
-  /** The name of its project, the registry key (`aleph`). `n` is the number in `projects/<n>/`, so the project's key is `project.<n>`. `code` is the short code shown in its IDs (`a` in `a-01430`), docs/naming.md. */
+  /** The name of its project, the registry key (`aleph`). `n` is the number in `projects/<n>/`, so the project's key is `project.<n>`. `code` is the short code shown in its IDs (`a` in `a1430`), docs/naming.md. */
   key: string; n: number; code?: string; description?: string; path: string; env?: string; main: string;
   setup: string[]; checks: Check[]; manual: { when: string[]; say: string }[]; note?: string;
   /** A passed agent run lands by itself. On unless the registry says false. */

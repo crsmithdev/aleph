@@ -28,12 +28,12 @@ A stored thing has one key, `<kind>.<n>`, with one counter per kind. A key never
 
 | Kind | Key | Shown as |
 |---|---|---|
-| Project | `project.3` | `p-00003` |
-| Issue | `issue.2072` | `i-02072`, or `a-02072` with the project code `a` |
-| Idea | `idea.7` | `d-00007` |
-| Job | `job.6802` | `j-06802` |
+| Project | `project.3` | `p3` |
+| Issue | `issue.2072` | `i2072`, or `a2072` with the project code `a` |
+| Idea | `idea.7` | `d7` |
+| Job | `job.6802` | `j6802` |
 
-- The shown form pads the number to 5 digits and is for display only. A stored key is never padded. The parser reads a shown form and a number with leading zeros, so a copied `j-06802` resolves.
+- The shown form is the letter or code, then the number, with no dash and no padding. It is for display only. The parser also reads the old form with a dash and leading zeros, so a copied `j-06802` resolves.
 - The kind letters of the shown form are lower case, `p`, `i`, `d` and `j`. A project code is lower case too, so no project takes the code `p`, `d` or `j`. A shown key is never stored.
 - A commit trailer is `Issue: issue.<n>` or `Job: job.<n>`.
 - A sub-issue is an issue with a `from` link. The parent stays open and closes when its children close.

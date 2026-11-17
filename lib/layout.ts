@@ -48,6 +48,11 @@ export const eventsAfter = (seq: number): EventRow[] => conn().query("SELECT * F
 /** The `seq` of the last event; 0 when there is none. */
 export const lastSeq = (): number => (conn().query("SELECT coalesce(max(seq), 0) AS n FROM events").get() as { n: number }).n;
 
+/** Each object that has an event with `action`, such as every issue key that was ever parked. */
+export function objectsWith(action: string): Set<string> {
+  touch("events");
+  return new Set((conn().query("SELECT DISTINCT object FROM events WHERE action = ?").all(action) as { object: string }[]).map((r) => r.object));
+}
 /** The events whose object is `object`, oldest first; with `actions`, only those actions. */
 export const eventsOf = (object: string, ...actions: string[]): Event[] =>
   conn().query(`SELECT seq, time, subject, action, object, detail FROM events WHERE object = ?${actions.length ? ` AND action IN (${actions.map(() => "?").join(", ")})` : ""} ORDER BY seq`).all(object, ...actions) as Event[];
