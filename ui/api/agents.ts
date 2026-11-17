@@ -9,6 +9,7 @@ import { listSessions, windowTraces } from "./sessions.ts";
 import { listSkills } from "./skills.ts";
 import { scopeOf } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
+import { errText } from "../../lib/errtext.ts";
 
 /** The value of `part`, or `{ error }` when it throws, so the other parts still show. */
 const partOf = (part: Promise<any>) => part.catch((e: Error) => ({ error: e.message }));
@@ -33,7 +34,7 @@ async function load(req: Request, url: URL): Promise<Response> {
       partOf(listSessions(innerReq)),
     ]);
     const { toolTraces = {}, ...rest } = act;
-    const links = sessions.error ? {} : await toolSessions(toolTraces, days, project).catch(() => ({}));
+    const links = sessions.error ? {} : await toolSessions(toolTraces, days, project).catch((e) => { console.error(`ui/agents: no tool sessions: ${errText(e)}`); return {}; });
     // Langfuse held more pages than a read takes: the counts or the list cover part of the window.
     const partial = !!rest.partial || !!sessions.partial;
     return Response.json({ window: days, project, partial, activity: rest, skills, sessions, toolSessions: links });

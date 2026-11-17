@@ -17,6 +17,9 @@ import { cardTrend } from "../ui/views/lib/html.js";
 import { cardHours, cardPct, pace } from "../ui/views/lib/flow-parts.js";
 import { errText } from "../lib/errtext.ts";
 
+type State = Awaited<ReturnType<typeof stateBody>>;
+type Flow = ReturnType<typeof speed> & { figures: ReturnType<typeof figures>; baseline: ReturnType<typeof baseline> };
+
 const REFRESH_MS = 10_000;
 /** The colour of each tone of the status sentence: red, yellow or green. */
 const TONES: Record<string, number> = { alert: 31, ask: 33, warning: 33, fine: 32 };
@@ -26,9 +29,9 @@ const paint = (code: number, t: string) => `\x1b[${code}m${t}\x1b[0m`;
 const trend = (html: string) => html.replace(/<[^>]*>/g, "");
 
 /** The scorecard of the page: each card's name, value, trend and what the value counts. */
-function scorecard(s: any, d: any) {
+function scorecard(s: State, d: Flow) {
   const f = d.figures, base = d.baseline?.base, prev = d.baseline?.prev, basis = d.baseline?.basis ?? "";
-  const t = (key: string, o: object) => trend(base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
+  const t = (key: keyof Flow["figures"], o: object) => trend(base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
   const p = pace(s);
   return [
     { name: "Lost time", value: `${cardPct(f.lost)} / ${cardHours(f.hours)}`, trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), note: "lost / hours" },
@@ -40,18 +43,18 @@ function scorecard(s: any, d: any) {
 }
 
 /** Agent Time: the hours of each outcome class, and the kept and total hours. */
-function agentTime(d: any) {
-  const classes = (d.classes ?? []).filter((c: any) => c.hours > 0).map((c: any) => ({ key: c.key, lost: c.lost, hours: c.hours }));
-  const sum = (cs: any[]) => cs.reduce((a, c) => a + c.hours, 0);
-  return { classes, kept: sum(classes.filter((c: any) => !c.lost)), all: sum(classes) };
+function agentTime(d: Flow) {
+  const classes = (d.classes ?? []).filter((c) => c.hours > 0).map((c) => ({ key: c.key, lost: c.lost, hours: c.hours }));
+  const sum = (cs: { hours: number }[]) => cs.reduce((a, c) => a + c.hours, 0);
+  return { classes, kept: sum(classes.filter((c) => !c.lost)), all: sum(classes) };
 }
 
 /** The health of a stage by its failed share, as on the page: under 10% fine, to 25% warning, above that alert. */
 const health = (share: number) => (share < 0.1 ? "fine" : share <= 0.25 ? "warning" : "alert");
 
 /** The Pipeline: each stage's runs per issue, p90 time and failed share, with its health. */
-function pipeline(d: any) {
-  const by = new Map<string, any>((d.stages?.rows ?? []).map((r: any) => [r.stage, r]));
+function pipeline(d: Flow) {
+  const by = new Map((d.stages?.rows ?? []).map((r) => [r.stage, r]));
   return ["intake", "queue", "build", "review", "recheck", "land"].map((k) => {
     const r = by.get(k), name = NAMES[k];
     if (k === "queue") return { name, text: d.phases?.queue?.count > 0 ? `wait · p90 ${dur(d.phases.queue.p90)}` : "–", tone: "quiet" };
@@ -64,22 +67,22 @@ function pipeline(d: any) {
 const at = (t: string) => clock(t) || when(t);
 
 /** The Herald's rows as the page draws them, from the server's rows (ui/herald.ts): the time, the chip's word, the ID, the text, and the fold's lines. */
-const heraldRows = (s: any) => (s.herald?.rows ?? []).map((r: Row) => ({ key: r.key, at: at(r.at), word: r.word, id: plain(r.id), title: plain(r.text),
+const heraldRows = (s: State) => (s.herald?.rows ?? []).map((r: Row) => ({ key: r.key, at: at(r.at), word: r.word, id: plain(r.id), title: plain(r.text),
   fold: r.lines.map((l) => ({ at: at(l.at), label: l.label, text: plain(l.text) })) }));
 
 /** The Status page as data for the Herdr desktop app's mod: the status sentence, the cards and the Herald. */
-export function data(s: any, d: any) {
+export function data(s: State, d: Flow) {
   return {
     status: verdict(s),
     scorecard: scorecard(s, d),
     agentTime: agentTime(d),
     pipeline: pipeline(d),
-    active: (d.active ?? []).map((b: any) => ({ at: b.at, intake: b.intake, queue: b.queue, running: b.running, landed: b.landed })),
-    asks: (s.asks ?? []).map((a: any) => ({ label: a.label, id: shownId(a.id, a.repo), title: shortText(a.headline || a.title) })),
-    stuck: (s.stuck ?? []).map((j: any) => ({ id: shownId(j.name), title: j.item?.title || j.name })),
+    active: (d.active ?? []).map((b) => ({ at: b.at, intake: b.intake, queue: b.queue, running: b.running, landed: b.landed })),
+    asks: (s.asks ?? []).map((a) => ({ label: a.label, id: shownId(a.id, a.repo), title: shortText(a.headline || a.title) })),
+    stuck: (s.stuck ?? []).map((j) => ({ id: shownId(j.name), title: j.item?.title || j.name })),
     running: [
-      ...(s.runningIssues ?? []).map((i: any) => ({ at: clock(i.at ?? i.since) || when(i.at ?? i.since), word: i.stage, id: shownId(i.id), title: i.title, size: "" })),
-      ...(s.running ?? []).map((j: any) => {
+      ...(s.runningIssues ?? []).map((i) => ({ at: clock(i.at ?? i.since) || when(i.at ?? i.since), word: i.stage, id: shownId(i.id), title: i.title, size: "" })),
+      ...(s.running ?? []).map((j) => {
         const run = j.run ?? { kind: "build", started: j.started };
         return { at: clock(run.started ?? j.started) || when(run.started ?? j.started), word: run.kind === "build" ? "implement" : run.kind, id: shownId(j.id ?? j.name), title: j.item?.title || j.name, size: run.kind === "build" ? j.size ?? "" : "" };
       }),
@@ -89,7 +92,7 @@ export function data(s: any, d: any) {
 }
 
 /** The Status page for the state `s` and the flow `d` (with its baseline) as lines of at most `width` columns, at most `height` of them. */
-export function render(s: any, d: any, { width, height }: { width: number; height: number }): string[] {
+export function render(s: State, d: Flow, { width, height }: { width: number; height: number }): string[] {
   const out: string[] = [], line = (t: string) => out.push(clip(t, width)), head = (t: string) => out.push(`\x1b[1m${clip(t, width)}\x1b[22m`);
   const v = verdict(s);
   out.push(paint(TONES[v.tone], clip(v.text, width)));
@@ -123,8 +126,8 @@ export function render(s: any, d: any, { width, height }: { width: number; heigh
 }
 
 /** The state and the week's flow, read as the routes do. */
-async function load() {
-  const now = new Date(), fit = await currentFit().catch(() => null), d = speed("week", now, fit);
+async function load(): Promise<[State, Flow]> {
+  const now = new Date(), fit = await currentFit(), d = speed("week", now, fit);
   return [await stateBody(null), { ...d, figures: figures(d), baseline: baseline("week", now, fit) }];
 }
 
@@ -137,7 +140,7 @@ if (import.meta.main && process.argv.includes("--json")) {
 
 if (import.meta.main) {
   const { stdin, stdout } = process;
-  let data: any[] | null = null, failed = "";
+  let data: [State, Flow] | null = null, failed = "";
   const draw = () => {
     const size = { width: stdout.columns || 40, height: stdout.rows || 30 };
     const lines = failed ? [clip(failed, size.width)] : data ? render(data[0], data[1], size) : [];

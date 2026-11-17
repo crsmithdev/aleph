@@ -36,6 +36,12 @@ test("systemctl failing gives its first line as err", () => {
   expect(withSystemctl("echo 'Failed to connect to bus'; exit 1")).toEqual({ next: null, running: false, err: "Failed to connect to bus" });
 });
 
+test("list-timers output that is not JSON gives the parse error as err", () => {
+  const r = withSystemctl(`${list("not json")}\nexit 1`);
+  expect(r).toMatchObject({ next: null, running: false });
+  expect(r.err).toStartWith("list-timers: ");
+});
+
 test("setTimerInterval writes the drop-in with the unit file's boot triggers, then reloads and restarts the timer", () => {
   const bin = join(dir, "systemctl-set"), units = join(dir, "units"), calls = join(dir, "calls");
   writeFileSync(bin, `#!/bin/sh\necho "$@" >> ${calls}\n`, { mode: 0o755 });

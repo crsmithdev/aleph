@@ -3,6 +3,7 @@
  * `FOLLOWUP:` line, a lesson, a landing's manual check) is cut to a title mechanically, with no model call.
  * `writeLine` is the one-shot call that the rule writer makes.
  */
+import { errText } from "../../../lib/errtext.ts";
 import { ruleCmd } from "../infra/settings.ts";
 import { oneShot } from "./one-shot.ts";
 
@@ -12,14 +13,14 @@ const BOX = 30_000;
 
 /**
  * One line of text from a nested Haiku `claude -p` given a system prompt and an input.
- * "" when it fails or finds nothing.
+ * "" when it finds nothing; `{ err }` with the cause when the call fails.
  */
-export async function writeLine(system: string, input: string, max: number): Promise<string> {
+export async function writeLine(system: string, input: string, max: number): Promise<string | { err: string }> {
   try {
-    const { code, result } = await oneShot("title", ruleCmd(), system, input, BOX);
-    return code !== 0 ? "" : result.trim().split("\n")[0].trim().slice(0, max);
-  } catch {
-    return "";
+    const { code, stderr, result } = await oneShot("title", ruleCmd(), system, input, BOX);
+    return code !== 0 ? { err: stderr.trim().split("\n")[0] || `exit ${code}` } : result.trim().split("\n")[0].trim().slice(0, max);
+  } catch (e) {
+    return { err: errText(e) };
   }
 }
 

@@ -290,7 +290,8 @@ export async function tell(line: string): Promise<boolean> {
       tls: loopback ? { rejectUnauthorized: false } : undefined,
     } as RequestInit);
     return res.ok;
-  } catch {
+  } catch (e) {
+    console.error(`warn: tell failed: ${(e as Error).message}`);
     return false;
   }
 }

@@ -28,8 +28,8 @@ function inProgress(service: string): boolean {
 export function timer(unit: string): { next: number | null; running: boolean; err: string | null } {
   const r = systemctl("list-timers", "--all", "--output=json", unit);
   if (!r.ok) return { next: null, running: false, err: r.out.split("\n")[0] || "systemctl failed" };
-  let rows: { unit: string; next?: number | null }[] = [];
-  try { rows = JSON.parse(r.out); } catch {}
+  let rows: { unit: string; next?: number | null }[];
+  try { rows = JSON.parse(r.out); } catch (e) { return { next: null, running: false, err: `list-timers: ${(e as Error).message}` }; }
   const next = rows.find((x) => x.unit === unit)?.next;
   if (next) return { next: next / 1000, running: false, err: null };
   return { next: null, running: inProgress(unit.replace(/\.timer$/, ".service")), err: null };

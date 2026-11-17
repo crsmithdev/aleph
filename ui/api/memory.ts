@@ -22,6 +22,7 @@ import { trackedFiles } from "../../vault/lib/git.ts";
 import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
+import { errText } from "../../lib/errtext.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "jobs", "cli.ts");
 const scopeOf = (n: Note) => String(n.fm.scope ?? "");
@@ -61,7 +62,7 @@ async function runMisses(): Promise<unknown | null> {
     const text = await new Response(p.stdout).text();
     if ((await p.exited) !== 0) return null;
     return JSON.parse(text);
-  } catch { return null; }
+  } catch (e) { console.error(`ui/memory: no misses: ${errText(e)}`); return null; }
 }
 
 /** Each note's recall count per day for the last 30 days, oldest first, from the recall log. */

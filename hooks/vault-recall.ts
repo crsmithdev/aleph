@@ -103,4 +103,4 @@ async function main() {
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } }));
 }
 
-if (import.meta.main) await main().catch(() => {});
+if (import.meta.main) await main().catch((e) => console.error("vault-recall:", errText(e)));

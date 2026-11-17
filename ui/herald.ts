@@ -7,7 +7,7 @@ import { EDITS, factsOf, issueHref, jobHref, parseId, parseKey, sayRest, shownId
 import { dur, money } from "./views/lib/format.js";
 
 /** A piece of a line: text, an ID with the address of its page, or the mark of a run's result. */
-export type Piece = string | { id: string; to: string } | { mark: string };
+type Piece = string | { id: string; to: string } | { mark: string };
 /** One line of a row's fold: its time, the action (which sets its tone), its label and its text. */
 export interface Line { at: string; action: string; label: string; text: Piece[] }
 /** A row of the Herald: the newest event of its group with the older ones in `lines`. `key` names the row for a redraw; `fold` names its fold. */

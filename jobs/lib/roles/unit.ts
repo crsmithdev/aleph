@@ -210,7 +210,7 @@ export async function unit(folder: string): Promise<void> {
 
 /** A run ended, so a slot may be free: `aleph dispatch` starts the ready issues. Its output goes to dispatch.log. */
 async function dispatchFree(folder: string): Promise<void> {
-  await runLogged(["dispatch"], logStream(folder, "dispatch"));
+  if (await runLogged(["dispatch"], logStream(folder, "dispatch")) === null) logTo(folder, "dispatch", "dispatch did not start");
 }
 
 /** The worker's time limit: a merge run has a short one. */

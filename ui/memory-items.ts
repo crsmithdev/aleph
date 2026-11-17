@@ -23,6 +23,7 @@ import { sessionRows, windowTraces } from "./api/sessions.ts";
 import { later } from "../lib/sources.ts";
 import { handoffsDir } from "../lib/paths.ts";
 import { memoryIn } from "./api/scope.ts";
+import { errText } from "../lib/errtext.ts";
 
 const TYPES = ["semantic", "procedural", "episodic", "working", "prospective"] as const;
 type Type = (typeof TYPES)[number];
@@ -33,8 +34,8 @@ export type Item = {
   at: string; read: string | null; effect: string; href?: string; core?: string; kind?: string; priority?: string; body: string;
 };
 
-const mtime = (p: string): string => { try { return statSync(p).mtime.toISOString(); } catch { return ""; } };
-const read = (p: string): string => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
+const mtime = (p: string): string => statSync(p).mtime.toISOString();
+const read = (p: string): string => readFileSync(p, "utf8");
 const files = (dir: string, re: RegExp): string[] => { try { return readdirSync(dir).filter((f) => re.test(f)).sort(); } catch { return []; } };
 const IDENTITY = join(import.meta.dir, "..", "identity");
 
@@ -54,7 +55,7 @@ type Sessions = Awaited<ReturnType<typeof sessionRows>>;
 const sessions = (): Promise<Sessions | null> => later("memory:sessions", ["usage"], loadSessions, null);
 async function loadSessions(): Promise<Sessions | null> {
   if (!langfuse()) return null;
-  try { return (await sessionRows((await windowTraces(7, null)).rows)).slice(0, 10); } catch { return null; }
+  try { return (await sessionRows((await windowTraces(7, null)).rows)).slice(0, 10); } catch (e) { console.error(`ui/memory-items: no sessions: ${errText(e)}`); return null; }
 }
 
 const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vault-context": "vault-context", "vault-recall": "vault-recall" };
@@ -68,7 +69,7 @@ async function hooks() {
     try {
       const a = await activity(7, null);
       return a.langfuse === "ok" ? new Map(a.hooks.map((h) => [h.name, h.calls] as const)) : null;
-    } catch { return null; }
+    } catch (e) { console.error(`ui/memory-items: no hook calls: ${errText(e)}`); return null; }
   }, null);
   const counted = counts !== null, calls = counts ?? new Map<string, number>();
   const out: { event: string; matcher: string; command: string; calls: number | null }[] = [];

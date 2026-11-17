@@ -279,7 +279,7 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
 const TOP = 10;
 
 export interface Hit { title: string; path: string; rank: number; scope: string; frontmatter: Note["fm"] }
-export interface RecallArgs { query: string; scope?: string; episodes?: boolean; unlogged?: boolean }
+interface RecallArgs { query: string; scope?: string; episodes?: boolean; unlogged?: boolean }
 
 export const recall = (root: string, { query: q, scope, episodes, unlogged = false }: RecallArgs) => op<Hit[]>(async (w) => {
   requireVault(root);
@@ -377,7 +377,7 @@ export const misses = (days = 7) => op(async () => {
   };
 });
 
-export interface LintOpts { fix?: boolean; overlap?: boolean; template?: boolean }
+interface LintOpts { fix?: boolean; overlap?: boolean; template?: boolean }
 
 export const lint = (root: string, o: LintOpts = {}) => op(async (w) => {
   requireVault(root);

@@ -89,7 +89,7 @@ const landedIssues = (d) => (d.times ?? []).filter((i) => i.outcome === "landed"
 const buildsOf = (d, size = "") => (d.builds ?? []).filter((b) => !size || b.size === size);
 
 /** The Lead Time by Size rows: the landed issues of each size, and of no size when any; an issue's size is that of its last build. */
-export function leadBySize(d) {
+function leadBySize(d) {
   const landed = landedIssues(d);
   const rows = [...SIZES, null].map((size) => {
     const xs = landed.filter((i) => i.size === size).map((i) => i.lead);
@@ -99,7 +99,7 @@ export function leadBySize(d) {
 }
 
 /** The Build Time by Model rows of the build runs of `size` (all with none), fastest Per Landed first. A model with fewer than `MIN_LANDED` landed issues has no Per Landed and sorts last. */
-export function buildByModel(d, size = "") {
+function buildByModel(d, size = "") {
   const rows = [...Map.groupBy(buildsOf(d, size), (b) => b.model)].map(([model, runs]) => {
     const secs = runs.map((b) => b.secs), issues = [...Map.groupBy(runs.filter((b) => b.issue), (b) => b.issue).values()];
     const retried = issues.filter((x) => x.length > 1).length;

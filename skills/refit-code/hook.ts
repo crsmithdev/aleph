@@ -26,12 +26,13 @@ const at = (s: { name: string; start: number; function?: string }) => `${s.name}
 /** The co-change rules of the commits at HEAD: history and rules cost about 240 ms, so one file per repo keeps the rules for the HEAD they came from. */
 function headRules(root: string): Map<string, Rule[]> {
   const r = probe(root, "rev-parse", "HEAD");
-  const head = r.ok ? r.out.trim() : "";
+  if (!r.ok) return new Map(); // no commit yet: no history to learn from
+  const head = r.out.trim();
   const file = join(spoolDir(), `cochange-${createHash("sha1").update(root).digest("hex").slice(0, 12)}.json`);
   const kept = readJsonOr<{ head: string; rules: [string, Rule[]][] } | null>(file, null);
-  if (head && kept?.head === head) return new Map(kept.rules);
+  if (kept?.head === head) return new Map(kept.rules);
   const all = rules(history(root));
-  if (head) writeJson(file, { head, rules: [...all] });
+  writeJson(file, { head, rules: [...all] });
   return all;
 }
 

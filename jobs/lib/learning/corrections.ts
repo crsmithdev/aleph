@@ -179,8 +179,8 @@ async function group(lessons: Lesson[], s: Signal): Promise<boolean> {
   let lesson = pick === "new" ? undefined : lessons.find((l) => l.id === pick);
   if (!lesson) {
     const sentence = await writeRule(s.quote);
-    if (!sentence) {
-      fail(s.id, "no rule written for the signal");
+    if (typeof sentence !== "string" || !sentence) {
+      fail(s.id, `no rule written for the signal${typeof sentence === "string" ? "" : `: ${sentence.err}`}`);
       return false;
     }
     lesson = lessons.find((l) => l.id === lessonId(sentence));

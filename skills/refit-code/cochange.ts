@@ -12,6 +12,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { probe } from "../../lib/git.ts";
 import { isTestFile } from "../../lib/test-files.ts";
 import { scan } from "./clones.ts";
 
@@ -25,10 +26,15 @@ export type Commit = { sha: string; subject: string; files: string[] };
 export type Rule = { a: string; b: string; co: number; n: number; conf: number; shas: string[] };
 export type Accepted = { concept?: string; copies: string[]; reason: string };
 
+/** The output of `git`, or a throw with git's message: the hook reports it, so a failed git is not a quiet pass. */
 function git(cwd: string, ...args: string[]): string {
-  const p = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-  return p.exitCode === 0 ? p.stdout.toString() : "";
+  const r = probe(cwd, ...args);
+  if (!r.ok) throw new Error(`git ${args[0]} failed: ${r.out}`);
+  return r.out;
 }
+
+/** The merge-base of HEAD and `ref`, or "" when there is none or `ref` is not there. */
+const mergeBase = (root: string, ref: string): string => { const r = probe(root, "merge-base", "HEAD", ref); return r.ok ? r.out.trim() : ""; };
 
 /** The last `limit` commits that are not merges, newest first. Each file is named by the path it has today, so a
  * rename does not split a file's history in two: walking newest first, a rename teaches the old path its new name. */
@@ -101,7 +107,7 @@ export const isAccepted = (list: Accepted[], a: string, b: string) =>
 
 /** The commit where the branch left the default branch, or "" when there is none. */
 export function base(root: string): string {
-  return git(root, "merge-base", "HEAD", "origin/HEAD").trim() || git(root, "merge-base", "HEAD", "main").trim();
+  return mergeBase(root, "origin/HEAD") || mergeBase(root, "main");
 }
 
 /** The files the current change touches: the branch since it left the default branch, plus the working tree. With `since` (ms), only the commits and edits from then on, so a change from before the session does not count. */
@@ -140,7 +146,8 @@ export function seed(root: string, since = "90.days") {
 }
 
 if (import.meta.main) {
-  const root = git(process.cwd(), "rev-parse", "--show-toplevel").trim() || process.cwd();
+  const top = probe(process.cwd(), "rev-parse", "--show-toplevel");
+  const root = top.ok ? top.out : process.cwd();
   const [cmd, ...rest] = Bun.argv.slice(2);
   const since = rest[rest.indexOf("--since") + 1];
   if (cmd === "seed") console.log(JSON.stringify(seed(root, rest.includes("--since") ? since : undefined), null, 1));

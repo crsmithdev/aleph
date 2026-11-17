@@ -11,10 +11,11 @@ import { conn } from "../lib/db.ts";
 import { addKeyRow, addSnapshot, keyRows, snapshots, type Snapshot } from "../lib/usage.ts";
 
 export type { Snapshot };
-import { need, type Hourly } from "../lib/langfuse.ts";
+import { langfuse, need, type Hourly } from "../lib/langfuse.ts";
 import { openRouterSpend, viaOf } from "../jobs/lib/routing/models.ts";
 import { once, touch } from "../lib/sources.ts";
 import { credentialsFile, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
+import { errText } from "../lib/errtext.ts";
 
 /** A job's or session's estimated share of the week: percent of the weekly limit, and whether the pooled rate priced it. */
 export interface Wk { pct: number; pooled: boolean }
@@ -186,7 +187,7 @@ export function currentFit(): Promise<Fit | null> {
     const to = Date.now(), from = to - WINDOW;
     const snaps = readSnapshots(to).filter((s) => Date.parse(s.at) >= from);
     try { return fit(snaps, await need().hourly({ from: new Date(from), to: new Date(to) }, "usage")); }
-    catch { return null; }
+    catch (e) { if (langfuse()) console.error(`ui/usage: no fit: ${errText(e)}`); return null; } // off is not an error
   });
 }
 
@@ -209,7 +210,7 @@ export async function pollOpenRouter(now = Date.now()): Promise<void> {
   const row: { at: string; usage: number; factor?: number } = { at: new Date(now).toISOString(), usage: spent.total };
   if (base) {
     const from = Date.parse(base.at);
-    const list = (await need().hourly({ from: new Date(from), to: new Date(now) }, "usage").catch(() => []))
+    const list = (await need().hourly({ from: new Date(from), to: new Date(now) }, "usage").catch((e) => { if (langfuse()) console.error(`ui/usage: no hourly list price: ${errText(e)}`); return []; }))
       .filter((h) => viaOf(h.model) === "openrouter").reduce((a, h) => a + h.cost, 0);
     const jev = jevRows().filter((j) => Date.parse(j?.at) > from && Date.parse(j.at) <= now).reduce((a, j) => a + (j.cost ?? 0), 0);
     const factor = (spent.total - base.usage - jev) / list;

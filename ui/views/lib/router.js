@@ -215,7 +215,7 @@ export async function start() {
   const $ = (id) => document.getElementById(id);
   const typing = () => !!document.activeElement?.matches("input, textarea, select");
   const armed = () => !!$("view").querySelector("button.act.ask");
-  let views = [], redirects = [], timer = 0;
+  let views = [], redirects = [], timer = 0, viewsFailed = false;
 
   // The page imports each view once; when the server restarts or a land changes a page file (the version header changes), reload to load it, unless the reader is typing.
   let version = null;
@@ -354,7 +354,7 @@ export async function start() {
     if (!m) {
       page.show({ view: null });
       document.title = "Not found · aleph";
-      $("view").innerHTML = `<div class="page nf">${pageHead(`Nothing at ${path}`)}${linkButton("Status", "#/")}</div>`;
+      $("view").innerHTML = `<div class="page nf">${pageHead(viewsFailed ? "Could not load views." : `Nothing at ${path}`)}${linkButton("Status", "#/")}</div>`;
       $("offline").hidden = true;
       return;
     }
@@ -420,8 +420,8 @@ export async function start() {
 
   document.addEventListener("click", dispatch);
 
-  setCodes(Object.fromEntries(Object.entries(await fetch("/api/projects", { cache: "no-store" }).then((r) => r.json()).catch(() => ({}))).filter(([, p]) => p.code).map(([k, p]) => [k, p.code])));
-  const names = await fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch(() => []);
+  setCodes(Object.fromEntries(Object.entries(await fetch("/api/projects", { cache: "no-store" }).then((r) => r.json()).catch((e) => { console.error("projects", e); return {}; })).filter(([, p]) => p.code).map(([k, p]) => [k, p.code])));
+  const names = await fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch((e) => { console.error("views", e); viewsFailed = true; return []; });
   const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => (typeof m.redirect === "function" && redirects.push(m.redirect), m.views ?? (m.view ? [m.view] : [])), (e) => { console.error(n, e); return []; })));
   views = mods.flat().filter((v) => v && typeof v.path === "string" && typeof v.render === "function")
     .map((v) => ({ ...v, _route: compile(v.path) }));

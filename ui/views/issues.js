@@ -197,7 +197,7 @@ export function renderRow(r, { fold, sub } = {}) {
 export const fileProject = (project, projects = []) => project || (projects.includes("aleph") ? "aleph" : projects[0] ?? "");
 
 /** The search box's action: it files the search text in `project`. CSS shows it only while the box has text. */
-export const fileHint = (project) =>
+const fileHint = (project) =>
   `<button type="button" class="hint" data-file title="File the search text as an issue (Ctrl+Enter)">Ctrl+↵ File in ${esc(project)}</button>`;
 
 export function renderTable(rows, o = {}) {

@@ -49,3 +49,10 @@ test("when the GPU slot stays taken past the rule writer's time box, the line co
     if (saved === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = saved;
   }
 });
+
+test("a rule writer that fails returns its error text, not an empty string", async () => {
+  const f = join(dir, "failing");
+  writeFileSync(f, "#!/bin/sh\necho 'rule writer broke' >&2\nexit 1\n", { mode: 0o755 });
+  process.env.ALEPH_RULE_CMD = f;
+  expect(await writeLine("Write a rule.", "a quote", 200)).toEqual({ err: expect.stringContaining("rule writer broke") });
+});

@@ -144,6 +144,12 @@ test("a hook that throws while checking prints a systemMessage with the error, a
   expect(out).not.toHaveProperty("decision");
 });
 
+test("a git that fails makes history throw with its message, not return no commits", () => {
+  const bare = mkdtempSync(join(tmpdir(), "refit-bare-"));
+  try { expect(() => history(bare)).toThrow(/git log failed: .*not a git repository/); }
+  finally { rmSync(bare, { recursive: true, force: true }); }
+});
+
 test("the hook skips a session with no start record", () => {
   write("a.ts", "export const a = 99;\n");
   expect(stop({ hook_event_name: "Stop", session_id: "s0", cwd: root })).toBe("");

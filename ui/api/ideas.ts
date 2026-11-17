@@ -8,7 +8,7 @@ import { cliOverride } from "../../jobs/lib/infra/settings.ts";
 import { runsOfRole } from "../../jobs/lib/records/ledger.ts";
 import { LENSES, ideasDir, lenses, list, read } from "../../ideas/ideas.ts";
 import { projectName } from "../../issues/lib/projects.ts";
-import { refuse } from "../../lib/refusal.ts";
+import { Refusal, refuse } from "../../lib/refusal.ts";
 import { post } from "../action.ts";
 import type { Routes } from "../server.ts";
 
@@ -16,7 +16,9 @@ const SLUG = /^[a-z0-9-]+$/;
 const missing = (what: string) => Response.json({ error: `no ${what}` }, { status: 404 });
 
 /** The idea, or null when the slug names none. */
-const find = (slug: string) => { try { return SLUG.test(slug) ? read(slug) : null; } catch { return null; } };
+const find = (slug: string) => {
+  try { return SLUG.test(slug) ? read(slug) : null; } catch (e) { if (e instanceof Refusal) return null; throw e; }
+};
 
 const lensRuns = (slug: string) => runsOfRole("lens").filter((e) => LENSES.some((l) => e.run.name === `${slug}-${l}`));
 

@@ -496,8 +496,7 @@ const episodesSeenFile = () => join(factoryDir(), "episodes-seen");
  * rewritten as the titles on disk, so a page deleted after KEEP_DAYS (episode.ts) leaves it too.
  */
 function newEpisodes(): string[] {
-  let titles: string[] = [];
-  try { titles = listEpisodes().map((e) => e.file.slice(0, -3)); } catch { return []; }
+  const titles = listEpisodes().map((e) => e.file.slice(0, -3));
   const seen = new Set(existsSync(episodesSeenFile()) ? readFileSync(episodesSeenFile(), "utf8").split("\n").filter(Boolean) : []);
   const fresh = titles.filter((t) => !seen.has(t));
   if (fresh.length || seen.size !== titles.length - fresh.length) {
