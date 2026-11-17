@@ -19,7 +19,8 @@ import { MEDIA_BYTES, MEDIA_TYPES } from "../../issues/lib/store.ts";
 import { startChat } from "../../jobs/lib/roles/agent-call.ts";
 import { chatIdleMs } from "../../jobs/lib/infra/settings.ts";
 import { read, type Note } from "../../lib/annotations.ts";
-import { alephPath, claudeProjects } from "../../lib/paths.ts";
+import { alephPath } from "../../lib/paths.ts";
+import { find } from "../../lib/transcripts.ts";
 import { clip } from "../../lib/naming.ts";
 import { file as ideaFile } from "../../ideas/ideas.ts";
 import { sameSite } from "../http.ts";
@@ -54,13 +55,12 @@ export interface Chat { id: string; start: string; last: string; title: string }
 
 /** The conversations with a turn at or after `since` (ms), oldest first, each read from its Claude Code transcript; one with no transcript is left out. */
 export function chats(since: number): Chat[] {
-  const root = claudeProjects();
-  if (!existsSync(sessions()) || !existsSync(root)) return [];
+  if (!existsSync(sessions())) return [];
   const out: Chat[] = [];
   for (const id of readdirSync(sessions())) {
-    const file = [...new Bun.Glob(`*/${id}.jsonl`).scanSync({ cwd: root })][0];
+    const file = find(id);
     if (!file) continue;
-    const records = readFileSync(join(root, file), "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } }).filter((r) => r?.timestamp);
+    const records = readFileSync(file, "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } }).filter((r) => r?.timestamp);
     const latest = records.findLast((r) => r.type === "user" && !r.isMeta && !r.isSidechain && typeof r.message?.content === "string");
     if (records.length && records.at(-1).timestamp >= new Date(since).toISOString()) out.push({ id, start: records[0].timestamp, last: records.at(-1).timestamp, title: clip(String(latest?.message.content ?? "").split("\n")[0], 80) });
   }

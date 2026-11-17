@@ -228,6 +228,10 @@ test("call gives a call's input and its result as text, with an image as its tok
   expect(call(drill, "nope")).toBeNull();
 });
 
+test("a cut-off last line, as a live session has, leaves the earlier requests", () => {
+  expect(parse(`${transcript}\n{"type":"assis`).requests.map((x) => x.fill)).toEqual([1002, 1503, 1804]);
+});
+
 let base: string, stop: () => void, restoreEnv: () => void, at: (path: string) => Promise<Response>;
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-context-"));

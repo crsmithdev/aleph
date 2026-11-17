@@ -1,24 +1,20 @@
 /** `/api/context`, `/api/context/:id`, `/api/context/:id/calls/:call`: the Context view's data, from the Claude Code transcripts under `~/.claude/projects/<project>/<session>.jsonl`. */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { claudeProjects } from "../../lib/paths.ts";
 import { touch } from "../../lib/sources.ts";
 import { window } from "../../lib/session-context.ts";
+import { find } from "../../lib/transcripts.ts";
 import { call, parseExact } from "../context.ts";
 import type { Routes } from "../server.ts";
 
 const root = claudeProjects;
 const transcripts = () => existsSync(root()) ? [...new Bun.Glob("*/*.jsonl").scanSync({ cwd: root() })] : [];
 
-/** The transcript of session `id`: one lookup in each project folder, not a scan of every transcript. */
-const file = (id: string) => {
-  if (!existsSync(root())) return undefined;
-  for (const p of readdirSync(root())) { const f = join(root(), p, `${id}.jsonl`); if (existsSync(f)) return f; }
-};
 /** The last transcript read: the click on a call reads the one the click on its session just read, until the file is written again. */
 let held: { id: string; f: string; at: number; text: string } | undefined;
 const transcript = (id: string) => {
-  const f = held?.id === id && existsSync(held.f) ? held.f : file(id);
+  const f = held?.id === id && existsSync(held.f) ? held.f : find(id);
   if (!f) return undefined;
   const at = statSync(f).mtimeMs;
   if (held?.f !== f || held.at !== at) held = { id, f, at, text: readFileSync(f, "utf8") };

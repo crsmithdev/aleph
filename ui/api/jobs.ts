@@ -14,6 +14,8 @@ import type { Routes } from "../server.ts";
 import { currentFit, runShare, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
 import { resultContent } from "../../lib/toolresult.ts";
+import { jsonLines } from "../../lib/jsonl.ts";
+import { pairs } from "../../lib/transcripts.ts";
 import { issueHref, shownId } from "../../lib/naming.ts";
 import { isSection, readSections } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
@@ -54,25 +56,15 @@ function logsOf(folder: string): LogFile[] {
 export type Step = { kind: "text"; text: string } | { kind: "tool"; name: string; input: unknown; output?: string; error?: boolean };
 /** A stream-json transcript as steps, in order. */
 export function transcript(stream: string): Step[] {
-  const steps: Step[] = [];
-  const calls = new Map<string, Extract<Step, { kind: "tool" }>>();
-  for (const line of stream.split("\n")) {
-    if (!line.startsWith("{")) continue;
-    let ev: any;
-    try { ev = JSON.parse(line); } catch { continue; }
-    const content = ev?.message?.content;
-    if (ev?.type === "assistant" && Array.isArray(content)) {
-      for (const b of content) {
-        if (b?.type === "text" && b.text) steps.push({ kind: "text", text: String(b.text) });
-        if (b?.type === "tool_use") { const t: Extract<Step, { kind: "tool" }> = { kind: "tool", name: String(b.name), input: b.input }; steps.push(t); calls.set(b.id, t); }
-      }
-    } else if (ev?.type === "user" && Array.isArray(content)) {
-      for (const b of content) {
-        const t = b?.type === "tool_result" ? calls.get(b.tool_use_id) : undefined;
-        if (!t) continue;
-        t.output = resultContent(b.content);
-        if (b.is_error === true) t.error = true;
-      }
+  const entries = jsonLines(stream), calls = pairs(entries), steps: Step[] = [];
+  for (const ev of entries) {
+    if (ev.type !== "assistant" || !Array.isArray(ev.message?.content)) continue;
+    for (const b of ev.message.content) {
+      if (b?.type === "text" && b.text) steps.push({ kind: "text", text: String(b.text) });
+      if (b?.type !== "tool_use") continue;
+      const t: Extract<Step, { kind: "tool" }> = { kind: "tool", name: String(b.name), input: b.input }, r = calls.get(b.id)?.result;
+      if (r) { t.output = resultContent(r.content); if (r.is_error === true) t.error = true; }
+      steps.push(t);
     }
   }
   return steps;

@@ -1,5 +1,7 @@
 /** A Claude Code session's requests, read from its transcript jsonl: each request's fill and the parts it holds. */
 import { anthropicKey } from "../lib/env.ts";
+import { jsonLines } from "../lib/jsonl.ts";
+import { pairs } from "../lib/transcripts.ts";
 
 export interface Part { name: string; rec: string; tokens: number; how: "exact" | "est" }
 export interface Request {
@@ -137,7 +139,7 @@ function imageTokens(base64: string): number {
 function scan(jsonl: string): Scan {
   const out: Request[] = [];
   const seen = new Set<string>();
-  const uses = new Map<string, { tool: string; input: unknown }>(), calls: Call[] = [];
+  const entries = jsonLines(jsonl), uses = pairs(entries), calls: Call[] = [];
   let pending: { id: string; w: number }[] = [], since = 1;
   let system = "", model = "", tools: unknown[] = [], instructions: { path: string; content: string }[] = [], memory = "";
   const hooks = new Map<string, number>(), before = new Map<string, number>(), items: Item[] = [], summaries: Summary[] = [];
@@ -155,9 +157,7 @@ function scan(jsonl: string): Scan {
     const h = held.get(rec) ?? { tokens: 0, count: 0, est: false };
     held.set(rec, { tokens: h.tokens + tokens, count: h.count + count, est: h.est || est });
   };
-  for (const line of jsonl.split("\n")) {
-    if (!line) continue;
-    const o = JSON.parse(line);
+  for (const o of entries) {
     const a = o.attachment;
     if (a?.type === "prompt_snapshot") { system = [a.systemPrompt ?? system].flat().join(""); tools = a.tools ?? tools; }
     else if (a?.type === "instructions" && !out.length) instructions.push(...(a.files ?? []).map((f: any) => ({ path: f.path ?? "?", content: f.content })));
@@ -178,7 +178,6 @@ function scan(jsonl: string): Scan {
       note(o.isCompactSummary ? "isCompactSummary" : results.length ? "tool_result" : "user", weigh(c ?? ""), results.length || 1, results.length ? undefined : kind);
     } else if (o.type === "assistant" && !o.isSidechain) {
       const blocks = [o.message?.content].flat();
-      for (const b of blocks) if (b?.type === "tool_use") uses.set(b.id, { tool: b.name, input: b.input });
       const answer = () => {
         for (const b of blocks) if (BLOCKS[b?.type]) add(reply, BLOCKS[b.type], weigh(b.text ?? b.input ?? ""));
         thought ||= blocks.some((b) => b?.type === "thinking" || b?.type === "redacted_thinking");
@@ -227,7 +226,7 @@ function scan(jsonl: string): Scan {
   function split(tokens: number, mixed: boolean) {
     apportion(tokens, pending.map((p) => [p, p.w] as [typeof p, number])).forEach(([p, t]) => {
       const u = uses.get(p.id);
-      calls.push({ id: p.id, tool: u?.tool ?? "?", input: brief(u?.input), n: out.length + 1, tokens: t, how: mixed || pending.length > 1 ? "est" : "exact" });
+      calls.push({ id: p.id, tool: u?.use?.name ?? "?", input: brief(u?.use?.input), n: out.length + 1, tokens: t, how: mixed || pending.length > 1 ? "est" : "exact" });
     });
   }
   return { out, model, defs: tools, calls, items, summaries, fixed: [
@@ -265,16 +264,9 @@ function withFixed({ out, fixed, defs, calls, parts: subs, items, summaries }: S
 
 /** One call's input and its result as text, with each image as a line that gives its tokens. */
 export function call(jsonl: string, id: string): { tool: string; input: unknown; text: string } | null {
-  let use: any, res: any;
-  for (const line of jsonl.split("\n")) {
-    if (!line.includes(id)) continue;
-    for (const b of [JSON.parse(line).message?.content].flat()) {
-      if (b?.type === "tool_use" && b.id === id) use = b;
-      if (b?.type === "tool_result" && b.tool_use_id === id) res = b;
-    }
-  }
-  if (!use && !res) return null;
-  const text = [res?.content ?? ""].flat().map((b: any) =>
+  const { use, result } = pairs(jsonLines(jsonl.split("\n").filter((l) => l.includes(id)).join("\n"))).get(id) ?? {};
+  if (!use && !result) return null;
+  const text = [result?.content ?? ""].flat().map((b: any) =>
     typeof b === "string" ? b : b.type === "text" ? b.text : b.type === "image" ? `[image, about ${imageTokens(b.source?.data ?? "")} tokens]` : JSON.stringify(b)).join("\n");
   return { tool: use?.name ?? "?", input: use?.input ?? null, text };
 }
