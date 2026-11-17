@@ -1,18 +1,18 @@
 ---
 name: refit-data
 description: >
-  Refit a UI's data: recompute the numbers a page shows from their raw
-  sources; find wrong, empty, stale or leaked values, broken joins, and
-  migration losses. Use when asked to audit or verify a page's data or
-  metrics, or before you add a metric (check). NOT for: choosing numbers
-  (use datavis); building the pipeline (use write-data).
+  Refit a UI's data: recompute a page's numbers from raw sources; find
+  wrong, empty, stale or leaked values, broken joins, migration losses. Use
+  to audit or verify a page's data or metrics, or before you add a metric
+  (check). NOT for: choosing numbers (use datavis); building the pipeline
+  (use write-data).
 ---
 
 # Refit data
 
 A number on a page is right when an independent recompute from its raw source gives the same value at the same
-moment. Tests run on fixtures. They do not see a migrated store, a key that changed form, or a writer that
-stopped writing a field. This skill reads the live sources.
+moment. Tests run on fixtures, so they miss a migrated store, a changed key form, or a writer that stopped
+writing a field. This skill reads the live sources.
 
 ## Lenses
 
@@ -56,9 +56,9 @@ its label is **scope**. Report a candidate under one lens only.
    matches, or the difference is listed by row.
 5. **Prove, guard and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lenses.
    A mismatch is a finding only with both values, the query and the moment of the read. The report goes to
-   `<tmpdir>/refit-data-retro-<timestamp>/`, and its unit is a shown number. Its Overview opens with a table of each number: the shown value, the
-   recomputed value and the verdict. This skill has no `act` and no fix step: PROVE.md's tier and fix do not apply,
-   and its pick is the findings to file as issues.
+   `<tmpdir>/refit-data-retro-<timestamp>/`, and its unit is a shown number. Its Overview opens with a table of
+   each number: the shown value, the recomputed value and the verdict. This skill has no tier and no fix step.
+   The pick is the findings to file as issues.
 
 Rules:
 
