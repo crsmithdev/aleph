@@ -1,7 +1,7 @@
 # Design retro report
 
 The report of a refit-design `retro`. It has the shape of refit-code's [REPORT.md](../refit-code/REPORT.md): Overview
-(repo line, counts of fixed and waiting findings, themes, findings table), Units, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
+(repo line, links, counts of fixed and waiting findings), Units, Findings, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
 class names are in refit-code's [HTML.md](../refit-code/HTML.md). This file holds only what is specific to design.
 A design report uses the design language of the UI it scans: aleph classes and tokens from `ui/app.css`, no Tailwind.
 It cites only rules of `docs/design.md`.
@@ -11,13 +11,14 @@ It cites only rules of `docs/design.md`.
 Write `<tmpdir>/refit-design-retro-<timestamp>/`. Besides `index.html` and `app.css` it holds
 `shots/<route>-<theme>-<width>.png`: each screenshot, as a file. Link it with a relative path.
 
-The report links the live Kit at `/#/kit` on the same origin. The link text names the specimen by its id, the first
-argument of a `spec(id, ...)` call in `ui/views/kit.js`, such as `Kit: metric`. The Kit section of that id has the
-anchor `kit-<id>`. A report opened from a host that has no Kit says so in the Overview's repo line and drops the links.
+The report links the live Kit by its absolute URL, such as `http://aleph.home/#/kit`, because the shelf serves the
+report from another host, where `/#/kit` finds nothing (Chris, 2026-11-17). The link text names the specimen by its
+id, the first argument of a `spec(id, ...)` call in `ui/views/kit.js`, such as `Kit: metric`. The Kit section of that
+id has the anchor `kit-<id>`.
 
 ## Differences from the shared shape
 
-1. **Findings** (in the Overview). The kinds are missing token, one-off, mismatch, local defect, state, stress, hand
+1. **Findings** (the card above Proposals). The kinds are missing token, one-off, mismatch, local defect, state, stress, hand
    markup and slop.
 2. **Units.** The unit is a component kind of the page, in the page's order, as an `h3.sub-head`. Under it, list
    the findings in the page's order. List only the components with a broken rule: a component that passes gets
@@ -33,14 +34,14 @@ The finding comes first, and the components it breaks come under its title (Chri
 
 1. the title: its number, the change as an imperative, and the chips of its lens, kind and tier (**auto** or **ask**),
    then its result as refit-code's REPORT.md gives it: the commit, "reverted" with the failed command, or "found during fix";
-2. one `p.on` line per component the finding breaks: the component in bold, its variant in `span.quiet` if it
-   has one, then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the line, with the kind and the
-   variant as the Kit names them in lower case, such as `metric-card/status` or `table/roles`. A finding that
-   breaks a rule in two components shows two lines and sits under the kind of the first;
-3. the fix, one sentence as PROVE.md's step 2 gives it;
-4. a screenshot of the part the finding names, as drawn, cropped from the shots, with no caption: its `alt` names
-   it. A finding that compares two parts shows both. Show each picture once;
-5. one closed `<details>`, summary "Details", that holds the rest: the rule (its `docs/design.md` section and the
+   then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the finding, with the kind and the variant as the
+   Kit names them in lower case, such as `metric-card/status` or `table/roles`. A finding that breaks a rule in two
+   components sits under the kind of the first. No line under the title names the component again (Chris, 2026-11-17);
+2. the fix, one sentence as PROVE.md's step 2 gives it;
+3. a screenshot of the part the finding names, as drawn on the page, cropped from the shots, with no caption: its
+   `alt` names it. Show it at most 480px wide, as a link that opens the full shot in a new tab. Show no Kit
+   specimen: the Kit link stands for the rule (Chris, 2026-11-17). Show each picture once;
+4. one closed `<details>`, summary "Details", that holds the rest: the rule (its `docs/design.md` section and the
    rule text, quoted), the locations (`file:line`, one each), a "Shot: see" line with a link to the finding that
    shows a repeated picture, and the guard, one sentence.
 
@@ -51,11 +52,10 @@ Proposals when 3 or more places use it.
 <section class="card" id="components" aria-label="Components">
   <div class="sh"><h2>Components</h2></div>
   <h3 class="sub-head">{{kind}}</h3>
-  <div class="finding" id="f{{n}}">
-    <p class="ft"><b>{{n}}. {{title}}</b> <span class="chip">{{lens}}</span><span class="chip">{{kind}}</span><span class="chip">{{tier}}</span> <span class="quiet">{{result}}</span></p>
-    <p class="on" data-annotate="{{kind}}/{{variant}}"><b>{{component}}</b> <span class="quiet">{{variant}}</span> <a href="/#/kit">Kit: {{id}}</a></p>
+  <div class="finding" id="f{{n}}" data-annotate="{{kind}}/{{variant}}">
+    <p class="ft"><b>{{n}}. {{title}}</b> <span class="chip">{{lens}}</span><span class="chip">{{kind}}</span><span class="chip">{{tier}}</span> <span class="quiet">{{result}}</span> <a href="http://aleph.home/#/kit">Kit: {{id}}</a></p>
     <p class="fix"><b>Fix</b>: ...</p>
-    <figure><img src="shots/{{file}}.png" alt="{{part}}"></figure>
+    <figure><a href="shots/{{file}}.png" target="_blank"><img src="shots/{{file}}.png" alt="{{part}}" style="max-width:480px"></a></figure>
     <details><summary>Details</summary>
       <p class="aux"><b>Rule</b>: {{rule}}</p>
       <ul class="locs"><li><code>{{file:line}}</code></li></ul>
@@ -67,7 +67,7 @@ Proposals when 3 or more places use it.
 
 Size shows rank, and no part outranks its parent (Chris, 2026-11-16). The page title, the card head and the kind
 head step down from `--fs-metric` to `--fs-2xl`. A finding's title is below them at `--fs-lg`, then the fix at
-`--fs-md`. The component lines, the rule, the locations and the guard recede at `--fs-sm` in `--muted`. Set it in
+`--fs-md`. The rule, the locations and the guard recede at `--fs-sm` in `--muted`. Set it in
 the report's `<style>`, from tokens:
 
 ```css
@@ -75,12 +75,10 @@ the report's `<style>`, from tokens:
 .sh h2 { font-size: var(--fs-xl); }
 #components h3.sub-head { font-size: var(--fs-2xl); }
 .finding .ft { font-size: var(--fs-lg); color: var(--ink); margin: 0 0 var(--sp-4); }
-.finding .on { font-size: var(--fs-sm); color: var(--muted); margin: 0; }
-.finding .on b { font-weight: var(--fw-mid); }
 .finding .fix { font-size: var(--fs-md); color: var(--ink); margin: var(--sp-8) 0; }
 .finding .fix b { color: var(--done); }
 .finding .aux, .finding ul.locs { font-size: var(--fs-sm); color: var(--muted); }
 ```
 
-Give an image a
-`max-width: 100%` through a `style` attribute only when `app.css` has no class for it. Add no `<script>`.
+Give an image its
+`max-width` through a `style` attribute only when `app.css` has no class for it. Add no `<script>`.

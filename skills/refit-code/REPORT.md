@@ -15,7 +15,7 @@ Write `<tmpdir>/refit-<skill>-retro-<timestamp>/`, with `<tmpdir>` from `$TMPDIR
 
 ## Parts
 
-Three parts, in this order. Each is a `<section class="card">`, so `.card` rules apply and no card sits in a card:
+Four parts, in this order. Each is a `<section class="card">`, so `.card` rules apply and no card sits in a card:
 a variant is an `<h3 class="sub-head">`, not a card.
 
 1. **Overview.** One card, with no part said twice (Chris, 2026-11-16):
@@ -25,22 +25,21 @@ a variant is an `<h3 class="sub-head">`, not a card.
      `cochange.ts seed` gave.
    - **Counts.** Two counts after the repo line: the findings fixed, with the commit hash of each, and the findings
      waiting for Chris (the ask findings). A `scan` run fixes none.
-   - **Themes.** One list item per theme: the theme in bold, then the numbers of its findings, each a link to its
-     card. A repeated cause is one theme. No summary sentence comes before it: the themes carry it (Chris,
-     2026-11-16). List the themes in the order to act: a theme with an ask finding comes first, since those wait for Chris. Then rank by drift or failure that already cost a fix,
-     then by how many callers or pages the theme touches, then by the lines it removes. The themes carry this
-     order, so the report has no Actions list (Chris, 2026-11-16).
-   - **Findings.** One closed `<details>`, its summary "Findings: N, and M dropped" (Chris, 2026-11-16). It holds
-     one table of every candidate, with the columns #, Finding, Kind and Lens. A finding row links its
-     title to its card. The findings come first, grouped by kind. The rows that are not findings come last in
-     `tr.quiet`: dropped, accepted, and for the dead lens a survivor. Their Kind cell is the verdict, and the reason
-     sits under the title in `<small>`. The per-lens count table and a separate raw listing are gone (Chris,
-     2026-11-16).
+   - **Links.** The page head links back to the shelf, at the shelf's base URL (the first line of
+     `~/.local/share/aleph-tools/shelf/url`) plus `/shelf/`. The repo line links each mock the run made, by the URL that
+     `shelf.ts put` printed for it, so put a mock on the shelf before the report (Chris, 2026-11-17).
+   - No themes and no baseline line: the units carry the order, and a red baseline ends the run before a report
+     (Chris, 2026-11-17).
 2. **Units.** One section per unit the skill scanned, in the scan's order, with `data-annotate="<unit id>"`. A unit
    with findings shows one finding card each. A unit with no finding is one line: "No issues." The SKILL.md of
    each skill names its unit: refit-code a module, refit-docs a doc page, refit-tests a test file, refit-agents a
    loaded file (CLAUDE.md, skill or hook), refit-data a shown number, refit-design a component kind.
-3. **Proposals.** Each change to the skill's reference doc that the scan asks for: where, the evidence and the
+3. **Findings.** One card at the bottom, above Proposals (Chris, 2026-11-17), with one closed `<details>`, its
+   summary "Findings: N, and M dropped". It holds one table of every candidate, with the columns #, Finding, Kind and
+   Lens. A finding row links its title to its card. The findings come first, grouped by kind. The rows that are not
+   findings come last in `tr.quiet`: dropped, accepted, and for the dead lens a survivor. Their Kind cell is the
+   verdict, and the reason sits under the title in `<small>`.
+4. **Proposals.** Each change to the skill's reference doc that the scan asks for: where, the evidence and the
    sentence the doc needs. Omit the part when there are none. The skill changes no doc text.
 
 ## Finding card

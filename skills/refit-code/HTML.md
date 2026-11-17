@@ -32,18 +32,11 @@ The report is a directory in the OS temp directory: `index.html` and `app.css`. 
 </head>
 <body>
 <div class="page sp">
-  <header class="ph"><h1>Refit Retro</h1><span class="count">{{skill}}</span></header>
+  <header class="ph"><h1>Refit Retro</h1><span class="count">{{skill}}</span><div class="aside"><a href="{{shelf base}}/shelf/">Shelf</a></div></header>
 
   <section class="card" id="overview" aria-label="Overview">
     <div class="sh"><h2>Overview</h2><span class="count">{{n}} findings</span></div>
-    <dl class="facts"><div><dt>Repo</dt><dd>{{repo}}</dd></div><div><dt>Date</dt><dd>{{date}}</dd></div><div><dt>Commit</dt><dd>{{sha}}</dd></div></dl>
-    <h3 class="sub-head">Themes</h3>
-    <ul><li><b>{{theme}}</b>: <a href="#f{{n}}">{{n}}</a>, ...</li></ul>
-    <details><summary>Findings: {{n}}, and {{dropped}} dropped</summary>
-    <div class="tscroll"><table class="tbl"><thead><tr><th class="num">#</th><th>Finding</th><th>Kind</th><th>Lens</th></tr></thead><tbody>
-      <tr><td class="num">{{n}}</td><td><a href="#f{{n}}">{{title}}</a></td><td>{{kind}}</td><td>{{lens}}</td></tr>
-      <tr class="quiet"><td class="num">d{{n}}</td><td>{{title}}<br><small>{{reason}}</small></td><td>{{verdict}}</td><td>{{lens}}</td></tr>
-    </tbody></table></div></details>
+    <dl class="facts"><div><dt>Repo</dt><dd>{{repo}}</dd></div><div><dt>Date</dt><dd>{{date}}</dd></div><div><dt>Commit</dt><dd>{{sha}}</dd></div><div><dt>Mock</dt><dd><a href="{{mock shelf url}}" target="_blank">{{mock}}</a></dd></div></dl>
   </section>
 
   <section class="card" id="units" aria-label="Units">
@@ -61,6 +54,14 @@ The report is a directory in the OS temp directory: `index.html` and `app.css`. 
       </div>
     </div>
     <div data-annotate="{{other unit id}}"><h3 class="sub-head">{{unit}}</h3><p>No issues.</p></div>
+  </section>
+
+  <section class="card" id="findings" aria-label="Findings">
+    <details><summary>Findings: {{n}}, and {{dropped}} dropped</summary>
+    <div class="tscroll"><table class="tbl"><thead><tr><th class="num">#</th><th>Finding</th><th>Kind</th><th>Lens</th></tr></thead><tbody>
+      <tr><td class="num">{{n}}</td><td><a href="#f{{n}}">{{title}}</a></td><td>{{kind}}</td><td>{{lens}}</td></tr>
+      <tr class="quiet"><td class="num">d{{n}}</td><td>{{title}}<br><small>{{reason}}</small></td><td>{{verdict}}</td><td>{{lens}}</td></tr>
+    </tbody></table></div></details>
   </section>
 
   <section class="card" id="proposals" aria-label="Proposals">...</section>
