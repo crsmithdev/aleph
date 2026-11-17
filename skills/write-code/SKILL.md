@@ -18,4 +18,5 @@ diff against them.
 
 - For test-first work, follow [write-tests](../write-tests/SKILL.md). For a bug whose cause you do not know, follow
   [diagnosing-bugs](../diagnosing-bugs/SKILL.md) before you change code.
-- When the diff adds or changes a test, write-tests' rules apply too: PROCESS.md's Check names them.
+- When the diff adds or changes a test, call the Read tool on [write-tests/RULES.md](../write-tests/RULES.md) before you
+  end: its rules apply too.

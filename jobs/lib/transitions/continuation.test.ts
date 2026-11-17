@@ -179,6 +179,7 @@ describe("the worker brief", () => {
     expect(sandboxed).not.toContain("name: write-code");
     expect(sandboxed).not.toContain("Skill tool");
     expect(sandboxed).toMatch(/\]\(\/[^)]*\/skills\/diagnosing-bugs\/SKILL\.md\)/);
+    expect(sandboxed).toMatch(/\]\(\/[^)]*\/skills\/write-tests\/RULES\.md\)/);
     expect(sandboxed).not.toContain("](../");
     expect(brief(first.id, r, repo)).not.toContain("write-code");
   });

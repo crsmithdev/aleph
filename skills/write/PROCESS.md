@@ -35,8 +35,8 @@ write: its `RULES.md`. The auditor, `refit-<domain>`, owns how to find a break i
 1. **List the new things** in the diff, plan or spec: each new function, module, type, constant, literal, route,
    CLI flag, record field, dependency, guard, option, comment, test, doc page or section, agent file line, view and
    style rule.
-2. **Read the rules** of each domain the diff touches, and ask each rule of each item. Record each search a rule
-   names, with its hit count.
+2. **Read the rules.** For each domain the diff touches, call the Read tool on its file in the table, and ask each
+   rule of each item. Record each search a rule names, with its hit count.
 
    | The diff changes | Read |
    |---|---|
