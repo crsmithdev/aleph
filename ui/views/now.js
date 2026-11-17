@@ -3,7 +3,7 @@
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { keep, kept, scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { dur, count, hours, mean, pct, plural, shortModel, when } from "./lib/format.js";
+import { cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
 import { actButton, fold, recordState, restoreState, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
 import { shortText, NAMES, runWord, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
@@ -70,8 +70,8 @@ function renderOutcome(d) {
   const outcome = (body, aside = "") => card("Agent Time", body, { id: "outcome", label: "Agent time", aside });
   if (!d) return outcome(loadingLine("the outcomes"));
   if (d.error) return outcome(error(d.error));
-  const cs = d.classes, sum = (xs) => xs.reduce((a, c) => a + c.hours, 0), total = sum(cs);
-  return outcome(share(d), total > 0 ? `${esc(hours(sum(cs.filter((c) => !c.lost))))} of ${esc(hours(total))}` : "");
+  const { kept, hours: lostH } = d.figures;
+  return outcome(share(d), lostH === null ? "" : `${esc(hours(kept))} of ${esc(hours(kept + lostH))}`);
 }
 
 /** The active-issues frame: per bucket, the issues in each stage (`d.active` of /api/flow), stacked. */
@@ -122,7 +122,7 @@ export function renderPipeline(d, q = new URLSearchParams()) {
     if (n === null) return `<div class="pnode idle"><span class="ring">–</span><span class="pn">${esc(name)}</span><span class="pt">${miss("Nothing ran in this window")}</span></div>`;
     const share = r.runs ? (r.unusable ?? 0) / r.runs : 0, tone = health(share);
     const tip = `${name}: ${plural(r.runs, "run")} on ${plural(r.items, "issue")}${r.unusable ? `, ${count(r.unusable)} failed` : ""}`;
-    return `<div class="pnode ${tone}">${go(k, tip, `<span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span><span class="pt">${esc(dur(r.p90))}</span>`)}${r.unusable ? `<a class="pf" href="${esc(drillHref(k, q, { unusable: "1" }))}">${pct(share * 100)} failed</a>` : `<span class="pf">${pct(share * 100)} failed</span>`}</div>`;
+    return `<div class="pnode ${tone}">${go(k, tip, `<span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span><span class="pt">${esc(dur(r.p90))}</span>`)}${r.unusable ? `<a class="pf" href="${esc(drillHref(k, q, { unusable: "1" }))}">${cardPct(share)} failed</a>` : `<span class="pf">${cardPct(share)} failed</span>`}</div>`;
   };
   const nodes = Object.entries(PIPE).map(node).join(`<span class="parrow" aria-hidden="true"></span>`);
   return box(`<div class="pflow" role="group" aria-label="Stages">${nodes}</div>`, `<span class="asof">runs / issue in the ring · p90 time under it</span>`);

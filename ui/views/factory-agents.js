@@ -1,13 +1,12 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, moved, redraw } from "./lib/router.js";
 import { postJson, keep, kept, scope } from "./lib/address.js";
-import { count, day, dur, money, pct, shortModel } from "./lib/format.js";
+import { cardPct, count, day, dur, money, shortModel } from "./lib/format.js";
 import { badCount, card, cardTrend, cell, dataTable, empty, error, esc, heads, loadingLine, miss, notice, pageHead, say, selectBox, statCard, tiles } from "./lib/html.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { flowOf, lastPeriod, usageCard, windowTrend } from "./lib/flow-parts.js";
 
-const share = (v) => pct(v == null ? v : v * 100);
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
 const SPEND = { hour: "day", day: "day", week: "week", month: "month" };
 
@@ -27,7 +26,7 @@ function followupsCard(d) {
 /** The Success card: the share of runs that succeeded and the share of builds that passed first time, with the success trend against its baseline. */
 function successCard(d) {
   const r = d?.agents?.rates;
-  return statCard({ k: "Success", ...(r ? { v: share(r.success), v2: share(r.firstPass) } : d && !d.error ? { v: "–" } : {}), q: ["runs", "first pass"], trend: cardTrend(r?.success, r?.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline" }), loading: !d, failed: d?.error ?? "" });
+  return statCard({ k: "Success", ...(r ? { v: cardPct(r.success), v2: cardPct(r.firstPass) } : d && !d.error ? { v: "–" } : {}), q: ["runs", "first pass"], trend: cardTrend(r?.success, r?.baseline, null, { kind: "points", lowerIsGood: false, format: cardPct, basis: "the baseline" }), loading: !d, failed: d?.error ?? "" });
 }
 
 function scorecard(s, d, m, win) {
@@ -65,10 +64,10 @@ function roles(a, m) {
     if (!o) return `<td class="num">${gone}</td>`.repeat(num.length) + `<td class="out">${gone}</td>`;
     const few = o.ended < MIN_ENDED, worker = o.role === "worker", reviewer = o.role === "reviewer";
     const out = worker ? o.built : reviewer ? o.pass + o.fail : o.succeeded, noun = NOUNS[o.role] ?? "run";
-    const trend = few ? "" : cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
+    const trend = few ? "" : cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: cardPct, basis: "the baseline", tip: `Baseline ${cardPct(o.baseline)}` });
     const warn = !few && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    const rate = few ? `${reviewer ? out : o.succeeded} / ${o.ended}` : `${esc(share(o.rate))} <span class="quiet" title="ended">${count(o.ended)}</span> ${trend}`;
-    const q = worker ? ` <span class="quiet">· ${share(o.built ? o.firstPass / o.built : null)} first · ${share(o.reviewPass)} review</span>` : "";
+    const rate = few ? `${reviewer ? out : o.succeeded} / ${o.ended}` : `${esc(cardPct(o.rate))} <span class="quiet" title="ended">${count(o.ended)}</span> ${trend}`;
+    const q = worker ? ` <span class="quiet">· ${cardPct(o.built ? o.firstPass / o.built : null)} first · ${cardPct(o.reviewPass)} review</span>` : "";
     return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${badCount(o.stuck)}${[dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td class="out">${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
   };
   const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });

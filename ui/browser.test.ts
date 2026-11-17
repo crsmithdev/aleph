@@ -757,7 +757,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
         const host = document.createElement("div");
         host.id = "obar-probe";
         document.querySelector("#view").prepend(host);
-        host.innerHTML = v.bar({ classes }, "");
+        host.innerHTML = v.bar({ classes, figures: { kept: 60, hours: 19.6 } }, "");
         const segs = [...host.querySelectorAll(".osegs > *")];
         return {
           clip: segs.flatMap((s) => [...s.querySelectorAll("b, span")].map((e) => e.scrollWidth > e.clientWidth)),
@@ -779,7 +779,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       const host = document.createElement("div");
       host.id = "obar-probe";
       document.querySelector("#view").prepend(host);
-      host.innerHTML = v.bar({ classes: [{ key: "landed", lost: false, hours: 5, text: "" }, { key: "dropped", lost: true, hours: 3, text: "" }] }, "");
+      host.innerHTML = v.bar({ classes: [{ key: "landed", lost: false, hours: 5, text: "" }, { key: "dropped", lost: true, hours: 3, text: "" }], figures: { kept: 5, hours: 3 } }, "");
       const r = (e) => e.getBoundingClientRect();
       const at = () => { const sep = r(host.querySelector(".osep")); return { sep: [sep.top, sep.bottom], segs: [...host.querySelectorAll(".osegs")].map((e) => [r(e).top, r(e).bottom]) }; };
       const out = [at()];

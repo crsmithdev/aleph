@@ -1,7 +1,7 @@
 // What the Status pages share: formats, the /api/flow load, the merged causes, tiles and the usage pace.
 import { get } from "./router.js";
 import { scope } from "./address.js";
-import { count, xLabel, day, dur, hourLabel, hours, pct, plural, when } from "./format.js";
+import { cardPct, count, xLabel, day, dur, hourLabel, hours, pct, plural, when } from "./format.js";
 import { cardTrend, empty, meter, esc, statCard } from "./html.js";
 import { BUCKETS } from "../../../lib/windows.ts";
 
@@ -14,11 +14,13 @@ export const trendOn = (d) => d?.window === "week" || d?.window === "month" || !
 /** "last 7 days": the span as the page says it. */
 export const lastPeriod = (d) => `last ${period(d)}`;
 
+/** The URL of /api/flow for `window` in the project of the query `q`, with the window's trend baseline when `baseline`. */
+export const flowUrl = (window, q, baseline = false) => scope(q).url(`/api/flow?window=${window}${baseline ? "&baseline=1" : ""}`);
 /** /api/flow for `window` in the project of the query `q`, with the window's trend baseline (`d.baseline`) when
  * `baseline`; `{ error }` when the load fails. */
 export async function flowOf(window, q, baseline = false) {
   try {
-    const res = await get(scope(q).url(`/api/flow?window=${window}${baseline ? "&baseline=1" : ""}`));
+    const res = await get(flowUrl(window, q, baseline));
     if (!res.ok) throw new Error(`Could not load Flow (${res.status}).`);
     return await res.json();
   } catch (e) { return { error: e.message }; }
@@ -49,7 +51,6 @@ export function pace(s) {
   if (gone === null || gone === undefined) return null;
   return { used: cur.seven_day, gone, word: cur.seven_day > gone ? "over" : "under" };
 }
-export const cardPct = (v) => (v == null ? "–" : pct(v * 100));
 export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
 
 /** The trend of one figure of `d` against the baseline of its own /api/flow answer; empty with no baseline. */
@@ -59,48 +60,54 @@ export function windowTrend(d, figure, value, o) {
   return cardTrend(value, base[figure], d.baseline.prev?.[figure], { basis: d.baseline.basis ?? "", ...o });
 }
 
-/** The five cards of the Status scorecard. `d` is /api/flow for the window with `baseline`, or null while it loads. */
-export function statusCards(s, d, { efficiency, performance }) {
+/** The props of the five cards of the Status scorecard: the page draws each as a `statCard`, herdr as a line. `d` is /api/flow for the window with `baseline`, or null while it loads. */
+export function cardList(s, d, { efficiency, performance }) {
   const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
   const f = d && !d.error ? d.figures : null, loading = !d, failed = d?.error ?? "";
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
-  const lost = statCard({ k: "Lost time", loading, failed, ...(f ? { v: cardPct(f.lost) } : {}), ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
-  const lead = statCard({ k: "Completion", loading, failed, ...(f ? { v: dur(f.leadP50), v2: dur(f.leadP90) } : {}), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance });
-  const landed = statCard({ k: "Landed", loading, failed, ...(f ? { v: cardPct(f.firstPass) } : {}), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
-  const jobs = statCard({ k: "Jobs", v: count(s.factory.liveRuns), v2: count(s.queued.length), q: ["running", "queued"], href: "#/factory/jobs" });
-  return lost + lead + landed + jobs + usageCard(s);
+  return [
+    { k: "Lost time", loading, failed, ...(f ? { v: cardPct(f.lost) } : {}), ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency },
+    { k: "Completion", loading, failed, ...(f ? { v: dur(f.leadP50), v2: dur(f.leadP90) } : {}), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance },
+    { k: "Landed", loading, failed, ...(f ? { v: cardPct(f.firstPass) } : {}), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency },
+    { k: "Jobs", v: count(s.factory.liveRuns), v2: count(s.queued.length), q: ["running", "queued"], href: "#/factory/jobs" },
+    usageProps(s),
+  ];
 }
+/** The Status scorecard's five cards as HTML. */
+export const statusCards = (s, d, links) => cardList(s, d, links).map((c) => statCard(c)).join("");
 
-/** The Usage card: the 7-day value, the bar with the mark for the week gone, and a one- or two-word note. `link` is `{href}` or `{key, on}`. */
-export function usageCard(s, link = { href: "#/factory/agents" }) {
+/** The props of the Usage card: the 7-day value, the bar with the mark for the week gone, and a one- or two-word note. `link` is `{href}` or `{key, on}`. */
+function usageProps(s, link = { href: "#/factory/agents" }) {
   const cur = s.usage?.now, p = pace(s), off = s.usage?.off;
-  if (!cur) return statCard({ k: "Usage", v: "–", ...link });
+  if (!cur) return { k: "Usage", v: "–", ...link };
   const note = s.usage.stale ? "stale" : p ? `${p.word} pace` : "live";
   const gone = weekGone(cur.seven_day_resets_at, s.now);
   const tip = [`${pct(cur.seven_day)} used`, gone !== null && `${pct(gone)} of the week gone`, off != null && `${pct(off)} off this machine`].filter(Boolean).join(", ");
   const bar = meter([{ pct: Math.min(100, cur.seven_day) }], tip, { mark: gone });
-  return statCard({ k: "Usage", v: pct(cur.seven_day), extra: bar, note, ...link });
+  return { k: "Usage", v: pct(cur.seven_day), extra: bar, note, ...link };
 }
+export const usageCard = (s, link) => statCard(usageProps(s, link));
 
 /** The kept share of agent time, for the Status card: the share that reached main as the figure, a thin bar, and a legend of two columns, kept then lost. `d` is /api/flow for the window. */
 export function share(d) {
-  const cs = d.classes.filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return empty();
-  const good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost), kept = good.reduce((a, c) => a + c.hours, 0);
+  const { kept, hours: lostH } = d.figures;
+  if (lostH === null) return empty();
+  const total = kept + lostH, cs = d.classes.filter((c) => c.hours > 0), good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost);
   const seg = (c) => `<i class="seg-${esc(c.key)}" style="flex:${c.hours / total}" title="${esc(`${c.key} ${hours(c.hours)}${c.text ? `: ${c.text}` : ""}`)}"></i>`;
   const gap = good.length && lost.length ? `<i class="ogap" title="Left of the gap reached main; right of it did not"></i>` : "";
-  const line = (c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)}</span><span>${esc(hours(c.hours))}</span><span class="m">${esc(pct((c.hours / total) * 100))}</span>`;
+  const line = (c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)}</span><span>${esc(hours(c.hours))}</span><span class="m">${esc(cardPct(c.hours / total))}</span>`;
   const col = (xs) => `<div>${xs.map(line).join("")}</div>`;
-  return `<div class="ohead"><b class="num">${esc(pct((kept / total) * 100))}</b><span>reached main</span></div>` +
+  return `<div class="ohead"><b class="num">${esc(cardPct(kept / total))}</b><span>reached main</span></div>` +
     `<div class="obar thin" role="img" aria-label="${esc(cs.map((c) => `${c.key} ${hours(c.hours)}`).join(", "))}">${good.map(seg).join("")}${gap}${lost.map(seg).join("")}</div>` +
     `<div class="oledger num">${col(good)}${col(lost)}</div>`;
 }
 
 /** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/flow for the window. */
 export function bar(d, key) {
-  const cs = d.classes.filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return empty();
-  const said = (c) => `${hours(c.hours)} ${pct((c.hours / total) * 100)}`;
+  const { kept, hours: lostH } = d.figures;
+  if (lostH === null) return empty();
+  const total = kept + lostH, cs = d.classes.filter((c) => c.hours > 0);
+  const said = (c) => `${hours(c.hours)} ${cardPct(c.hours / total)}`;
   // Flex grows are shares that sum to 1 in each row: grows summing under 1 leave the row part empty.
   const seg = (c, of) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours / of}" aria-pressed="${c.key === key}" aria-label="${esc(`${c.key} ${said(c)}`)}" title="${esc(c.text)}"></button>`;
   const group = (xs) => { const h = xs.reduce((a, c) => a + c.hours, 0); return xs.length ? `<div class="osegs" style="flex:${h / total}">${xs.map((c) => seg(c, h)).join("")}</div>` : ""; };

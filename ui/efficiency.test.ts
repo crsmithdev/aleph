@@ -69,7 +69,7 @@ const D: any = {
     cls("reran", true, 4, [{ name: "No commit", hours: 3, runs: 2 }, { name: "Issue had landed", hours: 1, runs: 1 }], [{ goal: "fx-2", reason: "", hours: 3, runs: 2 }]),
     cls("dropped", true, 0, []),
   ],
-  figures: { lost: 0.3, hours: 6, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: 0.5 },
+  figures: { lost: 0.3, hours: 6, kept: 14, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: 0.5 },
 };
 
 const BASE: any = { prev: { lost: 0.2, firstPass: 0.6, flaky: 2 }, base: { lost: 0.25, firstPass: 0.75, flaky: 4 }, basis: "the previous 7 days" };

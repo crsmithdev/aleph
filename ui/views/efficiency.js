@@ -1,9 +1,9 @@
 // The Explore page (was Flow, Efficiency): where agent time went, in hours. `d` is /api/flow for the window.
 import { moved, redraw } from "./lib/router.js";
 import { setQuery, scope } from "./lib/address.js";
-import { count, hours, plural, sentence, pct } from "./lib/format.js";
+import { cardPct, count, hours, plural, sentence, pct } from "./lib/format.js";
 import { cell, card, empty, meter, row, statCard, dataTable, esc, heads, onTile, pageHead, repoIdLink, tiles, pagedTable } from "./lib/html.js";
-import { bar, cardHours, cardPct, mergeCauses, windowTrend } from "./lib/flow-parts.js";
+import { bar, cardHours, flowUrl, mergeCauses, windowTrend } from "./lib/flow-parts.js";
 
 const TOP_ISSUES = 5;
 const ALL = "all", FLAKES = "flakes", USAGE = "usage";
@@ -48,21 +48,24 @@ const topTable = (rows) => dataTable(heads(["Issue", "Why", "Took", "Jobs"], ["T
 const usageTable = (rows) => pagedTable(heads(["Issue", "Usage", "Jobs"], ["Usage", "Jobs"]), rows.map((x) =>
   row([`<td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td>`, cell(pct(x.week), { num: true }), cell(count(x.runs), { num: true })])));
 
+/** The page head, the scorecard and the Agent Time card, which every selection shows. */
+function head(d, key) {
+  const total = d.figures.kept + d.figures.hours, nc = d.notCounted;
+  return `${pageHead("Explore", { aside: scope().bar({ value: d.window ?? "week" }) })}${tiles("Quality", scorecard(d, key))}` +
+    card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined });
+}
+
 function usagePage(d, key) {
-  const total = d.classes.reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
-  const head = scope().bar({ value: d.window ?? "week" });
-  return `<div class="page sp" id="eff">${pageHead("Explore", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
-    card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined }) +
+  const s = selection(d, key);
+  return `<div class="page sp" id="eff">${head(d, key)}` +
     card("Usage per Issue, Largest First", s.top.length ? usageTable(s.top) : empty(), { label: "Usage per issue, largest first" }) + `</div>`;
 }
 
 /** The page body for a selection. `d` is /api/flow for the window, with its `baseline` when there is one. */
 export function renderEfficiency(d, key = ALL) {
   if (key === USAGE) return usagePage(d, key);
-  const s = selection(d, key), total = d.classes.reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
-  const head = scope().bar({ value: d.window ?? "week" });
-  return `<div class="page sp" id="eff">${pageHead("Explore", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
-    card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined }) +
+  const s = selection(d, key);
+  return `<div class="page sp" id="eff">${head(d, key)}` +
     `<div class="pair">${card(`${s.title} Causes`, s.causes.length ? causeBars(s) : empty(), { label: sentence(`${s.title} causes`) })}` +
     (key === FLAKES ? "" : card(`${s.title} Issues`, s.top.length ? topTable(s.top) : empty(), { label: sentence(`${s.title} issues`) })) + `</div></div>`;
 }
@@ -76,7 +79,7 @@ export const view = {
   group: "factory",
   order: 3,
   icon: "magnifying-glass-chart",
-  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/flow?window=${s.window}&baseline=1`); },
+  api: (_params, q = new URLSearchParams()) => flowUrl(scope(q).window, q, true),
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderEfficiency(d, q?.get("tile") ?? ALL),

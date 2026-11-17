@@ -10,11 +10,9 @@ import { verdict } from "../lib/status-words.ts";
 import { clip, NAMES, runWord, shortText, shownId } from "../lib/naming.ts";
 import { plain, type Row } from "../ui/herald.ts";
 // @ts-ignore plain JS, shared with the page
-import { clock, count, dur, hours, mean, pct, when } from "../ui/views/lib/format.js";
+import { cardPct, clock, dur, hours, mean, when } from "../ui/views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
-import { cardTrend } from "../ui/views/lib/html.js";
-// @ts-ignore plain JS, shared with the page
-import { cardHours, cardPct, pace } from "../ui/views/lib/flow-parts.js";
+import { cardList } from "../ui/views/lib/flow-parts.js";
 import { errText } from "../lib/errtext.ts";
 
 type State = Awaited<ReturnType<typeof stateBody>>;
@@ -28,19 +26,10 @@ const paint = (code: number, t: string) => `\x1b[${code}m${t}\x1b[0m`;
 /** The trend of the page's scorecard as text: the page draws it as HTML. */
 const trend = (html: string) => html.replace(/<[^>]*>/g, "");
 
-/** The scorecard of the page: each card's name, value, trend and what the value counts. */
-function scorecard(s: State, d: Flow) {
-  const f = d.figures, base = d.baseline?.base, prev = d.baseline?.prev, basis = d.baseline?.basis ?? "";
-  const t = (key: keyof Flow["figures"], o: object) => trend(base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
-  const p = pace(s);
-  return [
-    { name: "Lost time", value: `${cardPct(f.lost)} / ${cardHours(f.hours)}`, trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), note: "lost / hours" },
-    { name: "Completion", value: `${dur(f.leadP50)} / ${dur(f.leadP90)}`, trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), note: "p50 / p90" },
-    { name: "Landed", value: `${cardPct(f.firstPass)} / ${count(f.landed)}`, trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), note: "clean / landed" },
-    { name: "Jobs", value: `${count(s.factory.liveRuns)} / ${count((s.queued ?? []).length)}`, trend: "", note: "running / queued" },
-    { name: "Usage", value: s.usage?.now ? pct(s.usage.now.seven_day) : "–", trend: "", note: s.usage?.stale ? "stale" : p ? `${p.word} pace` : s.usage?.now ? "live" : "" },
-  ];
-}
+/** The scorecard of the page: each card's name, value, trend and what the value counts, from the page's card list. */
+const scorecard = (s: State, d: Flow): { name: string; value: string; trend: string; note: string }[] => cardList(s, d, {}).map((c: any) => ({
+  name: c.k, value: [c.v, c.v2].filter((x) => x !== undefined).join(" / "), trend: trend(c.trend ?? ""), note: c.q?.join(" / ") ?? c.note ?? "",
+}));
 
 /** Agent Time: the hours of each outcome class, and the kept and total hours. */
 function agentTime(d: Flow) {
@@ -60,7 +49,7 @@ function pipeline(d: Flow) {
     if (k === "queue") return { name, text: d.phases?.queue?.count > 0 ? `wait · p90 ${dur(d.phases.queue.p90)}` : "–", tone: "quiet" };
     if (!r?.items) return { name, text: "–", tone: "quiet" };
     const share = r.runs ? (r.unusable ?? 0) / r.runs : 0;
-    return { name, text: `${mean(r.runs / r.items)}/issue · p90 ${dur(r.p90)} · ${pct(share * 100)} failed`, tone: health(share) };
+    return { name, text: `${mean(r.runs / r.items)}/issue · p90 ${dur(r.p90)} · ${cardPct(share)} failed`, tone: health(share) };
   });
 }
 
@@ -102,7 +91,7 @@ export function render(s: State, d: Flow, { width, height }: { width: number; he
 
   head("Agent Time");
   const a = agentTime(d);
-  line(a.all > 0 ? `${pct((a.kept / a.all) * 100)} reached main · ${hours(a.kept)} of ${hours(a.all)}` : "No data");
+  line(a.all > 0 ? `${cardPct(a.kept / a.all)} reached main · ${hours(a.kept)} of ${hours(a.all)}` : "No data");
 
   head("Pipeline");
   for (const r of pipeline(d)) line(`${r.name} ${r.text}`);

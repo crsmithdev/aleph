@@ -4,7 +4,7 @@
 import { issueApi, postJson, setQuery as setHash, hashQuery, scope, remember, keep, kept } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
 import { undecided } from "./lib/decisions.js";
-import { count, days, plural, dur, money, pct, when } from "./lib/format.js";
+import { cardPct, count, days, plural, dur, money, when } from "./lib/format.js";
 import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, sortOf, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
 import { buckets, DAY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
@@ -245,7 +245,7 @@ export function renderTiles(s, key = "open", win = "week") {
     statCard({ k: "Backlog", v: count(s.parked), ...on("parked") }) +
     statCard({ k: "Filed / Closed", v: count(s.filed), v2: count(s.closed), q: ["filed", "closed"], ...on("flow") }) +
     statCard({ k: "Time to Close", v: s.p50 == null ? "–" : dur(s.p50), ...(s.p90 == null ? {} : { v2: dur(s.p90), q: ["p50", "p90"] }), trend: cardTrend(s.p50, s.p50Before, s.p50Before, { kind: "relative", lowerIsGood: true, tip: `${dur(s.p50Before)} the ${win} before` }) }) +
-    statCard({ k: "Close Rate", v: rate == null ? "–" : pct(rate * 100), trend: cardTrend(rate, before, before, { kind: "points", lowerIsGood: false, tip: `${before == null ? "–" : pct(before * 100)} the ${win} before` }) }));
+    statCard({ k: "Close Rate", v: cardPct(rate), trend: cardTrend(rate, before, before, { kind: "points", lowerIsGood: false, tip: `${cardPct(before)} the ${win} before` }) }));
 }
 
 /** The window's buckets (60 minutes, 24 hours, 7 or 30 days): the time of each and how many rows were filed and closed in it. A stored time counts to its minute. */

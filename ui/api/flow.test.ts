@@ -293,6 +293,13 @@ test("builds, wait and size: one entry per build run; an issue's size is its las
   expect(figures({ ...d, wait: { count: 20, p50: 0.3 } }).waitShare).toBe(0.3);
 });
 
+test("figures: kept hours are the counted hours less the lost ones, null with no hours", () => {
+  const d = speed("day", new Date("2026-10-28T12:00:00Z"));
+  const hrs = (xs: number[]) => xs.map((hours) => ({ hours })) as any;
+  expect(figures({ ...d, classes: hrs([10, 4, 2]), lost: { hours: 2, share: 0.125 } })).toMatchObject({ kept: 14, hours: 2 });
+  expect(figures({ ...d, classes: hrs([0]), lost: { hours: 0, share: 0 } })).toMatchObject({ kept: null, hours: null });
+});
+
 test("a build run counts as an agent run", () => {
   const before = speed("week", now);
   run({ role: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
@@ -619,13 +626,13 @@ test("the shared formats", () => {
 });
 
 test("the outcome bar with no hours names a job, not a run", () => {
-  const h = bar({ window: "week", classes: [] }, "all");
+  const h = bar({ window: "week", classes: [], figures: { kept: null, hours: null } }, "all");
   expect(h).not.toMatch(/\bruns?\b/i);
   expect(h).toContain('<div class="empty"><p>No data</p></div>');
 });
 
 test("the outcome bar's legend share has no brackets", () => {
-  const h = bar({ window: "week", classes: [{ key: "landed", hours: 3, text: "t" }] }, "all");
+  const h = bar({ window: "week", classes: [{ key: "landed", hours: 3, text: "t" }], figures: { kept: 3, hours: 0 } }, "all");
   expect(h).toContain("landed <em>3.0h 100%</em>");
   expect(h).not.toContain("(");
 });

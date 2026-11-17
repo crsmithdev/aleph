@@ -22,7 +22,7 @@ const WEEK = {
     { key: "reran", lost: true, hours: 4, causes: [{ name: "Issue had landed", hours: 1, runs: 1 }, { name: "No commit", hours: 3, runs: 2 }] },
     { key: "dropped", lost: true, hours: 0, causes: [] },
   ],
-  figures: { lost: 0.38, hours: 6, leadP50: 1570, leadP90: 16560, asks: null, landed: 7, firstPass: 0.91 },
+  figures: { lost: 0.38, hours: 6, kept: 10, leadP50: 1570, leadP90: 16560, asks: null, landed: 7, firstPass: 0.91 },
 };
 
 const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };

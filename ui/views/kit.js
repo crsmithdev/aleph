@@ -112,7 +112,7 @@ const FEED = [
   { key: "kit 1", at: "2026-11-10T16:58:00Z", by: "job.1", kind: "work", word: "landed", id: [{ id: "i1700", to: "#/kit" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
   { key: "kit 2", at: "2026-11-10T16:40:00Z", by: "job.2", kind: "work", word: "returned", id: [{ id: "i1701", to: "#/kit" }], text: ["checks failed"], more: 0, lines: [] },
 ];
-const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }] };
+const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }], figures: { kept: 52, hours: 9 } };
 
 const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill|sel)$/],
   ["tones", "Tones", /^--(run|done|need|error|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/],

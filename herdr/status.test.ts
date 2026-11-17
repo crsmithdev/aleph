@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { data, render } from "./status.ts";
 import { verdict } from "../lib/status-words.ts";
 import { heraldRows } from "../ui/herald.ts";
+// @ts-ignore plain JS, shared with the page
+import { cardList } from "../ui/views/lib/flow-parts.js";
 
 const ctx = { titles: {}, runs: {}, attempts: {}, reviewed: {} };
 
@@ -56,6 +58,13 @@ test("the scorecard has its five labels, and the alerts and running jobs come be
   expect(ask).toBeLessThan(stuck);
   expect(stuck).toBeLessThan(run);
   expect(run).toBeLessThan(first(text));
+});
+
+test("with null figures the scorecard prints the card values of the page's card list", () => {
+  const empty = { ...flow, figures: { lost: null, hours: null, kept: null, leadP50: null, leadP90: null, landed: null, firstPass: null }, baseline: undefined };
+  const cards = cardList(state, empty, {});
+  expect(data(state, empty).scorecard.map((c) => c.value)).toEqual(cards.map((c: any) => [c.v, c.v2].filter((x) => x !== undefined).join(" / ")));
+  expect(data(state, empty).scorecard.map((c) => c.value)).toEqual(["–", "– / –", "–", "1 / 1", "40%"]);
 });
 
 test("the height fills the pane, and the cut drops the oldest events", () => {

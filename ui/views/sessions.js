@@ -3,7 +3,7 @@
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
 import { setQuery, hashQuery, wireScope, scope } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
-import { count, plural, money, pct, when } from "./lib/format.js";
+import { cardPct, count, plural, money, when } from "./lib/format.js";
 import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, barRow, legendHtml, linkButton, meter, miss, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, onTile, pageHead, pager, searchBox, sortHead, sortOf, pageOf, pageRows, sortRows, wireTable, statCard, tiles } from "./lib/html.js";
 import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
@@ -68,10 +68,9 @@ export function shownSessions(d, o) {
     SORT, o.sort, (a, b) => SORT.last(b) - SORT.last(a));
 }
 
-const rate = (r) => pct(r.rate * 100);
 // plural() prints a bare number; this keeps count()'s thousands separator.
 const counted = (n, one) => plural(n, one).replace(/^\d+/, count(n));
-const renderFails = (d, o) => tiles("Failing Most", failing(d).map((r) => statCard({ k: r.name, v: rate(r), note: `${r.kind}: ${count(r.errors)} of ${counted(r.n, r.kind === "tool" ? "call" : "use")}`, key: r.pick, on: o.pick === r.pick })).join(""));
+const renderFails = (d, o) => tiles("Failing Most", failing(d).map((r) => statCard({ k: r.name, v: cardPct(r.rate), note: `${r.kind}: ${count(r.errors)} of ${counted(r.n, r.kind === "tool" ? "call" : "use")}`, key: r.pick, on: o.pick === r.pick })).join(""));
 
 function ranked(kind, rows, o) {
   const top = Math.max(1, ...rows.map((r) => r.n));

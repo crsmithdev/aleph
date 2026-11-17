@@ -1,13 +1,13 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
 import { get, moved, redraw } from "./lib/router.js";
 import { setQuery, scope } from "./lib/address.js";
-import { dur, count, failMessage, MIN_LANDED, pct, plural, shortModel } from "./lib/format.js";
+import { cardPct, dur, count, failMessage, MIN_LANDED, plural, shortModel } from "./lib/format.js";
 import { card, cell, dataTable, filterBar, miss, row, empty, error, heads, loadingLine, onTile, pageHead, searchBox, statCard, cardTrend, tiles } from "./lib/html.js";
 import { NAMES } from "../../lib/naming.ts";
 import { quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./lib/jobs-table.js";
-import { bucketOf, cardPct, flowOf, lastPeriod, trendOn, usable, windowTrend } from "./lib/flow-parts.js";
+import { bucketOf, flowOf, flowUrl, lastPeriod, trendOn, usable, windowTrend } from "./lib/flow-parts.js";
 
 export const STAGES = [
   ["lead", NAMES.lead],
@@ -28,7 +28,7 @@ const stageTile = ([key, name], d, day, on) => {
 /** The Wait share card: the p50 of queue time over lead time, over the issues that landed in the window; no figure with fewer than `MIN_LANDED`. */
 const waitTile = (d) => {
   const { count: n, p50 } = d.wait, few = n < MIN_LANDED;
-  return statCard({ k: "Wait share", v: few ? "–" : pct(p50 * 100), note: plural(n, "issue"), trend: few ? "" : windowTrend(d, "waitShare", p50, { kind: "points", lowerIsGood: true, format: cardPct }) });
+  return statCard({ k: "Wait share", v: few ? "–" : cardPct(p50), note: plural(n, "issue"), trend: few ? "" : windowTrend(d, "waitShare", p50, { kind: "points", lowerIsGood: true, format: cardPct }) });
 };
 
 /** The p50 and p90 of a stage by bucket, as two lines: a bucket with no time is null, a gap. */
@@ -107,7 +107,7 @@ function buildByModel(d, size = "") {
     const per = landed.length >= MIN_LANDED ? quantile(landed, 0.5) : null;
     return { per, count: runs.length, model, cells: [
       model === "unset" ? none("no model") : shortModel(model), count(runs.length), dur(quantile(secs, 0.5)), dur(quantile(secs, 0.9)),
-      issues.length ? { td: cell(pct((retried / issues.length) * 100), { num: true, title: `${retried} of ${plural(issues.length, "issue")}` }) } : none("no issue", false),
+      issues.length ? { td: cell(cardPct(retried / issues.length), { num: true, title: `${retried} of ${plural(issues.length, "issue")}` }) } : none("no issue", false),
       per === null ? none(`${landed.length} landed`, false) : dur(per),
     ] };
   });
@@ -136,7 +136,7 @@ export const view = {
   group: "factory",
   order: 1,
   icon: "stopwatch",
-  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/flow?window=${s.window}&baseline=1`); },
+  api: (_params, q = new URLSearchParams()) => flowUrl(scope(q).window, q, true),
   live: true,
   refresh: 60,
   // `d.day` is /api/flow for the last 24h and `d.jobs` is /api/jobs for the window, which `more` adds; the page draws without them first.
