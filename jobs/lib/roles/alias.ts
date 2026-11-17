@@ -149,7 +149,7 @@ export async function alias(root: string, dry: boolean, now = Date.now()): Promi
   const queue = (await findMisses(root, notes, now)).slice(0, MISSES);
   if (!queue.length) return { ...report, skipped: "no misses" };
   await pass(report, {
-    label: "alias", day, dry, schema: ALIAS_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
+    label: "alias", root, record: "alias", day, dry, schema: ALIAS_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
     act: async (list) => {
       const asked = (v: Verdict) => queue[v.miss - 1]?.note.title === v.note;
       report.misses = dry ? list.filter(asked).map(({ miss, note, verdict, why, aliases }) => ({ query: queue[miss - 1].query, note, verdict, why, ...(aliases ? { aliases } : {}) })) : await apply(root, queue, list, day);

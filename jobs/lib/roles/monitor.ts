@@ -18,7 +18,7 @@ import { errText } from "../../../lib/errtext.ts";
 /** The reader's time box, in seconds. */
 const SECONDS = 600;
 /** The model of the monitor reader: a run on OpenRouter, priced from its tokens. */
-const MONITOR_MODEL = () => readModels().monitor?.model ?? "deepseek-v4.1-flash";
+const MONITOR_MODEL = () => readModels().monitor.model;
 
 /** The day a report is due for: yesterday, from the monitor hour (local) on, when it has no report yet; else null. */
 export function monitorDue(now = new Date()): string | null {

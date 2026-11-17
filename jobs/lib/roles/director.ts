@@ -39,7 +39,6 @@ import { logEvent } from "../../../lib/layout.ts";
 import { because, ISSUE_KEY, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
 import { DIRECTOR_CAP, needsYouLog } from "../infra/settings.ts";
 import { vaultDir } from "../../../lib/paths.ts";
-import { OPUS_MODEL } from "../../../lib/models.ts";
 import { readModels } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
 import { readSection } from "../records/run-files.ts";
@@ -47,7 +46,7 @@ import { drop as dropJob, land as landJob, refusal } from "../transitions/transi
 import { writeTitle } from "./title.ts";
 import { errText } from "../../../lib/errtext.ts";
 
-const DIRECTOR_MODEL = () => readModels().director?.model ?? OPUS_MODEL;
+const DIRECTOR_MODEL = () => readModels().director.model;
 /** One run per Ask: its time box in seconds. */
 const SECONDS = 900;
 /** The most actions one run may take; the rest are refused. */

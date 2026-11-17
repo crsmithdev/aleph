@@ -102,7 +102,7 @@ test(`the run takes ${PAIRS} pairs, skips core pairs and refuses malformed repli
   reply([v(asked[0], asked[1], "merge", { keep: "Not In Pair", claim: "c", details: "d", evidence: "e" }), v(asked[2], asked[3], "merge", { keep: asked[2], claim: "c" })]);
   const r = await dedupe(root, false);
   expect(r.pairs.map((p) => p.rule)).toEqual(["reply", "reply"]);
-  expect(readRun(root, "dedupe")?.detail).toBe("0 resolved");
+  expect(readRun(root, "dedupe")?.detail).toBe("0 resolved, 2 refused");
 });
 
 test("a later pair that names a note an earlier verdict archived is skipped with rule gone", async () => {

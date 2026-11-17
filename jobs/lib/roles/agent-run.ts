@@ -112,7 +112,7 @@ export function openRun(o: Opening): AgentRun {
 }
 
 function endAgentRun(id: string, reason: string, fields: Partial<Omit<Run, "state">> = {}): void {
-  setState(id, "done", { reason, ...fields, phase: undefined, ended: new Date().toISOString() });
+  setState(id, "done", { reason, ...fields, phase: undefined });
 }
 
 /**

@@ -103,7 +103,7 @@ test("a refused verdict is kept with its rule, is not counted, and the rest go o
   reply([{ title: "Fix", verdict: "correct", why: "w", claim: "c", details: "d", evidence: "e", related: ["No Such"] }, { title: "Keep", verdict: "correct", why: "w" }]);
   const r = await recheck(root, false);
   expect(r.notes.map((n) => [n.title, n.rule])).toEqual([["Keep", "reply"], ["Fix", undefined]]);
-  expect(readRun(root, "recheck")?.detail).toBe("1 rechecked");
+  expect(readRun(root, "recheck")?.detail).toBe("1 rechecked, 1 refused");
 });
 
 test("a dry run asks the model, lists each verdict and writes nothing", async () => {

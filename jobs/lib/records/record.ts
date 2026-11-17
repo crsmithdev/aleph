@@ -224,7 +224,9 @@ function write(d: Database, id: string, state: State | undefined, change: Change
   if (!r) throw new Error(`no record holds the run ${id}`);
   const root = rootOf(d, id), was = fromRow(r, root, runAsks(d).get(id));
   const { ask, ...rest } = change as Change & { ask?: Ask };
-  const merged = JSON.parse(JSON.stringify({ ...was, ...rest, ...(state ? { state } : {}) })) as RunRecord;
+  // A run that leaves `running` ends now, unless `change` gives the time.
+  const ends = state && state !== "running" && state !== was.state && !("ended" in change) ? { ended: new Date().toISOString() } : {};
+  const merged = JSON.parse(JSON.stringify({ ...was, ...rest, ...ends, ...(state ? { state } : {}) })) as RunRecord;
   delete (merged as Partial<RunRecord>).ask;
   const row = toRow(id, merged);
   writes++;

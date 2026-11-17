@@ -28,7 +28,6 @@ import { paused } from "../gates/pause.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { conflictsOf, land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
-import { OPUS_MODEL } from "../../../lib/models.ts";
 import { readModels, SIZE_OF } from "../routing/models.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "../transitions/continuation.ts";
 import { oracleCommands, outsideSurface } from "./issue-spec.ts";
@@ -197,7 +196,7 @@ export async function unit(folder: string): Promise<void> {
   }
 
   // One write ends the run with its `next`. `told` is a later write: it waits for the reply of Sidetone.
-  const ended = jobRecord.endRun(id, { ...outcome, phase: undefined, ended: new Date().toISOString() }, (r, lands) => nextStep(r, !!repo?.autoland, lands));
+  const ended = jobRecord.endRun(id, { ...outcome, phase: undefined }, (r, lands) => nextStep(r, !!repo?.autoland, lands));
   const next = ended.next;
   markEnded(folder, code);
   jobRecord.copyEnd(id);
@@ -646,10 +645,10 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
   const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
   const diff = reviewDiff(repo.path, range, reviewDiffMax());
   const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
-  const model = readModels().review?.model ?? OPUS_MODEL;
+  const model = readModels().review.model;
   // The reviewer is a job of its own: it follows the build, which holds the unit and the process.
   const rv = jobRecord.makeJob({ role: "review", name: run.name, prev: jobOfFolder(folder), target: run.target, repo: run.repo, model }, (dir) => writeFileSync(runFile(dir, "prompt.md"), text));
-  const end = (state: "done" | "failed", fields: Parameters<typeof jobRecord.setState>[2] = {}) => jobRecord.setState(rv.id, state, { ended: new Date().toISOString(), ...fields });
+  const end = (state: "done" | "failed", fields: Parameters<typeof jobRecord.setState>[2] = {}) => jobRecord.setState(rv.id, state, fields);
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
   try {
     return await atCommit(repo, tip, async (wt) => {

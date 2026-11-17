@@ -111,7 +111,7 @@ async function dispatch(run: NewJob, cwd: string, command: string[], output: Out
     try {
       child = startUnit(["unit", folder], { unit: unitOf(id), cwd, props: max, output, attach: true });
     } catch (e) {
-      setState(id, "failed", { reason: errText(e), ended: new Date().toISOString() });
+      setState(id, "failed", { reason: errText(e) });
       refuse(errText(e));
     }
     // Wait for `pid`, but not for a unit that cannot write it: one that has exited, or whose folder is gone.
@@ -341,10 +341,10 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     for (const e of new Set([...live, last])) {
       markEnded(e.folder, 143);
       // The drop replaces the sentence, so a run that has only the sentence gets its cause now.
-      setState(e.id, "dropped", { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      setState(e.id, "dropped", { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, reason, ask: undefined, phase: undefined, told: true });
     }
     // The reviewer runs inside its build's unit, so a stopped unit leaves its job running.
-    for (const e of runs) if (e.run.role === "review" && e.run.state === "running") setState(e.id, "dropped", { reason, phase: undefined, ended: new Date().toISOString() });
+    for (const e of runs) if (e.run.role === "review" && e.run.state === "running") setState(e.id, "dropped", { reason, phase: undefined });
     const todo = issueOf(runs);
     const why = repo && todo !== undefined && !a.quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;
     if (why) console.error(`warn: issue ${todo} has no note: ${why}`);

@@ -33,7 +33,7 @@ export async function oneShot(role: "title" | "judge", cmd: string, system: stri
     return { code: r.step.code, stderr: readFileSync(stderr, "utf8"), result: r.text, timedOut: r.step.timedOut };
   } finally {
     const ok = r?.step.code === 0 && !r.step.timedOut;
-    setState(run, "done", { ...(r?.model === FALLBACK ? { model: FALLBACK } : {}), cost: r?.cost, tokens: r?.tokens, ended: new Date().toISOString(), ...(ok ? {} : { reason: `failed: ${r?.cause?.reason ?? "no reply"}`, cause: "unanswered" }) });
+    setState(run, "done", { ...(r?.model === FALLBACK ? { model: FALLBACK } : {}), cost: r?.cost, tokens: r?.tokens, ...(ok ? {} : { reason: `failed: ${r?.cause?.reason ?? "no reply"}`, cause: "unanswered" }) });
     rmSync(dir, { recursive: true, force: true });
   }
 }

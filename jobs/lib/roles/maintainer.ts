@@ -18,7 +18,7 @@ import { errText } from "../../../lib/errtext.ts";
 
 /** The run's time box, in seconds. */
 export const SECONDS = 900;
-const MODEL = () => readModels().maintainer?.model ?? "sonnet";
+const MODEL = () => readModels().maintainer.model;
 /** Read-only: the vault's recall and Read. */
 const ALLOWED = ["Bash(aleph memory recall:*)", "Read"];
 const KINDS = ["decision", "project", "concept", "entity", "gotcha"];
@@ -97,6 +97,9 @@ export const reason = (verb: string, day: string, why?: string): string => `main
 export interface Pass {
   /** The pass's name: the run's name and command. */
   label: string;
+  /** The vault and the name of the vault run record `pass` writes. */
+  root: string;
+  record: string;
   day: string;
   dry: boolean;
   schema: object;
@@ -109,7 +112,7 @@ export interface Pass {
   act: (list: any[]) => Promise<void>;
   /** The run's end text when `act` succeeded. */
   done: () => string;
-  /** Called after the run ends: the error text, or undefined when it succeeded. */
+  /** Called after the run ends and its record is written: the error text, or undefined when it succeeded. */
   settle?: (error?: string) => void;
 }
 
@@ -129,10 +132,13 @@ export async function pass(report: { run?: string; error?: string; skipped?: str
     } catch (e) {
       report.error = errText(e);
       run.end(`failed: ${report.error}`, { cause: "unanswered" });
+      recordRun(p.root, p.record, "failed", report.error);
       p.settle?.(report.error);
       return;
     }
-    run.end(`${p.dry ? "dry: " : ""}${p.done()}`);
+    const text = `${p.dry ? "dry: " : ""}${p.done()}`;
+    run.end(text);
+    recordRun(p.root, p.record, "ok", text);
     p.settle?.();
   } finally {
     release();
@@ -164,15 +170,13 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
     return { ...report, skipped: "nothing on the day" };
   }
   await pass(report, {
-    label: "maintainer", day, dry, schema: MAINTAINER_SCHEMA, allowed: ALLOWED, key: "notes", prompt: prompt(day, digest.text),
+    label: "maintainer", root, record: "compile", day, dry, schema: MAINTAINER_SCHEMA, allowed: ALLOWED, key: "notes", prompt: prompt(day, digest.text),
     act: async (list) => { report.notes = dry ? list.map((n) => ({ title: String(n.title), kind: String(n.kind) })) : await put(root, list, day); },
     done: () => {
       const wrote = report.notes.filter((n) => !n.refused).length;
       return `${wrote} notes${report.notes.length > wrote ? `, ${report.notes.length - wrote} refused` : ""}`;
     },
     settle: (error) => {
-      const wrote = report.notes.filter((n) => !n.refused).length;
-      recordRun(root, "compile", error ? "failed" : "ok", error ? `${day}: ${error}` : `${dry ? "dry: " : ""}${day}: ${wrote} notes`);
       if (!error && !dry) recordCompiled(root, day);
       markRetry(root, day, !!error);
     },

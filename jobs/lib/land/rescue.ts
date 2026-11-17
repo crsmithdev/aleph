@@ -369,7 +369,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     // The real recheck takes only a returned or failed run, so the killed run ends failed first, as a killed land does.
     if (r.role === "land" || step.action === "recheck") {
       markEnded(last.folder, 143);
-      setState(last.id, "failed", { reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
+      setState(last.id, "failed", { reason, cause: "other", phase: undefined, told: true });
     }
     return take(step);
   }
@@ -377,7 +377,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (isLostRun) {
     // Marked failed first, so the run is no longer lost, whatever comes next: the recheck and the Ask both want an ended run.
     markEnded(last.folder, 143);
-    setState(last.id, "failed", { reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
+    setState(last.id, "failed", { reason, cause: "other", phase: undefined, told: true });
     const again = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "lost");
     if (again) return chris(`${name}: a second run of this goal was lost (its process ended with no end written). Drop it, or change the goal?`, choice(`${name}: a second run was lost: how should the factory go on?`, ["An earlier run of this goal was lost too, and its rerun did not clear it"]));
     markRescued(last, "lost");

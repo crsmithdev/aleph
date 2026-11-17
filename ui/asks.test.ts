@@ -189,6 +189,13 @@ describe("asks", () => {
     expect(ofIssues(issue({ reason: "nope", question: "what now?" }))[0].reason).toBe("question");
   });
 
+  test("a review hold's Problem names how often the reviewer sent the run back", () => {
+    for (const times of ["once", "twice", "3 times"]) {
+      const [t] = ofRuns(run("review-held", { reason: `the reviewer sent it back ${times}: no test.` }));
+      expect(t.problem).toBe(`The reviewer sent aleph-27 back ${times}: no test.`);
+    }
+  });
+
   test("a failed intake's Problem names why it failed", () => {
     const [t] = ofIssues(issue({ reason: "intake-failed", question: "Intake failed: no verdict in 2 runs" }));
     expect(t.problem).toBe("Intake of aleph-387 failed: no verdict in 2 runs, so no one has decided what to do with this issue.");

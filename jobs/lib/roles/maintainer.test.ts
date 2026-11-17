@@ -62,7 +62,7 @@ test("a real compile writes each note through the vault write op, keeps a refusa
   expect(existsSync(join(root, "wiki", "decisions", "Bad Link.md"))).toBe(false);
   expect(readFileSync(join(root, "wiki", "decisions", "Core Try.md"), "utf8")).not.toContain("core:");
   expect(compiledDays(root)).toEqual([DAY]);
-  expect(readRun(root, "compile")?.detail).toBe(`${DAY}: 2 notes`);
+  expect(readRun(root, "compile")?.detail).toBe("2 notes, 1 refused");
   expect(notes()[0].run).toMatchObject({ state: "done", reason: "2 notes, 1 refused", name: `maintainer-${DAY}` });
   const prompt = readFileSync(join(base, "prompt.md"), "utf8");
   expect(prompt).toContain("## write");

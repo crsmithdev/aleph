@@ -55,6 +55,15 @@ test("setState logs one event by gate for a change of state; a patch that keeps 
   ]);
 });
 
+test("setState to a state past running stores an ended time unless the change gives one, and keeps it on a patch of the same state", () => {
+  const a = record.makeJob({ role: "build", name: "issue.35" }), b = record.makeJob({ role: "build", name: "issue.36" });
+  expect(record.setState(a.id, "failed", { cause: "timeout" }).ended).toBeString();
+  const ended = record.getRun(a.id)!.ended;
+  expect(record.setState(a.id, "failed", { reason: "again" }).ended).toBe(ended);
+  expect(record.setState(b.id, "dropped", { ended: "2026-01-01T00:00:00.000Z" }).ended).toBe("2026-01-01T00:00:00.000Z");
+  expect(record.patchRun(record.makeJob({ role: "build", name: "issue.37" }).id, { phase: "worker" }).ended).toBeUndefined();
+});
+
 test("a run that fails a check logs the reason as the event detail", () => {
   const { id } = record.makeJob({ role: "build", name: "issue.33" });
   record.setState(id, "failed", { cause: "check", checkName: "bun test", reason: "bun test failed: 3 fail (a.test.ts)" });

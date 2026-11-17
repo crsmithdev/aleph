@@ -25,7 +25,6 @@ import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { withMainClone } from "../infra/main-clone.ts";
 import { itemOnMain } from "../records/status.ts";
 import { INTAKE_TRIES } from "../infra/settings.ts";
-import { OPUS_MODEL } from "../../../lib/models.ts";
 import { readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
 import type { Decider } from "../gates/decider.ts";
@@ -35,7 +34,7 @@ import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec
 import { errText } from "../../../lib/errtext.ts";
 
 /** The model an intake run asks for. */
-const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;
+const INTAKE_MODEL = () => readModels().intake.model;
 
 export interface Part { title: string; spec: Spec; after: number[] }
 

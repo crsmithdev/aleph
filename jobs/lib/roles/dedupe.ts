@@ -8,7 +8,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { archive, outcome, write } from "../../../vault/lib/ops.ts";
-import { lintVault, loadWiki, recordRun, type Note } from "../../../vault/lib/vault.ts";
+import { lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
 
@@ -103,7 +103,7 @@ export async function dedupe(root: string, dry: boolean): Promise<DedupeReport> 
     .map((f): Pair => [byTitle.get(f.note)!, byTitle.get(f.other!)!]).filter(([a, b]) => !a.fm.core && !b.fm.core).slice(0, PAIRS);
   if (!queue.length) return { ...report, skipped: "no overlapping pairs" };
   await pass(report, {
-    label: "dedupe", day, dry, schema: DEDUPE_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
+    label: "dedupe", root, record: "dedupe", day, dry, schema: DEDUPE_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
     act: async (list) => {
       const asked = (v: Verdict) => queue.some(([a, b]) => (v.a === a.title && v.b === b.title) || (v.a === b.title && v.b === a.title));
       report.pairs = dry ? list.filter(asked).map(({ a, b, verdict, why }) => ({ a, b, verdict, why })) : await apply(root, queue, list, day);
@@ -112,7 +112,6 @@ export async function dedupe(root: string, dry: boolean): Promise<DedupeReport> 
       const done = report.pairs.filter((p) => !p.refused).length;
       return `${done} resolved${report.pairs.length > done ? `, ${report.pairs.length - done} refused` : ""}`;
     },
-    settle: (error) => recordRun(root, "dedupe", error ? "failed" : "ok", error ?? `${dry ? "dry: " : ""}${report.pairs.filter((p) => !p.refused).length} resolved`),
   });
   return report;
 }

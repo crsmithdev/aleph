@@ -84,6 +84,9 @@ function checkBack(done: number | undefined, check: string, reason: string, cap:
 
 /** "once", "twice", "3 times". */
 const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
+/** The reason of a hold after the reviewer sent the run back `n` times; `SENT_BACK` reads it: the count word, then `why`. */
+const sentBack = (n: number, why: string) => `the reviewer sent it back ${times(n)}: ${why}`;
+export const SENT_BACK = /^the reviewer sent it back (once|twice|\d+ times):\s*(.*)$/s;
 
 /**
  * What follows a reviewer hold: a fix round (`round`) while fewer than `cap` rounds are done; else the run
@@ -92,7 +95,7 @@ const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`
 function reviewHold(done: number | undefined, earlier: Run[] | undefined, reason: string, cap: number): { round: number } | { reason: string } {
   if (done !== undefined && done < cap) return { round: done };
   const back = earlier?.filter((r) => r.failed === "review").length ?? 0;
-  return { reason: back ? `the reviewer sent it back ${times(back)}: ${reason.replace(/^reviewer:\s*/, "")}` : reason };
+  return { reason: back ? sentBack(back, reason.replace(/^reviewer:\s*/, "")) : reason };
 }
 
 /** The verdict on a branch that its worker or a recheck left. */

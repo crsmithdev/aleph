@@ -3,6 +3,7 @@
  * the page only renders. One entry per run, issue that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
+import { SENT_BACK } from "../jobs/lib/gates/worker-verdict.ts";
 import { actionsOn, ASK_REASONS, CLOSE_DONE, LIMITS, limitText, PLAN_REST, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
 import { jobHref, parseId, refs, word } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
@@ -74,8 +75,8 @@ const PROBLEM: Record<string, (c: Ctx) => string | undefined> = {
     const r = c.run?.reviewCall;
     if (r?.call === "returned") return `The reviewer sent ${c.id} back twice${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
     if (r?.call === "waiting") return `The reviewer left ${c.id} to the user${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
-    const back = /^the reviewer sent it back twice:\s*(.*)$/s.exec(c.run?.reason ?? "");
-    if (back) return `The reviewer sent ${c.id} back twice: ${clean(back[1]).replace(/\.$/, "")}.`;
+    const back = SENT_BACK.exec(c.run?.reason ?? "");
+    if (back) return `The reviewer sent ${c.id} back ${back[1]}: ${clean(back[2]).replace(/\.$/, "")}.`;
   },
   question: (c) => c.run ? `The worker on ${c.id} asked: ${clean(c.run.question) || "it needs an answer"}` : asked(c),
   "intake-failed": (c) => {

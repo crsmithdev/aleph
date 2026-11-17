@@ -16,7 +16,7 @@ import { find, note, parseIssueRef, setStatus } from "../../../issues/lib/todo.t
 import { clearAsk, setAsk } from "../asks/ask.ts";
 import { decayQueue } from "../../../vault/lib/maintain.ts";
 import { archive, outcome, write } from "../../../vault/lib/ops.ts";
-import { lintVault, loadWiki, recordRun, type Note } from "../../../vault/lib/vault.ts";
+import { lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
@@ -127,7 +127,7 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
   const queue = stale.map((f) => byTitle.get(f.note)!).filter((n) => !held[n.title]).slice(0, BUDGET);
   if (!queue.length) return { ...report, skipped: "nothing to re-check" };
   await pass(report, {
-    label: "recheck", day, dry, schema: RECHECK_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
+    label: "recheck", root, record: "recheck", day, dry, schema: RECHECK_SCHEMA, allowed: ALLOWED, key: "verdicts", prompt: prompt(queue, day),
     act: async (list) => {
       report.notes = dry ? queue.flatMap((n) => list.filter((v) => v.title === n.title).map(({ title, verdict, why }) => ({ title, verdict, why }))) : await apply(root, queue, list, day);
     },
@@ -135,7 +135,6 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
       const done = report.notes.filter((n) => !n.refused).length;
       return `${done} rechecked${report.notes.length > done ? `, ${report.notes.length - done} refused` : ""}`;
     },
-    settle: (error) => recordRun(root, "recheck", error ? "failed" : "ok", error ?? `${dry ? "dry: " : ""}${report.notes.filter((n) => !n.refused).length} rechecked`),
   });
   return report;
 }
