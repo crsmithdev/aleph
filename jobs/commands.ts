@@ -204,10 +204,10 @@ function summary(runs: Job, fates = new Map<string, string>()) {
 
 function jobs(ctx: Ctx): void {
   if (ctx.rest.includes("--news")) {
-    const news: { run: string; line: string }[] = [];
+    const news: { run: string; line: string }[] = [], registry = loadRegistry();
     for (const e of allRuns()) {
       if (e.run.state === "running" || e.run.told) continue;
-      news.push({ run: e.id, line: newsLine(e, e.run.repo ? loadRegistry()[e.run.repo]?.note : undefined) });
+      news.push({ run: e.id, line: newsLine(e, e.run.repo ? registry[e.run.repo]?.note : undefined) });
       patchRun(e.id, { told: true });
     }
     return ctx.out(news);

@@ -141,6 +141,14 @@ test("the tick's due check does no fetch of the items repo", async () => {
   expect(housekeepDue(NOW + 3_600_000)).toBe(false);
 });
 
+test("guard: a repo whose main no longer resolves is not a moved main", async () => {
+  seed([{ title: "Parked issue" }]);
+  act([]);
+  await housekeep(NOW);
+  sh(repoPath(), "git", "branch", "-m", "main", "gone");
+  try { expect(housekeepDue(NOW + 3_600_000)).toBe(false); } finally { sh(repoPath(), "git", "branch", "-m", "gone", "main"); }
+});
+
 test("a held lock stops both triggers, and a reply with no actions list applies nothing", async () => {
   seed([{ title: "Parked issue" }]);
   const release = (await lock("housekeeper", 0))!;

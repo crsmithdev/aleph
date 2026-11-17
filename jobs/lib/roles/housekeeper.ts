@@ -57,11 +57,11 @@ const chunks = <T>(xs: T[], n: number): T[][] => Array.from({ length: Math.ceil(
 /** The registry repos with an issue list and a main the housekeeper can read. A repo has its list for good, so this reads the lists as last fetched: the tick does no fetch. */
 const repos = (): Repo[] => Object.values(loadRegistry()).filter((r) => readFetched(r) && headOf(r));
 
-/** The repos whose main moved since its last sweep. A repo seen for the first time has not moved. */
-function moved(s: State): { repo: Repo; from: string; to: string }[] {
-  return repos().flatMap((repo) => {
+/** The repos of `rs` whose main moved since its last sweep. A repo seen for the first time has not moved. */
+function moved(s: State, rs: Repo[]): { repo: Repo; from: string; to: string }[] {
+  return rs.flatMap((repo) => {
     const from = s.main[repo.key], to = headOf(repo);
-    return from && from !== to ? [{ repo, from, to }] : [];
+    return from && to && from !== to ? [{ repo, from, to }] : [];
   });
 }
 
@@ -71,12 +71,12 @@ const dailyDue = (s: State, now: number): boolean => !s.daily || now - Date.pars
 export function housekeepDue(now: number): boolean {
   if (paused() || held(LOCK)) return false;
   const s = readState();
-  return dailyDue(s, now) || ((!s.last || now - Date.parse(s.last) >= HOUR) && moved(s).length > 0);
+  return dailyDue(s, now) || ((!s.last || now - Date.parse(s.last) >= HOUR) && moved(s, Object.values(loadRegistry())).length > 0);
 }
 
 /** The batches of a land: the parked issues of each moved repo that name a changed file. */
-function landBatches(s: State): Batch[] {
-  return moved(s).flatMap(({ repo, from, to }) => {
+function landBatches(s: State, rs: Repo[]): Batch[] {
+  return moved(s, rs).flatMap(({ repo, from, to }) => {
     const files = git(repo.path, "diff", "--name-only", from, to).out.split("\n").filter(Boolean);
     const hit = parked(repo).filter((i) => files.some((f) => names(textOf(i), f)));
     return chunks(hit, BATCH).map((items) => ({ repo, items, land: { from, to, files } }));
@@ -263,8 +263,9 @@ export async function housekeep(now: number): Promise<Outcome[] | null> {
   try {
     const s = readState();
     const daily = dailyDue(s, now);
-    const batches = daily ? repos().flatMap((repo) => chunks(parked(repo), BATCH).map((items) => ({ repo, items }))) : landBatches(s);
-    putJson("state", "housekeeper", { daily: daily ? new Date(now).toISOString() : s.daily, last: new Date(now).toISOString(), main: { ...s.main, ...Object.fromEntries(repos().map((r) => [r.key, headOf(r)])) } });
+    const rs = repos();
+    const batches = daily ? rs.flatMap((repo) => chunks(parked(repo), BATCH).map((items) => ({ repo, items }))) : landBatches(s, rs);
+    putJson("state", "housekeeper", { daily: daily ? new Date(now).toISOString() : s.daily, last: new Date(now).toISOString(), main: { ...s.main, ...Object.fromEntries(rs.map((r) => [r.key, headOf(r)])) } });
     const out: Outcome[] = [];
     for (const b of batches) out.push(await review(b, now));
     return out;
